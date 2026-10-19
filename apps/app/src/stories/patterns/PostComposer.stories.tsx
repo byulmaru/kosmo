@@ -525,48 +525,52 @@ function InteractiveComposer({
 
   if (mobile && editor) {
     return (
-      <ComposerMediaEditor
-        media={items.filter((item) => item.state === 'ready')}
-        mobileState={editor.mobileState}
-        onAltTextChange={(key, altText) => {
-          setItems((current) =>
-            current.map((item) => (item.key === key ? { ...item, altText } : item)),
-          );
-        }}
-        onBack={() => setEditor(null)}
-        onClose={() => setEditor(null)}
-        onDone={() => setEditor(null)}
-        onPreviewPress={
-          editor.mobileState === 'altKeyboard'
-            ? () =>
-                setEditor((current) => (current ? { ...current, mobileState: 'default' } : current))
-            : undefined
-        }
-        onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
-        onSensitiveMediaChange={setSensitiveMedia}
-        onToolChange={(tool) =>
-          setEditor((current) => {
-            if (!current) {
-              return current;
-            }
-            return {
-              ...current,
-              mobileState:
-                tool === 'sensitive'
-                  ? 'sensitive'
-                  : current.mobileState === 'altKeyboard'
-                    ? 'default'
-                    : 'altKeyboard',
-              tool,
-            };
-          })
-        }
-        presentation={mobile ? 'mobile' : 'web'}
-        selectedKey={editor.key}
-        sensitiveMedia={sensitiveMedia}
-        showImageEditPreview={false}
-        tool={editor.tool}
-      />
+      <View style={{ height: '100dvh' as never, width: '100%' }}>
+        <ComposerMediaEditor
+          media={items.filter((item) => item.state === 'ready')}
+          mobileState={editor.mobileState}
+          onAltTextChange={(key, altText) => {
+            setItems((current) =>
+              current.map((item) => (item.key === key ? { ...item, altText } : item)),
+            );
+          }}
+          onBack={() => setEditor(null)}
+          onClose={() => setEditor(null)}
+          onDone={() => setEditor(null)}
+          onPreviewPress={
+            editor.mobileState === 'altKeyboard'
+              ? () =>
+                  setEditor((current) =>
+                    current ? { ...current, mobileState: 'default' } : current,
+                  )
+              : undefined
+          }
+          onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
+          onSensitiveMediaChange={setSensitiveMedia}
+          onToolChange={(tool) =>
+            setEditor((current) => {
+              if (!current) {
+                return current;
+              }
+              return {
+                ...current,
+                mobileState:
+                  tool === 'sensitive'
+                    ? 'sensitive'
+                    : current.mobileState === 'altKeyboard'
+                      ? 'default'
+                      : 'altKeyboard',
+                tool,
+              };
+            })
+          }
+          presentation="mobile"
+          selectedKey={editor.key}
+          sensitiveMedia={sensitiveMedia}
+          showImageEditPreview={false}
+          tool={editor.tool}
+        />
+      </View>
     );
   }
 
@@ -668,6 +672,7 @@ function InteractiveComposer({
       {!mobile && overlayOpen ? (
         <ComposerOverlayFixture
           accessibilityLabel="글쓰기"
+          height={editor ? 678 : undefined}
           maxWidth={editor ? 920 : 600}
           onRequestClose={closeOverlay}
           visible
@@ -1122,21 +1127,23 @@ export const MobilePlaygroundContract: Story = {
 
 export const MobileRuntimeAltEditorContract: Story = {
   render: () => (
-    <ComposerMediaEditor
-      media={readyComposerMedia}
-      mobileState="alt"
-      onAltTextChange={fn()}
-      onBack={fn()}
-      onClose={fn()}
-      onDone={fn()}
-      onSelectMedia={fn()}
-      onSensitiveMediaChange={fn()}
-      onToolChange={fn()}
-      presentation="mobile"
-      selectedKey="ready"
-      sensitiveMedia={false}
-      tool="alt"
-    />
+    <View style={{ height: '100dvh' as never, width: '100%' }}>
+      <ComposerMediaEditor
+        media={readyComposerMedia}
+        mobileState="alt"
+        onAltTextChange={fn()}
+        onBack={fn()}
+        onClose={fn()}
+        onDone={fn()}
+        onSelectMedia={fn()}
+        onSensitiveMediaChange={fn()}
+        onToolChange={fn()}
+        presentation="mobile"
+        selectedKey="ready"
+        sensitiveMedia={false}
+        tool="alt"
+      />
+    </View>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

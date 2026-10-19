@@ -147,6 +147,21 @@ const preview: Preview = {
           styles: { height: '640px', width: '1024px' },
           type: 'desktop',
         },
+        kosmoMediaEditor768: {
+          name: 'KOSMO Media Editor 768',
+          styles: { height: '900px', width: '768px' },
+          type: 'desktop',
+        },
+        kosmoMediaEditor800: {
+          name: 'KOSMO Media Editor 800',
+          styles: { height: '900px', width: '800px' },
+          type: 'desktop',
+        },
+        kosmoMediaEditor968: {
+          name: 'KOSMO Media Editor 968',
+          styles: { height: '900px', width: '968px' },
+          type: 'desktop',
+        },
         kosmoPickerWide: {
           name: 'KOSMO picker wide',
           styles: { height: '900px', width: '600px' },
