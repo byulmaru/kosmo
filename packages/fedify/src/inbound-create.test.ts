@@ -1209,6 +1209,69 @@ describe('inbound Create dispatch', () => {
     );
   });
 
+  test('materializes a hydrated DIRECT Note from a typed local Mention', async () => {
+    const author = await createStoredRemoteActor();
+    const recipient = await createLocalFollowerProfile('hydrated-direct-recipient');
+    const recipientActorUri = new URL(`/ap/actor/${recipient.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: recipientActorUri,
+      localInstanceId,
+      profileId: recipient.id,
+    });
+    const objectUri = new URL('https://objects.example/notes/hydrated-direct');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: 'Hydrated Mention-only Direct',
+      id: objectUri,
+      tags: [new Mention({ href: recipientActorUri, name: '@hydrated-direct-recipient' })],
+      to: new URL('https://unrelated.example/users/recipient'),
+    });
+
+    const result = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note,
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    assert.equal(materialized.post.profileId, author.id);
+    assert.equal(materialized.post.visibility, PostVisibility.DIRECT);
+    assert.deepEqual(materialized.content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [{ text: 'Hydrated Mention-only Direct', type: 'text' }],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: materialized.content.id, profileId: recipient.id },
+    ]);
+  });
+
+  test('rejects a hydrated DIRECT Note without an active local typed Mention', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/hydrated-direct-rejected');
+    const result = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Unaddressed Direct',
+        id: objectUri,
+        to: new URL('https://unrelated.example/users/recipient'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    assert.deepEqual(result, { reason: 'unsupported_note', status: 'rejected' });
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+  });
+
   test('requires the advertised actor URI for a Followers Only hydrated original', async () => {
     const objectUri = new URL('https://objects.example/notes/hydrated-followers-rejected');
 

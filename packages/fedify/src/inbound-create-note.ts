@@ -381,10 +381,6 @@ const materializeRemoteNote = async ({
       : storedActor?.actor.followersUri,
   );
   if (visibility === PostVisibility.DIRECT) {
-    if (source.kind === 'hydrated') {
-      return { reason: 'unsupported_note_visibility', status: 'rejected' };
-    }
-
     const targetHrefs = await collectInboundMentionTargetHrefs(note);
     const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
     if (!hasActiveLocalProfile) {

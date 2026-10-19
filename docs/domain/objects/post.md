@@ -374,13 +374,13 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   collection을 분류하려고 network dereference하거나 `/followers` 경로 휴리스틱을 사용하지 않고 추가 addressee로
   무시한다. raw malformed audience syntax는 기존 ActivityPub vocabulary hydration과 top-level Note 기본 검증에서
   처리하며, 이 무시 규칙은 구문상 유효하게 파싱된 extra IRI에만 적용한다.
-- Public marker와 author canonical followers marker가 모두 없으면 DIRECT 후보로 분류한다. 수신 `Create(Note)`는 inbox 종류와
-  `context.recipient`에 관계없이, verified typed Mention href가 ACTIVE Local Profile과 ACTIVE Local Instance를 하나 이상 가리킬
-  때 저장한다. Post의 기존 typed Mention 관계는 local/remote Profile 모두 보존하며, DIRECT 조회 권한은 그 현재 관계에서만 나온다.
-  Local Follow는 요구하지 않고, Mention되지 않은 inbox recipient는 읽을 수 없다. `to`/`cc`는 기존 Public/Unlisted/Followers marker
-  우선순위 분류에만 사용하며, `to`/`cc`/`bto`/`bcc` 주소만으로 Mention 관계나 DIRECT 권한을 만들지 않는다. audience 주소가
-  없거나 Mention과 달라도 검증된 Mention 수신을 허용한다. 이 DIRECT 수신 계약은 inbox Create에만 적용한다. hydrated non-inbox
-  Note의 DIRECT materialization과 Note Update는 포함하지 않는다.
+- Public marker와 author canonical followers marker가 모두 없으면 DIRECT 후보로 분류한다. 수신 `Create(Note)`와 remote source에서
+  fetch/hydrate해 공통 Note materializer로 전달한 Note는 inbox 종류와 `context.recipient`에 관계없이, verified typed Mention href가
+  ACTIVE Local Profile과 ACTIVE Local Instance를 하나 이상 가리킬 때 저장한다. Post의 기존 typed Mention 관계는 local/remote
+  Profile 모두 보존하며, DIRECT 조회 권한은 그 현재 관계에서만 나온다. Local Follow는 요구하지 않고, Mention되지 않은 inbox
+  recipient는 읽을 수 없다. `to`/`cc`는 기존 Public/Unlisted/Followers marker 우선순위 분류에만 사용하며,
+  `to`/`cc`/`bto`/`bcc` 주소만으로 Mention 관계나 DIRECT 권한을 만들지 않는다. audience 주소가 없거나 Mention과 달라도 검증된
+  Mention 수신을 허용한다. Note Update와 과거 Note 복구는 포함하지 않는다.
 - actor·object·attribution과 top-level Note의 기본 검증은 여전히 materialization 전에 통과해야 한다. 이 검증은
   audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility를
   결정하기 위한 경계다.
@@ -523,7 +523,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- ActivityPub DIRECT/limited audience의 inbound Create 처리는 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
+- ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
   Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
   따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
