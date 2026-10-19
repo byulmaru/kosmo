@@ -33,6 +33,7 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 ## Hashtag Mute의 현재 제공 범위
 
+- 태그 뮤트 규칙이 새 알림 노출에 적용되기 전까지 프로덕션 UI는 기본 숨김이다. 기능 플래그가 활성화된 경우에만 아래 UI 계약을 제공한다.
 - [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 TagChip으로 이동한
   [태그 상세·관련 Profile 목록 페이지](./hashtag-related-profiles.md)에서 현재 선택한 Profile이 소유하는
   태그 영구 뮤트를 설정·해제하는 UI 연결을 소유한다. 해당 태그를 프로필에 단 사람에게서 오는 새 알림만 제어하며,

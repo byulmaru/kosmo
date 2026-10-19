@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -44,6 +45,7 @@ export function HashtagRelatedProfileList({
   onVisibleResults?: (hashtagId: string, resultCount: number) => void;
   onResultSelected?: (hashtagId: string) => void;
 }) {
+  const tagNotificationMuteEnabled = useFeatureFlag('profile-tag-notification-mute');
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
     HashtagRelatedProfileList_hashtag$key
@@ -68,7 +70,11 @@ export function HashtagRelatedProfileList({
         leading={leading}
         title={`#${pagination.data.name} 관련 프로필`}
         titleLines={1}
-        trailing={<ProfileTagMuteAction hashtag={pagination.data} key={pagination.data.id} />}
+        trailing={
+          tagNotificationMuteEnabled ? (
+            <ProfileTagMuteAction hashtag={pagination.data} key={pagination.data.id} />
+          ) : null
+        }
       />
       {profiles.length ? (
         profiles.map((edge) => (
