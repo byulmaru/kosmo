@@ -378,9 +378,9 @@ const materializeRemoteNote = async ({
     }
     followersUri = storedActor.actor.followersUri;
   } else if (source.kind === 'hydrated' && resolveNoteVisibility(note) === PostVisibility.DIRECT) {
-    storedActor = await findStoredRemoteProfileActorByUri(attributionUri);
-    if (storedActor) {
-      followersUri = storedActor.actor.followersUri;
+    const storedAuthor = await findStoredRemoteProfileActorByUri(attributionUri);
+    if (storedAuthor) {
+      followersUri = storedAuthor.actor.followersUri;
     } else {
       try {
         const author = await fetchRemoteProfileActor(context, attributionUri);
@@ -437,7 +437,7 @@ const materializeRemoteNote = async ({
 
   if (source.kind === 'create') {
     storedActor = source.storedActor;
-  } else if (source.advertisingActorUri === undefined) {
+  } else if (!storedActor) {
     try {
       storedActor = await findOrMaterializeRemoteProfileActorByUri({
         actorUri: attributionUri,
