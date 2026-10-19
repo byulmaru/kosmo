@@ -190,6 +190,7 @@ input DeletePostInput {
 
 type DeletePostPayload {
   postId: ID!
+  replyParent: Post
   repostSource: Post
 }
 
@@ -440,6 +441,7 @@ type Post implements Node {
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
+  replyCount: Int
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
   replyParent: Post
   repostCount: Int!

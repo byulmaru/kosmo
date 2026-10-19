@@ -3,6 +3,7 @@ import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
+import { replyCountLoader } from '../loader/reply-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
 import { Post, PostContent } from '../ref';
 
@@ -40,6 +41,10 @@ builder.objectFields(Post, (t) => ({
   }),
   repostCount: t.int({
     resolve: async (post, _, ctx) => (await repostCountLoader(ctx).load(post.id))?.count ?? 0,
+  }),
+  replyCount: t.int({
+    nullable: true,
+    resolve: async (post, _, ctx) => (await replyCountLoader(ctx).load(post.id))?.count ?? 0,
   }),
   reactionCounts: t.field({
     type: [ReactionCount],

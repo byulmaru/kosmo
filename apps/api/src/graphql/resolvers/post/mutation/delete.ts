@@ -13,6 +13,10 @@ builder.mutationField('deletePost', (t) =>
             type: Post,
           }),
         }),
+        replyParent: field.field({
+          nullable: true,
+          type: Post,
+        }),
         repostSource: field.field({
           nullable: true,
           type: Post,
@@ -31,6 +35,7 @@ builder.mutationField('deletePost', (t) =>
 
       return {
         postId: result.postId,
+        replyParent: result.replyParentId,
         repostSource: result.sourcePostId,
       };
     },

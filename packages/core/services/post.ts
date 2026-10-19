@@ -450,7 +450,11 @@ export const deletePost = async ({
   readonly actorProfileId: string;
   readonly origin: PostOrigin;
   readonly postId: string;
-}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+}): Promise<{
+  readonly postId: string;
+  readonly replyParentId: string | null;
+  readonly sourcePostId: string | null;
+}> => {
   const { deleted, result } = await db.transaction(async (tx) => {
     const post = await tx
       .select({
@@ -492,7 +496,7 @@ export const deletePost = async ({
 
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
-    return { deleted, result: { postId, sourcePostId } };
+    return { deleted, result: { postId, replyParentId: post.replyParentId, sourcePostId } };
   });
 
   if (deleted) {

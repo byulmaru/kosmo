@@ -79,6 +79,10 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
         id
+        replyParent {
+          id
+          replyCount
+        }
         ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
       }
     }
