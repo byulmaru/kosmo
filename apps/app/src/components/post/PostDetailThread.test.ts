@@ -428,6 +428,55 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     assert.equal(scrollTo.mock.callCount(), 0);
   });
 
+  it('mount 후 초기 positioning을 끄면 대기 중인 alignment도 취소한다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    let measureCalls = 0;
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-route',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: () => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              measureCalls += 1;
+              done(0, 1200, 390, 200);
+            },
+          }),
+        },
+      );
+    });
+    assert.ok(frames.length > 0);
+
+    await act(async () => {
+      renderer!.update(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-route',
+          initialPositioningEnabled: false,
+          post: {} as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(measureCalls, 0);
+    assert.equal(scrollTo.mock.callCount(), 0);
+  });
+
   it('측정 중 상세를 떠나면 늦은 결과가 복원된 화면을 스크롤하지 않는다', async () => {
     const frames: FrameRequestCallback[] = [];
     let measureCurrent: ((...values: number[]) => void) | undefined;

@@ -473,7 +473,7 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
 test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지·수동 이동·handle 교정을 유지한다', async ({
   context,
   page,
-}, testInfo) => {
+}) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ height: 844, width: 390 });
 
@@ -508,8 +508,6 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     replyParentId: middle.id,
   });
   const sourceId = toGlobalId('Post', source.id);
-  const rootId = toGlobalId('Post', root.id);
-  const middleId = toGlobalId('Post', middle.id);
   for (let index = 0, parentId = source.id; index < 21; index += 1) {
     const descendant = await createE2EPost({
       body: `E2E source descendant ${index}`,
@@ -552,207 +550,6 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
 
   try {
     await setE2ESessionCookie(context, recipient.token);
-    type BrowserTrace = {
-      enabled: boolean;
-      events: Array<Record<string, unknown>>;
-      record: (event: string, details?: Record<string, unknown>) => void;
-      snapshot: () => Record<string, unknown>;
-    };
-    type TraceWindow = Window & { __kosmoPostDetailTrace?: BrowserTrace };
-    await page.addInitScript(
-      (selectors) => {
-        const summarizeState = (value: unknown) => {
-          const object = value !== null && typeof value === 'object';
-          return {
-            id: object && 'id' in value ? value.id : null,
-            keys: object ? Object.keys(value) : [],
-            type: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
-          };
-        };
-        const byTestId = (testId: string) =>
-          Array.from(document.querySelectorAll<HTMLElement>('[data-testid]')).find(
-            (element) => element.getAttribute('data-testid') === testId,
-          ) ?? null;
-        const rect = (element: Element | null) => {
-          if (!element) {
-            return null;
-          }
-          const bounds = element.getBoundingClientRect();
-          return {
-            x: bounds.x,
-            y: bounds.y,
-            top: bounds.top,
-            bottom: bounds.bottom,
-            width: bounds.width,
-            height: bounds.height,
-          };
-        };
-        const scrollTarget = (element: HTMLElement) => ({
-          id: element.getAttribute('data-testid'),
-          overflowY: getComputedStyle(element).overflowY,
-          scrollHeight: element.scrollHeight,
-          scrollTop: element.scrollTop,
-          tag: element.tagName,
-        });
-        const eventState = () => {
-          const state = summarizeState(history.state);
-          return {
-            href: location.href,
-            historyId: state.id,
-            historyKeys: state.keys,
-            historyStateType: state.type,
-            windowY: scrollY,
-          };
-        };
-        const traceWindow = window as TraceWindow;
-        const trace: BrowserTrace = {
-          enabled: false,
-          events: [],
-          record(event, details = {}) {
-            if (!trace.enabled) {
-              return;
-            }
-            trace.events.push({
-              at: performance.now(),
-              event,
-              ...eventState(),
-              ...details,
-            });
-            if (trace.events.length > 200) {
-              trace.events.splice(0, trace.events.length - 200);
-            }
-          },
-          snapshot() {
-            const state = summarizeState(window.history.state);
-            const navigation = performance.getEntriesByType('navigation')[0] as
-              | PerformanceNavigationTiming
-              | undefined;
-            const image = Array.from(document.images).find(
-              (item) => item.src === selectors.imageUrl || item.currentSrc === selectors.imageUrl,
-            );
-            const scrollables = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(
-              (element) =>
-                ['auto', 'scroll', 'overlay'].includes(getComputedStyle(element).overflowY) &&
-                element.scrollHeight > element.clientHeight,
-            );
-            return {
-              boxes: {
-                middle: rect(byTestId(`post-thread-item-${selectors.middleId}`)),
-                root: rect(byTestId(`post-thread-item-${selectors.rootId}`)),
-                source: rect(byTestId(`post-thread-current-${selectors.sourceId}`)),
-                image: image ? { naturalHeight: image.naturalHeight, rect: rect(image) } : null,
-                sticky: Array.from(document.querySelectorAll<HTMLElement>('*'))
-                  .filter((element) => getComputedStyle(element).position === 'sticky')
-                  .slice(0, 5)
-                  .map(rect),
-              },
-              history: {
-                href: window.location.href,
-                id: state.id,
-                keys: state.keys,
-                length: window.history.length,
-                stateType: state.type,
-              },
-              navigationType: navigation?.type ?? null,
-              scroll: {
-                bodyTop: document.body.scrollTop,
-                documentTop: document.documentElement.scrollTop,
-                scrollingElement: document.scrollingElement?.scrollTop ?? null,
-                windowX: window.scrollX,
-                windowY: window.scrollY,
-                inner: scrollables.slice(0, 25).map(scrollTarget),
-              },
-            };
-          },
-        };
-        traceWindow.__kosmoPostDetailTrace = trace;
-
-        const originalScrollTo = window.scrollTo;
-        window.scrollTo = ((...args: unknown[]) => {
-          trace.record('window.scrollTo', { args, stack: new Error().stack });
-          return Reflect.apply(originalScrollTo, window, args);
-        }) as typeof window.scrollTo;
-        const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-        HTMLElement.prototype.scrollIntoView = function (this: HTMLElement, ...args: unknown[]) {
-          trace.record('element.scrollIntoView', {
-            args,
-            stack: new Error().stack,
-            targetTestId: this.getAttribute('data-testid'),
-          });
-          return Reflect.apply(originalScrollIntoView, this, args);
-        } as typeof HTMLElement.prototype.scrollIntoView;
-        for (const method of ['pushState', 'replaceState'] as const) {
-          const original = window.history[method];
-          window.history[method] = ((...args: unknown[]) => {
-            const result = Reflect.apply(original, window.history, args);
-            trace.record(`history.${method}`, {
-              stack: new Error().stack,
-              state: summarizeState(args[0]),
-              url: args[2] == null ? null : String(args[2]),
-            });
-            return result;
-          }) as History[typeof method];
-        }
-        const tracePopState = (event: PopStateEvent) => {
-          trace.record('popstate.capture', { state: summarizeState(event.state) });
-          queueMicrotask(() => trace.record('popstate.microtask'));
-          requestAnimationFrame(() => trace.record('popstate.frame'));
-        };
-        const captureFlag = (options?: boolean | AddEventListenerOptions) =>
-          typeof options === 'boolean' ? options : (options?.capture ?? false);
-        const listenerName = (listener: EventListenerOrEventListenerObject | null) =>
-          typeof listener === 'function' ? listener.name : listener?.handleEvent.name;
-        const originalAddEventListener = window.addEventListener;
-        window.addEventListener = ((
-          type: string,
-          listener: EventListenerOrEventListenerObject | null,
-          options?: boolean | AddEventListenerOptions,
-        ) => {
-          if (type === 'popstate' && listener !== tracePopState) {
-            trace.record('popstate.listener.add', {
-              capture: captureFlag(options),
-              listener: listenerName(listener),
-              stack: new Error().stack,
-            });
-          }
-          return Reflect.apply(originalAddEventListener, window, [type, listener, options]);
-        }) as typeof window.addEventListener;
-        const originalRemoveEventListener = window.removeEventListener;
-        window.removeEventListener = ((
-          type: string,
-          listener: EventListenerOrEventListenerObject | null,
-          options?: boolean | EventListenerOptions,
-        ) => {
-          if (type === 'popstate' && listener !== tracePopState) {
-            trace.record('popstate.listener.remove', {
-              capture: captureFlag(options),
-              listener: listenerName(listener),
-              stack: new Error().stack,
-            });
-          }
-          return Reflect.apply(originalRemoveEventListener, window, [type, listener, options]);
-        }) as typeof window.removeEventListener;
-        window.addEventListener('popstate', tracePopState, true);
-        window.addEventListener(
-          'scroll',
-          (event) => {
-            const target = event.target instanceof HTMLElement ? event.target : null;
-            trace.record('scroll', {
-              isTrusted: event.isTrusted,
-              target: target ? scrollTarget(target) : (event.target as Node | null)?.nodeName,
-            });
-          },
-          true,
-        );
-        window.addEventListener('pageshow', (event) =>
-          trace.record('pageshow', { persisted: event.persisted }),
-        );
-        window.addEventListener('pagehide', (event) =>
-          trace.record('pagehide', { persisted: event.persisted }),
-        );
-      },
-      { imageUrl, middleId, rootId, sourceId },
-    );
     await page.goto('/home');
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
     const notificationsResponse = waitForGraphQLOperation(page, 'NotificationsPageQuery');
@@ -815,47 +612,14 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
 
-    await page.evaluate(() => {
-      const trace = (window as TraceWindow).__kosmoPostDetailTrace;
-      if (trace) {
-        trace.events.length = 0;
-        trace.enabled = true;
-        trace.record('before-home-click');
-      }
-    });
-    try {
-      await page.getByRole('link', { name: '홈', exact: true }).first().click();
-      await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
-      await page.goBack();
-      await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
-      await expect(sourceRow).toBeAttached();
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-      await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
-      await expect(sourceRow).not.toBeInViewport();
-      await attachScrollTrace();
-    } catch (error) {
-      await attachScrollTrace(true);
-      throw error;
-    }
-
-    async function attachScrollTrace(logTrace = false) {
-      try {
-        const diagnostic = await page.evaluate(() => {
-          const trace = (window as TraceWindow).__kosmoPostDetailTrace;
-          return { events: trace?.events ?? [], final: trace?.snapshot() ?? null };
-        });
-        const body = JSON.stringify(diagnostic, null, 2);
-        await testInfo.attach('post-detail-history-scroll-trace.json', {
-          body,
-          contentType: 'application/json',
-        });
-        if (logTrace) {
-          console.error(`Post detail history scroll trace:\n${body}`);
-        }
-      } catch (diagnosticError) {
-        console.error('Could not collect post detail history scroll trace:', diagnosticError);
-      }
-    }
+    await page.getByRole('link', { name: '홈', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(sourceRow).toBeAttached();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+    await expect(sourceRow).not.toBeInViewport();
   } finally {
     releaseAncestorImage();
     await page.unroute(imageUrl);

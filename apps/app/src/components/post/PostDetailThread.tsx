@@ -208,7 +208,11 @@ function PostDetailThreadContent({
     }
   }, []);
   const scheduleInitialScroll = useCallback(() => {
-    if (!shouldKeepCurrentInViewRef.current || initialScrollFrameRef.current !== null) {
+    if (
+      !initialPositioningEnabled ||
+      !shouldKeepCurrentInViewRef.current ||
+      initialScrollFrameRef.current !== null
+    ) {
       return;
     }
     if (Platform.OS === 'web' && typeof window === 'undefined') {
@@ -268,7 +272,7 @@ function PostDetailThreadContent({
         });
       });
     });
-  }, []);
+  }, [initialPositioningEnabled]);
   const headerLaidOut = useCallback(
     (event: LayoutChangeEvent) => {
       nativeHeaderHeightRef.current = event.nativeEvent.layout.height;

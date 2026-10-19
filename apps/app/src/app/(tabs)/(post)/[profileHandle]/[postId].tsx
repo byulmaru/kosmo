@@ -57,7 +57,6 @@ export default function PostDetailScreen() {
     postId: string;
     profileHandle: string;
   }>();
-  const { isHistoryEntryRestoration } = usePrimaryNavigationScroll();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
@@ -94,7 +93,6 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         header={header}
-        initialPositioningEnabled={!isHistoryEntryRestoration()}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
       />
@@ -126,12 +124,10 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   header,
-  initialPositioningEnabled,
   postId,
   routeRelativeHandle,
 }: {
   header: ReactNode;
-  initialPositioningEnabled: boolean;
   postId: string;
   routeRelativeHandle: string;
 }) {
@@ -143,6 +139,7 @@ function PostDetailContent({
     { postId },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  const { isHistoryEntryRestoration } = usePrimaryNavigationScroll();
   const post = data.node?.__typename === 'Post' ? data.node : null;
   const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
   const pureRepostSourceHref: Href | null = pureRepostSource
@@ -186,7 +183,7 @@ function PostDetailContent({
   ) : (
     <PostDetailThread
       header={header}
-      initialPositioningEnabled={initialPositioningEnabled}
+      initialPositioningEnabled={!isHistoryEntryRestoration()}
       identity={postId}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
