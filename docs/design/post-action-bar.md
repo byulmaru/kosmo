@@ -103,7 +103,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
   상태 또는 resting canvas로 돌아간다.
-- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 root Pressable 자체 입력만 따른다. Content Warning은 조상 hover 억제 계약이 없다.
+- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 상세로 이동하는 비상호작용 배경 responder의 입력을 따른다. 안쪽 행·본문 바깥·attribution·인용 배경에서도 같은 카드 overlay를 표시하고, release·cancel·스크롤 전환이나 배경 경계 이탈로 탭이 취소되면 즉시 해제한다. 독립 링크·미디어·CW 버튼·게시글 액션·열린 메뉴 입력은 카드 pressed와 navigation을 활성화하지 않는다. Content Warning은 조상 hover 억제 계약이 없다.
 - 이 feedback surface는 별도 navigation target이나 접근성 role을 추가하지 않는다. Action Bar는 실제 PostBody·Source
   navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
