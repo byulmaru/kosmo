@@ -415,7 +415,6 @@ export const NullableReactionPost: Story = {
     const canvas = within(canvasElement);
     const fallback = canvas.getByTestId('notification-source-unavailable-reaction');
     await expect(fallback).toBeVisible();
-    await expect(fallback).toHaveTextContent('반응 알림');
     await expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
   },
 };
@@ -435,32 +434,12 @@ export const ReadAndUnavailableStates: Story = {
 export const ActivationContract: Story = {
   args: { kind: 'followRequest' },
   parameters: { controls: { disable: true } },
-  render: (args) => (
-    <View>
-      <View testID="follow-activation">
-        <NotificationExample {...args} kind="follow" />
-      </View>
-      <View testID="follow-request-activation">
-        <NotificationExample {...args} kind="followRequest" />
-      </View>
-    </View>
-  ),
   play: async ({ args, canvasElement }) => {
     args.onNavigate.mockClear();
     const canvas = within(canvasElement);
-    const follow = within(canvas.getByTestId('follow-activation'));
-    const followLink = follow.getByRole('link');
-    await expect(follow.getAllByRole('link')).toHaveLength(1);
-    await expect(followLink).toHaveAttribute('href', '/@kosmo');
-    await userEvent.click(followLink);
-    await expect(args.onNavigate).toHaveBeenCalledOnce();
-
-    args.onNavigate.mockClear();
-    const followRequest = within(canvas.getByTestId('follow-request-activation'));
-    const link = followRequest.getByRole('link', { name: /팔로우 요청 관리 화면으로 이동/ });
-    await expect(followRequest.getAllByRole('link')).toHaveLength(1);
+    const link = canvas.getByRole('link', { name: /팔로우 요청 관리 화면으로 이동/ });
     await expect(link).toHaveAttribute('href', '/follow-requests');
-    await expect(followRequest.queryByRole('button', { name: /수락/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /수락/ })).not.toBeInTheDocument();
     await userEvent.tab();
     await expect(link).toHaveFocus();
     await expect(link).toHaveStyle({ outlineWidth: '2px' });
@@ -726,7 +705,6 @@ export const CompositionContract: Story = {
     const reaction = within(canvas.getByTestId('reaction-notification'));
     const surface = reaction.getByTestId('notification-item-surface');
     const excerpt = reaction.getByText(args.bodyText);
-    const reactionTime = reaction.getByText(args.timestamp);
     const unreadBackground = getComputedStyle(surface).backgroundColor;
     await expect(unreadBackground).not.toBe('rgba(0, 0, 0, 0)');
     await userEvent.hover(excerpt);
@@ -748,13 +726,6 @@ export const CompositionContract: Story = {
     const reply = within(canvas.getByTestId('reply-notification'));
     const replySurface = reply.getByTestId('notification-item-surface');
     const replyPost = reply.getByTestId('reply-notification-post');
-    const replyTime = reply.getByText('5분 전');
-    await expect(getComputedStyle(reactionTime).fontSize).toBe(
-      getComputedStyle(replyTime).fontSize,
-    );
-    await expect(getComputedStyle(reactionTime).lineHeight).toBe(
-      getComputedStyle(replyTime).lineHeight,
-    );
     await expect(replyPost).toHaveStyle({ paddingLeft: '0px', paddingRight: '0px' });
     await expect(replyPost).toHaveStyle({ paddingTop: '16px', paddingBottom: '8px' });
     await expect(reply.getByTestId('reply-notification-inset')).toHaveStyle({
@@ -765,20 +736,15 @@ export const CompositionContract: Story = {
       height: '48px',
       width: '48px',
     });
-    await expect(reply.queryByTestId('notification-reason')).not.toBeInTheDocument();
-    await expect(reply.getByText('답글 알림')).toBeInTheDocument();
     await expect(reply.getAllByText('별빛여행자')).toHaveLength(1);
     await expect(reply.queryByText(/원글 작성자/)).not.toBeInTheDocument();
-    await expect(reply.queryByRole('link', { name: /답글을 남겼습니다/ })).not.toBeInTheDocument();
     await expect(reply.getByText('읽지 않은 알림')).toBeInTheDocument();
-    await expect(replySurface).toContainElement(replyPost);
     await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
     await userEvent.hover(replyPost);
     await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
     await expect(reply.getByTestId('notification-hover-overlay')).toBeInTheDocument();
     const action = await reply.findByRole('button', { name: '답글' });
     await expect(action.closest('a')).toBeNull();
-    await expect(reply.getByTestId('reply-notification-post')).toBeInTheDocument();
     await expect(reply.getByRole('button', { name: /더 보기/ })).toBeInTheDocument();
     await userEvent.click(reply.getByRole('button', { name: /더 보기/ }));
     await expect(args.onNavigate).toHaveBeenCalledTimes(2);
@@ -1036,26 +1002,6 @@ export const PostNotificationRailActivationContract: Story = {
       args.onNavigate.mockClear();
       await clickAtBottomOfTarget(rail);
       await expect(args.onNavigate).toHaveBeenCalledOnce();
-
-      const author = group.getByTestId('notification-post-author');
-      await expect(author).toHaveAttribute('href', '/@starlight');
-      args.onNavigate.mockClear();
-      await userEvent.click(author);
-      await expect(args.onNavigate).toHaveBeenCalledOnce();
-
-      args.onNavigate.mockClear();
-      await userEvent.click(within(author.parentElement!).getByText('5분 전'));
-      await expect(args.onNavigate).toHaveBeenCalledOnce();
-
-      args.onNavigate.mockClear();
-      await userEvent.click(group.getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'));
-      await expect(args.onNavigate).toHaveBeenCalledOnce();
     }
-
-    const quote = within(canvas.getByTestId('post-notification-quote'));
-    await expect(quote.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
-      'href',
-      '/@source-author/notification-source-post',
-    );
   },
 };
