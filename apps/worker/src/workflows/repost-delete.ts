@@ -1,4 +1,4 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -9,12 +9,17 @@ type RepostDeleteInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { deleteRepostNotificationActivity, sendRepostUndoActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  deletePostRelatedNotificationsActivity,
+  deleteRepostNotificationActivity,
+  sendRepostUndoActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function repostDeleteWorkflow({ postId, origin }: RepostDeleteInput): Promise<void> {
   await settleEffects([
-    deleteRepostNotificationActivity(postId),
+    patched('repost-delete-related-notifications-v1')
+      ? deletePostRelatedNotificationsActivity(postId)
+      : deleteRepostNotificationActivity(postId),
     ...match(origin)
       .with('LOCAL', () => [sendRepostUndoActivity(postId)])
       .with('ACTIVITYPUB', () => [])

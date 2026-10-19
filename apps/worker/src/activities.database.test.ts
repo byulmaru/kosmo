@@ -18,7 +18,10 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '@kosmo/core/enums';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
@@ -39,6 +42,7 @@ import type {
   createReplyNotificationActivity as CreateReplyNotificationActivity,
   createRepostNotificationActivity as CreateRepostNotificationActivity,
   deleteAccountActivity as DeleteAccountActivity,
+  deletePostRelatedNotificationsActivity as DeletePostRelatedNotificationsActivity,
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
@@ -81,6 +85,7 @@ let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
 let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
+let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -118,6 +123,7 @@ before(async () => {
     createRepostNotificationActivity,
     captureOperationalNotificationAudienceActivity,
     deleteAccountActivity,
+    deletePostRelatedNotificationsActivity,
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
@@ -129,7 +135,7 @@ beforeEach(async () => {
   await db.delete(NotificationQuoteJudgments);
   await db.delete(Notifications);
   await db.delete(ProfileFollows);
-  await db.update(Posts).set({ currentContentId: null });
+  await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Profiles);
@@ -1177,6 +1183,235 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
 
   await deleteRepostNotificationActivity(repost.id);
   await deleteRepostNotificationActivity(repost.id);
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Post deletion Notification Activity removes exact related rows and is idempotent', async () => {
+  const recipientAccountId = await getActivityTestAccountId();
+  const author = await createProfile();
+  const mentionRecipient = await createProfile();
+  const independentMentionRecipient = await createProfile();
+  const actor = await createProfile();
+  const mentionContent = (profile: { handle: string; id: string }) => {
+    const relativeHandle = `@${profile.handle}`;
+    const authoredBodyText = `Mention ${relativeHandle}`;
+    const start = authoredBodyText.indexOf(relativeHandle);
+    return {
+      authoredBodyText,
+      document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+        {
+          end: start + relativeHandle.length,
+          handle: relativeHandle,
+          profileId: profile.id,
+          relativeHandle,
+          start,
+        },
+      ]),
+    };
+  };
+  const { post } = await createCorePost({
+    ...mentionContent(mentionRecipient),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const reaction = await db
+    .insert(Reactions)
+    .values({ postId: post.id, profileId: actor.id, type: '🌈' })
+    .returning()
+    .then(firstOrThrow);
+  const { post: reply } = await createCorePost({
+    ...mentionContent(independentMentionRecipient),
+    origin: 'LOCAL',
+    profileId: actor.id,
+    replyParentId: post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Quote body'),
+    origin: 'LOCAL',
+    profileId: actor.id,
+    repostSourceId: post.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+  const { repost } = await repostPost({
+    actorProfileId: actor.id,
+    origin: 'LOCAL',
+    sourcePostId: post.id,
+  });
+  const { post: unrelatedPost } = await createCorePost({
+    ...mentionContent(independentMentionRecipient),
+    origin: 'LOCAL',
+    profileId: actor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const readAt = Temporal.Now.instant();
+  const deletedNotifications = await db
+    .insert(Notifications)
+    .values([
+      {
+        kind: NotificationKind.MENTION,
+        recipientAccountId,
+        recipientProfileId: mentionRecipient.id,
+        sourceId: post.id,
+      },
+      {
+        kind: NotificationKind.REACTION,
+        recipientAccountId,
+        recipientProfileId: author.id,
+        sourceId: reaction.id,
+      },
+      {
+        kind: NotificationKind.REPLY,
+        recipientAccountId,
+        recipientProfileId: author.id,
+        sourceId: reply.id,
+      },
+      {
+        kind: NotificationKind.QUOTE,
+        recipientAccountId,
+        recipientProfileId: author.id,
+        sourceId: quote.id,
+      },
+      {
+        kind: NotificationKind.REPOST,
+        recipientAccountId,
+        recipientProfileId: author.id,
+        sourceId: repost.id,
+      },
+    ])
+    .returning();
+  const mentionOnReply = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.MENTION,
+      readAt,
+      recipientAccountId,
+      recipientProfileId: independentMentionRecipient.id,
+      sourceId: reply.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const unrelatedMention = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.MENTION,
+      readAt,
+      recipientAccountId,
+      recipientProfileId: independentMentionRecipient.id,
+      sourceId: unrelatedPost.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+
+  await deletePostRelatedNotificationsActivity(post.id);
+  await deletePostRelatedNotificationsActivity(post.id);
+
+  const remaining = await db
+    .select({ id: Notifications.id, readAt: Notifications.readAt })
+    .from(Notifications);
+  assert.deepEqual(
+    new Set(remaining.map(({ id }) => id)),
+    new Set([mentionOnReply.id, unrelatedMention.id]),
+  );
+  assert.equal(
+    remaining.find(({ id }) => id === mentionOnReply.id)?.readAt?.toString(),
+    readAt.toString(),
+  );
+  assert.equal(
+    remaining.find(({ id }) => id === unrelatedMention.id)?.readAt?.toString(),
+    readAt.toString(),
+  );
+  assert.equal(deletedNotifications.length, 5);
+  assert.equal(await db.$count(Reactions, eq(Reactions.id, reaction.id)), 1);
+});
+
+test('Post deletion Notification Activity removes direct Reply, Quote, and Repost notifications', async () => {
+  const recipientAccountId = await getActivityTestAccountId();
+  const replyRecipient = await createProfile();
+  const quoteRecipient = await createProfile();
+  const repostRecipient = await createProfile();
+  const actor = await createProfile();
+  const { post: replyParent } = await createCorePost({
+    document: postContentDocumentFromText('Reply parent'),
+    origin: 'LOCAL',
+    profileId: replyRecipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: reply } = await createCorePost({
+    document: postContentDocumentFromText('Reply body'),
+    origin: 'LOCAL',
+    profileId: actor.id,
+    replyParentId: replyParent.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quoteSource } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: quoteRecipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Quote body'),
+    origin: 'LOCAL',
+    profileId: actor.id,
+    repostSourceId: quoteSource.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: repostSource } = await createCorePost({
+    document: postContentDocumentFromText('Repost source'),
+    origin: 'LOCAL',
+    profileId: repostRecipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { repost } = await repostPost({
+    actorProfileId: actor.id,
+    origin: 'LOCAL',
+    sourcePostId: repostSource.id,
+  });
+  const deletedPosts = [reply, quote, repost];
+  const directNotifications = await db
+    .insert(Notifications)
+    .values([
+      {
+        kind: NotificationKind.REPLY,
+        recipientAccountId,
+        recipientProfileId: replyRecipient.id,
+        sourceId: reply.id,
+      },
+      {
+        kind: NotificationKind.QUOTE,
+        recipientAccountId,
+        recipientProfileId: quoteRecipient.id,
+        sourceId: quote.id,
+      },
+      {
+        kind: NotificationKind.REPOST,
+        recipientAccountId,
+        recipientProfileId: repostRecipient.id,
+        sourceId: repost.id,
+      },
+    ])
+    .returning();
+
+  await db
+    .update(Posts)
+    .set({ state: PostState.DELETED })
+    .where(
+      inArray(
+        Posts.id,
+        deletedPosts.map(({ id }) => id),
+      ),
+    );
+
+  for (const { id } of deletedPosts) {
+    await deletePostRelatedNotificationsActivity(id);
+    await deletePostRelatedNotificationsActivity(id);
+  }
+
+  assert.equal(directNotifications.length, 3);
   assert.equal(await db.$count(Notifications), 0);
 });
 

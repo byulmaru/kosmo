@@ -917,6 +917,20 @@ test('Reaction 알림은 source에서 Recipient와 Related 객체를 파생하�
   assert.deepEqual(notification.data, {});
 });
 
+test('Reaction 알림은 투영 전에 삭제된 Post에서 no-op이다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const deletedReaction = await createReaction(author.id, recipient.id);
+  await db
+    .update(Posts)
+    .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+    .where(eq(Posts.id, deletedReaction.postId));
+
+  assert.equal(await db.$count(Reactions, eq(Reactions.id, deletedReaction.id)), 1);
+  await createReactionNotification(deletedReaction.id);
+  assert.deepEqual(await readNotifications(deletedReaction.id), []);
+});
+
 test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', async () => {
   const self = await createProfile();
   const selfReaction = await createReaction(self.id, self.id);

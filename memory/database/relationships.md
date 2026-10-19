@@ -34,7 +34,9 @@ Social Notification은 여러 source의 사용자용 projection이므로 일반�
   선택 본문, 목적지 링크만 저장하고 actor snapshot이나 원인 객체를 추가하지 않는다.
 - Notification API는 저장 행이 존재하는 동안 Recipient 권한에 따라 목록, count, Node와 Read에서 해당 item을
   조회한다. Related Post/Profile과 source 필드는 현재 요청의 일반 객체 조회 권한을 적용하며 원본 접근을 우회하지 않는다.
-  기존 source 가용성 기반 정리와 물리 삭제 시점은 이 API 접근 규칙과 별도이며, 삭제 뒤까지 Notification 보존을 보장하지 않는다.
+  Local·Remote Post 삭제가 확정된 뒤 후속 effect가 삭제된 Post를 원인 또는 대상으로 하는 Notification을 정리한다.
+  effect는 확정된 삭제의 Post ID를 사용하며, 정리 실패는 Post 삭제 결과를 바꾸지 않고 effect를 재시도한다.
+  정리 완료 전까지 행은 조회될 수 있다. 그 밖의 source 가용성 정리와 이미 남아 있는 legacy unavailable Notification은 기존 Best Effort 정책을 따른다.
 - 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
 - Recipient 권한은 정확한 `recipient_account_id`를 요구하며 `recipient_profile_id`가 있으면 해당 Profile의 현재
   Membership도 요구한다. `kind`와 Account/Profile 조합은 알림 생성 경로가 결정한다.

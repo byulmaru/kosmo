@@ -52,6 +52,10 @@ const legacyNotificationEffectsWorkflowPath = new URL(
   './test-fixtures/legacy-notification-effects.ts',
   import.meta.url,
 ).pathname;
+const legacyPostDeleteWorkflowPath = new URL(
+  './test-fixtures/legacy-post-delete.ts',
+  import.meta.url,
+).pathname;
 
 type ActivityName =
   | 'createNotificationActivity'
@@ -329,6 +333,218 @@ test(
         new Set(calls.map(({ name }) => name)),
         new Set(['deleteReactionNotificationActivity', 'sendReactionUndoActivity']),
       );
+    });
+  },
+);
+
+test(
+  'Post Delete Workflows settle notification cleanup and protocol effects for both origins',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-effects-${process.pid}`;
+    const calls: string[] = [];
+    const cleanupAttempts = new Map<string, number>();
+    const retryCleanupIds = new Set<string>();
+    const failedCleanupIds = new Set<string>();
+    const failedPostDeleteIds = new Set<string>();
+    const failedRepostUndoIds = new Set<string>();
+    const worker = await Worker.create({
+      activities: {
+        deletePostRelatedNotificationsActivity: async (postId: string) => {
+          calls.push(`cleanup:${postId}`);
+          const attempt = (cleanupAttempts.get(postId) ?? 0) + 1;
+          cleanupAttempts.set(postId, attempt);
+          if (retryCleanupIds.has(postId) && attempt === 1) {
+            throw new Error('Transient Notification cleanup failure');
+          }
+          if (failedCleanupIds.has(postId)) {
+            throw ApplicationFailure.nonRetryable('Notification cleanup failed');
+          }
+        },
+        deleteRepostNotificationActivity: async (postId: string) => {
+          calls.push(`legacy-repost-cleanup:${postId}`);
+        },
+        sendLocalPostDeleteActivity: async (postId: string) => {
+          calls.push(`post-delete:${postId}`);
+          if (failedPostDeleteIds.has(postId)) {
+            throw ApplicationFailure.nonRetryable('Post Delete protocol effect failed');
+          }
+        },
+        sendRepostUndoActivity: async (postId: string) => {
+          calls.push(`repost-undo:${postId}`);
+          if (failedRepostUndoIds.has(postId)) {
+            throw ApplicationFailure.nonRetryable('Repost Undo protocol effect failed');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const start = (workflow: string, postId: string, origin: 'LOCAL' | 'ACTIVITYPUB') =>
+      environment.client.workflow.start(workflow, {
+        args: [{ postId, origin }],
+        taskQueue,
+        workflowId: `${taskQueue}:${workflow}:${origin}:${postId}`,
+      });
+    const replay = async (handle: Awaited<ReturnType<typeof start>>) =>
+      Worker.runReplayHistory({ workflowsPath }, await handle.fetchHistory(), handle.workflowId);
+
+    await worker.runUntil(async () => {
+      for (const workflow of ['postDeleteWorkflow', 'repostDeleteWorkflow'] as const) {
+        for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+          const postId = `${workflow}:${origin}:success`;
+          calls.length = 0;
+          const handle = await start(workflow, postId, origin);
+          await handle.result();
+          assert.deepEqual(
+            calls.toSorted(),
+            [
+              `cleanup:${postId}`,
+              ...(origin === 'LOCAL'
+                ? [
+                    workflow === 'postDeleteWorkflow'
+                      ? `post-delete:${postId}`
+                      : `repost-undo:${postId}`,
+                  ]
+                : []),
+            ].toSorted(),
+          );
+          await replay(handle);
+        }
+      }
+
+      const cleanupFailureId = 'postDeleteWorkflow:LOCAL:cleanup-failure';
+      failedCleanupIds.add(cleanupFailureId);
+      calls.length = 0;
+      const cleanupFailure = await start('postDeleteWorkflow', cleanupFailureId, 'LOCAL');
+      await assert.rejects(cleanupFailure.result());
+      assert.deepEqual(
+        calls.toSorted(),
+        [`cleanup:${cleanupFailureId}`, `post-delete:${cleanupFailureId}`].toSorted(),
+      );
+
+      const protocolFailureId = 'postDeleteWorkflow:LOCAL:protocol-failure';
+      failedPostDeleteIds.add(protocolFailureId);
+      calls.length = 0;
+      const protocolFailure = await start('postDeleteWorkflow', protocolFailureId, 'LOCAL');
+      await assert.rejects(protocolFailure.result());
+      assert.deepEqual(
+        calls.toSorted(),
+        [`cleanup:${protocolFailureId}`, `post-delete:${protocolFailureId}`].toSorted(),
+      );
+
+      const repostCleanupFailureId = 'repostDeleteWorkflow:LOCAL:cleanup-failure';
+      failedCleanupIds.add(repostCleanupFailureId);
+      calls.length = 0;
+      const repostCleanupFailure = await start(
+        'repostDeleteWorkflow',
+        repostCleanupFailureId,
+        'LOCAL',
+      );
+      await assert.rejects(repostCleanupFailure.result());
+      assert.deepEqual(
+        calls.toSorted(),
+        [`cleanup:${repostCleanupFailureId}`, `repost-undo:${repostCleanupFailureId}`].toSorted(),
+      );
+
+      const repostProtocolFailureId = 'repostDeleteWorkflow:LOCAL:protocol-failure';
+      failedRepostUndoIds.add(repostProtocolFailureId);
+      calls.length = 0;
+      const repostProtocolFailure = await start(
+        'repostDeleteWorkflow',
+        repostProtocolFailureId,
+        'LOCAL',
+      );
+      await assert.rejects(repostProtocolFailure.result());
+      assert.deepEqual(
+        calls.toSorted(),
+        [`cleanup:${repostProtocolFailureId}`, `repost-undo:${repostProtocolFailureId}`].toSorted(),
+      );
+
+      const retryId = 'postDeleteWorkflow:LOCAL:cleanup-retry';
+      retryCleanupIds.add(retryId);
+      calls.length = 0;
+      const retriedCleanup = await start('postDeleteWorkflow', retryId, 'LOCAL');
+      await retriedCleanup.result();
+      assert.equal(cleanupAttempts.get(retryId), 2);
+      assert.equal(calls.filter((call) => call === `cleanup:${retryId}`).length, 2);
+      assert.equal(calls.filter((call) => call === `post-delete:${retryId}`).length, 1);
+      await replay(retriedCleanup);
+    });
+  },
+);
+
+test(
+  'Post Delete Workflows replay their pre-cleanup Activity command traces',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-replay-${process.pid}`;
+    const calls: string[] = [];
+    const worker = await Worker.create({
+      activities: {
+        deleteRepostNotificationActivity: async (postId: string) => {
+          calls.push(`repost-notification:${postId}`);
+        },
+        sendLocalPostDeleteActivity: async (postId: string) => {
+          calls.push(`post-delete:${postId}`);
+        },
+        sendRepostUndoActivity: async (postId: string) => {
+          calls.push(`repost-undo:${postId}`);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: legacyPostDeleteWorkflowPath,
+    });
+
+    await worker.runUntil(async () => {
+      for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+        const postId = `legacy:${origin}:${process.pid}`;
+        calls.length = 0;
+        const postDelete = await environment.client.workflow.start('postDeleteWorkflow', {
+          args: [{ postId, origin }],
+          taskQueue,
+          workflowId: `${taskQueue}:postDeleteWorkflow:${origin}`,
+        });
+        await postDelete.result();
+        assert.deepEqual(calls, origin === 'LOCAL' ? [`post-delete:${postId}`] : []);
+        await Worker.runReplayHistory(
+          { workflowsPath },
+          await postDelete.fetchHistory(),
+          postDelete.workflowId,
+        );
+
+        calls.length = 0;
+        const repostDelete = await environment.client.workflow.start('repostDeleteWorkflow', {
+          args: [{ postId, origin }],
+          taskQueue,
+          workflowId: `${taskQueue}:repostDeleteWorkflow:${origin}`,
+        });
+        await repostDelete.result();
+        assert.deepEqual(
+          calls.toSorted(),
+          [
+            `repost-notification:${postId}`,
+            ...(origin === 'LOCAL' ? [`repost-undo:${postId}`] : []),
+          ].toSorted(),
+        );
+        await Worker.runReplayHistory(
+          { workflowsPath },
+          await repostDelete.fetchHistory(),
+          repostDelete.workflowId,
+        );
+      }
     });
   },
 );
