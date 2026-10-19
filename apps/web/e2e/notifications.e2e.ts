@@ -518,6 +518,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
   }
   await db.insert(Notifications).values({
     kind: NotificationKind.REPLY,
+    recipientAccountId: recipient.account.id,
     recipientProfileId: recipient.profile.id,
     sourceId: source.id,
   });
