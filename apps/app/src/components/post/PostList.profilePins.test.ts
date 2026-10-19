@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, it, mock } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Fragment, Suspense, useState } from 'react';
 import * as Relay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
-  ConnectionHandler,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
@@ -17,15 +18,19 @@ import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { ProfilePostListPageQuery } from '../../app/(tabs)/(profile)/[profileHandle]/__generated__/ProfilePostListPageQuery.graphql';
+import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction_post.graphql';
 import type { PostList as PostListType } from './PostList';
+import type { useProfilePinAction as UseProfilePinAction } from './ProfilePinAction';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
 const stub = (path: string, exports: object) => mock.module(path, { exports } as never);
 const children = ({ children }: { children?: ReactNode }) => children;
 let renderer: ReactTestRenderer | undefined;
-const focusList = mock.fn();
 let PostList: typeof PostListType;
+let useProfilePinAction: typeof UseProfilePinAction;
+let activeActionPostId: string | null = null;
+let refreshProfileQuery: (() => void) | null = null;
 const requests: Array<{
   name: string;
   variables: Record<string, unknown>;
@@ -34,7 +39,7 @@ const requests: Array<{
 stub('react-relay', {
   ...Relay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:fragment|query) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:fragment|query|mutation) (\w+)/)?.[1];
     return require(`./__generated__/${name}.graphql.ts`).default;
   },
 });
@@ -46,8 +51,24 @@ stub('react-native', {
   Text: 'Text',
   useWindowDimensions: () => ({ width: 390, height: 844 }),
 });
+stub('react-native-svg', {
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Rect: 'Rect',
+  Stop: 'Stop',
+  Svg: 'Svg',
+});
+stub('lucide-react-native', { Pin: 'Pin' });
+stub('@/session/SessionProvider', { useSession: () => ({ selectedProfileId: 'owner' }) });
 stub('@/theme/ThemeProvider', { useTheme: () => ({}) });
 stub('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => () => undefined }) });
+stub('@/components/ui/ConfirmationContent', {
+  ConfirmationContent: (props: object) => createElement('ConfirmationContent', props),
+});
+stub('@/components/ui/ModalSheet', {
+  ModalSheet: ({ children, ...props }: { children?: ReactNode }) =>
+    createElement('ModalSheet', props, children),
+});
 stub('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
 stub('@/components/ui/StateView', { Skeleton: 'Skeleton', StateView: 'StateView' });
 stub('@/components/pagination/InfiniteList', {
@@ -81,9 +102,11 @@ stub(new URL('./PostListItem.tsx', import.meta.url).href, {
 });
 before(async () => {
   ({ PostList } = await import('./PostList'));
+  ({ useProfilePinAction } = await import('./ProfilePinAction'));
 });
 beforeEach(() => {
-  focusList.mock.resetCalls();
+  activeActionPostId = null;
+  refreshProfileQuery = null;
   mock.timers.enable({ apis: ['setTimeout'] });
 });
 afterEach(async () => {
@@ -92,12 +115,33 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = undefined;
   requests.length = 0;
+  activeActionPostId = null;
+  refreshProfileQuery = null;
 });
 function Harness() {
-  const data = Relay.useLazyLoadQuery<ProfilePostListPageQuery>(query, { handle: '@owner' });
-  return createElement(PostList, {
-    profile: data.profileByHandle,
-  });
+  const [fetchKey, setFetchKey] = useState(0);
+  const data = Relay.useLazyLoadQuery<ProfilePostListPageQuery>(
+    query,
+    { handle: '@owner' },
+    { fetchKey, fetchPolicy: 'store-or-network' },
+  );
+  refreshProfileQuery = () => setFetchKey((key) => key + 1);
+  return createElement(
+    Fragment,
+    null,
+    createElement(PostList, { profile: data.profileByHandle }),
+    activeActionPostId ? createElement(ActionHarness, { postId: activeActionPostId }) : null,
+  );
+}
+const rootQueryOperation = createOperationDescriptor(getRequest(query), { handle: '@owner' });
+const queryOwner = rootQueryOperation.request;
+function ActionHarness({ postId }: { postId: string }) {
+  const action = useProfilePinAction({
+    __fragmentOwner: queryOwner,
+    __fragments: { ProfilePinAction_post: {} },
+    __id: postId,
+  } as unknown as ProfilePinAction_post$key);
+  return createElement('ActionState', { postId, ...action }, action.confirmation);
 }
 async function start() {
   const environment = new Environment({
@@ -114,7 +158,6 @@ async function start() {
         environment,
         children: createElement(Suspense, { fallback: null }, createElement(Harness)),
       }),
-      { createNodeMock: () => ({ focus: focusList }) },
     );
   });
   return environment;
@@ -133,7 +176,19 @@ const connection = (
       createdAt: '2026-09-30T00:00:00Z',
       state: 'ACTIVE',
       visibility: 'PUBLIC',
-      content: null,
+      content: {
+        __typename: 'PostContent',
+        id: `${id}:content`,
+        bodyText: '',
+        contentWarning: null,
+        document: {
+          version: 1,
+          summary: null,
+          body: { type: 'doc', content: [{ type: 'paragraph' }] },
+        },
+        media: [],
+        mentionedProfiles: [],
+      },
       replyParent: null,
       repostSource: null,
       viewerBookmark: null,
@@ -143,10 +198,10 @@ const connection = (
       reactionCounts: [],
       profile: {
         __typename: 'Profile',
-        id: 'author',
-        displayName: 'Author',
-        handle: 'author',
-        relativeHandle: '@author',
+        id: 'owner',
+        displayName: 'Owner',
+        handle: 'owner',
+        relativeHandle: '@owner',
         avatar: null,
         instance: { kind: 'LOCAL' },
         pinnedPosts: {
@@ -210,216 +265,106 @@ it('Local shows every pin, permits chronology duplicates, and survives deleted r
     ['second', true],
     ['first', false],
   ]);
-  assert.equal(typeof all('PostListItem')[1]!.props.onProfileUnpinned, 'function');
-  all('PostListItem')[0]!.props.onProfileUnpinned();
-  assert.equal(focusList.mock.callCount(), 1);
   await act(async () => environment.commitUpdate((store) => store.delete('first')));
   assert.deepEqual(cards(), [['second', true]]);
   assert.equal(all('StateView').length, 0);
   assert.equal(all('InfiniteList').length, 1);
   assert.equal(all('Button').length, 0);
 });
-it('Local pin pagination refreshes the whole loaded range after connection invalidation', async () => {
+it('pin and unpin update Post state while the pinned list waits for a normal query', async () => {
+  activeActionPostId = 'first';
   const environment = await start();
-  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
   await respond({
     currentSession: null,
-    profileByHandle: profile('LOCAL', firstPage, [], true),
+    profileByHandle: profile('LOCAL', ['first', 'second'], ['first', 'chronology']),
   });
-  await act(async () => all('Button')[0]!.props.onPress());
-  await respond({
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      pinnedPosts: connection(
-        Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
-        false,
-        true,
-      ),
+  assert.equal(environment.check(rootQueryOperation).status, 'available');
+  assert.deepEqual(cards(), [
+    ['first', true],
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
+  assert.equal(all('ActionState')[0]!.props.item.label, '프로필 고정 해제');
+
+  await act(async () => all('ActionState')[0]!.props.item.onSelect());
+  await act(async () => all('ConfirmationContent')[0]!.props.onConfirm());
+  await act(async () => all('ModalSheet')[0]!.props.onDismiss());
+  assert.equal(requests[1]!.name, 'ProfilePinActionUnpinMutation');
+  await respondAt(1, {
+    unpinProfilePost: {
+      changed: true,
+      profile: { __typename: 'Profile', id: 'owner' },
+      post: { __typename: 'Post', id: 'first', isPinned: false },
     },
   });
-  assert.equal(cards().length, 40);
 
-  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
-  await act(async () =>
-    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
-  );
-  const refresh = requests.at(-1)!;
-  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
-  assert.deepEqual(refresh.variables, { count: 40, cursor: null, id: 'owner' });
-  const loadedIds = cards().map(([id]) => id);
-  assert.equal(all('StateView').length, 0);
-  all('PostListItem')[0]!.props.onProfileUnpinned();
-  assert.equal(focusList.mock.callCount(), 1);
-  await act(async () => refresh.sink.error(new Error('offline')));
+  assert.equal(all('ActionState')[0]!.props.item.label, '프로필에 고정');
+  assert.deepEqual(cards(), [
+    ['first', true],
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
   assert.deepEqual(
-    cards().map(([id]) => id),
-    loadedIds,
+    requests.map((request) => request.name),
+    ['ProfilePostListPageQuery', 'ProfilePinActionUnpinMutation'],
   );
-  assert.equal(all('StateView').length, 0);
-  assert.equal(all('InfiniteList').length, 1);
-  assert.equal(all('Button')[0]!.props.accessibilityLabel, '고정된 게시글 새로고침 다시 시도');
-  all('PostListItem')[0]!.props.onProfileUnpinned();
-  assert.equal(focusList.mock.callCount(), 2);
+  assert.equal(environment.check(rootQueryOperation).status, 'stale');
 
-  await act(async () => all('Button')[0]!.props.onPress());
-  const retry = requests.at(-1)!;
-  assert.equal(retry.name, 'PostListProfilePinnedRefreshQuery');
-  assert.deepEqual(retry.variables, { count: 40, cursor: null, id: 'owner' });
-  const refreshed = [
-    ...firstPage,
-    ...Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
-  ].reverse();
-  await respond({
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(refreshed, false, true) },
-  });
-  assert.deepEqual(
-    cards().map(([id]) => id),
-    refreshed,
-  );
-});
-
-it('blocks pinned pagination during refresh and allows the next page after refresh completes', async () => {
-  const environment = await start();
-  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
-  await respond({
+  await act(async () => refreshProfileQuery?.());
+  assert.equal(requests[2]!.name, 'ProfilePostListPageQuery');
+  await respondAt(2, {
     currentSession: null,
-    profileByHandle: profile('LOCAL', firstPage, [], true),
+    profileByHandle: profile('LOCAL', ['second'], ['first', 'chronology']),
+  });
+  assert.deepEqual(cards(), [
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
+
+  await act(async () => all('ActionState')[0]!.props.item.onSelect());
+  await act(async () => all('ConfirmationContent')[0]!.props.onConfirm());
+  await act(async () => all('ModalSheet')[0]!.props.onDismiss());
+  assert.equal(requests[3]!.name, 'ProfilePinActionPinMutation');
+  await respondAt(3, {
+    pinProfilePost: {
+      changed: true,
+      profile: { __typename: 'Profile', id: 'owner' },
+      post: { __typename: 'Post', id: 'first', isPinned: true },
+    },
   });
 
-  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
-  await act(async () =>
-    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
+  assert.equal(all('ActionState')[0]!.props.item.label, '프로필 고정 해제');
+  assert.deepEqual(cards(), [
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
+  assert.deepEqual(
+    requests.map((request) => request.name),
+    [
+      'ProfilePostListPageQuery',
+      'ProfilePinActionUnpinMutation',
+      'ProfilePostListPageQuery',
+      'ProfilePinActionPinMutation',
+    ],
   );
-  const refresh = requests.at(-1)!;
-  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
+  assert.equal(environment.check(rootQueryOperation).status, 'stale');
 
-  await act(async () => all('Button')[0]!.props.onPress());
-  assert.equal(requests.at(-1), refresh);
-  assert.equal(all('Button')[0]!.props.loading, true);
-
-  await respondAt(requests.indexOf(refresh), {
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(firstPage, true, true) },
-  });
-  assert.equal(all('Button')[0]!.props.loading, false);
-
-  await act(async () => all('Button')[0]!.props.onPress());
-  assert.equal(requests.at(-1)!.name, 'PostListProfilePinnedNextPageQuery');
-});
-
-it('waits for pinned pagination before refreshing the complete loaded range', async () => {
-  const environment = await start();
-  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
-  const secondPage = Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`);
-  const loadedPins = [...firstPage, ...secondPage];
-  await respond({
+  await act(async () => refreshProfileQuery?.());
+  assert.equal(requests[4]!.name, 'ProfilePostListPageQuery');
+  await respondAt(4, {
     currentSession: null,
-    profileByHandle: profile('LOCAL', firstPage, [], true),
+    profileByHandle: profile('LOCAL', ['first', 'second'], ['first', 'chronology']),
   });
-
-  await act(async () => all('Button')[0]!.props.onPress());
-  const nextPage = requests.at(-1)!;
-  assert.equal(nextPage.name, 'PostListProfilePinnedNextPageQuery');
-
-  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
-  await act(async () =>
-    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
-  );
-  assert.equal(requests.at(-1), nextPage);
-
-  await respondAt(requests.indexOf(nextPage), {
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(secondPage, true, true) },
-  });
-  const refresh = requests.at(-1)!;
-  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
-  assert.equal(refresh.variables.count, 40);
-
-  const finalPins = ['pin-final', ...loadedPins.slice(0, 39)];
-  await respondAt(requests.indexOf(refresh), {
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(finalPins, true, true) },
-  });
-  assert.deepEqual(
-    cards()
-      .filter(([, pinned]) => pinned)
-      .map(([id]) => id),
-    finalPins,
-  );
-});
-
-it('coalesces invalidations and refetches the canonical pin page after an in-flight refresh', async () => {
-  const environment = await start();
-  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
-  const loadedPins = [
-    ...firstPage,
-    ...Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
-  ];
-  await respond({
-    currentSession: null,
-    profileByHandle: profile('LOCAL', firstPage, ['chronology'], true),
-  });
-  await act(async () => all('Button')[0]!.props.onPress());
-  await respond({
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(loadedPins) },
-  });
-  assert.equal(cards().filter(([, pinned]) => pinned).length, 40);
-
-  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
-  const invalidatePins = () =>
-    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord());
-
-  await act(async () => {
-    invalidatePins();
-    invalidatePins();
-  });
-  const staleRefresh = requests.at(-1)!;
-  assert.equal(staleRefresh.name, 'PostListProfilePinnedRefreshQuery');
-  assert.deepEqual(staleRefresh.variables, { count: 40, cursor: null, id: 'owner' });
-  await act(async () => invalidatePins());
-  assert.equal(requests.at(-1), staleRefresh);
-  const stalePins = ['pin-a', ...loadedPins.slice(0, 39)];
-  await respondAt(requests.indexOf(staleRefresh), {
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      pinnedPosts: connection(stalePins, true, true),
-    },
-  });
-  const currentRefresh = requests.at(-1)!;
-  assert.notEqual(currentRefresh, staleRefresh);
-  assert.equal(currentRefresh.name, 'PostListProfilePinnedRefreshQuery');
-  assert.deepEqual(currentRefresh.variables, { count: 40, cursor: null, id: 'owner' });
-  assert.deepEqual(
-    cards().map(([id, pinned]) => [id, pinned]),
-    [...stalePins.map((id) => [id, true] as const), ['chronology', false]],
-  );
-
-  const currentPins = ['pin-b', 'pin-a', ...loadedPins.slice(0, 38)];
-  await respondAt(requests.indexOf(currentRefresh), {
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      pinnedPosts: connection(currentPins, true, true),
-    },
-  });
-  assert.deepEqual(
-    cards().map(([id, pinned]) => [id, pinned]),
-    [...currentPins.map((id) => [id, true] as const), ['chronology', false]],
-  );
-  await act(async () => all('Button')[0]!.props.onPress());
-  assert.equal(requests.at(-1)!.variables.cursor, currentPins.at(-1));
-  await respond({
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      pinnedPosts: connection(loadedPins.slice(38), false, true),
-    },
-  });
-  assert.deepEqual(
-    cards().map(([id, pinned]) => [id, pinned]),
-    [...currentPins, ...loadedPins.slice(38)]
-      .map((id) => [id, true])
-      .concat([['chronology', false]]),
-  );
+  assert.deepEqual(cards(), [
+    ['first', true],
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
 });
 it('ActivityPub paginates pins independently of chronology', async () => {
   await start();

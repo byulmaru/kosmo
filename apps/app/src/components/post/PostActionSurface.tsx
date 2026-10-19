@@ -21,7 +21,6 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
-  onProfileUnpinned?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -45,7 +44,6 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
-  onProfileUnpinned,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -66,7 +64,7 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
-  const profilePinAction = useProfilePinAction(target.profilePin!, onProfileUnpinned);
+  const profilePinAction = useProfilePinAction(target.profilePin!);
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,

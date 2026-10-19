@@ -345,6 +345,15 @@ export const OwnerMenuAndConfirmedActions: Story = {
     await waitFor(() => expect(args.onUnpin).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(canvas.queryByText('고정됨')).not.toBeInTheDocument());
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+    expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      '링크 복사',
+      '프로필에 고정',
+      '신고',
+      '삭제',
+    ]);
+    await userEvent.keyboard('{Escape}');
   },
 };
 

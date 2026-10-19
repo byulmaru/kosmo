@@ -15,7 +15,6 @@ import {
 } from 'relay-runtime';
 import pinFragment from './__generated__/ProfilePinAction_post.graphql';
 import pinMutation from './__generated__/ProfilePinActionPinMutation.graphql';
-import refetchQuery from './__generated__/ProfilePinActionRefetchQuery.graphql';
 import unpinMutation from './__generated__/ProfilePinActionUnpinMutation.graphql';
 import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -36,7 +35,7 @@ const requests: Array<{
 const toasts: string[] = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
-const artifacts = [pinFragment, refetchQuery, pinMutation, unpinMutation];
+const artifacts = [pinFragment, pinMutation, unpinMutation];
 let selectedProfileId = profileA;
 let renderer: ReactTestRenderer | null = null;
 let useProfilePinAction: typeof useProfilePinActionType;
@@ -128,8 +127,8 @@ function fragmentRef(postId: string): ProfilePinAction_post$key {
   } as unknown as ProfilePinAction_post$key;
 }
 
-function ActionHarness({ postId, onUnpinned }: { postId: string; onUnpinned?: () => void }) {
-  const action = useProfilePinAction(fragmentRef(postId), onUnpinned);
+function ActionHarness({ postId }: { postId: string }) {
+  const action = useProfilePinAction(fragmentRef(postId));
   return createElement('ActionState', { postId, ...action }, action.confirmation);
 }
 
@@ -210,7 +209,7 @@ function mutationResponse(
   };
 }
 
-test('실제 Relay mutation은 여러 게시물을 독립 고정하고 해제 시 나머지 연결을 보존한다', async () => {
+test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정된 다른 게시물 상태를 보존한다', async () => {
   const environment = createEnvironment();
   seedPost(environment, 'post-a', profileA, false);
   seedPost(environment, 'post-b', profileA, false);
@@ -223,6 +222,8 @@ test('실제 Relay mutation은 여러 게시물을 독립 고정하고 해제 �
   assert.deepEqual(requests[0]?.variables, { postId: 'post-a' });
   assert.equal(actions()[0]!.props.pending, true);
   assert.equal(actions()[1]!.props.pending, false);
+  await act(async () => actions()[0]!.props.item.onSelect());
+  assert.equal(requests.length, 1);
 
   await confirm(1);
   assert.equal(requests[1]?.name, 'ProfilePinActionPinMutation');
@@ -232,13 +233,11 @@ test('실제 Relay mutation은 여러 게시물을 독립 고정하고 해제 �
   assert.equal(actions()[1]!.props.item.label, '프로필에 고정');
   await respond(1, mutationResponse('pinProfilePost', 'post-b', profileA, true));
 
-  let unpinned = 0;
   await act(async () => {
     renderer!.update(
       createElement(ReactRelay.RelayEnvironmentProvider, {
         children: createElement(ActionHarness, {
           key: 'post-a',
-          onUnpinned: () => (unpinned += 1),
           postId: 'post-a',
         }),
         environment,
@@ -250,44 +249,39 @@ test('실제 Relay mutation은 여러 게시물을 독립 고정하고 해제 �
   assert.equal(requests[2]?.name, 'ProfilePinActionUnpinMutation');
   await respond(2, mutationResponse('unpinProfilePost', 'post-a', profileA, false));
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
-  assert.equal(unpinned, 1);
+  assert.equal(requests.length, 3);
   const source = environment.getStore().getSource();
   assert.equal(source.get('post-a')?.isPinned, false);
   assert.equal(source.get('post-b')?.isPinned, true);
   assert.deepEqual(toasts, []);
 });
 
-test('durable pin success survives nullable projection errors and retries only the post field', async () => {
+test('durable pin success with an unreadable projection hides only the pin action', async () => {
   const environment = createEnvironment();
   seedPost(environment, 'post-retry', profileA, false);
   await render(environment, ['post-retry']);
   await confirm();
   await respond(0, mutationResponse('pinProfilePost', 'post-retry', profileA, null));
 
-  assert.equal(actions()[0]!.props.item.label, '고정 상태 다시 불러오기');
+  assert.equal(actions()[0]!.props.item, undefined);
   assert.deepEqual(toasts, []);
+  assert.equal(requests.length, 1);
+});
+
+test('취소하면 mutation을 보내지 않고 메뉴 트리거로 focus를 돌려준다', async () => {
+  const environment = createEnvironment();
+  seedPost(environment, 'post-cancel', profileA, false);
+  await render(environment, ['post-cancel']);
+  let focused = 0;
+  actions()[0]!.props.onMoreTriggerReady(() => (focused += 1));
+
   await act(async () => actions()[0]!.props.item.onSelect());
-  assert.equal(requests[1]?.name, 'ProfilePinActionRefetchQuery');
-  assert.equal(requests[1]?.variables.id, 'post-retry');
-  await respond(1, {
-    data: {
-      node: {
-        __typename: 'Post',
-        id: 'post-retry',
-        isPinned: true,
-        state: 'ACTIVE',
-        visibility: 'PUBLIC',
-        content: { __typename: 'PostContent', id: 'post-retry:content' },
-        profile: {
-          __typename: 'Profile',
-          id: profileA,
-          relativeHandle: '@pin-owner-a',
-          instance: { __typename: 'ProfileInstance', kind: 'LOCAL' },
-        },
-      },
-    },
-  });
-  assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
+  await act(async () => confirmation().props.onCancel());
+  await act(async () => modal().props.onDismiss());
+
+  assert.equal(requests.length, 0);
+  assert.equal(focused, 1);
+  assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
 });
 
 test('actor 전환 뒤 늦은 응답은 이전 Relay store와 요청 시점 작성자 handle을 사용한다', async () => {

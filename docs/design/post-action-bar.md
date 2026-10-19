@@ -247,6 +247,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정·해제 요청 중에도 Profile 전환을 허용한다. 실패 알림에는 요청을 시작한 Profile을 표시한다.
+- pin/unpin 성공 뒤 대상 Post의 메뉴는 저장된 고정 상태를 반영한다. 이미 표시 중인 Profile pinned segment는 이전 목록 구성과 순서를
+  유지할 수 있으며, 이후 Profile 목록을 다시 조회할 때 저장된 결과를 표시한다.
 - 고정 Post는 Profile 목록의 pinned segment에서 우선 표시하며 Home timeline 순서는 변경하지 않는다.
 - Profile pinned segment는 조회 가능한 Local pin 전체를 server-authoritative 순서로 표시하고 개별 관리한다. Remote는 검증된
   Featured collection 전체를 원격 순서로 표시한다. pin 관계는 기존 Profile chronology의 후보·순서·pagination을 바꾸지 않으므로,
@@ -259,14 +261,15 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 시각·상태 근거는 [DSN-55 handoff](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4827-6858)와
   `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
-- 고정 상태를 불러오지 못하면 owner 메뉴에서 `고정 상태 다시 불러오기`를 제공한다. 상태를 불러오거나 재시도하는
-  동안 현재 화면과 내부 상태를 유지한다. 요청 중 Profile 전환을 허용하고, 실패 안내는 요청을 시작한 Profile을 가리킨다.
-- 고정 목록에서 해제한 Post가 사라지면 목록으로 focus를 옮긴다. chronology에서 해제한 경우에는 남아 있는 More trigger로
-  focus를 복원한다. 기존 링크 복사 feedback과 삭제 eligibility·확인 흐름은 유지한다.
+- 고정 상태를 확인할 수 없으면 owner 메뉴에서 고정 action만 생략하고 Post와 나머지 메뉴 action은 유지한다. 별도 고정 상태
+  재시도 action은 제공하지 않는다.
+- 고정 목록에서 해제해도 현재 표시 중인 Post가 즉시 사라질 필요는 없으므로, 완료 뒤 focus는 해당 Post의 More trigger로
+  돌아간다. 기존 링크 복사 feedback과 삭제 eligibility·확인 흐름은 유지한다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
-- fixture는 고정·해제 요청의 busy·disabled 표시, 완료 뒤 More trigger focus 복귀, 단일 요청 실패 시 현재 표시 유지와
-  공용 한국어 오류 안내, 메뉴를 다시 열어 재시도하는 동작을 확인한다. 오류 원문은 표시하지 않는다.
+- fixture는 고정·해제 요청의 busy·disabled 표시, 완료 뒤 More trigger focus 복귀, mutation 실패 시 현재 표시 유지와
+  공용 한국어 오류 안내, 메뉴를 다시 열어 재시도하는 동작을 확인한다. 고정 상태를 확인할 수 없는 경우에는 고정 action만
+  생략하고 다른 메뉴 action을 유지한다. 오류 원문은 표시하지 않는다.
 - 고정과 해제는 각각 `프로필에 고정할까요?`·`프로필 고정을 해제할까요?` alertdialog에서 `취소`와
   `고정`·`고정 해제`를 확인한다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤
   요청한다.

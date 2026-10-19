@@ -1,6 +1,6 @@
 import { Pin } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
@@ -11,11 +11,10 @@ import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction_post.graphql';
 import type { ProfilePinActionPinMutation } from './__generated__/ProfilePinActionPinMutation.graphql';
-import type { ProfilePinActionRefetchQuery } from './__generated__/ProfilePinActionRefetchQuery.graphql';
 import type { ProfilePinActionUnpinMutation } from './__generated__/ProfilePinActionUnpinMutation.graphql';
 
 const profilePinFragment = graphql`
-  fragment ProfilePinAction_post on Post @refetchable(queryName: "ProfilePinActionRefetchQuery") {
+  fragment ProfilePinAction_post on Post {
     id
     isPinned @catch(to: RESULT)
     state
@@ -68,19 +67,13 @@ const failureMessage = '고정 상태를 변경하지 못했어요. 다시 시�
 
 type Operation = 'pin' | 'unpin';
 
-export function useProfilePinAction(
-  postKey: ProfilePinAction_post$key,
-  onUnpinned?: () => void,
-): Readonly<{
+export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonly<{
   confirmation: ReactNode;
   item?: ActionMenuItem;
   onMoreTriggerReady: (focus: () => void) => void;
   pending: boolean;
 }> {
-  const [post, refetch] = useRefetchableFragment<
-    ProfilePinActionRefetchQuery,
-    ProfilePinAction_post$key
-  >(profilePinFragment, postKey);
+  const post = useFragment(profilePinFragment, postKey);
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const [commitPin, pinPending] = useMutation<ProfilePinActionPinMutation>(pinMutation);
@@ -91,8 +84,6 @@ export function useProfilePinAction(
   );
   const cancelRef = useRef<View>(null);
   const focusTriggerRef = useRef<() => void>(() => undefined);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshFailed, setRefreshFailed] = useState(false);
   const pending = pinPending || unpinPending;
   const ownEligible = Boolean(
     selectedProfileId === post.profile.id &&
@@ -101,31 +92,8 @@ export function useProfilePinAction(
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),
   );
-  const stateReadFailed = !post.isPinned.ok || post.isPinned.value == null || refreshFailed;
+  const stateReadFailed = !post.isPinned.ok || post.isPinned.value == null;
   const pinned = post.isPinned.ok && post.isPinned.value === true;
-
-  const retry = useCallback(() => {
-    if (!ownEligible || refreshing) {
-      return;
-    }
-    setRefreshing(true);
-    setRefreshFailed(false);
-    try {
-      refetch(
-        {},
-        {
-          fetchPolicy: 'store-and-network',
-          onComplete: (error) => {
-            setRefreshing(false);
-            setRefreshFailed(Boolean(error));
-          },
-        },
-      );
-    } catch {
-      setRefreshing(false);
-      setRefreshFailed(true);
-    }
-  }, [ownEligible, refetch, refreshing]);
 
   const onSelect = useCallback(() => {
     if (!ownEligible || stateReadFailed || pending || selectedOperation) {
@@ -161,9 +129,7 @@ export function useProfilePinAction(
           const result = response.unpinProfilePost;
           if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
             finishFailure();
-            return;
           }
-          onUnpinned?.();
         },
         onError: finishFailure,
         updater: (store) => {
@@ -199,7 +165,6 @@ export function useProfilePinAction(
     commitPin,
     commitUnpin,
     confirmationPhase,
-    onUnpinned,
     ownEligible,
     pending,
     post.id,
@@ -242,22 +207,8 @@ export function useProfilePinAction(
     </ModalSheet>
   ) : null;
 
-  if (!ownEligible) {
+  if (!ownEligible || stateReadFailed) {
     return { confirmation, onMoreTriggerReady, pending: false };
-  }
-
-  if (stateReadFailed) {
-    return {
-      item: {
-        icon: Pin,
-        key: 'retry-profile-pin',
-        label: refreshing ? '고정 상태를 불러오는 중' : '고정 상태 다시 불러오기',
-        onSelect: retry,
-      },
-      confirmation,
-      onMoreTriggerReady,
-      pending: refreshing,
-    };
   }
 
   return {
