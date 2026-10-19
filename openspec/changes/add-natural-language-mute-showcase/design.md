@@ -13,11 +13,14 @@
 
 2026-10-19 Implement 후 사용자 요청 “기존 코스모 UI를 사용해서 실제 적용 예시를 보여주도록 수정”을 반영했다.
 
-`docs/demos/natural-language-mute/index.html`과 같은 폴더의 화면 이미지 3장이 전달물이다. 기존 `UniversalShell`·`HomeRoute`의 실제 홈 피드를 Relay fixture로 렌더링한다. 설정 예시는 기존 `PageHeader`·`TextField`·`Button`·`BottomTabBar`와 theme token을 합성한다. 제작 원본은 `apps/app/src/stories/screens/NaturalLanguageMute.stories.tsx`다.
+`docs/demos/natural-language-mute/index.html`과 같은 폴더의 화면 JPG 6장이 전달물이다. 기존 `UniversalShell`·`HomeRoute`의 실제 홈 피드를 Relay fixture로 렌더링한다. 설정 예시는 기존 `PageHeader`·`TextField`·`Button`·`BottomTabBar`와 theme token을 합성한다. 제작 원본은 `apps/app/src/stories/screens/NaturalLanguageMute.stories.tsx`다.
 
-장면은 문장 설정→적용 전 홈 피드→적용 후 홈 피드다. 동일한 세 글과 순서를 유지하고, 결말 공개 글의 핵심 구절만 검은 영역으로 가리고, 누르면 같은 자리에서 구절을 공개하는 모의 결과를 보여준다. 작성자·반응과 앞뒤 문장은 유지한다. 영역 원본은 소개용 `region-preview.html`이며 앱 renderer를 변경하지 않는다. 작화 감상과 행사 준비 글은 유지한다. 실제 CW·자연어 뮤트 정책을 연결하거나 실제 서비스 경로를 추가하지 않는다.
+2026-10-19 사용자 후속 요청에 따라 두 비교 케이스를 분리했다. 같은 자연어 조건과 적용 전 피드를 사용하며, 각 케이스는 설정→적용 전→결과 순서다.
 
-화면은 SUIT/Pretendard가 로드된 Light·390×844 Web Storybook 캡처와 본문 영역 합성이다. HTML은 넓은 화면에서 세 장면을 나란히 보여주고 작은 화면에서 세로로 배치한다. 설정·적용 전 이미지는 크게 열 수 있고, 적용 후 화면은 가림·공개를 전환한다. 행사 기기에는 폴더 전체를 복사한다.
+- 문장 단위 영역 뮤트: 첫 글의 세 문장 중 결말을 밝히는 두 번째 문장 전체를 검은 영역으로 가린다. 누르면 같은 자리에서 공개·재가림한다. 앞뒤 감상·작성자·반응·글 높이와 다른 글은 유지한다. 영역 원본은 소개용 `region-preview.html`이며 앱 renderer는 변경하지 않는다.
+- 글 전체 숨김: 첫 글을 모의 목록에서 제외해 기존 `HomeRoute`로 렌더링한다. 가림 카드나 대체 행 없이 작화 감상과 행사 준비 글이 올라오며 남은 글의 순서는 유지한다.
+
+화면은 SUIT/Pretendard가 로드된 Light·390×844 Web Storybook 캡처와 본문 영역 합성이다. HTML의 native radio로 케이스를 전환하고, 넓은 화면에서 세 장면을 나란히, 작은 화면에서 세로로 배치한다. 이미지 전체를 크게 열 수 있으며 문장 가림 결과는 공개·재가림을 전환한다. 행사 기기에는 폴더 전체를 복사한다. 실제 모델 판단·설정 모드·서비스 경로·뮤트 정책을 추가한 것은 아니다.
 
 ## Alternatives and Traps
 

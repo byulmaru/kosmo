@@ -13,7 +13,7 @@ import { iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-const sentence = '아직 보지 않은 작품의 결말이나 반전 이야기는 보고 싶지 않아요.';
+const sentence = '〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.';
 const membership = { id: 'showcase-membership', role: 'OWNER' as const };
 const viewer = profile({
   displayName: '하루',
@@ -32,7 +32,7 @@ const authors = ['달빛', '여울', '모아'].map((displayName, index) =>
   }),
 );
 const posts = [
-  '〈별의 정원〉 마지막에 정원사가 미래의 주인공이었다는 반전… 첫 장면부터 힌트가 있었네! 🌙',
+  '〈별의 정원〉 드디어 다 봤다!\n마지막에 정원사가 미래의 주인공으로 밝혀진다.\n배경 작화가 정말 예뻤어요. 🌙',
   '〈별의 정원〉 배경 작화가 정말 예뻐요. 수채화 같은 색감 때문에 한 번 더 보고 싶어요. 🎨',
   '코미버스 갈 준비 끝! 물이랑 보조 배터리 챙겼어요. 부스 구경할 생각에 두근두근 ✨',
 ].map((bodyText, index) => ({
@@ -48,7 +48,9 @@ const posts = [
 }));
 const shell = shellQuery({ profiles: [viewer], selectedProfile: viewer });
 const beforeData = { ...shell, homeTimeline: timeline(...posts) };
-function SettingExample() {
+const hiddenData = { ...shell, homeTimeline: timeline(...posts.slice(1)) };
+
+function SettingExample({ hidePost = false }: { hidePost?: boolean }) {
   const theme = useTheme();
   return (
     <View style={{ height: 844 }}>
@@ -68,7 +70,7 @@ function SettingExample() {
           단어를 하나씩 고르는 대신, 문장으로 말해보세요.
         </Text>
         <TextField label="뮤트할 내용" multiline value={sentence} style={styles.input} />
-        <Button>이 조건으로 뮤트하기</Button>
+        <Button>{hidePost ? '이 조건으로 글 숨기기' : '이 조건으로 문장 가리기'}</Button>
         <View
           style={[
             styles.condition,
@@ -77,10 +79,12 @@ function SettingExample() {
         >
           <VolumeX aria-hidden color={theme.foregroundPrimary} size={iconSizes[24]} />
           <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-            이런 부분이 가려져요
+            {hidePost ? '이런 글이 보이지 않아요' : '이런 문장이 가려져요'}
           </Text>
           <Text style={[textStyles.uiCopyL, { color: theme.foregroundPrimary }]}>
-            작품의 결말이나 반전을 직접 알려주는 구절
+            {hidePost
+              ? '결말이나 반전이 담긴 글 전체를 타임라인에서 숨겨요.'
+              : '결말이나 반전을 직접 알려주는 문장 전체를 가려요.'}
           </Text>
         </View>
         <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
@@ -116,7 +120,15 @@ export const Setting: Story = {
   parameters: { showcaseSetting: true },
   render: () => <SettingExample />,
 };
+export const SettingHidden: Story = {
+  parameters: { showcaseSetting: true },
+  render: () => <SettingExample hidePost />,
+};
 export const Before: Story = { render: () => <HomeRoute /> };
+export const HiddenPosts: Story = {
+  parameters: { relay: { data: hiddenData } },
+  render: () => <HomeRoute />,
+};
 const styles = StyleSheet.create({
   form: { flex: 1, gap: space[16], padding: space[16] },
   input: { minHeight: 144, ...textStyles.contentM },
