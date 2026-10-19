@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -10,8 +11,13 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
-import type { PropsWithChildren, ReactNode } from 'react';
-import type { ScrollViewProps } from 'react-native';
+import type { PropsWithChildren, ReactNode, RefObject } from 'react';
+import type {
+  LayoutChangeEvent,
+  ScrollView as NativeScrollView,
+  ScrollViewProps,
+  View as NativeView,
+} from 'react-native';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
@@ -47,9 +53,12 @@ const PostDetailThreadFragment = graphql`
 
 type PostDetailFrameProps = PropsWithChildren<{
   header: ReactNode;
+  headerRef?: RefObject<NativeView | null>;
+  onHeaderLayout?: (event: LayoutChangeEvent) => void;
+  nativeScrollRef?: RefObject<NativeScrollView | null>;
   nativeScrollProps?: Pick<
     ScrollViewProps,
-    'onContentSizeChange' | 'onLayout' | 'onScroll' | 'scrollEventThrottle'
+    'onContentSizeChange' | 'onLayout' | 'onScroll' | 'onScrollBeginDrag' | 'scrollEventThrottle'
   >;
 }>;
 
@@ -59,13 +68,22 @@ type ThreadRenderablePost = Readonly<{
   listItem: PostListItem_post$key | null;
 }>;
 
-export function PostDetailFrame({ children, header, nativeScrollProps }: PostDetailFrameProps) {
+export function PostDetailFrame({
+  children,
+  header,
+  headerRef,
+  nativeScrollProps,
+  nativeScrollRef,
+  onHeaderLayout,
+}: PostDetailFrameProps) {
   const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
 
   return Platform.OS === 'web' ? (
     <View style={styles.frame} testID="post-detail-scroll">
       <View
+        onLayout={onHeaderLayout}
+        ref={headerRef}
         style={[
           styles.header,
           webStickyHeader(shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0),
@@ -80,10 +98,14 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
       {...nativeScrollProps}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.frame}
+      onScrollBeginDrag={nativeScrollProps?.onScrollBeginDrag}
+      ref={nativeScrollRef}
       stickyHeaderIndices={[0]}
       testID="post-detail-scroll"
     >
-      <View style={styles.header}>{header}</View>
+      <View onLayout={onHeaderLayout} ref={headerRef} style={styles.header}>
+        {header}
+      </View>
       {children}
     </ScrollView>
   );
@@ -150,6 +172,14 @@ function PostDetailThreadContent({
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { width } = useWindowDimensions();
+  const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
+  const currentRowRef = useRef<NativeView>(null);
+  const headerRef = useRef<NativeView>(null);
+  const nativeScrollRef = useRef<NativeScrollView>(null);
+  const nativeScrollOffsetRef = useRef(0);
+  const nativeHeaderHeightRef = useRef(0);
+  const lastProgrammaticScrollOffsetRef = useRef<number | null>(null);
+  const initialScrollFrameRef = useRef<number | null>(null);
   const postListPresentation: PostListPresentation =
     getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
@@ -164,6 +194,148 @@ function PostDetailThreadContent({
     pageSize: 20,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
+  const cancelInitialScroll = useCallback(() => {
+    shouldKeepCurrentInViewRef.current = false;
+    lastProgrammaticScrollOffsetRef.current = null;
+    if (initialScrollFrameRef.current !== null) {
+      cancelAnimationFrame(initialScrollFrameRef.current);
+      initialScrollFrameRef.current = null;
+    }
+  }, []);
+  const scheduleInitialScroll = useCallback(() => {
+    if (!shouldKeepCurrentInViewRef.current || initialScrollFrameRef.current !== null) {
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      return;
+    }
+
+    initialScrollFrameRef.current = requestAnimationFrame(() => {
+      initialScrollFrameRef.current = null;
+      if (!shouldKeepCurrentInViewRef.current) {
+        return;
+      }
+
+      const currentRow = currentRowRef.current;
+      const headerView = headerRef.current;
+      if (!currentRow || !headerView) {
+        return;
+      }
+
+      currentRow.measureInWindow((_x, currentTop) => {
+        if (!shouldKeepCurrentInViewRef.current) {
+          return;
+        }
+        // Native sticky-header measurements retain the scrolled content coordinate.
+        // Its viewport stays fixed; combine that origin with the laid-out header height.
+        const boundary =
+          Platform.OS === 'web' ? headerView : nativeScrollRef.current?.getNativeScrollRef();
+        boundary?.measureInWindow((_headerX, headerTop, _headerWidth, measuredHeight) => {
+          const headerHeight =
+            Platform.OS === 'web' ? measuredHeight : nativeHeaderHeightRef.current;
+          if (!shouldKeepCurrentInViewRef.current) {
+            return;
+          }
+
+          const currentOffset =
+            Platform.OS === 'web' ? window.scrollY : nativeScrollOffsetRef.current;
+          const correction = currentTop - (headerTop + headerHeight);
+          let nextOffset = Math.max(0, currentOffset + correction);
+
+          if (Platform.OS === 'web') {
+            const maxOffset = Math.max(
+              0,
+              document.documentElement.scrollHeight - window.innerHeight,
+            );
+            nextOffset = Math.min(nextOffset, maxOffset);
+          }
+
+          lastProgrammaticScrollOffsetRef.current = nextOffset;
+          if (Math.abs(nextOffset - currentOffset) <= 1) {
+            return;
+          }
+
+          if (Platform.OS === 'web') {
+            window.scrollTo({ behavior: 'auto', left: 0, top: nextOffset });
+          } else {
+            nativeScrollRef.current?.scrollTo({ animated: false, y: nextOffset });
+          }
+        });
+      });
+    });
+  }, []);
+  const headerLaidOut = useCallback(
+    (event: LayoutChangeEvent) => {
+      nativeHeaderHeightRef.current = event.nativeEvent.layout.height;
+      scheduleInitialScroll();
+    },
+    [scheduleInitialScroll],
+  );
+  const nativeContentSizeChanged: NonNullable<ScrollViewProps['onContentSizeChange']> = useCallback(
+    (contentWidth, contentHeight) => {
+      nativeScrollProps.onContentSizeChange?.(contentWidth, contentHeight);
+      scheduleInitialScroll();
+    },
+    [nativeScrollProps.onContentSizeChange, scheduleInitialScroll],
+  );
+  const nativeScrolled: NonNullable<ScrollViewProps['onScroll']> = useCallback(
+    (event) => {
+      nativeScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+      nativeScrollProps.onScroll?.(event);
+    },
+    [nativeScrollProps.onScroll],
+  );
+
+  useEffect(() => {
+    if (!shouldKeepCurrentInViewRef.current) {
+      return;
+    }
+
+    scheduleInitialScroll();
+    return cancelInitialScroll;
+  }, [cancelInitialScroll, scheduleInitialScroll]);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== 'web' ||
+      !shouldKeepCurrentInViewRef.current ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    const scrollingKeys = new Set([
+      'ArrowDown',
+      'ArrowUp',
+      'End',
+      'Home',
+      'PageDown',
+      'PageUp',
+      ' ',
+    ]);
+    const cancelForKeyboardScroll = (event: KeyboardEvent) => {
+      if (scrollingKeys.has(event.key)) {
+        cancelInitialScroll();
+      }
+    };
+    const cancelForUnexpectedScroll = () => {
+      const expectedOffset = lastProgrammaticScrollOffsetRef.current;
+      if (expectedOffset !== null && Math.abs(window.scrollY - expectedOffset) > 1) {
+        cancelInitialScroll();
+      }
+    };
+
+    window.addEventListener('wheel', cancelInitialScroll, { passive: true });
+    window.addEventListener('touchmove', cancelInitialScroll, { passive: true });
+    window.addEventListener('keydown', cancelForKeyboardScroll);
+    window.addEventListener('scroll', cancelForUnexpectedScroll, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', cancelInitialScroll);
+      window.removeEventListener('touchmove', cancelInitialScroll);
+      window.removeEventListener('keydown', cancelForKeyboardScroll);
+      window.removeEventListener('scroll', cancelForUnexpectedScroll);
+    };
+  }, [cancelInitialScroll]);
   const ancestors = data.replyAncestors
     .filter((post) => post != null)
     .reverse()
@@ -202,7 +374,10 @@ function PostDetailThreadContent({
       <PostThreadLayout<ThreadRenderablePost>
         ancestors={ancestors}
         current={current}
+        currentRef={currentRowRef}
         descendants={descendants}
+        onCurrentLayout={scheduleInitialScroll}
+        onLayout={scheduleInitialScroll}
         presentation={postListPresentation}
         renderPost={({ item, role }) => (
           <View>
@@ -254,12 +429,26 @@ function PostDetailThreadContent({
               {...nativeScrollProps}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.frame}
+              onScroll={nativeScrolled}
+              onContentSizeChange={nativeContentSizeChanged}
+              onScrollBeginDrag={cancelInitialScroll}
               testID="post-media-viewer-thread-scroll"
             >
               {thread}
             </ScrollView>
           ) : (
-            <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+            <PostDetailFrame
+              header={header}
+              headerRef={headerRef}
+              nativeScrollProps={{
+                ...nativeScrollProps,
+                onContentSizeChange: nativeContentSizeChanged,
+                onScroll: nativeScrolled,
+                onScrollBeginDrag: cancelInitialScroll,
+              }}
+              nativeScrollRef={nativeScrollRef}
+              onHeaderLayout={headerLaidOut}
+            >
               {thread}
             </PostDetailFrame>
           )}

@@ -52,7 +52,10 @@ const PostQuery = graphql`
 `;
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
+  const params = useLocalSearchParams<{
+    postId: string;
+    profileHandle: string;
+  }>();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
