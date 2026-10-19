@@ -3,32 +3,32 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>내가 보고 싶은 이야기만 · KOSMO 자연어 뮤트 구상</title>
+    <title>보고 싶은 이야기는 그대로 · KOSMO 자연어 뮤트</title>
     <style>
-      /* docs/design/colors.md의 Light semantic 값. 독립·오프라인 소개 자료. */
       :root {
         color-scheme: light;
-        --color-background-canvas: #ffffff;
-        --color-background-surface: #fafafb;
-        --color-foreground-primary: #1a1a1a;
-        --color-foreground-secondary: #64646f;
-        --color-border-default: #dfdfe5;
-        --color-border-subtle: #ececf0;
-        --color-action-primary-base: #ffe597;
-        --color-action-primary-subtle: #fff9e6;
-        --color-state-selected-border: #ae8512;
-        --font-ui: 'SUIT Variable', 'SUIT', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-        --font-content:
-          'Pretendard Variable', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+        --canvas: #ffffff;
+        --surface: #fafafb;
+        --ink: #1a1a1a;
+        --secondary: #64646f;
+        --line: #dfdfe5;
+        --primary: #ffe597;
+        --subtle: #fff9e6;
+        --selected: #ae8512;
+        --focus: #4f46e5;
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        background: var(--color-background-canvas);
-        color: var(--color-foreground-primary);
-        font: 16px/1.5 var(--font-ui);
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          16px/1.5 'SUIT Variable',
+          'Apple SD Gothic Neo',
+          'Malgun Gothic',
+          sans-serif;
         word-break: keep-all;
         overflow-wrap: anywhere;
       }
@@ -37,264 +37,131 @@
         margin: auto;
         padding: 32px;
       }
-      .masthead {
+      .brandline {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
         gap: 16px;
         padding-bottom: 24px;
-        border-bottom: 1px solid var(--color-border-default);
+        border-bottom: 1px solid var(--line);
       }
-      .brand {
-        font-weight: 800;
-        letter-spacing: 0.08em;
+      .brandline img {
+        width: 48px;
+        height: 48px;
       }
-      .edition,
-      .eyebrow {
-        color: var(--color-foreground-secondary);
+      .eyebrow,
+      .caption {
         font-size: 14px;
         line-height: 20px;
-      }
-      .intro {
-        display: flex;
-        justify-content: space-between;
-        align-items: end;
-        gap: 24px;
-        margin: 32px 0;
+        color: var(--secondary);
       }
       h1 {
-        margin: 8px 0 12px;
+        margin: 12px 0;
         font-size: 24px;
-        line-height: 1.15;
-        letter-spacing: -0.02em;
-      }
-      h2,
-      h3,
-      p {
-        margin: 0;
+        line-height: 1.3;
       }
       h2 {
+        margin: 0;
         font-size: 20px;
         line-height: 1.3;
       }
-      h3 {
-        font-size: 16px;
-        line-height: 24px;
+      p {
+        margin: 0;
       }
-      .sub {
-        color: var(--color-foreground-secondary);
+      .intro {
+        margin: 24px 0 32px;
       }
-      .badge {
-        display: inline-block;
-        border: 1px solid var(--color-border-default);
-        border-radius: 999px;
-        padding: 4px 12px;
-        font-size: 14px;
-        white-space: nowrap;
-      }
-      .setup {
+      .screens {
         display: grid;
-        grid-template-columns: 1.2fr 1fr;
-        border: 1px solid var(--color-border-default);
-        border-radius: 16px;
-        overflow: hidden;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .scene {
+        min-width: 0;
+        margin: 0;
       }
       .step {
-        padding: 24px;
-      }
-      .step + .step {
-        border-left: 1px solid var(--color-border-default);
-        background: var(--color-action-primary-subtle);
-      }
-      .step-title {
         display: flex;
+        gap: 8px;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
       .number {
-        display: inline-grid;
+        display: grid;
         place-items: center;
         min-width: 32px;
         height: 32px;
         border-radius: 999px;
-        background: var(--color-action-primary-base);
+        background: var(--primary);
         font-size: 14px;
         font-weight: 700;
       }
-      .input-example {
-        margin: 12px 0 0;
-        padding: 16px;
-        border: 1px solid var(--color-border-default);
-        border-radius: 8px;
-        background: var(--color-background-surface);
-        font: 600 20px/1.5 var(--font-content);
+      .description {
+        min-height: 48px;
+        margin-bottom: 16px;
+        color: var(--secondary);
       }
-      .caption {
+      .screen-link {
+        display: block;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--canvas);
+      }
+      .screen-link:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 4px;
+      }
+      .screen-link img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .result .screen-link {
+        border: 2px solid var(--selected);
+      }
+      .note {
+        margin-top: 16px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        background: var(--surface);
         font-size: 14px;
         line-height: 20px;
-        color: var(--color-foreground-secondary);
       }
-      .step .caption {
-        margin-top: 12px;
-      }
-      .condition {
-        font-size: 20px;
-        line-height: 1.5;
-        font-weight: 600;
-      }
-      .condition strong {
-        box-shadow: inset 0 -0.45em var(--color-action-primary-base);
-      }
-      .result {
-        margin-top: 32px;
-      }
-      .result-heading {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 16px;
-      }
-      .result-heading .step-title {
-        margin: 0;
-      }
-      .feeds {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 24px;
-      }
-      .feed {
-        min-width: 0;
-        border: 1px solid var(--color-border-default);
-        border-radius: 16px;
-        overflow: hidden;
-      }
-      .feed.after {
-        border-color: var(--color-state-selected-border);
-      }
-      .feed-header {
-        min-height: 64px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 16px 24px;
-        background: var(--color-background-surface);
-        border-bottom: 1px solid var(--color-border-default);
-      }
-      .after .feed-header {
-        background: var(--color-action-primary-subtle);
-      }
-      .posts {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-      }
-      .post {
-        padding: 16px 24px;
-        min-height: 136px;
-      }
-      .post + .post {
-        border-top: 1px solid var(--color-border-subtle);
-      }
-      .identity {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-      }
-      .avatar {
-        display: grid;
-        place-items: center;
-        flex: 0 0 32px;
-        height: 32px;
-        border: 1px solid var(--color-border-default);
-        border-radius: 999px;
-        background: var(--color-background-surface);
-        font-size: 14px;
-      }
-      .handle {
-        color: var(--color-foreground-secondary);
-        font-size: 12px;
-      }
-      .post-body {
-        font-family: var(--font-content);
-      }
-      .hidden-post {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 8px;
-        background: var(--color-background-surface);
-      }
-      .hidden-post h3::before {
-        content: '—';
-        margin-right: 8px;
-        color: var(--color-foreground-secondary);
-      }
-      mark {
-        background: var(--color-action-primary-subtle);
-        color: inherit;
-        padding: 0 4px;
-      }
-      .explanation {
-        margin-top: 16px;
-        padding-left: 16px;
-        border-left: 2px solid var(--color-state-selected-border);
+      .result .note {
+        background: var(--subtle);
       }
       footer {
         display: flex;
         justify-content: space-between;
         gap: 24px;
+        padding-top: 24px;
         margin-top: 32px;
-        padding-top: 16px;
-        border-top: 1px solid var(--color-border-default);
+        border-top: 1px solid var(--line);
       }
-      @media (max-width: 767px) {
+      @media (max-width: 900px) {
         main {
           padding: 24px 16px;
         }
-        .intro {
-          align-items: start;
-          flex-direction: column;
-        }
-        .setup,
-        .feeds {
+        .screens {
           grid-template-columns: 1fr;
+          gap: 32px;
         }
-        .step + .step {
-          border-left: 0;
-          border-top: 1px solid var(--color-border-default);
+        .scene {
+          width: 100%;
+          max-width: 480px;
+          margin: auto;
         }
-        .step,
-        .post,
-        .feed-header {
-          padding: 16px;
-        }
-        .result-heading {
-          align-items: start;
-          flex-direction: column;
-        }
-        .post {
+        .description {
           min-height: 0;
         }
         footer {
           flex-direction: column;
-          gap: 8px;
+          gap: 12px;
         }
       }
       @media print {
-        main {
-          max-width: none;
-          padding: 16px;
-        }
-        body {
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
-        }
-        .setup,
-        .feeds {
+        .scene {
           break-inside: avoid;
         }
       }
@@ -302,144 +169,83 @@
   </head>
   <body>
     <main>
-      <header class="masthead">
-        <span class="brand">KOSMO</span>
-        <span class="edition">코미버스 · 아이디어 미리보기</span>
+      <header class="brandline">
+        <img src="brand-mark.png" width="48" height="48" alt="KOSMO" />
+        <p class="eyebrow">코미버스 · 자연어 뮤트 구상</p>
       </header>
       <div class="intro">
-        <div>
-          <p class="eyebrow">자연어 뮤트</p>
-          <h1>보고 싶지 않은 이야기, 문장으로 말해보세요.</h1>
-          <p class="sub">
-            좋아하는 이야기는 그대로. 피하고 싶은 내용은 가려진 피드를 상상해보세요.
-          </p>
-        </div>
-        <span class="badge">소개용 예시 화면</span>
+        <p class="eyebrow">보고 싶지 않은 내용을 문장으로 설정한다면?</p>
+        <h1>작품 이야기는 즐기고, 스포일러는 잠시 가려두세요.</h1>
+        <p>코스모 화면으로 보는 적용 예시. 문장 하나가 피드를 어떻게 바꾸는지 살펴보세요.</p>
       </div>
-      <div class="setup">
-        <section class="step" aria-labelledby="input-title">
-          <div class="step-title">
-            <span class="number">01</span>
-            <h2 id="input-title">보고 싶지 않은 내용을 적어요</h2>
-          </div>
-          <p>예를 들어, 작품을 아직 보지 않았다면</p>
-          <blockquote class="input-example">
-            “아직 보지 않은 작품의 결말이나 반전 이야기는 보고 싶지 않아요.”
-          </blockquote>
-          <p class="caption">
-            문장 입력 예시입니다. 이 화면에서 직접 입력하거나 적용하지는 않아요.
+      <div class="screens">
+        <figure class="scene">
+          <figcaption>
+            <div class="step">
+              <span class="number">1</span>
+              <h2>피하고 싶은 내용을 적어요</h2>
+            </div>
+            <p class="description">
+              “아직 보지 않은 작품의 결말이나 반전 이야기는 보고 싶지 않아요.”
+            </p>
+          </figcaption>
+          <a class="screen-link" href="setting.jpg" aria-label="문장 설정 예시 이미지 크게 보기"
+            ><img
+              src="setting.jpg"
+              width="390"
+              height="844"
+              alt="코스모의 입력 필드에 결말과 반전을 보고 싶지 않다는 문장이 적혀 있고, 이 조건으로 뮤트하기 버튼과 가림 조건이 표시된 예시."
+          /></a>
+          <p class="note">가릴 내용: <strong>작품의 결말·반전을 직접 알려주는 글</strong></p>
+        </figure>
+        <figure class="scene">
+          <figcaption>
+            <div class="step">
+              <span class="number">2</span>
+              <h2>적용 전에는 모두 보여요</h2>
+            </div>
+            <p class="description">
+              결말을 밝히는 글, 작화 감상, 행사 준비 글이 같은 피드에 있어요.
+            </p>
+          </figcaption>
+          <a class="screen-link" href="before.jpg" aria-label="적용 전 피드 이미지 크게 보기"
+            ><img
+              src="before.jpg"
+              width="390"
+              height="844"
+              alt="코스모 홈 피드. 달빛의 글은 정원사가 미래의 주인공이라는 반전을 공개한다. 아래에는 여울의 작화 감상과 모아의 코미버스 준비 글이 있다."
+          /></a>
+          <p class="note">첫 번째 글은 <strong>반전을 직접 알려주는 내용</strong>이에요.</p>
+        </figure>
+        <figure class="scene result">
+          <figcaption>
+            <div class="step">
+              <span class="number">3</span>
+              <h2>스포일러 글만 가려져요</h2>
+            </div>
+            <p class="description">
+              같은 글과 순서 그대로. 첫 번째 글의 본문만 가림 표시로 바뀌었어요.
+            </p>
+          </figcaption>
+          <a class="screen-link" href="after.jpg" aria-label="적용 후 피드 이미지 크게 보기"
+            ><img
+              src="after.jpg"
+              width="390"
+              height="844"
+              alt="같은 코스모 홈 피드에 뮤트 중 안내가 나타난다. 달빛의 첫 글 본문은 눈 가림 아이콘과 뮤트한 내용 · 작품 결말·반전, 보기 표시로 대체된다. 작화 감상과 행사 준비 글은 그대로 보인다."
+          /></a>
+          <p class="note">
+            <strong>작화 감상·행사 준비 글은 그대로.</strong> 같은 작품을 말해도 결말을 밝히지 않는
+            글은 남아요.
           </p>
-        </section>
-        <section class="step" aria-labelledby="condition-title">
-          <div class="step-title">
-            <span class="number">02</span>
-            <h2 id="condition-title">이런 내용이 가려져요</h2>
-          </div>
-          <p class="condition">작품의 <strong>결말이나 반전을 직접 알려주는 글</strong></p>
-          <p class="sub">결말을 말하지 않는 작화 감상이나 일상 이야기는 그대로 보여요.</p>
-          <p class="caption">입력 문장의 뜻을 설명하기 위해 준비한 조건 예시예요.</p>
-        </section>
+        </figure>
       </div>
-      <section class="result" aria-labelledby="result-title">
-        <div class="result-heading">
-          <div class="step-title">
-            <span class="number">03</span>
-            <h2 id="result-title">같은 피드, 이렇게 달라져요</h2>
-          </div>
-          <p class="caption">가상의 글 3개 중 결말을 말하는 글 1개를 가린 예시</p>
-        </div>
-        <div class="feeds">
-          <section class="feed" aria-labelledby="before-title">
-            <header class="feed-header">
-              <h3 id="before-title">적용 전</h3>
-              <span class="caption">예시 피드</span>
-            </header>
-            <ol class="posts">
-              <li class="post">
-                <article>
-                  <div class="identity">
-                    <span class="avatar" aria-hidden="true">달</span><strong>달빛</strong
-                    ><span class="handle">@moon · 예시</span>
-                  </div>
-                  <p class="post-body">
-                    〈별의 정원〉 마지막에 <mark>정원사가 미래의 주인공이었다는 반전</mark>, 다시
-                    보니 첫 장면부터 힌트가 있었네.
-                  </p>
-                </article>
-              </li>
-              <li class="post">
-                <article>
-                  <div class="identity">
-                    <span class="avatar" aria-hidden="true">여</span><strong>여울</strong
-                    ><span class="handle">@yeoul · 예시</span>
-                  </div>
-                  <p class="post-body">
-                    〈별의 정원〉 배경 작화가 정말 예뻐요. 수채화 같은 색감 때문에 큰 화면으로 한 번
-                    더 보고 싶어요.
-                  </p>
-                </article>
-              </li>
-              <li class="post">
-                <article>
-                  <div class="identity">
-                    <span class="avatar" aria-hidden="true">모</span><strong>모아</strong
-                    ><span class="handle">@moa · 예시</span>
-                  </div>
-                  <p class="post-body">
-                    내일 코미버스 갈 준비 끝! 가방에 물이랑 보조 배터리 챙겼어요. 부스 구경할 생각에
-                    두근두근.
-                  </p>
-                </article>
-              </li>
-            </ol>
-          </section>
-          <section class="feed after" aria-labelledby="after-title">
-            <header class="feed-header">
-              <h3 id="after-title">적용 후</h3>
-              <span class="badge">1개 가림 · 모의 결과</span>
-            </header>
-            <ol class="posts">
-              <li class="post hidden-post">
-                <h3>설정한 조건으로 가려진 예시 글</h3>
-                <p class="caption">작품의 결말·반전을 직접 알려주는 내용</p>
-              </li>
-              <li class="post">
-                <article>
-                  <div class="identity">
-                    <span class="avatar" aria-hidden="true">여</span><strong>여울</strong
-                    ><span class="handle">@yeoul · 예시</span>
-                  </div>
-                  <p class="post-body">
-                    〈별의 정원〉 배경 작화가 정말 예뻐요. 수채화 같은 색감 때문에 큰 화면으로 한 번
-                    더 보고 싶어요.
-                  </p>
-                </article>
-              </li>
-              <li class="post">
-                <article>
-                  <div class="identity">
-                    <span class="avatar" aria-hidden="true">모</span><strong>모아</strong
-                    ><span class="handle">@moa · 예시</span>
-                  </div>
-                  <p class="post-body">
-                    내일 코미버스 갈 준비 끝! 가방에 물이랑 보조 배터리 챙겼어요. 부스 구경할 생각에
-                    두근두근.
-                  </p>
-                </article>
-              </li>
-            </ol>
-          </section>
-        </div>
-        <p class="explanation">
-          같은 작품 이야기라도, 결말을 말하지 않는 감상은 그대로 남는 모습을 보여주는 예시예요.
-        </p>
-      </section>
       <footer class="caption">
         <p>
-          자연어 뮤트 구상을 설명하기 위한 목업입니다.<br />등장하는 작품·인물·글과 가림 결과는 모두
-          소개를 위해 만들었어요.
+          기존 코스모 UI로 구성한 소개용 목업입니다. 설정과 가림 결과는 준비된 예시이며 실제 서비스
+          기능·모델 판단이 아닙니다.
         </p>
-        <p>현재 서비스 기능이나 실제 모델의 판단 결과가 아닙니다.</p>
+        <p>작품·인물·글은 모두 가상입니다.<br />각 화면을 누르면 크게 볼 수 있어요.</p>
       </footer>
     </main>
   </body>
