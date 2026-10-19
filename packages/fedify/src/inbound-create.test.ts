@@ -1266,7 +1266,7 @@ describe('inbound Create dispatch', () => {
       receivedAt,
     });
 
-    assert.deepEqual(result, { reason: 'unsupported_note', status: 'rejected' });
+    assert.deepEqual(result, { reason: 'no_active_local_mention', status: 'rejected' });
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(PostContents), 0);
@@ -2223,13 +2223,37 @@ describe('inbound Create dispatch', () => {
       },
     ];
 
-    for (const { context, note } of cases) {
-      await handleInboundCreate(
-        context,
-        new Create({ actor: remoteActorUri, object: note }),
-        receivedAt,
-      );
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    try {
+      for (const { context, note } of cases) {
+        await handleInboundCreate(
+          context,
+          new Create({ actor: remoteActorUri, object: note }),
+          receivedAt,
+        );
+      }
+    } finally {
+      restoreReporter();
     }
+
+    assert.deepEqual(
+      logs.map((observation) => {
+        const { outcome, phase, reasonCode } = observation as {
+          outcome: string;
+          phase: string;
+          reasonCode: string;
+        };
+        return { outcome, phase, reasonCode };
+      }),
+      cases.map(() => ({
+        outcome: 'rejected',
+        phase: 'validation',
+        reasonCode: 'no_active_local_mention',
+      })),
+    );
 
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);

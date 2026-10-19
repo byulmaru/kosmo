@@ -199,6 +199,7 @@ type HydratedRemoteNoteMaterializationResult =
         | 'invalid_note'
         | 'note_content_length_exceeded'
         | 'note_mention_limit_exceeded'
+        | 'no_active_local_mention'
         | 'unsupported_note'
         | 'unusable_author';
       status: 'rejected';
@@ -224,7 +225,7 @@ type RemoteNoteMaterializationRejectionReason =
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
   | 'reply_profile_blocked'
-  | 'unsupported_note_visibility'
+  | 'no_active_local_mention'
   | 'unusable_author';
 
 type RemoteNotePostMaterializationResult =
@@ -384,7 +385,7 @@ const materializeRemoteNote = async ({
     const targetHrefs = await collectInboundMentionTargetHrefs(note);
     const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
     if (!hasActiveLocalProfile) {
-      return { reason: 'unsupported_note_visibility', status: 'rejected' };
+      return { reason: 'no_active_local_mention', status: 'rejected' };
     }
   }
 
@@ -486,8 +487,11 @@ export const materializeHydratedRemoteNote = async ({
       });
       return { reason: result.reason, status: 'rejected' };
     }
-    if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {
+    if (result.reason === 'empty_note') {
       return { reason: 'unsupported_note', status: 'rejected' };
+    }
+    if (result.reason === 'no_active_local_mention') {
+      return { reason: result.reason, status: 'rejected' };
     }
     if (result.reason === 'unusable_author') {
       return { reason: 'unusable_author', status: 'rejected' };
@@ -531,7 +535,7 @@ export const handleInboundCreateNote = async ({
     const phase =
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
-      result.reason === 'unsupported_note_visibility'
+      result.reason === 'no_active_local_mention'
         ? 'validation'
         : 'projection';
     observeInbound({
