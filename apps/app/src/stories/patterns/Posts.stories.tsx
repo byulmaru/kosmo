@@ -7025,6 +7025,10 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
       pageY: quoteBounds.top + 2 + window.scrollY,
     });
     const quotePointer = userEvent.setup();
+    await quotePointer.hover(quoteBackground);
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.stateHover }),
+    );
     await quotePointer.pointer({
       keys: '[MouseLeft>]',
       target: quoteBackground,
