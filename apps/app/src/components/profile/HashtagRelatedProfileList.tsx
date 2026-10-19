@@ -45,7 +45,7 @@ export function HashtagRelatedProfileList({
   onVisibleResults?: (hashtagId: string, resultCount: number) => void;
   onResultSelected?: (hashtagId: string) => void;
 }) {
-  const tagNotificationMuteEnabled = useFeatureFlag('profile-tag-notification-mute');
+  const profileTagMuteEnabled = useFeatureFlag('profile-tag-mute');
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
     HashtagRelatedProfileList_hashtag$key
@@ -71,7 +71,7 @@ export function HashtagRelatedProfileList({
         title={`#${pagination.data.name} 관련 프로필`}
         titleLines={1}
         trailing={
-          tagNotificationMuteEnabled ? (
+          profileTagMuteEnabled ? (
             <ProfileTagMuteAction hashtag={pagination.data} key={pagination.data.id} />
           ) : null
         }

@@ -9,7 +9,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 let renderer: ReactTestRenderer | null = null;
 let paginationCompletion: ((error?: Error | null) => void) | undefined;
-let tagNotificationMuteEnabled = false;
+let profileTagMuteEnabled = false;
 let profileEdges = [
   { cursor: 'cursor-a', node: { id: 'profile-a' } },
   { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -47,8 +47,7 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
 mockModule(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  useFeatureFlag: (key: string) =>
-    key === 'profile-tag-notification-mute' && tagNotificationMuteEnabled,
+  useFeatureFlag: (key: string) => key === 'profile-tag-mute' && profileTagMuteEnabled,
 });
 mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
   ProfileTagMuteAction: 'ProfileTagMuteAction',
@@ -105,7 +104,7 @@ afterEach(async () => {
     renderer = null;
   }
   paginationCompletion = undefined;
-  tagNotificationMuteEnabled = false;
+  profileTagMuteEnabled = false;
   profileEdges = [
     { cursor: 'cursor-a', node: { id: 'profile-a' } },
     { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -156,8 +155,8 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     }
   });
 
-  it('notification mute flag가 켜지면 헤더 action에 목록과 같은 Hashtag를 전달한다', async () => {
-    tagNotificationMuteEnabled = true;
+  it('프로필 태그 mute flag가 켜지면 헤더 action에 목록과 같은 Hashtag를 전달한다', async () => {
+    profileTagMuteEnabled = true;
     await act(async () => {
       renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
     });

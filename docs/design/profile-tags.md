@@ -33,17 +33,21 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 ## Hashtag Mute의 현재 제공 범위
 
-- 태그 뮤트 규칙이 새 알림 노출에 적용되기 전까지 프로덕션 UI는 기본 숨김이다. 기능 플래그가 활성화된 경우에만 아래 UI 계약을 제공한다.
+- 프로필 태그 뮤트는 해당 태그를 가진 프로필의 콘텐츠를 타임라인에서 보이지 않게 하는 목적을 포함한다.
+- 현재 UI는 기능 플래그로 제어한다. 프로덕션에서는 기존 `isDeveloper` 조건으로 개발자에게 활성화하고 일반
+  사용자에게 숨기며, dev channel에서는 기존 정책에 따라 해당 기능 플래그를 항상 활성화한다.
 - [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 TagChip으로 이동한
   [태그 상세·관련 Profile 목록 페이지](./hashtag-related-profiles.md)에서 현재 선택한 Profile이 소유하는
-  태그 영구 뮤트를 설정·해제하는 UI 연결을 소유한다. 해당 태그를 프로필에 단 사람에게서 오는 새 알림만 제어하며,
-  범위·숨기기/접기·기간 선택 control, preset, 날짜·시각 입력은 제공하지 않는다.
+  태그 뮤트를 설정·해제하는 UI 연결을 소유한다. 현재 UI action은 canonical Hashtag에 영구 Rule을 생성·해제하며,
+  생성 시 `Notification` Scope만 전송한다. 범위·Decision·기간 선택 control, preset, 날짜·시각 입력은 제공하지
+  않는다. 이는 현재 UI 구현 상태이며 Hashtag Mute Rule의 제품 범위를 제한하지 않는다.
 - 공개 Profile의 TagChip은 기존 관련 Profile 탐색 링크로 유지한다. 프로필 화면에 태그 뮤트용 벨·메뉴나
   확인 진입점을 추가하지 않는다. 기존 Profile 자체의 뮤트 UI는 유지한다. 뮤트 상태와 해제 action은 같은 canonical Hashtag를
   대상으로 하며, 태그가 표시된 Profile 자체를 뮤트하는 action과 구분한다.
 - 기존 [Profile Mute UI](./profile-mute-block.md)의 확인·요청 중·오류·완료 피드백을 재사용한다.
-  확인창은 대상 태그와 새 알림을 끄거나 다시 받는 결과를 설명하고, 취소하면 요청하지 않는다.
-  게시물 숨김·검색 제외·기존 알림 삭제·과거 억제 알림 복구를 안내하지 않는다.
+  현재 확인 문구는 대상 태그와 해당 태그를 프로필에 단 사람에게서 오는 새 알림을 끄거나 다시 받는 결과를
+  설명한다. 이는 현재 UI 문구이며, 타임라인 콘텐츠를 숨기는 제어는 현재 UI에 구현되어 있지 않다. 취소하면
+  요청하지 않는다.
 - 같은 selected Profile·Hashtag에 Notification 이외의 Scope를 가진 적용 중 임시 규칙이 있으면 그 규칙과 만료를
   보존하고 영구 Notification 뮤트를 추가하지 않는다. 만료 시각이 모든 Scope에 공통으로 적용되므로 기존 Scope를
   영구화하거나 임시 효과를 조기에 해제하지 않으며, 상태를 새로 읽은 뒤 다시 설정할 수 있음을 안내한다.

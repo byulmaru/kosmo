@@ -33,7 +33,13 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 
 ## 태그 상세 페이지의 뮤트·해제
 
-- 태그 뮤트 규칙이 새 알림 노출에 적용되기 전까지 프로덕션 헤더 action은 기본 숨김이다. 기능 플래그가 활성화되면 아래 계약을 따른다.
+- 프로필 태그 뮤트는 해당 태그를 가진 프로필의 콘텐츠를 타임라인에서 보이지 않게 하는 목적을 포함한다. 세부
+  범위는 [Hashtag Mute Rule](../domain/objects/hashtag-mute-rule.md)에 정의한다.
+- 현재 UI는 기능 플래그로 제어한다. 프로덕션에서는 기존 `isDeveloper` 조건으로 개발자에게 활성화하고 일반
+  사용자에게 숨기며, dev channel에서는 기존 정책에 따라 해당 기능 플래그를 항상 활성화한다.
+- 현재 UI action은 canonical Hashtag에 영구 Rule을 생성·해제하며, 생성 시 `Notification` Scope만 설정한다.
+  Scope·Decision·기간 선택, preset, 날짜·시각 입력을 제공하지 않는 것은 현재 UI 구현 상태이며 제품 범위를
+  제한하지 않는다.
 - 이 관련 Profile 목록 페이지가 현재 프로필 태그 상세 페이지다. PROD-735는 이 화면의 태그 맥락에서
   뮤트 상태와 설정·해제 action을 제공한다. 별도 상세 페이지나 알림 설정 화면을 만들지 않는다.
 - 공개 Profile의 TagChip은 이 페이지로 이동하는 링크다. 프로필 화면에 태그 뮤트용 벨·메뉴·확인 진입점을
@@ -47,11 +53,11 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
   우측 위치에 재시도 action을 제공하며 확정하지 못한 상태를 미뮤트로 표시하지 않는다.
 - 대상은 현재 페이지의 canonical Hashtag이며 Owner는 현재 selected Profile이다. 출발 Profile이나 목록의
   Profile 자체를 뮤트하지 않는다. 기존 Profile 자체의 뮤트 기능은 유지한다.
-- 기존 [Profile Mute 확인·피드백 패턴](./profile-mute-block.md)을 재사용한다. 해당 태그를 프로필에 단
-  사람의 새 알림을 영구적으로 끄거나 다시 받는 결과를 안내한다. 범위·방식·기간 선택을 제공하지 않으며,
-  게시물 숨김·검색 제외·기존 알림 삭제·과거 억제 알림 복구를 약속하지 않는다.
+- 기존 [Profile Mute 확인·피드백 패턴](./profile-mute-block.md)을 재사용한다. 현재 확인 문구는 해당 태그를
+  프로필에 단 사람에게서 오는 새 알림을 끄거나 다시 받는 결과를 설명한다. 이는 현재 UI 문구이며 타임라인
+  콘텐츠를 숨기는 제어는 현재 UI에 구현되어 있지 않다.
 - 서버 확정 상태, 취소 시 요청 없음, 요청 중 중복 제출 방지, 오류·재시도, 성공 후 현재 화면의 상태 수렴과
-  actor·target 격리는 [기존 뮤트 UI 계약](./profile-tags.md#hashtag-mute의-현재-제공-범위)을 유지한다.
+  actor·target 격리는 [현재 UI 동작](./profile-tags.md#hashtag-mute의-현재-제공-범위)을 따른다.
   다른 Scope의 활성 임시 규칙도 기존 보존 계약을 따른다.
 - action 종료 후 focus는 현재 태그 상세 페이지의 유효한 control로 돌아오거나 이어진다. 관련 Profile
   탐색·pagination을 유지하며, 뮤트 여부로 이 목록의 후보를 숨기지 않는다.
