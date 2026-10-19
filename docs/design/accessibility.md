@@ -137,6 +137,10 @@ Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유�
 - Native social target은 너비 50, 높이 iOS 44pt·Android 48dp이고 More는 각각 44×44pt·48×48dp다. Bar가 target 높이를 layout에 포함하고 Bookmark·More의 target은 gap이나 overlap 없이 맞닿는다. 28px visual은 세로 중앙에 둔다.
 - Native 출시 전에는 실제 parent clipping·target 비중첩·touch와 각 플랫폼 assistive technology의 focus boundary를 검증한다. platform style·접근성 prop 렌더 테스트는 Native runtime 완료 증거로 사용하지 않는다.
 
+### Reaction/Repost notification links
+
+Reaction/Repost notification links use compact Web-sized geometry on iOS and Android; actor profile links stay independent and do not overlap. Exact sizes are in the [notification display contract](./notifications.md). This exception applies only to Reaction/Repost rows and leaves the Native baseline for other notification types and controls unchanged.
+
 ### 기존 컴포넌트 계약
 
 - Post Composer의 Rail·Overlay·모바일 본문, CW와 Media editor ALT는 입력 caret·selection을 focus 표시로

@@ -405,7 +405,6 @@ function ReactionRepostNotificationTargets({
   const KindIcon = kind === 'reaction' ? Smile : Repeat2;
   const iconColor = kind === 'reaction' ? theme.actionReactionBase : theme.actionRepostBase;
   const visibleActors = actors.slice(0, 3);
-  const profileTargetSize = Platform.OS === 'web' ? 28 : Platform.OS === 'ios' ? 44 : 48;
   const copy = (
     <Text style={[styles.copy, { color: theme.foregroundPrimary }]}>
       <Text style={textStyles.uiLabelL}>
@@ -432,7 +431,7 @@ function ReactionRepostNotificationTargets({
       </NotificationLinkTarget>
       <View style={styles.summary}>
         <View style={styles.avatarAndTime}>
-          <View style={[styles.profileAvatars, { gap: Platform.OS === 'web' ? 0 : space[4] }]}>
+          <View style={styles.profileAvatars}>
             {visibleActors.map((item) => (
               <NotificationLinkTarget
                 key={item.id}
@@ -441,11 +440,7 @@ function ReactionRepostNotificationTargets({
                 href={item.profileHref}
                 onActivate={onNavigate}
                 pending={pending}
-                style={{
-                  ...styles.profileTarget,
-                  height: profileTargetSize,
-                  width: profileTargetSize,
-                }}
+                style={styles.profileTarget}
               >
                 <Avatar imageUri={item.avatarUrl} label={item.name} size={28} />
               </NotificationLinkTarget>
@@ -574,19 +569,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 48,
   },
-  profileTarget: { alignItems: 'center', flexShrink: 0, justifyContent: 'center' },
+  profileTarget: {
+    alignItems: 'center',
+    flexShrink: 0,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
   profileAvatars: { alignItems: 'center', flexDirection: 'row' },
   timeTarget: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    minHeight: Platform.OS === 'web' ? 28 : Platform.OS === 'ios' ? 44 : 48,
+    minHeight: 28,
     minWidth: 0,
   },
   summaryTarget: {
     alignItems: 'flex-start',
-    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'ios' ? 44 : 48,
+    minHeight: 24,
     minWidth: 0,
     width: '100%',
   },
@@ -594,7 +595,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: space[12],
-    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'ios' ? 44 : 48,
+    minHeight: 24,
     minWidth: 0,
     paddingBottom: space[8],
     width: '100%',
