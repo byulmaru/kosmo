@@ -1201,7 +1201,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
       document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
         {
           end: start + relativeHandle.length,
-          handle: profile.handle,
+          handle: relativeHandle,
           profileId: profile.id,
           relativeHandle,
           start,
