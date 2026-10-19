@@ -113,11 +113,9 @@ export function PostActionSurface({
           renderMenuItem={({ disabled, focusTriggerRef, item }) => (
             <ProfileMoreMenu
               accessibilityLabel="더 보기 메뉴"
-              disabled={disabled || profilePinAction.pending}
+              disabled={disabled}
               focusTriggerRef={focusTriggerRef}
               items={[...moreItems, item]}
-              onTriggerReady={profilePinAction.onMoreTriggerReady}
-              sheetIconSize={profilePinAction.item ? 24 : undefined}
               renderTrigger={({ expanded, onPress, ref }) =>
                 renderActions({
                   accessibilityLabel: '더 보기',
