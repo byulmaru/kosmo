@@ -4857,6 +4857,51 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
   render: () => <QuoteListSurfaceStory />,
 };
 
+export const QuoteListItemInternalBackground: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = await canvas.findByTestId('post-source-presentation');
+    const body = within(root).getByTestId('post-body');
+    const pathname = canvas.getByTestId('presentation-story-pathname');
+    const initialPath = pathname.textContent;
+    const header = body.previousElementSibling!;
+    await waitFor(() =>
+      expect(body.getBoundingClientRect().top).toBeGreaterThan(
+        header.getBoundingClientRect().bottom,
+      ),
+    );
+    const x = root.getBoundingClientRect().left + 4;
+    const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
+    const target = document.elementFromPoint(x, y)!;
+    expect(target).toBe(root);
+    const coords = (offset: number) => ({
+      clientX: x + offset,
+      clientY: y,
+      pageX: x + offset + window.scrollX,
+      pageY: y + window.scrollY,
+    });
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { target, coords: coords(30) },
+      { target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname).toHaveTextContent('/@reposter/post-quote');
+    await userEvent.click(
+      canvas.getByRole('link', { name: `${repostAuthor.displayName} 프로필 보기` }),
+    );
+    expect(pathname.textContent).toBe(`/@reposter`);
+    await userEvent.click(canvas.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(pathname.textContent).toBe(`/${sourcePost.profile.relativeHandle}/${sourcePost.id}`);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" presentation="wide" />,
+};
+
 export const QuoteListItemAvatars: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

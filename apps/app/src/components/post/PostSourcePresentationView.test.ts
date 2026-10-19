@@ -27,6 +27,7 @@ mockModule('expo-router', {
   useRouter: () => ({ push: () => undefined }),
 });
 mockModule('react-native', {
+  findNodeHandle: () => null,
   Platform: platform,
   Pressable: MockPressable,
   StyleSheet: { create: <T>(styles: T) => styles },
