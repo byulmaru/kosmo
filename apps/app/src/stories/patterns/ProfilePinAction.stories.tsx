@@ -411,9 +411,11 @@ export const ErrorRecoveryFocus: Story = {
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
     const dialog = await body.findByRole('alertdialog', { name: '프로필 고정을 해제할까요?' });
     await userEvent.click(within(dialog).getByRole('button', { name: '고정 해제' }));
-    expect(
-      await body.findByText('@kosmo의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.'),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        body.getByText('@kosmo의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.'),
+      ).toBeVisible(),
+    );
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(canvas.getByText('고정됨')).toBeVisible();
     await waitFor(() => expect(trigger).toHaveFocus());
