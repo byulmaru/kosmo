@@ -169,7 +169,11 @@ function confirmation(index = 0): ReactTestInstance {
   return instance;
 }
 
-async function confirm(index = 0) {
+async function pin(index = 0) {
+  await act(async () => actions()[index]!.props.item.onSelect());
+}
+
+async function unpin(index = 0) {
   await act(async () => actions()[index]!.props.item.onSelect());
   await act(async () => confirmation().props.onConfirm());
   await act(async () => modal().props.onDismiss());
@@ -187,13 +191,20 @@ function mutationResponse(
   postId: string,
   profileId: string,
   isPinned: boolean | null,
+  pinnedPostIds: string[] = isPinned ? [postId] : [],
 ): GraphQLResponse {
   return {
     data: {
       [field]: {
         changed: true,
-        profile: { __typename: 'Profile', id: profileId },
-        post: { __typename: 'Post', id: postId, isPinned },
+        profile: {
+          __typename: 'Profile',
+          id: profileId,
+          pinnedPosts: pinnedPostIds.map((id) =>
+            pinPostData(id, profileId, id === postId ? isPinned : true),
+          ),
+        },
+        post: pinPostData(postId, profileId, isPinned),
       },
     },
     ...(isPinned === null
@@ -209,6 +220,47 @@ function mutationResponse(
   };
 }
 
+function pinPostData(postId: string, profileId: string, isPinned: boolean | null) {
+  return {
+    __typename: 'Post',
+    id: postId,
+    isPinned,
+    state: 'ACTIVE',
+    visibility: 'PUBLIC',
+    createdAt: '2026-09-30T00:00:00Z',
+    content: {
+      __typename: 'PostContent',
+      id: `${postId}:content`,
+      bodyText: '',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: { type: 'doc', content: [{ type: 'paragraph' }] },
+      },
+      media: [],
+      mentionedProfiles: [],
+    },
+    profile: {
+      __typename: 'Profile',
+      id: profileId,
+      avatar: null,
+      displayName: profileId === profileA ? 'Owner A' : 'Owner B',
+      handle: profileId,
+      relativeHandle: profileId === profileA ? '@pin-owner-a' : '@pin-owner-b',
+      instance: { kind: 'LOCAL' },
+      viewerState: { profileMute: null },
+    },
+    replyParent: null,
+    repostSource: null,
+    repostCount: 0,
+    viewerBookmark: null,
+    viewerRepost: null,
+    viewerReactions: [],
+    reactionCounts: [],
+  };
+}
+
 test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정된 다른 게시물 상태를 보존한다', async () => {
   const environment = createEnvironment();
   seedPost(environment, 'post-a', profileA, false);
@@ -217,21 +269,25 @@ test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정
 
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
   assert.equal(actions()[1]!.props.item.label, '프로필에 고정');
-  await confirm(0);
+  await pin(0);
   assert.equal(requests[0]?.name, 'ProfilePinActionPinMutation');
   assert.deepEqual(requests[0]?.variables, { postId: 'post-a' });
+  assert.equal(actions()[0]!.props.confirmation, null);
   assert.equal(actions()[0]!.props.pending, true);
   assert.equal(actions()[1]!.props.pending, false);
   await act(async () => actions()[0]!.props.item.onSelect());
   assert.equal(requests.length, 1);
 
-  await confirm(1);
+  await pin(1);
   assert.equal(requests[1]?.name, 'ProfilePinActionPinMutation');
   assert.deepEqual(requests[1]?.variables, { postId: 'post-b' });
-  await respond(0, mutationResponse('pinProfilePost', 'post-a', profileA, true));
+  await respond(0, mutationResponse('pinProfilePost', 'post-a', profileA, true, ['post-a']));
   assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
   assert.equal(actions()[1]!.props.item.label, '프로필에 고정');
-  await respond(1, mutationResponse('pinProfilePost', 'post-b', profileA, true));
+  await respond(
+    1,
+    mutationResponse('pinProfilePost', 'post-b', profileA, true, ['post-a', 'post-b']),
+  );
 
   await act(async () => {
     renderer!.update(
@@ -245,9 +301,9 @@ test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정
       }),
     );
   });
-  await confirm();
+  await unpin();
   assert.equal(requests[2]?.name, 'ProfilePinActionUnpinMutation');
-  await respond(2, mutationResponse('unpinProfilePost', 'post-a', profileA, false));
+  await respond(2, mutationResponse('unpinProfilePost', 'post-a', profileA, false, ['post-b']));
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
   assert.equal(requests.length, 3);
   const source = environment.getStore().getSource();
@@ -260,17 +316,60 @@ test('durable pin success with an unreadable projection hides only the pin actio
   const environment = createEnvironment();
   seedPost(environment, 'post-retry', profileA, false);
   await render(environment, ['post-retry']);
-  await confirm();
-  await respond(0, mutationResponse('pinProfilePost', 'post-retry', profileA, null));
+  await pin();
+  await respond(
+    0,
+    mutationResponse('pinProfilePost', 'post-retry', profileA, null, ['post-retry']),
+  );
 
   assert.equal(actions()[0]!.props.item, undefined);
   assert.deepEqual(toasts, []);
   assert.equal(requests.length, 1);
 });
 
-test('취소하면 mutation을 보내지 않고 메뉴 트리거로 focus를 돌려준다', async () => {
+test('null mutation data clears pending state and preserves the cached pin status', async () => {
   const environment = createEnvironment();
-  seedPost(environment, 'post-cancel', profileA, false);
+  seedPost(environment, 'post-null-data', profileA, false);
+  await render(environment, ['post-null-data']);
+
+  await pin();
+  assert.equal(actions()[0]!.props.pending, true);
+  await respond(0, {
+    data: null,
+    errors: [{ message: 'profile projection failed' }],
+  } as unknown as GraphQLResponse);
+
+  assert.equal(actions()[0]!.props.pending, false);
+  assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
+  assert.equal(environment.getStore().getSource().get('post-null-data')?.isPinned, false);
+  assert.deepEqual(toasts, ['@pin-owner-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+});
+
+test('unpin remains pending until failure, then keeps the pin and allows retry', async () => {
+  const environment = createEnvironment();
+  seedPost(environment, 'post-unpin-failure', profileA, true);
+  await render(environment, ['post-unpin-failure']);
+
+  await unpin();
+  assert.equal(requests[0]?.name, 'ProfilePinActionUnpinMutation');
+  assert.equal(actions()[0]!.props.pending, true);
+  await act(async () => actions()[0]!.props.item.onSelect());
+  assert.equal(requests.length, 1);
+
+  await act(async () => requests[0]!.sink.error(new Error('offline')));
+  assert.equal(actions()[0]!.props.pending, false);
+  assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
+  assert.equal(environment.getStore().getSource().get('post-unpin-failure')?.isPinned, true);
+  assert.deepEqual(toasts, ['@pin-owner-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+
+  await unpin();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1]?.name, 'ProfilePinActionUnpinMutation');
+});
+
+test('unpin 취소는 mutation을 보내지 않고 메뉴 트리거로 focus를 돌려준다', async () => {
+  const environment = createEnvironment();
+  seedPost(environment, 'post-cancel', profileA, true);
   await render(environment, ['post-cancel']);
   let focused = 0;
   actions()[0]!.props.onMoreTriggerReady(() => (focused += 1));
@@ -281,7 +380,7 @@ test('취소하면 mutation을 보내지 않고 메뉴 트리거로 focus를 돌
 
   assert.equal(requests.length, 0);
   assert.equal(focused, 1);
-  assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
+  assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
 });
 
 test('actor 전환 뒤 늦은 응답은 이전 Relay store와 요청 시점 작성자 handle을 사용한다', async () => {
@@ -292,8 +391,8 @@ test('actor 전환 뒤 늦은 응답은 이전 Relay store와 요청 시점 작�
   const environmentB = createEnvironment();
   seedPost(environmentB, 'post-b', profileB, false);
   await render(environmentA, ['post-a-success', 'post-a-error']);
-  await confirm(0);
-  await confirm(1);
+  await pin(0);
+  await pin(1);
 
   selectedProfileId = profileB;
   await render(environmentB, ['post-b']);

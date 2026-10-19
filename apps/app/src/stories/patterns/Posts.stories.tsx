@@ -1002,7 +1002,7 @@ const paginationProfileNextPageResponse = {
       __typename: 'Profile',
       id: paginationProfile.id,
       instance: paginationProfile.instance,
-      pinnedPosts: timeline(),
+      pinnedPosts: [],
       posts: paginatedTimeline(paginationProfileNextPost, false),
     },
   },
@@ -1055,7 +1055,7 @@ const PostsStoriesQuery = graphql`
       ... on Profile @alias(as: "profile") {
         id
         ...PostList_profile @arguments(count: 20)
-        ...PostList_profile_pinned @arguments(count: 20)
+        ...PostList_profile_pinned
       }
     }
     contentPostsProfile: node(id: "profile-posts-content") {
@@ -1063,7 +1063,7 @@ const PostsStoriesQuery = graphql`
       ... on Profile @alias(as: "profile") {
         id
         ...PostList_profile @arguments(count: 20)
-        ...PostList_profile_pinned @arguments(count: 20)
+        ...PostList_profile_pinned
       }
     }
     ...PostList_home @arguments(count: 20) @alias(as: "home")
@@ -1093,7 +1093,7 @@ const PostDeletionListEdgeSafetyQuery = graphql`
       ... on Profile @alias(as: "profile") {
         id
         ...PostList_profile @arguments(count: 1)
-        ...PostList_profile_pinned @arguments(count: 20)
+        ...PostList_profile_pinned
       }
     }
   }

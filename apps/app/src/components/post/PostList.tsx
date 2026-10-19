@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -7,10 +7,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, usePaginationFragment } from 'react-relay';
+import { graphql, useFragment, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { getShellLayout } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -19,18 +18,13 @@ import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from './PostComposerCoordinator';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
-import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
-import type {
-  PostList_profile_pinned$data,
-  PostList_profile_pinned$key,
-} from './__generated__/PostList_profile_pinned.graphql';
+import type { PostList_profile_pinned$key } from './__generated__/PostList_profile_pinned.graphql';
 import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNextPageQuery.graphql';
 import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { PostListProfileNextPageQuery } from './__generated__/PostListProfileNextPageQuery.graphql';
-import type { PostListProfilePinnedNextPageQuery } from './__generated__/PostListProfilePinnedNextPageQuery.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from './postListMetrics';
 
@@ -52,18 +46,11 @@ const PostListProfileFragment = graphql`
 `;
 
 const PostListProfilePinnedFragment = graphql`
-  fragment PostList_profile_pinned on Profile
-  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
-  @refetchable(queryName: "PostListProfilePinnedNextPageQuery") {
+  fragment PostList_profile_pinned on Profile {
     id
-    pinnedPosts(first: $count, after: $cursor) @connection(key: "PostList_profile__pinnedPosts") {
-      edges {
-        cursor
-        node {
-          id
-          ...PostListItem_post
-        }
-      }
+    pinnedPosts {
+      id
+      ...PostListItem_post
     }
   }
 `;
@@ -137,10 +124,10 @@ export function PostList({
     PostListProfileNextPageQuery,
     PostList_profile$key
   >(PostListProfileFragment, profileKey ?? null);
-  const profilePinnedPagination = usePaginationFragment<
-    PostListProfilePinnedNextPageQuery,
-    PostList_profile_pinned$key
-  >(PostListProfilePinnedFragment, profileKey ?? null);
+  const pinnedProfile = useFragment(
+    PostListProfilePinnedFragment,
+    (profileKey as PostList_profile_pinned$key | null) ?? null,
+  );
   const localPagination = usePaginationFragment<PostListLocalNextPageQuery, PostList_local$key>(
     PostListLocalFragment,
     localKey ?? null,
@@ -150,8 +137,7 @@ export function PostList({
   const home = homePagination.data;
   const local = localPagination.data;
   const profile = profilePagination.data;
-  const pinnedProfile = profilePinnedPagination.data;
-  const pinnedEdges = (pinnedProfile?.pinnedPosts.edges ?? []).filter((edge) => edge.node != null);
+  const pinnedPosts = (pinnedProfile?.pinnedPosts ?? []).filter((post) => post != null);
   const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
@@ -174,7 +160,6 @@ export function PostList({
     : isLocal
       ? localPagination.loadNext
       : profilePagination.loadNext;
-  const loadPinnedNext = profilePinnedPagination.loadNext;
   const { showToast } = useToast();
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
   const handleLoadErrorChange = useCallback(
@@ -235,17 +220,20 @@ export function PostList({
         <PostMediaViewerHostProvider>
           <View style={listContainerStyle}>
             {profileKey ? (
-              <ProfilePinnedPostList
-                data={pinnedEdges}
-                hasNext={profilePinnedPagination.hasNext}
-                isLoadingNext={profilePinnedPagination.isLoadingNext}
-                loadNext={loadPinnedNext}
-                presentation={postListPresentation}
-              />
+              <View style={styles.root}>
+                {pinnedPosts.map((post) => (
+                  <PostListItem
+                    key={`pinned:${post.id}`}
+                    pinned
+                    post={post}
+                    presentation={postListPresentation}
+                  />
+                ))}
+              </View>
             ) : null}
             <InfiniteList
               data={visibleEdges}
-              empty={visibleEdges.length === 0 && pinnedEdges.length === 0 ? emptyState : null}
+              empty={visibleEdges.length === 0 && pinnedPosts.length === 0 ? emptyState : null}
               hasNext={hasNext}
               isLoadingNext={isLoadingNext}
               key={listIdentityKey}
@@ -278,60 +266,6 @@ export function PostList({
         </PostMediaViewerHostProvider>
       </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
-  );
-}
-
-type ProfilePinnedPostListProps = Readonly<{
-  data: PostList_profile_pinned$data['pinnedPosts']['edges'];
-  hasNext: boolean;
-  isLoadingNext: boolean;
-  loadNext: LoadNext;
-  presentation: PostListPresentation;
-}>;
-
-function ProfilePinnedPostList({
-  data,
-  hasNext,
-  isLoadingNext,
-  loadNext,
-  presentation,
-}: ProfilePinnedPostListProps) {
-  const [loadError, setLoadError] = useState(false);
-  const handleLoadNext = useCallback(() => {
-    if (!hasNext || isLoadingNext) {
-      return;
-    }
-    setLoadError(false);
-    loadNext(20, {
-      onComplete: (error) => setLoadError(Boolean(error)),
-    });
-  }, [hasNext, isLoadingNext, loadNext]);
-
-  return (
-    <View style={styles.root}>
-      {data.map((edge) => (
-        <PostListItem
-          key={`pinned:${edge.node.id}`}
-          pinned
-          post={edge.node}
-          presentation={presentation}
-        />
-      ))}
-      {hasNext ? (
-        <View style={styles.pinnedPagination}>
-          <Button
-            accessibilityLabel={loadError ? '고정된 게시글 다시 시도' : '고정된 게시글 더 보기'}
-            loading={isLoadingNext}
-            loadingText="고정된 게시글을 불러오는 중"
-            onPress={handleLoadNext}
-            size="compact"
-            tone="secondary"
-          >
-            {loadError ? '다시 시도' : '고정된 게시글 더 보기'}
-          </Button>
-        </View>
-      ) : null}
-    </View>
   );
 }
 
@@ -396,7 +330,6 @@ function PostListState({
 const styles = StyleSheet.create({
   flexRoot: { flex: 1, minHeight: 0, width: '100%' },
   loadingNext: { alignItems: 'center', padding: spacing.lg },
-  pinnedPagination: { alignItems: 'center', padding: spacing.md },
   root: { width: '100%' },
   skeletonItem: {
     alignItems: 'flex-start',

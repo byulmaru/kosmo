@@ -1,7 +1,6 @@
 import { Pin } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -38,10 +37,10 @@ const pinMutation = graphql`
       changed
       profile {
         id
+        ...PostList_profile_pinned
       }
       post {
-        id
-        isPinned
+        ...ProfilePinAction_post
       }
     }
   }
@@ -53,16 +52,15 @@ const unpinMutation = graphql`
       changed
       profile {
         id
+        ...PostList_profile_pinned
       }
       post {
-        id
-        isPinned
+        ...ProfilePinAction_post
       }
     }
   }
 `;
 
-const pinnedPostsConnectionKey = 'PostList_profile__pinnedPosts';
 const failureMessage = '고정 상태를 변경하지 못했어요. 다시 시도해 주세요.';
 
 type Operation = 'pin' | 'unpin';
@@ -95,13 +93,52 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
   const stateReadFailed = !post.isPinned.ok || post.isPinned.value == null;
   const pinned = post.isPinned.ok && post.isPinned.value === true;
 
+  const submit = useCallback(
+    (operation: Operation) => {
+      const finishFailure = () => {
+        showToast(`${post.profile.relativeHandle}의 ${failureMessage}`, { tone: 'danger' });
+      };
+      const variables = { postId: post.id };
+
+      if (operation === 'unpin') {
+        commitUnpin({
+          onCompleted: (response) => {
+            const result = response.unpinProfilePost;
+            if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
+              finishFailure();
+            }
+          },
+          onError: finishFailure,
+          variables,
+        });
+        return;
+      }
+
+      commitPin({
+        onCompleted: (response) => {
+          const result = response.pinProfilePost;
+          if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
+            finishFailure();
+          }
+        },
+        onError: finishFailure,
+        variables,
+      });
+    },
+    [commitPin, commitUnpin, post.id, post.profile.relativeHandle, selectedProfileId, showToast],
+  );
+
   const onSelect = useCallback(() => {
     if (!ownEligible || stateReadFailed || pending || selectedOperation) {
       return;
     }
-    setSelectedOperation(pinned ? 'unpin' : 'pin');
-    setConfirmationPhase('open');
-  }, [ownEligible, pending, pinned, selectedOperation, stateReadFailed]);
+    if (pinned) {
+      setSelectedOperation('unpin');
+      setConfirmationPhase('open');
+      return;
+    }
+    submit('pin');
+  }, [ownEligible, pending, pinned, selectedOperation, stateReadFailed, submit]);
 
   const closeConfirmation = useCallback(() => {
     if (confirmationPhase === 'open') {
@@ -113,67 +150,11 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
     const operation = selectedOperation;
     setSelectedOperation(null);
     focusTriggerRef.current();
-    if (!operation || confirmationPhase !== 'confirm' || pending || !ownEligible) {
+    if (operation !== 'unpin' || confirmationPhase !== 'confirm' || pending || !ownEligible) {
       return;
     }
-
-    const relativeHandle = post.profile.relativeHandle;
-    const finishFailure = () => {
-      showToast(`${relativeHandle}의 ${failureMessage}`, { tone: 'danger' });
-    };
-    const variables = { postId: post.id };
-
-    if (operation === 'unpin') {
-      commitUnpin({
-        onCompleted: (response) => {
-          const result = response.unpinProfilePost;
-          if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
-            finishFailure();
-          }
-        },
-        onError: finishFailure,
-        updater: (store) => {
-          const connectionId = ConnectionHandler.getConnectionID(
-            post.profile.id,
-            pinnedPostsConnectionKey,
-          );
-          store.get(connectionId)?.invalidateRecord();
-        },
-        variables,
-      });
-      return;
-    }
-
-    commitPin({
-      onCompleted: (response) => {
-        const result = response.pinProfilePost;
-        if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
-          finishFailure();
-        }
-      },
-      onError: finishFailure,
-      updater: (store) => {
-        const connectionId = ConnectionHandler.getConnectionID(
-          post.profile.id,
-          pinnedPostsConnectionKey,
-        );
-        store.get(connectionId)?.invalidateRecord();
-      },
-      variables,
-    });
-  }, [
-    commitPin,
-    commitUnpin,
-    confirmationPhase,
-    ownEligible,
-    pending,
-    post.id,
-    post.profile.id,
-    post.profile.relativeHandle,
-    selectedOperation,
-    selectedProfileId,
-    showToast,
-  ]);
+    submit(operation);
+  }, [confirmationPhase, ownEligible, pending, selectedOperation, submit]);
 
   const onMoreTriggerReady = useCallback((focus: () => void) => {
     focusTriggerRef.current = focus;
@@ -185,18 +166,13 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
       onDismiss={onDismiss}
       onShow={() => cancelRef.current?.focus()}
       role="alertdialog"
-      title={selectedOperation === 'unpin' ? '프로필 고정을 해제할까요?' : '프로필에 고정할까요?'}
+      title="프로필 고정을 해제할까요?"
       visible={confirmationPhase === 'open'}
     >
       <ConfirmationContent
         cancelLabel="취소"
         cancelRef={cancelRef}
-        confirmLabel={selectedOperation === 'unpin' ? '고정 해제' : '고정'}
-        message={
-          selectedOperation === 'unpin'
-            ? '프로필 상단에서 이 게시글을 제거해요. 게시글은 삭제되지 않아요.'
-            : '이 게시글을 프로필 상단에 표시해요. 게시글은 삭제되지 않아요.'
-        }
+        confirmLabel="고정 해제"
         onCancel={closeConfirmation}
         onConfirm={() => {
           if (confirmationPhase === 'open') {

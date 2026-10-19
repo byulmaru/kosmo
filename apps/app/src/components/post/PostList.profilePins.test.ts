@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, it, mock } from 'node:test';
-import { createElement, Fragment, Suspense, useState } from 'react';
+import { createElement, Fragment, Suspense } from 'react';
 import * as Relay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -30,7 +30,6 @@ let renderer: ReactTestRenderer | undefined;
 let PostList: typeof PostListType;
 let useProfilePinAction: typeof UseProfilePinAction;
 let activeActionPostId: string | null = null;
-let refreshProfileQuery: (() => void) | null = null;
 const requests: Array<{
   name: string;
   variables: Record<string, unknown>;
@@ -106,7 +105,6 @@ before(async () => {
 });
 beforeEach(() => {
   activeActionPostId = null;
-  refreshProfileQuery = null;
   mock.timers.enable({ apis: ['setTimeout'] });
 });
 afterEach(async () => {
@@ -116,16 +114,13 @@ afterEach(async () => {
   renderer = undefined;
   requests.length = 0;
   activeActionPostId = null;
-  refreshProfileQuery = null;
 });
 function Harness() {
-  const [fetchKey, setFetchKey] = useState(0);
   const data = Relay.useLazyLoadQuery<ProfilePostListPageQuery>(
     query,
     { handle: '@owner' },
-    { fetchKey, fetchPolicy: 'store-or-network' },
+    { fetchPolicy: 'store-or-network' },
   );
-  refreshProfileQuery = () => setFetchKey((key) => key + 1);
   return createElement(
     Fragment,
     null,
@@ -162,6 +157,44 @@ async function start() {
   });
   return environment;
 }
+const postNode = (id: string, isPinned: boolean) => ({
+  __typename: 'Post',
+  id,
+  isPinned,
+  createdAt: '2026-09-30T00:00:00Z',
+  state: 'ACTIVE',
+  visibility: 'PUBLIC',
+  content: {
+    __typename: 'PostContent',
+    id: `${id}:content`,
+    bodyText: '',
+    contentWarning: null,
+    document: {
+      version: 1,
+      summary: null,
+      body: { type: 'doc', content: [{ type: 'paragraph' }] },
+    },
+    media: [],
+    mentionedProfiles: [],
+  },
+  replyParent: null,
+  repostSource: null,
+  viewerBookmark: null,
+  repostCount: 0,
+  viewerRepost: null,
+  viewerReactions: [],
+  reactionCounts: [],
+  profile: {
+    __typename: 'Profile',
+    id: 'owner',
+    displayName: 'Owner',
+    handle: 'owner',
+    relativeHandle: '@owner',
+    avatar: null,
+    instance: { kind: 'LOCAL' },
+    viewerState: { profileBlock: null, profileMute: null },
+  },
+});
 const connection = (
   ids: string[],
   hasNextPage = false,
@@ -169,53 +202,7 @@ const connection = (
 ) => ({
   edges: ids.map((id) => ({
     cursor: id,
-    node: {
-      __typename: 'Post',
-      id,
-      isPinned: typeof isPinned === 'function' ? isPinned(id) : isPinned,
-      createdAt: '2026-09-30T00:00:00Z',
-      state: 'ACTIVE',
-      visibility: 'PUBLIC',
-      content: {
-        __typename: 'PostContent',
-        id: `${id}:content`,
-        bodyText: '',
-        contentWarning: null,
-        document: {
-          version: 1,
-          summary: null,
-          body: { type: 'doc', content: [{ type: 'paragraph' }] },
-        },
-        media: [],
-        mentionedProfiles: [],
-      },
-      replyParent: null,
-      repostSource: null,
-      viewerBookmark: null,
-      repostCount: 0,
-      viewerRepost: null,
-      viewerReactions: [],
-      reactionCounts: [],
-      profile: {
-        __typename: 'Profile',
-        id: 'owner',
-        displayName: 'Owner',
-        handle: 'owner',
-        relativeHandle: '@owner',
-        avatar: null,
-        instance: { kind: 'LOCAL' },
-        pinnedPosts: {
-          edges: [],
-          pageInfo: {
-            startCursor: null,
-            endCursor: null,
-            hasNextPage: false,
-            hasPreviousPage: false,
-          },
-        },
-        viewerState: null,
-      },
-    },
+    node: postNode(id, typeof isPinned === 'function' ? isPinned(id) : isPinned),
   })),
   pageInfo: {
     startCursor: ids[0] ?? null,
@@ -224,18 +211,12 @@ const connection = (
     hasPreviousPage: false,
   },
 });
-const profile = (
-  kind: string,
-  pins: string[],
-  posts: string[],
-  pinnedHasNext = false,
-  postsHasNext = false,
-) => ({
+const profile = (kind: string, pins: string[], posts: string[], postsHasNext = false) => ({
   __typename: 'Profile',
   id: 'owner',
   instance: { kind },
-  viewerState: null,
-  pinnedPosts: connection(pins, pinnedHasNext, true),
+  viewerState: { profileBlock: null, profileMute: null },
+  pinnedPosts: pins.map((id) => postNode(id, true)),
   posts: connection(posts, postsHasNext, (id) => pins.includes(id)),
 });
 async function respond(data: Record<string, unknown>) {
@@ -271,146 +252,95 @@ it('Local shows every pin, permits chronology duplicates, and survives deleted r
   assert.equal(all('InfiniteList').length, 1);
   assert.equal(all('Button').length, 0);
 });
-it('pin and unpin update Post state while the pinned list waits for a normal query', async () => {
+it('pin and unpin immediately synchronize the pinned segment from the mutation response', async () => {
   activeActionPostId = 'first';
   const environment = await start();
   await respond({
     currentSession: null,
-    profileByHandle: profile('LOCAL', ['first', 'second'], ['first', 'chronology']),
+    profileByHandle: profile('LOCAL', ['second'], ['first', 'chronology']),
   });
   assert.equal(environment.check(rootQueryOperation).status, 'available');
+  assert.deepEqual(cards(), [
+    ['second', true],
+    ['first', false],
+    ['chronology', false],
+  ]);
+  assert.equal(all('ActionState')[0]!.props.item.label, '프로필에 고정');
+
+  await act(async () => all('ActionState')[0]!.props.item.onSelect());
+  assert.equal(requests[1]!.name, 'ProfilePinActionPinMutation');
+  assert.equal(all('ModalSheet').length, 0);
+  assert.equal(all('ActionState')[0]!.props.pending, true);
+  await respondAt(1, {
+    pinProfilePost: {
+      changed: true,
+      profile: {
+        __typename: 'Profile',
+        id: 'owner',
+        pinnedPosts: [postNode('first', true), postNode('second', true)],
+      },
+      post: postNode('first', true),
+    },
+  });
+
+  assert.equal(all('ActionState')[0]!.props.item.label, '프로필 고정 해제');
   assert.deepEqual(cards(), [
     ['first', true],
     ['second', true],
     ['first', false],
     ['chronology', false],
   ]);
-  assert.equal(all('ActionState')[0]!.props.item.label, '프로필 고정 해제');
+  assert.equal(environment.check(rootQueryOperation).status, 'available');
 
   await act(async () => all('ActionState')[0]!.props.item.onSelect());
   await act(async () => all('ConfirmationContent')[0]!.props.onConfirm());
   await act(async () => all('ModalSheet')[0]!.props.onDismiss());
-  assert.equal(requests[1]!.name, 'ProfilePinActionUnpinMutation');
-  await respondAt(1, {
+  assert.equal(requests[2]!.name, 'ProfilePinActionUnpinMutation');
+  await respondAt(2, {
     unpinProfilePost: {
       changed: true,
-      profile: { __typename: 'Profile', id: 'owner' },
-      post: { __typename: 'Post', id: 'first', isPinned: false },
+      profile: {
+        __typename: 'Profile',
+        id: 'owner',
+        pinnedPosts: [postNode('second', true)],
+      },
+      post: postNode('first', false),
     },
   });
 
   assert.equal(all('ActionState')[0]!.props.item.label, '프로필에 고정');
   assert.deepEqual(cards(), [
-    ['first', true],
     ['second', true],
     ['first', false],
     ['chronology', false],
   ]);
   assert.deepEqual(
     requests.map((request) => request.name),
-    ['ProfilePostListPageQuery', 'ProfilePinActionUnpinMutation'],
+    ['ProfilePostListPageQuery', 'ProfilePinActionPinMutation', 'ProfilePinActionUnpinMutation'],
   );
-  assert.equal(environment.check(rootQueryOperation).status, 'stale');
-
-  await act(async () => refreshProfileQuery?.());
-  assert.equal(requests[2]!.name, 'ProfilePostListPageQuery');
-  await respondAt(2, {
-    currentSession: null,
-    profileByHandle: profile('LOCAL', ['second'], ['first', 'chronology']),
-  });
-  assert.deepEqual(cards(), [
-    ['second', true],
-    ['first', false],
-    ['chronology', false],
-  ]);
-
-  await act(async () => all('ActionState')[0]!.props.item.onSelect());
-  await act(async () => all('ConfirmationContent')[0]!.props.onConfirm());
-  await act(async () => all('ModalSheet')[0]!.props.onDismiss());
-  assert.equal(requests[3]!.name, 'ProfilePinActionPinMutation');
-  await respondAt(3, {
-    pinProfilePost: {
-      changed: true,
-      profile: { __typename: 'Profile', id: 'owner' },
-      post: { __typename: 'Post', id: 'first', isPinned: true },
-    },
-  });
-
-  assert.equal(all('ActionState')[0]!.props.item.label, '프로필 고정 해제');
-  assert.deepEqual(cards(), [
-    ['second', true],
-    ['first', false],
-    ['chronology', false],
-  ]);
-  assert.deepEqual(
-    requests.map((request) => request.name),
-    [
-      'ProfilePostListPageQuery',
-      'ProfilePinActionUnpinMutation',
-      'ProfilePostListPageQuery',
-      'ProfilePinActionPinMutation',
-    ],
-  );
-  assert.equal(environment.check(rootQueryOperation).status, 'stale');
-
-  await act(async () => refreshProfileQuery?.());
-  assert.equal(requests[4]!.name, 'ProfilePostListPageQuery');
-  await respondAt(4, {
-    currentSession: null,
-    profileByHandle: profile('LOCAL', ['first', 'second'], ['first', 'chronology']),
-  });
-  assert.deepEqual(cards(), [
-    ['first', true],
-    ['second', true],
-    ['first', false],
-    ['chronology', false],
-  ]);
+  assert.equal(environment.check(rootQueryOperation).status, 'available');
 });
-it('ActivityPub paginates pins independently of chronology', async () => {
+it('ActivityPub displays the returned pin list without a pinned pagination control', async () => {
   await start();
   const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
   await respond({
     currentSession: null,
-    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology'], true),
+    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology']),
   });
   assert.equal(all('InfiniteList').length, 1);
-  await act(async () => all('Button')[0]!.props.onPress());
-  assert.equal(requests.at(-1)!.name, 'PostListProfilePinnedNextPageQuery');
-  assert.equal(requests.at(-1)!.variables.cursor, 'pin-19');
-  await act(async () => requests.at(-1)!.sink.error(new Error('offline')));
-  assert.equal(all('Button')[0]!.props.accessibilityLabel, '고정된 게시글 다시 시도');
-  await act(async () => all('Button')[0]!.props.onPress());
-  await respond({
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(['pin-20'], false, true) },
-  });
-  assert.deepEqual(
-    cards(),
-    [...pins, 'pin-20'].map((id) => [id, true]).concat([['chronology', false]]),
-  );
+  assert.deepEqual(cards(), pins.map((id) => [id, true]).concat([['chronology', false]]));
   assert.equal(all('Button').length, 0);
 });
 
-it('keeps the loaded pin next page when the profile chronology loads another page', async () => {
+it('keeps the complete pin list when profile chronology loads another page', async () => {
   await start();
   const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
   await respond({
     currentSession: null,
-    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology-0'], true, true),
+    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology-0'], true),
   });
 
-  await act(async () => all('Button')[0]!.props.onPress());
-  assert.equal(requests.at(-1)!.name, 'PostListProfilePinnedNextPageQuery');
-  assert.equal(requests.at(-1)!.variables.cursor, 'pin-19');
-  await respond({
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      instance: { kind: 'ACTIVITYPUB' },
-      pinnedPosts: connection(['pin-20'], false, true),
-    },
-  });
   assert.equal(all('Button').length, 0);
-
   const list = all('InfiniteList')[0]!;
   await act(async () => list.props.loadNext(20));
   assert.equal(requests.at(-1)!.name, 'PostListProfileNextPageQuery');
@@ -426,9 +356,6 @@ it('keeps the loaded pin next page when the profile chronology loads another pag
 
   assert.deepEqual(
     cards(),
-    [...pins, 'pin-20', 'chronology-0', 'chronology-1'].map((id, index) => [
-      id,
-      index < pins.length + 1,
-    ]),
+    [...pins, 'chronology-0', 'chronology-1'].map((id, index) => [id, index < pins.length]),
   );
 });
