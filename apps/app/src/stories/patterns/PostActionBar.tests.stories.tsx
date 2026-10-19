@@ -2,6 +2,7 @@ import baseMeta, {
   ActionBarCatalogInteraction as actionBarCatalogInteraction,
   ActionSemanticColorsDarkInteraction as actionSemanticColorsDarkInteraction,
   AuthorPostDeletion as authorPostDeletion,
+  AuthorPostDeletionCountError as authorPostDeletionCountError,
   AuthorPostDeletionFailureRetry as authorPostDeletionFailureRetry,
   AuthorPostDeletionGraphQLErrorRetry as authorPostDeletionGraphQLErrorRetry,
   AuthorPostDeletionPending as authorPostDeletionPending,
@@ -35,6 +36,7 @@ export const PlaygroundInteraction: Story = playgroundInteraction;
 export const ActionBarCatalogInteraction: Story = actionBarCatalogInteraction;
 export const ActionSemanticColorsDarkInteraction: Story = actionSemanticColorsDarkInteraction;
 export const AuthorPostDeletion: Story = authorPostDeletion;
+export const AuthorPostDeletionCountError: Story = authorPostDeletionCountError;
 export const AuthorPostDeletionPending: Story = authorPostDeletionPending;
 export const AuthorPostDeletionFailureRetry: Story = authorPostDeletionFailureRetry;
 export const AuthorPostDeletionGraphQLErrorRetry: Story = authorPostDeletionGraphQLErrorRetry;

@@ -110,30 +110,4 @@ describe('PostDeletionAction Relay cache contract', () => {
     assert.equal(actorA.getStore().getSource().get(parentId)?.replyCount, 0);
     assert.equal(actorB.getStore().getSource().get(parentId)?.replyCount, 1);
   });
-
-  it('keeps deletion successful when the optional Parent count field reports a GraphQL error', async () => {
-    const { getPostDeletionMutationOutcome } = await import('./postDeletionOutcome');
-
-    assert.deepEqual(
-      getPostDeletionMutationOutcome(
-        { deletePost: { postId, replyParent: { id: parentId, replyCount: null } } },
-        [{ message: 'Reply count query failed' }],
-        '게시글 삭제 실패',
-      ),
-      { kind: 'committed', postId },
-    );
-  });
-
-  it('keeps deletion failed when the mutation response has no committed postId', async () => {
-    const { getPostDeletionMutationOutcome } = await import('./postDeletionOutcome');
-
-    assert.deepEqual(
-      getPostDeletionMutationOutcome(
-        { deletePost: { postId: null, replyParent: null } },
-        [{ message: 'Delete failed' }],
-        '게시글 삭제 실패',
-      ),
-      { kind: 'failed', message: 'Delete failed' },
-    );
-  });
 });

@@ -65,7 +65,7 @@ const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'unselected' | 'selected' | 'pending';
 type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
-type DeleteOutcome = 'graphql-error' | 'network-error' | 'pending' | 'success';
+type DeleteOutcome = 'count-error' | 'graphql-error' | 'network-error' | 'pending' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   deleteOutcome?: DeleteOutcome;
   onMutationRequest?: (requestName: string, variables: Variables) => void;
@@ -169,6 +169,22 @@ function PostActionBarFixture({
               }
               if (deleteOutcome === 'network-error') {
                 return Promise.reject(new Error('delete failed'));
+              }
+              if (deleteOutcome === 'count-error') {
+                return Promise.resolve({
+                  data: {
+                    deletePost: {
+                      postId: sourcePostId,
+                      replyParent: { id: 'post-reply-parent', replyCount: null },
+                    },
+                  },
+                  errors: [
+                    {
+                      message: 'Reply count failed',
+                      path: ['deletePost', 'replyParent', 'replyCount'],
+                    },
+                  ],
+                } as GraphQLResponse);
               }
               if (deleteOutcome === 'graphql-error') {
                 return Promise.resolve({
@@ -777,6 +793,7 @@ const meta = {
     'ActionBarCatalogInteraction',
     'ActionSemanticColorsDarkInteraction',
     'AuthorPostDeletion',
+    'AuthorPostDeletionCountError',
     'AuthorPostDeletionFailureRetry',
     'AuthorPostDeletionGraphQLErrorRetry',
     'AuthorPostDeletionPending',
@@ -1338,9 +1355,23 @@ export const AuthorPostDeletion: Story = {
       'PostDeletionActionDeletePostMutation',
       { id: sourcePostId },
     );
+    await waitFor(() => expect(canvas.getByText('삭제된 게시글')).toBeVisible());
+    expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   },
   render: () => (
     <PostActionBarFixture
+      onMutationRequest={deletionMutationRequest}
+      selectedProfileId="profile-author"
+    />
+  ),
+};
+
+export const AuthorPostDeletionCountError: Story = {
+  ...AuthorPostDeletion,
+  render: () => (
+    <PostActionBarFixture
+      deleteOutcome="count-error"
       onMutationRequest={deletionMutationRequest}
       selectedProfileId="profile-author"
     />

@@ -7,7 +7,6 @@ import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { PostActionControl } from './PostActionControl';
-import { getPostDeletionMutationOutcome } from './postDeletionOutcome';
 import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PostDeletionAction_post$key } from './__generated__/PostDeletionAction_post.graphql';
@@ -130,9 +129,8 @@ export function PostDeletionAction({
         response: PostDeletionActionDeletePostMutation['response'],
         errors: ReadonlyArray<{ message: string }> | null | undefined,
       ) => {
-        const outcome = getPostDeletionMutationOutcome(response, errors, failureMessage);
-        if (outcome.kind === 'failed') {
-          fail(new Error(outcome.message));
+        if (!response?.deletePost?.postId) {
+          fail(new Error(errors?.[0]?.message ?? failureMessage));
           return;
         }
         if (
