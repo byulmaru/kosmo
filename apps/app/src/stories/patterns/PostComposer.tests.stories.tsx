@@ -306,17 +306,30 @@ export const MobileFullPickerBackdropDismissContract: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
 
-    const composerPicker = await canvas.findByTestId('post-composer-emoji-picker');
-    const backdrop = within(composerPicker).getByTestId('full-reaction-picker-backdrop');
+    const composerPicker = await within(canvasElement.ownerDocument.body).findByTestId(
+      'post-composer-emoji-picker',
+    );
+    const backdrop = composerPicker;
     const dismissTarget = within(composerPicker).getByTestId(
       'full-reaction-picker-backdrop-dismiss',
     );
     const sheet = within(backdrop).getByTestId('full-reaction-picker-sheet');
+    const search = within(composerPicker).getByRole('searchbox', { name: '반응 검색' });
+    expect(
+      within(canvasElement.ownerDocument.body).getAllByRole('dialog', { name: '반응 선택' }),
+    ).toHaveLength(1);
     const backdropBounds = backdrop.getBoundingClientRect();
     const sheetBounds = sheet.getBoundingClientRect();
 
     expect(sheetBounds.top).toBeGreaterThan(backdropBounds.top);
-    await userEvent.click(sheet);
+    const searchBounds = search.getBoundingClientRect();
+    const insideHitTarget = backdrop.ownerDocument.elementFromPoint(
+      searchBounds.left + searchBounds.width / 2,
+      searchBounds.top + searchBounds.height / 2,
+    );
+    expect(insideHitTarget).not.toBeNull();
+    expect(search.contains(insideHitTarget)).toBe(true);
+    await userEvent.click(insideHitTarget as HTMLElement);
     expect(composerPicker).toBeVisible();
 
     const backdropClickPoint = {
@@ -330,7 +343,7 @@ export const MobileFullPickerBackdropDismissContract: Story = {
     expect(dismissHitTarget).not.toBeNull();
     expect(dismissTarget.contains(dismissHitTarget)).toBe(true);
     await userEvent.click(dismissHitTarget as HTMLElement);
-    await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
+    await waitFor(() => expect(composerPicker).not.toBeVisible());
   },
 };
 export const MobileReplyShellContract: Story = mobileReplyShellContract;

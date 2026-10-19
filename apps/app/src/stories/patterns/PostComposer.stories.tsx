@@ -17,6 +17,7 @@ import {
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
@@ -471,54 +472,67 @@ function InteractiveComposer({
   };
 
   const shouldShowPicker = pickerOpen && !props.submitting;
-  const picker = shouldShowPicker ? (
-    <View pointerEvents="box-none" style={mobile ? styles.mobilePicker : styles.pickerLayer}>
-      {!mobile ? (
-        <Pressable
-          accessibilityLabel="반응 선택 닫기"
-          accessibilityRole="button"
-          onPress={closePicker}
-          style={styles.pickerDismiss}
-        />
-      ) : null}
+  const pickerContent = (
+    <FullReactionPicker
+      onClose={closePicker}
+      onQueryChange={setPickerQuery}
+      onSelect={(option) => {
+        if (props.submitting) {
+          return;
+        }
+        const value = `${body}${option.emoji}`;
+        props.onBodyChange(value);
+        setDraft((previous) => {
+          const caret = { start: value.length, end: value.length };
+          return {
+            ...updatePostComposerDraftBody(previous, value),
+            previousSelection: caret,
+            selection: caret,
+          };
+        });
+        closePicker();
+      }}
+      options={reactionOptions}
+      presentation={mobile ? 'mobile' : 'web'}
+      query={pickerQuery}
+      selectedValues={[]}
+    />
+  );
+  const mobilePicker = mobile ? (
+    <ModalOverlay
+      accessibilityLabel="반응 선택"
+      backdropTestID="full-reaction-picker-backdrop-dismiss"
+      onRequestClose={closePicker}
+      presentation="sheet"
+      testID="post-composer-emoji-picker"
+      visible={shouldShowPicker}
+    >
+      {pickerContent}
+    </ModalOverlay>
+  ) : null;
+  const picker = mobile ? (
+    mobilePicker
+  ) : shouldShowPicker ? (
+    <View pointerEvents="box-none" style={styles.pickerLayer}>
+      <Pressable
+        accessibilityLabel="반응 선택 닫기"
+        accessibilityRole="button"
+        onPress={closePicker}
+        style={styles.pickerDismiss}
+      />
       <View
         pointerEvents="box-none"
         style={[
           styles.pickerPanel,
-          mobile
-            ? styles.mobilePickerPanel
-            : {
-                height: pickerPosition.height,
-                left: pickerPosition.left,
-                top: pickerPosition.top,
-              },
+          {
+            height: pickerPosition.height,
+            left: pickerPosition.left,
+            top: pickerPosition.top,
+          },
         ]}
         testID="post-composer-emoji-picker"
       >
-        <FullReactionPicker
-          onClose={closePicker}
-          onQueryChange={setPickerQuery}
-          onSelect={(option) => {
-            if (props.submitting) {
-              return;
-            }
-            const value = `${body}${option.emoji}`;
-            props.onBodyChange(value);
-            setDraft((previous) => {
-              const caret = { start: value.length, end: value.length };
-              return {
-                ...updatePostComposerDraftBody(previous, value),
-                previousSelection: caret,
-                selection: caret,
-              };
-            });
-            closePicker();
-          }}
-          options={reactionOptions}
-          presentation={mobile ? 'mobile' : 'web'}
-          query={pickerQuery}
-          selectedValues={[]}
-        />
+        {pickerContent}
       </View>
     </View>
   ) : null;
@@ -1569,14 +1583,6 @@ const styles = StyleSheet.create({
   authorHandle: textStyles.uiCopyM,
   authorName: textStyles.uiLabelL,
   composition: { alignItems: 'center', width: '100%' },
-  mobilePicker: {
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    zIndex: 20,
-  },
   overlayClose: { position: 'absolute', right: space[16], top: space[12] },
   pickerDismiss: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
   pickerLayer: {
@@ -1588,7 +1594,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   pickerPanel: { position: 'absolute', zIndex: 1 },
-  mobilePickerPanel: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   railTarget: { maxWidth: 326, width: '100%' },
   railMediaFixture: { maxWidth: 326, width: '100%' },
   overlayTarget: { maxWidth: 600, width: '100%' },

@@ -29,7 +29,6 @@ export type FullReactionPickerOption = Readonly<{
 }>;
 
 export type FullReactionPickerProps = {
-  onBackdropPress?: () => void;
   onClose: () => void;
   onQueryChange: (query: string) => void;
   onSelect: (option: FullReactionPickerOption) => void;
@@ -45,7 +44,6 @@ export type FullReactionPickerProps = {
 };
 
 export function FullReactionPicker({
-  onBackdropPress,
   onClose,
   onQueryChange,
   onSelect,
@@ -141,7 +139,7 @@ export function FullReactionPicker({
       accessibilityLabel="반응 선택"
       onAccessibilityEscape={onClose}
       ref={pickerRef}
-      role={Platform.OS === 'web' ? 'dialog' : undefined}
+      role={!mobile && Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
         mobile ? styles.mobileSheetContent : styles.webDialog,
         !mobile && elevation.overlay,
@@ -254,28 +252,15 @@ export function FullReactionPicker({
   );
 
   return mobile ? (
-    <View
-      style={[styles.mobileRoot, !onBackdropPress && { backgroundColor: theme.overlayScrim }]}
-      testID="full-reaction-picker-backdrop"
+    <BottomSheetSurface
+      handleTestID="full-reaction-picker-drag-handle"
+      initialHeight={state === 'browse' ? 480 : 720}
+      onClose={onClose}
+      style={styles.mobileSheetSurface}
+      testID="full-reaction-picker-sheet"
     >
-      <Pressable
-        accessible={false}
-        aria-hidden
-        importantForAccessibility="no"
-        onPress={onBackdropPress ?? onClose}
-        style={StyleSheet.absoluteFill}
-        testID="full-reaction-picker-backdrop-dismiss"
-      />
-      <BottomSheetSurface
-        handleTestID="full-reaction-picker-drag-handle"
-        initialHeight={state === 'browse' ? 480 : 720}
-        onClose={onClose}
-        style={styles.mobileSheetSurface}
-        testID="full-reaction-picker-sheet"
-      >
-        {picker}
-      </BottomSheetSurface>
-    </View>
+      {picker}
+    </BottomSheetSurface>
   ) : (
     picker
   );
@@ -456,7 +441,6 @@ const styles = StyleSheet.create({
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
   mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
-  mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheetContent: {
     flex: 1,
     gap: space[12],
