@@ -231,11 +231,13 @@ test('Reaction·Repost 알림 사진과 게시글은 각각 한 번 이동하고
     .values([
       {
         kind: NotificationKind.REACTION,
+        recipientAccountId: recipient.account.id,
         recipientProfileId: recipient.profile.id,
         sourceId: reaction!.id,
       },
       {
         kind: NotificationKind.REPOST,
+        recipientAccountId: recipient.account.id,
         recipientProfileId: recipient.profile.id,
         sourceId: repost.id,
       },
