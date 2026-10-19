@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { AtSign, MessageCircle, Quote } from 'lucide-react-native';
 import { useCallback } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -16,6 +15,7 @@ import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
+import { notificationKindPresentations } from './notificationKindPresentation';
 import { NotificationKindRail } from './NotificationLinkTarget';
 import type { PostMediaOpenHandler } from '@/components/post/PostMediaImage';
 import type { PostNotificationPost_post$key } from './__generated__/PostNotificationPost_post.graphql';
@@ -47,16 +47,6 @@ const PostNotificationPostFragment = graphql`
 
 type PostNotificationKind = 'mention' | 'quote' | 'reply';
 
-const presentations = {
-  mention: { Icon: AtSign, label: '멘션 알림', reason: null },
-  quote: {
-    Icon: Quote,
-    label: '인용 알림',
-    reason: '회원님의 게시글을 인용했습니다',
-  },
-  reply: { Icon: MessageCircle, label: '답글 알림', reason: null },
-} as const;
-
 /** Shared Post composition for recipient-relative Mention, Reply, and Quote notifications. */
 export function PostNotificationPost({
   kind,
@@ -74,7 +64,8 @@ export function PostNotificationPost({
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
-  const { Icon, label, reason } = presentations[kind];
+  const { Icon, label } = notificationKindPresentations[kind];
+  const reason = kind === 'quote' ? '회원님의 게시글을 인용했습니다' : null;
   const onMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       onActivate?.();
