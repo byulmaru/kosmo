@@ -247,7 +247,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정·해제 요청 중에도 Profile 전환을 허용한다. 실패 알림에는 요청을 시작한 Profile을 표시한다.
-- pin/unpin 성공 뒤 대상 Post의 메뉴와 현재 표시 중인 Profile pinned segment는 저장된 고정 상태·구성·순서를 즉시 반영한다.
+- pin/unpin 결과는 현재 화면의 고정 상태와 목록 표시에 반영한다. 동시 요청의 응답 순서에 따라 이전 표시가 남을 수 있으며,
+  서버의 최신 고정 목록과 순서는 Profile 목록을 다시 조회할 때 확인한다.
 - 고정 Post는 Profile 목록의 pinned segment에서 우선 표시하며 Home timeline 순서는 변경하지 않는다.
 - Profile pinned segment는 조회 가능한 Local pin 전체를 server-authoritative 순서로 표시하고 개별 관리한다. Remote는 검증된
   Featured collection 전체를 원격 순서로 표시한다. pin 관계는 기존 Profile chronology의 후보·순서·pagination을 바꾸지 않으므로,
