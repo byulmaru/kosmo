@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -177,7 +177,7 @@ type Props = {
   refreshing?: boolean;
 };
 
-export function PostList({
+export const PostList = memo(function PostList({
   error = false,
   home: homeKey,
   ignoreBlock = false,
@@ -360,7 +360,7 @@ export function PostList({
       </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );
-}
+});
 
 function PostListSkeleton() {
   const theme = useTheme();

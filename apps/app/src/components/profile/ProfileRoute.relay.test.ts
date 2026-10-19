@@ -43,6 +43,7 @@ mockModule('expo-router', {
   Slot: () => null,
   Stack: () => null,
   useGlobalSearchParams: () => ({ profileHandle: '@target' }),
+  useCurrentRouteInfo: () => ({ params: { profileHandle: '@target' }, pathname: '/@target' }),
   usePathname: () => '/@target',
   useRouter: () => ({ back: () => undefined, replace: () => undefined }),
 });

@@ -343,15 +343,15 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     return () => subscription.remove();
   }, [closeDrawer, drawerOpen, web]);
 
-  const openProfileSwitcher = () => {
+  const openProfileSwitcher = useCallback(() => {
     if (mobile) {
       setDrawerOpen(true);
     }
     setSwitcherOpen(true);
-  };
-  const openNavigationDrawer = () => {
+  }, [mobile]);
+  const openNavigationDrawer = useCallback(() => {
     setDrawerOpen(true);
-  };
+  }, []);
   const openFeedbackOverlay = () => {
     setDrawerOpen(false);
     setSwitcherOpen(false);
