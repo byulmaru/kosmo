@@ -308,6 +308,9 @@ export const MobileFullPickerBackdropDismissContract: Story = {
 
     const composerPicker = await canvas.findByTestId('post-composer-emoji-picker');
     const backdrop = within(composerPicker).getByTestId('full-reaction-picker-backdrop');
+    const dismissTarget = within(composerPicker).getByTestId(
+      'full-reaction-picker-backdrop-dismiss',
+    );
     const sheet = within(backdrop).getByTestId('full-reaction-picker-sheet');
     const backdropBounds = backdrop.getBoundingClientRect();
     const sheetBounds = sheet.getBoundingClientRect();
@@ -317,13 +320,16 @@ export const MobileFullPickerBackdropDismissContract: Story = {
     expect(composerPicker).toBeVisible();
 
     const backdropClickPoint = {
-      clientX: backdropBounds.left + backdropBounds.width / 2,
-      clientY: backdropBounds.top + (sheetBounds.top - backdropBounds.top) / 2,
+      x: backdropBounds.left + backdropBounds.width / 2,
+      y: backdropBounds.top + (sheetBounds.top - backdropBounds.top) / 2,
     };
-    await userEvent.pointer([
-      { keys: '[MouseLeft>]', target: backdrop, coords: backdropClickPoint },
-      { keys: '[/MouseLeft]', target: backdrop, coords: backdropClickPoint },
-    ]);
+    const dismissHitTarget = backdrop.ownerDocument.elementFromPoint(
+      backdropClickPoint.x,
+      backdropClickPoint.y,
+    );
+    expect(dismissHitTarget).not.toBeNull();
+    expect(dismissTarget.contains(dismissHitTarget)).toBe(true);
+    await userEvent.click(dismissHitTarget as HTMLElement);
     await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
   },
 };

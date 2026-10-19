@@ -255,15 +255,17 @@ export function FullReactionPicker({
 
   return mobile ? (
     <View
-      onResponderRelease={(event) => {
-        if (event.target === event.currentTarget) {
-          (onBackdropPress ?? onClose)();
-        }
-      }}
-      onStartShouldSetResponder={(event) => event.target === event.currentTarget}
       style={[styles.mobileRoot, !onBackdropPress && { backgroundColor: theme.overlayScrim }]}
       testID="full-reaction-picker-backdrop"
     >
+      <Pressable
+        accessible={false}
+        aria-hidden
+        importantForAccessibility="no"
+        onPress={onBackdropPress ?? onClose}
+        style={StyleSheet.absoluteFill}
+        testID="full-reaction-picker-backdrop-dismiss"
+      />
       <BottomSheetSurface
         handleTestID="full-reaction-picker-drag-handle"
         initialHeight={state === 'browse' ? 480 : 720}
