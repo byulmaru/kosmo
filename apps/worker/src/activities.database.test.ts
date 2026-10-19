@@ -135,7 +135,7 @@ beforeEach(async () => {
   await db.delete(NotificationQuoteJudgments);
   await db.delete(Notifications);
   await db.delete(ProfileFollows);
-  await db.update(Posts).set({ currentContentId: null });
+  await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Profiles);
