@@ -11,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { PostDetailBackground } from './PostDetailBackground';
 import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
@@ -91,6 +92,10 @@ const PostListItemFragment = graphql`
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostSourcePresentationView_post
     repostSource {
+      id
+      profile {
+        relativeHandle
+      }
       ...PostListRow_post
     }
     ...PostListRow_post
@@ -113,9 +118,13 @@ export function PostListItem({
   const theme = useTheme();
   const metrics = postListMetrics[presentation];
   const post = useFragment(PostListItemFragment, postKey);
+  const router = useRouter();
   const openViewer = usePostMediaViewerHost();
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
+  const detailPost = post.content ? post : (post.repostSource ?? post);
+  const detailHref = `/${detailPost.profile.relativeHandle}/${detailPost.id}` as const;
+  const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -154,8 +163,13 @@ export function PostListItem({
             <Pin color={theme.textSecondary} size={16} />
           </View>
         }
+        onBackgroundPress={openDetail}
       >
-        <Text style={[styles.attributionLabel, { color: theme.textSecondary }]}>고정됨</Text>
+        <Text
+          style={[styles.attributionLabel, { color: theme.textSecondary, pointerEvents: 'none' }]}
+        >
+          고정됨
+        </Text>
       </PostAttributionRow>
     </View>
   ) : null;
@@ -172,8 +186,12 @@ export function PostListItem({
             <MessageCircle color={theme.textSecondary} size={16} />
           </View>
         }
+        onBackgroundPress={openDetail}
       >
-        <Text numberOfLines={1} style={[styles.attributionLabel, { color: theme.textSecondary }]}>
+        <Text
+          numberOfLines={1}
+          style={[styles.attributionLabel, { color: theme.textSecondary, pointerEvents: 'none' }]}
+        >
           {post.replyParent.profile.displayName}님에게 답글
         </Text>
       </PostAttributionRow>
@@ -191,7 +209,7 @@ export function PostListItem({
       return renderWithReplySurface(null);
     }
     return renderWithReplySurface(
-      <PostListItemCard article style={standardCardStyle}>
+      <PostListItemCard article onBackgroundPress={openDetail} style={standardCardStyle}>
         {pinnedAttribution}
         {replyAttribution}
         <PostListRow
@@ -211,10 +229,11 @@ export function PostListItem({
 
   if (!post.content) {
     return renderWithReplySurface(
-      <PostListItemCard article style={compactCardStyle}>
+      <PostListItemCard article onBackgroundPress={openDetail} style={compactCardStyle}>
         {pinnedAttribution}
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
+          onBackgroundPress={openDetail}
         >
           <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
@@ -242,10 +261,10 @@ export function PostListItem({
   }
 
   return renderWithReplySurface(
-    <PostListItemCard style={compactCardStyle}>
+    <PostListItemCard onBackgroundPress={openDetail} style={compactCardStyle}>
       {pinnedAttribution}
       {replyAttribution}
-      <View style={styles.quoteRow}>
+      <PostDetailBackground onBackgroundPress={openDetail} style={styles.quoteRow}>
         <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
@@ -265,6 +284,7 @@ export function PostListItem({
         </Link>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
+            onBackgroundPress={openDetail}
             onMediaOpen={handleQuoteMediaOpen}
             post={post}
             showPostAvatar={false}
@@ -277,7 +297,7 @@ export function PostListItem({
             socialActionTarget={post.actionSurface!}
           />
         </View>
-      </View>
+      </PostDetailBackground>
     </PostListItemCard>,
   );
 }
@@ -285,19 +305,26 @@ export function PostListItem({
 function PostListItemCard({
   article = false,
   children,
+  onBackgroundPress,
   style,
 }: {
   article?: boolean;
   children: ReactNode;
+  onBackgroundPress: () => void;
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const [pressed, setPressed] = useState(false);
   const [pointerHovered, setPointerHovered] = useState(false);
 
-  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
+  // Keep hover across child controls and press feedback on the background responder.
   return (
-    <Pressable
+    <PostDetailBackground
       accessible={false}
+      onBackgroundPress={onBackgroundPress}
+      onResponderGrant={() => setPressed(true)}
+      onResponderRelease={() => setPressed(false)}
+      onResponderTerminate={() => setPressed(false)}
       focusable={false}
       onPointerEnter={(event) => {
         if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
@@ -314,36 +341,40 @@ function PostListItemCard({
       tabIndex={-1}
       testID="post-list-item-card"
     >
-      {(state) => (
-        <>
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={[
-              styles.surfaceFeedback,
-              {
-                backgroundColor: state.pressed
-                  ? theme.statePressedSubtle
-                  : Platform.OS === 'web' && pointerHovered
-                    ? theme.stateHover
-                    : undefined,
-              },
-            ]}
-            testID="post-list-item-feedback"
-          />
-          {children}
-        </>
-      )}
-    </Pressable>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[
+          styles.surfaceFeedback,
+          {
+            backgroundColor: pressed
+              ? theme.statePressedSubtle
+              : Platform.OS === 'web' && pointerHovered
+                ? theme.stateHover
+                : undefined,
+          },
+        ]}
+        testID="post-list-item-feedback"
+      />
+      {children}
+    </PostDetailBackground>
   );
 }
 
-function PostAttributionRow({ children, icon }: { children: ReactNode; icon: ReactNode }) {
+function PostAttributionRow({
+  children,
+  icon,
+  onBackgroundPress,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  onBackgroundPress: () => void;
+}) {
   return (
-    <View style={styles.attributionRow}>
-      <View style={styles.attributionIconColumn}>{icon}</View>
-      <View style={styles.attributionContent}>{children}</View>
-    </View>
+    <PostDetailBackground onBackgroundPress={onBackgroundPress} style={styles.attributionRow}>
+      <View style={[styles.attributionIconColumn, { pointerEvents: 'none' }]}>{icon}</View>
+      <View style={[styles.attributionContent, { pointerEvents: 'box-none' }]}>{children}</View>
+    </PostDetailBackground>
   );
 }
 
@@ -363,6 +394,7 @@ function PostListRow({
   const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -375,7 +407,11 @@ function PostListRow({
     [openViewer, post.id, surfacePostId],
   );
   return (
-    <View style={styles.standardRow} testID="post-list-standard-row">
+    <PostDetailBackground
+      onBackgroundPress={openDetail}
+      style={styles.standardRow}
+      testID="post-list-standard-row"
+    >
       <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
         <Pressable
           aria-hidden
@@ -393,8 +429,8 @@ function PostListRow({
           />
         </Pressable>
       </Link>
-      <View style={styles.content}>
-        <View style={styles.header}>
+      <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
+        <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
           <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
@@ -403,15 +439,11 @@ function PostListRow({
               </TimestampText>
             </Pressable>
           </Link>
-        </View>
+        </PostDetailBackground>
         {post.content ? (
-          <View style={styles.bodyLink}>
-            <PostBody
-              onBodyPress={() => router.push(detailHref)}
-              onMediaOpen={handleMediaOpen}
-              post={post}
-            />
-          </View>
+          <PostDetailBackground onBackgroundPress={openDetail} style={styles.bodyLink}>
+            <PostBody onBodyPress={openDetail} onMediaOpen={handleMediaOpen} post={post} />
+          </PostDetailBackground>
         ) : null}
         {post.content && post.repostSource ? (
           <PostSourcePreview source={post.repostSource} style={styles.quoteSourcePreview} />
@@ -422,8 +454,8 @@ function PostListRow({
           reply={reply}
           socialActionTarget={post.actionSurface!}
         />
-      </View>
-    </View>
+      </PostDetailBackground>
+    </PostDetailBackground>
   );
 }
 

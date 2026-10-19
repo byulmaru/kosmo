@@ -2146,6 +2146,7 @@ function ContentWarningConsumerIntegrationStory() {
 
   return (
     <Catalog>
+      <StoryPathname testID="content-warning-list-pathname" />
       <View testID="content-warning-list-surface">
         <PostListItem
           post={requireFragment(post.listItem, 'Content Warning list item consumer')}
@@ -4856,6 +4857,51 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
   render: () => <QuoteListSurfaceStory />,
 };
 
+export const QuoteListItemInternalBackground: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = await canvas.findByTestId('post-source-presentation');
+    const body = within(root).getByTestId('post-body');
+    const pathname = canvas.getByTestId('presentation-story-pathname');
+    const initialPath = pathname.textContent;
+    const header = body.previousElementSibling!;
+    await waitFor(() =>
+      expect(body.getBoundingClientRect().top).toBeGreaterThan(
+        header.getBoundingClientRect().bottom,
+      ),
+    );
+    const x = root.getBoundingClientRect().left + 4;
+    const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
+    const target = document.elementFromPoint(x, y)!;
+    expect(target).toBe(root);
+    const coords = (offset: number) => ({
+      clientX: x + offset,
+      clientY: y,
+      pageX: x + offset + window.scrollX,
+      pageY: y + window.scrollY,
+    });
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { target, coords: coords(30) },
+      { target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname).toHaveTextContent('/@reposter/post-quote');
+    await userEvent.click(
+      canvas.getByRole('link', { name: `${repostAuthor.displayName} 프로필 보기` }),
+    );
+    expect(pathname.textContent).toBe(`/@reposter`);
+    await userEvent.click(canvas.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(pathname.textContent).toBe(`/${sourcePost.profile.relativeHandle}/${sourcePost.id}`);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" presentation="wide" />,
+};
+
 export const QuoteListItemAvatars: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -6731,7 +6777,72 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
     const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
+    const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.id}`;
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    const row = listSurface.getByTestId('post-list-standard-row');
+    const pathname = canvas.getByTestId('content-warning-list-pathname');
+    const initialPath = pathname.textContent;
+    const card = listSurface.getByTestId('post-list-item-card');
+    await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
+    const cardBounds = card.getBoundingClientRect();
+    const cardCoords = (x: number) => ({
+      clientX: x,
+      clientY: cardBounds.top + 2,
+      pageX: x + window.scrollX,
+      pageY: cardBounds.top + 2 + window.scrollY,
+    });
+    const cardStart = cardCoords(cardBounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: card, coords: cardStart },
+      { target: card, coords: cardCoords(cardBounds.left + 40) },
+      { target: card, coords: cardStart },
+      { keys: '[/MouseLeft]', target: card, coords: cardStart },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
+    // Drive RN Web's real responder with coordinates on the empty avatar column.
+    await waitFor(() => expect(row.getBoundingClientRect().height).toBeGreaterThan(0));
+    const bounds = row.getBoundingClientRect();
+    // userEvent defaults pageX/Y to zero rather than deriving them from clientX/Y.
+    const coords = (clientX: number) => ({
+      clientX,
+      clientY: bounds.bottom - 2,
+      pageX: clientX + window.scrollX,
+      pageY: bounds.bottom - 2 + window.scrollY,
+    });
+    const start = coords(bounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: row, coords: coords(bounds.left + 40) },
+      { target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: canvasElement, coords: coords(bounds.left - 2) },
+      {
+        keys: '[/MouseLeft]',
+        target: canvasElement,
+        coords: coords(bounds.left - 2),
+      },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(
+      listSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+      }),
+    ).toBeVisible();
 
     await userEvent.click(
       listSurface.getByRole('button', {
@@ -6739,6 +6850,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       layoutSurface.getByRole('button', {
         name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
@@ -6751,6 +6863,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
     ).toBeVisible();
