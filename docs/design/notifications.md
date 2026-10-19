@@ -253,7 +253,7 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   중복 전달하지 않는다.
 - Follow/FollowRequest/Reaction/Repost의 pending/disabled는 알림 이동을 차단한다. consumer가 pending
   수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
-  Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실 등으로 source를 가져오지 못하면
+  Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. Notification 행이 조회되지만 권한 상실 등으로 source를 가져오지 못하면
   consumer는 해당 알림 종류의 일반 문구와 시각을 표시한다. Follow, FollowRequest, Reaction, Reply, Quote,
   Mention, Repost의 일반 문구는 각각 `팔로우 알림`, `팔로우 요청 알림`, `반응 알림`, `답글 알림`,
   `인용 알림`, `멘션 알림`, `재게시 알림`이다. 이 행은 읽음/읽지 않음 상태와 모두 읽음 대상에 남지만

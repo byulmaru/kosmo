@@ -6,6 +6,7 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export { deletePostRelatedNotificationsActivity } from './activities/delete-post-related-notifications';
 export {
   followImportedProfileActivity,
   resolveImportedLocalProfileActivity,
