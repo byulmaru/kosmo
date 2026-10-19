@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { startWebLoginFromPress } from '@/auth/webLogin';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -89,11 +90,11 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
           </IconButton>
         </View>
         <View style={styles.actions}>
-          <NavigationLink href="/" primary>
-            <Button style={styles.ctaButton}>
+          <Link asChild href="/login">
+            <Button onPress={startWebLoginFromPress} style={styles.ctaButton}>
               <Text style={textStyles.uiLabelL}>KOSMO에서 계속하기</Text>
             </Button>
-          </NavigationLink>
+          </Link>
           <View style={styles.links}>
             <Link
               asChild

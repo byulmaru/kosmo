@@ -315,34 +315,44 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 });
 
 for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
-  test(`공개 콘텐츠의 ${entry}는 기존 가입 홈을 새 탭으로 연다`, async ({ context, page }) => {
-    const author = await createE2ESession({ handle: 'guest_entry_author' });
-    const post = await createE2EPost({ body: 'guest entry', profileId: author.profile!.id });
-    const publicPath =
-      entry === '가입하기'
-        ? '/@guest_entry_author'
-        : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(publicPath);
-    await expect(page.getByRole('link', { name: '로그인', exact: true })).toHaveAttribute(
-      'href',
-      '/login',
-    );
-    const [signupTab] = await Promise.all([
-      context.waitForEvent('page'),
-      page.getByRole('link', { name: entry, exact: true }).click({ button: 'middle' }),
-    ]);
-    try {
-      await expect(signupTab).toHaveURL((url) => url.pathname === '/' && url.search === '');
-      await expect(signupTab.getByRole('link', { name: '시작하기' })).toHaveAttribute(
-        'href',
-        '/login',
-      );
-      await expect(page).toHaveURL((url) => url.pathname === publicPath);
-    } finally {
-      await signupTab.close();
-    }
-  });
+  for (const newTab of [false, true]) {
+    test(`공개 콘텐츠의 ${entry}는 ${newTab ? '새 탭에서' : '현재 탭에서'} 바로 인증을 시작한다`, async ({
+      context,
+      page,
+    }) => {
+      const author = await createE2ESession({ handle: 'guest_entry_author' });
+      const post = await createE2EPost({ body: 'guest entry', profileId: author.profile!.id });
+      const publicPath =
+        entry === '가입하기'
+          ? '/@guest_entry_author'
+          : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(publicPath);
+      const entryLink = page.getByRole('link', { name: entry, exact: true });
+      await expect(entryLink).toHaveAttribute('href', '/login');
+      const loginRequest = context.waitForEvent('request', {
+        predicate: (request) =>
+          new URL(request.url()).pathname === '/login' && request.isNavigationRequest(),
+      });
+      const destination = newTab ? context.waitForEvent('page') : Promise.resolve(page);
+      await entryLink.click({ button: newTab ? 'middle' : 'left' });
+      const signupTab = await destination;
+      try {
+        await loginRequest;
+        await expect(signupTab).toHaveURL(/\/home$/);
+        await expect(
+          signupTab.getByRole('heading', { name: '프로필을 만들어 시작하세요' }),
+        ).toBeVisible();
+        if (newTab) {
+          await expect(page).toHaveURL((url) => url.pathname === publicPath);
+        }
+      } finally {
+        if (newTab) {
+          await signupTab.close();
+        }
+      }
+    });
+  }
 }
 
 test('Deleted Account의 Web OIDC callback은 같은 Account에 새 Session을 만들고 Profile 생성으로 이동한다', async ({

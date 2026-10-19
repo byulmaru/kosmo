@@ -159,20 +159,11 @@ export function SidebarNavigation({
     );
   };
 
-  const renderGuestAction = ({ action, children }: SidebarGuestActionRenderProps): ReactElement => {
+  const renderGuestAction = ({ children }: SidebarGuestActionRenderProps): ReactElement => {
     const childControl = children as ReactElement<{
       accessibilityRole?: 'button' | 'link';
       onPress?: NonNullable<LinkProps['onPress']>;
     }>;
-    if (action === 'signup') {
-      return (
-        <NavigationLink href="/" onNavigate={onNavigate} primary>
-          {cloneElement(childControl, {
-            accessibilityRole: 'link',
-          })}
-        </NavigationLink>
-      );
-    }
 
     return (
       <Link asChild href="/login">

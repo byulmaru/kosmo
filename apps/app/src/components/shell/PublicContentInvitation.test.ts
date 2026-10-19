@@ -9,11 +9,16 @@ import type { PublicContentInvitation as PublicContentInvitationExport } from '.
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+let loginPressCount = 0;
 let dismissed = false;
 let measuredHeight = 0;
 let viewport = { height: 844, width: 390 };
 let renderer: ReactTestRenderer | undefined;
 let PublicContentInvitation: typeof PublicContentInvitationExport;
+
+mockModule('@/auth/webLogin', {
+  startWebLoginFromPress: () => loginPressCount++,
+});
 
 mockModule('expo-router', {
   Link: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
@@ -68,6 +73,7 @@ before(async () => {
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
+  loginPressCount = 0;
   dismissed = false;
   measuredHeight = 0;
   viewport = { height: 844, width: 390 };
@@ -113,17 +119,21 @@ describe('PublicContentInvitation', () => {
     assert.ok(!styleObjects.some((style) => style.width === '100%'));
   });
 
-  it('opens the existing signup home without a return destination', async () => {
+  it('starts authentication without passing through the signup home', async () => {
     const view = await renderInvitation();
-    const mainLink = view.root.findAllByType('NavigationLink' as never)[0];
+    const mainLink = view.root.findAllByType('Link' as never)[0];
 
-    assert.equal(mainLink?.props.href, '/');
+    assert.equal(mainLink?.props.href, '/login');
+    await act(async () => {
+      view.root.findByType('Button' as never).props.onPress({ nativeEvent: { button: 0 } });
+    });
+    assert.equal(loginPressCount, 1);
   });
 
   it('opens the team and privacy destinations as independent links', async () => {
     const view = await renderInvitation();
-    const externalLink = view.root.findByType('Link' as never);
-    const privacyLink = view.root.findAllByType('NavigationLink' as never)[1];
+    const externalLink = view.root.findAllByType('Link' as never)[1];
+    const privacyLink = view.root.findByType('NavigationLink' as never);
 
     assert.equal(externalLink.props.href, 'https://byulmaru.co/about-us');
     assert.equal(privacyLink?.props.href, '/privacy');

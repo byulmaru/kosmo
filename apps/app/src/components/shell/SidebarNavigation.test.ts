@@ -151,7 +151,7 @@ test('Production adapter hides feedback without a current session', async () => 
   assert.equal(props.showFeedback, false);
 });
 
-test('Production adapter links guest signup to Home and login to the existing BFF entry', async () => {
+test('Production adapter starts guest signup and login through the existing BFF entry', async () => {
   pathname = '/@writer/post-id';
   const props = await renderSidebar({ guestPublicContent: true });
 
@@ -162,8 +162,15 @@ test('Production adapter links guest signup to Home and login to the existing BF
   const child = createElement('Pressable', { accessibilityRole: 'button' });
   const signup = props.renderGuestAction?.({ action: 'signup', children: child as never });
   const login = props.renderGuestAction?.({ action: 'login', children: child as never });
-  assert.equal((signup?.props as { href?: string }).href, '/');
+  assert.equal((signup?.props as { href?: string }).href, '/login');
   assert.equal((login?.props as { href?: string }).href, '/login');
+
+  const signupControl = (
+    signup?.props as {
+      children?: React.ReactElement<{ onPress?: (event: unknown) => void }>;
+    }
+  ).children;
+  signupControl?.props.onPress?.({ nativeEvent: { button: 0 } });
 
   const loginControl = (
     login?.props as {
@@ -172,5 +179,5 @@ test('Production adapter links guest signup to Home and login to the existing BF
   ).children;
   loginControl?.props.onPress?.({ nativeEvent: { button: 0 } });
 
-  assert.equal(loginPressCount, 1);
+  assert.equal(loginPressCount, 2);
 });
