@@ -823,7 +823,7 @@ export const Playground: Story = {
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
     expect(labels).toEqual([
-      args.replyAccessibilityLabel,
+      `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
       args.repostState === 'selected' ? '재게시 취소' : '재게시',
       '반응',
       args.bookmarkAccessibilityLabel,
@@ -854,7 +854,7 @@ export const PlaygroundInteraction: Story = {
       .map((button) => button.getAttribute('aria-label'));
     await step('Controls에 따른 고정 순서와 trailing group 확인', async () => {
       expect(labels).toEqual([
-        args.replyAccessibilityLabel,
+        `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
         args.repostState === 'selected' ? '재게시 취소' : '재게시',
         '반응',
         args.bookmarkAccessibilityLabel,
@@ -875,7 +875,9 @@ export const PlaygroundInteraction: Story = {
     });
 
     await step('Actions callback과 처리 상태 확인', async () => {
-      const replyButton = canvas.getByRole('button', { name: args.replyAccessibilityLabel });
+      const replyButton = canvas.getByRole('button', {
+        name: `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
+      });
       const bookmarkButton = canvas.getByRole('button', {
         name: args.bookmarkAccessibilityLabel,
       });
@@ -945,7 +947,7 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultToolbar = canvas.getAllByRole('toolbar')[0]!;
     const defaultToolbarCanvas = within(defaultToolbar);
     const iconMetrics = [
-      ['답글', 16, 16, '3.5'],
+      ['답글, 12.3K', 16, 16, '3.5'],
       ['재게시', 16, 16, '2.7'],
       ['반응', 16, 16, '3.5'],
       ['북마크', 16, 16, '3.5'],
@@ -962,7 +964,7 @@ export const ActionBarCatalogInteraction: Story = {
       defaultToolbarCanvas.getByTestId('post-action-repost-icon').getBoundingClientRect().width,
     ).toBe(16);
 
-    for (const label of ['답글', '재게시'] as const) {
+    for (const label of ['답글, 12.3K', '재게시'] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
       const count = button.querySelector('[dir="auto"]') as HTMLElement;
@@ -985,7 +987,7 @@ export const ActionBarCatalogInteraction: Story = {
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
 
     const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
-    const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
+    const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글, 12.3K' });
     const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
     verifyHuggedActionTargets(defaultToolbar);
@@ -1061,7 +1063,7 @@ export const ActionBarCatalogInteraction: Story = {
     fireEvent.keyUp(defaultReply, { code: 'Space', key: ' ' });
     await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('1'));
 
-    const resolutionReply = within(toolbars[4]!).getByRole('button', { name: '답글' });
+    const resolutionReply = within(toolbars[4]!).getByRole('button', { name: '답글, 12.3K' });
     expect(within(resolutionReply).queryByTestId('post-action-reply-hover')).toBeNull();
     fireEvent.mouseDown(resolutionReply, { buttons: 1 });
     await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('0.72'));
@@ -1181,14 +1183,14 @@ export const ActionBarCatalogInteraction: Story = {
     expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
-    const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
+    const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글, 12.3K' });
     fireEvent.pointerEnter(blockedReply);
     expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(blockedReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
     const resolutionToolbar = within(toolbars[4]!);
     for (const [label, testID] of [
-      ['답글', 'reply'],
+      ['답글, 12.3K', 'reply'],
       ['재게시', 'repost'],
       ['반응', 'reaction'],
       ['북마크', 'bookmark'],
@@ -1446,7 +1448,7 @@ export const AuthorPostDeletionGraphQLErrorRetry: Story = {
 export const ControlledReply: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = canvas.getByRole('button', { name: '답글' });
+    const button = canvas.getByRole('button', { name: '답글, 12.3K' });
 
     expect(button).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(button);
@@ -2024,7 +2026,7 @@ export const InteractionContract: Story = {
 
     const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
     expect(labels).toEqual([
-      '답글',
+      '답글, 12.3K',
       '재게시',
       '반응',
       '북마크',
@@ -2034,7 +2036,7 @@ export const InteractionContract: Story = {
       '북마크',
     ]);
 
-    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const replyButton = canvas.getByRole('button', { name: '답글, 12.3K' });
     replyButton.focus();
     await userEvent.keyboard('{Enter}');
     await userEvent.keyboard(' ');
@@ -2060,7 +2062,7 @@ export const InteractionContract: Story = {
 export const ProcessingAccessibility: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const replyButton = canvas.getByRole('button', { name: '답글, 12.3K' });
     const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
     await userEvent.click(repostButton);
     await userEvent.click(
@@ -2140,7 +2142,7 @@ export const AccessibilityAndCompactGeometry: Story = {
     const buttons = within(actionBar).getAllByRole('button');
 
     expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-      '답글',
+      '답글, 0',
       '재게시',
       '반응',
       '북마크',
@@ -2155,7 +2157,7 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
     expect(actionBar.getBoundingClientRect().height).toBe(28);
-    verifyHuggedActionTargets(actionBar);
+    verifyHuggedActionTargets(actionBar, '답글, 0');
     expect(buttons[0]).toHaveTextContent('0');
     expect(buttons[0]!.getBoundingClientRect().width).toBeGreaterThan(28);
   },
@@ -2251,11 +2253,11 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   verifyHuggedActionTargets(toolbar);
 }
 
-function verifyHuggedActionTargets(toolbar: HTMLElement) {
+function verifyHuggedActionTargets(toolbar: HTMLElement, replyLabel = '답글, 12.3K') {
   const toolbarBounds = toolbar.getBoundingClientRect();
   const toolbarCanvas = within(toolbar);
   const actions = [
-    ['답글', 'reply', 50],
+    [replyLabel, 'reply', 50],
     ['재게시', 'repost', 50],
     ['반응', 'reaction', 50],
     ['북마크', 'bookmark', 50],
@@ -2280,7 +2282,7 @@ function verifyHuggedActionTargets(toolbar: HTMLElement) {
       toolbarBounds.top + toolbarBounds.height / 2,
       0,
     );
-    if (label === '답글') {
+    if (testID === 'reply') {
       expect(targetBounds.left).toBeCloseTo(slotBounds.left, 0);
     } else {
       expect(targetBounds.left + targetBounds.width / 2).toBeCloseTo(

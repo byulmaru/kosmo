@@ -722,7 +722,7 @@ export const CompositionContract: Story = {
     await userEvent.hover(replyPost);
     await expect(getComputedStyle(replySurface).backgroundColor).toBe(unreadBackground);
     await expect(reply.getByTestId('notification-hover-overlay')).toBeInTheDocument();
-    const action = await reply.findByRole('button', { name: '답글' });
+    const action = await reply.findByRole('button', { name: '답글, 12' });
     await expect(action.closest('a')).toBeNull();
     await expect(reply.getByTestId('reply-notification-post')).toBeInTheDocument();
     await expect(reply.getByRole('button', { name: /더 보기/ })).toBeInTheDocument();
@@ -816,7 +816,7 @@ export const ReplyActionsContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onNavigate.mockClear();
     const canvas = within(canvasElement);
-    const reply = canvas.getByRole('button', { name: '답글' });
+    const reply = canvas.getByRole('button', { name: '답글, 12' });
     await userEvent.click(reply);
     const composer = await screen.findByRole('dialog', { name: '답글 쓰기' });
     await expect(within(composer).getByRole('textbox', { name: '답글 본문' })).toHaveFocus();
