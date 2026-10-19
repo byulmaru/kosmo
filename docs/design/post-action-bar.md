@@ -237,7 +237,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## Profile 고정 More menu와 attribution
 
-- Profile 목록 최상단의 고정 Post는 `Pin`과 `고정됨`을 표시한다. `Pin`은 인접한 문장이 의미를 제공하는
+- Profile pinned segment의 각 고정 Post는 `Pin`과 `고정됨`을 표시한다. `Pin`은 인접한 문장이 의미를 제공하는
   장식 아이콘이며 보조 기술에 중복 announce하지 않는다.
 - `고정됨` 위쪽 여백은 `Pinned attribution / Size=Center, Kind=Pinned` source가 `paddingTop=4px`로 소유한다.
   이 source의 전체 높이는 24px이고 내부 text line box는 기존 20px을 유지한다. 순수 Repost의 attribution
@@ -246,47 +246,41 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `프로필에 고정` 또는 `프로필 고정 해제`로 전환한다. `삭제`는 마지막에 두며 기존 eligibility가 있을 때만 표시한다.
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
-- 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
-- 저장·API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative order의 첫 visible
-  pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제한다. 같은 Post 재고정과
-  이미 해제된 Post 해제는 안전한 no-op으로 처리한다.
-- 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않는다. pin 관계는 기존 Profile chronology의
-  후보·순서·pagination을 바꾸지 않으므로, 첫 visible pin도 기존 chronology 후보라면 pinned segment와 원래 위치에 모두 표시된다.
-- 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인
-  대상에만 연결한다. Mentioned Profiles, Content 없는 pure Repost와 다른 Profile 작성 Post는 제외한다. Remote Profile의
-  `featured` 수신 결과는 검증된 Featured collection 전체를 순서대로 표시하며 Local first-visible UI 제한을 적용하지 않는다.
-- persistence/API·pagination·mutation·동시성은 PROD-973, ActivityPub federation은 PROD-974가 소유하고 PROD-809는
-  cross-slice 통합·archive를 소유한다. Storybook fixture의 모의 요청은 이 서버 계약을 증명하지 않는다.
+- 고정·해제 요청 중에도 Profile 전환을 허용한다. 실패 알림에는 요청을 시작한 Profile을 표시한다.
+- pin/unpin 성공 뒤 대상 Post의 메뉴는 저장된 고정 상태를 반영한다. 이미 표시 중인 Profile pinned segment는 이전 목록 구성과 순서를
+  유지할 수 있으며, 이후 Profile 목록을 다시 조회할 때 저장된 결과를 표시한다.
+- 고정 Post는 Profile 목록의 pinned segment에서 우선 표시하며 Home timeline 순서는 변경하지 않는다.
+- Profile pinned segment는 조회 가능한 Local pin 전체를 server-authoritative 순서로 표시하고 개별 관리한다. Remote는 검증된
+  Featured collection 전체를 원격 순서로 표시한다. pin 관계는 기존 Profile chronology의 후보·순서·pagination을 바꾸지 않으므로,
+  chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다.
+- Home, Search, Detail, Profile 게시물 메뉴에서 같은 owner 고정·해제 action을 제공한다. Profile 고정 목록은
+  authoritative order를 따라 페이지를 이어가며 chronology와 분리한다.
 
 ### Storybook 이관 · PROD-863
 
 - 시각·상태 근거는 [DSN-55 handoff](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4827-6858)와
   `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
-- `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
-  실제 Pin mutation과 production 호출자가 없으므로 `profilePin`·`onAction` 공개 API와 가짜 요청 함수를
-  미리 만들지 않는다. 실제 요청 실행은 PROD-975가 PROD-973 mutation을 연결할 때 개별 액션 내부에 둔다.
-- 고정·해제 메뉴 조립과 요청·상태 전환 모의는 Storybook fixture가 소유한다. Storybook 전용 adapter가
-  실제 `PostActionBar`에 메뉴 항목·pending 표시·focus 복귀 연결·sheet 아이콘 크기를 공급한다.
-  fixture 밖에서는 원래 props를 그대로 전달하며 production `PostActionSurface`는 고정 항목을 조립하지 않는다.
-- 기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
-  eligibility·확인창·mutation·cache·실패 처리를 유지한다. fixture는 owner의 복사·고정·삭제 순서와
-  visitor의 링크 복사만 있는 메뉴를 보여준다. 실제 고정 자격·정책은 PROD-809의 Profile consumer와 서버 계약을 따른다.
+- 고정 상태를 확인할 수 없으면 owner 메뉴에서 고정 action만 생략하고 Post와 나머지 메뉴 action은 유지한다. 별도 고정 상태
+  재시도 action은 제공하지 않는다.
+- 고정 목록에서 해제해도 현재 표시 중인 Post가 즉시 사라질 필요는 없으므로, 완료 뒤 focus는 해당 Post의 More trigger로
+  돌아간다. 기존 링크 복사 feedback과 삭제 eligibility·확인 흐름은 유지한다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
-- fixture의 모의 요청 중 실제 More trigger의 busy·disabled 표시를 검증한다. 모의 완료 뒤 More trigger로
-  focus를 돌리고, 실패하면 기존 고정 표시를 유지하며 공용 toast에 한국어 오류를 표시한다. 오류 원문은
-  표시하지 않는다. 메뉴를 다시 열어 재시도할 수 있지만, 이는 실제 Pin 요청의 중복 방지·실패 복구 증거가 아니다.
+- fixture는 고정·해제 요청의 busy·disabled 표시, 완료 뒤 More trigger focus 복귀, mutation 실패 시 현재 표시 유지와
+  공용 한국어 오류 안내, 메뉴를 다시 열어 재시도하는 동작을 확인한다. 고정 상태를 확인할 수 없는 경우에는 고정 action만
+  생략하고 다른 메뉴 action을 유지한다. 오류 원문은 표시하지 않는다.
+- 고정과 해제는 각각 `프로필에 고정할까요?`·`프로필 고정을 해제할까요?` alertdialog에서 `취소`와
+  `고정`·`고정 해제`를 확인한다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤
+  요청한다.
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
-  비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
+  비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
-  presentation Control은 이 이관에서 제외한다. 이 이관은 향후 reorder UI나 공개 persistence 계약을 선점하지 않는다.
-- 2026-09-09 리뷰 답변과 사용자 승인에 따라 기존 callback 기반 실행 계약을 위의 fixture 기반 표시
-  검증으로 변경했다. `ProfilePinAction` production controller를 제거하며 요청 수명과 결과 반영은
-  실제 mutation 구현 시 다시 검증한다.
-- 이 이관은 제품 정책과 독립적인 공용 UI 범위만 구현하므로 새 OpenSpec을 만들지 않는다. PROD-809의
-  정책 검토·명세 확정은 이 이관 완료를 기다리지 않으며, API·mutation·cache·pagination·권한과 실제 Profile
-  연결, Native touch·focus·screen reader QA는 미완료 runtime 범위로 남긴다.
+  presentation Control은 이 이관에서 제외한다. 별도 재정렬 UI도 제공하지 않는다.
+- 2026-09-30 PROD-975 이관에서 fixture는 production `PostActionSurface`와 실제 Relay mutation observer를
+  사용하도록 정렬한다. Storybook의 pending·error·focus 검증은 request observer로 응답을 지연·실패시켜
+  수행하며, 원격 Featured sync와 Native runtime QA는 별도 통합 범위로 남긴다.
+- 이 이관은 Profile pinned segment와 기존 chronology를 분리해 유지한다. 두 목록의 위치와 페이지 진행은 각각의 목록 순서를 따른다.
 - 2026-09-09 로컬 검증: Relay·TypeScript·lint·Storybook 빌드와 Pin·PostActionBar·Posts의 123개 테스트가
   통과했다. 새 정적 빌드의 키보드 고정 모의 실행·표시 전환·More focus 복귀를 확인했고, 완료 상태의
   접근성 재검사는 위반 0건이었다. 이 기록은 fixture의 공용 UI 검증이며 실제 Pin mutation 증거가 아니다.
@@ -357,7 +351,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-937`은 `PROD-598`의 author deletion behavior를 바꾸지 않고 공용 `ModalSheet`·`ConfirmationContent`
   presentation migration, Web 단일 `alertdialog`·`aria-modal` surface, canonical `420px` shell과
   focus·dismiss·pending 회귀 검증을 소유한다.
-- `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
+- `PROD-809`는 Profile 다중 고정 동작·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
   동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
 - `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션

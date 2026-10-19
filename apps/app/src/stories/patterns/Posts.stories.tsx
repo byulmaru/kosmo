@@ -1001,6 +1001,8 @@ const paginationProfileNextPageResponse = {
     node: {
       __typename: 'Profile',
       id: paginationProfile.id,
+      instance: paginationProfile.instance,
+      pinnedPosts: timeline(),
       posts: paginatedTimeline(paginationProfileNextPost, false),
     },
   },
@@ -1050,16 +1052,18 @@ const PostsStoriesQuery = graphql`
     }
     emptyPostsProfile: node(id: "profile-posts-empty") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
     contentPostsProfile: node(id: "profile-posts-content") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
     ...PostList_home @arguments(count: 20) @alias(as: "home")
@@ -1086,9 +1090,10 @@ const PostDeletionListEdgeSafetyQuery = graphql`
     ...PostList_home @arguments(count: 1) @alias(as: "home")
     deletionProfile: node(id: "profile-posts-deletion") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 1)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
   }
@@ -1145,8 +1150,8 @@ function usePostsStoryData() {
       data.composerProfile.replySurface,
       'Reply Composer profile',
     ),
-    contentPostsProfile: requireFragment(data.contentPostsProfile.postList, 'content post list'),
-    emptyPostsProfile: requireFragment(data.emptyPostsProfile.postList, 'empty post list'),
+    contentPostsProfile: requireFragment(data.contentPostsProfile.profile, 'content post list'),
+    emptyPostsProfile: requireFragment(data.emptyPostsProfile.profile, 'empty post list'),
     home: requireFragment(data.home, 'home post list'),
     posts,
   };
@@ -1484,7 +1489,7 @@ function PostDeletionListEdgeSafety() {
         </View>
         <View testID="post-deletion-profile-list">
           <PostList
-            profile={requireFragment(data.deletionProfile.postList, 'deletion profile list')}
+            profile={requireFragment(data.deletionProfile.profile, 'deletion profile list')}
           />
         </View>
       </Catalog>
@@ -3077,7 +3082,6 @@ const postListPaginationRelayData = {
   contentPostsProfile: paginationProfile,
   homeTimeline: paginationHomeTimeline,
 };
-
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
@@ -3851,7 +3855,7 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('aria-label')),
-    ).toEqual(['링크 복사', '게시물 신고', '게시글 삭제']);
+    ).toEqual(['링크 복사', '프로필에 고정', '게시물 신고', '게시글 삭제']);
     await userEvent.click(
       within(menu).getByRole('menuitem', {
         name: '게시글 삭제',

@@ -29,6 +29,10 @@ export type StoryProfile = {
   id: string;
   instance: { canonicalOrigin?: string | null; kind: 'ACTIVITYPUB' | 'LOCAL' };
   private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
+  pinnedPosts: {
+    edges: Array<{ cursor: string; node: StoryPostReference | null }>;
+    pageInfo: StoryPageInfo;
+  };
   relativeHandle: string;
   tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
@@ -97,6 +101,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     header: null,
     id: 'profile-kosmo',
     instance: { canonicalOrigin: null, kind: 'LOCAL' },
+    pinnedPosts: { edges: [], pageInfo: pageInfo() },
     relativeHandle: '@kosmo',
     tags: [],
     unreadNotificationCount: 0,
@@ -145,6 +150,7 @@ export type StoryPost = {
   } | null;
   createdAt: string;
   id: string;
+  isPinned: boolean;
   profile: StoryProfile;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
@@ -162,6 +168,7 @@ export function post({
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   contentWarning = null,
   id = 'post-1',
+  isPinned = false,
   media = [],
   profile: author = profile(),
   reactionCounts = [],
@@ -176,6 +183,7 @@ export function post({
   createdAt?: string;
   contentWarning?: string | null;
   id?: string;
+  isPinned?: boolean;
   media?: StoryMedia[] | null;
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
@@ -205,6 +213,7 @@ export function post({
           },
     createdAt,
     id,
+    isPinned,
     profile: author,
     reactionCounts,
     repostCount,
@@ -240,7 +249,7 @@ export function timeline(...posts: StoryPost[]) {
 }
 
 export function profileWithPosts(posts: StoryPost[], overrides: Partial<StoryProfile> = {}) {
-  return { ...profile(overrides), posts: timeline(...posts) };
+  return { ...profile(overrides), posts: timeline(...posts), pinnedPosts: timeline() };
 }
 
 export function shellQuery({

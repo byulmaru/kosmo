@@ -12,6 +12,7 @@ import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
+import { useProfilePinAction } from './ProfilePinAction';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
@@ -29,6 +30,7 @@ const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
     visibility
+    ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
       relativeHandle
@@ -62,6 +64,7 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
+  const profilePinAction = useProfilePinAction(target.profilePin!);
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
@@ -71,7 +74,11 @@ export function PostActionSurface({
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
-  const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
+  const moreItems = [
+    copyLinkItem,
+    ...(profilePinAction.item ? [profilePinAction.item] : []),
+    ...(sessionId ? [reportItem] : []),
+  ];
 
   const canMute =
     authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
@@ -82,6 +89,9 @@ export function PostActionSurface({
         execution={authentication.execution}
         more={more}
         moreItems={moreItems}
+        morePending={profilePinAction.pending}
+        moreSheetIconSize={profilePinAction.item ? 24 : undefined}
+        onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
         onRepostError={onRepostError}
@@ -121,6 +131,7 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
+      {profilePinAction.confirmation}
     </>
   );
 }

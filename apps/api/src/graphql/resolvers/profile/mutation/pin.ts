@@ -2,6 +2,7 @@ import { AccountProfileRole } from '@kosmo/core/enums';
 import { pinProfilePost, unpinProfilePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
+import { postProfilePinLoader } from '@/graphql/resolvers/post/loader/profile-pin';
 import { Profile } from '../ref';
 
 builder.mutationField('pinProfilePost', (t) =>
@@ -10,6 +11,7 @@ builder.mutationField('pinProfilePost', (t) =>
       fields: (field) => ({
         profile: field.field({ type: Profile }),
         changed: field.boolean(),
+        post: field.field({ type: Post, nullable: true }),
       }),
     }),
     input: {
@@ -20,8 +22,9 @@ builder.mutationField('pinProfilePost', (t) =>
         profileId: ctx.session.profile.id,
         postId: input.postId.id,
       });
+      postProfilePinLoader(ctx).clear(input.postId.id);
 
-      return { changed: result.changed, profile: ctx.session.profile.id };
+      return { changed: result.changed, profile: ctx.session.profile.id, post: input.postId.id };
     },
   }),
 );
@@ -32,6 +35,7 @@ builder.mutationField('unpinProfilePost', (t) =>
       fields: (field) => ({
         profile: field.field({ type: Profile }),
         changed: field.boolean(),
+        post: field.field({ type: Post, nullable: true }),
       }),
     }),
     input: {
@@ -42,8 +46,9 @@ builder.mutationField('unpinProfilePost', (t) =>
         profileId: ctx.session.profile.id,
         postId: input.postId.id,
       });
+      postProfilePinLoader(ctx).clear(input.postId.id);
 
-      return { changed: result.changed, profile: ctx.session.profile.id };
+      return { changed: result.changed, profile: ctx.session.profile.id, post: input.postId.id };
     },
   }),
 );

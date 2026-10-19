@@ -926,6 +926,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
           me?: {
             profiles?: Array<{ id: string; relativeHandle: string } | null> | null;
           } | null;
+          node?: { __typename?: string; id?: string; relativeHandle?: string } | null;
         };
       };
       const selectedProfile = body.data?.currentSession?.selectedProfile;

@@ -110,6 +110,11 @@ mock.module('./PostMoreMenu', {
 mock.module('./PostReactionController', {
   exports: { usePostReactionController: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./ProfilePinAction', {
+  exports: {
+    useProfilePinAction: () => ({ pending: false }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./useRepostFailureToast', {
   exports: { useRepostFailureToast: () => () => undefined },
 } as unknown as Parameters<typeof mock.module>[1]);
