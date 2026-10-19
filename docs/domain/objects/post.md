@@ -275,10 +275,10 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ### 원격 Note의 최초 materialization과 Reply Parent
 
-- 검증된 Public/Unlisted 원격 Note는 `inReplyTo` 유무와 관계없이 최초 저장한다. 요청 URI와 Note
-  identity, 단일 attribution과 작성자 검증, 지원되는 Content 및 수신 한계를 통과해야 한다. PUBLIC/UNLISTED 신규 원문 조회 경로는
-  Followers Only Note를 허용하지 않는다. DIRECT Note의 최초 저장은 아래
-  [수신 규칙](#activitypub-local-note-표현)을 따른다. 기존 Create의 Followers Only 수신 계약은 유지한다.
+- 검증된 원격 Note는 `inReplyTo` 유무와 관계없이 최초 저장한다. 요청 URI와 Note identity, 단일
+  attribution과 작성자 검증, 지원되는 Content 및 수신 한계를 통과해야 한다. 수신 `Create(Note)`와 지원되는 원문 조회로
+  fetch/hydrate한 Note는 모두 아래 [수신 규칙](#activitypub-local-note-표현)에 따라 분류한다. 따라서 Public/Unlisted marker가 없고
+  검증된 작성자의 canonical followers URI가 audience에 있는 Note는 원문 조회에서도 Followers Only로 저장한다.
 - Reply Parent는 기존 DB의 Local canonical identity 또는 Remote exact URI mapping으로만 조회한다.
   Parent identity가 모호하거나 지원되지 않거나, Parent가 없거나 기존 Post 생성 계약상 부적합하면
   `replyParentId = null`로 Note 자체를 저장한다. DB 장애와 예상하지 못한 오류는 fallback 조건이 아니다.

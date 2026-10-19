@@ -21,13 +21,14 @@ import {
 } from './inbound-mention';
 import { isExternalInboundError, observeInbound } from './inbound-observability';
 import {
+  fetchRemoteProfileActor,
   findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { InboundObservation } from './inbound-observability';
-import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
   Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
@@ -357,6 +358,8 @@ const materializeRemoteNote = async ({
   }
 
   let storedActor: StoredRemoteProfileActor | undefined;
+  let followersUri: string | null | undefined =
+    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined;
   if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
     try {
       storedActor = await findOrMaterializeRemoteProfileActorByUri({
@@ -373,14 +376,29 @@ const materializeRemoteNote = async ({
       }
       throw error;
     }
+    followersUri = storedActor.actor.followersUri;
+  } else if (source.kind === 'hydrated' && resolveNoteVisibility(note) === PostVisibility.DIRECT) {
+    storedActor = await findStoredRemoteProfileActorByUri(attributionUri);
+    if (storedActor) {
+      followersUri = storedActor.actor.followersUri;
+    } else {
+      try {
+        const author = await fetchRemoteProfileActor(context, attributionUri);
+        followersUri = author.followersId?.href;
+      } catch (error) {
+        if (
+          error instanceof RemoteActorMaterializationError ||
+          error instanceof ConflictError ||
+          error instanceof NotFoundError
+        ) {
+          return { reason: 'unusable_author', status: 'rejected' };
+        }
+        throw error;
+      }
+    }
   }
 
-  const visibility = resolveNoteVisibility(
-    note,
-    source.kind === 'create'
-      ? source.storedActor.actor.followersUri
-      : storedActor?.actor.followersUri,
-  );
+  const visibility = resolveNoteVisibility(note, followersUri);
   if (visibility === PostVisibility.DIRECT) {
     const targetHrefs = await collectInboundMentionTargetHrefs(note);
     const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
@@ -419,7 +437,7 @@ const materializeRemoteNote = async ({
 
   if (source.kind === 'create') {
     storedActor = source.storedActor;
-  } else if (!storedActor) {
+  } else if (source.advertisingActorUri === undefined) {
     try {
       storedActor = await findOrMaterializeRemoteProfileActorByUri({
         actorUri: attributionUri,

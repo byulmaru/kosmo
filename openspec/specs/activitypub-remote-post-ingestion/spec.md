@@ -70,10 +70,12 @@
 - **AND** PUBLIC, UNLISTED 분류의 shared inbox delivery는 local follower relevance를 추가 조건으로 요구하지 않는다
 - **AND** 시스템은 해당 URI로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는 viewer access를 만들지 않는다
 
-#### Scenario: Preserve Followers Only visibility with an extra mentioned actor URI
+#### Scenario: Classify Followers Only across supported materialization routes
 
 - **WHEN** `to`와 `cc` 모두에 Public URI가 없고 verified author의 canonical followers URI와 추가 actor URI(mention addressee)가 audience에 있다
+- **AND** Note가 inbox `Create` 또는 지원되는 fetched/hydrated materialization 경로로 처리된다
 - **THEN** materialization visibility는 FOLLOWERS다
+- **AND** 처리 경로가 이 분류를 바꾸지 않는다
 - **AND** canonical followers marker의 중복·순서와 구문상 유효하게 파싱된 foreign/unknown/spoofed-looking followers extra actor/collection URI는 visibility를 바꾸거나 Note 전체를 무효화하지 않는다
 - **AND** foreign/unknown URI를 분류하기 위한 network dereference나 `/followers` 경로 휴리스틱을 수행하지 않는다
 - **AND** 시스템은 추가 URI로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는 viewer access를 만들지 않는다
