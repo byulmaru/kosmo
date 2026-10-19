@@ -17,54 +17,41 @@ export type PostMediaOpenHandler = (
   originControl: RefObject<NativeView | null>,
 ) => void;
 
-export function PostMediaImage({
-  fill = false,
-  index,
-  interactive = true,
-  item,
-  onOpen,
-}: {
+type PostMediaImageProps = {
   readonly fill?: boolean;
   readonly index: number;
   readonly interactive?: boolean;
   readonly item: PostMediaItem;
   readonly onOpen?: PostMediaOpenHandler;
-}) {
+};
+
+export function PostMediaImage(props: PostMediaImageProps) {
   const triggerRef = useRef<NativeView>(null);
 
   return (
     <PostMediaImageSource
-      key={`${item.id}:${item.url ?? ''}`}
-      fill={fill}
-      index={index}
-      interactive={interactive}
-      item={item}
-      onOpen={onOpen}
+      {...props}
+      key={`${props.item.id}:${props.item.url ?? ''}`}
       triggerRef={triggerRef}
     />
   );
 }
 
 function PostMediaImageSource({
-  fill,
+  fill = false,
   index,
-  interactive,
+  interactive = true,
   item,
   onOpen,
   triggerRef,
-}: {
-  readonly fill: boolean;
-  readonly index: number;
-  readonly interactive: boolean;
-  readonly item: PostMediaItem;
-  readonly onOpen?: PostMediaOpenHandler;
+}: PostMediaImageProps & {
   readonly triggerRef: RefObject<NativeView | null>;
 }) {
   const theme = useTheme();
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
-  const canRetry = Boolean(item.url) && Boolean(interactive);
+  const canRetry = Boolean(item.url) && interactive;
   const updateAspectRatio = useCallback((width: number, height: number) => {
     if (height > 0 && width > 0) {
       setAspectRatio(Math.max(width / height, 1));
@@ -104,11 +91,6 @@ function PostMediaImageSource({
         ]}
         testID={`post-media-error-${item.id}`}
       >
-        {canRetry ? null : (
-          <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
-            {accessibilityLabel}을 불러오지 못했습니다.
-          </Text>
-        )}
         {canRetry ? (
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
@@ -122,7 +104,11 @@ function PostMediaImageSource({
           >
             <Text style={[styles.retryButtonText, { color: theme.text }]}>다시 시도</Text>
           </Pressable>
-        ) : null}
+        ) : (
+          <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
+            {accessibilityLabel}을 불러오지 못했습니다.
+          </Text>
+        )}
       </View>
     );
   }

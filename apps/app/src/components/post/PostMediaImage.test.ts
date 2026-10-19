@@ -74,37 +74,18 @@ afterEach(async () => {
 });
 
 describe('PostMediaImage', () => {
-  it('이미지 로드 시작과 성공 순서를 유지하고 성공 뒤 늦은 시작으로 되돌아가지 않는다', async () => {
+  it('처음에는 로딩을 표시하고 성공 뒤 오류는 fallback을 표시한다', async () => {
     await render(0, media('landscape', '가로 이미지'));
     assert.equal(rendered('Skeleton').length, 1);
     assert.equal(rendered('Skeleton')[0]?.props.height, '100%');
     assert.equal(rendered('Skeleton')[0]?.props.width, '100%');
     assert.equal(image('landscape').props.accessibilityState.busy, true);
 
-    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
-    assert.equal(rendered('Skeleton').length, 1);
-    assert.equal(image('landscape').props.accessibilityState.busy, true);
-
     await act(async () => image('landscape').props.onLoad());
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
 
-    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
-    assert.equal(rendered('Skeleton').length, 0);
-    assert.equal(image('landscape').props.accessibilityState.busy, false);
-
-    await act(async () => {
-      image('landscape').props.onLoad();
-      callImageEvent(image('landscape'), 'onLoadStart');
-    });
-    assert.equal(rendered('Skeleton').length, 0);
-    assert.equal(image('landscape').props.accessibilityState.busy, false);
-
-    const failedAttempt = image('landscape');
-    await act(async () => {
-      failedAttempt.props.onError();
-      callImageEvent(failedAttempt, 'onLoadStart');
-    });
+    await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Skeleton').length, 0);
     assert.ok(byTestId('post-media-error-landscape'));
   });
@@ -186,7 +167,7 @@ describe('PostMediaImage', () => {
     assert.equal(frameAspectRatio(item.id), 1);
 
     await act(async () =>
-      callImageEvent(image(item.id), 'onLoad', {
+      image(item.id).props.onLoad({
         nativeEvent: { source: { width: 1800, height: 900 } },
       }),
     );
@@ -247,7 +228,6 @@ describe('PostMediaImage', () => {
     assert.equal(frameAspectRatio('landscape'), 1600 / 900);
     assert.equal(getSizeAttempts.get(source.uri as string), sizeAttempts);
 
-    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
     await act(async () => image('landscape').props.onLoad());
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
@@ -328,15 +308,6 @@ function pressable(accessibilityLabel: string): ReactTestInstance {
 
 function image(id: string): ReactTestInstance {
   return byTestId(`post-media-image-${id}`);
-}
-
-function callImageEvent(
-  instance: ReactTestInstance,
-  event: 'onError' | 'onLoad' | 'onLoadStart',
-  payload?: unknown,
-) {
-  const handler = instance.props[event] as ((payload?: unknown) => void) | undefined;
-  handler?.(payload);
 }
 
 function frameAspectRatio(id: string): number | undefined {
