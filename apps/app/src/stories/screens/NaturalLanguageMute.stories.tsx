@@ -14,12 +14,13 @@ import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const sentence = '아직 보지 않은 작품의 결말이나 반전 이야기는 보고 싶지 않아요.';
+const membership = { id: 'showcase-membership', role: 'OWNER' as const };
 const viewer = profile({
   displayName: '하루',
   handle: 'haru',
   id: 'showcase-viewer',
   relativeHandle: '@haru',
-  viewerState: { follow: null, followRequest: null, isSelf: true, membership: { role: 'OWNER' } },
+  viewerState: { follow: null, followRequest: null, isSelf: true, membership },
 });
 const authors = ['달빛', '여울', '모아'].map((displayName, index) =>
   profile({
@@ -90,12 +91,7 @@ function SettingExample() {
             { backgroundColor: theme.actionPrimarySubtle, borderColor: theme.borderDefault },
           ]}
         >
-          <VolumeX
-            aria-hidden
-            accessible={false}
-            color={theme.foregroundPrimary}
-            size={iconSizes[24]}
-          />
+          <VolumeX aria-hidden color={theme.foregroundPrimary} size={iconSizes[24]} />
           <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
             이런 글이 가려져요
           </Text>
@@ -117,12 +113,7 @@ function AppliedExample() {
   return (
     <>
       <View style={[styles.applied, { backgroundColor: theme.actionPrimarySubtle }]}>
-        <Check
-          aria-hidden
-          accessible={false}
-          color={theme.foregroundPrimary}
-          size={iconSizes[20]}
-        />
+        <Check aria-hidden color={theme.foregroundPrimary} size={iconSizes[20]} />
         <Text style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}>
           결말·반전 이야기를 뮤트하고 있어요
         </Text>
