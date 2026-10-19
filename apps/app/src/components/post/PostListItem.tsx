@@ -282,7 +282,7 @@ export function PostListItem({
             />
           </Pressable>
         </Link>
-        <PostDetailBackground onBackgroundPress={openDetail} style={styles.sourcePresentation}>
+        <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
             onBackgroundPress={openDetail}
             onMediaOpen={handleQuoteMediaOpen}
@@ -296,7 +296,7 @@ export function PostListItem({
             reply={reply}
             socialActionTarget={post.actionSurface!}
           />
-        </PostDetailBackground>
+        </View>
       </PostDetailBackground>
     </PostListItemCard>,
   );

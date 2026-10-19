@@ -150,15 +150,15 @@ export function PostSourcePresentationView({
   const postProfileHref = `/${post.profile.relativeHandle}` as Href;
   const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
   const postHeader = (
-    <PostDetailBackground onBackgroundPress={onBackgroundPress} style={styles.authorHeader}>
-      <PostDetailBackground onBackgroundPress={onBackgroundPress} style={styles.authorSlot}>
+    <View style={styles.authorHeader}>
+      <View style={styles.authorSlot}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
           href={postProfileHref}
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
-      </PostDetailBackground>
+      </View>
       <PresentationLink
         accessibilityLabel={`${post.profile.displayName}의 게시글 보기`}
         href={postDetailHref}
@@ -170,7 +170,7 @@ export function PostSourcePresentationView({
           {formatTimelineTimestamp(post.createdAt)}
         </Text>
       </PresentationLink>
-    </PostDetailBackground>
+    </View>
   );
 
   if (kind === 'ordinary') {
