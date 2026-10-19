@@ -52,7 +52,7 @@ mock.module('react-native', {
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
-    useWindowDimensions: () => ({ width: 1200 }),
+    useWindowDimensions: () => ({ height: 800, width: 1200 }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 

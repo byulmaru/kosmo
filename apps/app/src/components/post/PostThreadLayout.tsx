@@ -25,6 +25,7 @@ export type PostThreadLayoutProps<TPost> = Readonly<{
   ancestors: ReadonlyArray<PostThreadItem<TPost>>;
   current: PostThreadItem<TPost>;
   currentRef?: RefObject<NativeView | null>;
+  currentSectionMinHeight?: number;
   descendants: ReadonlyArray<PostThreadItem<TPost>>;
   onCurrentLayout?: (event: LayoutChangeEvent) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
@@ -36,6 +37,7 @@ export function PostThreadLayout<TPost>({
   ancestors,
   current,
   currentRef,
+  currentSectionMinHeight,
   descendants,
   onCurrentLayout,
   onLayout,
@@ -50,59 +52,68 @@ export function PostThreadLayout<TPost>({
     ...descendants.map((item) => ({ item, role: 'descendant' as const })),
   ];
 
+  const renderedRows = rows.map(({ item, role }, index) => {
+    const previous = rows[index - 1];
+    const next = rows[index + 1];
+    const connectsFromPrevious =
+      role !== 'descendant' && item.connectedToPrevious && previous !== undefined;
+    const connectsToNext = role === 'ancestor' && next?.item.connectedToPrevious === true;
+    const renderedPost = renderPost({ item, role });
+
+    return (
+      <View
+        key={item.id}
+        aria-current={role === 'current' ? true : undefined}
+        onLayout={role === 'current' ? onCurrentLayout : undefined}
+        ref={role === 'current' ? currentRef : undefined}
+        role={role === 'current' ? 'article' : undefined}
+        style={styles.row}
+        testID={
+          role === 'current' ? `post-thread-current-${item.id}` : `post-thread-item-${item.id}`
+        }
+      >
+        {connectsFromPrevious ? (
+          <PostThreadConnector
+            style={[
+              role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
+              { left: metrics.connectorLeft },
+            ]}
+            testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
+          />
+        ) : null}
+        {connectsToNext ? (
+          <PostThreadConnector
+            style={[styles.listConnectorAfter, { left: metrics.connectorLeft }]}
+            testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
+          />
+        ) : null}
+        {role === 'current' ? (
+          <View style={[styles.currentContent, { paddingLeft: metrics.inset }]}>
+            {renderedPost}
+          </View>
+        ) : (
+          renderedPost
+        )}
+        {index < rows.length - 1 && role !== 'current' ? (
+          <View
+            style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
+            testID={`post-thread-divider-${item.id}`}
+          />
+        ) : null}
+      </View>
+    );
+  });
+
   return (
     <View accessibilityLabel="Reply thread" onLayout={onLayout} testID="post-thread">
-      {rows.map(({ item, role }, index) => {
-        const previous = rows[index - 1];
-        const next = rows[index + 1];
-        const connectsFromPrevious =
-          role !== 'descendant' && item.connectedToPrevious && previous !== undefined;
-        const connectsToNext = role === 'ancestor' && next?.item.connectedToPrevious === true;
-        const renderedPost = renderPost({ item, role });
-
-        return (
-          <View
-            key={item.id}
-            aria-current={role === 'current' ? true : undefined}
-            onLayout={role === 'current' ? onCurrentLayout : undefined}
-            ref={role === 'current' ? currentRef : undefined}
-            role={role === 'current' ? 'article' : undefined}
-            style={styles.row}
-            testID={
-              role === 'current' ? `post-thread-current-${item.id}` : `post-thread-item-${item.id}`
-            }
-          >
-            {connectsFromPrevious ? (
-              <PostThreadConnector
-                style={[
-                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
-                  { left: metrics.connectorLeft },
-                ]}
-                testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
-              />
-            ) : null}
-            {connectsToNext ? (
-              <PostThreadConnector
-                style={[styles.listConnectorAfter, { left: metrics.connectorLeft }]}
-                testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
-              />
-            ) : null}
-            {role === 'current' ? (
-              <View style={[styles.currentContent, { paddingLeft: metrics.inset }]}>
-                {renderedPost}
-              </View>
-            ) : (
-              renderedPost
-            )}
-            {index < rows.length - 1 && role !== 'current' ? (
-              <View
-                style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
-                testID={`post-thread-divider-${item.id}`}
-              />
-            ) : null}
-          </View>
-        );
-      })}
+      {renderedRows.slice(0, ancestors.length)}
+      {currentSectionMinHeight === undefined ? (
+        renderedRows.slice(ancestors.length)
+      ) : (
+        <View style={{ minHeight: currentSectionMinHeight }}>
+          {renderedRows.slice(ancestors.length)}
+        </View>
+      )}
     </View>
   );
 }

@@ -5734,7 +5734,7 @@ export const PostDetailThreadRoute: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
     const heading = canvas.getByRole('heading', { name: '게시글' });
     const backButton = canvas.getByRole('button', { name: '뒤로 가기' });
 
@@ -6047,14 +6047,17 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-visible-parent',
       'post-thread-current-route-boundary-current',
     ]);
     const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
-    const firstPost = thread.children[0] as HTMLElement;
-    expect(header.getBoundingClientRect().bottom).toBeLessThanOrEqual(
-      firstPost.getBoundingClientRect().top,
+    const current = canvas.getByTestId('post-thread-current-route-boundary-current');
+    await waitFor(() =>
+      expect(
+        Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
+      ).toBeLessThanOrEqual(1),
     );
     expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
     expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
