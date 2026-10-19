@@ -508,9 +508,9 @@ export const ReactionRepostKeyboardContract: Story = {
       const group = within(canvas.getByTestId(`${kind}-profile-targets`));
       const targets = [
         group.getByTestId('notification-kind-target'),
-        ...reactionProfileActors.slice(0, 3).map((actor) =>
-          group.getByRole('link', { name: `${actor.name} 프로필로 이동` }),
-        ),
+        ...reactionProfileActors
+          .slice(0, 3)
+          .map((actor) => group.getByRole('link', { name: `${actor.name} 프로필로 이동` })),
         group.getByTestId('notification-post-time-target'),
         group.getByTestId('notification-post-summary-target'),
         group.getByTestId('notification-post-preview-target'),
