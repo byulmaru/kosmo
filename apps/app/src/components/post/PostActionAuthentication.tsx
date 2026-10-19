@@ -1,4 +1,4 @@
-import { usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { createContext, useCallback, useContext, useMemo } from 'react';
 import { Platform } from 'react-native';
 import { startWebLogin } from '@/auth/webLogin';
@@ -20,7 +20,6 @@ const PostActionAuthenticationContext = createContext<PostActionAuthenticationVa
 
 export function PostActionAuthenticationProvider({ children }: PropsWithChildren) {
   const router = useRouter();
-  const pathname = usePathname();
   const session = useSession();
   const shellChrome = useShellChrome();
   const resolve = useCallback(
@@ -34,12 +33,12 @@ export function PostActionAuthenticationProvider({ children }: PropsWithChildren
         return;
       }
       if (Platform.OS === 'web') {
-        startWebLogin(pathname);
+        startWebLogin();
       } else {
         router.push('/');
       }
     },
-    [pathname, router, shellChrome],
+    [router, shellChrome],
   );
   const value = useMemo<PostActionAuthenticationValue>(
     () => ({

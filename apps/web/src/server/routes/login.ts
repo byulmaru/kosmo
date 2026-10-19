@@ -14,10 +14,6 @@ import {
   LOGIN_CODE_VERIFIER_COOKIE,
   LOGIN_STATE_COOKIE,
 } from '../auth';
-import {
-  isSafePublicContentReturnTarget,
-  PUBLIC_CONTENT_RETURN_TARGET_COOKIE,
-} from './publicContentReturn';
 
 const LOGIN_COOKIE_MAX_AGE = 60 * 10;
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -38,7 +34,6 @@ loginRoutes.get('/login', async (c) => {
     sameSite: 'Lax' as const,
     secure: publicOrigin.protocol === 'https:',
   };
-  const returnTarget = c.req.query('returnTo');
 
   const authorizeUrl = buildAuthorizationUrl(await getOidcConfiguration(), {
     code_challenge: codeChallenge,
@@ -50,15 +45,6 @@ loginRoutes.get('/login', async (c) => {
 
   setCookie(c, LOGIN_STATE_COOKIE, state, cookieOptions);
   setCookie(c, LOGIN_CODE_VERIFIER_COOKIE, codeVerifier, cookieOptions);
-  if (isSafePublicContentReturnTarget(returnTarget)) {
-    setCookie(c, PUBLIC_CONTENT_RETURN_TARGET_COOKIE, returnTarget, cookieOptions);
-  } else {
-    deleteCookie(c, PUBLIC_CONTENT_RETURN_TARGET_COOKIE, {
-      path: '/login/callback',
-      sameSite: 'Lax',
-      secure: publicOrigin.protocol === 'https:',
-    });
-  }
 
   return c.redirect(authorizeUrl.toString(), 302);
 });
@@ -68,17 +54,8 @@ loginRoutes.get('/login/callback', async (c) => {
   const requestUrl = new URL(c.req.url);
   const code = requestUrl.searchParams.get('code');
   const returnedState = requestUrl.searchParams.get('state');
-  const publicOrigin = new URL(process.env.PUBLIC_ORIGIN ?? requestUrl.origin);
-  const returnCookieOptions = {
-    path: '/login/callback',
-    sameSite: 'Lax' as const,
-    secure: publicOrigin.protocol === 'https:',
-  };
-  const clearReturnTarget = () =>
-    deleteCookie(c, PUBLIC_CONTENT_RETURN_TARGET_COOKIE, returnCookieOptions);
 
   if (!code || !returnedState) {
-    clearReturnTarget();
     return c.text('OIDC callback is missing code or state', 400);
   }
 
@@ -86,12 +63,10 @@ loginRoutes.get('/login/callback', async (c) => {
   const codeVerifier = getCookie(c, LOGIN_CODE_VERIFIER_COOKIE);
 
   if (!state || !codeVerifier || returnedState !== state) {
-    clearReturnTarget();
     return c.text('OIDC callback state is invalid', 400);
   }
 
-  const returnTarget = getCookie(c, PUBLIC_CONTENT_RETURN_TARGET_COOKIE);
-  clearReturnTarget();
+  const publicOrigin = new URL(process.env.PUBLIC_ORIGIN ?? requestUrl.origin);
   const redirectUri = new URL('/login/callback', publicOrigin).toString();
   const requestedRedirectUri = requestUrl.searchParams.get('redirect_uri');
 
@@ -115,12 +90,7 @@ loginRoutes.get('/login/callback', async (c) => {
     secure: publicOrigin.protocol === 'https:',
   });
 
-  const homeUrl = new URL('/home', publicOrigin);
-  homeUrl.searchParams.set('resetSelectedProfile', '1');
-  if (isSafePublicContentReturnTarget(returnTarget)) {
-    homeUrl.searchParams.set('returnTo', returnTarget);
-  }
-  return c.redirect(`${homeUrl.pathname}${homeUrl.search}`, 302);
+  return c.redirect('/home?resetSelectedProfile=1', 302);
 });
 loginRoutes.all('/login/callback', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 

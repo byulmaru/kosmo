@@ -2,8 +2,6 @@ import { DefaultTheme, router, ThemeProvider as NavigationThemeProvider } from '
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
-import { saveCallbackReturnTarget } from '@/auth/publicContentReturn';
-import { PublicContentReturnController } from '@/auth/PublicContentReturnController';
 import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
@@ -48,9 +46,7 @@ export function AppProviders({
       }
 
       const url = new URL(window.location.href);
-      saveCallbackReturnTarget(url.searchParams.get('returnTo'));
       url.searchParams.delete(resetSelectedProfileParam);
-      url.searchParams.delete('returnTo');
       router.replace(`${url.pathname}${url.search}${url.hash}` as Href);
       setResetSelectedProfilePending(false);
     })();
@@ -69,7 +65,6 @@ export function AppProviders({
             <GraphQLErrorBoundary>
               <RelayActorProvider>
                 <SessionProvider>
-                  <PublicContentReturnController />
                   <FeatureFlagsProvider>
                     <AnalyticsSessionBridge />
                     <NativePushProvider>

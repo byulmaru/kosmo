@@ -1,14 +1,13 @@
-import { buildWebLoginHref } from './publicContentReturn';
-import type { WebActivationEvent } from './publicContentReturn';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { GestureResponderEvent } from 'react-native';
 
-export function startWebLogin(returnTarget?: string | null): void {
-  window.location.assign(buildWebLoginHref(returnTarget));
+type WebActivationEvent = GestureResponderEvent | ReactMouseEvent<HTMLAnchorElement>;
+
+export function startWebLogin(): void {
+  window.location.assign('/login');
 }
 
-export function startWebLoginFromPress(
-  event: WebActivationEvent,
-  returnTarget?: string | null,
-): void {
+export function startWebLoginFromPress(event: WebActivationEvent): void {
   const pointer = event.nativeEvent as unknown as MouseEvent;
 
   if (
@@ -22,5 +21,5 @@ export function startWebLoginFromPress(
   }
 
   event.preventDefault();
-  startWebLogin(returnTarget);
+  startWebLogin();
 }

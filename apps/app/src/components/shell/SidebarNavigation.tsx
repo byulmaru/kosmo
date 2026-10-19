@@ -2,7 +2,6 @@ import { Link, usePathname } from 'expo-router';
 import { cloneElement } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { buildSignupHomeHref, buildWebLoginHref } from '@/auth/publicContentReturn';
 import { startWebLoginFromPress } from '@/auth/webLogin';
 import { SidebarNavigation as SidebarNavigationPresentation } from '@/components/ui/SidebarNavigation';
 import { useLogout } from '@/session/logout';
@@ -167,7 +166,7 @@ export function SidebarNavigation({
     }>;
     if (action === 'signup') {
       return (
-        <NavigationLink href={buildSignupHomeHref(pathname)} onNavigate={onNavigate} primary>
+        <NavigationLink href="/" onNavigate={onNavigate} primary>
           {cloneElement(childControl, {
             accessibilityRole: 'link',
           })}
@@ -176,10 +175,10 @@ export function SidebarNavigation({
     }
 
     return (
-      <Link asChild href={buildWebLoginHref(pathname)}>
+      <Link asChild href="/login">
         {cloneElement(childControl, {
           accessibilityRole: 'link',
-          onPress: (event) => startWebLoginFromPress(event, pathname),
+          onPress: startWebLoginFromPress,
         })}
       </Link>
     );

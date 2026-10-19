@@ -12,11 +12,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
-import {
-  isSafePublicContentReturnTarget,
-  readInvitationDismissed,
-  saveInvitationDismissed,
-} from '@/auth/publicContentReturn';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -113,6 +108,7 @@ const webFixedBottomBar = {
 } as unknown as ViewStyle;
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
+const invitationDismissedKey = 'kosmo:public-content-invitation-dismissed';
 
 export function UniversalShell({ children }: { children?: ReactNode }) {
   return (
@@ -138,7 +134,15 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [invitationDismissed, setInvitationDismissed] = useState(readInvitationDismissed);
+  const [invitationDismissed, setInvitationDismissed] = useState(() => {
+    try {
+      return (
+        Platform.OS === 'web' && globalThis.sessionStorage?.getItem(invitationDismissedKey) === '1'
+      );
+    } catch {
+      return false;
+    }
+  });
   const [invitationHeight, setInvitationHeight] = useState(0);
   const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
@@ -182,7 +186,10 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
-  const guestPublicContent = web && status === 'guest' && isSafePublicContentReturnTarget(pathname);
+  const publicContentRoute =
+    routeSegments.at(-1) === '[profileHandle]' ||
+    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]');
+  const guestPublicContent = web && status === 'guest' && publicContentRoute;
   const invitationVisible = guestPublicContent && !invitationDismissed;
   const invitationPlacement = getPublicContentInvitationPlacement({
     height,
@@ -486,7 +493,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           </PostMediaViewerScreenFallbackProvider>
           <PublicContentInvitation
             onDismiss={() => {
-              saveInvitationDismissed();
+              try {
+                globalThis.sessionStorage?.setItem(invitationDismissedKey, '1');
+              } catch {
+                // Keep the current render dismissible when browser storage is unavailable.
+              }
               setInvitationDismissed(true);
               setInvitationHeight(0);
             }}
@@ -495,7 +506,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
                 Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
               );
             }}
-            pathname={pathname}
             visible={invitationVisible}
           />
         </View>

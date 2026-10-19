@@ -15,6 +15,7 @@ let renderer: ReactTestRenderer | null = null;
 let hardwareBackPressListener: (() => boolean) | null = null;
 let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
+let routeSegments: string[] = [];
 let sessionProfile: Record<string, unknown> | null = null;
 let accountId: string | null = null;
 let profileIds: string[] | null = null;
@@ -82,7 +83,7 @@ mockModule('expo-router', {
   Slot: () => null,
   usePathname: () => pathname,
   useRouter: () => router,
-  useSegments: () => [],
+  useSegments: () => routeSegments,
 });
 
 mockModule('react-native', {
@@ -242,6 +243,7 @@ afterEach(async () => {
   platform.OS = 'web';
   layout = 'mobile';
   pathname = '/home';
+  routeSegments = [];
   sessionProfile = null;
   accountId = null;
   profileIds = null;
@@ -268,6 +270,7 @@ describe('UniversalShell screen fallback focus target', () => {
     platform.OS = 'web';
     layout = 'mobile';
     pathname = '/@writer/post-id';
+    routeSegments = ['(tabs)', '(profile)', '[profileHandle]', '[postId]'];
     sessionStatus = 'guest';
     await renderShell();
 
@@ -277,14 +280,47 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(invitationProps?.visible, false);
 
     pathname = '/home';
+    routeSegments = ['(tabs)', '(protected)', 'home'];
     await act(async () => renderer?.update(createElement(UniversalShell)));
     assert.equal(invitationProps?.visible, false);
     assert.equal(sidebarNavigationProps?.guestPublicContent, false);
   });
 
+  it('keeps dismissal within the tab after the shell remounts', async () => {
+    const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    try {
+      pathname = '/@writer';
+      routeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
+      sessionStatus = 'guest';
+      await renderShell();
+      assert.equal(invitationProps?.visible, true);
+      await act(async () => invitationProps?.onDismiss?.());
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      await renderShell();
+      assert.equal(invitationProps?.visible, false);
+      assert.equal(sidebarNavigationProps?.guestPublicContent, true);
+    } finally {
+      if (previousStorage) {
+        Object.defineProperty(globalThis, 'sessionStorage', previousStorage);
+      } else {
+        Reflect.deleteProperty(globalThis, 'sessionStorage');
+      }
+    }
+  });
+
   it('does not show the invitation for session errors or authenticated visitors', async () => {
     platform.OS = 'web';
     pathname = '/@writer';
+    routeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
     sessionStatus = 'error';
     await renderShell();
     assert.equal(invitationProps?.visible, false);

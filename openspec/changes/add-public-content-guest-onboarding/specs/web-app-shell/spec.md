@@ -2,7 +2,7 @@
 
 ### Requirement: Public content guest onboarding
 
-**Source Context:** `docs/domain/policies/public-content-onboarding.md`, `docs/design/public-content-onboarding.md`, PROD-836·PROD-681, 2026-10-14·2026-10-16 사용자 지시. The app SHALL 비로그인 공개 Profile·Post에 로그인 상태, 가능한 공개 조회와 Profile 참여의 차이를 안내하며 기존 공개 조회를 유지한다.
+**Source Context:** `docs/domain/policies/public-content-onboarding.md`, `docs/design/public-content-onboarding.md`, PROD-836·PROD-681, 2026-10-14·2026-10-16 안내 구성과 2026-10-19 범위 조정. The app SHALL 비로그인 공개 Profile·Post에 로그인 상태, 가능한 공개 조회와 Profile 참여의 차이를 안내하며 기존 공개 조회를 유지한다.
 
 #### Scenario: Full Web guest
 
@@ -37,23 +37,3 @@
 
 - **WHEN** 유효한 Session이 있거나 그 Session에 선택 Profile만 없다
 - **THEN** guest 안내를 표시하지 않고 기존 navigation·Profile 준비 흐름을 유지한다
-
-### Requirement: Return after profile preparation
-
-**Source Context:** `docs/domain/policies/public-content-onboarding.md`, PROD-836·PROD-681, 2026-10-14·2026-10-16 사용자 지시. The app SHALL 공개 콘텐츠에서 시작한 인증 뒤 필요한 Profile 준비를 마치면 원래 공개 콘텐츠로 복귀하고 참여 action을 자동 실행하지 않는다.
-
-#### Scenario: Authenticate and prepare a profile
-
-- **WHEN** 공개 Profile·Post에서 인증이 성공하고 유효한 선택 Profile이 준비된다
-- **THEN** 이전 Profile 상태 초기화를 유지한 뒤 검증된 공개 콘텐츠 위치로 복귀한다
-- **AND** 참여 action은 사용자가 다시 실행한다
-
-#### Scenario: Sign up through the public home
-
-- **WHEN** 공개 Profile·Post에서 `가입하기` 또는 `KOSMO에서 계속하기`를 눌러 홈(`/`)을 거쳐 인증하고 필요한 Profile 준비를 마친다
-- **THEN** 처음 보고 있던 공개 콘텐츠로 복귀하고 참여 action을 자동 실행하지 않는다
-
-#### Scenario: Invalid return location
-
-- **WHEN** 복귀 위치를 유효하게 확인할 수 없다
-- **THEN** 외부 이동이나 권한 우회 없이 기존 홈 진입을 사용한다

@@ -2,7 +2,6 @@ import { Link } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { buildSignupHomeHref } from '@/auth/publicContentReturn';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -22,11 +21,10 @@ import type { TextStyle, ViewStyle } from 'react-native';
 type Props = {
   onDismiss: () => void;
   onLayout: (height: number) => void;
-  pathname: string;
   visible: boolean;
 };
 
-export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible }: Props) {
+export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -91,7 +89,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
           </IconButton>
         </View>
         <View style={styles.actions}>
-          <NavigationLink href={buildSignupHomeHref(pathname)} primary>
+          <NavigationLink href="/" primary>
             <Button style={styles.ctaButton}>
               <Text style={textStyles.uiLabelL}>KOSMO에서 계속하기</Text>
             </Button>

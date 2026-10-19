@@ -16,7 +16,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 let platform: Platform = 'web';
 let sessionStatus: 'guest' | 'valid' = 'guest';
-let returnTo: string | string[] | undefined;
 let renderer: ReactTestRenderer | null = null;
 let IndexScreen: ComponentType;
 const replace = mock.fn();
@@ -25,7 +24,6 @@ mockModule('expo-router', {
   Link: ({ children, href }: { children: ReactNode; href: string }) =>
     createElement('Link', { href }, children),
   useRouter: () => ({ replace }),
-  useLocalSearchParams: () => ({ returnTo }),
 });
 mockModule('react-native', {
   Platform: {
@@ -84,7 +82,6 @@ before(async () => {
 afterEach(async () => {
   platform = 'web';
   sessionStatus = 'guest';
-  returnTo = undefined;
   replace.mock.resetCalls();
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -113,30 +110,6 @@ describe('로그인 route', () => {
     assert.equal(rendered('Button').length, 1);
     assert.deepEqual(rendered('NativeChannelSettings'), []);
   });
-});
-
-describe('signup-home return context', () => {
-  it('builds a login href from the URL even in a fresh tab with no saved context', async () => {
-    returnTo = new URL('https://kos.moe/?returnTo=%2F%40writer%2Fpost-id').searchParams.get(
-      'returnTo',
-    )!;
-    await renderLoginScreen('web');
-
-    assert.equal(rendered('Link')[0]?.props.href, '/login?returnTo=%2F%40writer%2Fpost-id');
-  });
-
-  for (const invalid of [
-    'https://outside.example/@writer',
-    '/settings',
-    ['/@writer', '/settings'],
-  ]) {
-    it(`uses ordinary login for an unsafe or ambiguous return target ${JSON.stringify(invalid)}`, async () => {
-      returnTo = invalid;
-      await renderLoginScreen('web');
-
-      assert.equal(rendered('Link')[0]?.props.href, '/login');
-    });
-  }
 });
 
 describe('session landing route', () => {

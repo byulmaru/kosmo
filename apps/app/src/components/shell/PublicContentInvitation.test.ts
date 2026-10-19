@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -7,13 +7,6 @@ import type { PublicContentInvitation as PublicContentInvitationExport } from '.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const values = new Map<string, string>();
-const tabStorage = {
-  getItem: (key: string) => values.get(key) ?? null,
-  removeItem: (key: string) => values.delete(key),
-  setItem: (key: string, value: string) => values.set(key, value),
-};
-const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let dismissed = false;
@@ -69,25 +62,12 @@ mockModule('@/components/ui/IconButton', {
 });
 
 before(async () => {
-  Object.defineProperty(globalThis, 'sessionStorage', {
-    configurable: true,
-    value: tabStorage,
-  });
   ({ PublicContentInvitation } = await import('./PublicContentInvitation'));
-});
-
-after(() => {
-  if (previousStorage) {
-    Object.defineProperty(globalThis, 'sessionStorage', previousStorage);
-  } else {
-    Reflect.deleteProperty(globalThis, 'sessionStorage');
-  }
 });
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
-  values.clear();
   dismissed = false;
   measuredHeight = 0;
   viewport = { height: 844, width: 390 };
@@ -104,7 +84,6 @@ async function renderInvitation() {
         onLayout: (height: number) => {
           measuredHeight = height;
         },
-        pathname: '/@writer/post-id',
         visible: true,
       }),
     );
@@ -134,12 +113,11 @@ describe('PublicContentInvitation', () => {
     assert.ok(!styleObjects.some((style) => style.width === '100%'));
   });
 
-  it('carries the public Post in the home href before any click or new-tab activation', async () => {
+  it('opens the existing signup home without a return destination', async () => {
     const view = await renderInvitation();
     const mainLink = view.root.findAllByType('NavigationLink' as never)[0];
 
-    assert.equal(mainLink?.props.href, '/?returnTo=%2F%40writer%2Fpost-id');
-    assert.equal(tabStorage.getItem('kosmo:public-content-return-home'), null);
+    assert.equal(mainLink?.props.href, '/');
   });
 
   it('opens the team and privacy destinations as independent links', async () => {

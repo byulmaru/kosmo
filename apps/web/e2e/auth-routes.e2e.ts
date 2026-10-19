@@ -315,41 +315,29 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 });
 
 for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
-  test(`공개 콘텐츠의 ${entry}를 새 탭에 열어도 Profile 준비 후 원래 위치로 복귀한다`, async ({
-    context,
-    page,
-  }) => {
-    const author = await createE2ESession({ handle: 'signup_return_author' });
-    const post = await createE2EPost({
-      body: 'signup return target',
-      profileId: author.profile!.id,
-    });
+  test(`공개 콘텐츠의 ${entry}는 기존 가입 홈을 새 탭으로 연다`, async ({ context, page }) => {
+    const author = await createE2ESession({ handle: 'guest_entry_author' });
+    const post = await createE2EPost({ body: 'guest entry', profileId: author.profile!.id });
     const publicPath =
       entry === '가입하기'
-        ? '/@signup_return_author'
-        : `/@signup_return_author/${toGlobalId('Post', post.id)}`;
+        ? '/@guest_entry_author'
+        : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(publicPath);
-
+    await expect(page.getByRole('link', { name: '로그인', exact: true })).toHaveAttribute(
+      'href',
+      '/login',
+    );
     const [signupTab] = await Promise.all([
       context.waitForEvent('page'),
       page.getByRole('link', { name: entry, exact: true }).click({ button: 'middle' }),
     ]);
     try {
+      await expect(signupTab).toHaveURL((url) => url.pathname === '/' && url.search === '');
       await expect(signupTab.getByRole('link', { name: '시작하기' })).toHaveAttribute(
         'href',
-        `/login?returnTo=${encodeURIComponent(publicPath)}`,
+        '/login',
       );
-      await signupTab.getByRole('link', { name: '시작하기' }).click();
-      await expect(
-        signupTab.getByRole('heading', { name: '프로필을 만들어 시작하세요' }),
-      ).toBeVisible();
-      await signupTab.getByRole('button', { name: '프로필 만들기' }).click();
-      await signupTab.getByRole('button', { name: '새 프로필 추가' }).click();
-      const form = signupTab.getByRole('form', { name: '새 프로필 만들기' });
-      await form.getByPlaceholder('새 프로필 핸들').fill('signup_return_viewer');
-      await form.getByRole('button', { name: '만들기', exact: true }).click();
-      await expect(signupTab).toHaveURL((url) => url.pathname === publicPath && url.search === '');
       await expect(page).toHaveURL((url) => url.pathname === publicPath);
     } finally {
       await signupTab.close();
