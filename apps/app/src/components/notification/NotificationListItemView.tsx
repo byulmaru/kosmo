@@ -305,8 +305,6 @@ function NotificationTarget(props: FollowNotificationProps) {
   } = props;
   const theme = useTheme();
   const web = Platform.OS === 'web';
-  const [focusVisible, setFocusVisible] = useState(false);
-  const blocked = disabled || pending;
   const actors = props.actors;
   const actor = actors[0];
   const suppliedCount = props.totalActorCount ?? actors.length;
@@ -344,33 +342,14 @@ function NotificationTarget(props: FollowNotificationProps) {
     </Text>
   );
   const time = <TimestampText style={styles.time}>{timestamp}</TimestampText>;
-  const target = (
-    <Pressable
+  return (
+    <NotificationLinkTarget
       accessibilityLabel={label}
-      accessibilityRole="link"
-      accessibilityState={{ busy: pending, disabled: blocked }}
-      aria-busy={pending}
-      aria-disabled={blocked}
-      disabled={blocked}
-      onBlur={() => setFocusVisible(false)}
-      onFocus={(event) => {
-        const target = event.currentTarget as unknown as {
-          matches?: (selector: string) => boolean;
-        };
-        setFocusVisible(web && Boolean(target.matches?.(':focus-visible')));
-      }}
-      onPointerDown={() => setFocusVisible(false)}
-      onPress={blocked ? undefined : onNavigate}
-      style={StyleSheet.flatten([
-        styles.target,
-        {
-          outlineColor: theme.stateFocusRing,
-          outlineOffset: -2,
-          outlineStyle: focusVisible ? 'solid' : 'none',
-          outlineWidth: focusVisible ? 2 : 0,
-          opacity: blocked ? 0.5 : 1,
-        } as ViewStyle,
-      ])}
+      disabled={disabled}
+      href={href}
+      onActivate={onNavigate}
+      pending={pending}
+      style={styles.target}
     >
       <View style={[styles.row, web && styles.webRow]}>
         <View
@@ -389,15 +368,7 @@ function NotificationTarget(props: FollowNotificationProps) {
           {copy}
         </View>
       </View>
-    </Pressable>
-  );
-
-  return blocked ? (
-    target
-  ) : (
-    <Link asChild href={href} push={Platform.OS !== 'web'}>
-      {target}
-    </Link>
+    </NotificationLinkTarget>
   );
 }
 

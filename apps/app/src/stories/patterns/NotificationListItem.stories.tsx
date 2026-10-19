@@ -500,6 +500,75 @@ export const ReactionRepostProfileTargetsContract: Story = {
   },
 };
 
+export const ReactionRepostKeyboardContract: Story = {
+  ...ReactionRepostProfileTargetsContract,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const kind of ['reaction', 'repost'] as const) {
+      const group = within(canvas.getByTestId(`${kind}-profile-targets`));
+      const targets = [
+        group.getByTestId('notification-kind-target'),
+        ...reactionProfileActors.slice(0, 3).map((actor) =>
+          group.getByRole('link', { name: `${actor.name} 프로필로 이동` }),
+        ),
+        group.getByTestId('notification-post-time-target'),
+        group.getByTestId('notification-post-summary-target'),
+        group.getByTestId('notification-post-preview-target'),
+      ];
+      for (const target of targets) {
+        args.onNavigate.mockClear();
+        await userEvent.tab();
+        await expect(target).toHaveFocus();
+        await expect(target).toHaveStyle({ outlineWidth: '2px', outlineStyle: 'solid' });
+        await userEvent.keyboard('{Enter}');
+        await expect(args.onNavigate).toHaveBeenCalledOnce();
+      }
+    }
+  },
+};
+
+export const GroupedNotificationsBlockedContract: Story = {
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      {(['follow', 'followRequest', 'reaction', 'repost'] as const).map((kind) =>
+        (['pending', 'disabled'] as const).map((state) => (
+          <View key={`${kind}-${state}`} testID={`${kind}-${state}`}>
+            <NotificationExample
+              {...args}
+              disabled={state === 'disabled'}
+              grouped
+              kind={kind}
+              pending={state === 'pending'}
+            />
+          </View>
+        )),
+      )}
+    </View>
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    for (const kind of ['follow', 'followRequest', 'reaction', 'repost'] as const) {
+      for (const state of ['pending', 'disabled'] as const) {
+        const group = within(canvas.getByTestId(`${kind}-${state}`));
+        const targets = group.getAllByRole('link');
+        await expect(targets).toHaveLength(kind === 'reaction' || kind === 'repost' ? 7 : 1);
+        for (const target of targets) {
+          await expect(target).not.toHaveAttribute('href');
+          await expect(target).toHaveAttribute('aria-disabled', 'true');
+          await expect(target).toHaveAttribute('aria-busy', String(state === 'pending'));
+          await expect(target).toHaveStyle({ opacity: '0.5', pointerEvents: 'none' });
+          fireEvent.click(target);
+          target.focus();
+          await userEvent.keyboard('{Enter}');
+          await expect(args.onNavigate).not.toHaveBeenCalled();
+        }
+      }
+    }
+  },
+};
+
 export const OperationalActivationContract: Story = {
   args: {
     kind: 'operational',
