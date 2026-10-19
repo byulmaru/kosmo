@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { NotificationKindRail, NotificationLinkTarget } from './NotificationLinkTarget';
 import type { Href } from 'expo-router';
 import type { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
@@ -418,17 +419,17 @@ function ReactionRepostNotificationTargets({
 
   return (
     <View style={[styles.row, styles.postActionRow, Platform.OS === 'web' && styles.webRow]}>
-      <NotificationLinkTarget
+      <NotificationKindRail
         accessibilityLabel={label}
         disabled={disabled}
         href={href}
         onActivate={onNavigate}
         pending={pending}
-        style={styles.kindTarget}
         testID="notification-kind-target"
+        iconTestID={`${kind}-notification-kind`}
       >
         <KindIcon color={iconColor} size={32} />
-      </NotificationLinkTarget>
+      </NotificationKindRail>
       <View style={styles.summary}>
         <View style={styles.avatarAndTime}>
           <View style={styles.profileAvatars}>
@@ -494,81 +495,9 @@ function ReactionRepostNotificationTargets({
   );
 }
 
-function NotificationLinkTarget({
-  accessibilityLabel,
-  children,
-  disabled = false,
-  href,
-  onActivate,
-  pending = false,
-  style,
-  testID,
-}: {
-  accessibilityLabel: string;
-  children: ReactElement;
-  disabled?: boolean;
-  href: Href;
-  onActivate?: () => void;
-  pending?: boolean;
-  style: ViewStyle;
-  testID?: string;
-}) {
-  const theme = useTheme();
-  const web = Platform.OS === 'web';
-  const [focusVisible, setFocusVisible] = useState(false);
-  const blocked = disabled || pending;
-  const target = (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="link"
-      accessibilityState={{ busy: pending, disabled: blocked }}
-      aria-busy={pending}
-      aria-disabled={blocked}
-      disabled={blocked}
-      onBlur={() => setFocusVisible(false)}
-      onFocus={(event) => {
-        const control = event.currentTarget as unknown as {
-          matches?: (selector: string) => boolean;
-        };
-        setFocusVisible(web && Boolean(control.matches?.(':focus-visible')));
-      }}
-      onPointerDown={() => setFocusVisible(false)}
-      onPress={blocked ? undefined : onActivate}
-      style={StyleSheet.flatten([
-        style,
-        {
-          outlineColor: theme.stateFocusRing,
-          outlineOffset: -2,
-          outlineStyle: focusVisible ? 'solid' : 'none',
-          outlineWidth: focusVisible ? 2 : 0,
-          opacity: blocked ? 0.5 : 1,
-        } as ViewStyle,
-      ])}
-      testID={testID}
-    >
-      {children}
-    </Pressable>
-  );
-
-  return blocked ? (
-    target
-  ) : (
-    <Link asChild href={href} push={Platform.OS !== 'web'}>
-      {target}
-    </Link>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
-  kindTarget: {
-    alignItems: 'center',
-    flexShrink: 0,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
   profileTarget: {
     alignItems: 'center',
     flexShrink: 0,

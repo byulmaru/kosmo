@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { MentionNotificationPost } from '@/components/notification/MentionNotificationPost';
 import { ReactionNotificationListItem } from '@/components/notification/NotificationListItem';
 import { NotificationListItemView } from '@/components/notification/NotificationListItemView';
+import { QuoteNotificationPost } from '@/components/notification/QuoteNotificationPost';
 import { ReplyNotificationPost } from '@/components/notification/ReplyNotificationPost';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
@@ -71,13 +73,25 @@ export type NotificationStoryArgs = {
 };
 type Args = NotificationStoryArgs;
 
-function ReplyPost({ onActivate }: { onActivate?: ReturnType<typeof fn> }) {
+type PostNotificationKind = 'mention' | 'quote' | 'reply';
+
+function PostNotificationStory({
+  kind,
+  onActivate,
+  unread = false,
+}: {
+  kind: PostNotificationKind;
+  onActivate?: ReturnType<typeof fn>;
+  unread?: boolean;
+}) {
   const data = useLazyLoadQuery<Query>(
     graphql`
       query NotificationListItemStoriesQuery {
         node(id: "notification-reply-post") {
           ... on Post {
             ...ReplyNotificationPost_post @alias(as: "post")
+            ...MentionNotificationPost_post @alias(as: "mention")
+            ...QuoteNotificationPost_post @alias(as: "quote")
           }
         }
         composer: node(id: "notification-viewer") {
@@ -89,15 +103,25 @@ function ReplyPost({ onActivate }: { onActivate?: ReturnType<typeof fn> }) {
     `,
     {},
   );
-  if (!data.node?.post) {
+  if (!data.node?.post || !data.node.mention || !data.node.quote) {
     throw new Error('Reply story Post fixture is missing.');
   }
+  const notificationPost =
+    kind === 'reply' ? (
+      <ReplyNotificationPost onActivate={onActivate} post={data.node.post} />
+    ) : kind === 'mention' ? (
+      <MentionNotificationPost onActivate={onActivate} post={data.node.mention} />
+    ) : (
+      <QuoteNotificationPost onActivate={onActivate} post={data.node.quote} />
+    );
   return (
     <SessionProvider>
       <PostActionAuthenticationProvider>
         <PostComposerCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
           <PostMediaViewerHostProvider>
-            <ReplyNotificationPost onActivate={onActivate} post={data.node.post} />
+            <NotificationListItemView kind={kind} unread={unread}>
+              {notificationPost}
+            </NotificationListItemView>
           </PostMediaViewerHostProvider>
         </PostComposerCoordinatorProvider>
       </PostActionAuthenticationProvider>
@@ -138,11 +162,7 @@ export function NotificationExample(args: Args) {
     unread: args.unread,
   };
   if (args.kind === 'reply') {
-    return (
-      <NotificationListItemView kind="reply" unread={args.unread}>
-        <ReplyPost onActivate={args.onNavigate} />
-      </NotificationListItemView>
-    );
+    return <PostNotificationStory kind="reply" onActivate={args.onNavigate} unread={args.unread} />;
   }
   if (args.kind === 'operational') {
     return (
@@ -198,6 +218,19 @@ export function NotificationExample(args: Args) {
   );
 }
 
+async function clickAtBottomOfTarget(target: HTMLElement) {
+  target.scrollIntoView({ block: 'center', inline: 'nearest' });
+  const bounds = target.getBoundingClientRect();
+  const clientX = bounds.left + bounds.width / 2;
+  const clientY = bounds.bottom - 1;
+  const testID = target.getAttribute('data-testid');
+  const hitTarget = target.ownerDocument.elementFromPoint(clientX, clientY);
+
+  expect(hitTarget).not.toBeNull();
+  expect(hitTarget?.closest(`[data-testid="${testID}"]`)).toBe(target);
+  fireEvent.click(hitTarget!, { clientX, clientY });
+}
+
 const meta = {
   title: 'KOSMO/Patterns/Notification List Item',
   args: {
@@ -248,18 +281,7 @@ const meta = {
       </View>
     ),
   ],
-  excludeStories: [
-    'NotificationExample',
-    'ActivationContract',
-    'PendingContract',
-    'CompositionContract',
-    'ProtectionContract',
-    'ReplyLayoutContract',
-    'ReplyQuoteContract',
-    'ReplyActionsContract',
-    'ReplyRailActivationContract',
-    'ReactionRepostProfileTargetsContract',
-  ],
+  excludeStories: ['NotificationExample'],
   parameters: {
     layout: 'fullscreen',
     relay: {
@@ -413,12 +435,32 @@ export const ReadAndUnavailableStates: Story = {
 export const ActivationContract: Story = {
   args: { kind: 'followRequest' },
   parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      <View testID="follow-activation">
+        <NotificationExample {...args} kind="follow" />
+      </View>
+      <View testID="follow-request-activation">
+        <NotificationExample {...args} kind="followRequest" />
+      </View>
+    </View>
+  ),
   play: async ({ args, canvasElement }) => {
     args.onNavigate.mockClear();
     const canvas = within(canvasElement);
-    const link = canvas.getByRole('link', { name: /팔로우 요청 관리 화면으로 이동/ });
+    const follow = within(canvas.getByTestId('follow-activation'));
+    const followLink = follow.getByRole('link');
+    await expect(follow.getAllByRole('link')).toHaveLength(1);
+    await expect(followLink).toHaveAttribute('href', '/@kosmo');
+    await userEvent.click(followLink);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+    args.onNavigate.mockClear();
+    const followRequest = within(canvas.getByTestId('follow-request-activation'));
+    const link = followRequest.getByRole('link', { name: /팔로우 요청 관리 화면으로 이동/ });
+    await expect(followRequest.getAllByRole('link')).toHaveLength(1);
     await expect(link).toHaveAttribute('href', '/follow-requests');
-    await expect(canvas.queryByRole('button', { name: /수락/ })).not.toBeInTheDocument();
+    await expect(followRequest.queryByRole('button', { name: /수락/ })).not.toBeInTheDocument();
     await userEvent.tab();
     await expect(link).toHaveFocus();
     await expect(link).toHaveStyle({ outlineWidth: '2px' });
@@ -473,8 +515,17 @@ export const ReactionRepostProfileTargetsContract: Story = {
         }
       }
 
+      const kindRail = group.getByTestId('notification-kind-target');
+      const kindIcon = group.getByTestId(`${kind}-notification-kind`);
+      const railBounds = kindRail.getBoundingClientRect();
+      const iconBounds = kindIcon.getBoundingClientRect();
+      expect(railBounds.width).toBe(48);
+      expect(railBounds.height).toBeGreaterThan(iconBounds.height);
+      expect(iconBounds.width).toBe(48);
+      expect(iconBounds.height).toBe(48);
+      expect(iconBounds.top).toBe(railBounds.top);
       const postTargets = [
-        group.getByTestId('notification-kind-target'),
+        kindRail,
         group.getByTestId('notification-post-time-target'),
         group.getByTestId('notification-post-summary-target'),
         group.getByTestId('notification-post-preview-target'),
@@ -491,7 +542,10 @@ export const ReactionRepostProfileTargetsContract: Story = {
       args.onNavigate.mockClear();
       await userEvent.click(profileLinks[0]!);
       await expect(args.onNavigate).toHaveBeenCalledOnce();
-      for (const postTarget of postTargets) {
+      args.onNavigate.mockClear();
+      await clickAtBottomOfTarget(kindRail);
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+      for (const postTarget of postTargets.slice(1)) {
         args.onNavigate.mockClear();
         await userEvent.click(postTarget);
         await expect(args.onNavigate).toHaveBeenCalledOnce();
@@ -922,5 +976,86 @@ export const ReplyRailActivationContract: Story = {
     await expect(args.onNavigate).toHaveBeenCalledTimes(4);
     await userEvent.click(canvas.getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'));
     await expect(args.onNavigate).toHaveBeenCalledTimes(5);
+  },
+};
+
+export const PostNotificationRailActivationContract: Story = {
+  args: { kind: 'reply', unread: true },
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      operationResponses: {
+        NotificationListItemStoriesQuery: {
+          data: {
+            node: {
+              ...replyPost,
+              repostSource: {
+                ...post({
+                  id: 'notification-source-post',
+                  profile: profile({
+                    id: 'notification-source-author',
+                    displayName: '원문 작성자',
+                    relativeHandle: '@source-author',
+                  }),
+                  bodyText: '인용 게시글이 연결한 원문입니다.',
+                }),
+                viewerReactions: [],
+              },
+            },
+            composer: profile({ id: 'notification-viewer' }),
+          },
+        },
+      },
+    },
+  },
+  render: (args) => (
+    <View>
+      {(['mention', 'reply', 'quote'] as const).map((kind) => (
+        <View key={kind} testID={`post-notification-${kind}`}>
+          <PostNotificationStory kind={kind} onActivate={args.onNavigate} unread />
+        </View>
+      ))}
+    </View>
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const kind of ['mention', 'reply', 'quote'] as const) {
+      const group = within(canvas.getByTestId(`post-notification-${kind}`));
+      const rail = group.getByTestId(`${kind}-notification-rail`);
+      const icon = group.getByTestId(`${kind}-notification-kind`);
+      const railBounds = rail.getBoundingClientRect();
+      const iconBounds = icon.getBoundingClientRect();
+
+      await expect(rail).toHaveAttribute('href', '/@starlight/notification-reply-post');
+      expect(railBounds.width).toBe(48);
+      expect(railBounds.height).toBeGreaterThan(iconBounds.height);
+      expect(iconBounds.width).toBe(48);
+      expect(iconBounds.height).toBe(48);
+      expect(iconBounds.top).toBe(railBounds.top);
+
+      args.onNavigate.mockClear();
+      await clickAtBottomOfTarget(rail);
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+      const author = group.getByTestId('notification-post-author');
+      await expect(author).toHaveAttribute('href', '/@starlight');
+      args.onNavigate.mockClear();
+      await userEvent.click(author);
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+      args.onNavigate.mockClear();
+      await userEvent.click(within(author.parentElement!).getByText('5분 전'));
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+      args.onNavigate.mockClear();
+      await userEvent.click(group.getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'));
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+    }
+
+    const quote = within(canvas.getByTestId('post-notification-quote'));
+    await expect(quote.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/@source-author/notification-source-post',
+    );
   },
 };
