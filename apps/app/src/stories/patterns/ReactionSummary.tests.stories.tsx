@@ -180,7 +180,7 @@ export const TrailingWhitespaceAndIndependentControls: Story = {
     await userEvent.click(reaction);
     expect(reaction).toHaveAttribute('aria-pressed', 'true');
     const pending = canvas.getByRole('button', { name: '❤️ 반응 18개, 처리 중' });
-    await userEvent.click(pending);
+    await userEvent.click(within(pending).getByText('❤️'));
     expect(count).toHaveTextContent('0');
     for (const [index, fraction] of [0, 0.5, 1].entries()) {
       await tapReactionSummaryWhitespace(canvasElement, fraction);
