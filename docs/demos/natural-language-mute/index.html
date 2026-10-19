@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>내가 보고 싶은 이야기만 · KOSMO 자연어 뮤트 구상</title>
+    <style>
+      /* docs/design/colors.md의 Light semantic 값. 독립·오프라인 소개 자료. */
+      :root {
+        color-scheme: light;
+        --color-background-canvas: #ffffff;
+        --color-background-surface: #fafafb;
+        --color-foreground-primary: #1a1a1a;
+        --color-foreground-secondary: #64646f;
+        --color-border-default: #dfdfe5;
+        --color-border-subtle: #ececf0;
+        --color-action-primary-base: #ffe597;
+        --color-action-primary-subtle: #fff9e6;
+        --color-state-selected-border: #ae8512;
+        --font-ui: 'SUIT Variable', 'SUIT', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+        --font-content:
+          'Pretendard Variable', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--color-background-canvas);
+        color: var(--color-foreground-primary);
+        font: 16px/1.5 var(--font-ui);
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+      main {
+        max-width: 1280px;
+        margin: auto;
+        padding: 32px;
+      }
+      .masthead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--color-border-default);
+      }
+      .brand {
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+      .edition,
+      .eyebrow {
+        color: var(--color-foreground-secondary);
+        font-size: 14px;
+        line-height: 20px;
+      }
+      .intro {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 24px;
+        margin: 32px 0;
+      }
+      h1 {
+        margin: 8px 0 12px;
+        font-size: 24px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+      }
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h2 {
+        font-size: 20px;
+        line-height: 1.3;
+      }
+      h3 {
+        font-size: 16px;
+        line-height: 24px;
+      }
+      .sub {
+        color: var(--color-foreground-secondary);
+      }
+      .badge {
+        display: inline-block;
+        border: 1px solid var(--color-border-default);
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+      .setup {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        border: 1px solid var(--color-border-default);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .step {
+        padding: 24px;
+      }
+      .step + .step {
+        border-left: 1px solid var(--color-border-default);
+        background: var(--color-action-primary-subtle);
+      }
+      .step-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .number {
+        display: inline-grid;
+        place-items: center;
+        min-width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--color-action-primary-base);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .input-example {
+        margin: 12px 0 0;
+        padding: 16px;
+        border: 1px solid var(--color-border-default);
+        border-radius: 8px;
+        background: var(--color-background-surface);
+        font: 600 20px/1.5 var(--font-content);
+      }
+      .caption {
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--color-foreground-secondary);
+      }
+      .step .caption {
+        margin-top: 12px;
+      }
+      .condition {
+        font-size: 20px;
+        line-height: 1.5;
+        font-weight: 600;
+      }
+      .condition strong {
+        box-shadow: inset 0 -0.45em var(--color-action-primary-base);
+      }
+      .result {
+        margin-top: 32px;
+      }
+      .result-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .result-heading .step-title {
+        margin: 0;
+      }
+      .feeds {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .feed {
+        min-width: 0;
+        border: 1px solid var(--color-border-default);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .feed.after {
+        border-color: var(--color-state-selected-border);
+      }
+      .feed-header {
+        min-height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 24px;
+        background: var(--color-background-surface);
+        border-bottom: 1px solid var(--color-border-default);
+      }
+      .after .feed-header {
+        background: var(--color-action-primary-subtle);
+      }
+      .posts {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .post {
+        padding: 16px 24px;
+        min-height: 136px;
+      }
+      .post + .post {
+        border-top: 1px solid var(--color-border-subtle);
+      }
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        flex: 0 0 32px;
+        height: 32px;
+        border: 1px solid var(--color-border-default);
+        border-radius: 999px;
+        background: var(--color-background-surface);
+        font-size: 14px;
+      }
+      .handle {
+        color: var(--color-foreground-secondary);
+        font-size: 12px;
+      }
+      .post-body {
+        font-family: var(--font-content);
+      }
+      .hidden-post {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+        background: var(--color-background-surface);
+      }
+      .hidden-post h3::before {
+        content: '—';
+        margin-right: 8px;
+        color: var(--color-foreground-secondary);
+      }
+      mark {
+        background: var(--color-action-primary-subtle);
+        color: inherit;
+        padding: 0 4px;
+      }
+      .explanation {
+        margin-top: 16px;
+        padding-left: 16px;
+        border-left: 2px solid var(--color-state-selected-border);
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--color-border-default);
+      }
+      @media (max-width: 767px) {
+        main {
+          padding: 24px 16px;
+        }
+        .intro {
+          align-items: start;
+          flex-direction: column;
+        }
+        .setup,
+        .feeds {
+          grid-template-columns: 1fr;
+        }
+        .step + .step {
+          border-left: 0;
+          border-top: 1px solid var(--color-border-default);
+        }
+        .step,
+        .post,
+        .feed-header {
+          padding: 16px;
+        }
+        .result-heading {
+          align-items: start;
+          flex-direction: column;
+        }
+        .post {
+          min-height: 0;
+        }
+        footer {
+          flex-direction: column;
+          gap: 8px;
+        }
+      }
+      @media print {
+        main {
+          max-width: none;
+          padding: 16px;
+        }
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .setup,
+        .feeds {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="masthead">
+        <span class="brand">KOSMO</span>
+        <span class="edition">코미버스 · 아이디어 미리보기</span>
+      </header>
+      <div class="intro">
+        <div>
+          <p class="eyebrow">자연어 뮤트</p>
+          <h1>보고 싶지 않은 이야기, 문장으로 말해보세요.</h1>
+          <p class="sub">
+            좋아하는 이야기는 그대로. 피하고 싶은 내용은 가려진 피드를 상상해보세요.
+          </p>
+        </div>
+        <span class="badge">소개용 예시 화면</span>
+      </div>
+      <div class="setup">
+        <section class="step" aria-labelledby="input-title">
+          <div class="step-title">
+            <span class="number">01</span>
+            <h2 id="input-title">보고 싶지 않은 내용을 적어요</h2>
+          </div>
+          <p>예를 들어, 작품을 아직 보지 않았다면</p>
+          <blockquote class="input-example">
+            “아직 보지 않은 작품의 결말이나 반전 이야기는 보고 싶지 않아요.”
+          </blockquote>
+          <p class="caption">
+            문장 입력 예시입니다. 이 화면에서 직접 입력하거나 적용하지는 않아요.
+          </p>
+        </section>
+        <section class="step" aria-labelledby="condition-title">
+          <div class="step-title">
+            <span class="number">02</span>
+            <h2 id="condition-title">이런 내용이 가려져요</h2>
+          </div>
+          <p class="condition">작품의 <strong>결말이나 반전을 직접 알려주는 글</strong></p>
+          <p class="sub">결말을 말하지 않는 작화 감상이나 일상 이야기는 그대로 보여요.</p>
+          <p class="caption">입력 문장의 뜻을 설명하기 위해 준비한 조건 예시예요.</p>
+        </section>
+      </div>
+      <section class="result" aria-labelledby="result-title">
+        <div class="result-heading">
+          <div class="step-title">
+            <span class="number">03</span>
+            <h2 id="result-title">같은 피드, 이렇게 달라져요</h2>
+          </div>
+          <p class="caption">가상의 글 3개 중 결말을 말하는 글 1개를 가린 예시</p>
+        </div>
+        <div class="feeds">
+          <section class="feed" aria-labelledby="before-title">
+            <header class="feed-header">
+              <h3 id="before-title">적용 전</h3>
+              <span class="caption">예시 피드</span>
+            </header>
+            <ol class="posts">
+              <li class="post">
+                <article>
+                  <div class="identity">
+                    <span class="avatar" aria-hidden="true">달</span><strong>달빛</strong
+                    ><span class="handle">@moon · 예시</span>
+                  </div>
+                  <p class="post-body">
+                    〈별의 정원〉 마지막에 <mark>정원사가 미래의 주인공이었다는 반전</mark>, 다시
+                    보니 첫 장면부터 힌트가 있었네.
+                  </p>
+                </article>
+              </li>
+              <li class="post">
+                <article>
+                  <div class="identity">
+                    <span class="avatar" aria-hidden="true">여</span><strong>여울</strong
+                    ><span class="handle">@yeoul · 예시</span>
+                  </div>
+                  <p class="post-body">
+                    〈별의 정원〉 배경 작화가 정말 예뻐요. 수채화 같은 색감 때문에 큰 화면으로 한 번
+                    더 보고 싶어요.
+                  </p>
+                </article>
+              </li>
+              <li class="post">
+                <article>
+                  <div class="identity">
+                    <span class="avatar" aria-hidden="true">모</span><strong>모아</strong
+                    ><span class="handle">@moa · 예시</span>
+                  </div>
+                  <p class="post-body">
+                    내일 코미버스 갈 준비 끝! 가방에 물이랑 보조 배터리 챙겼어요. 부스 구경할 생각에
+                    두근두근.
+                  </p>
+                </article>
+              </li>
+            </ol>
+          </section>
+          <section class="feed after" aria-labelledby="after-title">
+            <header class="feed-header">
+              <h3 id="after-title">적용 후</h3>
+              <span class="badge">1개 가림 · 모의 결과</span>
+            </header>
+            <ol class="posts">
+              <li class="post hidden-post">
+                <h3>설정한 조건으로 가려진 예시 글</h3>
+                <p class="caption">작품의 결말·반전을 직접 알려주는 내용</p>
+              </li>
+              <li class="post">
+                <article>
+                  <div class="identity">
+                    <span class="avatar" aria-hidden="true">여</span><strong>여울</strong
+                    ><span class="handle">@yeoul · 예시</span>
+                  </div>
+                  <p class="post-body">
+                    〈별의 정원〉 배경 작화가 정말 예뻐요. 수채화 같은 색감 때문에 큰 화면으로 한 번
+                    더 보고 싶어요.
+                  </p>
+                </article>
+              </li>
+              <li class="post">
+                <article>
+                  <div class="identity">
+                    <span class="avatar" aria-hidden="true">모</span><strong>모아</strong
+                    ><span class="handle">@moa · 예시</span>
+                  </div>
+                  <p class="post-body">
+                    내일 코미버스 갈 준비 끝! 가방에 물이랑 보조 배터리 챙겼어요. 부스 구경할 생각에
+                    두근두근.
+                  </p>
+                </article>
+              </li>
+            </ol>
+          </section>
+        </div>
+        <p class="explanation">
+          같은 작품 이야기라도, 결말을 말하지 않는 감상은 그대로 남는 모습을 보여주는 예시예요.
+        </p>
+      </section>
+      <footer class="caption">
+        <p>
+          자연어 뮤트 구상을 설명하기 위한 목업입니다.<br />등장하는 작품·인물·글과 가림 결과는 모두
+          소개를 위해 만들었어요.
+        </p>
+        <p>현재 서비스 기능이나 실제 모델의 판단 결과가 아닙니다.</p>
+      </footer>
+    </main>
+  </body>
+</html>
