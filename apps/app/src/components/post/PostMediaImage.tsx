@@ -31,29 +31,26 @@ export function PostMediaImage({
   readonly onOpen?: PostMediaOpenHandler;
 }) {
   const triggerRef = useRef<NativeView>(null);
-  const [generation, setGeneration] = useState(0);
 
   return (
-    <PostMediaImageAttempt
-      key={`${item.id}:${item.url ?? ''}:${generation}`}
+    <PostMediaImageSource
+      key={`${item.id}:${item.url ?? ''}`}
       fill={fill}
       index={index}
       interactive={interactive}
       item={item}
       onOpen={onOpen}
-      onRetry={() => setGeneration((value) => value + 1)}
       triggerRef={triggerRef}
     />
   );
 }
 
-function PostMediaImageAttempt({
+function PostMediaImageSource({
   fill,
   index,
   interactive,
   item,
   onOpen,
-  onRetry,
   triggerRef,
 }: {
   readonly fill: boolean;
@@ -61,7 +58,6 @@ function PostMediaImageAttempt({
   readonly interactive: boolean;
   readonly item: PostMediaItem;
   readonly onOpen?: PostMediaOpenHandler;
-  readonly onRetry: () => void;
   readonly triggerRef: RefObject<NativeView | null>;
 }) {
   const theme = useTheme();
@@ -117,7 +113,7 @@ function PostMediaImageAttempt({
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"
-            onPress={onRetry}
+            onPress={() => setStatus('loading')}
             style={({ pressed }) => [
               styles.retryButton,
               fill ? styles.fillRetryButton : null,
