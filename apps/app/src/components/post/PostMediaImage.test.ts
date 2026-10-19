@@ -16,6 +16,12 @@ const ImageMock = Object.assign((props: Record<string, unknown>) => createElemen
   ) => {
     const attempts = getSizeAttempts.get(uri) ?? 0;
     getSizeAttempts.set(uri, attempts + 1);
+    if (uri.includes('/delayed-')) {
+      const callbacks = pendingGetSizes.get(uri) ?? [];
+      callbacks.push(success);
+      pendingGetSizes.set(uri, callbacks);
+      return;
+    }
     if (uri.endsWith('/transient-size-error.webp') && attempts === 0) {
       failure?.();
       return;
@@ -27,6 +33,7 @@ const ImageMock = Object.assign((props: Record<string, unknown>) => createElemen
   },
 });
 const getSizeAttempts = new Map<string, number>();
+const pendingGetSizes = new Map<string, Array<(width: number, height: number) => void>>();
 
 mock.module('react-native', {
   exports: {
@@ -59,6 +66,7 @@ before(async () => {
 
 afterEach(async () => {
   getSizeAttempts.clear();
+  pendingGetSizes.clear();
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -134,6 +142,35 @@ describe('PostMediaImage', () => {
     assert.equal(image('new-media').props.accessibilityState.busy, true);
   });
 
+  it('이전 URL과 재시도 attempt의 늦은 크기 조회는 현재 비율을 바꾸지 않는다', async () => {
+    const original = {
+      ...media('same-id', '가로 이미지'),
+      url: 'https://media.example/delayed-old.webp',
+    };
+    await render(0, original);
+    const oldUrlSize = pendingGetSizes.get(original.url)?.[0];
+    assert.ok(oldUrlSize);
+
+    const updated = { ...original, url: 'https://media.example/delayed-current.webp' };
+    await render(0, updated);
+    const currentUrlSize = pendingGetSizes.get(updated.url)?.[0];
+    assert.ok(currentUrlSize);
+
+    await act(async () => oldUrlSize(2400, 900));
+    assert.equal(frameAspectRatio('same-id'), 1);
+
+    await act(async () => image('same-id').props.onError());
+    await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
+    const retrySize = pendingGetSizes.get(updated.url)?.[1];
+    assert.ok(retrySize);
+
+    await act(async () => currentUrlSize(1600, 900));
+    assert.equal(frameAspectRatio('same-id'), 1);
+
+    await act(async () => retrySize(1800, 900));
+    assert.equal(frameAspectRatio('same-id'), 2);
+  });
+
   it('nullable Alt Text fallback과 원본 비율을 적용하되 세로 이미지는 정사각형으로 제한한다', async () => {
     await render(1, media('landscape', null));
 
@@ -144,13 +181,19 @@ describe('PostMediaImage', () => {
     assert.equal(frameAspectRatio('portrait'), 1);
   });
 
-  it('Image 이벤트 callback을 재사용한다', async () => {
-    await render(0, media('landscape', '가로 이미지'));
-    const firstOnLoad = image('landscape').props.onLoad;
+  it('Image lookup 실패 뒤 native onLoad 크기를 사용한다', async () => {
+    const item = media('transient-size-error', '가로 이미지');
+    await render(0, item);
+    assert.equal(frameAspectRatio(item.id), 1);
 
-    await act(async () => firstOnLoad());
+    await act(async () =>
+      callImageEvent(image(item.id), 'onLoad', {
+        nativeEvent: { source: { width: 1800, height: 900 } },
+      }),
+    );
 
-    assert.equal(image('landscape').props.onLoad, firstOnLoad);
+    assert.equal(frameAspectRatio(item.id), 2);
+    assert.equal(getSizeAttempts.get(item.url!), 1);
   });
 
   it('interactive 정상 image tile은 viewer 목적을 알리고 선택 index만 연다', async () => {
@@ -290,9 +333,13 @@ function image(id: string): ReactTestInstance {
   return byTestId(`post-media-image-${id}`);
 }
 
-function callImageEvent(instance: ReactTestInstance, event: 'onError' | 'onLoad' | 'onLoadStart') {
-  const handler = instance.props[event] as (() => void) | undefined;
-  handler?.();
+function callImageEvent(
+  instance: ReactTestInstance,
+  event: 'onError' | 'onLoad' | 'onLoadStart',
+  payload?: unknown,
+) {
+  const handler = instance.props[event] as ((payload?: unknown) => void) | undefined;
+  handler?.(payload);
 }
 
 function frameAspectRatio(id: string): number | undefined {
