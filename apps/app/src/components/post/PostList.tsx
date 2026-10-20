@@ -234,7 +234,8 @@ export function PostList({
       (edge) =>
         ignoreBlock ||
         (!edge.node.profile.viewerState?.profileBlock &&
-          (edge.node.content != null || !edge.node.repostSource?.profile.viewerState?.profileBlock)),
+          (edge.node.content != null ||
+            !edge.node.repostSource?.profile.viewerState?.profileBlock)),
     );
   const hasData = Boolean(home || local || profile);
   const hasNext = isHome
