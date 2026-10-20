@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import {
   createContext,
@@ -14,6 +15,10 @@ import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+mock.module('expo-crypto', {
+  exports: { randomUUID },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
 type QueryMode = 'error' | 'pending' | 'success';
@@ -61,7 +66,7 @@ let RouteBoundary: ComponentType<{
   loading: ReactNode;
   title: string;
 }>;
-let useRouteBoundary: () => { fetchKey: number };
+let useRouteBoundary: () => { fetchKey: string };
 let useRelayActor: () => Pick<
   MockRelayActorValue,
   'clearNativeSession' | 'nativeToken' | 'resetActor' | 'setNativeSession'

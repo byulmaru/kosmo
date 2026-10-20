@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -10,7 +11,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
-const queryHistory: Array<{ fetchKey: number }> = [];
+const queryHistory: Array<{ fetchKey: string }> = [];
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
 let selectedProfileId: string | null = 'profile-a';
@@ -28,6 +29,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('expo-crypto', { randomUUID });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     assert.match(parts.join(''), /query FollowRequestsPageQuery/);
@@ -36,7 +38,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: string,
     variables: Record<string, never>,
-    options: { fetchKey: number },
+    options: { fetchKey: string },
   ) => {
     assert.equal(query, 'FollowRequestsPageQuery');
     assert.deepEqual(variables, {});
@@ -154,7 +156,6 @@ describe('follow requests route actor lifecycle', () => {
       rendered('FollowRequestList').map((node) => node.props.identity),
       ['profile-a'],
     );
-    assert.equal(queryHistory.at(-1)?.fetchKey, 0);
   });
 
   it('selected Profile이 없으면 profile-required 상태를 표시한다', async () => {
@@ -181,6 +182,7 @@ describe('follow requests route actor lifecycle', () => {
         tone: 'danger',
       });
       assert.ok(latestToastAction);
+      const failedFetchKey = queryHistory.at(-1)?.fetchKey;
 
       queryMode = 'success';
       await act(async () => latestToastAction?.());
@@ -189,7 +191,7 @@ describe('follow requests route actor lifecycle', () => {
         rendered('FollowRequestList').map((node) => node.props.identity),
         ['profile-a'],
       );
-      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
+      assert.notEqual(queryHistory.at(-1)?.fetchKey, failedFetchKey);
       assert.equal(toastCleanupCount, 1);
     } finally {
       console.error = originalConsoleError;
@@ -202,9 +204,11 @@ describe('follow requests route actor lifecycle', () => {
     try {
       queryMode = 'error';
       await renderScreen();
+      const failedFetchKey = queryHistory.at(-1)?.fetchKey;
       queryMode = 'success';
       await act(async () => latestToastAction?.());
-      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
+      const retriedFetchKey = queryHistory.at(-1)?.fetchKey;
+      assert.notEqual(retriedFetchKey, failedFetchKey);
 
       selectedProfileId = 'profile-b';
       await act(async () => renderer?.unmount());
@@ -215,7 +219,7 @@ describe('follow requests route actor lifecycle', () => {
         rendered('FollowRequestList').map((node) => node.props.identity),
         ['profile-b'],
       );
-      assert.equal(queryHistory.at(-1)?.fetchKey, 0);
+      assert.notEqual(queryHistory.at(-1)?.fetchKey, retriedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -13,6 +14,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('expo-crypto', { randomUUID });
+
 mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
@@ -26,8 +29,9 @@ type RouteBoundaryProps = {
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: number; refetch: () => void };
+let useRouteBoundary: () => { fetchKey: string; refetch: () => void };
 let queryShouldThrow = false;
+let observedFetchKey = '';
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -42,12 +46,13 @@ afterEach(async () => {
 });
 
 function QueryProbe() {
-  const { fetchKey } = useRouteBoundary();
+  const { fetchKey, refetch } = useRouteBoundary();
+  observedFetchKey = fetchKey;
   if (queryShouldThrow) {
     throw new Error('route query failed');
   }
 
-  return createElement('QueryProbe', { fetchKey });
+  return createElement('QueryProbe', { fetchKey, refetch });
 }
 
 function renderBoundary(
@@ -69,7 +74,39 @@ function queryProbe() {
   return probe;
 }
 
+function assertUuidFetchKey(fetchKey: string) {
+  assert.match(fetchKey, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
+}
+
 describe('RouteBoundary local query lifecycle', () => {
+  it('keeps the fetch key stable through ordinary rerenders', async () => {
+    await act(async () => {
+      renderer = create(renderBoundary());
+    });
+
+    const initialFetchKey = queryProbe().props.fetchKey;
+    assertUuidFetchKey(initialFetchKey);
+
+    await act(async () => {
+      renderer?.update(renderBoundary());
+    });
+
+    assert.equal(queryProbe().props.fetchKey, initialFetchKey);
+  });
+
+  it('assigns a new fetch key for an explicit refetch', async () => {
+    await act(async () => {
+      renderer = create(renderBoundary());
+    });
+
+    const initialFetchKey = queryProbe().props.fetchKey;
+    await act(async () => queryProbe().props.refetch());
+
+    const refetchedKey = queryProbe().props.fetchKey;
+    assert.notEqual(refetchedKey, initialFetchKey);
+    assertUuidFetchKey(refetchedKey);
+  });
+
   it('resets an error boundary and advances the fetch key through the fallback action', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -79,6 +116,8 @@ describe('RouteBoundary local query lifecycle', () => {
         renderer = create(renderBoundary());
       });
 
+      const failedFetchKey = observedFetchKey;
+      assertUuidFetchKey(failedFetchKey);
       assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
       const fallback = renderer?.root.findAll((node) => String(node.type) === 'StateView')[0];
       assert.ok(fallback);
@@ -86,9 +125,31 @@ describe('RouteBoundary local query lifecycle', () => {
       queryShouldThrow = false;
       await act(async () => fallback.props.onAction());
 
-      assert.equal(queryProbe().props.fetchKey, 1);
+      const retriedFetchKey = queryProbe().props.fetchKey;
+      assert.notEqual(retriedFetchKey, failedFetchKey);
+      assertUuidFetchKey(retriedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }
+  });
+
+  it('assigns a fresh fetch key after the boundary remounts', async () => {
+    await act(async () => {
+      renderer = create(renderBoundary());
+    });
+
+    const firstMountKey = queryProbe().props.fetchKey;
+    assertUuidFetchKey(firstMountKey);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    await act(async () => {
+      renderer = create(renderBoundary());
+    });
+
+    const remountedKey = queryProbe().props.fetchKey;
+    assert.notEqual(remountedKey, firstMountKey);
+    assertUuidFetchKey(remountedKey);
   });
 });

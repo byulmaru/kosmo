@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext, useState } from 'react';
@@ -29,7 +30,7 @@ const queryModes: Record<QueryName, QueryMode> = {
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
-  fetchKey: number;
+  fetchKey: string;
   handle: string;
   query: QueryName;
 }> = [];
@@ -103,6 +104,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('expo-crypto', { randomUUID });
 mockModule('expo-router', {
   Slot: () =>
     SlotContent
@@ -216,7 +218,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
-    options: { fetchKey: number },
+    options: { fetchKey: string },
   ) => {
     queryHistory.push({
       fetchKey: options.fetchKey,
@@ -847,6 +849,9 @@ describe('profile route parameter lifecycle', () => {
       assert.ok(errorLeading);
       await act(async () => errorLeading.props.onPress());
       assert.equal(routerBackCount, 1);
+      const failedFetchKey = queryHistory.findLast(
+        ({ query }) => query === 'ProfileLayoutQuery',
+      )?.fetchKey;
 
       queryModes.ProfileLayoutQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());
@@ -856,7 +861,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfileLayoutQuery',
       );
       assert.equal(latestLayoutQuery?.handle, 'remote@activitypub.example');
-      assert.equal(latestLayoutQuery?.fetchKey, 1);
+      assert.notEqual(latestLayoutQuery?.fetchKey, failedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }
@@ -899,6 +904,9 @@ describe('profile route parameter lifecycle', () => {
         const errorState = requireRendered('ProfileConnectionListState');
         assert.equal(errorState.props.kind, kind);
         assert.equal(errorState.props.state, 'error');
+        const failedFetchKey = queryHistory.findLast(
+          ({ query: current }) => current === query,
+        )?.fetchKey;
 
         queryModes[query] = 'success';
         await act(async () => errorState.props.onRetry());
@@ -906,7 +914,7 @@ describe('profile route parameter lifecycle', () => {
         assert.equal(requireRendered('ProfileConnectionList').props.kind, kind);
         const latestQuery = queryHistory.findLast(({ query: current }) => current === query);
         assert.equal(latestQuery?.handle, 'local');
-        assert.equal(latestQuery?.fetchKey, 1);
+        assert.notEqual(latestQuery?.fetchKey, failedFetchKey);
       } finally {
         console.error = originalConsoleError;
       }
@@ -925,6 +933,9 @@ describe('profile route parameter lifecycle', () => {
       queryModes.ProfilePostListPageQuery = 'success';
       const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
       assert.ok(errorPostList);
+      const failedFetchKey = queryHistory.findLast(
+        ({ query }) => query === 'ProfilePostListPageQuery',
+      )?.fetchKey;
       await act(async () => errorPostList.props.onRetry());
 
       assert.deepEqual(identities('PostList'), ['local']);
@@ -932,7 +943,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfilePostListPageQuery',
       );
       assert.equal(latestPostQuery?.handle, 'local');
-      assert.equal(latestPostQuery?.fetchKey, 1);
+      assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }

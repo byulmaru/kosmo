@@ -1,3 +1,4 @@
+import { randomUUID } from 'expo-crypto';
 import {
   createContext,
   forwardRef,
@@ -26,7 +27,7 @@ type RouteBoundaryProps = {
 };
 
 type RouteBoundaryContextValue = RouteBoundaryHandle & {
-  fetchKey: number;
+  fetchKey: string;
 };
 
 const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(null);
@@ -50,9 +51,9 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
   function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
-    const [fetchKey, setFetchKey] = useState(0);
+    const [fetchKey, setFetchKey] = useState(() => randomUUID());
 
-    const refetch = useCallback(() => setFetchKey((key) => key + 1), []);
+    const refetch = useCallback(() => setFetchKey(randomUUID()), []);
     const reset = useCallback(() => refetch(), [refetch]);
 
     useImperativeHandle(ref, () => ({ refetch }), [refetch]);

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -6,6 +7,10 @@ import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+mock.module('expo-crypto', {
+  exports: { randomUUID },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 type QueryData = {
   currentSession: {
@@ -254,7 +259,9 @@ describe('SettingsProfileDetail', () => {
       defaultPostVisibility: 'FOLLOWERS',
       followPolicy: 'OPEN',
     });
-    assert.deepEqual(queryFetchKeys, [0, 0, 0]);
+    const initialFetchKey = queryFetchKeys[0];
+    assert.ok(initialFetchKey);
+    assert.deepEqual(queryFetchKeys, [initialFetchKey, initialFetchKey, initialFetchKey]);
   });
 
   it('저장 실패 뒤 마지막 저장값과 오류를 표시하고 다음 변경을 다시 저장한다', async () => {
@@ -587,11 +594,12 @@ describe('SettingsProfileDetail', () => {
       const error = rendered('StateView')[0];
       assert.equal(error.props.title, 'Profile 설정을 불러오지 못했어요');
       assert.equal(error.props.actionLabel, '다시 시도');
+      const failedFetchKey = queryFetchKeys.at(-1);
 
       queryMode = 'success';
       await act(async () => error.props.onAction());
-      assert.equal(queryFetchKeys[0], 0);
-      assert.equal(queryFetchKeys.at(-1), 1);
+      const retriedFetchKey = queryFetchKeys.at(-1);
+      assert.notEqual(retriedFetchKey, failedFetchKey);
       const queryCountAfterRetry = queryFetchKeys.length;
 
       relayActorLifecycleKey = 'actor-b';
@@ -599,7 +607,7 @@ describe('SettingsProfileDetail', () => {
       await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
 
       assert.equal(queryFetchKeys.length, queryCountAfterRetry + 1);
-      assert.equal(queryFetchKeys.at(-1), 1);
+      assert.equal(queryFetchKeys.at(-1), retriedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }
