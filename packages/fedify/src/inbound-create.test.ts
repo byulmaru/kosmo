@@ -3881,6 +3881,11 @@ describe('inbound Create dispatch', () => {
   test('rejects a hydrated Note with an oversized Mention username as a whole', async () => {
     const mentionActorUri = new URL('https://mentions.example/users/long-handle');
     const objectUri = new URL('https://objects.example/notes/long-mention-handle');
+    const author = await createStoredRemoteActor();
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      assert.equal(actorUri, remoteActorUri.href);
+      return author.id;
+    });
     const logs: unknown[] = [];
     const restoreReporter = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
@@ -3911,7 +3916,9 @@ describe('inbound Create dispatch', () => {
         reason: 'note_mention_limit_exceeded',
         status: 'rejected',
       });
+      assert.equal(lookupWorkflow.mock.callCount(), 1);
     } finally {
+      lookupWorkflow.mock.restore();
       restoreReporter();
     }
 
