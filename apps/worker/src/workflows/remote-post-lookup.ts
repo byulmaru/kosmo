@@ -1,10 +1,8 @@
+import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
 import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
-import {
-  REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
-  type RemotePostLookupInput,
-} from '@kosmo/core/temporal/workflows';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import type { RemotePostLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const { lookupRemotePostActivity } = proxyActivities<typeof activities>(workflowActivityOptions);

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NotificationKind } from '@kosmo/core/enums';
 import { operationalNotificationWorkflow } from '@kosmo/core/temporal/operational-notification';
-import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
 import {
   PROFILE_BLOCK_UPDATE_ID,
   PROFILE_BLOCK_UPDATE_NAME,
@@ -10,6 +9,7 @@ import {
   PROFILE_UNBLOCK_UPDATE_NAME,
 } from '@kosmo/core/temporal/profile-block';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
+import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
   WithStartWorkflowOperation,
@@ -24,9 +24,9 @@ import type {
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
+import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
-import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
 import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
@@ -406,7 +406,7 @@ test(
         'replaceRemoteFeaturedActivity',
       ]);
       assert.equal(
-        events.some((event) => event.childWorkflowExecutionStartedEventAttributes !== undefined),
+        events.some((event) => Boolean(event.childWorkflowExecutionStartedEventAttributes)),
         false,
       );
 

@@ -4,11 +4,11 @@ import { Note, Object as ActivityObject } from '@fedify/vocab';
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
-import { eq } from 'drizzle-orm';
+import { federation, materializeHydratedRemoteNote } from '@kosmo/fedify';
 import { ApplicationFailure } from '@temporalio/activity';
-import { materializeHydratedRemoteNote, federation } from '@kosmo/fedify';
+import { eq } from 'drizzle-orm';
 import { createBoundedDocumentLoader, RemoteDocumentBudgetExceededError } from './remote-document';
+import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 

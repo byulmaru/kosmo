@@ -1,13 +1,13 @@
 import {
+  REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+  remotePostLookupWorkflow,
+} from '@kosmo/core/temporal/workflows';
+import {
   ApplicationFailure,
   patched,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
-import {
-  REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
-  remotePostLookupWorkflow,
-} from '@kosmo/core/temporal/workflows';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import type {

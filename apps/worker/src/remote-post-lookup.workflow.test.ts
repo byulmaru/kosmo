@@ -7,26 +7,26 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
-  PostVisibility,
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure } from '@temporalio/activity';
-import { eq } from 'drizzle-orm';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { eq } from 'drizzle-orm';
+import { RemoteDocumentLoaderTypeError } from './activities/remote-document';
 import type { DocumentLoader } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as Fedify from '@kosmo/fedify';
+import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
 import type {
   RemotePostLookupInput,
   RemoteProfileLookupInput,
 } from '@kosmo/core/temporal/workflows';
-import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type * as Fedify from '@kosmo/fedify';
 import type { lookupRemotePostActivity as LookupRemotePostActivity } from './activities/remote-post-lookup';
-import { RemoteDocumentLoaderTypeError } from './activities/remote-document';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
