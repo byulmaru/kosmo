@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react-native';
-import { memo, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   FlatList,
   Platform,
@@ -43,7 +43,7 @@ export type FullReactionPickerProps = {
   webHeight?: number;
 };
 
-export const FullReactionPicker = memo(function FullReactionPicker({
+export function FullReactionPicker({
   onClose,
   onQueryChange,
   onSelect,
@@ -193,8 +193,7 @@ export const FullReactionPicker = memo(function FullReactionPicker({
               ? (_data, index) => ({ ...itemLayouts[index]!, index })
               : undefined
           }
-          // Web Tab order must include the full catalogue from the initial render.
-          initialNumToRender={Platform.OS === 'web' ? gridItems.length : 12}
+          initialNumToRender={12}
           keyExtractor={(item) =>
             item.kind === 'count'
               ? 'count'
@@ -265,7 +264,7 @@ export const FullReactionPicker = memo(function FullReactionPicker({
   ) : (
     picker
   );
-});
+}
 
 function SearchField({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   const theme = useTheme();

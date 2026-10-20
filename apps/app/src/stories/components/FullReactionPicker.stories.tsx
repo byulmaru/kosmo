@@ -698,15 +698,29 @@ export const SequentialKeyboardBrowseContract: Story = {
     const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
-    const finalCatalogOption = reactionEmojiPickerOptions.at(-1)!;
-    const previousCatalogOption = reactionEmojiPickerOptions.at(-2)!;
-    const tailOption = within(scroll).getByRole('button', {
-      name: `${finalCatalogOption.label} ${finalCatalogOption.emoji}`,
-    });
-    const previousOption = within(scroll).getByRole('button', {
-      name: `${previousCatalogOption.label} ${previousCatalogOption.emoji}`,
-    });
+    const finalCatalogOption = reactionEmojiPickerOptions.at(-1);
+    const tailName = `${finalCatalogOption?.label} ${finalCatalogOption?.emoji}`;
     await waitFor(() => expect(search).toHaveFocus());
+    // The virtualized list can already have mounted the true terminal option.
+    const lastInitiallyMountedOption = within(scroll)
+      .getAllByRole('button')
+      .findLast((button) => button.getAttribute('aria-label') !== tailName)!;
+    lastInitiallyMountedOption.focus();
+    const nextOption = await waitFor(
+      () => {
+        expect(lastInitiallyMountedOption).toHaveFocus();
+        const buttons = within(scroll).queryAllByRole('button');
+        const selectedIndex = buttons.indexOf(lastInitiallyMountedOption);
+        expect(selectedIndex).toBeGreaterThanOrEqual(0);
+        const nextButton = buttons[selectedIndex + 1];
+        expect(nextButton).toBeDefined();
+        return nextButton!;
+      },
+      { container: scroll },
+    );
+    await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(nextOption).toHaveFocus();
     search.focus();
     await userEvent.tab();
     const quickOptions = reactionEmojiPickerOptions
@@ -725,11 +739,13 @@ export const SequentialKeyboardBrowseContract: Story = {
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
-    previousOption.focus();
-    await userEvent.tab();
-    expect(tailOption).toHaveFocus();
-
     scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
+    // Avoid formatting the whole virtualized list on each missing-role poll.
+    await waitFor(
+      () => expect(within(scroll).queryByRole('button', { name: tailName })).not.toBeNull(),
+      { container: scroll },
+    );
+    const tailOption = within(scroll).getByRole('button', { name: tailName });
     await waitFor(() => {
       const tailRect = tailOption.getBoundingClientRect();
       const scrollRect = scroll.getBoundingClientRect();
