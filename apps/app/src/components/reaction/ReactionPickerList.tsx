@@ -103,7 +103,7 @@ export function ReactionPickerList<Item>({
     // Keep a held thumb through that rounding; real geometry changes invalidate its mapping.
     if (
       viewport !== metrics.viewport ||
-      (content > viewport) !== (metrics.content > metrics.viewport) ||
+      content > viewport !== metrics.content > metrics.viewport ||
       Math.abs(content - metrics.content) > 1 / PixelRatio.get()
     ) {
       dispatchDrag({ type: 'reset' });
