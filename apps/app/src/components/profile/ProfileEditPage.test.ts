@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
@@ -21,8 +20,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 const require = createRequire(import.meta.url);
-
-mockModule('expo-crypto', { randomUUID });
 
 let canGoBack = false;
 let routeState: RouteState = 'ready';

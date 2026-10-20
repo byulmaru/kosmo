@@ -1,4 +1,3 @@
-import { randomUUID } from 'expo-crypto';
 import {
   createContext,
   forwardRef,
@@ -27,8 +26,11 @@ type RouteBoundaryProps = {
 };
 
 type RouteBoundaryContextValue = RouteBoundaryHandle & {
-  fetchKey: string;
+  fetchKey: number;
 };
+
+// Keep keys unique across remounts while Relay may retain their query operations.
+let nextFetchKey = 0;
 
 const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(null);
 
@@ -51,9 +53,9 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
   function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
-    const [fetchKey, setFetchKey] = useState(() => randomUUID());
+    const [fetchKey, setFetchKey] = useState(() => nextFetchKey++);
 
-    const refetch = useCallback(() => setFetchKey(randomUUID()), []);
+    const refetch = useCallback(() => setFetchKey(nextFetchKey++), []);
     const reset = useCallback(() => refetch(), [refetch]);
 
     useImperativeHandle(ref, () => ({ refetch }), [refetch]);

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -7,10 +6,6 @@ import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-mock.module('expo-crypto', {
-  exports: { randomUUID },
-} as unknown as Parameters<typeof mock.module>[1]);
 
 type QueryData = {
   currentSession: {
@@ -260,7 +255,7 @@ describe('SettingsProfileDetail', () => {
       followPolicy: 'OPEN',
     });
     const initialFetchKey = queryFetchKeys[0];
-    assert.ok(initialFetchKey);
+    assert.equal(typeof initialFetchKey, 'number');
     assert.deepEqual(queryFetchKeys, [initialFetchKey, initialFetchKey, initialFetchKey]);
   });
 

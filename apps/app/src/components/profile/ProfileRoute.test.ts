@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext, useState } from 'react';
@@ -30,7 +29,7 @@ const queryModes: Record<QueryName, QueryMode> = {
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
-  fetchKey: string;
+  fetchKey: number;
   handle: string;
   query: QueryName;
 }> = [];
@@ -104,7 +103,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('expo-crypto', { randomUUID });
 mockModule('expo-router', {
   Slot: () =>
     SlotContent
@@ -218,7 +216,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
-    options: { fetchKey: string },
+    options: { fetchKey: number },
   ) => {
     queryHistory.push({
       fetchKey: options.fetchKey,

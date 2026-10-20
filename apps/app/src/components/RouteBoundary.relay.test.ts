@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
@@ -25,7 +24,6 @@ import type { RouteBoundaryHandle } from './RouteBoundary';
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('expo-crypto', { randomUUID });
 mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
@@ -44,9 +42,9 @@ type FetchPolicy = 'store-or-network' | 'store-and-network';
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: string };
+let useRouteBoundary: () => { fetchKey: number };
 let renderer: ReactTestRenderer | null = null;
-let observedFetchKey = '';
+let observedFetchKey = 0;
 const requests: Request[] = [];
 
 before(async () => {
@@ -60,7 +58,7 @@ afterEach(async () => {
   await act(async () => mock.timers.tick(300_001));
   mock.timers.reset();
   renderer = null;
-  observedFetchKey = '';
+  observedFetchKey = 0;
   requests.length = 0;
 });
 

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -11,7 +10,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
-const queryHistory: Array<{ fetchKey: string }> = [];
+const queryHistory: Array<{ fetchKey: number }> = [];
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
 let selectedProfileId: string | null = 'profile-a';
@@ -29,7 +28,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('expo-crypto', { randomUUID });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     assert.match(parts.join(''), /query FollowRequestsPageQuery/);
@@ -38,7 +36,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: string,
     variables: Record<string, never>,
-    options: { fetchKey: string },
+    options: { fetchKey: number },
   ) => {
     assert.equal(query, 'FollowRequestsPageQuery');
     assert.deepEqual(variables, {});

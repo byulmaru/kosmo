@@ -158,7 +158,7 @@ function HomeContent({
   registerHomeRefresh,
   revalidateCachedHome,
 }: {
-  fetchKey: string;
+  fetchKey: number;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
   revalidateCachedHome: boolean;

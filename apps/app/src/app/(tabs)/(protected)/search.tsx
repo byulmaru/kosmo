@@ -110,7 +110,7 @@ function SearchPeopleResults({
   handle,
   query,
 }: {
-  fetchKey: string;
+  fetchKey: number;
   handle: string;
   query: SearchPeopleResults_query$key;
 }) {
@@ -118,7 +118,7 @@ function SearchPeopleResults({
     SearchPeopleResultsNextPageQuery,
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
-  const trackedFetchKeyRef = useRef<string | null>(null);
+  const trackedFetchKeyRef = useRef<number | null>(null);
   const edges = pagination.data.searchProfiles.edges;
   const hasResults = edges.length > 0;
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
