@@ -14,7 +14,6 @@ type PrimaryNavigationScrollContextValue = {
   clearQueryNavigation: (expected?: QueryNavigation) => void;
   consume: (pathname: string) => boolean;
   getQueryNavigation: () => QueryNavigation | null;
-  isHistoryEntryRestoration: () => boolean;
   record: (targetPathname: string) => void;
   recordQueryNavigation: (navigation: QueryNavigation) => void;
 };
@@ -32,7 +31,6 @@ const PrimaryNavigationScrollContext = createContext<PrimaryNavigationScrollCont
   clearQueryNavigation: () => undefined,
   consume: () => false,
   getQueryNavigation: () => null,
-  isHistoryEntryRestoration: () => false,
   record: () => undefined,
   recordQueryNavigation: () => undefined,
 });
@@ -41,19 +39,6 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
   const pendingIntentRef = useRef<PendingIntent | null>(null);
   const queryNavigationRef = useRef<QueryNavigation | null>(null);
   const cancelHistoryRestoreRef = useRef<(() => void) | null>(null);
-  // Keep the browser POP identity so a delayed route mount can recognize restoration.
-  const lastPopHistoryKeyRef = useRef<string | null>(null);
-  const getHistoryKey = useCallback(() => {
-    const state = window.history.state as { id?: unknown } | null;
-    return typeof state?.id === 'string' ? state.id : window.location.href;
-  }, []);
-  const isHistoryEntryRestoration = useCallback(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.history) {
-      return false;
-    }
-
-    return getHistoryKey() === lastPopHistoryKeyRef.current;
-  }, [getHistoryKey]);
 
   // Keep browser scroll restoration enabled; replay the entry offset if Expo Router writes top after popstate.
   useEffect(() => {
@@ -74,6 +59,10 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
     let attempts = 0;
     let settledFrames = 0;
     let lastScrollHeight: number | null = null;
+    const getHistoryKey = () => {
+      const state = window.history.state as { id?: unknown } | null;
+      return typeof state?.id === 'string' ? state.id : window.location.href;
+    };
     const getHistoryEntry = () => ({ href: window.location.href, key: getHistoryKey() });
     const cancelHistoryRestore = () => {
       pendingHistoryEntry = null;
@@ -145,7 +134,6 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
     const handlePopState = () => {
       cancelHistoryRestore();
       const pendingEntry = getHistoryEntry();
-      lastPopHistoryKeyRef.current = pendingEntry.key;
       if (!scrollPositions.has(pendingEntry.key)) {
         return;
       }
@@ -158,7 +146,7 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
 
     saveScrollPosition();
     window.addEventListener('scroll', saveScrollPosition, { passive: true });
-    window.addEventListener('popstate', handlePopState, { capture: true });
+    window.addEventListener('popstate', handlePopState);
     for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
       window.addEventListener(eventName, cancelHistoryRestore, { capture: true, passive: true });
     }
@@ -167,12 +155,12 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
       cancelHistoryRestore();
       cancelHistoryRestoreRef.current = null;
       window.removeEventListener('scroll', saveScrollPosition);
-      window.removeEventListener('popstate', handlePopState, true);
+      window.removeEventListener('popstate', handlePopState);
       for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
         window.removeEventListener(eventName, cancelHistoryRestore, true);
       }
     };
-  }, [getHistoryKey]);
+  }, []);
 
   const record = useCallback((targetPathname: string) => {
     if (Platform.OS !== 'web') {
@@ -208,18 +196,10 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
       clearQueryNavigation,
       consume,
       getQueryNavigation,
-      isHistoryEntryRestoration,
       record,
       recordQueryNavigation,
     }),
-    [
-      clearQueryNavigation,
-      consume,
-      getQueryNavigation,
-      isHistoryEntryRestoration,
-      record,
-      recordQueryNavigation,
-    ],
+    [clearQueryNavigation, consume, getQueryNavigation, record, recordQueryNavigation],
   );
 
   return (

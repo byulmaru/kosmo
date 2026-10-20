@@ -6,7 +6,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
-import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
@@ -139,7 +138,6 @@ function PostDetailContent({
     { postId },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  const { isHistoryEntryRestoration } = usePrimaryNavigationScroll();
   const post = data.node?.__typename === 'Post' ? data.node : null;
   const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
   const pureRepostSourceHref: Href | null = pureRepostSource
@@ -183,7 +181,6 @@ function PostDetailContent({
   ) : (
     <PostDetailThread
       header={header}
-      initialPositioningEnabled={!isHistoryEntryRestoration()}
       identity={postId}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}

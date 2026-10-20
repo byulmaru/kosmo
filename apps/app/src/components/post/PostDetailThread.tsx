@@ -116,7 +116,6 @@ export function PostDetailThread({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
-  initialPositioningEnabled = true,
   identity,
   onReplyCreated,
   onPostDeleted,
@@ -128,7 +127,6 @@ export function PostDetailThread({
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
-  initialPositioningEnabled?: boolean;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
@@ -142,7 +140,6 @@ export function PostDetailThread({
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
-      initialPositioningEnabled={initialPositioningEnabled}
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
@@ -158,7 +155,6 @@ function PostDetailThreadContent({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
-  initialPositioningEnabled,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -169,7 +165,6 @@ function PostDetailThreadContent({
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
-  initialPositioningEnabled: boolean;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -177,7 +172,7 @@ function PostDetailThreadContent({
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { width } = useWindowDimensions();
-  const shouldKeepCurrentInViewRef = useRef(presentation === 'route' && initialPositioningEnabled);
+  const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
   const currentRowRef = useRef<NativeView>(null);
   const headerRef = useRef<NativeView>(null);
   const nativeScrollRef = useRef<NativeScrollView>(null);
@@ -208,11 +203,7 @@ function PostDetailThreadContent({
     }
   }, []);
   const scheduleInitialScroll = useCallback(() => {
-    if (
-      !initialPositioningEnabled ||
-      !shouldKeepCurrentInViewRef.current ||
-      initialScrollFrameRef.current !== null
-    ) {
+    if (!shouldKeepCurrentInViewRef.current || initialScrollFrameRef.current !== null) {
       return;
     }
     if (Platform.OS === 'web' && typeof window === 'undefined') {
@@ -272,7 +263,7 @@ function PostDetailThreadContent({
         });
       });
     });
-  }, [initialPositioningEnabled]);
+  }, []);
   const headerLaidOut = useCallback(
     (event: LayoutChangeEvent) => {
       nativeHeaderHeightRef.current = event.nativeEvent.layout.height;
