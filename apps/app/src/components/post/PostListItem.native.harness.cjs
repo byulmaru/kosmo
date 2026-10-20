@@ -367,6 +367,7 @@ installEnvironment();
 const { default: deepDiffer } = require('react-native/Libraries/Utilities/differ/deepDiffer');
 const { default: Pressable } = require('react-native/Libraries/Components/Pressable/Pressable');
 const { default: Modal } = require('react-native/Libraries/Modal/Modal');
+const { default: PanResponder } = require('react-native/Libraries/Interaction/PanResponder');
 const renderer = require('react-native/Libraries/Renderer/implementations/ReactNativeRenderer-dev');
 
 class AnimatedValue {
@@ -474,7 +475,7 @@ function modalDidDismiss() {
   }
   nativeEmitter.receiveEvent(tag, 'topDismiss', {});
 }
-function touchStart(tag) {
+function touchStart(tag, point = { x: 20, y: 20 }) {
   installEnvironment();
   if (!views.has(tag)) {
     throw new Error(`No rendered native view exists for tag ${String(tag)}`);
@@ -482,13 +483,27 @@ function touchStart(tag) {
   activeTouch = {
     target: tag,
     identifier: ++nextTouchId,
-    pageX: 20,
-    pageY: 20,
-    locationX: 20,
-    locationY: 20,
+    pageX: point.x,
+    pageY: point.y,
+    locationX: point.x,
+    locationY: point.y,
     timestamp: nextTouchId * 100,
   };
   dispatchTouch('topTouchStart', activeTouch);
+}
+function touchMove(point) {
+  if (!activeTouch) {
+    throw new Error('touchMove() requires an active touch');
+  }
+  activeTouch = {
+    ...activeTouch,
+    pageX: point.x,
+    pageY: point.y,
+    locationX: point.x,
+    locationY: point.y,
+    timestamp: activeTouch.timestamp + 1000,
+  };
+  dispatchTouch('topTouchMove', activeTouch);
 }
 function touchEnd() {
   if (!activeTouch) {
@@ -518,6 +533,7 @@ module.exports = {
   cleanup,
   modalDidDismiss,
   nativeExports,
+  PanResponder,
   render,
   responderTag,
   tagByAccessibilityLabel,
@@ -525,6 +541,7 @@ module.exports = {
   tagByViewName,
   touchCancel,
   touchEnd,
+  touchMove,
   touchStart,
   unmount,
   viewProps,

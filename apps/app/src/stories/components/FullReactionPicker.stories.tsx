@@ -274,6 +274,7 @@ const meta = {
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
     'MobileHandleExpansionContract',
+    'MobileHandleRowTargetContract',
     'MobileExpandedGeometryContract',
     'MobileOverlayContract',
     'WebGridGeometryContract',
@@ -804,4 +805,46 @@ export const MobileHandleExpansionContract: Story = {
 export const MobileWebSearchScrollResetContract: Story = {
   ...SearchScrollResetContract,
   globals: mobileGlobals,
+};
+
+export const MobileHandleRowTargetContract: Story = {
+  ...MobileBrowse,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const sheet = canvas.getByTestId('full-reaction-picker-sheet');
+    const handle = canvas.getByTestId('full-reaction-picker-drag-handle');
+    const sheetBounds = sheet.getBoundingClientRect();
+    const handleBounds = handle.getBoundingClientRect();
+    const sheetStyle = getComputedStyle(sheet);
+    expect(handleBounds.left).toBeCloseTo(
+      sheetBounds.left + parseFloat(sheetStyle.borderLeftWidth),
+      0,
+    );
+    expect(handleBounds.right).toBeCloseTo(
+      sheetBounds.right - parseFloat(sheetStyle.borderRightWidth),
+      0,
+    );
+    expect(handleBounds.height).toBe(48);
+    // Hit testing must land on the actual button, including both side margins.
+    for (const fraction of [0.05, 0.5, 0.95]) {
+      const point = {
+        x: handleBounds.left + handleBounds.width * fraction,
+        y: handleBounds.top + handleBounds.height / 2,
+      };
+      const target = handle.ownerDocument.elementFromPoint(point.x, point.y);
+      expect(target && handle.contains(target)).toBe(true);
+    }
+    await userEvent.click(handle);
+    await waitFor(() => expect(parseFloat(getComputedStyle(sheet).height)).toBeGreaterThan(480));
+    await userEvent.click(handle);
+    await waitFor(() => expect(sheet).toHaveStyle({ height: '480px' }));
+    const search = canvas.getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(search, '하트');
+    await waitFor(() => expect(canvas.getByText(/검색 결과/)).toBeVisible());
+    await userEvent.click(canvas.getByRole('button', { name: '빨간 하트 ❤️' }));
+    expect(canvas.getByRole('button', { name: '빨간 하트 ❤️' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  },
 };
