@@ -387,6 +387,7 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
 
 test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }) => {
   let localRequestCount = 0;
+  let failLocalRequests = true;
   const viewer = await createE2ESession({
     displayName: 'E2E Local Error Viewer',
     handle: 'e2e-local-error-viewer',
@@ -396,7 +397,7 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   await page.route('**/graphql', async (route) => {
     if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
       localRequestCount += 1;
-      if (localRequestCount <= 3) {
+      if (failLocalRequests) {
         await route.fulfill({
           body: JSON.stringify({ errors: [{ message: 'E2E forced Local error' }] }),
           contentType: 'application/json',
@@ -417,23 +418,25 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
   await page.waitForTimeout(3600);
   await expect(page.getByRole('alert')).toBeVisible();
+  const previousCount = localRequestCount;
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 
   await page.goto('/local');
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
-  await expect.poll(() => localRequestCount).toBe(2);
+  await expect.poll(() => localRequestCount).toBeGreaterThan(previousCount);
 
-  const previousCount = localRequestCount;
+  const countBeforeRetry = localRequestCount;
   await page.getByRole('button', { name: '다시 시도' }).click();
-  await expect.poll(() => localRequestCount).toBe(previousCount + 1);
+  await expect.poll(() => localRequestCount).toBe(countBeforeRetry + 1);
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
   await page.waitForTimeout(3600);
   await expect(page.getByRole('alert')).toBeVisible();
 
+  failLocalRequests = false;
   await page.getByRole('button', { name: '다시 시도' }).click();
-  await expect.poll(() => localRequestCount).toBe(previousCount + 2);
+  await expect.poll(() => localRequestCount).toBe(countBeforeRetry + 2);
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });

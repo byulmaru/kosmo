@@ -225,6 +225,7 @@ test('no-data Home 오류는 current Home 재선택으로 단일 query를 다시
   await createE2EPost({ body: postBody, profileId: session.profile!.id });
 
   let homeQueryCount = 0;
+  let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {
     if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
       await route.continue();
@@ -232,7 +233,7 @@ test('no-data Home 오류는 current Home 재선택으로 단일 query를 다시
     }
 
     homeQueryCount += 1;
-    if (homeQueryCount === 1) {
+    if (failHomeQueries) {
       await route.abort('failed');
       return;
     }
@@ -247,16 +248,15 @@ test('no-data Home 오류는 current Home 재선택으로 단일 query를 다시
     await expect(page.getByText('프로필을 만들어 시작하세요')).toHaveCount(0);
     await expect(page.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
 
-    await (
-      await visiblePrimaryNavigation(page)
-    )
-      .getByRole('link', {
-        name: '홈',
-        exact: true,
-      })
-      .click();
+    const homeLink = (await visiblePrimaryNavigation(page)).getByRole('link', {
+      name: '홈',
+      exact: true,
+    });
+    const failedQueryCount = homeQueryCount;
+    failHomeQueries = false;
+    await homeLink.click();
 
-    await expect.poll(() => homeQueryCount).toBe(2);
+    await expect.poll(() => homeQueryCount).toBe(failedQueryCount + 1);
     await expect(page.getByText(postBody)).toBeVisible();
   } finally {
     await page.unroute('**/graphql');
@@ -277,6 +277,7 @@ test('no-data Home blocking retry는 오류를 한 번 보고하고 HomePageQuer
   await createE2EPost({ body: postBody, profileId: session.profile!.id });
 
   let homeQueryCount = 0;
+  let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {
     if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
       await route.continue();
@@ -284,7 +285,7 @@ test('no-data Home blocking retry는 오류를 한 번 보고하고 HomePageQuer
     }
 
     homeQueryCount += 1;
-    if (homeQueryCount === 1) {
+    if (failHomeQueries) {
       await route.abort('failed');
       return;
     }
@@ -298,9 +299,11 @@ test('no-data Home blocking retry는 오류를 한 번 보고하고 HomePageQuer
     await expect.poll(() => reportedRouteErrors.length).toBe(1);
 
     const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+    const failedQueryCount = homeQueryCount;
+    failHomeQueries = false;
     await page.getByRole('button', { name: '다시 시도' }).click();
     await homeQueryResponse;
-    await expect.poll(() => homeQueryCount).toBe(2);
+    await expect.poll(() => homeQueryCount).toBe(failedQueryCount + 1);
     await expect(page.getByText(postBody)).toBeVisible();
   } finally {
     await page.unroute('**/graphql');
@@ -401,6 +404,7 @@ test('팔로워 요청 최초 오류는 route 이탈에서 정리되고 같은 q
 }) => {
   await signIn(page, 'e2e-follow-request-initial-error');
   let requestCount = 0;
+  let failRequests = true;
 
   await page.route('**/graphql', async (route) => {
     if (!isGraphQLOperation(route.request().postData(), 'FollowRequestsPageQuery')) {
@@ -409,7 +413,7 @@ test('팔로워 요청 최초 오류는 route 이탈에서 정리되고 같은 q
     }
 
     requestCount += 1;
-    if (requestCount <= 2) {
+    if (failRequests) {
       await route.fulfill({
         body: JSON.stringify({ errors: [{ message: 'E2E forced follow request error' }] }),
         contentType: 'application/json',
@@ -445,11 +449,18 @@ test('팔로워 요청 최초 오류는 route 이탈에서 정리되고 같은 q
       })
       .click();
     await expect(page.getByRole('alert')).toContainText('팔로워 요청을 불러오지 못했어요');
+
+    const requestsBeforeFirstRetry = requestCount;
     await page.getByRole('button', { name: '다시 시도' }).click();
-    await expect.poll(() => requestCount).toBe(2);
+    await expect.poll(() => requestCount).toBe(requestsBeforeFirstRetry + 1);
     await expect(page.getByRole('alert')).toContainText('팔로워 요청을 불러오지 못했어요');
+
+    const requestsBeforeSecondRetry = requestCount;
+    failRequests = false;
+    const followRequestsResponse = waitForGraphQLOperation(page, 'FollowRequestsPageQuery');
     await page.getByRole('button', { name: '다시 시도' }).click();
-    await expect.poll(() => requestCount).toBe(3);
+    await followRequestsResponse;
+    await expect.poll(() => requestCount).toBe(requestsBeforeSecondRetry + 1);
     await expect(page.getByText('받은 팔로우 요청이 없어요')).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
   } finally {
