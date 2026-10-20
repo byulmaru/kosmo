@@ -97,7 +97,7 @@
 - **WHEN** object hydration이 실패하거나 object가 Note가 아니다
 - **OR** hydrated Note ID, attribution 또는 Note identity 조건이 맞지 않는다
 - **OR** `to`와 `cc`에 Public URI와 verified author canonical followers URI가 모두 없고 ACTIVE Local typed Mention target이 없다
-- **THEN** 시스템은 Profile, ActivityPub Post mapping, Post와 content side effect 없이 delivery를 skip한다
+- **THEN** 시스템은 delivery를 skip하고 해당 Note의 ActivityPub Post mapping, Post와 PostContent를 생성하지 않는다
 - **AND** audience address만으로 Mention relation이나 DIRECT 권한을 만들지 않는다
 
 ### Requirement: Remote Note projection handoff

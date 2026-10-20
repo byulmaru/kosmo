@@ -1242,7 +1242,7 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('uses the fetched author followers URI for generic hydrated visibility', async () => {
+  test('uses the Workflow-materialized author for hydrated visibility and Post ownership', async () => {
     const recipient = await createLocalFollowerProfile('hydrated-unknown-followers-recipient');
     const recipientActorUri = new URL(`/ap/actor/${recipient.id}`, publicOrigin);
     await ensureDrizzleLocalProfileActor({
@@ -1251,7 +1251,7 @@ describe('inbound Create dispatch', () => {
       profileId: recipient.id,
     });
     const followersUri = new URL(`${remoteActorUri.href}/followers`);
-    const lookupObject = mock.fn(
+    const workflowLookupObject = mock.fn(
       async () =>
         new Person({
           followers: followersUri,
@@ -1259,10 +1259,13 @@ describe('inbound Create dispatch', () => {
           preferredUsername: 'alice',
         }),
     );
+    const contextLookupObject = mock.fn(async () => {
+      throw new Error('Hydrated author must not be looked up outside its Workflow');
+    });
     const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
       const profile = await materializeRemoteProfileActor({
         actorUri: new URL(actorUri),
-        context: { lookupObject },
+        context: { lookupObject: workflowLookupObject },
       });
       return profile.id;
     });
@@ -1270,7 +1273,10 @@ describe('inbound Create dispatch', () => {
 
     try {
       const result = await materializeHydratedRemoteNote({
-        context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+        context: {
+          ...createContext(),
+          lookupObject: contextLookupObject,
+        } as unknown as InboxContext<void>,
         note: new Note({
           attribution: remoteActorUri,
           content: 'Fetched-author Followers-only Mention',
@@ -1294,6 +1300,9 @@ describe('inbound Create dispatch', () => {
       assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
+      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(workflowLookupObject.mock.callCount(), 1);
+      assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
         { postContentId: materialized.content.id, profileId: recipient.id },
       ]);
@@ -1356,7 +1365,7 @@ describe('inbound Create dispatch', () => {
     }
   });
 
-  test('does not persist an unknown author for an invalid DIRECT Note with an active local Mention', async () => {
+  test('persists an unknown author before rejecting an invalid DIRECT Note with an active local Mention', async () => {
     const recipient = await createLocalFollowerProfile('hydrated-invalid-direct-recipient');
     const recipientActorUri = new URL(`/ap/actor/${recipient.id}`, publicOrigin);
     await ensureDrizzleLocalProfileActor({
@@ -1367,8 +1376,12 @@ describe('inbound Create dispatch', () => {
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
-    const lookupWorkflow = mockRemoteProfileRefresh(async () => {
-      throw new Error('Invalid Note must not start a remote profile Workflow');
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
     });
     const objectUri = new URL('https://objects.example/notes/hydrated-invalid-direct');
 
@@ -1392,12 +1405,12 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'invalid_note', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(lookupWorkflow.mock.callCount(), 0);
+      assert.equal(lookupWorkflow.mock.callCount(), 1);
       assert.equal(
         await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, remoteActorUri.href)),
-        0,
+        1,
       );
-      assert.equal(await db.$count(Profiles), 1);
+      assert.equal(await db.$count(Profiles), 2);
       assert.equal(await db.$count(ActivityPubPosts), 0);
       assert.equal(await db.$count(Posts), 0);
       assert.equal(await db.$count(PostContents), 0);
@@ -1449,13 +1462,17 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('rejects a hydrated DIRECT Note without an active local typed Mention', async () => {
+  test('persists an unknown author before rejecting a DIRECT Note without an active local typed Mention', async () => {
     const objectUri = new URL('https://objects.example/notes/hydrated-direct-rejected');
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
-    const lookupWorkflow = mockRemoteProfileRefresh(async () => {
-      throw new Error('Rejected DIRECT Note must not start a remote profile Workflow');
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
     });
 
     try {
@@ -1474,8 +1491,9 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'no_active_local_mention', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(await db.$count(ActivityPubActors), 0);
-      assert.equal(await db.$count(Profiles), 0);
+      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(await db.$count(ActivityPubActors), 1);
+      assert.equal(await db.$count(Profiles), 1);
       assert.equal(await db.$count(ActivityPubPosts), 0);
       assert.equal(await db.$count(Posts), 0);
       assert.equal(await db.$count(PostContents), 0);
@@ -1570,14 +1588,18 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
-  test('rejects invalid and ineligible hydrated originals without persisting authors or starting profile lookup Workflows', async () => {
+  test('rejects invalid and ineligible hydrated originals after resolving their author', async () => {
     const invalidImageMentionActorUri = new URL('https://mentions.example/users/invalid-image');
-    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
-      throw new Error('Rejected Note must not start a remote profile Workflow');
-    });
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
+    });
     const context = { ...createContext(), lookupObject } as unknown as InboxContext<void>;
     const cases = [
       {
@@ -1683,14 +1705,14 @@ describe('inbound Create dispatch', () => {
         );
       }
 
-      assert.equal(lookupObject.mock.calls.length, 1);
-      assert.equal(mentionWorkflow.mock.callCount(), 0);
+      assert.equal(lookupWorkflow.mock.callCount(), 5);
+      assert.equal(lookupObject.mock.callCount(), 5);
     } finally {
-      mentionWorkflow.mock.restore();
+      lookupWorkflow.mock.restore();
     }
 
-    assert.equal(await db.$count(ActivityPubActors), 0);
-    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(ActivityPubActors), 1);
+    assert.equal(await db.$count(Profiles), 1);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(Media), 0);
   });

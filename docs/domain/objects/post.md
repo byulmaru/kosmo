@@ -298,12 +298,14 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   일부 유효 이미지로 축소 저장하지 않는다. nullable Media Type·Alt Text와 attachment별 Media identity를 보존한다.
 - attachment-only Note는 하나 이상의 유효한 이미지가 있으면 허용한다. 신규 원문 조회에서 본문과 유효한
   이미지가 모두 없는 Note는 저장하지 않는다. 이 조건을 기존 Create에 일괄 적용해 기존 동작을 바꾸지 않는다.
-- Note identity·attribution·Public/Unlisted audience·content/media·수신 한계 검증은 신규 작성자 persistence보다
-  먼저 수행한다. Note의 `attributedTo`와 실제 저장할 Actor의 exact URI 일치는 Actor persistence 전에 검증한다.
-  불일치한 Actor를 저장하거나 기존 Profile을 그 Actor에 재연결한 뒤 실패 처리하지 않는다.
+- Note identity·attribution 검증은 신규 작성자 persistence보다 먼저 수행한다. Note의 `attributedTo`와 실제 저장할
+  Actor의 exact URI 일치는 Actor persistence 전에 검증한다. 불일치한 Actor를 저장하거나 기존 Profile을 그 Actor에
+  재연결한 뒤 실패 처리하지 않는다.
 - Remote Actor/Profile과 Post는 독립된 원자적 저장 경계다. Actor 내부 Profile·Actor metadata·Profile 표현의
-  원자성을 유지한다. 유효한 작성자가 commit된 뒤 Post가 실패하거나 duplicate로 종료돼도 작성자와 그 표현을
-  보상 삭제하지 않는다. Instance 확보도 기존 독립 경계를 유지하며 Note/Post 실패를 이유로 삭제하지 않는다.
+  원자성을 유지한다. Audience나 content/media 검증이 Note를 거부하더라도 이미 저장된 작성자와 그 표현은
+  유지한다. 해당 Note의 ActivityPub Post mapping, Post, PostContent와 Post effects는 생성하지 않는다. 유효한 작성자가
+  commit된 뒤 Post가 실패하거나 duplicate로 종료돼도 작성자와 그 표현을 보상 삭제하지 않는다. Instance 확보도
+  기존 독립 경계를 유지하며 Note/Post 실패를 이유로 삭제하지 않는다.
 - Post·PostContent·currentContent·ActivityPub mapping·첨부 Media·최초 Reply Parent 관계는 같은 Post
   transaction에서 commit/rollback한다. DB 장애와 예상하지 못한 오류는 전파한다. Post effects는 성공한 Post
   commit 뒤에만 실행하고, 실패·duplicate에서는 시작하지 않는다. commit 뒤 effects 실패는 저장 결과를 되돌리지 않는다.

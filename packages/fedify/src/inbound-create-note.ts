@@ -21,9 +21,7 @@ import {
 } from './inbound-mention';
 import { isExternalInboundError, observeInbound } from './inbound-observability';
 import {
-  fetchRemoteProfileActor,
   findOrMaterializeRemoteProfileActorByUri,
-  findStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
@@ -31,7 +29,7 @@ import type { Note } from '@fedify/vocab';
 import type { InboundObservation } from './inbound-observability';
 
 type StoredRemoteProfileActor = NonNullable<
-  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+  Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>
 >;
 
 type RemoteNoteMaterializationContext = Pick<
@@ -357,48 +355,27 @@ const materializeRemoteNote = async ({
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
 
-  let storedActor: StoredRemoteProfileActor | undefined;
-  let followersUri: string | null | undefined =
-    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined;
-  if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
+  let storedActor: StoredRemoteProfileActor;
+  try {
+    storedActor =
+      source.kind === 'create'
+        ? source.storedActor
+        : await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: attributionUri,
+            contextOrigin: context.canonicalOrigin,
+          });
+  } catch (error) {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof ConflictError ||
+      error instanceof NotFoundError
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
     }
-    followersUri = storedActor.actor.followersUri;
-  } else if (source.kind === 'hydrated' && resolveNoteVisibility(note) === PostVisibility.DIRECT) {
-    const storedAuthor = await findStoredRemoteProfileActorByUri(attributionUri);
-    if (storedAuthor) {
-      followersUri = storedAuthor.actor.followersUri;
-    } else {
-      try {
-        const author = await fetchRemoteProfileActor(context, attributionUri);
-        followersUri = author.followersId?.href;
-      } catch (error) {
-        if (
-          error instanceof RemoteActorMaterializationError ||
-          error instanceof ConflictError ||
-          error instanceof NotFoundError
-        ) {
-          return { reason: 'unusable_author', status: 'rejected' };
-        }
-        throw error;
-      }
-    }
+    throw error;
   }
 
-  const visibility = resolveNoteVisibility(note, followersUri);
+  const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
   if (visibility === PostVisibility.DIRECT) {
     const targetHrefs = await collectInboundMentionTargetHrefs(note);
     const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
@@ -433,26 +410,6 @@ const materializeRemoteNote = async ({
     projection.media.length === 0
   ) {
     return { reason: 'empty_note', status: 'rejected' };
-  }
-
-  if (source.kind === 'create') {
-    storedActor = source.storedActor;
-  } else if (!storedActor) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
-    }
   }
 
   const result = await createRemoteNotePost({
