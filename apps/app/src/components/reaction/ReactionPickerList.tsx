@@ -1,5 +1,5 @@
 import { useEffect, useId, useReducer, useRef, useState } from 'react';
-import { FlatList, Platform, StyleSheet, View } from 'react-native';
+import { FlatList, PixelRatio, Platform, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
 import type { FlatListProps, ViewStyle } from 'react-native';
@@ -97,8 +97,17 @@ export function ReactionPickerList<Item>({
         offset: Math.min(Math.max(0, next.content - next.viewport), Math.max(0, previous.offset)),
       };
     });
-    // Geometry changes invalidate the current gesture and any queued old-range request.
-    dispatchDrag({ type: 'reset' });
+    const content = update.content ?? metrics.content;
+    const viewport = update.viewport ?? metrics.viewport;
+    // Native text measurement can change content height by one physical pixel.
+    // Keep a held thumb through that rounding; real geometry changes invalidate its mapping.
+    if (
+      viewport !== metrics.viewport ||
+      (content > viewport) !== (metrics.content > metrics.viewport) ||
+      Math.abs(content - metrics.content) > 1 / PixelRatio.get()
+    ) {
+      dispatchDrag({ type: 'reset' });
+    }
   };
   const move = (pageY: number, pointerId?: number) => {
     dispatchDrag({ type: 'move', pageY, pointerId, range, travel });

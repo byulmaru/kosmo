@@ -18,6 +18,7 @@ mockModule('react-native', {
     }));
     return createElement('FlatList', props);
   }),
+  PixelRatio: { get: () => 2.625 },
   Platform: {
     get OS() {
       return platform;
@@ -233,3 +234,39 @@ for (const content of [100, 800]) {
     act(() => renderer.unmount());
   });
 }
+
+test('one-pixel Native content remeasurement preserves a held thumb and final batched move', () => {
+  platform = 'android';
+  const { renderer, list, thumb } = render();
+  scroll(list, 100);
+  const handlers = thumb().props;
+  act(() => {
+    handlers.onResponderGrant({ nativeEvent: { pageY: 100 } });
+    handlers.onResponderMove({ nativeEvent: { pageY: 150 } });
+    list().props.onContentSizeChange(200, 1200.38);
+  });
+  assert.equal(list().props.scrollEnabled, false);
+  assert.ok(offsets.at(-1)! > 100);
+  act(() => thumb().props.onResponderMove({ nativeEvent: { pageY: 10000 } }));
+  assert.ok(Math.abs(offsets.at(-1)! - 1000.38) < 0.001);
+  act(() => thumb().props.onResponderRelease());
+  assert.equal(list().props.scrollEnabled, true);
+  act(() => renderer.unmount());
+});
+
+test('viewport resize ends a held thumb and discards its queued old geometry move', () => {
+  platform = 'ios';
+  const { renderer, list, thumb } = render();
+  scroll(list, 500);
+  const handlers = thumb().props;
+  act(() => {
+    handlers.onResponderGrant({ nativeEvent: { pageY: 100 } });
+    handlers.onResponderMove({ nativeEvent: { pageY: 10000 } });
+    list().props.onLayout({ nativeEvent: { layout: { height: 400 } } });
+  });
+  assert.equal(list().props.scrollEnabled, true);
+  assert.equal(offsets.length, 0);
+  act(() => thumb().props.onResponderMove({ nativeEvent: { pageY: 10000 } }));
+  assert.equal(offsets.length, 0);
+  act(() => renderer.unmount());
+});
