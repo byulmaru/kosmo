@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiPickerOptions } from '@/components/reaction/reactionEmojiCatalog';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
@@ -267,6 +267,8 @@ const meta = {
   },
   component: FullReactionPicker,
   excludeStories: [
+    'MobileScrollbarContract',
+    'NativePresentationScrollbarContract',
     'InteractionContract',
     'SearchScrollResetContract',
     'LoadingContract',
@@ -435,7 +437,7 @@ export const WebMobileGridGeometryContract: Story = {
     const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
       'button',
     );
-    expect(grid).toHaveLength(6);
+    expect(grid).toHaveLength(5);
     expectQuickColumnsToAlign(canvasElement);
   },
 };
@@ -473,7 +475,7 @@ export const RecentTwoRowsMobileWebContract: Story = {
   play: async ({ canvasElement }) => {
     const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
     expect(rows).toHaveLength(2);
-    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([5, 5]);
   },
 };
 
@@ -485,7 +487,7 @@ export const RecentTwoRowsNativeContract: Story = {
       /^full-reaction-section-recent-row-/,
     );
     expect(rows).toHaveLength(2);
-    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([7, 7]);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
   },
 };
 
@@ -497,7 +499,7 @@ function expectQuickColumnsToAlign(canvasElement: HTMLElement) {
   const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
     'button',
   );
-  expect(quick).toHaveLength(6);
+  expect(quick).toHaveLength(Math.min(6, grid.length));
   for (let column = 0; column < quick.length; column += 1) {
     expect(
       Math.abs(
@@ -776,4 +778,70 @@ export const MobileHandleExpansionContract: Story = {
     await userEvent.click(canvas.getByTestId('full-reaction-picker-drag-handle'));
     await waitFor(() => expect(parseFloat(getComputedStyle(sheet).height)).toBeGreaterThan(480));
   },
+};
+
+export const MobileScrollbarContract: Story = {
+  args: { options: reactionEmojiPickerOptions },
+  globals: mobileGlobals,
+  play: async ({ args, canvasElement }) => {
+    args.onSelect.mockClear();
+    const canvas = within(canvasElement.ownerDocument.body);
+    const list = () => canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    const bar = () => canvas.getByTestId('full-reaction-picker-scrollbar');
+    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '0' }));
+    list().scroll({ top: 100, behavior: 'instant' });
+    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '1' }));
+    const listBounds = list().getBoundingClientRect();
+    expect(bar().getBoundingClientRect().left).toBeGreaterThanOrEqual(listBounds.right);
+    const bounds = bar().getBoundingClientRect();
+    const point = (y: number) => ({ x: bounds.left + bounds.width / 2, y });
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: bar(), coords: point(bounds.top + 4) });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(bar()).toHaveStyle({ opacity: '1' });
+    await userEvent.pointer({
+      target: bar(),
+      coords: point(listBounds.top + listBounds.height / 2),
+    });
+    await waitFor(() => expect(list().scrollTop).toBeGreaterThan(100));
+    await userEvent.pointer({ target: bar(), coords: point(listBounds.bottom + 100) });
+    await waitFor(() =>
+      expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
+        2,
+      ),
+    );
+    expect(args.onSelect).not.toHaveBeenCalled();
+    fireEvent.pointerCancel(bar(), { pointerId: 1 });
+    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '0' }));
+    // A focusable control exposes the same position without requiring a drag.
+    bar().focus();
+    await userEvent.keyboard('{Home}');
+    await waitFor(() => expect(list().scrollTop).toBe(0));
+    await userEvent.keyboard('{End}');
+    await waitFor(() =>
+      expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
+        2,
+      ),
+    );
+    const search = canvas.getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(search, 'a');
+    expect(search).toHaveFocus();
+    await waitFor(() => expect(list().scrollTop).toBe(0));
+    await userEvent.clear(search);
+    await userEvent.type(search, 'zzzzzzzzzz');
+    await waitFor(() =>
+      expect(canvas.queryByTestId('full-reaction-picker-scrollbar')).not.toBeInTheDocument(),
+    );
+    await userEvent.clear(search);
+    await waitFor(() => expect(list().scrollTop).toBe(0));
+    const firstEmoji = within(list()).getAllByRole('button')[0]!;
+    await userEvent.click(firstEmoji);
+    expect(args.onSelect).toHaveBeenCalledOnce();
+  },
+};
+
+// This exercises the sheet composition in RN Web; Native responders have separate unit coverage.
+export const NativePresentationScrollbarContract: Story = {
+  ...MobileScrollbarContract,
+  args: { options: reactionEmojiPickerOptions, presentation: 'mobile' },
+  parameters: mobileParameters,
 };

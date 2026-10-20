@@ -1,7 +1,6 @@
 import { Search } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
+import { ReactionPickerList, reactionScrollbarWidth } from './ReactionPickerList';
 import type React from 'react';
 
 export type FullReactionPickerOption = Readonly<{
@@ -62,9 +62,22 @@ export function FullReactionPicker({
   const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
   const compactWeb = !mobile && viewportWidth < breakpoints.compact;
+  const scrollbar = mobile || compactWeb;
+  const [pickerWidth, setPickerWidth] = useState<number | null>(null);
+  const gridWidth =
+    (pickerWidth ?? (mobile ? viewportWidth - 2 * borderWidths[1] : compactWeb ? 288 : 360)) -
+    2 * space[16] -
+    (!mobile ? 2 * borderWidths[1] : 0) -
+    (scrollbar ? reactionScrollbarWidth + space[4] : 0);
   const { columns, columnGap, targetSize } = mobile
-    ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
-    : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
+    ? getMobileReactionGridLayout(gridWidth, fontScale)
+    : {
+        columns: compactWeb
+          ? Math.max(1, Math.min(6, Math.floor((gridWidth + space[8]) / (32 + space[8]))))
+          : 8,
+        columnGap: 0,
+        targetSize: 32,
+      };
   const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
@@ -138,6 +151,7 @@ export function FullReactionPicker({
     <View
       accessibilityLabel="반응 선택"
       onAccessibilityEscape={onClose}
+      onLayout={(event) => setPickerWidth(event.nativeEvent.layout.width)}
       ref={pickerRef}
       role={!mobile && Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
@@ -184,7 +198,7 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <FlatList
+        <ReactionPickerList
           key={normalizedQuery}
           contentContainerStyle={styles.scrollContent}
           data={gridItems}
@@ -241,6 +255,7 @@ export function FullReactionPicker({
               </View>
             )
           }
+          scrollbar={scrollbar}
           showsVerticalScrollIndicator={false}
           testID="full-reaction-picker-scroll"
           updateCellsBatchingPeriod={16}
