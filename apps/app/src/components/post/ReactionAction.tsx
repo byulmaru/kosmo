@@ -54,15 +54,18 @@ export function ReactionAction({
       return;
     }
     let active = true;
-    setRecentValues([]);
+    setRecentValues((current) => (current.length === 0 ? current : []));
     void readRecentReactions(selectedProfileId).then((stored) => {
       if (active) {
-        setRecentValues((current) =>
-          [...current, ...stored.filter((id) => !current.includes(id))].slice(
+        setRecentValues((current) => {
+          const next = [...current, ...stored.filter((id) => !current.includes(id))].slice(
             0,
             RECENT_REACTION_LIMIT,
-          ),
-        );
+          );
+          return next.length === current.length && next.every((id, index) => id === current[index])
+            ? current
+            : next;
+        });
       }
     });
     return () => {

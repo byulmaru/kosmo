@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import {
   FlatList,
   Platform,
@@ -43,7 +43,7 @@ export type FullReactionPickerProps = {
   webHeight?: number;
 };
 
-export function FullReactionPicker({
+export const FullReactionPicker = memo(function FullReactionPicker({
   onClose,
   onQueryChange,
   onSelect,
@@ -265,7 +265,7 @@ export function FullReactionPicker({
   ) : (
     picker
   );
-}
+});
 
 function SearchField({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   const theme = useTheme();
