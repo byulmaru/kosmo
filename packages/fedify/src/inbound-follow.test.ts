@@ -654,7 +654,6 @@ describe('inbound Follow and Undo', () => {
           activityType: 'Undo',
           actorOrigin: remoteActorUri.origin,
           handler: 'undo',
-          objectOrigin: undefined,
           outcome: 'external_failure',
           phase: 'object_lookup',
           reasonCode: 'undo_object_lookup_failed',
