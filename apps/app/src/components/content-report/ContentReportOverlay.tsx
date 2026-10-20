@@ -73,7 +73,7 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
                 accessibilityRole="header"
                 style={[styles.completionTitle, { color: theme.foregroundPrimary }]}
               >
-                신고를 전달했어요
+                신고가 접수되었어요
               </Text>
               {selectedProfileId && blockProfile ? (
                 <View style={styles.blockSection}>

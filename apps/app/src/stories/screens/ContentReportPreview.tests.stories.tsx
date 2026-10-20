@@ -23,7 +23,7 @@ async function completeReport(canvasElement: HTMLElement) {
   await userEvent.click(trigger);
   await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
   await userEvent.click(page.getByRole('button', { name: '신고하기' }));
-  await waitFor(() => expect(page.getByText('신고를 전달했어요')).toBeVisible());
+  await waitFor(() => expect(page.getByText('신고가 접수되었어요')).toBeVisible());
   return { canvas, page };
 }
 
@@ -65,7 +65,7 @@ export const SubmissionSuccess: Story = {
       },
     );
 
-    expect(page.getByText('신고를 전달했어요')).toBeVisible();
+    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     expect(page.getByRole('button', { name: /차단하기/ })).toBeVisible();
     const complete = page.getByRole('button', { name: '완료' });
     await waitFor(() => expect(complete).toHaveFocus());
@@ -116,7 +116,7 @@ export const BlockActionAfterReport: Story = {
     await userEvent.click(block);
     let confirmation = within(await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' }));
     await userEvent.click(confirmation.getByRole('button', { name: '취소' }));
-    expect(page.getByText('신고를 전달했어요')).toBeVisible();
+    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     await waitFor(() => expect(block).toHaveFocus());
     expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
 
@@ -126,7 +126,7 @@ export const BlockActionAfterReport: Story = {
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
     );
-    expect(page.getByText('신고를 전달했어요')).toBeVisible();
+    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     await waitFor(() => expect(block).toHaveFocus());
 
     await userEvent.click(block);
@@ -134,7 +134,7 @@ export const BlockActionAfterReport: Story = {
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() => {
       expect(page.queryByRole('button', { name: '게시물 신고 닫기' })).not.toBeInTheDocument();
-      expect(page.queryByText('신고를 전달했어요')).not.toBeInTheDocument();
+      expect(page.queryByText('신고가 접수되었어요')).not.toBeInTheDocument();
     });
     await waitFor(() => expect(page.getByRole('button', { name: '신고 메뉴 열기' })).toHaveFocus());
     expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledTimes(3);
