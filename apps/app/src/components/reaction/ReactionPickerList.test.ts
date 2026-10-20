@@ -207,3 +207,29 @@ test('batched Web pointer input preserves the final move and ignores other point
   assert.equal(list().props.scrollEnabled, true);
   act(() => renderer.unmount());
 });
+
+for (const content of [100, 800]) {
+  test(`resize to content height ${content} cancels batched drag and its old-range request`, () => {
+    const { renderer, list, thumb } = render();
+    scroll(list, 500);
+    const handlers = thumb().props;
+    act(() => {
+      handlers.onPointerDown(pointer(100));
+      handlers.onPointerMove(pointer(10000));
+      list().props.onContentSizeChange(200, content);
+    });
+    assert.equal(list().props.scrollEnabled, true);
+    assert.equal(offsets.length, 0);
+    if (content > 200) {
+      assert.equal(thumb().props.accessibilityValue.now, 500);
+      act(() => thumb().props.onPointerMove(pointer(10000)));
+      assert.equal(offsets.length, 0);
+    } else {
+      assert.equal(
+        renderer.root.findAllByProps({ testID: 'full-reaction-picker-scrollbar' }).length,
+        0,
+      );
+    }
+    act(() => renderer.unmount());
+  });
+}

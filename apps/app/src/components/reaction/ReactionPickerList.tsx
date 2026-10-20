@@ -16,9 +16,13 @@ type Interaction = { drag: Drag | null; request: { offset: number } | null };
 type DragAction =
   | { type: 'begin'; drag: Drag }
   | { type: 'move'; pageY: number; pointerId?: number; range: number; travel: number }
-  | { type: 'end'; pointerId?: number };
+  | { type: 'end'; pointerId?: number }
+  | { type: 'reset' };
 
 function updateDrag(state: Interaction, action: DragAction): Interaction {
+  if (action.type === 'reset') {
+    return { drag: null, request: null };
+  }
   if (action.type === 'begin') {
     return state.drag ? state : { ...state, drag: action.drag };
   }
@@ -93,9 +97,8 @@ export function ReactionPickerList<Item>({
         offset: Math.min(Math.max(0, next.content - next.viewport), Math.max(0, previous.offset)),
       };
     });
-    if ((update.content ?? metrics.content) <= (update.viewport ?? metrics.viewport)) {
-      dispatchDrag({ type: 'end', pointerId: drag?.pointerId });
-    }
+    // Geometry changes invalidate the current gesture and any queued old-range request.
+    dispatchDrag({ type: 'reset' });
   };
   const move = (pageY: number, pointerId?: number) => {
     dispatchDrag({ type: 'move', pageY, pointerId, range, travel });
