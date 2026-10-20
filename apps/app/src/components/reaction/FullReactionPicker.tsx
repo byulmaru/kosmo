@@ -113,13 +113,33 @@ export function FullReactionPicker({
       })),
     ]),
   ];
+  const layoutKey = `${gridWidth}:${fontScale}:${query}:${searchResults.length}`;
+  const [textMetrics, setTextMetrics] = useState<{
+    key: string;
+    heights: Record<string, number>;
+  }>({ key: layoutKey, heights: {} });
+  if (textMetrics.key !== layoutKey) {
+    setTextMetrics({ key: layoutKey, heights: {} });
+  }
+  const textHeights = textMetrics.key === layoutKey ? textMetrics.heights : {};
+  const measureText = (key: string, height: number) => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    setTextMetrics((current) =>
+      current.key !== layoutKey || current.heights[key] === height
+        ? current
+        : { ...current, heights: { ...current.heights, [key]: height } },
+    );
+  };
+  const textScale = Platform.OS === 'web' ? 1 : fontScale;
   let itemOffset = 0;
   const itemLayouts = gridItems.map((item) => {
     const length =
       item.kind === 'count'
-        ? (textStyles.uiCopyS.lineHeight ?? 0) + space[16]
+        ? (textHeights.count ?? (textStyles.uiCopyS.lineHeight ?? 0) * textScale) + space[16]
         : item.kind === 'heading'
-          ? (textStyles.uiLabelM.lineHeight ?? 0) +
+          ? (textHeights[item.sectionId] ?? (textStyles.uiLabelM.lineHeight ?? 0) * textScale) +
             space[8] +
             (item.sectionIndex > 0 ? space[16] : 0)
           : targetSize + (item.rowIndex > 0 && !mobile ? space[8] : 0);
@@ -202,11 +222,8 @@ export function FullReactionPicker({
           key={normalizedQuery}
           contentContainerStyle={styles.scrollContent}
           data={gridItems}
-          getItemLayout={
-            Platform.OS === 'web'
-              ? (_data, index) => ({ ...itemLayouts[index]!, index })
-              : undefined
-          }
+          // Native needs the full extent to drag beyond the already measured render window.
+          getItemLayout={(_data, index) => ({ ...itemLayouts[index]!, index })}
           initialNumToRender={12}
           keyExtractor={(item) =>
             item.kind === 'count'
@@ -217,6 +234,7 @@ export function FullReactionPicker({
           renderItem={({ item }) =>
             item.kind === 'count' ? (
               <Text
+                onLayout={(event) => measureText('count', event.nativeEvent.layout.height)}
                 style={[
                   styles.resultCount,
                   styles.resultCountSpacing,
@@ -227,6 +245,7 @@ export function FullReactionPicker({
               </Text>
             ) : item.kind === 'heading' ? (
               <View
+                onLayout={(event) => measureText(item.sectionId, event.nativeEvent.layout.height)}
                 style={[styles.sectionHeading, item.sectionIndex > 0 && styles.sectionSpacing]}
                 testID={`full-reaction-section-${item.sectionId}`}
               >
