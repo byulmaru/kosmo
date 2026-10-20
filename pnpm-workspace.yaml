@@ -42,6 +42,8 @@ minimumReleaseAgeExclude:
   - '@fedify/vocab@2.4.0'
   - '@fedify/webfinger@2.4.0'
 overrides:
+  # source-map-js 1.2.2 fixes CVE-2026-93749 within consumers' 1.x range.
+  'source-map-js@<1.2.2': ^1.2.2
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   'undici@': 6.28.1
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
