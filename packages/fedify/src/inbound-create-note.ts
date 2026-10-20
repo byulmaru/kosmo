@@ -27,10 +27,9 @@ import {
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { InboundObservation } from './inbound-observability';
-import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
-  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+  Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>
 >;
 
 type RemoteNoteMaterializationContext = Pick<
@@ -199,6 +198,7 @@ type HydratedRemoteNoteMaterializationResult =
         | 'invalid_note'
         | 'note_content_length_exceeded'
         | 'note_mention_limit_exceeded'
+        | 'no_active_local_mention'
         | 'unsupported_note'
         | 'unusable_author';
       status: 'rejected';
@@ -224,7 +224,7 @@ type RemoteNoteMaterializationRejectionReason =
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
   | 'reply_profile_blocked'
-  | 'unsupported_note_visibility'
+  | 'no_active_local_mention'
   | 'unusable_author';
 
 type RemoteNotePostMaterializationResult =
@@ -240,17 +240,14 @@ type RemoteNotePostMaterialized = Extract<
   { status: 'created' | 'duplicate' }
 >;
 
-const resolveNoteVisibility = (
-  note: Note,
-  followersUri?: string | null,
-): PostVisibility | undefined =>
+const resolveNoteVisibility = (note: Note, followersUri?: string | null): PostVisibility =>
   note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
     ? PostVisibility.PUBLIC
     : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
       ? PostVisibility.UNLISTED
       : followersUri && [...note.toIds, ...note.ccIds].some((uri) => uri.href === followersUri)
         ? PostVisibility.FOLLOWERS
-        : undefined;
+        : PostVisibility.DIRECT;
 
 const createRemoteNotePost = async ({
   context,
@@ -358,34 +355,35 @@ const materializeRemoteNote = async ({
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
 
-  let storedActor: StoredRemoteProfileActor | undefined;
-  if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
+  let storedActor: StoredRemoteProfileActor;
+  try {
+    storedActor =
+      source.kind === 'create'
+        ? source.storedActor
+        : await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: attributionUri,
+            contextOrigin: context.canonicalOrigin,
+          });
+  } catch (error) {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof ConflictError ||
+      error instanceof NotFoundError
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
+    throw error;
+  }
+
+  const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
+  if (visibility === PostVisibility.DIRECT) {
+    const targetHrefs = await collectInboundMentionTargetHrefs(note);
+    const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
+    if (!hasActiveLocalProfile) {
+      return { reason: 'no_active_local_mention', status: 'rejected' };
     }
   }
 
-  const visibility = resolveNoteVisibility(
-    note,
-    source.kind === 'create'
-      ? source.storedActor.actor.followersUri
-      : storedActor?.actor.followersUri,
-  );
-  if (!visibility) {
-    return { reason: 'unsupported_note_visibility', status: 'rejected' };
-  }
   let projection;
   try {
     projection = await projectRemoteNote(
@@ -412,26 +410,6 @@ const materializeRemoteNote = async ({
     projection.media.length === 0
   ) {
     return { reason: 'empty_note', status: 'rejected' };
-  }
-
-  if (source.kind === 'create') {
-    storedActor = source.storedActor;
-  } else if (!storedActor) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
-    }
   }
 
   const result = await createRemoteNotePost({
@@ -484,8 +462,11 @@ export const materializeHydratedRemoteNote = async ({
       });
       return { reason: result.reason, status: 'rejected' };
     }
-    if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {
+    if (result.reason === 'empty_note') {
       return { reason: 'unsupported_note', status: 'rejected' };
+    }
+    if (result.reason === 'no_active_local_mention') {
+      return { reason: result.reason, status: 'rejected' };
     }
     if (result.reason === 'unusable_author') {
       return { reason: 'unusable_author', status: 'rejected' };
@@ -529,7 +510,7 @@ export const handleInboundCreateNote = async ({
     const phase =
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
-      result.reason === 'unsupported_note_visibility'
+      result.reason === 'no_active_local_mention'
         ? 'validation'
         : 'projection';
     observeInbound({

@@ -1,6 +1,6 @@
 import { Mention } from '@fedify/vocab';
 import { ActivityPubActors, db, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState } from '@kosmo/core/enums';
+import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { eq, inArray } from 'drizzle-orm';
@@ -14,6 +14,7 @@ export type InboundMentionCandidate = {
 };
 
 export type StoredInboundMentionCandidates = {
+  readonly hasActiveLocalProfile: boolean;
   readonly candidates: InboundMentionCandidate[];
   readonly knownActorHrefs: string[];
 };
@@ -45,7 +46,7 @@ export const resolveStoredInboundMentionCandidates = async (
   targetHrefs: readonly string[],
 ): Promise<StoredInboundMentionCandidates> => {
   if (targetHrefs.length === 0) {
-    return { candidates: [], knownActorHrefs: [] };
+    return { hasActiveLocalProfile: false, candidates: [], knownActorHrefs: [] };
   }
 
   const profileRows = await db
@@ -58,6 +59,7 @@ export const resolveStoredInboundMentionCandidates = async (
       instanceState: Instances.state,
       profileId: ActivityPubActors.profileId,
       actorHref: ActivityPubActors.uri,
+      profileState: Profiles.state,
       profileUrl: ActivityPubActors.profileUrl,
     })
     .from(ActivityPubActors)
@@ -66,7 +68,7 @@ export const resolveStoredInboundMentionCandidates = async (
     .where(inArray(ActivityPubActors.uri, [...targetHrefs]));
 
   if (profileRows.length === 0) {
-    return { candidates: [], knownActorHrefs: [] };
+    return { hasActiveLocalProfile: false, candidates: [], knownActorHrefs: [] };
   }
 
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
@@ -115,6 +117,12 @@ export const resolveStoredInboundMentionCandidates = async (
   });
 
   return {
+    hasActiveLocalProfile: profileRows.some(
+      ({ instanceKind, instanceState, profileState }) =>
+        instanceKind === InstanceKind.LOCAL &&
+        instanceState === InstanceState.ACTIVE &&
+        profileState === ProfileState.ACTIVE,
+    ),
     candidates,
     knownActorHrefs: profileRows.map(({ actorHref }) => actorHref),
   };

@@ -44,7 +44,7 @@
 
 ### Requirement: Remote Note identity and audience validation
 
-**Authority / Provenance:** `docs/domain/objects/post.md#activitypub-local-note-표현`, `docs/domain/objects/follow-relationship.md#조회-정책`, `PROD-360`. 시스템은 actor와 attribution이 일치하는 remote Note 중 remote Note ingestion이 지원하는 visibility(PUBLIC, UNLISTED 또는 검증된 Followers Only)의 materialization input만 허용해야 한다(MUST). Audience visibility는 `to` Public, 그 다음 `cc` Public, 그 다음 verified author canonical followers URI의 존재를 이 순서로 확인해 분류해야 한다(MUST). Audience와 identity validation은 Note의 선택적 `inReplyTo`/reply target 존재 여부와 독립적으로 적용해야 한다(MUST). 구문상 유효하게 파싱된 extra actor/collection URI는 visibility 분류나 Note 유효성에 영향을 주지 않아야 하며(MUST), raw malformed audience syntax는 기존 vocabulary hydration과 remote Note 기본 검증에서 처리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md#activitypub-local-note-표현`, `docs/domain/objects/follow-relationship.md#조회-정책`, `PROD-360`, `PROD-359`. 시스템은 actor와 attribution이 일치하는 remote Note 중 remote Note ingestion이 지원하는 visibility(PUBLIC, UNLISTED, 검증된 Followers Only 또는 검증된 DIRECT)의 materialization input만 허용해야 한다(MUST). Audience visibility는 `to` Public, 그 다음 `cc` Public, 그 다음 verified author canonical followers URI의 존재를 이 순서로 확인하고, 모두 없으면 공통 remote Note materializer에서 DIRECT 후보로 분류해야 한다(MUST). DIRECT 저장은 Note의 typed Mention href 중 하나 이상이 ACTIVE Local Profile과 ACTIVE Local Instance를 가리킬 때만 허용해야 한다(MUST). inbox Create에서는 inbox 종류나 `context.recipient`가 이 조건에 영향을 주지 않아야 한다(MUST). 확인된 typed Mention 집합의 Post relation은 local/remote Profile 모두에 보존하며, `to`/`cc`는 기존 visibility marker 분류에만 사용해야 한다(MUST). `to`/`cc`/`bto`/`bcc` 주소는 Mention relation이나 DIRECT 권한을 만들지 않아야 한다(MUST). Audience와 identity validation은 Note의 선택적 `inReplyTo`/reply target 존재 여부와 독립적으로 적용해야 한다(MUST). 구문상 유효하게 파싱된 extra actor/collection URI는 visibility 분류나 Note 유효성에 영향을 주지 않아야 하며(MUST), raw malformed audience syntax는 기존 vocabulary hydration과 remote Note 기본 검증에서 처리해야 한다(MUST). Note Update와 과거 Note 복구는 범위에 포함하지 않는다.
 
 #### Scenario: Hydrate a supported Note with Fedify vocabulary
 
@@ -70,21 +70,35 @@
 - **AND** PUBLIC, UNLISTED 분류의 shared inbox delivery는 local follower relevance를 추가 조건으로 요구하지 않는다
 - **AND** 시스템은 해당 URI로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는 viewer access를 만들지 않는다
 
-#### Scenario: Preserve Followers Only visibility with an extra mentioned actor URI
+#### Scenario: Classify Followers Only across supported materialization routes
 
 - **WHEN** `to`와 `cc` 모두에 Public URI가 없고 verified author의 canonical followers URI와 추가 actor URI(mention addressee)가 audience에 있다
+- **AND** Note가 inbox `Create` 또는 지원되는 fetched/hydrated materialization 경로로 처리된다
 - **THEN** materialization visibility는 FOLLOWERS다
+- **AND** 처리 경로가 이 분류를 바꾸지 않는다
 - **AND** canonical followers marker의 중복·순서와 구문상 유효하게 파싱된 foreign/unknown/spoofed-looking followers extra actor/collection URI는 visibility를 바꾸거나 Note 전체를 무효화하지 않는다
 - **AND** foreign/unknown URI를 분류하기 위한 network dereference나 `/followers` 경로 휴리스틱을 수행하지 않는다
 - **AND** 시스템은 추가 URI로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는 viewer access를 만들지 않는다
+
+#### Scenario: Materialize DIRECT from a validated typed Mention
+
+- **WHEN** `to`와 `cc`에 Public URI와 verified author canonical followers URI가 모두 없다
+- **AND** Note의 typed Mention href 중 적어도 하나가 ACTIVE Local Profile과 ACTIVE Local Instance로 검증된다
+- **AND** Note가 verified inbox Create 또는 지원되는 fetched/hydrated materialization 경로에서 처리된다
+- **AND** inbox Create이면 personal/shared inbox와 `context.recipient` 값이 이 검증 결과에 영향을 주지 않는다
+- **THEN** materialization visibility는 DIRECT다
+- **AND** 시스템은 현재 Note의 기존 검증된 typed Mention Profile 관계를 local/remote Profile 모두에 저장한다
+- **AND** Author와 Mentioned Profile은 기존 Post visibility policy에 따라 읽을 수 있고, unmentioned inbox recipient, follower와 anonymous viewer는 읽을 수 없다
+- **AND** Follow 관계는 필요하지 않으며 `to`/`cc`의 부재나 Mention과 다른 주소는 검증된 Mention 수신을 막지 않는다
+- **AND** `to`/`cc`/`bto`/`bcc` 주소만으로 Mention relation이나 viewer access를 만들지 않는다
 
 #### Scenario: Skip a Note without a recognized audience marker
 
 - **WHEN** object hydration이 실패하거나 object가 Note가 아니다
 - **OR** hydrated Note ID, attribution 또는 Note identity 조건이 맞지 않는다
-- **OR** `to`와 `cc`에 Public URI와 verified author canonical followers URI가 모두 없고 actor-only DIRECT/limited audience 또는 foreign/unknown followers-looking URI만 있다
-- **THEN** 시스템은 Profile, ActivityPub Post mapping, Post와 content side effect 없이 delivery를 skip한다
-- **AND** unsupported audience를 Followers Only 권한의 근거로 사용하지 않는다
+- **OR** `to`와 `cc`에 Public URI와 verified author canonical followers URI가 모두 없고 ACTIVE Local typed Mention target이 없다
+- **THEN** 시스템은 delivery를 skip하고 해당 Note의 ActivityPub Post mapping, Post와 PostContent를 생성하지 않는다
+- **AND** audience address만으로 Mention relation이나 DIRECT 권한을 만들지 않는다
 
 ### Requirement: Remote Note projection handoff
 
