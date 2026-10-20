@@ -10,7 +10,13 @@ import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
 for (const width of [390, 1440]) {
-  for (const destination of ['post-body', 'post-time', 'profile-name', 'profile-avatar'] as const) {
+  for (const destination of [
+    'post-body',
+    'post-time',
+    'profile-name',
+    'profile-avatar',
+    'profile-mention',
+  ] as const) {
     test(`홈에서 ${destination}로 새로 진입하면 이전 스크롤을 넘기지 않는다 (${width}px)`, async ({
       context,
       page,
@@ -33,8 +39,24 @@ for (const width of [390, 1440]) {
           profileId: author.id,
         });
       }
-      const body = 'E2E Home navigation target';
-      const post = await createE2EPost({ body, profileId: author.id });
+      const mention = `@${author.handle}`;
+      const body = `E2E Home navigation target${destination === 'profile-mention' ? ` ${mention}` : ''}`;
+      const post = await createE2EPost({
+        body,
+        mentions:
+          destination === 'profile-mention'
+            ? [
+                {
+                  end: body.length,
+                  handle: mention,
+                  profileId: author.id,
+                  relativeHandle: mention,
+                  start: body.indexOf(mention),
+                },
+              ]
+            : undefined,
+        profileId: author.id,
+      });
       for (let index = 0; index < 6; index += 1) {
         await createE2EPost({
           body: `Reply after target ${index} ${'답글 본문 '.repeat(30)}`,
@@ -71,6 +93,13 @@ for (const width of [390, 1440]) {
           } else {
             if (destination === 'profile-avatar') {
               await card.locator(`a[href="/@${author.handle}"]`).first().click();
+            } else if (destination === 'profile-mention') {
+              await card
+                .getByRole('link', {
+                  name: `${mention}, ${author.displayName}, 프로필 보기`,
+                  exact: true,
+                })
+                .click();
             } else {
               await card
                 .getByRole('link', {
