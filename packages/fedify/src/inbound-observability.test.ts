@@ -237,6 +237,8 @@ describe('inbound ActivityPub observability', () => {
       assert.deepEqual(logs, [
         {
           activityType: 'Create',
+          activityOrigin: undefined,
+          actorOrigin: undefined,
           handler: 'create',
           objectOrigin: objectUri.origin,
           objectUri: objectUri.href,
