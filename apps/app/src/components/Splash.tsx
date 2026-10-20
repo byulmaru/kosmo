@@ -10,7 +10,7 @@ export function Splash({ label = 'Kosmo를 불러오는 중입니다.' }: { labe
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <BrandLogo width={56} />
-      <LoadingIndicator accessibilityLabel={label} color={theme.text} loadingText="" />
+      <LoadingIndicator accessibilityLabel={label} color={theme.text} />
       <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
     </View>
   );

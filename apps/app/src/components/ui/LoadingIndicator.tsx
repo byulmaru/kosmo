@@ -9,8 +9,6 @@ type LoadingIndicatorProps = Pick<
 > & {
   accessible?: boolean;
   'aria-hidden'?: boolean;
-  loadingText?: string | null;
-  loadingTextStyle?: StyleProp<TextStyle>;
 };
 
 export function LoadingIndicator({
@@ -18,8 +16,6 @@ export function LoadingIndicator({
   accessible,
   'aria-hidden': ariaHidden,
   color,
-  loadingText,
-  loadingTextStyle,
   size,
   style,
   testID,
@@ -27,42 +23,18 @@ export function LoadingIndicator({
   const reducedMotion = useReducedMotion();
 
   if (reducedMotion) {
-    const reducedTextStyle = [textStyles.uiLabelS, loadingTextStyle, color ? { color } : undefined];
-    const reducedLoadingText =
-      loadingText === undefined
-        ? ariaHidden === true || accessible === false
-          ? undefined
-          : accessibilityLabel
-        : loadingText;
-    const reducedDotsAccessible =
-      loadingText === null &&
-      ariaHidden !== true &&
-      accessible !== false &&
-      Boolean(accessibilityLabel);
-    const reducedLoadingTextAccessible =
-      loadingText !== null && ariaHidden !== true && accessible !== false;
+    const dotsAccessible = accessible ?? (ariaHidden !== true && Boolean(accessibilityLabel));
 
     return (
-      <>
-        <Text
-          accessibilityLabel={reducedDotsAccessible ? accessibilityLabel : undefined}
-          accessible={reducedDotsAccessible}
-          aria-hidden={reducedDotsAccessible ? undefined : (ariaHidden ?? true)}
-          style={[...reducedTextStyle, style as StyleProp<TextStyle>]}
-          testID={testID}
-        >
-          ···
-        </Text>
-        {reducedLoadingText ? (
-          <Text
-            accessible={reducedLoadingTextAccessible}
-            aria-hidden={reducedLoadingTextAccessible ? undefined : true}
-            style={reducedTextStyle}
-          >
-            {reducedLoadingText}
-          </Text>
-        ) : null}
-      </>
+      <Text
+        accessibilityLabel={accessibilityLabel}
+        accessible={dotsAccessible}
+        aria-hidden={ariaHidden ?? (dotsAccessible ? undefined : true)}
+        style={[textStyles.uiLabelS, color ? { color } : undefined, style as StyleProp<TextStyle>]}
+        testID={testID}
+      >
+        ···
+      </Text>
     );
   }
 

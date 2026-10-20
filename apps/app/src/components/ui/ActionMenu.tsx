@@ -548,7 +548,7 @@ export function ActionMenu({
                   style={[styles.item, styles.nativeItem]}
                 >
                   {item.busy ? (
-                    <LoadingIndicator color={itemColor} />
+                    <LoadingIndicator accessible={false} aria-hidden color={itemColor} />
                   ) : Icon ? (
                     <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
                   ) : null}

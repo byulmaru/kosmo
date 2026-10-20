@@ -341,7 +341,6 @@ export const PostList = memo(function PostList({
                     <LoadingIndicator
                       accessibilityLabel="게시글을 더 불러오는 중"
                       color={theme.foregroundSecondary}
-                      loadingText=""
                     />
                     <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
                       게시글을 더 불러오는 중입니다.

@@ -27,71 +27,70 @@ before(async () => {
   ({ LoadingIndicator } = await import('./LoadingIndicator'));
 });
 
-function renderWithLoadingText(loadingText: string | null) {
+function render(props: Parameters<typeof LoadingIndicatorModule.LoadingIndicator>[0]) {
   let renderer: ReactTestRenderer | undefined;
   act(() => {
-    renderer = create(
-      createElement(LoadingIndicator, {
-        accessibilityLabel: '게시글을 불러오는 중',
-        color: 'primary',
-        loadingText,
-        size: 'small',
-      }),
-    );
+    renderer = create(createElement(LoadingIndicator, props));
   });
   assert.ok(renderer);
   return renderer;
 }
 
-function render() {
-  return renderWithLoadingText('게시글을 불러오는 중');
-}
-
 test('keeps the labelled platform indicator when reduced motion is off', () => {
   reducedMotion = false;
-  const renderer = render();
-  assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 1);
-  assert.equal(renderer.root.findAllByType(TextHost).length, 0);
-  assert.equal(
-    renderer.root.findByType(ActivityIndicatorHost).props.accessibilityLabel,
-    '게시글을 불러오는 중',
-  );
-  assert.equal(renderer.root.findByType(ActivityIndicatorHost).props.size, 'small');
-  act(() => renderer.unmount());
-});
-
-test('replaces rotation with static dots when reduced motion is on', () => {
-  reducedMotion = true;
-  const renderer = render();
-  assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 0);
-  const fallback = renderer.root.findAllByType(TextHost)[0];
-  assert.ok(fallback);
-  assert.equal(fallback.children.join(''), '···');
-  assert.equal(renderer.root.findAllByType(TextHost)[1]?.children.join(''), '게시글을 불러오는 중');
-  assert.equal(fallback.props.accessible, false);
-  assert.equal(fallback.props['aria-hidden'], true);
-  act(() => renderer.unmount());
-});
-
-test('keeps a compact overlay label on the static dots without adding layout text', () => {
-  reducedMotion = true;
-  let renderer: ReactTestRenderer | undefined;
-  act(() => {
-    renderer = create(
-      createElement(LoadingIndicator, {
-        accessibilityLabel: '첨부 이미지 업로드 중',
-        color: 'primary',
-        loadingText: null,
-      }),
-    );
+  const renderer = render({
+    accessibilityLabel: '게시글을 불러오는 중',
+    color: 'primary',
+    size: 'small',
   });
-  assert.ok(renderer);
-  const rendered = renderer;
-  const fallback = rendered.root.findByType(TextHost);
-  assert.equal(fallback.children.join(''), '···');
-  assert.equal(fallback.props.accessibilityLabel, '첨부 이미지 업로드 중');
-  assert.equal(fallback.props.accessible, true);
-  assert.equal(fallback.props['aria-hidden'], undefined);
-  assert.equal(rendered.root.findAllByType(TextHost).length, 1);
-  act(() => rendered.unmount());
+  try {
+    assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 1);
+    assert.equal(renderer.root.findAllByType(TextHost).length, 0);
+    assert.equal(
+      renderer.root.findByType(ActivityIndicatorHost).props.accessibilityLabel,
+      '게시글을 불러오는 중',
+    );
+    assert.equal(renderer.root.findByType(ActivityIndicatorHost).props.color, 'primary');
+    assert.equal(renderer.root.findByType(ActivityIndicatorHost).props.size, 'small');
+  } finally {
+    act(() => renderer.unmount());
+  }
+});
+
+test('uses accessible static dots instead of a spinner when reduced motion is on', () => {
+  reducedMotion = true;
+  const renderer = render({
+    accessibilityLabel: '게시글을 불러오는 중',
+    color: 'primary',
+    size: 'small',
+  });
+  try {
+    assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 0);
+    const dots = renderer.root.findByType(TextHost);
+    assert.equal(dots.children.join(''), '···');
+    assert.equal(dots.props.accessibilityLabel, '게시글을 불러오는 중');
+    assert.equal(dots.props.accessible, true);
+    assert.equal(dots.props['aria-hidden'], undefined);
+    assert.equal(renderer.root.findAllByType(TextHost).length, 1);
+  } finally {
+    act(() => renderer.unmount());
+  }
+});
+
+test('keeps hidden static dots hidden when the caller hides the indicator', () => {
+  reducedMotion = true;
+  const renderer = render({
+    accessibilityLabel: '답글 처리 중',
+    accessible: false,
+    'aria-hidden': true,
+  });
+  try {
+    const dots = renderer.root.findByType(TextHost);
+    assert.equal(dots.children.join(''), '···');
+    assert.equal(dots.props.accessibilityLabel, '답글 처리 중');
+    assert.equal(dots.props.accessible, false);
+    assert.equal(dots.props['aria-hidden'], true);
+  } finally {
+    act(() => renderer.unmount());
+  }
 });

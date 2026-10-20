@@ -417,7 +417,6 @@ export function PostComposerMediaItems({
                     <LoadingIndicator
                       accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
                       color={colors.light.fixedWhite}
-                      loadingText={null}
                     />
                   </View>
                 ) : (

@@ -50,11 +50,7 @@ export function PaginationSurface({
 
   return (
     <View ref={endRef} style={style}>
-      <LoadingIndicator
-        accessibilityLabel={loadingLabel}
-        color={theme.foregroundSecondary}
-        loadingText=""
-      />
+      <LoadingIndicator accessibilityLabel={loadingLabel} color={theme.foregroundSecondary} />
       <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
         {loadingLabel}
       </Text>

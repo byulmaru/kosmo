@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
-import type { ReactElement, ReactNode } from 'react';
+import { createElement } from 'react';
+import { act, create } from 'react-test-renderer';
+import type { ElementType, ReactElement, ReactNode } from 'react';
+import type { ReactTestRenderer } from 'react-test-renderer';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -25,16 +30,23 @@ const theme = {
 };
 
 const platform = { OS: 'web' };
+let reducedMotion = false;
+const ActivityIndicatorHost = 'ActivityIndicator' as unknown as ElementType;
+const PressableHost = 'Pressable' as unknown as ElementType;
+const TextHost = 'Text' as unknown as ElementType;
 
 mockModule('react-native', {
-  ActivityIndicator: 'ActivityIndicator',
+  ActivityIndicator: ActivityIndicatorHost,
   Platform: platform,
-  Pressable: 'Pressable',
+  Pressable: PressableHost,
   StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
-  Text: 'Text',
+  Text: TextHost,
   View: 'View',
 });
-mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
+mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
+  useTheme: () => theme,
+});
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
   motion: {
@@ -45,7 +57,10 @@ mockModule('@/theme/tokens', {
   radius: { 8: 8 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16 },
   spacing: { sm: 8, lg: 16 },
-  textStyles: { uiLabelM: { fontSize: 14, lineHeight: 20 } },
+  textStyles: {
+    uiLabelM: { fontSize: 14, lineHeight: 20 },
+    uiLabelS: { fontSize: 12, lineHeight: 16 },
+  },
   typography: { sm: { fontSize: 14, lineHeight: 20 } },
 });
 
@@ -55,9 +70,11 @@ type TestElement = ReactElement<{
   style?: unknown;
 }>;
 type ButtonComponent = (props: {
+  accessibilityLabel?: string;
   children: ReactNode;
   disabled?: boolean;
   loading?: boolean;
+  loadingText?: string;
   size?: 'compact' | 'default';
   style?: { minHeight: number } | (() => { minHeight: number });
   tone?: 'danger' | 'primary' | 'secondary';
@@ -123,6 +140,63 @@ test('loading Button exposes shared busy and disabled accessibility state', () =
   assert.ok(Button);
   const button = Button({ children: '저장', loading: true });
   assert.deepEqual(button.props.accessibilityState, { busy: true, disabled: true });
+});
+
+function mountLoadingButton(props: { accessibilityLabel?: string; loadingText?: string }) {
+  const LoadingButton = Button;
+  assert.ok(LoadingButton);
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = create(createElement(LoadingButton, { children: '저장', loading: true, ...props }));
+  });
+  assert.ok(renderer);
+  return renderer;
+}
+
+test('reduced-motion Button does not turn a long accessible name into visible copy', () => {
+  reducedMotion = true;
+  const label = '첨부된 모든 이미지를 안전하게 처리하고 게시 작업을 진행하는 중';
+  const renderer = mountLoadingButton({ accessibilityLabel: label });
+  try {
+    assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 0);
+    const visibleText = renderer.root.findAllByType(TextHost);
+    assert.deepEqual(
+      visibleText.map((node) => node.children.join('')),
+      ['···'],
+    );
+    assert.equal(visibleText[0]?.props.accessibilityLabel, `${label} 처리 중`);
+    assert.equal(renderer.root.findByType(PressableHost).props.accessibilityLabel, label);
+    assert.deepEqual(renderer.root.findByType(PressableHost).props.accessibilityState, {
+      busy: true,
+      disabled: true,
+    });
+  } finally {
+    act(() => renderer.unmount());
+    reducedMotion = false;
+  }
+});
+
+test('Button keeps explicitly supplied loading text in both motion modes', () => {
+  try {
+    for (const reduced of [false, true]) {
+      reducedMotion = reduced;
+      const renderer = mountLoadingButton({
+        accessibilityLabel: '게시',
+        loadingText: '게시 중',
+      });
+      try {
+        const visibleText = renderer.root.findAllByType(TextHost);
+        const contents = visibleText.map((node) => node.children.join(''));
+        assert.equal(contents.filter((text) => text === '게시 중').length, 1);
+        assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, reduced ? 0 : 1);
+        assert.deepEqual(contents, reduced ? ['···', '게시 중'] : ['게시 중']);
+      } finally {
+        act(() => renderer.unmount());
+      }
+    }
+  } finally {
+    reducedMotion = false;
+  }
 });
 
 test('disabled Button uses the semantic disabled pair instead of opacity alone', () => {

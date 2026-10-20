@@ -184,7 +184,6 @@ export function PostComposerMediaItemsTarget({
                   <LoadingIndicator
                     accessibilityLabel={`첨부 이미지 ${itemNumber} 업로드 중`}
                     color={theme.foregroundPrimary}
-                    loadingText={null}
                   />
                 </View>
               ) : failed && onRetry ? (

@@ -115,15 +115,8 @@ export function Button({
     >
       {loading ? (
         <View style={styles.loadingContent}>
-          <LoadingIndicator
-            accessibilityLabel={`${label ?? '요청'} 처리 중`}
-            color={color}
-            loadingText={loadingText ?? `${label ?? '요청'} 처리 중`}
-            loadingTextStyle={[styles.label, { color }]}
-          />
-          {!reducedMotion && loadingText ? (
-            <Text style={[styles.label, { color }]}>{loadingText}</Text>
-          ) : null}
+          <LoadingIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
+          {loadingText ? <Text style={[styles.label, { color }]}>{loadingText}</Text> : null}
         </View>
       ) : (
         <Text style={[styles.label, { color }]}>{children}</Text>
