@@ -158,6 +158,7 @@ test(
           return documentLoader;
         },
         parseUri: realContext.parseUri.bind(realContext),
+        verifyPortableObject: realContext.verifyPortableObject,
       } as never;
     });
     const authorLookupInputs: RemoteProfileLookupInput[] = [];
@@ -478,6 +479,51 @@ test(
         contextOrigin: publicOrigin,
         profileId: signer.id,
       });
+
+      const portableMentionObjectUri = new URL(
+        'https://objects.example/notes/signed-direct-portable-mention',
+      );
+      fetchedDocument = [
+        {
+          '@id': portableMentionObjectUri.href,
+          '@type': ['https://www.w3.org/ns/activitystreams#Note'],
+          'https://www.w3.org/ns/activitystreams#attributedTo': [{ '@id': authorUri.href }],
+          'https://www.w3.org/ns/activitystreams#content': [
+            { '@value': 'Unverified portable Mention cannot authorize Direct' },
+          ],
+          'https://www.w3.org/ns/activitystreams#tag': [
+            {
+              '@id': 'ap+ef61://did:key:z6MkhVPuyvgG1RkMv67azDqDCDERPXVrUg1i3qchXY5EACE3/objects/1',
+              '@type': ['https://www.w3.org/ns/activitystreams#Mention'],
+              'https://www.w3.org/ns/activitystreams#href': [{ '@id': recipientActorUri.href }],
+              'https://www.w3.org/ns/activitystreams#name': [{ '@value': '@mention-recipient' }],
+            },
+          ],
+          'https://www.w3.org/ns/activitystreams#to': [
+            { '@id': 'https://unrelated.example/users/recipient' },
+          ],
+        },
+      ];
+      const portableMentionDocumentBytes = new TextEncoder().encode(
+        JSON.stringify(fetchedDocument),
+      ).byteLength;
+      const postCountBeforePortableMention = await db.$count(Posts);
+      const postMentionCountBeforePortableMention = await db.$count(PostMentions);
+      const postCreateEffectsBeforePortableMention = postCreateEffectsStart.mock.callCount();
+      assert.deepEqual(
+        await run(
+          { objectUri: portableMentionObjectUri.href, signingProfileId: signer.id },
+          'signed-direct-portable-mention',
+        ),
+        {
+          documentBytes: portableMentionDocumentBytes,
+          reason: 'no_active_local_mention',
+          status: 'rejected',
+        },
+      );
+      assert.equal(await db.$count(Posts), postCountBeforePortableMention);
+      assert.equal(await db.$count(PostMentions), postMentionCountBeforePortableMention);
+      assert.equal(postCreateEffectsStart.mock.callCount(), postCreateEffectsBeforePortableMention);
 
       const directActivityInput = {
         objectUri: 'https://objects.example/notes/network-error',

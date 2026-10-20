@@ -112,6 +112,7 @@ export const lookupRemotePostActivity = async (
         baseUrl: documentUri,
         contextLoader: documentLoader,
         documentLoader,
+        verifyPortableObject: context.verifyPortableObject,
       });
     } catch (error) {
       if (bounded.documentBytes > input.maxDocumentBytes) {
