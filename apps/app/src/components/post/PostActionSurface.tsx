@@ -37,7 +37,7 @@ const postActionSurfaceFragment = graphql`
     profile {
       id
       relativeHandle
-      ...ProfileBlockAction_profile
+      ...ContentReportOverlay_blockProfile
       viewerState {
         blockedBy
         isSelf

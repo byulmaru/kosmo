@@ -4,19 +4,24 @@ import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import {
-  getContentReportBlockProfile,
   ContentReportProvider,
+  getContentReportBlockProfile,
   useContentReportMenuItem,
 } from '@/components/content-report/ContentReportContext';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ProfileBlockAction_profile$key } from '@/components/profile/__generated__/ProfileBlockAction_profile.graphql';
+import type { ContentReportOverlay_blockProfile$key } from '@/components/content-report/__generated__/ContentReportOverlay_blockProfile.graphql';
 import type { ContentReportPreviewQuery as ContentReportPreviewQueryType } from './__generated__/ContentReportPreviewQuery.graphql';
 
 const mutationRequestObserver = fn().mockName('ContentReport mutation');
 export const reportAuthor = profile({ id: 'content-report-author', displayName: '민지' });
+export const longReportAuthor = profile({
+  id: 'content-report-long-handle',
+  displayName: '민지',
+  relativeHandle: '@minji@long-federated-instance-name.example.social',
+});
 const selfAuthor = profile({
   id: 'content-report-self',
   viewerState: {
@@ -47,7 +52,7 @@ const blockedByAuthor = profile({
     profileBlock: null,
   },
 });
-const reportAuthors = [reportAuthor, selfAuthor, blockedAuthor, blockedByAuthor];
+const reportAuthors = [reportAuthor, longReportAuthor, selfAuthor, blockedAuthor, blockedByAuthor];
 
 const ContentReportPreviewQuery = graphql`
   query ContentReportPreviewQuery($ids: [ID!]!) {
@@ -57,7 +62,7 @@ const ContentReportPreviewQuery = graphql`
         id
         displayName
         relativeHandle
-        ...ProfileBlockAction_profile @alias(as: "blockProfile")
+        ...ContentReportOverlay_blockProfile @alias(as: "blockProfile")
         viewerState {
           blockedBy
           isSelf
@@ -74,7 +79,7 @@ function ContentReportTrigger({
   blockProfile,
   onReportOpen,
 }: {
-  blockProfile?: ProfileBlockAction_profile$key;
+  blockProfile?: ContentReportOverlay_blockProfile$key;
   onReportOpen?: () => void;
 }) {
   const reportItem = useContentReportMenuItem({

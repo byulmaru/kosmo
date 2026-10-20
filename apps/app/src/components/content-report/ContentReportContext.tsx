@@ -4,16 +4,16 @@ import { ContentReportOverlay } from './ContentReportOverlay';
 import type { ContentReportTargetType } from '@kosmo/core/enums';
 import type { PropsWithChildren } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
-import type { ProfileBlockAction_profile$key } from '@/components/profile/__generated__/ProfileBlockAction_profile.graphql';
+import type { ContentReportOverlay_blockProfile$key } from './__generated__/ContentReportOverlay_blockProfile.graphql';
 
 export type ContentReportTarget = Readonly<{
-  blockProfile?: ProfileBlockAction_profile$key;
+  blockProfile?: ContentReportOverlay_blockProfile$key;
   id: string;
   kind: ContentReportTargetType;
   label: string;
 }>;
 
-type ContentReportBlockProfile = ProfileBlockAction_profile$key &
+type ContentReportBlockProfile = ContentReportOverlay_blockProfile$key &
   Readonly<{
     viewerState?: Readonly<{
       blockedBy?: boolean | null;
@@ -24,7 +24,7 @@ type ContentReportBlockProfile = ProfileBlockAction_profile$key &
 
 export function getContentReportBlockProfile(
   profile: ContentReportBlockProfile | null | undefined,
-): ProfileBlockAction_profile$key | undefined {
+): ContentReportOverlay_blockProfile$key | undefined {
   const viewerState = profile?.viewerState;
   if (
     !profile ||

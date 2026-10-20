@@ -131,6 +131,9 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('@/components/feedback/FeedbackOverlay', {
   FeedbackOverlay: () => null,
 });
+mockModule('@/components/content-report/ContentReportContext', {
+  ContentReportProvider: PassThrough,
+});
 mockModule('@/analytics/client', {
   identifyAnalytics: (id: string, count: number) => identifyCalls.push([id, count]),
 });

@@ -61,7 +61,7 @@ const ProfileLayoutQuery = graphql`
         }
       }
       ...ProfileHero_profile
-      ...ProfileBlockAction_profile
+      ...ContentReportOverlay_blockProfile
       ...FollowButton_profile
     }
   }

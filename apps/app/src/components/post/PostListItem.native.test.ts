@@ -215,11 +215,16 @@ async function mountPost(t: TestContext, postKey = post) {
   await renderPost(postKey);
 }
 
-async function renderPost(postKey = post) {
+async function renderPost(postKey = post, hideBlocked = false) {
   assert.ok(PostListItem);
   await act(async () =>
     nativeHarness.render(
-      createElement(PostListItem, { post: postKey, presentation: 'mobile', showDivider: false }),
+      createElement(PostListItem, {
+        hideBlocked,
+        post: postKey,
+        presentation: 'mobile',
+        showDivider: false,
+      }),
     ),
   );
 }
@@ -274,7 +279,7 @@ test('the card pressed feedback follows direct touch and clears on release or ca
   assertFeedbackRest();
 });
 
-test('a blocked author or direct quote/repost source disappears from the current list', async (t) => {
+test('only feed callers hide a blocked author or direct quote/repost source', async (t) => {
   await mountPost(t);
   assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
 
@@ -283,6 +288,8 @@ test('a blocked author or direct quote/repost source disappears from the current
     profile: { ...postData.profile, viewerState: { profileBlock: { id: 'block-1' } } },
   } as unknown as PostListItem_post$key;
   await renderPost(blockedAuthorPost);
+  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
+  await renderPost(blockedAuthorPost, true);
   assert.equal(nativeHarness.tagByTestID('post-list-item-card'), undefined);
 
   const blockedSourcePost = {
@@ -296,6 +303,8 @@ test('a blocked author or direct quote/repost source disappears from the current
     },
   } as unknown as PostListItem_post$key;
   await renderPost(blockedSourcePost);
+  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
+  await renderPost(blockedSourcePost, true);
   assert.equal(nativeHarness.tagByTestID('post-list-item-card'), undefined);
 
   await renderPost();

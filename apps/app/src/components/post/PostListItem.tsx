@@ -113,12 +113,14 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
+  hideBlocked = false,
   pinned = false,
   post: postKey,
   presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
+  hideBlocked?: boolean;
   pinned?: boolean;
   post: PostListItem_post$key;
   presentation: PostListPresentation;
@@ -148,8 +150,8 @@ export function PostListItem({
   );
 
   if (
-    post.profile.viewerState?.profileBlock ||
-    post.repostSource?.profile.viewerState?.profileBlock
+    hideBlocked &&
+    (post.profile.viewerState?.profileBlock || post.repostSource?.profile.viewerState?.profileBlock)
   ) {
     return null;
   }

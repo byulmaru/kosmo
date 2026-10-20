@@ -1,5 +1,9 @@
 import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
-import baseMeta, { ContentReportPreview, reportAuthor } from './ContentReportPreview.stories';
+import baseMeta, {
+  ContentReportPreview,
+  longReportAuthor,
+  reportAuthor,
+} from './ContentReportPreview.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
@@ -14,11 +18,20 @@ type Story = StoryObj<typeof meta>;
 async function completeReport(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
   const page = within(canvasElement.ownerDocument.body);
-  await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+  await waitFor(() => expect(canvas.getByRole('button', { name: '신고 메뉴 열기' })).toBeVisible());
+  const trigger = canvas.getByRole('button', { name: '신고 메뉴 열기' });
+  await userEvent.click(trigger);
   await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
   await userEvent.click(page.getByRole('button', { name: '신고하기' }));
   await waitFor(() => expect(page.getByText('신고를 전달했어요')).toBeVisible());
   return { canvas, page };
+}
+
+function expectBlockSectionHidden(page: ReturnType<typeof within>) {
+  expect(
+    page.queryByRole('heading', { name: `${reportAuthor.relativeHandle} 차단` }),
+  ).not.toBeInTheDocument();
+  expect(page.queryByText('서로의 게시물이 숨겨지고 팔로우가 해제돼요.')).not.toBeInTheDocument();
 }
 
 export const SubmissionSuccess: Story = {
@@ -54,8 +67,9 @@ export const SubmissionSuccess: Story = {
 
     expect(page.getByText('신고를 전달했어요')).toBeVisible();
     expect(page.getByRole('button', { name: /차단하기/ })).toBeVisible();
-    await waitFor(() => expect(page.getByRole('button', { name: '닫기' })).toHaveFocus());
-    await userEvent.click(page.getByRole('button', { name: '닫기' }));
+    const complete = page.getByRole('button', { name: '완료' });
+    await waitFor(() => expect(complete).toHaveFocus());
+    await userEvent.click(complete);
     await waitFor(() => {
       expect(page.queryByRole('button', { name: '게시물 신고 닫기' })).not.toBeInTheDocument();
     });
@@ -132,7 +146,8 @@ export const BlockActionHiddenForSelf: Story = {
   play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     expect(page.queryByRole('button', { name: /차단하기/ })).not.toBeInTheDocument();
-    expect(page.getByRole('button', { name: '닫기' })).toBeVisible();
+    expectBlockSectionHidden(page);
+    expect(page.getByRole('button', { name: '완료' })).toBeVisible();
   },
 };
 
@@ -141,7 +156,8 @@ export const BlockActionHiddenWhenAlreadyBlocked: Story = {
   play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     expect(page.queryByRole('button', { name: /차단하기/ })).not.toBeInTheDocument();
-    expect(page.getByRole('button', { name: '닫기' })).toBeVisible();
+    expectBlockSectionHidden(page);
+    expect(page.getByRole('button', { name: '완료' })).toBeVisible();
   },
 };
 
@@ -150,7 +166,8 @@ export const BlockActionHiddenWhenBlockedByTarget: Story = {
   play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     expect(page.queryByRole('button', { name: /차단하기/ })).not.toBeInTheDocument();
-    expect(page.getByRole('button', { name: '닫기' })).toBeVisible();
+    expectBlockSectionHidden(page);
+    expect(page.getByRole('button', { name: '완료' })).toBeVisible();
   },
 };
 
@@ -167,7 +184,8 @@ export const BlockActionHiddenWithoutSelectedProfile: Story = {
   play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     expect(page.queryByRole('button', { name: /차단하기/ })).not.toBeInTheDocument();
-    expect(page.getByRole('button', { name: '닫기' })).toBeVisible();
+    expectBlockSectionHidden(page);
+    expect(page.getByRole('button', { name: '완료' })).toBeVisible();
   },
 };
 
@@ -205,6 +223,53 @@ export const PostReportLayoutContract: Story = {
     const bodyBounds = body.getBoundingClientRect();
     const submitBounds = submit.getBoundingClientRect();
     expect(submitBounds.bottom).toBeLessThanOrEqual(bodyBounds.bottom);
+  },
+};
+
+export const PostReportCompletionLayoutContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'contentReportMobileShort' } },
+  parameters: {
+    viewport: {
+      options: {
+        contentReportMobileShort: {
+          name: 'Content report mobile short',
+          styles: { height: '560px', width: '390px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  render: () => <ContentReportPreview reportProfileId={longReportAuthor.id} />,
+  play: async ({ canvasElement }) => {
+    const { page } = await completeReport(canvasElement);
+    const view = canvasElement.ownerDocument.defaultView!;
+    const surface = page.getByTestId('content-report-overlay-surface');
+    const body = page.getByTestId('content-report-overlay-body');
+    const handle = page.getByRole('heading', {
+      name: `${longReportAuthor.relativeHandle} 차단`,
+    });
+    const result = page.getByText('서로의 게시물이 숨겨지고 팔로우가 해제돼요.');
+    const block = page.getByRole('button', { name: /차단하기/ });
+    const complete = page.getByRole('button', { name: '완료' });
+
+    expect(handle).toBeVisible();
+    expect(result).toBeVisible();
+    await waitFor(() => expect(complete).toHaveFocus());
+
+    const surfaceBounds = surface.getBoundingClientRect();
+    const bodyBounds = body.getBoundingClientRect();
+    const blockBounds = block.getBoundingClientRect();
+    const completeBounds = complete.getBoundingClientRect();
+    expect(surfaceBounds.left).toBeGreaterThanOrEqual(0);
+    expect(surfaceBounds.right).toBeLessThanOrEqual(view.innerWidth);
+    expect(surfaceBounds.top).toBeGreaterThanOrEqual(0);
+    expect(surfaceBounds.bottom).toBeLessThanOrEqual(view.innerHeight);
+    expect(blockBounds.width).toBeGreaterThan(bodyBounds.width * 0.8);
+    expect(blockBounds.bottom).toBeLessThanOrEqual(view.innerHeight);
+    expect(completeBounds.top - blockBounds.bottom).toBeGreaterThanOrEqual(24);
+    expect(completeBounds.width).toBeGreaterThan(bodyBounds.width * 0.8);
+    expect(completeBounds.height).toBeGreaterThanOrEqual(40);
+    expect(completeBounds.bottom).toBeLessThanOrEqual(view.innerHeight);
   },
 };
 

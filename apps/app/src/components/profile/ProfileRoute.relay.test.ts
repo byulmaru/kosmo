@@ -63,6 +63,7 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
+  getContentReportBlockProfile: () => undefined,
   useContentReportMenuItem: () => ({
     key: 'report-profile',
     label: '신고',

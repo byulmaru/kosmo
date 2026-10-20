@@ -37,6 +37,7 @@ const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
 type ReportMenuInput = {
+  blockProfile?: object;
   id: string;
   kind: 'PROFILE';
   label: string;
@@ -340,6 +341,7 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
+  getContentReportBlockProfile: () => undefined,
   useContentReportMenuItem: (input: ReportMenuInput) => {
     capturedReport.value = input;
     return reportMenuItem;
@@ -686,6 +688,7 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@local');
 
     assert.deepEqual(capturedReport.value, {
+      blockProfile: undefined,
       id: 'profile:local',
       kind: 'PROFILE',
       label: '@local',

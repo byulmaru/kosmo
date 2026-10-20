@@ -256,7 +256,11 @@ export function PostList({
                 ) : null
               }
               renderItem={({ item }) => (
-                <PostListItem post={item.node} presentation={postListPresentation} />
+                <PostListItem
+                  hideBlocked={isHome || isLocal}
+                  post={item.node}
+                  presentation={postListPresentation}
+                />
               )}
               reselectDestination={isHome || isLocal ? 'home' : undefined}
               refreshing={refreshing}

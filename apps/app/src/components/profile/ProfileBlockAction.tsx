@@ -81,11 +81,13 @@ type Props = ProfileBlockActionTarget &
         surface: 'menu';
         buttonLabel?: never;
         onBlocked?: never;
+        presentation?: never;
       }
     | {
         buttonLabel?: string;
         icon?: never;
         onBlocked?: () => void;
+        presentation?: 'reportCompletion';
         renderMenuItem?: never;
         surface: 'button';
       }
@@ -100,6 +102,7 @@ export function ProfileBlockAction({
   surface,
   buttonLabel,
   onBlocked,
+  presentation,
 }: Props) {
   const profileData = useFragment(profileFragment, profile ?? null);
   const profileBlockData = useFragment(profileBlockFragment, profileBlock ?? null);
@@ -203,8 +206,12 @@ export function ProfileBlockAction({
           controlRef={actionRef}
           disabled={pending}
           onPress={activate}
-          style={{ minWidth: 96, width: 96 }}
-          tone="secondary"
+          style={
+            presentation === 'reportCompletion'
+              ? { minWidth: 0, width: '100%' }
+              : { minWidth: 96, width: 96 }
+          }
+          tone={presentation === 'reportCompletion' ? 'danger' : 'secondary'}
         >
           {label}
         </Button>

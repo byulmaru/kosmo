@@ -1,12 +1,21 @@
 import { useCallback, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
 import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { Button } from '@/components/ui/Button';
 import { FormOverlay } from '@/components/ui/FormOverlay';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
+import { breakpoints, spacing, textStyles } from '@/theme/tokens';
 import { ContentReportForm } from './ContentReportForm';
 import type { ContentReportTarget } from './ContentReportContext';
+
+const blockProfileFragment = graphql`
+  fragment ContentReportOverlay_blockProfile on Profile {
+    relativeHandle
+    ...ProfileBlockAction_profile
+  }
+`;
 
 type Props = {
   onRequestClose: () => void;
@@ -33,6 +42,10 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
 
 function ContentReportOverlayContent({ onRequestClose, target, visible }: ContentProps) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const compact = width < breakpoints.compact;
+  const { selectedProfileId } = useSession();
+  const blockProfile = useFragment(blockProfileFragment, target.blockProfile ?? null);
   const [delivered, setDelivered] = useState(false);
   const focusCompletionClose = useCallback((control: View | null) => {
     if (Platform.OS === 'web') {
@@ -44,6 +57,7 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
   return (
     <FormOverlay
       bodyPadding={spacing.lg}
+      bodyContentContainerStyle={delivered && compact ? styles.completionBody : undefined}
       continueEditingFocusSelector='textarea, [role="radio"]'
       discardConfirmLabel="신고 버리기"
       discardTitle="작성 중인 신고를 버릴까요?"
@@ -52,33 +66,45 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
       onRequestClose={onRequestClose}
       renderForm={({ close, onStateChange }) =>
         delivered ? (
-          <View style={styles.completion}>
-            <Text
-              accessibilityLiveRegion="polite"
-              accessibilityRole="header"
-              style={[styles.completionTitle, { color: theme.foregroundPrimary }]}
-            >
-              신고를 전달했어요
-            </Text>
-            <View style={styles.actions}>
-              {target.blockProfile ? (
-                <ProfileBlockAction
-                  buttonLabel="차단하기"
-                  nextBlocked
-                  onBlocked={close}
-                  profile={target.blockProfile}
-                  surface="button"
-                />
-              ) : null}
-              <Button
-                controlRef={focusCompletionClose}
-                onPress={close}
-                style={styles.actionButton}
-                tone="secondary"
+          <View style={[styles.completion, delivered && compact ? styles.compactCompletion : null]}>
+            <View style={styles.completionTop}>
+              <Text
+                accessibilityLiveRegion="polite"
+                accessibilityRole="header"
+                style={[styles.completionTitle, { color: theme.foregroundPrimary }]}
               >
-                닫기
-              </Button>
+                신고를 전달했어요
+              </Text>
+              {selectedProfileId && blockProfile ? (
+                <View style={styles.blockSection}>
+                  <Text
+                    accessibilityRole="header"
+                    style={[styles.blockTitle, { color: theme.foregroundPrimary }]}
+                  >
+                    {blockProfile.relativeHandle} 차단
+                  </Text>
+                  <Text style={[styles.blockResult, { color: theme.foregroundSecondary }]}>
+                    서로의 게시물이 숨겨지고 팔로우가 해제돼요.
+                  </Text>
+                  <ProfileBlockAction
+                    buttonLabel="차단하기"
+                    nextBlocked
+                    onBlocked={close}
+                    presentation="reportCompletion"
+                    profile={blockProfile}
+                    surface="button"
+                  />
+                </View>
+              ) : null}
             </View>
+            <Button
+              controlRef={focusCompletionClose}
+              onPress={close}
+              style={styles.fullWidthButton}
+              tone="primary"
+            >
+              완료
+            </Button>
           </View>
         ) : (
           <ContentReportForm
@@ -96,8 +122,13 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
 }
 
 const styles = StyleSheet.create({
-  completion: { gap: spacing.lg, width: '100%' },
-  completionTitle: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
-  actions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  actionButton: { minHeight: 48, minWidth: 96, width: 96 },
+  completion: { gap: spacing.xl, width: '100%' },
+  completionBody: { flexGrow: 1 },
+  compactCompletion: { flexGrow: 1, justifyContent: 'space-between' },
+  completionTop: { gap: spacing.xl, width: '100%' },
+  completionTitle: textStyles.uiHeadingM,
+  blockSection: { gap: spacing.sm, width: '100%' },
+  blockTitle: textStyles.uiLabelL,
+  blockResult: textStyles.uiCopyM,
+  fullWidthButton: { minWidth: 0, width: '100%' },
 });
