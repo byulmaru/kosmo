@@ -9,6 +9,7 @@ import {
   PROFILE_UNBLOCK_UPDATE_NAME,
 } from '@kosmo/core/temporal/profile-block';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
+import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
   WithStartWorkflowOperation,
@@ -23,6 +24,7 @@ import type {
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
+import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
 import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
@@ -54,6 +56,10 @@ const legacyNotificationEffectsWorkflowPath = new URL(
 ).pathname;
 const legacyPostDeleteWorkflowPath = new URL(
   './test-fixtures/legacy-post-delete.ts',
+  import.meta.url,
+).pathname;
+const legacyRemoteProfileFeaturedWorkflowPath = new URL(
+  './test-fixtures/legacy-remote-profile-featured.ts',
   import.meta.url,
 ).pathname;
 
@@ -116,7 +122,7 @@ test('settleEffects는 실패 뒤에도 모든 sibling effect 정산을 기다�
 });
 
 test(
-  'Remote Featured Workflow skips missing actors, clears empty collections, and retries replacement only',
+  'Remote Featured Workflow uses lookup children, shares the byte budget, and preserves pins on failure',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -125,21 +131,76 @@ test(
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
     const profileId = '00000000-0000-8000-8000-000000000201';
+    const signingProfileId = '00000000-0000-8000-8000-000000000202';
     const orderedPostIds = [
       '00000000-0000-8000-8000-000000000301',
       '00000000-0000-8000-8000-000000000302',
     ];
+    const itemUris = ['https://remote.example/notes/first', 'https://remote.example/notes/second'];
+    const wrongOwnerUri = 'https://remote.example/notes/wrong-owner';
     const collectionCalls: RemoteProfileFeaturedSyncInput[] = [];
+    const lookupCalls: Array<RemotePostLookupInput & { readonly maxDocumentBytes: number }> = [];
     const replacementCalls: Array<{ profileId: string; postIds: readonly string[] }> = [];
+    let pinSnapshot = ['00000000-0000-8000-8000-000000000399'];
     let failNextNonemptyReplacement = true;
     const worker = await Worker.create({
       activities: {
-        collectRemoteFeaturedActivity: async (input: RemoteProfileFeaturedSyncInput) => {
+        collectRemoteFeaturedItemsActivity: async (input: RemoteProfileFeaturedSyncInput) => {
           collectionCalls.push(input);
           if (input.actorUri.endsWith('/missing')) {
             return null;
           }
-          return input.actorUri.endsWith('/empty') ? [] : orderedPostIds;
+          if (input.actorUri.endsWith('/empty')) {
+            return { documentBytes: 7, itemUris: [] };
+          }
+          if (input.actorUri.endsWith('/aggregate-overflow')) {
+            return {
+              documentBytes: REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES - 40,
+              itemUris,
+              signingProfileId,
+            };
+          }
+          if (input.actorUri.endsWith('/wrong-owner')) {
+            return { documentBytes: 1, itemUris: [wrongOwnerUri], signingProfileId };
+          }
+          return { documentBytes: 100, itemUris, signingProfileId };
+        },
+        lookupRemotePostActivity: async (
+          input: RemotePostLookupInput & { readonly maxDocumentBytes: number },
+        ): Promise<RemotePostLookupResult> => {
+          lookupCalls.push(input);
+          if (input.objectUri === itemUris[0]) {
+            return {
+              authorProfileId: profileId,
+              documentBytes: 25,
+              postId: orderedPostIds[0]!,
+              status: 'created',
+            };
+          }
+          if (input.objectUri === itemUris[1]) {
+            if (input.maxDocumentBytes === 15) {
+              return {
+                documentBytes: 16,
+                reason: 'document_budget_exceeded',
+                status: 'rejected',
+              };
+            }
+            return {
+              authorProfileId: profileId,
+              documentBytes: 15,
+              postId: orderedPostIds[1]!,
+              status: 'duplicate',
+            };
+          }
+          if (input.objectUri === wrongOwnerUri) {
+            return {
+              authorProfileId: '00000000-0000-8000-8000-000000000299',
+              documentBytes: 10,
+              postId: orderedPostIds[0]!,
+              status: 'duplicate',
+            };
+          }
+          throw new Error(`Unexpected remote Note URI: ${input.objectUri}`);
         },
         replaceRemoteFeaturedActivity: async (input: {
           profileId: string;
@@ -150,6 +211,7 @@ test(
             failNextNonemptyReplacement = false;
             throw new Error('temporary Featured replacement failure');
           }
+          pinSnapshot = [...input.postIds];
         },
       },
       connection: environment.nativeConnection,
@@ -157,13 +219,17 @@ test(
       taskQueue,
       workflowsPath,
     });
-    const inputs: RemoteProfileFeaturedSyncInput[] = ['missing', 'empty', 'retry'].map(
-      (suffix) => ({
-        actorUri: `https://remote.example/users/${suffix}`,
-        featuredUri: `https://remote.example/users/${suffix}/featured`,
-        profileId,
-      }),
-    );
+    const inputs: RemoteProfileFeaturedSyncInput[] = [
+      'missing',
+      'empty',
+      'retry',
+      'aggregate-overflow',
+      'wrong-owner',
+    ].map((suffix) => ({
+      actorUri: `https://remote.example/users/${suffix}`,
+      featuredUri: `https://remote.example/users/${suffix}/featured`,
+      profileId,
+    }));
     const execute = (input: RemoteProfileFeaturedSyncInput, id: string) =>
       environment.client.workflow.execute<(input: RemoteProfileFeaturedSyncInput) => Promise<void>>(
         'remoteProfileFeaturedWorkflow',
@@ -176,8 +242,32 @@ test(
 
     await worker.runUntil(async () => {
       await execute(inputs[0]!, 'missing');
+      assert.deepEqual(pinSnapshot, ['00000000-0000-8000-8000-000000000399']);
       await execute(inputs[1]!, 'empty');
+      assert.deepEqual(pinSnapshot, []);
       await execute(inputs[2]!, 'retry');
+      assert.deepEqual(pinSnapshot, orderedPostIds);
+
+      pinSnapshot = ['00000000-0000-8000-8000-000000000398'];
+      await assert.rejects(
+        execute(inputs[3]!, 'aggregate-overflow'),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ApplicationFailure &&
+          error.cause.nonRetryable &&
+          error.cause.type === 'RemoteFeaturedNoteRejected',
+      );
+      assert.deepEqual(pinSnapshot, ['00000000-0000-8000-8000-000000000398']);
+
+      await assert.rejects(
+        execute(inputs[4]!, 'wrong-owner'),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ApplicationFailure &&
+          error.cause.nonRetryable &&
+          error.cause.type === 'RemoteFeaturedPostOwnerMismatch',
+      );
+      assert.deepEqual(pinSnapshot, ['00000000-0000-8000-8000-000000000398']);
 
       assert.deepEqual(collectionCalls, inputs);
       assert.deepEqual(replacementCalls, [
@@ -185,6 +275,48 @@ test(
         { profileId, postIds: orderedPostIds },
         { profileId, postIds: orderedPostIds },
       ]);
+      assert.deepEqual(
+        lookupCalls.map(
+          ({ objectUri, signingProfileId: signer, advertisingActorUri, maxDocumentBytes }) => ({
+            objectUri,
+            signingProfileId: signer,
+            advertisingActorUri,
+            maxDocumentBytes,
+          }),
+        ),
+        [
+          {
+            objectUri: itemUris[0],
+            signingProfileId,
+            advertisingActorUri: inputs[2]!.actorUri,
+            maxDocumentBytes: REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES - 100,
+          },
+          {
+            objectUri: itemUris[1],
+            signingProfileId,
+            advertisingActorUri: inputs[2]!.actorUri,
+            maxDocumentBytes: REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES - 125,
+          },
+          {
+            objectUri: itemUris[0],
+            signingProfileId,
+            advertisingActorUri: inputs[3]!.actorUri,
+            maxDocumentBytes: 40,
+          },
+          {
+            objectUri: itemUris[1],
+            signingProfileId,
+            advertisingActorUri: inputs[3]!.actorUri,
+            maxDocumentBytes: 15,
+          },
+          {
+            objectUri: wrongOwnerUri,
+            signingProfileId,
+            advertisingActorUri: inputs[4]!.actorUri,
+            maxDocumentBytes: REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES - 1,
+          },
+        ],
+      );
     });
 
     const events =
@@ -194,7 +326,7 @@ test(
       .find(
         (event) =>
           event.activityTaskScheduledEventAttributes?.activityType?.name ===
-          'collectRemoteFeaturedActivity',
+          'collectRemoteFeaturedItemsActivity',
       )
       ?.eventId?.toString();
     assert.ok(collectionScheduledEventId);
@@ -205,6 +337,81 @@ test(
           collectionScheduledEventId,
       ),
     );
+    assert.equal(
+      events.filter(
+        (event) =>
+          event.childWorkflowExecutionStartedEventAttributes?.workflowType?.name ===
+          'remotePostLookupWorkflow',
+      ).length,
+      2,
+    );
+  },
+);
+
+test(
+  'Remote Featured Workflow replays the pre-patch collection and replacement trace',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-replay-${process.pid}`;
+    const profileId = '00000000-0000-8000-8000-000000000221';
+    const postIds = ['00000000-0000-8000-8000-000000000321'];
+    const input: RemoteProfileFeaturedSyncInput = {
+      actorUri: 'https://remote.example/users/legacy',
+      featuredUri: 'https://remote.example/users/legacy/featured',
+      profileId,
+    };
+    const calls: string[] = [];
+    const legacyWorker = await Worker.create({
+      activities: {
+        collectRemoteFeaturedActivity: async (received: RemoteProfileFeaturedSyncInput) => {
+          calls.push('collectRemoteFeaturedActivity');
+          assert.deepEqual(received, input);
+          return postIds;
+        },
+        replaceRemoteFeaturedActivity: async (received: {
+          readonly profileId: string;
+          readonly postIds: readonly string[];
+        }) => {
+          calls.push('replaceRemoteFeaturedActivity');
+          assert.deepEqual(received, { profileId, postIds });
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: legacyRemoteProfileFeaturedWorkflowPath,
+    });
+
+    await legacyWorker.runUntil(async () => {
+      const handle = await environment.client.workflow.start('remoteProfileFeaturedWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `${taskQueue}:legacy`,
+      });
+      await handle.result();
+      assert.deepEqual(calls, ['collectRemoteFeaturedActivity', 'replaceRemoteFeaturedActivity']);
+
+      const history = await handle.fetchHistory();
+      const events = history.events ?? [];
+      const scheduledActivities = events.flatMap((event) => {
+        const name = event.activityTaskScheduledEventAttributes?.activityType?.name;
+        return name === undefined ? [] : [name];
+      });
+      assert.deepEqual(scheduledActivities, [
+        'collectRemoteFeaturedActivity',
+        'replaceRemoteFeaturedActivity',
+      ]);
+      assert.equal(
+        events.some((event) => Boolean(event.childWorkflowExecutionStartedEventAttributes)),
+        false,
+      );
+
+      await Worker.runReplayHistory({ workflowsPath }, history, handle.workflowId);
+    });
   },
 );
 

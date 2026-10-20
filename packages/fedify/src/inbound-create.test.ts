@@ -1183,6 +1183,54 @@ describe('inbound Create dispatch', () => {
     assert.equal(postContentDocumentToText(materialized.content.document), 'Original');
   });
 
+  test('forwards an optional signing Profile to the hydrated author lookup Workflow', async () => {
+    const signer = await createLocalFollowerProfile('hydrated-author-lookup-signer');
+    const author = await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/signed-author-lookup');
+    const lookupInput = {
+      actorUri: remoteActorUri.href,
+      contextOrigin: publicOrigin,
+      profileId: signer.id,
+    } satisfies RemoteProfileLookupInput;
+    const lookupWorkflow = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        assert.deepEqual(workflowOptions.args, [lookupInput]);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput),
+        );
+        return author.id;
+      },
+    );
+
+    try {
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Signed author lookup',
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+        signingProfileId: signer.id,
+      });
+
+      assert.equal(result.status, 'created');
+      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal((await getMaterializedPost(objectUri)).post.profileId, author.id);
+    } finally {
+      lookupWorkflow.mock.restore();
+    }
+  });
+
   test('materializes a Followers Only hydrated original without a local Follow', async () => {
     const profile = await createStoredRemoteActor();
     const objectUri = new URL('https://objects.example/notes/hydrated-followers');

@@ -60,7 +60,11 @@ export const collectRemoteFeaturedItemUris = async ({
     });
   };
 
-  const requestedFeaturedUri = new URL(featuredUri).href;
+  const featuredObjectUri = new URL(featuredUri);
+  if (!isHttpUri(featuredObjectUri)) {
+    throw new TypeError('Remote Featured URI must use HTTP(S)');
+  }
+  const requestedFeaturedUri = featuredObjectUri.href;
   const root = await parseObject(requestedFeaturedUri);
   if (!(root instanceof OrderedCollection || root instanceof OrderedCollectionPage)) {
     throw new TypeError('Remote Featured document must be an OrderedCollection or page');
@@ -79,6 +83,9 @@ export const collectRemoteFeaturedItemUris = async ({
       throw new RemoteFeaturedTraversalError('item_limit_exceeded');
     }
     for (const itemUri of pageItems) {
+      if (!isHttpUri(itemUri)) {
+        throw new TypeError('Remote Featured item URI must use HTTP(S)');
+      }
       if (itemUris.has(itemUri.href)) {
         throw new RemoteFeaturedTraversalError('duplicate_item_uri');
       }
@@ -166,10 +173,6 @@ export const collectRemoteFeaturedPostIds = async ({
   featuredUri: string;
   profileId: string;
 }): Promise<string[]> => {
-  if (!isHttpUri(new URL(featuredUri))) {
-    throw new TypeError('Remote Featured URI must use HTTP(S)');
-  }
-
   let bytes = 0;
   const boundedLoader: DocumentLoader = async (url, options) => {
     const loaded = await documentLoader(url, {
@@ -190,9 +193,6 @@ export const collectRemoteFeaturedPostIds = async ({
   });
   const postIds: string[] = [];
   for (const objectUri of itemUris) {
-    if (!isHttpUri(objectUri)) {
-      throw new TypeError('Remote Featured item URI must use HTTP(S)');
-    }
     const note = await context.lookupObject(objectUri, {
       contextLoader: boundedLoader,
       crossOrigin: 'throw',

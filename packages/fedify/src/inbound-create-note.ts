@@ -212,6 +212,7 @@ type RemoteNoteMaterializationSource =
     }
   | {
       advertisingActorUri?: string | URL;
+      signingProfileId?: string;
       kind: 'hydrated';
     };
 
@@ -363,6 +364,9 @@ const materializeRemoteNote = async ({
         : await findOrMaterializeRemoteProfileActorByUri({
             actorUri: attributionUri,
             contextOrigin: context.canonicalOrigin,
+            ...(source.signingProfileId === undefined
+              ? {}
+              : { profileId: source.signingProfileId }),
           });
   } catch (error) {
     if (
@@ -433,6 +437,7 @@ export const materializeHydratedRemoteNote = async ({
   objectUri,
   observation,
   receivedAt,
+  signingProfileId,
 }: {
   advertisingActorUri?: string | URL;
   context: RemoteNoteMaterializationContext;
@@ -440,13 +445,18 @@ export const materializeHydratedRemoteNote = async ({
   objectUri: URL;
   observation: Pick<InboundObservation, 'activityType' | 'handler'>;
   receivedAt: Temporal.Instant;
+  signingProfileId?: string;
 }): Promise<HydratedRemoteNoteMaterializationResult> => {
   const result = await materializeRemoteNote({
     context,
     note,
     objectUri,
     receivedAt,
-    source: { advertisingActorUri, kind: 'hydrated' },
+    source: {
+      ...(advertisingActorUri === undefined ? {} : { advertisingActorUri }),
+      ...(signingProfileId === undefined ? {} : { signingProfileId }),
+      kind: 'hydrated',
+    },
   });
   if (result.status === 'rejected') {
     if (

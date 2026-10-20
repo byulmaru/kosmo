@@ -25,7 +25,11 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
-export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
+export { lookupRemotePostActivity } from './activities/remote-post-lookup';
+export {
+  collectRemoteFeaturedActivity,
+  collectRemoteFeaturedItemsActivity,
+} from './activities/remote-profile-featured';
 export {
   applyRemoteProfileActorActivity,
   fetchRemoteProfileActorActivity,

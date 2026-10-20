@@ -325,6 +325,7 @@ type RemoteActorReceipt = {
 type RemoteActorLookupOptions = {
   actorUri: URL;
   contextOrigin?: string;
+  profileId?: string;
   receipt?: RemoteActorReceipt;
 };
 
@@ -472,6 +473,7 @@ export const findOrMaterializeRemoteProfileActorByUri = async (
   const profileId = await lookupRemoteProfileActor({
     actorUri: options.actorUri.href,
     ...(options.contextOrigin === undefined ? {} : { contextOrigin: options.contextOrigin }),
+    ...(options.profileId === undefined ? {} : { profileId: options.profileId }),
     ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
   });
   if (!profileId) {
