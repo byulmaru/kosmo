@@ -12,7 +12,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure } from '@temporalio/activity';
+import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { eq } from 'drizzle-orm';
@@ -147,6 +147,7 @@ test(
       };
     };
     let contextCreationCalls = 0;
+    const realContext = federation.createContext(new URL(publicOrigin), undefined);
     const createContextMock = t.mock.method(federation, 'createContext', () => {
       contextCreationCalls += 1;
       return {
@@ -156,6 +157,7 @@ test(
           signerLoaderIdentifiers.push(identifier);
           return documentLoader;
         },
+        parseUri: realContext.parseUri.bind(realContext),
       } as never;
     });
     const authorLookupInputs: RemoteProfileLookupInput[] = [];
@@ -202,10 +204,12 @@ test(
         args: [input as RemotePostLookupInput],
         taskQueue,
         workflowId: `${taskQueue}:${id}`,
+        workflowExecutionTimeout: '30 seconds',
       });
 
     await worker.runUntil(async () => {
       const invalidInputs = [
+        { objectUri: 'not-a-url' },
         { objectUri: 'ftp://remote.example/notes/1' },
         { objectUri: objectUri.href, signingProfileId: 'not-a-uuid' },
         { objectUri: objectUri.href, maxDocumentBytes: -1 },
@@ -216,7 +220,14 @@ test(
         { objectUri: objectUri.href, unexpected: true },
       ];
       for (const [index, input] of invalidInputs.entries()) {
-        await assert.rejects(run(input, `invalid-${index}`));
+        await assert.rejects(
+          run(input, `invalid-${index}`),
+          (error: unknown) =>
+            error instanceof WorkflowFailedError &&
+            error.cause instanceof ApplicationFailure &&
+            error.cause.nonRetryable &&
+            error.cause.type === 'RemotePostLookupInputInvalid',
+        );
       }
       assert.equal(activityInputs.length, 0);
 

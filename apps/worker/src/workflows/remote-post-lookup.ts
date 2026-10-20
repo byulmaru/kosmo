@@ -7,10 +7,7 @@ import type * as activities from '../activities';
 
 const { lookupRemotePostActivity } = proxyActivities<typeof activities>(workflowActivityOptions);
 
-const httpUriSchema = z.url().refine((value) => {
-  const uri = new URL(value);
-  return (uri.protocol === 'http:' || uri.protocol === 'https:') && uri.hostname !== '';
-});
+const httpUriSchema = z.url({ protocol: /^https?$/ });
 
 const inputSchema = z.strictObject({
   objectUri: httpUriSchema,
