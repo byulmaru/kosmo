@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { FlatList, Platform, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space } from '@/theme/tokens';
@@ -10,6 +10,31 @@ type PointerEvent = {
   preventDefault: () => void;
   stopPropagation: () => void;
 };
+
+type Drag = { pageY: number; offset: number; pointerId?: number };
+type Interaction = { drag: Drag | null; request: { offset: number } | null };
+type DragAction =
+  | { type: 'begin'; drag: Drag }
+  | { type: 'move'; pageY: number; pointerId?: number; range: number; travel: number }
+  | { type: 'end'; pointerId?: number };
+
+function updateDrag(state: Interaction, action: DragAction): Interaction {
+  if (action.type === 'begin') {
+    return state.drag ? state : { ...state, drag: action.drag };
+  }
+  if (!state.drag || state.drag.pointerId !== action.pointerId) {
+    return state;
+  }
+  if (action.type === 'end') {
+    return { ...state, drag: null };
+  }
+  if (action.travel <= 0) {
+    return state;
+  }
+  const next =
+    state.drag.offset + ((action.pageY - state.drag.pageY) / action.travel) * action.range;
+  return { ...state, request: { offset: Math.min(action.range, Math.max(0, next)) } };
+}
 
 // Private to the picker: the grid reserves this gutter even while the thumb is hidden.
 export const reactionScrollbarWidth = Platform.OS === 'web' ? space[24] : space[48];
@@ -25,9 +50,7 @@ export function ReactionPickerList<Item>({
   const [metrics, setMetrics] = useState({ content: 0, viewport: 0, offset: 0 });
   const [activity, setActivity] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
-  const [drag, setDrag] = useState<{ pageY: number; offset: number; pointerId?: number } | null>(
-    null,
-  );
+  const [{ drag, request }, dispatchDrag] = useReducer(updateDrag, { drag: null, request: null });
   const web = Platform.OS === 'web';
   const range = Math.max(0, metrics.content - metrics.viewport);
   const offset = Math.min(range, Math.max(0, metrics.offset));
@@ -38,6 +61,15 @@ export function ReactionPickerList<Item>({
   );
   const travel = metrics.viewport - thumbHeight;
   const visible = activity !== null || drag !== null || focused;
+
+  // Native can batch grant/move/release before a render. Reduce them in order, then
+  // synchronize the final request with the imperative platform list scroll handle.
+  useEffect(() => {
+    if (request) {
+      list.current?.scrollToOffset({ offset: request.offset, animated: false });
+      setMetrics((value) => ({ ...value, offset: request.offset }));
+    }
+  }, [request]);
 
   // Scroll events include inertia. Synchronize the idle timeout with that external event stream.
   useEffect(() => {
@@ -62,16 +94,14 @@ export function ReactionPickerList<Item>({
       };
     });
     if ((update.content ?? metrics.content) <= (update.viewport ?? metrics.viewport)) {
-      setDrag(null);
+      dispatchDrag({ type: 'end', pointerId: drag?.pointerId });
     }
   };
-  const move = (pageY: number) => {
-    if (drag && travel > 0) {
-      scrollTo(drag.offset + ((pageY - drag.pageY) / travel) * range);
-    }
+  const move = (pageY: number, pointerId?: number) => {
+    dispatchDrag({ type: 'move', pageY, pointerId, range, travel });
   };
-  const finish = () => {
-    setDrag(null);
+  const finish = (pointerId?: number) => {
+    dispatchDrag({ type: 'end', pointerId });
     setActivity(null);
   };
   const webProps = web
@@ -108,38 +138,30 @@ export function ReactionPickerList<Item>({
           event.preventDefault();
           event.stopPropagation();
           event.currentTarget.setPointerCapture(pointerId);
-          setDrag({ pageY, offset, pointerId });
+          dispatchDrag({ type: 'begin', drag: { pageY, offset, pointerId } });
         },
         onPointerMove: (event: PointerEvent) => {
-          if (drag?.pointerId === event.nativeEvent.pointerId) {
-            move(event.nativeEvent.pageY);
-          }
+          move(event.nativeEvent.pageY, event.nativeEvent.pointerId);
         },
         onPointerUp: (event: PointerEvent) => {
-          if (drag?.pointerId === event.nativeEvent.pointerId) {
-            finish();
-          }
+          finish(event.nativeEvent.pointerId);
         },
         onPointerCancel: (event: PointerEvent) => {
-          if (drag?.pointerId === event.nativeEvent.pointerId) {
-            finish();
-          }
+          finish(event.nativeEvent.pointerId);
         },
         onLostPointerCapture: (event: PointerEvent) => {
-          if (drag?.pointerId === event.nativeEvent.pointerId) {
-            finish();
-          }
+          finish(event.nativeEvent.pointerId);
         },
       }
     : {
         onStartShouldSetResponder: () => visible,
         onResponderGrant: (event: { nativeEvent: { pageY: number } }) => {
-          setDrag({ pageY: event.nativeEvent.pageY, offset });
+          dispatchDrag({ type: 'begin', drag: { pageY: event.nativeEvent.pageY, offset } });
         },
         onResponderMove: (event: { nativeEvent: { pageY: number } }) =>
           move(event.nativeEvent.pageY),
-        onResponderRelease: finish,
-        onResponderTerminate: finish,
+        onResponderRelease: () => finish(),
+        onResponderTerminate: () => finish(),
         onResponderTerminationRequest: () => false,
       };
 

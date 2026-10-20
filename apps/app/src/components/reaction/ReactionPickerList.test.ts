@@ -161,3 +161,49 @@ test('queued Native scroll updates do not retain pooled events', () => {
   assert.equal(thumb().props.accessibilityValue.now, 500);
   act(() => renderer.unmount());
 });
+
+for (const end of ['onResponderRelease', 'onResponderTerminate']) {
+  test(`batched Native grant, move and ${end} preserve the final scroll request`, () => {
+    platform = 'ios';
+    const { renderer, list, thumb } = render();
+    scroll(list, 100);
+    const handlers = thumb().props;
+    act(() => {
+      handlers.onResponderGrant({ nativeEvent: { pageY: 100 } });
+      handlers.onResponderMove({ nativeEvent: { pageY: 10000 } });
+      handlers[end]();
+    });
+    assert.equal(offsets.at(-1), 1000);
+    assert.equal(list().props.scrollEnabled, true);
+    const count = offsets.length;
+    act(() => thumb().props.onResponderMove({ nativeEvent: { pageY: -10000 } }));
+    assert.equal(offsets.length, count);
+    // A later gesture may request the same offset after ordinary list scrolling.
+    scroll(list, 100);
+    const nextHandlers = thumb().props;
+    act(() => {
+      nextHandlers.onResponderGrant({ nativeEvent: { pageY: 100 } });
+      nextHandlers.onResponderMove({ nativeEvent: { pageY: 10000 } });
+      nextHandlers[end]();
+    });
+    assert.equal(offsets.at(-1), 1000);
+    assert.equal(thumb().props.accessibilityValue.now, 1000);
+    act(() => renderer.unmount());
+  });
+}
+
+test('batched Web pointer input preserves the final move and ignores other pointers', () => {
+  const { renderer, list, thumb } = render();
+  scroll(list, 100);
+  const handlers = thumb().props;
+  act(() => {
+    handlers.onPointerDown(pointer(100));
+    handlers.onPointerMove(pointer(-10000, 2));
+    handlers.onPointerUp(pointer(0, 2));
+    handlers.onPointerMove(pointer(10000));
+    handlers.onPointerUp(pointer(10000));
+  });
+  assert.equal(offsets.at(-1), 1000);
+  assert.equal(list().props.scrollEnabled, true);
+  act(() => renderer.unmount());
+});
