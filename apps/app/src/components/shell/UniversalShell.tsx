@@ -32,6 +32,8 @@ import {
   PrimaryNavigationScrollProvider,
   PrimaryNavigationScrollReset,
 } from './PrimaryNavigationScrollContext';
+import { PublicContentInvitation } from './PublicContentInvitation';
+import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import { RightRail, RightRailFooter } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import {
@@ -106,6 +108,7 @@ const webFixedBottomBar = {
 } as unknown as ViewStyle;
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
+const invitationDismissedKey = 'kosmo:public-content-invitation-dismissed';
 
 export function UniversalShell({ children }: { children?: ReactNode }) {
   return (
@@ -125,12 +128,22 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [invitationDismissed, setInvitationDismissed] = useState(() => {
+    try {
+      return (
+        Platform.OS === 'web' && globalThis.sessionStorage?.getItem(invitationDismissedKey) === '1'
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [invitationHeight, setInvitationHeight] = useState(0);
   const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
@@ -173,6 +186,18 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const publicContentRoute =
+    routeSegments.at(-1) === '[profileHandle]' ||
+    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]');
+  const guestPublicContent = web && status === 'guest' && publicContentRoute;
+  const invitationVisible = guestPublicContent && !invitationDismissed;
+  const invitationPlacement = getPublicContentInvitationPlacement({
+    height,
+    safeAreaBottom: insets.bottom,
+    width,
+  });
+  const invitationReservedHeight =
+    invitationVisible && invitationPlacement.mode === 'fixed' ? invitationHeight : 0;
   const availableProfileCount = data.me?.profiles.length;
   useEffect(() => {
     if (web && status === 'valid' && accountId && availableProfileCount !== undefined) {
@@ -192,7 +217,13 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const timeline = isTimelineRoute(pathname);
-  const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
+  const mobileShellHeader = getWebMobileShellHeader(
+    web,
+    width,
+    pathname,
+    routeSegments,
+    guestPublicContent,
+  );
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
@@ -383,6 +414,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           <SidebarNavigation
             compact={compact}
             feedbackActive={feedbackOverlayVisible}
+            guestPublicContent={guestPublicContent}
             onComposeOpen={layout === 'compact' ? openComposer : undefined}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
@@ -444,11 +476,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           style={[
             styles.route,
             !web && styles.nativeRoute,
+            web ? { paddingBottom: invitationReservedHeight } : null,
             mobile && web
               ? {
                   ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
                   paddingBottom:
-                    getBottomTabBarContentHeight(Platform.OS) + (web ? 0 : insets.bottom),
+                    getBottomTabBarContentHeight(Platform.OS) +
+                    invitationReservedHeight +
+                    insets.bottom,
                 }
               : null,
           ]}
@@ -456,6 +491,23 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
             <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
+          <PublicContentInvitation
+            onDismiss={() => {
+              try {
+                globalThis.sessionStorage?.setItem(invitationDismissedKey, '1');
+              } catch {
+                // Keep the current render dismissible when browser storage is unavailable.
+              }
+              setInvitationDismissed(true);
+              setInvitationHeight(0);
+            }}
+            onLayout={(nextHeight) => {
+              setInvitationHeight((currentHeight) =>
+                Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
+              );
+            }}
+            visible={invitationVisible}
+          />
         </View>
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
@@ -504,6 +556,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           onSwitcherOpenChange={setSwitcherOpen}
           query={data}
           switcherOpen={switcherOpen}
+          guestPublicContent={guestPublicContent}
         />
       ) : null}
     </View>

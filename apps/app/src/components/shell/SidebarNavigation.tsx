@@ -1,7 +1,8 @@
-import { usePathname } from 'expo-router';
+import { Link, usePathname } from 'expo-router';
 import { cloneElement } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { startWebLoginFromPress } from '@/auth/webLogin';
 import { SidebarNavigation as SidebarNavigationPresentation } from '@/components/ui/SidebarNavigation';
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -14,7 +15,10 @@ import { isSettingsRoute, isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement, RefObject } from 'react';
 import type { NavigationDestination } from '@/components/ui/navigationChrome';
-import type { SidebarNavigationRenderControlProps } from '@/components/ui/SidebarNavigation';
+import type {
+  SidebarGuestActionRenderProps,
+  SidebarNavigationRenderControlProps,
+} from '@/components/ui/SidebarNavigation';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
 
 const SidebarNavigationFragment = graphql`
@@ -38,6 +42,7 @@ const SidebarNavigationFragment = graphql`
 
 type Props = {
   compact?: boolean;
+  guestPublicContent?: boolean;
   onComposeOpen?: () => void;
   feedbackActive?: boolean;
   onFeedbackOpen?: () => void;
@@ -62,6 +67,7 @@ const hrefs: Partial<Record<NavigationDestination, Href>> = {
 
 export function SidebarNavigation({
   compact = false,
+  guestPublicContent = false,
   onComposeOpen,
   feedbackActive = false,
   onFeedbackOpen,
@@ -153,6 +159,22 @@ export function SidebarNavigation({
     );
   };
 
+  const renderGuestAction = ({ children }: SidebarGuestActionRenderProps): ReactElement => {
+    const childControl = children as ReactElement<{
+      accessibilityRole?: 'button' | 'link';
+      onPress?: NonNullable<LinkProps['onPress']>;
+    }>;
+
+    return (
+      <Link asChild href="/login">
+        {cloneElement(childControl, {
+          accessibilityRole: 'link',
+          onPress: startWebLoginFromPress,
+        })}
+      </Link>
+    );
+  };
+
   const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';
   const nativeDrawerSurface = Platform.OS !== 'web' && surface === 'drawer';
 
@@ -170,14 +192,16 @@ export function SidebarNavigation({
         },
       ]}
     >
-      <ProfileSwitcher
-        onNavigate={onNavigate}
-        onOpenChange={onSwitcherOpenChange}
-        open={switcherOpen}
-        query={data}
-        surface={switcherSurface}
-        triggerRef={profileTriggerRef}
-      />
+      {!guestPublicContent ? (
+        <ProfileSwitcher
+          onNavigate={onNavigate}
+          onOpenChange={onSwitcherOpenChange}
+          open={switcherOpen}
+          query={data}
+          surface={switcherSurface}
+          triggerRef={profileTriggerRef}
+        />
+      ) : null}
       <ScrollView
         contentContainerStyle={styles.navigationContent}
         style={[
@@ -189,6 +213,7 @@ export function SidebarNavigation({
       >
         <SidebarNavigationPresentation
           currentDestination={currentDestination}
+          guestPublicContent={guestPublicContent}
           logoutError={logoutError}
           logoutPending={logoutPending}
           onLogout={handleLogout}
@@ -203,8 +228,9 @@ export function SidebarNavigation({
               : null
           }
           renderControl={renderControl}
+          renderGuestAction={renderGuestAction}
           showRightBorder={surface === 'drawer'}
-          showFeedback={data.currentSession !== null}
+          showFeedback={!guestPublicContent && data.currentSession !== null}
           unreadNotificationCount={unreadNotificationCount}
         />
       </ScrollView>
