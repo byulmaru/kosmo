@@ -161,7 +161,7 @@ afterEach(async () => {
 
 after(() => nativeHarness.cleanup());
 
-const post = {
+const postData = {
   actionSurface: {},
   content: {
     bodyText: 'Post body',
@@ -178,10 +178,12 @@ const post = {
     handle: 'profile',
     id: 'profile-1',
     relativeHandle: '@profile',
+    viewerState: { profileBlock: null },
   },
   replyParent: null,
   repostSource: null,
-} as unknown as PostListItem_post$key;
+};
+const post = postData as unknown as PostListItem_post$key;
 
 function feedbackIsPressed(): boolean {
   const tag = nativeHarness.tagByTestID('post-list-item-feedback');
@@ -208,12 +210,20 @@ function requiredTag(tag: number | undefined, description: string): number {
   return tag;
 }
 
-async function mountPost(t: TestContext) {
+async function mountPost(t: TestContext, postKey = post) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  await renderPost(postKey);
+}
+
+async function renderPost(postKey = post) {
   assert.ok(PostListItem);
   await act(async () =>
     nativeHarness.render(
-      createElement(PostListItem, { post, presentation: 'mobile', showDivider: false }),
+      createElement(PostListItem, {
+        post: postKey,
+        presentation: 'mobile',
+        showDivider: false,
+      }),
     ),
   );
 }

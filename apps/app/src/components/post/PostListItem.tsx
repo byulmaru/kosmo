@@ -136,6 +136,7 @@ export function PostListItem({
     },
     [openViewer, post.id],
   );
+
   const standardCardStyle = [
     { backgroundColor: theme.backgroundCanvas, paddingHorizontal: metrics.inset },
     styles.standardCard,

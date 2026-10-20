@@ -192,7 +192,7 @@ const postNode = (id: string, isPinned: boolean) => ({
     relativeHandle: '@owner',
     avatar: null,
     instance: { kind: 'LOCAL' },
-    viewerState: { profileBlock: null, profileMute: null },
+    viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
   },
 });
 const connection = (

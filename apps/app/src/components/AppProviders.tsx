@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
-import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
 import { NativePushProvider } from '@/components/native-push/NativePushProvider';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
@@ -68,11 +67,9 @@ export function AppProviders({
                   <FeatureFlagsProvider>
                     <AnalyticsSessionBridge />
                     <NativePushProvider>
-                      <ContentReportProvider>
-                        <PostContentWarningRevealProvider>
-                          {children}
-                        </PostContentWarningRevealProvider>
-                      </ContentReportProvider>
+                      <PostContentWarningRevealProvider>
+                        {children}
+                      </PostContentWarningRevealProvider>
                     </NativePushProvider>
                   </FeatureFlagsProvider>
                 </SessionProvider>

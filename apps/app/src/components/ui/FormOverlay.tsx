@@ -15,7 +15,7 @@ import { ConfirmationContent } from './ConfirmationContent';
 import { IconButton } from './IconButton';
 import { useSafeAreaPadding } from './useSafeAreaPadding';
 import type { ReactNode, RefObject } from 'react';
-import type { View as NativeView } from 'react-native';
+import type { StyleProp, View as NativeView, ViewStyle } from 'react-native';
 
 export type FormOverlayState = {
   dirty: boolean;
@@ -29,6 +29,7 @@ type RenderFormProps = {
 
 type Props = {
   bodyPadding?: number;
+  bodyContentContainerStyle?: StyleProp<ViewStyle>;
   closeAccessibilityLabel?: string;
   continueEditingFocusSelector?: string;
   desktopPlacement?: 'center' | 'top';
@@ -48,6 +49,7 @@ const initialFormState: FormOverlayState = { dirty: false, submitting: false };
 
 export function FormOverlay({
   bodyPadding = spacing.xl,
+  bodyContentContainerStyle,
   closeAccessibilityLabel,
   continueEditingFocusSelector = 'textarea',
   desktopPlacement = 'center',
@@ -332,7 +334,7 @@ export function FormOverlay({
             </View>
             <ScrollView
               automaticallyAdjustKeyboardInsets
-              contentContainerStyle={{ padding: bodyPadding }}
+              contentContainerStyle={[{ padding: bodyPadding }, bodyContentContainerStyle]}
               style={styles.scroll}
               testID={`${testIDPrefix}-overlay-body`}
             >

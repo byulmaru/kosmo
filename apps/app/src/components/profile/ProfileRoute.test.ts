@@ -37,6 +37,7 @@ const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
 type ReportMenuInput = {
+  blockProfile?: object;
   id: string;
   kind: 'PROFILE';
   label: string;
@@ -340,6 +341,7 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
+  getContentReportBlockProfile: () => undefined,
   useContentReportMenuItem: (input: ReportMenuInput) => {
     capturedReport.value = input;
     return reportMenuItem;
@@ -407,11 +409,13 @@ mockModule(new URL('../ui/Tabs.tsx', import.meta.url), {
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   PostList: ({
     error,
+    ignoreBlock,
     loading,
     onRetry,
     profile,
   }: {
     error?: boolean;
+    ignoreBlock?: boolean;
     loading?: boolean;
     onRetry?: () => void;
     profile?: { handle: string };
@@ -419,6 +423,7 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
     const postList = createElement(
       'PostList',
       {
+        ignoreBlock,
         identity: error ? 'error' : loading ? 'loading' : profile?.handle,
         onRetry,
       },
@@ -686,6 +691,7 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@local');
 
     assert.deepEqual(capturedReport.value, {
+      blockProfile: undefined,
       id: 'profile:local',
       kind: 'PROFILE',
       label: '@local',
@@ -1012,6 +1018,7 @@ describe('profile route parameter lifecycle', () => {
 
     await act(async () => requireRendered('StateView').props.onAction());
     assert.deepEqual(identities('PostList'), ['blocked']);
+    assert.equal(requireRendered('PostList').props.ignoreBlock, true);
   });
 
   it('Profile viewerState에 own block이 없으면 일반 관계 상태를 유지한다', async () => {
@@ -1028,6 +1035,7 @@ describe('profile route parameter lifecycle', () => {
 
     assert.equal(requireRendered('ProfileHero').props.blockedBy, false);
     assert.deepEqual(identities('PostList'), ['blocked']);
+    assert.equal(requireRendered('PostList').props.ignoreBlock, false);
     assert.equal(
       requireRendered('FollowButton').findByType('Button' as never).props.children,
       '팔로우',

@@ -74,6 +74,7 @@ mock.module('@/components/profile/ProfileMuteController', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/content-report/ContentReportContext', {
   exports: {
+    getContentReportBlockProfile: () => undefined,
     useContentReportMenuItem: (input: ReportMenuInput) => {
       capturedReport.value = input;
       return {
@@ -150,6 +151,7 @@ describe('PostActionSurface mute wiring', () => {
       throw new Error('PostActionSurface did not render ProfileMuteAction.');
     }
     assert.deepEqual(capturedReport.value, {
+      blockProfile: undefined,
       id: target.id,
       kind: 'POST',
       label: '@author의 게시물 · post:1',
