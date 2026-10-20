@@ -193,7 +193,8 @@ export function FullReactionPicker({
               ? (_data, index) => ({ ...itemLayouts[index]!, index })
               : undefined
           }
-          initialNumToRender={12}
+          // Web Tab order must include the full catalogue from the initial render.
+          initialNumToRender={Platform.OS === 'web' ? gridItems.length : 12}
           keyExtractor={(item) =>
             item.kind === 'count'
               ? 'count'

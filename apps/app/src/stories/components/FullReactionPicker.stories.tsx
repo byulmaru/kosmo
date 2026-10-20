@@ -698,11 +698,15 @@ export const SequentialKeyboardBrowseContract: Story = {
     const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    const finalCatalogOption = reactionEmojiPickerOptions.at(-1)!;
+    const previousCatalogOption = reactionEmojiPickerOptions.at(-2)!;
+    const tailOption = within(scroll).getByRole('button', {
+      name: `${finalCatalogOption.label} ${finalCatalogOption.emoji}`,
+    });
+    const previousOption = within(scroll).getByRole('button', {
+      name: `${previousCatalogOption.label} ${previousCatalogOption.emoji}`,
+    });
     await waitFor(() => expect(search).toHaveFocus());
-    const lastInitiallyMountedOption = within(scroll).getAllByRole('button').at(-1)!;
-    lastInitiallyMountedOption.focus();
-    await userEvent.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
     search.focus();
     await userEvent.tab();
     const quickOptions = reactionEmojiPickerOptions
@@ -721,11 +725,11 @@ export const SequentialKeyboardBrowseContract: Story = {
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
-    const finalCatalogOption = reactionEmojiPickerOptions.at(-1);
+    previousOption.focus();
+    await userEvent.tab();
+    expect(tailOption).toHaveFocus();
+
     scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
-    const tailOption = await within(scroll).findByRole('button', {
-      name: `${finalCatalogOption?.label} ${finalCatalogOption?.emoji}`,
-    });
     await waitFor(() => {
       const tailRect = tailOption.getBoundingClientRect();
       const scrollRect = scroll.getBoundingClientRect();
