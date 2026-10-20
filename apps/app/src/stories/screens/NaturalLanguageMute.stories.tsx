@@ -1,17 +1,25 @@
 import { ArrowLeft, VolumeX } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import HomeRoute from '@/app/(tabs)/(protected)/home';
 import { PageHeader } from '@/components/PageHeader';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
+import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { BottomTabBar } from '@/components/ui/BottomTabBar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { SearchToolbar } from '@/components/ui/SearchToolbar';
+import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextField } from '@/components/ui/TextField';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { NaturalLanguageMuteSearchQuery } from './__generated__/NaturalLanguageMuteSearchQuery.graphql';
 
 const sentence = '〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.';
 const membership = { id: 'showcase-membership', role: 'OWNER' as const };
@@ -50,7 +58,7 @@ const shell = shellQuery({ profiles: [viewer], selectedProfile: viewer });
 const beforeData = { ...shell, homeTimeline: timeline(...posts) };
 const hiddenData = { ...shell, homeTimeline: timeline(...posts.slice(1)) };
 
-function SettingExample({ hidePost = false }: { hidePost?: boolean }) {
+function SettingExample() {
   const theme = useTheme();
   return (
     <View style={{ height: 844 }}>
@@ -70,7 +78,7 @@ function SettingExample({ hidePost = false }: { hidePost?: boolean }) {
           단어를 하나씩 고르는 대신, 문장으로 말해보세요.
         </Text>
         <TextField label="뮤트할 내용" multiline value={sentence} style={styles.input} />
-        <Button>{hidePost ? '이 조건으로 글 숨기기' : '이 조건으로 문장 가리기'}</Button>
+        <Button>이 조건으로 글 숨기기</Button>
         <View
           style={[
             styles.condition,
@@ -79,12 +87,10 @@ function SettingExample({ hidePost = false }: { hidePost?: boolean }) {
         >
           <VolumeX aria-hidden color={theme.foregroundPrimary} size={iconSizes[24]} />
           <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-            {hidePost ? '이런 글이 보이지 않아요' : '이런 문장이 가려져요'}
+            조건에 맞는 글을 숨겨요
           </Text>
           <Text style={[textStyles.uiCopyL, { color: theme.foregroundPrimary }]}>
-            {hidePost
-              ? '결말이나 반전이 담긴 글 전체를 타임라인에서 숨겨요.'
-              : '결말이나 반전을 직접 알려주는 문장 전체를 가려요.'}
+            타임라인과 검색 결과 등에서 글 전체가 보이지 않아요.
           </Text>
         </View>
         <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
@@ -92,6 +98,56 @@ function SettingExample({ hidePost = false }: { hidePost?: boolean }) {
         </Text>
       </View>
       <BottomTabBar onNavigate={() => undefined} profile={{ label: viewer.displayName }} />
+    </View>
+  );
+}
+
+const SearchPostsQuery = graphql`
+  query NaturalLanguageMuteSearchQuery($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      __typename
+      ... on Post {
+        id
+        ...PostListItem_post @alias(as: "listItem")
+      }
+    }
+  }
+`;
+
+function SearchExample({ postIds }: { postIds: string[] }) {
+  const data = useLazyLoadQuery<NaturalLanguageMuteSearchQuery>(SearchPostsQuery, { ids: postIds });
+  return (
+    <View>
+      <SearchToolbar
+        leadingAction="back"
+        onBackPress={() => undefined}
+        onChangeText={() => undefined}
+        onClear={() => undefined}
+        onSubmit={() => undefined}
+        value="별의 정원"
+      />
+      <TabList
+        accessibilityLabel="검색 결과 유형"
+        onValueChange={() => undefined}
+        value="latest"
+        variant="underline"
+      >
+        <Tab option={{ label: '인기', value: 'popular' }} />
+        <Tab option={{ label: '최신', value: 'latest' }} />
+        <Tab option={{ label: '미디어', value: 'media' }} />
+        <Tab option={{ label: '사람', value: 'people' }} />
+      </TabList>
+      <PostActionAuthenticationProvider>
+        <PostComposerCoordinatorProvider owner="list" profile={null}>
+          <PostMediaViewerHostProvider>
+            {data.nodes?.map((node) =>
+              node?.__typename === 'Post' && node.listItem ? (
+                <PostListItem key={node.id} post={node.listItem} presentation="mobile" />
+              ) : null,
+            )}
+          </PostMediaViewerHostProvider>
+        </PostComposerCoordinatorProvider>
+      </PostActionAuthenticationProvider>
     </View>
   );
 }
@@ -120,14 +176,24 @@ export const Setting: Story = {
   parameters: { showcaseSetting: true },
   render: () => <SettingExample />,
 };
-export const SettingHidden: Story = {
-  parameters: { showcaseSetting: true },
-  render: () => <SettingExample hidePost />,
-};
 export const Before: Story = { render: () => <HomeRoute /> };
 export const HiddenPosts: Story = {
   parameters: { relay: { data: hiddenData } },
   render: () => <HomeRoute />,
+};
+export const SearchBefore: Story = {
+  parameters: {
+    relay: { data: { ...shell, nodes: posts.slice(0, 2) } },
+    router: { pathname: '/search' },
+  },
+  render: () => <SearchExample postIds={posts.slice(0, 2).map((item) => item.id)} />,
+};
+export const SearchHidden: Story = {
+  parameters: {
+    relay: { data: { ...shell, nodes: posts.slice(1, 2) } },
+    router: { pathname: '/search' },
+  },
+  render: () => <SearchExample postIds={[posts[1].id]} />,
 };
 const styles = StyleSheet.create({
   form: { flex: 1, gap: space[16], padding: space[16] },

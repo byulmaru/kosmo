@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>문장 가림과 글 숨김 · KOSMO 자연어 뮤트</title>
+    <title>글 전체 숨김 · KOSMO 자연어 뮤트</title>
     <style>
       :root {
         color-scheme: light;
@@ -110,8 +110,8 @@
       .cases input {
         accent-color: var(--selected);
       }
-      main:has(#case-sentence:checked) #post-case,
-      main:has(#case-post:checked) #sentence-case {
+      main:has(#case-timeline:checked) #search-case,
+      main:has(#case-search:checked) #timeline-case {
         display: none;
       }
       .case-heading {
@@ -170,35 +170,6 @@
       .result .screen-link {
         border: 2px solid var(--selected);
       }
-      .region-toggle summary {
-        cursor: pointer;
-        list-style: none;
-      }
-      .region-toggle summary::-webkit-details-marker {
-        display: none;
-      }
-      .region-toggle summary:focus-visible {
-        outline: 2px solid var(--focus);
-        outline-offset: -4px;
-      }
-      .screen-link .revealed {
-        display: none;
-      }
-      .region-toggle[open] .muted {
-        display: none;
-      }
-      .region-toggle[open] .revealed {
-        display: block;
-      }
-      .toggle-hint {
-        display: block;
-        padding: 12px 16px;
-        font-size: 14px;
-        line-height: 20px;
-        color: var(--ink);
-        background: var(--subtle);
-        border-top: 1px solid var(--line);
-      }
       .note {
         margin-top: 16px;
         padding: 12px 16px;
@@ -249,11 +220,11 @@
         .cases {
           display: none;
         }
-        main #sentence-case,
-        main #post-case {
+        main #timeline-case,
+        main #search-case {
           display: block !important;
         }
-        #post-case {
+        #search-case {
           break-before: page;
         }
         .scene {
@@ -270,153 +241,68 @@
       </header>
       <div class="intro">
         <p class="eyebrow">“〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.”</p>
-        <h1>같은 조건, 두 가지 뮤트 예시</h1>
-        <p>문장만 가릴 때와 글 전체를 숨길 때, 코스모 피드가 어떻게 달라지는지 비교해보세요.</p>
+        <h1>보고 싶지 않은 글은 목록에서 숨겨요.</h1>
+        <p>조건에 해당하는 글 전체가 타임라인·검색 결과 등에 나타나지 않아요.</p>
       </div>
       <fieldset class="cases">
-        <legend>적용 예시 선택</legend>
-        <label><input id="case-sentence" type="radio" name="case" checked />01 문장만 가리기</label>
-        <label><input id="case-post" type="radio" name="case" />02 글 전체 숨기기</label>
+        <legend>적용 화면 선택</legend>
+        <label><input id="case-timeline" type="radio" name="case" checked />01 타임라인</label>
+        <label><input id="case-search" type="radio" name="case" />02 검색</label>
       </fieldset>
-      <section id="sentence-case" aria-labelledby="sentence-heading">
+      <section id="timeline-case" aria-labelledby="timeline-heading">
         <div class="case-heading">
-          <h2 id="sentence-heading">01 · 스포일러 문장만 영역 뮤트</h2>
-          <p>결말을 밝히는 문장 전체를 가려요. 같은 글의 다른 문장과 반응은 남아 있어요.</p>
+          <h2 id="timeline-heading">01 · 타임라인에서 글 전체 숨김</h2>
+          <p>결말을 담은 글이 목록에서 빠져요. 남은 글은 기존 순서대로 이어져요.</p>
         </div>
         <div class="screens">
           <figure class="scene">
             <figcaption>
               <div class="step">
                 <span class="number">1</span>
-                <h3>문장으로 조건 설정</h3>
+                <h3>피하고 싶은 내용을 적어요</h3>
               </div>
-              <p class="description">결말·반전은 피하고, 같은 글의 다른 감상은 읽고 싶어요.</p>
+              <p class="description">
+                작품의 결말·반전은 피하고, 다른 감상과 일상 글은 읽고 싶어요.
+              </p>
             </figcaption>
-            <a class="screen-link" href="setting.jpg" aria-label="문장 가림 설정 이미지 크게 보기"
+            <a class="screen-link" href="setting.jpg" aria-label="글 숨김 설정 이미지 크게 보기"
               ><img
                 src="setting.jpg"
                 width="390"
                 height="844"
-                alt="코스모 자연어 뮤트 설정 예시. 별의 정원의 결말이나 반전을 보고 싶지 않다는 입력과 이 조건으로 문장 가리기 버튼이 있다."
+                alt="코스모 자연어 뮤트 설정 예시. 별의 정원의 결말이나 반전을 보고 싶지 않다는 입력과 이 조건으로 글 숨기기 버튼. 타임라인과 검색 결과 등에서 글 전체가 보이지 않는다는 안내가 있다."
             /></a>
-            <p class="note">가리는 단위: <strong>조건에 해당하는 문장 전체</strong></p>
+            <p class="note">뮤트 대상: <strong>결말·반전이 담긴 글 전체</strong></p>
           </figure>
           <figure class="scene">
             <figcaption>
               <div class="step">
                 <span class="number">2</span>
-                <h3>적용 전</h3>
+                <h3>적용 전 타임라인</h3>
               </div>
-              <p class="description">
-                첫 글에 감상과 결말 공개가 함께 있어요. 아래에는 작화·행사 글이 있어요.
-              </p>
+              <p class="description">결말 공개, 작화 감상, 행사 준비 글이 함께 보여요.</p>
             </figcaption>
-            <a class="screen-link" href="before.jpg" aria-label="적용 전 피드 이미지 크게 보기"
+            <a class="screen-link" href="before.jpg" aria-label="적용 전 타임라인 이미지 크게 보기"
               ><img
                 src="before.jpg"
                 width="390"
                 height="844"
-                alt="코스모 홈 피드. 달빛의 글은 작품을 다 봤다는 말, 정원사가 미래의 주인공이라는 결말 문장, 작화 감상으로 구성된다. 아래에 여울과 모아의 글이 있다."
+                alt="코스모 홈 피드. 달빛의 결말 공개 글, 여울의 작화 감상, 모아의 행사 준비 글이 차례로 보인다."
             /></a>
-            <p class="note">첫 글의 <strong>두 번째 문장</strong>이 결말을 알려줘요.</p>
+            <p class="note">결말이 담긴 <strong>달빛의 글 전체</strong>가 숨김 대상이에요.</p>
           </figure>
           <figure class="scene result">
             <figcaption>
               <div class="step">
                 <span class="number">3</span>
-                <h3>해당 문장만 가려져요</h3>
+                <h3>해당 글이 보이지 않아요</h3>
               </div>
-              <p class="description">검은 영역을 눌러 문장을 볼 수 있어요. 다시 누르면 가려져요.</p>
-            </figcaption>
-            <details class="screen-link region-toggle">
-              <summary aria-label="가린 결말 문장 보기 또는 다시 가리기">
-                <img
-                  class="muted"
-                  src="after.jpg"
-                  width="390"
-                  height="844"
-                  alt="첫 글의 두 번째 문장 전체가 검은 영역으로 가려졌다. 작품명, 앞뒤 감상, 작성자, 반응과 다른 글은 그대로다."
-                />
-                <img
-                  class="revealed"
-                  src="revealed.jpg"
-                  width="390"
-                  height="844"
-                  alt="가린 문장이 같은 자리에서 공개되었다. 마지막에 정원사가 미래의 주인공으로 밝혀진다는 문장 전체에 옅은 배경과 점선 밑줄이 표시된다."
-                />
-                <span class="toggle-hint muted">눌러서 가린 문장 보기</span>
-                <span class="toggle-hint revealed">다시 눌러 문장 가리기</span>
-              </summary>
-            </details>
-            <p class="note">
-              <strong>글은 그대로 남아요.</strong> 문장 일부의 단어를 고르는 대신, 해당 문장의
-              처음부터 끝까지 가려요.
-            </p>
-          </figure>
-        </div>
-      </section>
-      <section id="post-case" aria-labelledby="post-heading">
-        <div class="case-heading">
-          <h2 id="post-heading">02 · 해당 글을 타임라인에서 숨기기</h2>
-          <p>결말이 담긴 첫 글을 통째로 제외해요. 아래 글이 올라와 빈자리 없이 이어져요.</p>
-        </div>
-        <div class="screens">
-          <figure class="scene">
-            <figcaption>
-              <div class="step">
-                <span class="number">1</span>
-                <h3>문장으로 조건 설정</h3>
-              </div>
-              <p class="description">같은 조건으로, 결말·반전이 담긴 글 자체를 보고 싶지 않아요.</p>
-            </figcaption>
-            <a
-              class="screen-link"
-              href="setting-hidden.jpg"
-              aria-label="글 숨김 설정 이미지 크게 보기"
-              ><img
-                src="setting-hidden.jpg"
-                width="390"
-                height="844"
-                alt="같은 자연어 조건과 이 조건으로 글 숨기기 버튼. 결말이나 반전이 담긴 글 전체를 타임라인에서 숨긴다는 안내가 있다."
-            /></a>
-            <p class="note">숨기는 단위: <strong>조건에 해당하는 글 전체</strong></p>
-          </figure>
-          <figure class="scene">
-            <figcaption>
-              <div class="step">
-                <span class="number">2</span>
-                <h3>적용 전</h3>
-              </div>
-              <p class="description">
-                문장 가림 예시와 같은 피드예요. 첫 글에는 결말을 밝히는 내용이 있어요.
-              </p>
-            </figcaption>
-            <a
-              class="screen-link"
-              href="before.jpg"
-              aria-label="글 숨김 적용 전 피드 이미지 크게 보기"
-              ><img
-                src="before.jpg"
-                width="390"
-                height="844"
-                alt="적용 전에는 달빛의 결말 공개 글, 여울의 작화 감상, 모아의 행사 준비 글이 순서대로 보인다."
-            /></a>
-            <p class="note">결말을 담은 <strong>첫 글 전체</strong>가 숨김 대상이에요.</p>
-          </figure>
-          <figure class="scene result">
-            <figcaption>
-              <div class="step">
-                <span class="number">3</span>
-                <h3>글 자체가 보이지 않아요</h3>
-              </div>
-              <p class="description">
-                가림 카드나 안내 행 없이, 작화 감상과 행사 준비 글이 바로 이어져요.
-              </p>
+              <p class="description">첫 글이 빠지고 아래 글이 올라와, 빈자리 없이 이어져요.</p>
             </figcaption>
             <a
               class="screen-link"
               href="hidden.jpg"
-              aria-label="글 전체를 숨긴 피드 이미지 크게 보기"
+              aria-label="글을 숨긴 타임라인 이미지 크게 보기"
               ><img
                 src="hidden.jpg"
                 width="390"
@@ -424,18 +310,93 @@
                 alt="달빛의 글은 타임라인에 없다. 여울의 작화 감상이 첫 글이 되고 모아의 행사 준비 글이 바로 이어진다. 숨긴 글을 대신하는 카드나 빈자리는 없다."
             /></a>
             <p class="note">
-              <strong>남은 글의 순서는 그대로예요.</strong> 같은 작품의 작화 감상은 결말을 밝히지
-              않아 계속 보여요.
+              <strong>글 자체가 목록에서 빠져요.</strong> 같은 작품의 작화 감상과 행사 글은 그대로
+              남아요.
+            </p>
+          </figure>
+        </div>
+      </section>
+      <section id="search-case" aria-labelledby="search-heading">
+        <div class="case-heading">
+          <h2 id="search-heading">02 · 검색 결과에서도 글 전체 숨김</h2>
+          <p>같은 조건이 검색 결과에도 적용돼요. 작품을 검색해도 결말을 담은 글은 보이지 않아요.</p>
+        </div>
+        <div class="screens">
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">1</span>
+                <h3>같은 뮤트 조건을 사용해요</h3>
+              </div>
+              <p class="description">“〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.”</p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="setting.jpg"
+              aria-label="검색에 적용할 글 숨김 설정 이미지 크게 보기"
+              ><img
+                src="setting.jpg"
+                width="390"
+                height="844"
+                alt="타임라인과 동일한 자연어 뮤트 조건. 결말이나 반전이 담긴 글 전체를 숨기는 설정 예시다."
+            /></a>
+            <p class="note">타임라인과 <strong>같은 글 숨김 조건</strong>이에요.</p>
+          </figure>
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">2</span>
+                <h3>적용 전 검색 결과</h3>
+              </div>
+              <p class="description">
+                ‘별의 정원’을 검색하면 결말 공개 글과 작화 감상이 함께 나와요.
+              </p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="search-before.jpg"
+              aria-label="적용 전 검색 결과 이미지 크게 보기"
+              ><img
+                src="search-before.jpg"
+                width="390"
+                height="844"
+                alt="별의 정원 검색 결과의 최신 탭. 달빛의 결말 공개 글과 여울의 작화 감상이 보인다."
+            /></a>
+            <p class="note">
+              검색어와 일치하더라도 <strong>결말을 담은 글</strong>은 숨김 대상이에요.
+            </p>
+          </figure>
+          <figure class="scene result">
+            <figcaption>
+              <div class="step">
+                <span class="number">3</span>
+                <h3>검색에서도 보이지 않아요</h3>
+              </div>
+              <p class="description">결말 공개 글이 결과에서 빠지고, 작화 감상만 남아요.</p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="search-hidden.jpg"
+              aria-label="글을 숨긴 검색 결과 이미지 크게 보기"
+              ><img
+                src="search-hidden.jpg"
+                width="390"
+                height="844"
+                alt="검색어 별의 정원과 최신 탭은 그대로다. 달빛의 글은 검색 결과에 없고 여울의 작화 감상만 보인다. 대체 카드나 가린 문장은 없다."
+            /></a>
+            <p class="note">
+              <strong>검색어는 그대로예요.</strong> 조건에 해당하지 않는 작화 감상은 계속 볼 수
+              있어요.
             </p>
           </figure>
         </div>
       </section>
       <footer class="caption">
         <p>
-          기존 코스모 UI로 구성한 소개용 목업입니다. 두 케이스는 준비된 모의 결과이며 실제 서비스
-          기능·모델 판단이 아닙니다.
+          기존 코스모 UI로 구성한 소개용 목업입니다. 타임라인·검색 결과는 준비한 예시이며 실제
+          서비스의 적용 결과가 아닙니다.
         </p>
-        <p>작품·인물·글은 모두 가상입니다.<br />문장 판별의 정확도는 아직 검증하지 않았습니다.</p>
+        <p>작품·인물·글은 모두 가상입니다.<br />실제 모델 판단과 정확도는 검증하지 않았습니다.</p>
       </footer>
     </main>
   </body>
