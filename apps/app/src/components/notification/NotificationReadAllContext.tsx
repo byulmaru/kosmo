@@ -9,9 +9,11 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { NotificationListMarkAllReadMutation } from './__generated__/NotificationListMarkAllReadMutation.graphql';
 
@@ -100,6 +102,7 @@ export function useNotificationReadAll() {
 
 export function NotificationReadAllAction() {
   const { getCurrentTarget, unreadIds } = useNotificationReadAll();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { showToast } = useToast();
   const [commitMarkAllRead, isMarkAllReadInFlight] =
     useMutation<NotificationListMarkAllReadMutation>(markAllReadMutation);
@@ -121,6 +124,8 @@ export function NotificationReadAllAction() {
       return;
     }
 
+    const requestedIds = [...target];
+    const requestGeneration = environmentGenerationRef?.current;
     readAllInFlight.current = true;
     const handleFailure = () => {
       readAllInFlight.current = false;
@@ -138,12 +143,30 @@ export function NotificationReadAllAction() {
           handleFailure();
           return;
         }
+        const notifications = response?.markNotificationRead?.notifications;
+        if (
+          notifications &&
+          environmentGenerationRef?.current === requestGeneration &&
+          requestedIds.every((id) =>
+            notifications.some(
+              (notification) => notification.id === id && notification.readAt != null,
+            ),
+          )
+        ) {
+          trackAnalytics('notifications_read', { scope: 'all' });
+        }
         readAllInFlight.current = false;
       },
       onError: handleFailure,
-      variables: { ids: [...target] },
+      variables: { ids: requestedIds },
     });
-  }, [commitMarkAllRead, getCurrentTarget, isMarkAllReadInFlight, showToast]);
+  }, [
+    commitMarkAllRead,
+    environmentGenerationRef,
+    getCurrentTarget,
+    isMarkAllReadInFlight,
+    showToast,
+  ]);
 
   return (
     <Button

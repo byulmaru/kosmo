@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import type { PayloadError } from 'relay-runtime';
@@ -94,6 +96,7 @@ function SettingsFollowingImportDetailContents() {
   const [csv, setCsv] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const profile = data.currentSession?.selectedProfile ?? null;
 
   if (!profile || profile.instance.kind !== 'LOCAL') {
@@ -164,10 +167,14 @@ function SettingsFollowingImportDetailContents() {
     }
 
     setFeedback(null);
+    const requestGeneration = environmentGenerationRef?.current;
     commit({
       variables: { input: { csv } },
       onCompleted: (response, errors) => {
         if (response?.importFollowingAccounts?.accepted) {
+          if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+            trackAnalytics('following_import_requested', {});
+          }
           setFeedback('accepted');
           return;
         }

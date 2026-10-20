@@ -7572,6 +7572,7 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      post_type: 'post',
       selected_profile_id: composerProfile.id,
       visibility: 'PUBLIC',
     });

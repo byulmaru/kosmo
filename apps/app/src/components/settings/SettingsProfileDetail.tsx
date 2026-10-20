@@ -2,12 +2,14 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { textStyles } from '@/theme/tokens';
 import { resolveProfileDefaultVisibility } from '../profile/profileDefaultPostVisibilityState';
@@ -168,6 +170,7 @@ function SettingsProfileEditor({
   const editable = profile.viewerState?.membership?.role === 'OWNER';
   const theme = useTheme();
   const baseline = getPostingSettings(profile);
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [pendingValue, setPendingValue] = useState<ProfilePostingSettingsValue | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'error'>('idle');
   const [deletionPhase, setDeletionPhase] = useState<'entry' | 'idle' | 'error'>('entry');
@@ -189,13 +192,20 @@ function SettingsProfileEditor({
     }
     setPendingValue(nextValue);
     setSaveState('idle');
+    const requestGeneration = environmentGenerationRef?.current;
     commit({
       variables: { input },
-      onCompleted: (_response, errors) => {
+      onCompleted: (response, errors) => {
         if (errors?.length) {
           setPendingValue(null);
           setSaveState('error');
           return;
+        }
+        if (
+          response?.updateProfile?.profile?.id === profile.id &&
+          environmentGenerationRef?.current === requestGeneration
+        ) {
+          trackAnalytics('profile_updated', {});
         }
         setPendingValue(null);
         setSaveState('idle');
@@ -212,12 +222,17 @@ function SettingsProfileEditor({
       return;
     }
 
+    const requestGeneration = environmentGenerationRef?.current;
     commitDeleteProfile({
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         const result = response?.deleteProfile;
         if (result?.success !== true || result.profileId !== profile.id) {
           setDeletionPhase('error');
           return;
+        }
+
+        if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+          trackAnalytics('profile_deleted', {});
         }
 
         const [selectedProfileId, ...remainingFallbackProfileIds] = result.account.profiles.map(

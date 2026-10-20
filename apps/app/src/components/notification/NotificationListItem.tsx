@@ -1,12 +1,15 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { MentionNotificationPost } from './MentionNotificationPost';
 import { parseNotificationHref } from './notificationHref';
 import { NotificationListItemView } from './NotificationListItemView';
 import { QuoteNotificationPost } from './QuoteNotificationPost';
 import { ReplyNotificationPost } from './ReplyNotificationPost';
+import type { AnalyticsEventProperties } from '@/analytics/events';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
 import type { MentionNotificationListItem_notification$key } from './__generated__/MentionNotificationListItem_notification.graphql';
@@ -22,6 +25,8 @@ import type { SourceUnavailableNotificationKind } from './NotificationListItemVi
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
 };
+
+type NotificationAnalyticsKind = AnalyticsEventProperties['notification_opened']['kind'];
 
 const notificationFragment = graphql`
   fragment NotificationListItem_notification on FollowNotification {
@@ -57,17 +62,35 @@ const notificationListItemMarkReadMutation = graphql`
 `;
 
 function useNotificationRead() {
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
     notificationListItemMarkReadMutation,
   );
   return useCallback(
-    (id: string) => {
+    (id: string, readAt: string | null | undefined, kind: NotificationAnalyticsKind) => {
+      const requestGeneration = environmentGenerationRef?.current;
+      trackAnalytics('notification_opened', { kind });
+      const wasUnread = readAt === null;
+
       commitMarkRead({
+        onCompleted: (response, errors) => {
+          if (
+            !wasUnread ||
+            errors?.length ||
+            environmentGenerationRef?.current !== requestGeneration ||
+            !response?.markNotificationRead?.notifications?.some(
+              (notification) => notification.id === id && notification.readAt != null,
+            )
+          ) {
+            return;
+          }
+          trackAnalytics('notifications_read', { scope: 'single' });
+        },
         onError: () => undefined,
         variables: { ids: [id] },
       });
     },
-    [commitMarkRead],
+    [commitMarkRead, environmentGenerationRef],
   );
 }
 
@@ -100,7 +123,7 @@ export function OperationalNotificationListItem({
       body={data.body ?? null}
       href={href}
       kind="operational"
-      onNavigate={() => markRead(data.id)}
+      onNavigate={() => markRead(data.id, data.readAt, 'operational')}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       title={data.title}
       unread={data.readAt === null}
@@ -142,7 +165,10 @@ export function MentionNotificationListItem({
 
   return (
     <NotificationListItemView kind="mention" unread={data.readAt === null}>
-      <MentionNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+      <MentionNotificationPost
+        onActivate={() => markRead(data.id, data.readAt, 'mention')}
+        post={data.post}
+      />
     </NotificationListItemView>
   );
 }
@@ -181,7 +207,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
       actors={[actor(data.profile)]}
       href={`/${data.profile.relativeHandle}`}
       kind="follow"
-      onNavigate={() => markRead(data.id)}
+      onNavigate={() => markRead(data.id, data.readAt, 'follow')}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
     />
@@ -232,7 +258,7 @@ export function FollowRequestNotificationListItem({
       actors={[actor(data.profile)]}
       href="/follow-requests"
       kind="followRequest"
-      onNavigate={() => markRead(data.id)}
+      onNavigate={() => markRead(data.id, data.readAt, 'followRequest')}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
     />
@@ -297,7 +323,7 @@ export function ReactionNotificationListItem({
       actors={[actor(data.profile)]}
       href={`/${post.profile.relativeHandle}/${post.id}`}
       kind="reaction"
-      onNavigate={() => markRead(data.id)}
+      onNavigate={() => markRead(data.id, data.readAt, 'reaction')}
       preview={toPreview(post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
@@ -339,7 +365,10 @@ export function ReplyNotificationListItem({
 
   return (
     <NotificationListItemView kind="reply" unread={data.readAt === null}>
-      <ReplyNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+      <ReplyNotificationPost
+        onActivate={() => markRead(data.id, data.readAt, 'reply')}
+        post={data.post}
+      />
     </NotificationListItemView>
   );
 }
@@ -378,7 +407,10 @@ export function QuoteNotificationListItem({
 
   return (
     <NotificationListItemView kind="quote" unread={data.readAt === null}>
-      <QuoteNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+      <QuoteNotificationPost
+        onActivate={() => markRead(data.id, data.readAt, 'quote')}
+        post={data.post}
+      />
     </NotificationListItemView>
   );
 }
@@ -441,7 +473,7 @@ export function RepostNotificationListItem({
       actors={[actor(data.profile)]}
       href={`/${post.profile.relativeHandle}/${post.id}`}
       kind="repost"
-      onNavigate={() => markRead(data.id)}
+      onNavigate={() => markRead(data.id, data.readAt, 'repost')}
       preview={toPreview(post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}

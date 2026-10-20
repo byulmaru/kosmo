@@ -95,10 +95,12 @@ type PendingMentionSearchRequest = {
 };
 let requests: PendingMentionSearchRequest[] = [];
 let relayEnvironment: Environment;
+const environmentGeneration = { current: 0 };
 let textInputMountCount = 0;
 let textInputUnmountCount = 0;
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
 let toastCalls: Array<[string, { tone: string }]> = [];
+let analyticsCalls: Array<{ name: string; properties: Record<string, unknown> }> = [];
 
 const profileA = {
   ' $fragmentSpreads': {
@@ -206,7 +208,11 @@ mockModule('relay-runtime', {
   ConnectionHandler: { getConnectionID: () => 'home-connection' },
   ROOT_ID: 'root',
 });
-mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/analytics/client', {
+  trackAnalytics: (name: string, properties: Record<string, unknown>) => {
+    analyticsCalls.push({ name, properties });
+  },
+});
 mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
@@ -221,7 +227,9 @@ mockModule('@/components/ui/ToastProvider', {
   }),
 });
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
-mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => environmentGeneration,
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
   useTheme: () => ({
@@ -335,9 +343,11 @@ beforeEach(() => {
   keyboardDismissCount = 0;
   requests = [];
   relayEnvironment = createRelayEnvironment();
+  environmentGeneration.current = 0;
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
+  analyticsCalls = [];
 });
 
 afterEach(async () => {
@@ -552,6 +562,16 @@ describe('PostComposer Reply visibility seed', () => {
     await act(async () =>
       mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'post-reply' } } }),
     );
+    assert.deepEqual(analyticsCalls, [
+      {
+        name: 'post_created',
+        properties: {
+          post_type: 'reply',
+          selected_profile_id: profile.id,
+          visibility: 'PUBLIC',
+        },
+      },
+    ]);
     assert.equal(targetProps?.body, '');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
@@ -561,6 +581,31 @@ describe('PostComposer Reply visibility seed', () => {
     await act(async () => targetProps?.onBodyChange('다음 답글'));
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls[1]?.variables.input.visibility, 'FOLLOWERS');
+  });
+
+  it('does not record a late success after the Relay environment generation changes', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('늦은 성공'));
+    await act(async () => targetProps?.onSubmit());
+
+    environmentGeneration.current += 1;
+    await act(async () =>
+      mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'late-post' } } }),
+    );
+
+    assert.equal(
+      analyticsCalls.some(({ name }) => name === 'post_created'),
+      false,
+    );
+    assert.equal(targetProps?.body, '늦은 성공');
   });
 
   it('keeps the current Reply draft and manual visibility when the Profile default changes', async () => {

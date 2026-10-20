@@ -361,6 +361,7 @@ function PostComposerContents({
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
+  const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
   const mountedRef = useRef(true);
   const { bodyText, mentions } = normalizePostComposerMentionDraft(body, mentionRanges);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
@@ -475,6 +476,7 @@ function PostComposerContents({
         }
 
         trackAnalytics('post_created', {
+          post_type: composerMode,
           selected_profile_id: profile.id,
           visibility,
         });
@@ -543,7 +545,6 @@ function PostComposerContents({
   }, [focusOnMount]);
 
   const productionSurface: PostComposerVisibility = visibility;
-  const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
   const pickerProfiles =
     selectedProfileKey && !profiles.includes(selectedProfileKey)
       ? [...profiles, selectedProfileKey]

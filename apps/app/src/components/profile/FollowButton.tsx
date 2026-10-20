@@ -3,6 +3,7 @@ import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import { ProfileBlockAction } from './ProfileBlockAction';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -83,6 +84,7 @@ const unfollowProfileMutation = graphql`
         followingCount
       }
       followeeProfile {
+        followeeProfileId: id
         ...FollowButton_profile
       }
     }
@@ -107,6 +109,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -142,23 +145,33 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     if (loading) {
       return;
     }
-
-    const callbacks = {
-      onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) =>
-        errors?.length ? showFailureToast() : undefined,
-      onError: showFailureToast,
-    };
+    const requestGeneration = environmentGenerationRef?.current;
 
     if (isFollowing) {
       const follower = viewerState.follow?.follower;
 
       commitUnfollow({
-        ...callbacks,
+        onCompleted: (response, errors) => {
+          if (errors?.length) {
+            showFailureToast();
+            return;
+          }
+          if (
+            selectedProfileId &&
+            environmentGenerationRef?.current === requestGeneration &&
+            response.unfollowProfile?.followerProfile?.id === selectedProfileId &&
+            response.unfollowProfile?.followeeProfile?.followeeProfileId === data.id
+          ) {
+            trackAnalytics('follow_removed', { result: 'unfollow' });
+          }
+        },
+        onError: showFailureToast,
         optimisticResponse: follower
           ? {
               unfollowProfile: {
                 followeeProfile: {
                   displayName: data.displayName,
+                  followeeProfileId: data.id,
                   followPolicy: data.followPolicy,
                   followersCount: Math.max(data.followersCount - 1, 0),
                   handle: data.handle,
@@ -181,14 +194,28 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {
+      const followRequestId = viewerState.followRequest.id;
       commitCancel({
-        ...callbacks,
+        onCompleted: (response, errors) => {
+          if (errors?.length) {
+            showFailureToast();
+            return;
+          }
+          if (
+            selectedProfileId &&
+            environmentGenerationRef?.current === requestGeneration &&
+            response.cancelProfileFollowRequest?.profileFollowRequestId === followRequestId
+          ) {
+            trackAnalytics('follow_removed', { result: 'request_cancelled' });
+          }
+        },
+        onError: showFailureToast,
         optimisticResponse: {
           cancelProfileFollowRequest: {
-            profileFollowRequestId: viewerState.followRequest.id,
+            profileFollowRequestId: followRequestId,
           },
         },
-        variables: { id: viewerState.followRequest.id },
+        variables: { id: followRequestId },
       });
     } else {
       commitFollow({

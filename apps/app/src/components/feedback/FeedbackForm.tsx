@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImagePlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { trackAnalytics } from '@/analytics/client';
 import { releaseImagePreview } from '@/components/media/imageUpload';
 import { ComposerTool } from '@/components/post/PostComposer';
 import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMediaItemsTarget';
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
 import { captureFeedback } from '@/observability/sentry';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { getFeedbackAssetContentType, prepareFeedbackAttachments } from './feedbackAttachments';
@@ -42,6 +44,7 @@ type FeedbackMediaItem = PostComposerSelectedMediaItem;
 
 export function FeedbackForm({ onStateChange }: Props) {
   const theme = useTheme();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const web = Platform.OS === 'web';
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
   const [body, setBody] = useState('');
@@ -81,7 +84,10 @@ export function FeedbackForm({ onStateChange }: Props) {
     onStateChange?.(latestStateRef.current);
   }, [dirty, onStateChange, submitting]);
 
-  const completeSubmission = () => {
+  const completeSubmission = (submissionEnvironmentGeneration: number | undefined) => {
+    if (environmentGenerationRef?.current === submissionEnvironmentGeneration) {
+      trackAnalytics('feedback_submitted', {});
+    }
     submittingRef.current = false;
     setSubmitting(false);
     reportState({ dirty: false, submitting: false });
@@ -198,6 +204,7 @@ export function FeedbackForm({ onStateChange }: Props) {
     reportState({ dirty, submitting: true });
     setStatus('idle');
     setAttachmentError(null);
+    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     void prepareFeedbackAttachments(attachments).then(
       async (prepared) => {
         try {
@@ -207,7 +214,7 @@ export function FeedbackForm({ onStateChange }: Props) {
           failSubmission();
           return;
         }
-        completeSubmission();
+        completeSubmission(submissionEnvironmentGeneration);
       },
       (error: unknown) => {
         failSubmission();

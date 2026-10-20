@@ -54,7 +54,11 @@ mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
 mockModule('@/analytics/client', {
-  trackAnalytics: () => {},
+  trackAnalytics: (...args: unknown[]) => analyticsCalls.push(args),
+});
+const generationRef = { current: 1 };
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => generationRef,
 });
 const toasts: string[] = [];
 mockModule('@/components/ui/ToastProvider', {
@@ -75,6 +79,7 @@ let renderer: ReactTestRenderer | null = null;
 let FollowButton: typeof FollowButtonExport;
 let ProfileBlockAction: typeof BlockActionExport;
 let focusCount = 0;
+const analyticsCalls: unknown[][] = [];
 const control = {
   focus: () => {
     focusCount += 1;
@@ -91,6 +96,8 @@ afterEach(async () => {
   toasts.length = 0;
   selectedProfileId = 'owner-a';
   focusCount = 0;
+  analyticsCalls.length = 0;
+  generationRef.current = 1;
 });
 
 function createEnvironment() {
@@ -244,6 +251,63 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   assert.equal(store.getSource().get(stateId)?.profileBlock, null);
   assert.equal(store.getSource().get('unrelated')?.displayName, '보존');
   assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.', '차단을 해제했어요']);
+  assert.deepEqual(analyticsCalls, [['profile_unblocked', {}]]);
+});
+
+test('unfollow 성공 결과만 follow_removed/unfollow를 기록한다', async () => {
+  const environment = createEnvironment();
+  clearProfileBlock(environment);
+  seedFollow(environment);
+  await render(environment);
+
+  assert.equal(button().props.children, '팔로잉');
+  await act(async () => button().props.onPress());
+  assert.equal(requests[0]?.name, 'FollowButtonUnfollowProfileMutation');
+  await respond(0, { data: unfollowPayload() });
+
+  assert.deepEqual(analyticsCalls, [['follow_removed', { result: 'unfollow' }]]);
+});
+
+test('unfollow 대상이 요청한 profile과 다르면 follow_removed를 기록하지 않는다', async () => {
+  const environment = createEnvironment();
+  clearProfileBlock(environment);
+  seedFollow(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, { data: unfollowPayload('target-b') });
+
+  assert.deepEqual(analyticsCalls, []);
+  assert.deepEqual(toasts, []);
+});
+
+test('보낸 요청 취소 성공 결과만 follow_removed/request_cancelled를 기록한다', async () => {
+  const environment = createEnvironment();
+  clearProfileBlock(environment);
+  seedFollowRequest(environment);
+  await render(environment);
+
+  assert.equal(button().props.children, '요청됨');
+  await act(async () => button().props.onPress());
+  assert.equal(requests[0]?.name, 'FollowButtonCancelProfileFollowRequestMutation');
+  await respond(0, {
+    data: { cancelProfileFollowRequest: { profileFollowRequestId: 'request-a' } },
+  });
+
+  assert.deepEqual(analyticsCalls, [['follow_removed', { result: 'request_cancelled' }]]);
+});
+
+test('follow removed payload 누락은 기존 UI 흐름을 유지하고 이벤트를 기록하지 않는다', async () => {
+  const environment = createEnvironment();
+  clearProfileBlock(environment);
+  seedFollow(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, { data: { unfollowProfile: null } });
+
+  assert.deepEqual(analyticsCalls, []);
+  assert.deepEqual(toasts, []);
 });
 
 test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 않는다', async () => {
@@ -251,6 +315,7 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 
   await render(actorA);
   await confirm();
   selectedProfileId = 'owner-b';
+  generationRef.current += 1;
   const actorB = createEnvironment();
   await render(actorB);
   assert.equal(button().props.disabled, false);
@@ -260,6 +325,7 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 
   assert.equal(button().props.children, '차단 해제');
   assert.equal(button().props.disabled, false);
   assert.deepEqual(actorB.getStore().getSource().toJSON(), before);
+  assert.deepEqual(analyticsCalls, []);
 });
 
 test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {
@@ -315,6 +381,7 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
   assert.deepEqual(labels(), ['차단 해제', '차단하기']);
   assert.equal(environment.getStore().getSource().get(stateId)?.profileBlock?.__ref, blockId);
   assert.deepEqual(toasts, ['프로필을 차단했어요']);
+  assert.deepEqual(analyticsCalls, [['profile_blocked', {}]]);
   await act(async () => actionControl('ModalSheet').props.onDismiss());
 });
 
@@ -341,6 +408,7 @@ for (const [name, response] of [
     assert.deepEqual(relationshipState(environment), before);
     assert.equal(control('ModalSheet').props.visible, false);
     assert.deepEqual(toasts, ['프로필을 차단하지 못했어요. 다시 시도해 주세요.']);
+    assert.deepEqual(analyticsCalls, []);
     await act(async () => control('ModalSheet').props.onDismiss());
   });
 }
@@ -376,6 +444,7 @@ for (const [name, response] of [
     assert.equal(button().props.children, '차단 해제');
     assert.equal(modal().props.visible, false);
     assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
+    assert.deepEqual(analyticsCalls, []);
     await act(async () => modal().props.onDismiss());
   });
 }
@@ -392,6 +461,56 @@ function clearProfileBlock(environment: Environment) {
       )
       ?.setLinkedRecords([], 'edges');
   });
+}
+
+function seedFollow(environment: Environment) {
+  environment.commitUpdate((store) => {
+    const target = store.get(targetId);
+    const state = store.get(stateId);
+    const follower = store.create('follower-a', 'Profile');
+    follower.setValue(selectedProfileId, 'id');
+    follower.setValue(1, 'followingCount');
+    const follow = store.create('follow-a', 'ProfileFollow');
+    follow.setLinkedRecord(follower, 'follower');
+    state?.setLinkedRecord(follow, 'follow');
+    state?.setValue(null, 'followRequest');
+    target?.setLinkedRecord(state ?? null, 'viewerState');
+  });
+}
+
+function seedFollowRequest(environment: Environment) {
+  environment.commitUpdate((store) => {
+    const target = store.get(targetId);
+    const state = store.get(stateId);
+    const request = store.create('request-a', 'ProfileFollowRequest');
+    request.setValue('request-a', 'id');
+    state?.setValue(null, 'follow');
+    state?.setLinkedRecord(request, 'followRequest');
+    target?.setLinkedRecord(state ?? null, 'viewerState');
+  });
+}
+
+function unfollowPayload(followeeId = targetId) {
+  return {
+    unfollowProfile: {
+      followerProfile: { id: selectedProfileId, followingCount: 0 },
+      followeeProfile: {
+        displayName: '대상',
+        followeeProfileId: followeeId,
+        followPolicy: 'OPEN',
+        followersCount: 0,
+        handle: 'target',
+        id: followeeId,
+        relativeHandle: '@target',
+        viewerState: {
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: null,
+        },
+      },
+    },
+  };
 }
 
 function relationshipState(environment: Environment) {

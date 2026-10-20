@@ -12,6 +12,8 @@ Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`�
 
 ## 명시적 event allowlist
 
+기존 사용자 동작과 PROD-1184에서 보완한 이벤트의 전체 대응, 허용 속성과 제외 범위는 [사용자 행동 계측 범위](../analytics/user-actions/README.md)에 있다. 아래 표는 기존 게시글 상호작용의 성공 경계를 설명한다. 신규 mutation 이벤트도 해당 행동의 성공 결과를 확인한 뒤 기록한다. `notification_opened`는 유효한 대상 선택, `theme_changed`는 직접 설정 변경, `link_copied`는 클립보드 쓰기 성공을 기록하며 mutation 성공과 구분한다.
+
 | Event              | 허용 property                            | 발생 조건                                                                                                                           |
 | ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `repost_succeeded` | `result`: `created` 또는 `removed`       | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |

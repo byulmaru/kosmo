@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeftIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
+import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
@@ -11,6 +12,7 @@ import { themePreferenceOptions } from '@/theme/themePreference';
 import { useSetThemePreference, useThemePreference } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, space, textStyles } from '@/theme/tokens';
+import type { ThemePreference } from '@/theme/themePreference';
 
 export default function SettingsThemeRoute() {
   const router = useRouter();
@@ -18,6 +20,12 @@ export default function SettingsThemeRoute() {
   const preference = useThemePreference();
   const setPreference = useSetThemePreference();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const handlePreferenceChange = (nextPreference: ThemePreference) => {
+    setPreference(nextPreference);
+    if (nextPreference !== preference) {
+      trackAnalytics('theme_changed', { preference: nextPreference });
+    }
+  };
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -46,7 +54,11 @@ export default function SettingsThemeRoute() {
         >
           테마 설정
         </Text>
-        <RadioGroup accessibilityLabel="테마 설정" onChange={setPreference} value={preference}>
+        <RadioGroup
+          accessibilityLabel="테마 설정"
+          onChange={handlePreferenceChange}
+          value={preference}
+        >
           {themePreferenceOptions.map((option) => (
             <RadioOption key={option.value} option={option} />
           ))}

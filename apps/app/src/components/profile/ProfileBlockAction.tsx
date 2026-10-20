@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
@@ -108,6 +110,7 @@ export function ProfileBlockAction({
   const profileBlockData = useFragment(profileBlockFragment, profileBlock ?? null);
   const targetProfile = profileBlockData?.targetProfile ?? profileData;
   const { selectedProfileId } = useSession();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [commitBlock, blocking] =
     useMutation<ProfileBlockActionBlockMutation>(blockProfileMutation);
   const [commitUnblock, unblocking] =
@@ -146,9 +149,17 @@ export function ProfileBlockAction({
     if (!open || pending) {
       return;
     }
-    const finish = (status: 'success' | 'error') => {
+    const requestGeneration = environmentGenerationRef?.current;
+    const finish = (status: 'success' | 'error', shouldTrack = true) => {
       notify(status);
       setOpen(false);
+      if (
+        status === 'success' &&
+        shouldTrack &&
+        environmentGenerationRef?.current === requestGeneration
+      ) {
+        trackAnalytics(nextBlocked ? 'profile_blocked' : 'profile_unblocked', {});
+      }
       if (nextBlocked && status === 'success') {
         onBlocked?.();
       }
@@ -156,11 +167,12 @@ export function ProfileBlockAction({
     try {
       if (nextBlocked) {
         commitBlock({
-          onCompleted: (response) =>
+          onCompleted: (response, errors) =>
             finish(
               response.blockProfile?.success && response.blockProfile.profileBlock
                 ? 'success'
                 : 'error',
+              !errors?.length,
             ),
           onError: () => finish('error'),
           variables: { id: targetProfileId },
@@ -173,12 +185,13 @@ export function ProfileBlockAction({
         return;
       }
       commitUnblock({
-        onCompleted: (response) =>
+        onCompleted: (response, errors) =>
           finish(
             response.unblockProfile?.success &&
               response.unblockProfile.profileBlockId === requestedProfileBlockId
               ? 'success'
               : 'error',
+            !errors?.length,
           ),
         onError: () => finish('error'),
         variables: { id: requestedProfileBlockId },

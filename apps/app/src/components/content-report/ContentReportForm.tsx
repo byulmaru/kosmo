@@ -3,9 +3,11 @@ import { contentReportDetailsMaxLength, contentReportInputSchema } from '@kosmo/
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { getContentReportFormState } from './contentReportState';
@@ -39,6 +41,7 @@ const SubmitContentReportMutation = graphql`
 
 export function ContentReportForm({ onDelivered, onStateChange, target }: Props) {
   const theme = useTheme();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const web = Platform.OS === 'web';
   const [reason, setReason] = useState<ContentReportReason>(ContentReportReason.HARMFUL_CONTENT);
   const [details, setDetails] = useState('');
@@ -70,6 +73,7 @@ export function ContentReportForm({ onDelivered, onStateChange, target }: Props)
 
     reportState({ dirty: formState.dirty, submitting: true });
     setStatus('idle');
+    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     commit({
       variables: {
         input: {
@@ -82,6 +86,9 @@ export function ContentReportForm({ onDelivered, onStateChange, target }: Props)
       onCompleted: (response, errors) => {
         const nextStatus = errors?.length ? null : (response.submitContentReport?.status ?? null);
         if (nextStatus === 'DELIVERED') {
+          if (environmentGenerationRef?.current === submissionEnvironmentGeneration) {
+            trackAnalytics('content_report_submitted', {});
+          }
           setDetails('');
           setReason(ContentReportReason.HARMFUL_CONTENT);
           reportState({ dirty: false, submitting: false });

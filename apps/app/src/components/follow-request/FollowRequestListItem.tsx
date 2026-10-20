@@ -2,11 +2,13 @@ import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileListItemRow } from '@/components/profile/ProfileListItemRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -74,6 +76,7 @@ const rejectFollowRequestMutation = graphql`
 
 export function FollowRequestListItem({ connectionId, request }: FollowRequestListItemProps) {
   const { showToast } = useToast();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const data = useFragment(followRequestListItemFragment, request);
   const [commitApprove] = useMutation<FollowRequestListItemApproveMutation>(
     approveFollowRequestMutation,
@@ -100,27 +103,44 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     }
 
     setPendingAction(action);
-    const callbacks = {
-      onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) => {
-        if (errors?.length) {
-          handleFailure(action);
-          return;
-        }
-        setPendingAction(null);
-      },
-      onError: () => handleFailure(action),
-    };
+    const requestGeneration = environmentGenerationRef?.current;
 
     if (action === 'approve') {
       commitApprove({
-        ...callbacks,
+        onCompleted: (response, errors) => {
+          if (errors?.length) {
+            handleFailure(action);
+            return;
+          }
+          setPendingAction(null);
+          if (
+            environmentGenerationRef?.current === requestGeneration &&
+            response.approveProfileFollowRequest?.profileFollowRequestId === data.id
+          ) {
+            trackAnalytics('follow_request_responded', { result: 'accepted' });
+          }
+        },
+        onError: () => handleFailure(action),
         variables: { connections: [connectionId], id: data.id },
       });
       return;
     }
 
     commitReject({
-      ...callbacks,
+      onCompleted: (response, errors) => {
+        if (errors?.length) {
+          handleFailure(action);
+          return;
+        }
+        setPendingAction(null);
+        if (
+          environmentGenerationRef?.current === requestGeneration &&
+          response.rejectProfileFollowRequest?.profileFollowRequestId === data.id
+        ) {
+          trackAnalytics('follow_request_responded', { result: 'rejected' });
+        }
+      },
+      onError: () => handleFailure(action),
       variables: { connections: [connectionId], id: data.id },
     });
   };

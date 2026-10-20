@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type {
@@ -73,6 +75,7 @@ export function ProfileMigrationSourceControl({
     useMutation<ProfileMigrationSourceControlMutation>(RegisterMutation);
   const [unregisterCommit, unregistering] =
     useMutation<ProfileMigrationSourceControlUnregisterMutation>(UnregisterMutation);
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const busy = registering || unregistering;
   const destinationHandle = getQualifiedDestinationHandle(profile);
 
@@ -89,15 +92,19 @@ export function ProfileMigrationSourceControl({
     }
 
     setValidationError(undefined);
+    const requestGeneration = environmentGenerationRef?.current;
     registerCommit({
       variables: { input: { sourceHandle: normalizedInput } },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         const nextProfile = response.registerProfileMigrationSource?.profile;
         if (!nextProfile || nextProfile.id !== profile.id) {
           setRegisterState('error');
           return;
         }
 
+        if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+          trackAnalytics('profile_migration_requested', { action: 'source_registered' });
+        }
         setRegisterState('success');
       },
       onError: () => setRegisterState('error'),
@@ -109,15 +116,19 @@ export function ProfileMigrationSourceControl({
       return;
     }
 
+    const requestGeneration = environmentGenerationRef?.current;
     unregisterCommit({
       variables: {},
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         const nextProfile = response.unregisterProfileMigrationSource?.profile;
         if (!nextProfile || nextProfile.id !== profile.id) {
           setUnregisterState('error');
           return;
         }
 
+        if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+          trackAnalytics('profile_migration_requested', { action: 'source_unregistered' });
+        }
         setSourceHandle('');
         setValidationError(undefined);
         setRegisterState('idle');

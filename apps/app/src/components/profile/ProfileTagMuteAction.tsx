@@ -2,10 +2,12 @@ import { RefreshCw, Volume2, VolumeOff } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, radius } from '@/theme/tokens';
@@ -98,6 +100,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
     ProfileTagMuteAction_tag$key
   >(hashtagFragment, hashtag);
   const { selectedProfileId } = useSession();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { showToast } = useToast();
   const theme = useTheme();
   const [commitCreate, creating] = useMutation<ProfileTagMuteActionCreateMutation>(
@@ -178,7 +181,8 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
       return;
     }
     const nextMuted = intent.muted;
-    const finish = (status: 'success' | 'error') => {
+    const requestGeneration = environmentGenerationRef?.current;
+    const finish = (status: 'success' | 'error', shouldTrack = true) => {
       setCompletionToast({
         message:
           status === 'success'
@@ -190,17 +194,25 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
         refreshRule();
       }
       setOpen(false);
+      if (
+        status === 'success' &&
+        shouldTrack &&
+        environmentGenerationRef?.current === requestGeneration
+      ) {
+        trackAnalytics(nextMuted ? 'profile_tag_muted' : 'profile_tag_unmuted', {});
+      }
     };
     const handleMutationError = () => finish('error');
     const validateMutationResult = (
       ruleId: string | null | undefined,
       targetHashtagId: string | null | undefined,
+      errors?: ReadonlyArray<unknown> | null,
     ) => {
       if (!ruleId || targetHashtagId !== data.id) {
         handleMutationError();
         return;
       }
-      finish('success');
+      finish('success', !errors?.length);
     };
 
     if (nextMuted) {
@@ -212,10 +224,11 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
 
       if (rule && rule.isActive) {
         commitUpdate({
-          onCompleted: (response) =>
+          onCompleted: (response, errors) =>
             validateMutationResult(
               response.updateHashtagMuteRule?.hashtagMuteRule?.id,
               response.updateHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
+              errors,
             ),
           onError: handleMutationError,
           variables: {
@@ -229,10 +242,11 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
       }
 
       commitCreate({
-        onCompleted: (response) =>
+        onCompleted: (response, errors) =>
           validateMutationResult(
             response.createHashtagMuteRule?.hashtagMuteRule?.id,
             response.createHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
+            errors,
           ),
         onError: handleMutationError,
         variables: {
@@ -255,10 +269,11 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
     const remainingScopes = rule.scopes.filter((scope) => scope !== 'NOTIFICATION');
     if (remainingScopes.length > 0) {
       commitUpdate({
-        onCompleted: (response) =>
+        onCompleted: (response, errors) =>
           validateMutationResult(
             response.updateHashtagMuteRule?.hashtagMuteRule?.id,
             response.updateHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
+            errors,
           ),
         onError: handleMutationError,
         variables: { input: { id: rule.id, scopes: remainingScopes } },

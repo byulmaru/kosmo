@@ -31,6 +31,7 @@ const trackEvent = mock.fn();
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
+let profileClipboardResult = true;
 const platform = {
   OS: 'web',
   select: (options: Record<string, number>) => {
@@ -101,7 +102,7 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
     }),
 });
 mockModule(new URL('../post/postClipboard.ts', import.meta.url), {
-  setStringAsync: async () => true,
+  setStringAsync: async () => profileClipboardResult,
 });
 mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
   useToast: () => ({ showToast: mock.fn() }),
@@ -151,6 +152,7 @@ afterEach(async () => {
   trackEvent.mock.resetCalls();
   windowWidth = 1280;
   platform.OS = 'web';
+  profileClipboardResult = true;
 });
 
 const renderProfile = async (data: ProfileData) => {
@@ -361,6 +363,64 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
+  it('프로필 링크 복사 성공을 target과 함께 추적한다', async () => {
+    fragmentData = {
+      ...baseProfile,
+      viewerState: { ...baseProfile.viewerState!, isSelf: true },
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const menu = renderer!.root.find((node) => (node.type as unknown) === 'ProfileMoreMenu');
+    const copyItem = menu.props.items.find(
+      (item: { key: string }) => item.key === 'copy-profile-link',
+    );
+    assert.ok(copyItem);
+    await act(async () => {
+      copyItem.onSelect();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(trackEvent.mock.calls.at(-1)?.arguments, [
+      'link_copied',
+      { target: 'profile' },
+    ]);
+  });
+
+  it('프로필 링크 복사 실패는 추적하지 않는다', async () => {
+    profileClipboardResult = false;
+    fragmentData = {
+      ...baseProfile,
+      viewerState: { ...baseProfile.viewerState!, isSelf: true },
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const menu = renderer!.root.find((node) => (node.type as unknown) === 'ProfileMoreMenu');
+    const copyItem = menu.props.items.find(
+      (item: { key: string }) => item.key === 'copy-profile-link',
+    );
+    assert.ok(copyItem);
+    await act(async () => {
+      copyItem.onSelect();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(trackEvent.mock.calls, []);
+  });
+
   it('blockedBy는 Profile viewerState에서 읽어 관계 관리 action을 숨긴다', async () => {
     fragmentData = {
       ...baseProfile,
