@@ -23,6 +23,7 @@ type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   onExternalNavigate?: () => void;
   onNavigate?: () => void;
   primary?: boolean;
+  resetScroll?: boolean;
 };
 
 type NavigationMode = 'navigate' | 'push' | 'replace';
@@ -36,6 +37,7 @@ export function NavigationLink({
   onExternalNavigate,
   onNavigate,
   primary = false,
+  resetScroll = primary,
   ...props
 }: Props) {
   const router = useRouter();
@@ -43,8 +45,8 @@ export function NavigationLink({
   const navigationMode = getNavigationMode(requestedNavigationMode, props);
   const { request } = useNavigationGuard();
   const { record } = usePrimaryNavigationScroll();
-  const recordPrimaryNavigation = () => {
-    if (!primary) {
+  const recordScrollNavigation = () => {
+    if (!resetScroll) {
       return;
     }
 
@@ -69,7 +71,7 @@ export function NavigationLink({
       return;
     }
     const navigate = () => {
-      recordPrimaryNavigation();
+      recordScrollNavigation();
       onNavigate?.();
       if (navigationMode === 'push') {
         router.push(href);
@@ -84,7 +86,7 @@ export function NavigationLink({
       return;
     }
     onNavigate?.();
-    recordPrimaryNavigation();
+    recordScrollNavigation();
   };
 
   return (

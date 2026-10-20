@@ -173,6 +173,7 @@ const renderLink = async (
     onCurrentNavigate?: () => void;
     onExternalNavigate?: () => void;
     primary?: boolean;
+    resetScroll?: boolean;
   } = {},
 ) => {
   await act(async () => {
@@ -194,6 +195,7 @@ const renderLink = async (
             onCurrentNavigate: options.onCurrentNavigate,
             onExternalNavigate: options.onExternalNavigate,
             primary: options.primary,
+            resetScroll: options.resetScroll,
           }),
         ),
       ),
@@ -342,6 +344,14 @@ describe('NavigationLink', () => {
     await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(consumeIntent?.('/search'), true);
+  });
+
+  it('일반 게시글·프로필 forward 링크도 요청한 최상단 진입 intent를 기록한다', async () => {
+    await renderLink(() => false, undefined, { href: '/@author', resetScroll: true });
+    await act(async () =>
+      composedLinkPress?.(createPressEvent() as unknown as Parameters<LinkPress>[0]),
+    );
+    assert.equal(consumeIntent?.('/@author'), true);
   });
 
   it('guard 승인 action에서 scroll intent를 기록하고 취소 시에는 기록하지 않는다', async () => {

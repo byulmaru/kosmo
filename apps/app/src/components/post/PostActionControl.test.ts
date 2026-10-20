@@ -81,6 +81,7 @@ mockModule('react-relay', {
   useFragment: () => renderedPost,
 });
 mockModule('expo-router', {
+  usePathname: () => '/home',
   Link: ({ children }: { children: ReactNode }) => children,
   useRouter: () => ({ push: () => undefined }),
 });

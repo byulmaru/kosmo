@@ -255,6 +255,10 @@ KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` th
 - Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
   여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
   route의 document scroll offset을 대상 route에 노출하지 않는다.
+- Web 게시글 목록·상세에서 프로필 이름·아바타·재게시 작성자를 통해 프로필을 새로 열면 Profile Home의
+  최상단부터 표시한다. 이미 조회한 프로필로 다시 진입해도 이전 화면의 document scroll을 넘기지 않는다.
+  게시글 본문·시간·배경을 통한 새 상세 진입도 이전 화면의 위치를 넘기지 않으며,
+  [상세 초기 표시 위치](./post-thread.md#상세-초기-표시-위치--prod-1033)에 따라 URL 대상 Post를 헤더 아래에 표시한다.
 - 프로필 레이아웃은 Profile Home에서는 PageHeader·Hero·Slot을, 팔로워·팔로잉 독립 route에서는
   PageHeader·관계 TabList·Slot을 같은 바깥 scroll 구성으로 렌더링한다. Home PageHeader는 표시 이름을
   한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native PageHeader는 Stack

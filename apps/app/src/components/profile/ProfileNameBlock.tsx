@@ -60,7 +60,7 @@ export function ProfileNameBlock({
 
   if (!hero && href) {
     return (
-      <NavigationLink href={href}>
+      <NavigationLink href={href} resetScroll>
         <Pressable
           accessibilityRole="link"
           style={StyleSheet.flatten([styles.root, inline && styles.inline, style])}

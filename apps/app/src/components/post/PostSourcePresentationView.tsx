@@ -1,15 +1,16 @@
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
+import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
-import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileNameBlock_profile$key } from '@/components/profile/__generated__/ProfileNameBlock_profile.graphql';
@@ -147,8 +148,8 @@ export function PostSourcePresentationView({
     return null;
   }
 
-  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
-  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
+  const postProfileHref = `/${post.profile.relativeHandle}` as const;
+  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const postHeader = (
     <View style={styles.authorHeader}>
       <View style={styles.authorSlot}>
@@ -229,8 +230,8 @@ export function PostSourcePreview({
   const theme = useTheme();
   const [pointerHovered, setPointerHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
-  const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
-  const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
+  const sourceProfileHref = `/${source.profile.relativeHandle}` as const;
+  const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as const;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
   if (!interactive && pointerHovered) {
     setPointerHovered(false);
@@ -332,10 +333,10 @@ function PresentationLink({
 }: {
   accessibilityLabel: string;
   children: ReactNode;
-  href: Href;
+  href: `/${string}`;
 }) {
   return (
-    <Link asChild href={href} push={Platform.OS !== 'web'}>
+    <NavigationLink resetScroll href={href} push={Platform.OS !== 'web'}>
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="link"
@@ -343,7 +344,7 @@ function PresentationLink({
       >
         {children}
       </Pressable>
-    </Link>
+    </NavigationLink>
   );
 }
 
@@ -356,19 +357,23 @@ function PostBodyPressTarget({
   testID,
 }: {
   content: PresentationContent;
-  href: Href;
+  href: `/${string}`;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
   const router = useRouter();
+  const { record: recordScrollNavigation } = usePrimaryNavigationScroll();
 
   return (
     <Pressable
       accessible={false}
       focusable={false}
-      onPress={() => router.push(href)}
+      onPress={() => {
+        recordScrollNavigation(href);
+        router.push(href);
+      }}
       style={style}
       tabIndex={-1}
       testID={testID}
