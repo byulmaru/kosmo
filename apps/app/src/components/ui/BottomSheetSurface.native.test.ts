@@ -50,7 +50,9 @@ const tag = (id: string) => {
 };
 const sheetStyle = () => {
   const flatten = (style: unknown): Record<string, unknown> =>
-    Array.isArray(style) ? Object.assign({}, ...style.map(flatten)) : (style ?? {});
+    Array.isArray(style)
+      ? Object.assign({}, ...style.map(flatten))
+      : ((style ?? {}) as Record<string, unknown>);
   return flatten(harness.viewProps(tag('sheet')).style);
 };
 async function mount(initialHeight: number | undefined = 480, closeDisabled = false) {
