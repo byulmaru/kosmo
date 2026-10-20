@@ -1,7 +1,10 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
+import {
+  getContentReportBlockProfile,
+  useContentReportMenuItem,
+} from '@/components/content-report/ContentReportContext';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
@@ -34,6 +37,14 @@ const postActionSurfaceFragment = graphql`
     profile {
       id
       relativeHandle
+      ...ProfileBlockAction_profile
+      viewerState {
+        blockedBy
+        isSelf
+        profileBlock {
+          id
+        }
+      }
       ...ProfileMuteAction_profile
     }
     ...PostActionBar_post @alias(as: "actionBar")
@@ -70,6 +81,7 @@ export function PostActionSurface({
     relativeHandle: target.profile.relativeHandle,
   });
   const reportItem = useContentReportMenuItem({
+    blockProfile: getContentReportBlockProfile(target.profile),
     id: target.id,
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,

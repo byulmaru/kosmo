@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
+import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -489,7 +490,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           ]}
         >
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
-            <RelayActorBoundary>{children}</RelayActorBoundary>
+            <RelayActorBoundary>
+              <ContentReportProvider>{children}</ContentReportProvider>
+            </RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
           <PublicContentInvitation
             onDismiss={() => {

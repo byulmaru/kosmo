@@ -139,7 +139,11 @@ function createEnvironment() {
   return environment;
 }
 
-async function render(environment: Environment, showBlockAction = false) {
+async function render(
+  environment: Environment,
+  showBlockAction = false,
+  blockActionOptions: { buttonLabel?: string; onBlocked?: () => void } = {},
+) {
   const owner = createOperationDescriptor(followMutation, { id: targetId }).request;
   const children = [
     createElement(FollowButton, {
@@ -160,6 +164,7 @@ async function render(environment: Environment, showBlockAction = false) {
             __fragmentOwner: owner,
           } as never,
           surface: 'button',
+          ...blockActionOptions,
         })
       : null,
   ];
@@ -260,7 +265,9 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 
 test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {
   const environment = createEnvironment();
   clearProfileBlock(environment);
-  await render(environment, true);
+  await render(environment, true, {
+    buttonLabel: '차단하기',
+  });
   const action = () =>
     renderer!.root.findAllByType(ProfileBlockAction).find((node) => node.props.nextBlocked)!;
   const actionControl = (type: string) => action().find((node) => (node.type as unknown) === type);
@@ -269,7 +276,9 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
       .findAll((node) => (node.type as unknown) === 'Button')
       .map((node) => node.props.children);
   const startBlock = async () => {
+    assert.equal(actionControl('Button').props.children, '차단하기');
     await act(async () => actionControl('Button').props.onPress());
+    assert.equal(actionControl('ConfirmationContent').props.confirmLabel, '차단하기');
     await act(async () => actionControl('ConfirmationContent').props.onConfirm());
   };
   const payload = {
@@ -303,7 +312,7 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
   };
   await startBlock();
   await respond(0, { data: payload });
-  assert.deepEqual(labels(), ['차단 해제', '차단']);
+  assert.deepEqual(labels(), ['차단 해제', '차단하기']);
   assert.equal(environment.getStore().getSource().get(stateId)?.profileBlock?.__ref, blockId);
   assert.deepEqual(toasts, ['프로필을 차단했어요']);
   await act(async () => actionControl('ModalSheet').props.onDismiss());
@@ -324,6 +333,7 @@ for (const [name, response] of [
       .find((node) => node.props.nextBlocked)!;
     const control = (type: string) => action.find((node) => (node.type as unknown) === type);
 
+    assert.equal(control('Button').props.children, '차단');
     await act(async () => control('Button').props.onPress());
     await act(async () => control('ConfirmationContent').props.onConfirm());
     await respond(0, response);

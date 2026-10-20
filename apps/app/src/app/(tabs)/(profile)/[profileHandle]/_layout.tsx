@@ -5,7 +5,10 @@ import { useEffect } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
-import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
+import {
+  getContentReportBlockProfile,
+  useContentReportMenuItem,
+} from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
@@ -58,6 +61,7 @@ const ProfileLayoutQuery = graphql`
         }
       }
       ...ProfileHero_profile
+      ...ProfileBlockAction_profile
       ...FollowButton_profile
     }
   }
@@ -183,6 +187,7 @@ function ProfileLayoutContent({
   );
   const profile = data.profileByHandle;
   const reportItem = useContentReportMenuItem({
+    blockProfile: getContentReportBlockProfile(profile),
     id: profile?.id ?? '',
     kind: ContentReportTargetType.PROFILE,
     label: profile?.relativeHandle ?? '',

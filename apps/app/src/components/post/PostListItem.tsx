@@ -81,6 +81,11 @@ const PostListItemFragment = graphql`
       handle
       relativeHandle
       displayName
+      viewerState {
+        profileBlock {
+          id
+        }
+      }
     }
     replyParent {
       id
@@ -95,6 +100,11 @@ const PostListItemFragment = graphql`
       id
       profile {
         relativeHandle
+        viewerState {
+          profileBlock {
+            id
+          }
+        }
       }
       ...PostListRow_post
     }
@@ -136,6 +146,14 @@ export function PostListItem({
     },
     [openViewer, post.id],
   );
+
+  if (
+    post.profile.viewerState?.profileBlock ||
+    post.repostSource?.profile.viewerState?.profileBlock
+  ) {
+    return null;
+  }
+
   const standardCardStyle = [
     { backgroundColor: theme.backgroundCanvas, paddingHorizontal: metrics.inset },
     styles.standardCard,
