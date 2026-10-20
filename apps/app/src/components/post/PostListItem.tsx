@@ -81,11 +81,6 @@ const PostListItemFragment = graphql`
       handle
       relativeHandle
       displayName
-      viewerState {
-        profileBlock {
-          id
-        }
-      }
     }
     replyParent {
       id
@@ -100,11 +95,6 @@ const PostListItemFragment = graphql`
       id
       profile {
         relativeHandle
-        viewerState {
-          profileBlock {
-            id
-          }
-        }
       }
       ...PostListRow_post
     }
@@ -113,14 +103,12 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
-  hideBlocked = false,
   pinned = false,
   post: postKey,
   presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
-  hideBlocked?: boolean;
   pinned?: boolean;
   post: PostListItem_post$key;
   presentation: PostListPresentation;
@@ -148,13 +136,6 @@ export function PostListItem({
     },
     [openViewer, post.id],
   );
-
-  if (
-    hideBlocked &&
-    (post.profile.viewerState?.profileBlock || post.repostSource?.profile.viewerState?.profileBlock)
-  ) {
-    return null;
-  }
 
   const standardCardStyle = [
     { backgroundColor: theme.backgroundCanvas, paddingHorizontal: metrics.inset },

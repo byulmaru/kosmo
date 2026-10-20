@@ -38,6 +38,25 @@ const PostListProfileFragment = graphql`
         cursor
         node {
           id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
           ...PostListItem_post
         }
       }
@@ -50,6 +69,25 @@ const PostListProfilePinnedFragment = graphql`
     id
     pinnedPosts {
       id
+      content {
+        id
+      }
+      profile {
+        viewerState {
+          profileBlock {
+            id
+          }
+        }
+      }
+      repostSource {
+        profile {
+          viewerState {
+            profileBlock {
+              id
+            }
+          }
+        }
+      }
       ...PostListItem_post
     }
   }
@@ -64,6 +102,25 @@ const PostListHomeFragment = graphql`
         cursor
         node {
           id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
           ...PostListItem_post
         }
       }
@@ -80,6 +137,25 @@ const PostListLocalFragment = graphql`
         cursor
         node {
           id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
           ...PostListItem_post
         }
       }
@@ -90,6 +166,7 @@ const PostListLocalFragment = graphql`
 type Props = {
   error?: boolean;
   home?: PostList_home$key | null;
+  ignoreBlock?: boolean;
   identityKey?: string;
   local?: PostList_local$key | null;
   loading?: boolean;
@@ -103,6 +180,7 @@ type Props = {
 export function PostList({
   error = false,
   home: homeKey,
+  ignoreBlock = false,
   identityKey,
   local: localKey,
   loading = false,
@@ -137,13 +215,27 @@ export function PostList({
   const home = homePagination.data;
   const local = localPagination.data;
   const profile = profilePagination.data;
-  const pinnedPosts = (pinnedProfile?.pinnedPosts ?? []).filter((post) => post != null);
+  const pinnedPosts = (pinnedProfile?.pinnedPosts ?? [])
+    .filter((post) => post != null)
+    .filter(
+      (post) =>
+        ignoreBlock ||
+        (!post.profile.viewerState?.profileBlock &&
+          (post.content != null || !post.repostSource?.profile.viewerState?.profileBlock)),
+    );
   const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
   // unhandled connection edge. Treat that stale edge as empty until the next
   // server payload instead of passing a missing fragment ref to PostListItem.
-  const visibleEdges = edges.filter((edge) => edge.node != null);
+  const visibleEdges = edges
+    .filter((edge) => edge.node != null)
+    .filter(
+      (edge) =>
+        ignoreBlock ||
+        (!edge.node.profile.viewerState?.profileBlock &&
+          (edge.node.content != null || !edge.node.repostSource?.profile.viewerState?.profileBlock)),
+    );
   const hasData = Boolean(home || local || profile);
   const hasNext = isHome
     ? homePagination.hasNext
@@ -256,11 +348,7 @@ export function PostList({
                 ) : null
               }
               renderItem={({ item }) => (
-                <PostListItem
-                  hideBlocked={isHome || isLocal}
-                  post={item.node}
-                  presentation={postListPresentation}
-                />
+                <PostListItem post={item.node} presentation={postListPresentation} />
               )}
               reselectDestination={isHome || isLocal ? 'home' : undefined}
               refreshing={refreshing}

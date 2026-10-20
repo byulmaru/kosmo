@@ -30,6 +30,30 @@ const requests: Array<{
   variables: Record<string, unknown>;
   sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 }> = [];
+const animationFrames = new Map<number, FrameRequestCallback>();
+const originalWindow = globalThis.window;
+const originalDocument = globalThis.document;
+let nextAnimationFrameId = 0;
+let documentHeight = 4_000;
+const browserWindow = {
+  addEventListener: () => undefined,
+  cancelAnimationFrame: (id: number) => animationFrames.delete(id),
+  innerHeight: 800,
+  requestAnimationFrame: (callback: FrameRequestCallback) => {
+    const id = ++nextAnimationFrameId;
+    animationFrames.set(id, callback);
+    return id;
+  },
+  removeEventListener: () => undefined,
+  scrollY: 0,
+};
+const browserDocument = {
+  documentElement: {
+    get scrollHeight() {
+      return documentHeight;
+    },
+  },
+};
 const theme = {
   backgroundCanvas: '#fff',
   borderSubtle: '#ddd',
@@ -66,8 +90,10 @@ stub('react-relay', {
 });
 stub('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  FlatList: 'FlatList',
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
@@ -112,24 +138,6 @@ stub('@/components/ui/ModalSheet', {
     createElement('ModalSheet', props, children),
 });
 stub('@/components/ui/StateView', { Skeleton: 'Skeleton', StateView: 'StateView' });
-stub('@/components/pagination/InfiniteList', {
-  InfiniteList: ({
-    data,
-    empty,
-    renderItem,
-  }: {
-    data: Array<{ node: { id: string } }>;
-    empty?: ReactNode;
-    renderItem: (input: { item: unknown }) => ReactNode;
-  }) =>
-    createElement(
-      Fragment,
-      null,
-      data.length
-        ? data.map((item) => createElement(Fragment, { key: item.node.id }, renderItem({ item })))
-        : empty,
-    ),
-});
 stub('@/components/shell/shellLayout', { getShellLayout: () => 'mobile' });
 for (const [file, name] of [
   ['PostActionAuthentication', 'PostActionAuthenticationProvider'],
@@ -156,7 +164,11 @@ stub(new URL('./PostReplySurface.tsx', import.meta.url), {
   usePostReplySurface: () => ({ reply: undefined, replySurface: null }),
 });
 stub(new URL('./PostSourcePresentationView.tsx', import.meta.url), {
-  PostSourcePresentationView: () => null,
+  PostSourcePresentationView: ({
+    post,
+  }: {
+    post: { content?: { bodyText?: string | null } | null; id: string };
+  }) => createElement('Text', { testID: `body-${post.id}` }, post.content?.bodyText),
   PostSourcePreview: () => null,
 });
 
@@ -165,7 +177,12 @@ before(async () => {
   ({ ProfileBlockAction } = await import('../profile/ProfileBlockAction'));
 });
 
-beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
+beforeEach(() => {
+  documentHeight = 4_000;
+  globalThis.window = browserWindow as unknown as Window & typeof globalThis;
+  globalThis.document = browserDocument as unknown as Document;
+  mock.timers.enable({ apis: ['setTimeout'] });
+});
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -173,6 +190,17 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  animationFrames.clear();
+  if (originalWindow) {
+    globalThis.window = originalWindow;
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
+  if (originalDocument) {
+    globalThis.document = originalDocument;
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
+  }
 });
 
 const targetId = 'target-a';
@@ -180,7 +208,15 @@ const blockId = 'block-a';
 const queryBySurface = { home: homeQuery, local: localQuery } as const;
 type Surface = keyof typeof queryBySurface;
 
-function FeedSurface({ queryOwner, surface }: { queryOwner: unknown; surface: Surface }) {
+function FeedSurface({
+  ignoreBlock = false,
+  queryOwner,
+  surface,
+}: {
+  ignoreBlock?: boolean;
+  queryOwner: unknown;
+  surface: Surface;
+}) {
   const listFragmentKey = {
     __id: 'client:root',
     __fragments: { [`PostList_${surface}`]: { count: 20, cursor: null } },
@@ -190,6 +226,7 @@ function FeedSurface({ queryOwner, surface }: { queryOwner: unknown; surface: Su
     Fragment,
     null,
     createElement(PostList, {
+      ignoreBlock,
       identityKey: surface,
       [surface]: listFragmentKey,
     } as never),
@@ -208,15 +245,17 @@ function FeedSurface({ queryOwner, surface }: { queryOwner: unknown; surface: Su
 function FeedUnderTest({
   surface,
   environment,
+  ignoreBlock,
   queryOwner,
 }: {
   surface: Surface;
   environment: Environment;
+  ignoreBlock?: boolean;
   queryOwner: unknown;
 }) {
   return createElement(Relay.RelayEnvironmentProvider, {
     environment,
-    children: createElement(FeedSurface, { queryOwner, surface }),
+    children: createElement(FeedSurface, { ignoreBlock, queryOwner, surface }),
   });
 }
 
@@ -231,13 +270,13 @@ function createFeedEnvironment() {
   });
 }
 
-async function start(surface: Surface) {
+async function start(surface: Surface, rows = feedRows(), hasNextPage = false) {
   const environment = createFeedEnvironment();
   const operation = createOperationDescriptor(getRequest(queryBySurface[surface]), {
     count: 20,
   });
   const field = surface === 'home' ? 'homeTimeline' : 'localTimeline';
-  environment.commitPayload(operation, { [field]: feedConnection() });
+  environment.commitPayload(operation, { [field]: feedConnection(rows, hasNextPage) });
   await act(async () => {
     renderer = create(
       createElement(FeedUnderTest, {
@@ -247,22 +286,27 @@ async function start(surface: Surface) {
       }),
     );
   });
-  return { environment };
+  await act(async () => flushAnimationFrames());
+  return { environment, queryOwner: operation.request };
 }
 
-function feedConnection() {
-  const rows = [
+function feedRows(): ReturnType<typeof postNode>[] {
+  return [
     postNode('post-target', targetId),
-    postNode('post-source', 'other-a', null, postNode('source-target', targetId)),
+    postNode('post-repost', 'other-a', null, postNode('source-target', targetId)),
+    postNode('post-quote', 'other-c', 'body-post-quote', postNode('source-target', targetId)),
     postNode('post-other', 'other-b'),
   ];
+}
+
+function feedConnection(rows: ReturnType<typeof postNode>[], hasNextPage: boolean) {
   return {
     edges: rows.map((node) => ({ cursor: node.id, node })),
     pageInfo: {
-      endCursor: 'post-other',
-      hasNextPage: false,
+      endCursor: (rows.at(-1)?.id as string | undefined) ?? null,
+      hasNextPage,
       hasPreviousPage: false,
-      startCursor: 'post-target',
+      startCursor: (rows[0]?.id as string | undefined) ?? null,
     },
   };
 }
@@ -335,67 +379,139 @@ function findByType(type: string) {
   return match;
 }
 
-for (const surface of ['home', 'local'] as const) {
-  test(`${surface} hides blocked author and direct source immediately`, async () => {
-    const { environment } = await start(surface);
-    assert.deepEqual(visibleBodies(), [
-      'body-post-other',
-      'body-post-target',
-      'body-source-target',
-    ]);
+function flushAnimationFrames() {
+  for (const [id, callback] of animationFrames) {
+    animationFrames.delete(id);
+    callback(0);
+  }
+}
 
-    await act(async () => findByType('Button').props.onPress());
-    await act(async () => findByType('ConfirmationContent').props.onConfirm());
-    const mutation = requests.find(
-      (item) => item.actor === 'A' && item.name === 'ProfileBlockActionBlockMutation',
-    );
-    assert.ok(mutation);
-    assert.deepEqual(mutation.variables, { id: targetId });
-    assert.deepEqual(visibleBodies(), [
-      'body-post-other',
-      'body-post-target',
-      'body-source-target',
-    ]);
-
-    const payload = {
-      blockProfile: {
-        success: true,
-        profileBlock: {
-          id: blockId,
-          targetProfile: {
-            displayName: 'target-a',
-            followPolicy: 'OPEN',
-            followersCount: 0,
-            handle: 'target-a',
-            id: targetId,
-            relativeHandle: '@target-a',
-            viewerState: {
-              follow: null,
-              followRequest: null,
-              blockedBy: false,
-              isSelf: false,
-              profileBlock: {
-                id: blockId,
-                targetProfile: {
-                  displayName: 'target-a',
-                  id: targetId,
-                  relativeHandle: '@target-a',
-                },
+function blockResponse() {
+  return {
+    blockProfile: {
+      success: true,
+      profileBlock: {
+        id: blockId,
+        targetProfile: {
+          displayName: 'target-a',
+          followPolicy: 'OPEN',
+          followersCount: 0,
+          handle: 'target-a',
+          id: targetId,
+          relativeHandle: '@target-a',
+          viewerState: {
+            follow: null,
+            followRequest: null,
+            blockedBy: false,
+            isSelf: false,
+            profileBlock: {
+              id: blockId,
+              targetProfile: {
+                displayName: 'target-a',
+                id: targetId,
+                relativeHandle: '@target-a',
               },
             },
           },
         },
       },
-    };
-    await act(async () => {
-      mutation.sink.next({ data: payload });
-      mutation.sink.complete();
-    });
+    },
+  };
+}
 
-    assert.deepEqual(visibleBodies(), ['body-post-other']);
+async function blockTarget() {
+  await act(async () => findByType('Button').props.onPress());
+  await act(async () => findByType('ConfirmationContent').props.onConfirm());
+  const mutation = requests.find(
+    (item) => item.actor === 'A' && item.name === 'ProfileBlockActionBlockMutation',
+  );
+  assert.ok(mutation);
+  assert.deepEqual(mutation.variables, { id: targetId });
+  await act(async () => {
+    mutation.sink.next({ data: blockResponse() });
+    mutation.sink.complete();
+  });
+}
+
+for (const surface of ['home', 'local'] as const) {
+  test(`${surface} block mutation filters blocked authors and pure reposts while retaining Quotes and unrelated rows`, async () => {
+    const { environment, queryOwner } = await start(surface);
+    assert.deepEqual(visibleBodies(), [
+      'body-post-other',
+      'body-post-quote',
+      'body-post-target',
+      'body-source-target',
+    ]);
+
+    await blockTarget();
+
+    assert.deepEqual(visibleBodies(), ['body-post-other', 'body-post-quote']);
     assert.equal(
       environment.getStore().getSource().get('client:target-a:viewerState')?.profileBlock?.__ref,
       blockId,
     );
+
+    await act(async () =>
+      renderer!.update(
+        createElement(FeedUnderTest, {
+          environment,
+          ignoreBlock: true,
+          queryOwner,
+          surface,
+        }),
+      ),
+    );
+    assert.deepEqual(visibleBodies(), [
+      'body-post-other',
+      'body-post-quote',
+      'body-post-target',
+      'body-source-target',
+    ]);
   });
 }
+
+test('the web list loads another page when blocking filters every loaded row', async () => {
+  const rows = [
+    postNode('post-target', targetId),
+    postNode('post-repost', 'other-a', null, postNode('source-target', targetId)),
+  ];
+  await start('home', rows, true);
+  assert.deepEqual(visibleBodies(), ['body-post-target', 'body-source-target']);
+  assert.equal(requests.length, 0);
+
+  documentHeight = 800;
+  await blockTarget();
+  assert.deepEqual(visibleBodies(), []);
+  findByType('StateView');
+
+  await act(async () => flushAnimationFrames());
+  const nextPage = requests.find((item) => item.name === 'PostListHomeNextPageQuery');
+  assert.ok(nextPage, 'an empty filtered list should request another page');
+  assert.equal(nextPage.variables.cursor, 'post-repost');
+  assert.equal(nextPage.variables.count, 20);
+
+  await act(async () => {
+    nextPage.sink.next({
+      data: {
+        homeTimeline: {
+          edges: [
+            {
+              cursor: 'post-next',
+              node: postNode('post-next', 'other-next'),
+            },
+          ],
+          pageInfo: {
+            endCursor: 'post-next',
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: 'post-next',
+          },
+        },
+      },
+    });
+    nextPage.sink.complete();
+  });
+  await act(async () => mock.timers.tick(0));
+  await act(async () => flushAnimationFrames());
+  assert.deepEqual(visibleBodies(), ['body-post-next']);
+});

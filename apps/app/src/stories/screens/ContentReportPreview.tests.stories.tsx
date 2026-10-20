@@ -114,23 +114,28 @@ export const BlockActionAfterReport: Story = {
     const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
-    let confirmation = within(await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' }));
+    let confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    let confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
     expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     await waitFor(() => expect(block).toHaveFocus());
     expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
 
     await userEvent.click(block);
-    confirmation = within(await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' }));
+    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
     );
     expect(page.getByText('신고가 접수되었어요')).toBeVisible();
+    await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
     await waitFor(() => expect(block).toHaveFocus());
 
     await userEvent.click(block);
-    confirmation = within(await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' }));
+    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() => {
       expect(page.queryByRole('button', { name: '게시물 신고 닫기' })).not.toBeInTheDocument();

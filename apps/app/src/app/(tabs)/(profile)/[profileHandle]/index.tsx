@@ -74,6 +74,7 @@ function ProfilePostListPageContent({ handle }: { handle: string }) {
 
   return (
     <PostList
+      ignoreBlock={profileBlockId != null && acknowledgedProfileBlockId === profileBlockId}
       identityKey={`profile:${data.profileByHandle?.id ?? handle}`}
       profile={data.profileByHandle}
       replyProfile={data.currentSession?.selectedProfile ?? null}

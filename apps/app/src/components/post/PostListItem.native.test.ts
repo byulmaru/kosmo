@@ -215,12 +215,11 @@ async function mountPost(t: TestContext, postKey = post) {
   await renderPost(postKey);
 }
 
-async function renderPost(postKey = post, hideBlocked = false) {
+async function renderPost(postKey = post) {
   assert.ok(PostListItem);
   await act(async () =>
     nativeHarness.render(
       createElement(PostListItem, {
-        hideBlocked,
         post: postKey,
         presentation: 'mobile',
         showDivider: false,
@@ -277,38 +276,6 @@ test('the card pressed feedback follows direct touch and clears on release or ca
   assert.ok(feedbackIsPressed());
   await cancel(t);
   assertFeedbackRest();
-});
-
-test('only feed callers hide a blocked author or direct quote/repost source', async (t) => {
-  await mountPost(t);
-  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
-
-  const blockedAuthorPost = {
-    ...postData,
-    profile: { ...postData.profile, viewerState: { profileBlock: { id: 'block-1' } } },
-  } as unknown as PostListItem_post$key;
-  await renderPost(blockedAuthorPost);
-  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
-  await renderPost(blockedAuthorPost, true);
-  assert.equal(nativeHarness.tagByTestID('post-list-item-card'), undefined);
-
-  const blockedSourcePost = {
-    ...postData,
-    repostSource: {
-      id: 'source-1',
-      profile: {
-        relativeHandle: '@target',
-        viewerState: { profileBlock: { id: 'block-1' } },
-      },
-    },
-  } as unknown as PostListItem_post$key;
-  await renderPost(blockedSourcePost);
-  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
-  await renderPost(blockedSourcePost, true);
-  assert.equal(nativeHarness.tagByTestID('post-list-item-card'), undefined);
-
-  await renderPost();
-  assert.ok(nativeHarness.tagByTestID('post-list-item-card'));
 });
 
 test('an active ActionMenu row selects once without pressing its PostListItem ancestor', async (t) => {
