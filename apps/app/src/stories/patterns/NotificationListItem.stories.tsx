@@ -281,7 +281,20 @@ const meta = {
       </View>
     ),
   ],
-  excludeStories: ['NotificationExample'],
+  excludeStories: [
+    'NotificationExample',
+    'ActivationContract',
+    'PendingContract',
+    'CompositionContract',
+    'ProtectionContract',
+    'ReplyLayoutContract',
+    'ReplyQuoteContract',
+    'ReplyActionsContract',
+    'ReplyRailActivationContract',
+    'ReactionRepostProfileTargetsContract',
+    'OperationalActivationContract',
+    'PostNotificationRailActivationContract',
+  ],
   parameters: {
     layout: 'fullscreen',
     relay: {
