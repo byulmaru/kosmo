@@ -2,25 +2,26 @@
 
 ### Requirement: Public content guest onboarding
 
-**Source Context:** `docs/domain/policies/public-content-onboarding.md`, `docs/design/public-content-onboarding.md`, PROD-836·PROD-681, 2026-10-14·2026-10-16 안내 구성과 2026-10-19 범위 조정. The app SHALL 비로그인 공개 Profile·Post에 로그인 상태, 가능한 공개 조회와 Profile 참여의 차이를 안내하며 기존 공개 조회를 유지한다.
+**Source Context:** `docs/domain/policies/public-content-onboarding.md`, `docs/design/public-content-onboarding.md`, PROD-836·PROD-681, 2026-10-14·2026-10-16 안내 구성, 2026-10-19 범위 조정과 2026-10-20 직접 인증 진입. The app SHALL 비로그인 공개 Profile·Post에 로그인 상태, 가능한 공개 조회와 Profile 참여의 차이를 안내하며 기존 공개 조회를 유지한다.
 
 #### Scenario: Full Web guest
 
 - **WHEN** guest가 full Web에서 공개 Profile 또는 Post를 연다
-- **THEN** 홈(`/`)을 여는 `KOSMO에서 계속하기` 하단 CTA와 좌측 `가입하기`·`로그인` 버튼을 제공하고 보호 메뉴·로그아웃·직접 Profile 생성 진입을 숨긴다
+- **THEN** `/login`에서 기존 인증을 바로 시작하는 `KOSMO에서 계속하기` 하단 CTA와 좌측 `가입하기`·`로그인` 진입을 제공하고 보호 메뉴·로그아웃·직접 Profile 생성 진입을 숨긴다
 - **AND** 콘텐츠·focus를 가리지 않으며 우측 레일에는 중복 `가입하기`·`로그인` 버튼과 별도의 가입·소개 안내 카드를 표시하지 않는다
 
 #### Scenario: Bottom invitation across Web widths
 
 - **WHEN** guest가 full, compact 또는 mobile Web에서 두 공개 route 중 하나를 연다
-- **THEN** 닫을 수 있는 하단 안내에 홈(`/`)을 여는 `KOSMO에서 계속하기` 버튼을 표시한다
+- **THEN** 닫을 수 있는 하단 안내에 `/login`에서 기존 인증을 바로 시작하는 `KOSMO에서 계속하기` 버튼을 표시한다
 - **AND** 버튼 아래에 `https://byulmaru.co/about-us`를 여는 `팀 별마루 소개`와 `/privacy`를 여는 `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다
 - **AND** 콘텐츠·focus·하단 탭을 가리지 않는다
 
 #### Scenario: Guest sidebar authentication controls
 
 - **WHEN** guest가 공개 Profile·Post의 좌측 사이드바 또는 mobile drawer를 연다
-- **THEN** 보호 메뉴 대신 홈(`/`)을 여는 `가입하기`와 `/login`을 여는 `로그인`을 별도의 action으로 제공한다
+- **THEN** 보호 메뉴 대신 `/login`에서 기존 인증을 바로 시작하는 `가입하기`와 `로그인` 진입을 제공한다
+- **AND** 현재 head에서는 두 진입이 별도 control로 렌더링된다. 이 snapshot은 향후 control 구성을 정하지 않는다
 
 #### Scenario: Dismiss bottom invitation
 

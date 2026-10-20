@@ -7,7 +7,6 @@ import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
-  isGuestPublicProfileHome,
   isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
@@ -210,14 +209,5 @@ describe('getShellLayout', () => {
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/profile-edit'), false);
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/@writer/following'), false);
-  });
-
-  it('uses the drawer trigger only for a guest mobile Web Profile home header', () => {
-    assert.equal(isGuestPublicProfileHome(true, 390, '/@writer', 'guest'), true);
-    assert.equal(isGuestPublicProfileHome(true, 390, '/@writer/followers', 'guest'), false);
-    assert.equal(isGuestPublicProfileHome(true, 390, '/@writer', 'error'), false);
-    assert.equal(isGuestPublicProfileHome(true, 390, '/@writer', 'valid'), false);
-    assert.equal(isGuestPublicProfileHome(true, 768, '/@writer', 'guest'), false);
-    assert.equal(isGuestPublicProfileHome(false, 390, '/@writer', 'guest'), false);
   });
 });

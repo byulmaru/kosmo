@@ -141,19 +141,6 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
   );
 }
 
-export function isGuestPublicProfileHome(
-  web: boolean,
-  width: number,
-  pathname: string,
-  status: 'error' | 'guest' | 'valid',
-) {
-  const segments = pathname.split('/').filter(Boolean);
-  const isProfileHome =
-    segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
-
-  return web && getShellLayout(web, width) === 'mobile' && status === 'guest' && isProfileHome;
-}
-
 export function getWebMobileShellHeaderStickyOffset(width: number) {
   return width < breakpoints.compact ? webMobileShellHeaderHeight : 0;
 }

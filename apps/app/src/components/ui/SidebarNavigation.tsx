@@ -32,7 +32,6 @@ import type { PressableStateCallbackType, ViewStyle } from 'react-native';
 import type { NavigationDestination, NavigationProfile } from './navigationChrome';
 
 export type SidebarPresentation = 'compact' | 'drawer' | 'full';
-export type SidebarGuestAction = 'login' | 'signup';
 
 export type SidebarNavigationProps = {
   currentDestination?: NavigationDestination | null;
@@ -52,7 +51,6 @@ export type SidebarNavigationProps = {
 };
 
 export type SidebarGuestActionRenderProps = Readonly<{
-  action: SidebarGuestAction;
   children: ReactElement;
 }>;
 
@@ -90,7 +88,6 @@ type SidebarControlProps = {
   onPress: () => void;
   profile?: NavigationProfile;
   renderControl?: (props: SidebarNavigationRenderControlProps) => ReactElement;
-  guestAction?: SidebarGuestAction;
   renderGuestAction?: (props: SidebarGuestActionRenderProps) => ReactElement;
   selected?: boolean;
   nested?: boolean;
@@ -110,7 +107,6 @@ function SidebarControl({
   href,
   hasMenu = false,
   Icon,
-  guestAction,
   label,
   onPress,
   profile,
@@ -281,24 +277,23 @@ function SidebarControl({
     </Pressable>
   );
 
-  const renderedControl =
-    guestAction && renderGuestAction ? (
-      renderGuestAction({ action: guestAction, children: control })
-    ) : href ? (
-      <Link asChild href={href} rel="noopener noreferrer" target="_blank">
-        {control}
-      </Link>
-    ) : renderControl && destination ? (
-      renderControl({
-        children: control,
-        destination,
-        disabled: controlDisabled,
-        onPress,
-        selected: active,
-      })
-    ) : (
-      control
-    );
+  const renderedControl = renderGuestAction ? (
+    renderGuestAction({ children: control })
+  ) : href ? (
+    <Link asChild href={href} rel="noopener noreferrer" target="_blank">
+      {control}
+    </Link>
+  ) : renderControl && destination ? (
+    renderControl({
+      children: control,
+      destination,
+      disabled: controlDisabled,
+      onPress,
+      selected: active,
+    })
+  ) : (
+    control
+  );
 
   return compact ? <View style={styles.compactTarget}>{renderedControl}</View> : renderedControl;
 }
@@ -387,7 +382,6 @@ export function SidebarNavigation({
           ) : null}
           <SidebarControl
             compact={compact}
-            guestAction="signup"
             Icon={UserRoundPlus}
             label="가입하기"
             onPress={() => undefined}
@@ -396,7 +390,6 @@ export function SidebarNavigation({
           />
           <SidebarControl
             compact={compact}
-            guestAction="login"
             Icon={LogIn}
             label="로그인"
             onPress={() => undefined}

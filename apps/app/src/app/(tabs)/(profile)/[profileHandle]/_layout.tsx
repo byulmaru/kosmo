@@ -18,7 +18,7 @@ import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/p
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { NavigationLink } from '@/components/shell/NavigationLink';
-import { isGuestPublicProfileHome } from '@/components/shell/shellLayout';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
@@ -92,11 +92,12 @@ export default function ProfileLayout() {
       <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
     </IconButton>
   );
-  const headerLeading = isGuestPublicProfileHome(Platform.OS === 'web', width, pathname, status) ? (
-    <NavigationDrawerTrigger />
-  ) : (
-    backButton
-  );
+  const guestMobileWebProfileHome =
+    Platform.OS === 'web' &&
+    getShellLayout(Platform.OS === 'web', width) === 'mobile' &&
+    status === 'guest' &&
+    isProfileHome;
+  const headerLeading = guestMobileWebProfileHome ? <NavigationDrawerTrigger /> : backButton;
 
   return (
     <RouteBoundary

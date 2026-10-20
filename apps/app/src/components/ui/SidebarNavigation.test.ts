@@ -107,8 +107,7 @@ async function renderGuestSidebar(presentation: 'compact' | 'drawer' | 'full') {
         onLogout: () => undefined,
         onNavigate: () => undefined,
         presentation,
-        renderGuestAction: ({ action, children }) =>
-          createElement('GuestActionLink', { action }, children),
+        renderGuestAction: ({ children }) => createElement('GuestActionLink', null, children),
       }),
     );
   });
@@ -124,10 +123,7 @@ describe('guest public-content sidebar', () => {
       .findAllByType('Pressable' as never)
       .map((node) => node.props.accessibilityLabel);
 
-    assert.deepEqual(
-      guestActions.map((node) => node.props.action),
-      ['signup', 'login'],
-    );
+    assert.equal(guestActions.length, 2);
     assert.ok(labels.includes('가입하기'));
     assert.ok(labels.includes('로그인'));
     assert.ok(!labels.includes('홈'));
