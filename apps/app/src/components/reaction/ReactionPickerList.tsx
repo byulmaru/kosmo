@@ -79,6 +79,9 @@ export function ReactionPickerList<Item>({
         role: 'scrollbar' as const,
         'aria-controls': listId,
         'aria-orientation': 'vertical' as const,
+        'aria-valuemin': 0,
+        'aria-valuemax': range,
+        'aria-valuenow': offset,
         tabIndex: 0 as const,
         onKeyDown: (event: { key: string; preventDefault: () => void }) => {
           const next =
@@ -152,7 +155,8 @@ export function ReactionPickerList<Item>({
         onContentSizeChange={(_width, height) => resize({ content: height })}
         onLayout={(event) => resize({ viewport: event.nativeEvent.layout.height })}
         onScroll={(event) => {
-          setMetrics((value) => ({ ...value, offset: event.nativeEvent.contentOffset.y }));
+          const nextOffset = event.nativeEvent.contentOffset.y;
+          setMetrics((value) => ({ ...value, offset: nextOffset }));
           setActivity((value) => (value ?? 0) + 1);
         }}
         ref={list}

@@ -387,7 +387,7 @@ export const MobileGridGeometryContract: Story = {
     const quickRow = canvas.getByTestId('full-reaction-section-quick-row-0');
     const symbolsHeading = canvas.getByRole('heading', { name: '기호' });
     const expressionsHeading = canvas.getByRole('heading', { name: '표정과 감정' });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     for (const row of rows) {
       expect(getComputedStyle(row).justifyContent).toBe('normal');
     }
@@ -785,6 +785,7 @@ export const MobileScrollbarContract: Story = {
   globals: mobileGlobals,
   play: async ({ args, canvasElement }) => {
     args.onSelect.mockClear();
+    const user = userEvent.setup();
     const canvas = within(canvasElement.ownerDocument.body);
     const list = () => canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     const bar = () => canvas.getByTestId('full-reaction-picker-scrollbar');
@@ -794,16 +795,16 @@ export const MobileScrollbarContract: Story = {
     const listBounds = list().getBoundingClientRect();
     expect(bar().getBoundingClientRect().left).toBeGreaterThanOrEqual(listBounds.right);
     const bounds = bar().getBoundingClientRect();
-    const point = (y: number) => ({ x: bounds.left + bounds.width / 2, y });
-    await userEvent.pointer({ keys: '[MouseLeft>]', target: bar(), coords: point(bounds.top + 4) });
+    const point = (y: number) => ({ x: bounds.left + bounds.width / 2, y, pageY: y });
+    await user.pointer({ keys: '[MouseLeft>]', target: bar(), coords: point(bounds.top + 4) });
     await new Promise((resolve) => setTimeout(resolve, 800));
     expect(bar()).toHaveStyle({ opacity: '1' });
-    await userEvent.pointer({
+    await user.pointer({
       target: bar(),
       coords: point(listBounds.top + listBounds.height / 2),
     });
     await waitFor(() => expect(list().scrollTop).toBeGreaterThan(100));
-    await userEvent.pointer({ target: bar(), coords: point(listBounds.bottom + 100) });
+    await user.pointer({ target: bar(), coords: point(listBounds.bottom + 100) });
     await waitFor(() =>
       expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
         2,
@@ -814,27 +815,27 @@ export const MobileScrollbarContract: Story = {
     await waitFor(() => expect(bar()).toHaveStyle({ opacity: '0' }));
     // A focusable control exposes the same position without requiring a drag.
     bar().focus();
-    await userEvent.keyboard('{Home}');
+    await user.keyboard('{Home}');
     await waitFor(() => expect(list().scrollTop).toBe(0));
-    await userEvent.keyboard('{End}');
+    await user.keyboard('{End}');
     await waitFor(() =>
       expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
         2,
       ),
     );
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
-    await userEvent.type(search, 'a');
+    await user.type(search, 'a');
     expect(search).toHaveFocus();
     await waitFor(() => expect(list().scrollTop).toBe(0));
-    await userEvent.clear(search);
-    await userEvent.type(search, 'zzzzzzzzzz');
+    await user.clear(search);
+    await user.type(search, 'zzzzzzzzzz');
     await waitFor(() =>
       expect(canvas.queryByTestId('full-reaction-picker-scrollbar')).not.toBeInTheDocument(),
     );
-    await userEvent.clear(search);
+    await user.clear(search);
     await waitFor(() => expect(list().scrollTop).toBe(0));
     const firstEmoji = within(list()).getAllByRole('button')[0]!;
-    await userEvent.click(firstEmoji);
+    await user.click(firstEmoji);
     expect(args.onSelect).toHaveBeenCalledOnce();
   },
 };

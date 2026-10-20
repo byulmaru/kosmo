@@ -145,3 +145,19 @@ test('keyboard and accessibility actions scroll without drag and query remount r
   );
   act(() => renderer.unmount());
 });
+
+// Native synthetic events are released after the callback, before a queued update may run.
+test('queued Native scroll updates do not retain pooled events', () => {
+  platform = 'ios';
+  const { renderer, list, thumb } = render();
+  const event: { nativeEvent: { contentOffset: { y: number } } | null } = {
+    nativeEvent: { contentOffset: { y: 500 } },
+  };
+  act(() => {
+    list().props.onScroll({ nativeEvent: { contentOffset: { y: 100 } } });
+    list().props.onScroll(event);
+    event.nativeEvent = null;
+  });
+  assert.equal(thumb().props.accessibilityValue.now, 500);
+  act(() => renderer.unmount());
+});
