@@ -255,7 +255,7 @@ describe('SettingsProfileDetail', () => {
       followPolicy: 'OPEN',
     });
     const initialFetchKey = queryFetchKeys[0];
-    assert.equal(typeof initialFetchKey, 'number');
+    assert.equal(typeof initialFetchKey, 'string');
     assert.deepEqual(queryFetchKeys, [initialFetchKey, initialFetchKey, initialFetchKey]);
   });
 

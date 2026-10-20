@@ -29,7 +29,7 @@ const queryModes: Record<QueryName, QueryMode> = {
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
-  fetchKey: number;
+  fetchKey: string;
   handle: string;
   query: QueryName;
 }> = [];
@@ -216,7 +216,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
-    options: { fetchKey: number },
+    options: { fetchKey: string },
   ) => {
     queryHistory.push({
       fetchKey: options.fetchKey,

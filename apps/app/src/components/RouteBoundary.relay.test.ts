@@ -42,9 +42,9 @@ type FetchPolicy = 'store-or-network' | 'store-and-network';
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: number };
+let useRouteBoundary: () => { fetchKey: string };
 let renderer: ReactTestRenderer | null = null;
-let observedFetchKey = 0;
+let observedFetchKey = '';
 const requests: Request[] = [];
 
 before(async () => {
@@ -58,7 +58,7 @@ afterEach(async () => {
   await act(async () => mock.timers.tick(300_001));
   mock.timers.reset();
   renderer = null;
-  observedFetchKey = 0;
+  observedFetchKey = '';
   requests.length = 0;
 });
 

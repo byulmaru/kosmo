@@ -10,7 +10,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
-const queryHistory: Array<{ fetchKey: number }> = [];
+const queryHistory: Array<{ fetchKey: string }> = [];
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
 let selectedProfileId: string | null = 'profile-a';
@@ -36,7 +36,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: string,
     variables: Record<string, never>,
-    options: { fetchKey: number },
+    options: { fetchKey: string },
   ) => {
     assert.equal(query, 'FollowRequestsPageQuery');
     assert.deepEqual(variables, {});

@@ -26,9 +26,9 @@ type RouteBoundaryProps = {
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: number; refetch: () => void };
+let useRouteBoundary: () => { fetchKey: string; refetch: () => void };
 let queryShouldThrow = false;
-let observedFetchKey = 0;
+let observedFetchKey = '';
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -86,16 +86,28 @@ describe('RouteBoundary local query lifecycle', () => {
     assert.equal(queryProbe().props.fetchKey, initialFetchKey);
   });
 
-  it('assigns a new fetch key for an explicit refetch', async () => {
-    await act(async () => {
-      renderer = create(renderBoundary());
-    });
+  it('assigns a new fetch key for an explicit refetch in the same millisecond', async () => {
+    const originalDateNow = Date.now;
+    const originalRandom = Math.random;
+    const randomValues = [0.125, 0.25];
+    Date.now = () => 1_700_000_000_000;
+    Math.random = () => randomValues.shift() ?? 0;
 
-    const initialFetchKey = queryProbe().props.fetchKey;
-    await act(async () => queryProbe().props.refetch());
+    try {
+      await act(async () => {
+        renderer = create(renderBoundary());
+      });
 
-    const refetchedKey = queryProbe().props.fetchKey;
-    assert.notEqual(refetchedKey, initialFetchKey);
+      const initialFetchKey = queryProbe().props.fetchKey;
+      assert.equal(typeof initialFetchKey, 'string');
+      await act(async () => queryProbe().props.refetch());
+
+      const refetchedKey = queryProbe().props.fetchKey;
+      assert.notEqual(refetchedKey, initialFetchKey);
+    } finally {
+      Date.now = originalDateNow;
+      Math.random = originalRandom;
+    }
   });
 
   it('resets an error boundary and advances the fetch key through the fallback action', async () => {

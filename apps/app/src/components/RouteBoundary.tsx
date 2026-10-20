@@ -26,11 +26,12 @@ type RouteBoundaryProps = {
 };
 
 type RouteBoundaryContextValue = RouteBoundaryHandle & {
-  fetchKey: number;
+  fetchKey: string;
 };
 
-// Keep keys unique across remounts while Relay may retain their query operations.
-let nextFetchKey = 0;
+function createFetchKey() {
+  return `${Date.now()}-${Math.random()}`;
+}
 
 const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(null);
 
@@ -53,9 +54,9 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
   function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
-    const [fetchKey, setFetchKey] = useState(() => nextFetchKey++);
+    const [fetchKey, setFetchKey] = useState(createFetchKey);
 
-    const refetch = useCallback(() => setFetchKey(nextFetchKey++), []);
+    const refetch = useCallback(() => setFetchKey(createFetchKey()), []);
     const reset = useCallback(() => refetch(), [refetch]);
 
     useImperativeHandle(ref, () => ({ refetch }), [refetch]);
