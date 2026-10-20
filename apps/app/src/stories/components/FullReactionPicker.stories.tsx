@@ -571,6 +571,8 @@ export const InteractionContract: Story = {
     const canvas = within(canvasElement);
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
 
+    expect(getComputedStyle(search).fontSize).toBe('16px');
+
     expect(canvas.getByRole('dialog', { name: '반응 선택' })).toHaveStyle({
       height: '624px',
       width: '360px',

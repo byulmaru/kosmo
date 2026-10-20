@@ -1480,9 +1480,16 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
     let position = screen.getByTestId('full-reaction-overlay-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
-    expect(canvasElement.ownerDocument.activeElement).toBe(
-      within(dialog).getByRole('searchbox', { name: '반응 검색' }),
-    );
+    const search = within(dialog).getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(search).toHaveFocus());
+    expect(getComputedStyle(search).fontSize).toBe('16px');
+    await userEvent.click(within(dialog).getByRole('heading', { name: '빠른 반응' }));
+    await userEvent.click(search);
+    expect(search).toHaveFocus();
+    expect(getComputedStyle(search).fontSize).toBe('16px');
+    await userEvent.type(search, '존재하지않음');
+    expect(within(dialog).getByText('검색 결과가 없어요')).toBeVisible();
+    await userEvent.clear(search);
     expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
     expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
@@ -1502,6 +1509,12 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
     await userEvent.click(topLeftTrigger!);
+    const reopenedSearch = within(
+      await screen.findByRole('dialog', { name: '반응 선택' }),
+    ).getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(reopenedSearch).toHaveFocus());
+    expect(getComputedStyle(reopenedSearch).fontSize).toBe('16px');
+    expect(reopenedSearch).toHaveValue('');
     await userEvent.click(canvasElement.ownerDocument.body);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
