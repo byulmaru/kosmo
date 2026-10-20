@@ -907,16 +907,17 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(
       observations
         .map((observation) => {
-          const { activityType, handler, objectOrigin, outcome, phase, reasonCode } =
+          const { activityType, handler, objectOrigin, objectUri, outcome, phase, reasonCode } =
             observation as {
               activityType: 'Create';
               handler: 'create';
               objectOrigin: string;
+              objectUri: string;
               outcome: 'external_failure' | 'internal_failure';
               phase: 'actor_lookup';
               reasonCode: 'remote_mention_materialization_rejected';
             };
-          return { activityType, handler, objectOrigin, outcome, phase, reasonCode };
+          return { activityType, handler, objectOrigin, objectUri, outcome, phase, reasonCode };
         })
         .sort((left, right) => left.outcome.localeCompare(right.outcome)),
       [
@@ -924,6 +925,7 @@ describe('inbound Create dispatch', () => {
           activityType: 'Create',
           handler: 'create',
           objectOrigin: objectUri.origin,
+          objectUri: objectUri.href,
           outcome: 'internal_failure',
           phase: 'actor_lookup',
           reasonCode: 'remote_mention_materialization_rejected',
@@ -2478,21 +2480,21 @@ describe('inbound Create dispatch', () => {
     }
 
     assert.deepEqual(
-      logs.map((observation) => {
-        const { outcome, phase, reasonCode } = observation as {
-          outcome: string;
-          phase: string;
-          reasonCode: string;
+      logs,
+      cases.map(({ note }) => {
+        assert.ok(note.id);
+        return {
+          activityType: 'Create',
+          actorOrigin: remoteActorUri.origin,
+          handler: 'create',
+          objectOrigin: note.id.origin,
+          objectUri: note.id.href,
+          outcome: 'rejected',
+          phase: 'validation',
+          reasonCode: 'no_active_local_mention',
         };
-        return { outcome, phase, reasonCode };
       }),
-      cases.map(() => ({
-        outcome: 'rejected',
-        phase: 'validation',
-        reasonCode: 'no_active_local_mention',
-      })),
     );
-
     assert.equal(await db.$count(ActivityPubPosts), 0);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(PostContents), 0);
@@ -2818,35 +2820,54 @@ describe('inbound Create dispatch', () => {
     assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
   });
 
-  test('rejects unknown, inactive, non-ActivityPub, and SUSPENDED actors before hydration', async () => {
+  test('skips unavailable actors before hydration and logs the object URI', async () => {
     const cases = [
       { name: 'unknown' },
       { name: 'inactive', profileState: ProfileState.DISABLED },
       { instanceKind: InstanceKind.LOCAL, name: 'non-ActivityPub' },
       { instanceState: InstanceState.SUSPENDED, name: 'SUSPENDED' },
     ];
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
 
-    for (const { instanceKind, instanceState, name, profileState } of cases) {
-      await db.delete(Profiles);
-      await db.delete(Instances).where(ne(Instances.id, localInstanceId));
-      if (name !== 'unknown') {
-        await createStoredRemoteActor({ instanceKind, instanceState, profileState });
+    try {
+      for (const { instanceKind, instanceState, name, profileState } of cases) {
+        await db.delete(Profiles);
+        await db.delete(Instances).where(ne(Instances.id, localInstanceId));
+        if (name !== 'unknown') {
+          await createStoredRemoteActor({ instanceKind, instanceState, profileState });
+        }
+        const documentLoader = mock.fn(async () => {
+          throw new Error('hydration must not run');
+        });
+
+        assert.equal(
+          await handleInboundCreate(
+            createContext(documentLoader),
+            new Create({ actor: remoteActorUri, object: remoteObjectUri }),
+            receivedAt,
+          ),
+          undefined,
+          name,
+        );
+        assert.equal(documentLoader.mock.calls.length, 0, name);
       }
-      const documentLoader = mock.fn(async () => {
-        throw new Error('hydration must not run');
-      });
-
-      assert.equal(
-        await handleInboundCreate(
-          createContext(documentLoader),
-          new Create({ actor: remoteActorUri, object: remoteObjectUri }),
-          receivedAt,
-        ),
-        undefined,
-        name,
-      );
-      assert.equal(documentLoader.mock.calls.length, 0, name);
+    } finally {
+      restoreReporter();
     }
+
+    assert.deepEqual(
+      observations.map((observation) => {
+        const { objectOrigin, objectUri } = observation as {
+          objectOrigin?: string;
+          objectUri?: string;
+        };
+        return [objectOrigin, objectUri];
+      }),
+      cases.map(() => [remoteObjectUri.origin, remoteObjectUri.href]),
+    );
   });
 
   test('rejects missing or multiple actor/object identities before hydration', async () => {
@@ -2866,46 +2887,101 @@ describe('inbound Create dispatch', () => {
         objects: [remoteObjectUri, new URL('https://remote.example/notes/2')],
       }),
     ];
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
 
-    for (const create of activities) {
-      assert.equal(
-        await handleInboundCreate(createContext(documentLoader), create, receivedAt),
-        undefined,
-      );
+    try {
+      for (const create of activities) {
+        assert.equal(
+          await handleInboundCreate(createContext(documentLoader), create, receivedAt),
+          undefined,
+        );
+      }
+      assert.equal(documentLoader.mock.calls.length, 0);
+    } finally {
+      restoreReporter();
     }
-    assert.equal(documentLoader.mock.calls.length, 0);
+
+    assert.deepEqual(
+      observations.map((observation) => {
+        const { objectOrigin, objectUri } = observation as {
+          objectOrigin?: string;
+          objectUri?: string;
+        };
+        return [objectOrigin, objectUri];
+      }),
+      [
+        [remoteObjectUri.origin, remoteObjectUri.href],
+        [remoteObjectUri.origin, remoteObjectUri.href],
+        [undefined, undefined],
+        [undefined, undefined],
+      ],
+    );
   });
 
   test('skips unsupported object types and failed hydration', async () => {
-    await createStoredRemoteActor();
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
     const article = new Article({
       attribution: remoteActorUri,
       id: remoteObjectUri,
       to: PUBLIC_COLLECTION,
     });
 
-    assert.equal(
-      await handleInboundCreate(
-        createContext(),
-        new Create({ actor: remoteActorUri, object: article }),
-        receivedAt,
-      ),
-      undefined,
-    );
+    try {
+      await createStoredRemoteActor();
+      assert.equal(
+        await handleInboundCreate(
+          createContext(),
+          new Create({ actor: remoteActorUri, object: article }),
+          receivedAt,
+        ),
+        undefined,
+      );
 
-    const failedLoader = mock.fn(async () => {
-      throw new Error('remote object unavailable');
-    });
-    assert.equal(
-      await handleInboundCreate(
-        createContext(failedLoader),
-        new Create({ actor: remoteActorUri, object: remoteObjectUri }),
-        receivedAt,
-      ),
-      undefined,
-    );
-    assert.equal(failedLoader.mock.calls.length, 1);
-    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+      const failedLoader = mock.fn(async () => {
+        throw new Error('remote object unavailable');
+      });
+      assert.equal(
+        await handleInboundCreate(
+          createContext(failedLoader),
+          new Create({ actor: remoteActorUri, object: remoteObjectUri }),
+          receivedAt,
+        ),
+        undefined,
+      );
+      assert.equal(failedLoader.mock.calls.length, 1);
+      assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(observations, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: remoteObjectUri.origin,
+        objectUri: remoteObjectUri.href,
+        outcome: 'external_failure',
+        phase: 'protocol',
+        reasonCode: 'create_object_not_note',
+      },
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: remoteObjectUri.origin,
+        objectUri: remoteObjectUri.href,
+        outcome: 'external_failure',
+        phase: 'object_lookup',
+        reasonCode: 'create_object_lookup_failed',
+      },
+    ]);
   });
 
   test('rejects mismatched identity, attribution, and non-public Notes while falling back unresolved replies', async () => {
@@ -3104,6 +3180,7 @@ describe('inbound Create dispatch', () => {
         actorOrigin: remoteActorUri.origin,
         handler: 'create',
         objectOrigin: firstReplyUri.origin,
+        objectUri: firstReplyUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'reply_profile_blocked',
@@ -3113,6 +3190,7 @@ describe('inbound Create dispatch', () => {
         actorOrigin: remoteActorUri.origin,
         handler: 'create',
         objectOrigin: secondReplyUri.origin,
+        objectUri: secondReplyUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'reply_profile_blocked',
@@ -3584,6 +3662,7 @@ describe('inbound Create dispatch', () => {
         actorOrigin: remoteActorUri.origin,
         handler: 'create',
         objectOrigin: objectUri.origin,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_content_length_exceeded',
@@ -3645,6 +3724,7 @@ describe('inbound Create dispatch', () => {
         actorOrigin: remoteActorUri.origin,
         handler: 'create',
         objectOrigin: objectUri.origin,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_content_length_exceeded',
@@ -3699,6 +3779,7 @@ describe('inbound Create dispatch', () => {
         activityType: 'Announce',
         handler: 'announce',
         objectOrigin: objectUri.origin,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_content_length_exceeded',
@@ -3866,6 +3947,7 @@ describe('inbound Create dispatch', () => {
         actorOrigin: remoteActorUri.origin,
         handler: 'create',
         objectOrigin: objectUri.origin,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_mention_limit_exceeded',
@@ -3927,6 +4009,7 @@ describe('inbound Create dispatch', () => {
         activityType: 'Unknown',
         handler: 'create',
         objectOrigin: objectUri.origin,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_mention_limit_exceeded',

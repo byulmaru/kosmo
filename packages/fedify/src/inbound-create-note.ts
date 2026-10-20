@@ -153,7 +153,7 @@ const projectRemoteNote = async (
           ? 'external_failure'
           : 'internal_failure',
       reasonCode: 'remote_mention_materialization_rejected',
-      objectOrigin: note.id?.origin,
+      objectUri: note.id?.href,
       error,
     });
     return [];
@@ -455,7 +455,7 @@ export const materializeHydratedRemoteNote = async ({
     ) {
       observeInbound({
         ...observation,
-        objectOrigin: objectUri.href,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: result.reason,
@@ -518,7 +518,7 @@ export const handleInboundCreateNote = async ({
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
-      objectOrigin: objectUri,
+      objectUri,
       phase,
       reasonCode: result.reason,
     });

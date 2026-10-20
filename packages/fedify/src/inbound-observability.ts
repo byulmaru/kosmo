@@ -50,6 +50,7 @@ export type InboundObservation = {
   reasonCode: string;
   actorOrigin?: string;
   objectOrigin?: string;
+  objectUri?: string;
   activityOrigin?: string;
   error?: unknown;
   message?: string;
@@ -161,12 +162,20 @@ export const getInboundActivityType = (activity: unknown): InboundActivityType =
     : 'Unknown';
 };
 
-export const observeInbound = ({ error, message, ...observation }: InboundObservation): void => {
+export const observeInbound = ({
+  error,
+  message,
+  objectUri,
+  objectOrigin: rawObjectOrigin,
+  ...observation
+}: InboundObservation): void => {
+  const objectOrigin = toOrigin(rawObjectOrigin ?? objectUri);
   const safeObservation = {
     ...observation,
+    ...(objectUri ? { objectUri } : {}),
     ...(message ? { message } : {}),
     ...(observation.actorOrigin ? { actorOrigin: toOrigin(observation.actorOrigin) } : {}),
-    ...(observation.objectOrigin ? { objectOrigin: toOrigin(observation.objectOrigin) } : {}),
+    ...(objectOrigin ? { objectOrigin } : {}),
     ...(observation.activityOrigin ? { activityOrigin: toOrigin(observation.activityOrigin) } : {}),
   } satisfies Omit<InboundObservation, 'error'>;
 
@@ -266,9 +275,9 @@ export const withInboundObservability =
           'actorId' in activity && activity.actorId instanceof URL
             ? activity.actorId.origin
             : undefined,
-        objectOrigin:
+        objectUri:
           'objectId' in activity && activity.objectId instanceof URL
-            ? activity.objectId.origin
+            ? activity.objectId.href
             : undefined,
         error: normalizedError,
         handler,
