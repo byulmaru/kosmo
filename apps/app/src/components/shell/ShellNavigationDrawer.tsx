@@ -20,6 +20,7 @@ type SharedProps = {
 };
 
 type WebProps = SharedProps & {
+  guestPublicContent?: boolean;
   onHomeReselect?: () => void;
 };
 
@@ -31,6 +32,7 @@ type NativeProps = SharedProps & {
 
 export function WebNavigationDrawer({
   drawerOpen,
+  guestPublicContent = false,
   onFeedbackOpen,
   onClose,
   onHomeReselect,
@@ -75,6 +77,7 @@ export function WebNavigationDrawer({
           style={[styles.drawer, elevation.overlay, { backgroundColor: theme.backgroundElevated }]}
         >
           <SidebarNavigation
+            guestPublicContent={guestPublicContent}
             onFeedbackOpen={onFeedbackOpen}
             onHomeReselect={onHomeReselect}
             onNavigate={onClose}

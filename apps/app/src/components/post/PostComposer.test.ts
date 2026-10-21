@@ -20,6 +20,15 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+const previousCancelAnimationFrame = globalThis.cancelAnimationFrame;
+const appStateListeners = new Set<(nextState: string) => void>();
+let keyboardDismissCount = 0;
+const emitAppState = (nextState: string) => {
+  for (const listener of appStateListeners) {
+    listener(nextState);
+  }
+};
 let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
@@ -60,6 +69,7 @@ let targetProps:
       onSubmit: () => void;
       onVisibilityChange: (value: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
       selection: { end: number; start: number };
+      selectionToApply?: { end: number; start: number };
       submitting?: boolean;
     }
   | undefined;
@@ -155,6 +165,13 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  AppState: {
+    addEventListener: (_eventType: string, listener: (nextState: string) => void) => {
+      appStateListeners.add(listener);
+      return { remove: () => appStateListeners.delete(listener) };
+    },
+  },
+  Keyboard: { dismiss: () => keyboardDismissCount++ },
   Modal: 'Modal',
   Platform: platform,
   Pressable: 'Pressable',
@@ -302,6 +319,7 @@ mockModule('./PostComposer', {
             renderInput: ({ webProps, ...inputProps }) =>
               createElement(TrackedTextInput, { ...inputProps, ...webProps }),
             selection: props?.selection ?? { end: 0, start: 0 },
+            selectionToApply: props?.selectionToApply,
           })
         : null,
     );
@@ -317,6 +335,8 @@ before(async () => {
 
 beforeEach(() => {
   mentionSearchEnabled = true;
+  appStateListeners.clear();
+  keyboardDismissCount = 0;
   requests = [];
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
@@ -330,6 +350,10 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  Object.assign(globalThis, {
+    cancelAnimationFrame: previousCancelAnimationFrame,
+    requestAnimationFrame: previousRequestAnimationFrame,
+  });
   platform.OS = 'web';
   mediaState = 'ready';
   refreshMedia = undefined;
@@ -396,6 +420,76 @@ describe('PostComposer initial body', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'PUBLIC',
     );
+  });
+});
+
+describe('PostComposer native background', () => {
+  beforeEach(() => {
+    Object.assign(globalThis, {
+      cancelAnimationFrame: () => undefined,
+      requestAnimationFrame: () => 0,
+    });
+  });
+
+  it('dismisses the open native keyboard on background and keeps the mounted draft', async () => {
+    platform.OS = 'ios';
+    let closeCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          focusOnMount: true,
+          onRequestClose: () => closeCount++,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    assert.equal(appStateListeners.size, 1);
+    await act(async () => targetProps?.onBodyChange('보존할 본문'));
+
+    await act(async () => {
+      emitAppState('inactive');
+      emitAppState('active');
+    });
+    assert.equal(keyboardDismissCount, 0);
+
+    await act(async () => emitAppState('background'));
+    assert.equal(keyboardDismissCount, 1);
+    await act(async () => emitAppState('active'));
+    assert.equal(keyboardDismissCount, 1);
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.body,
+      '보존할 본문',
+    );
+    assert.equal(closeCount, 0);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    assert.equal(appStateListeners.size, 0);
+  });
+
+  it('does not subscribe for a hidden native composer or a Web composer', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, { focusOnMount: false, profile: profileA as never }),
+      );
+    });
+    assert.equal(appStateListeners.size, 0);
+    await act(async () => emitAppState('background'));
+    assert.equal(keyboardDismissCount, 0);
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, { focusOnMount: true, profile: profileA as never }),
+      );
+    });
+    assert.equal(appStateListeners.size, 0);
+    await act(async () => emitAppState('background'));
+    assert.equal(keyboardDismissCount, 0);
   });
 });
 
@@ -858,12 +952,20 @@ describe('PostComposer local author', () => {
     assert.equal(targetProps?.authorProfileId, profileB.id);
     await act(async () => targetProps?.onSelectMention(alice, query));
     assert.equal(targetProps?.body, ' \r\n😀 @alice ');
+    assert.deepEqual(targetProps?.selectionToApply, { start: 13, end: 13 });
+
+    await act(async () => targetProps?.onSelectionChange({ start: 13, end: 13 }));
+    assert.equal(targetProps?.selectionToApply, undefined);
+    await act(async () => targetProps?.onBodyChange(' \r\n😀 @alice !'));
+    assert.equal(targetProps?.selectionToApply, undefined);
+    assert.deepEqual(targetProps?.selection, { start: 13, end: 13 });
+    await act(async () => targetProps?.onSelectionChange({ start: 14, end: 14 }));
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
     assert.deepEqual(mutationCalls[0]?.variables.input, {
       actorProfileId: profileB.id,
-      bodyText: '😀 @alice',
+      bodyText: '😀 @alice !',
       media: mediaValue.items,
       mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
       sensitiveMedia: true,
@@ -1057,12 +1159,19 @@ describe('PostComposer mention suggestions', () => {
     });
 
     const textInput = () => renderer?.root.findByType('TextInput' as never);
-    const enterText = async (value: string) => {
+    const enterText = async (value: string, caret = value.length) => {
       const onChangeText = textInput()?.props.onChangeText as
         | ((nextValue: string) => void)
         | undefined;
+      const onSelectionChange = textInput()?.props.onSelectionChange as
+        | ((event: { nativeEvent: { selection: { end: number; start: number } } }) => void)
+        | undefined;
       assert.ok(onChangeText);
+      assert.ok(onSelectionChange);
       await act(async () => onChangeText(value));
+      await act(async () =>
+        onSelectionChange({ nativeEvent: { selection: { start: caret, end: caret } } }),
+      );
     };
     const hasMessage = (message: string) =>
       renderer?.root
@@ -1081,7 +1190,7 @@ describe('PostComposer mention suggestions', () => {
     assert.equal(textInputMountCount, 1);
     assert.equal(textInputUnmountCount, 0);
 
-    await enterText('@ali');
+    await enterText('@ali suffix', 4);
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.name, 'PostComposerMentionSuggestionsQuery');
     assert.deepEqual(requests[0]?.variables, {

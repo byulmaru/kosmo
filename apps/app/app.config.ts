@@ -42,7 +42,7 @@ if (!/^[1-9]\d*$/.test(iosBuildNumber)) {
 const config: ExpoConfig = {
   name: 'Kosmo',
   slug: 'kosmo',
-  version: '0.0.1',
+  version: '0.4.5',
   scheme: 'kosmo',
   orientation: 'default',
   userInterfaceStyle: 'automatic',

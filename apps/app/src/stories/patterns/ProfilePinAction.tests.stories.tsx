@@ -1,7 +1,7 @@
 import baseMeta, {
   ErrorRecoveryFocus as errorRecoveryFocus,
   ExistingDeletionFlow as existingDeletionFlow,
-  OwnerMenuAndDirectActions as ownerMenuAndDirectActions,
+  OwnerMenuAndConfirmedActions as ownerMenuAndConfirmedActions,
   PendingContract as pendingContract,
   ProductionWithoutPinFixture as productionWithoutPinFixture,
   SheetIconContract as sheetIconContract,
@@ -19,7 +19,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const OwnerMenuAndDirectActions: Story = ownerMenuAndDirectActions;
+export const OwnerMenuAndConfirmedActions: Story = ownerMenuAndConfirmedActions;
 export const VisitorMenuContract: Story = visitorMenuContract;
 export const PendingContract: Story = pendingContract;
 export const ErrorRecoveryFocus: Story = errorRecoveryFocus;

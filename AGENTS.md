@@ -12,7 +12,7 @@
 - Create every new pull request, including a standalone pull request, as a one-layer-or-larger Stack with the official `github/gh-stack` extension.
 - Before branch or pull request work, verify the extension with `gh extension list` and `gh stack --version`; if it is missing, install it for the current user. Use `gh stack`, never an ordinary unstacked PR fallback.
 - Start the first layer from the latest `main` with `gh stack init --base main <branch>` and add later layers from the current top with `gh stack add <branch>`. Feature and contract branches use their Linear issue ID; behavior-preserving refactors may use a descriptive branch.
-- Push and submit through `gh stack push` and `gh stack submit`. If the extension is unavailable or fails, report the blocker and observed state without switching tools.
+- Push and submit through `gh stack push` and `gh stack submit`. Diagnose command errors, fix recoverable setup, environment, or usage problems, and retry the official command. If the failure is unrecoverable, preserve and report the local/remote partial state and blocker. Do not bypass the extension with `gh pr create`, an unstacked PR, or manual Stack/base metadata edits.
 - Detailed branch, Stack, REST verification, Draft/Ready, auto-merge, merge-queue and closeout rules live in [`memory/git-pr-workflow.md`](memory/git-pr-workflow.md); rebase and reparent rules live in [`memory/git-stack-maintenance.md`](memory/git-stack-maintenance.md).
 
 ## CodeGraph In Linked Worktrees

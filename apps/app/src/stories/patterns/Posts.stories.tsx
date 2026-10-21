@@ -1001,6 +1001,8 @@ const paginationProfileNextPageResponse = {
     node: {
       __typename: 'Profile',
       id: paginationProfile.id,
+      instance: paginationProfile.instance,
+      pinnedPosts: [],
       posts: paginatedTimeline(paginationProfileNextPost, false),
     },
   },
@@ -1050,16 +1052,18 @@ const PostsStoriesQuery = graphql`
     }
     emptyPostsProfile: node(id: "profile-posts-empty") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned
       }
     }
     contentPostsProfile: node(id: "profile-posts-content") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned
       }
     }
     ...PostList_home @arguments(count: 20) @alias(as: "home")
@@ -1086,9 +1090,10 @@ const PostDeletionListEdgeSafetyQuery = graphql`
     ...PostList_home @arguments(count: 1) @alias(as: "home")
     deletionProfile: node(id: "profile-posts-deletion") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 1)
+        ...PostList_profile_pinned
       }
     }
   }
@@ -1145,8 +1150,8 @@ function usePostsStoryData() {
       data.composerProfile.replySurface,
       'Reply Composer profile',
     ),
-    contentPostsProfile: requireFragment(data.contentPostsProfile.postList, 'content post list'),
-    emptyPostsProfile: requireFragment(data.emptyPostsProfile.postList, 'empty post list'),
+    contentPostsProfile: requireFragment(data.contentPostsProfile.profile, 'content post list'),
+    emptyPostsProfile: requireFragment(data.emptyPostsProfile.profile, 'empty post list'),
     home: requireFragment(data.home, 'home post list'),
     posts,
   };
@@ -1484,7 +1489,7 @@ function PostDeletionListEdgeSafety() {
         </View>
         <View testID="post-deletion-profile-list">
           <PostList
-            profile={requireFragment(data.deletionProfile.postList, 'deletion profile list')}
+            profile={requireFragment(data.deletionProfile.profile, 'deletion profile list')}
           />
         </View>
       </Catalog>
@@ -2146,6 +2151,7 @@ function ContentWarningConsumerIntegrationStory() {
 
   return (
     <Catalog>
+      <StoryPathname testID="content-warning-list-pathname" />
       <View testID="content-warning-list-surface">
         <PostListItem
           post={requireFragment(post.listItem, 'Content Warning list item consumer')}
@@ -3076,7 +3082,6 @@ const postListPaginationRelayData = {
   contentPostsProfile: paginationProfile,
   homeTimeline: paginationHomeTimeline,
 };
-
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
@@ -3850,7 +3855,7 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('aria-label')),
-    ).toEqual(['링크 복사', '게시물 신고', '게시글 삭제']);
+    ).toEqual(['링크 복사', '프로필에 고정', '게시물 신고', '게시글 삭제']);
     await userEvent.click(
       within(menu).getByRole('menuitem', {
         name: '게시글 삭제',
@@ -4880,6 +4885,51 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
     expect(replyButton).toHaveFocus();
   },
   render: () => <QuoteListSurfaceStory />,
+};
+
+export const QuoteListItemInternalBackground: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = await canvas.findByTestId('post-source-presentation');
+    const body = within(root).getByTestId('post-body');
+    const pathname = canvas.getByTestId('presentation-story-pathname');
+    const initialPath = pathname.textContent;
+    const header = body.previousElementSibling!;
+    await waitFor(() =>
+      expect(body.getBoundingClientRect().top).toBeGreaterThan(
+        header.getBoundingClientRect().bottom,
+      ),
+    );
+    const x = root.getBoundingClientRect().left + 4;
+    const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
+    const target = document.elementFromPoint(x, y)!;
+    expect(target).toBe(root);
+    const coords = (offset: number) => ({
+      clientX: x + offset,
+      clientY: y,
+      pageX: x + offset + window.scrollX,
+      pageY: y + window.scrollY,
+    });
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { target, coords: coords(30) },
+      { target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target, coords: coords(0) },
+      { keys: '[/MouseLeft]', target, coords: coords(0) },
+    ]);
+    expect(pathname).toHaveTextContent('/@reposter/post-quote');
+    await userEvent.click(
+      canvas.getByRole('link', { name: `${repostAuthor.displayName} 프로필 보기` }),
+    );
+    expect(pathname.textContent).toBe(`/@reposter`);
+    await userEvent.click(canvas.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(pathname.textContent).toBe(`/${sourcePost.profile.relativeHandle}/${sourcePost.id}`);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" presentation="wide" />,
 };
 
 export const QuoteListItemAvatars: Story = {
@@ -6757,7 +6807,72 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
     const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
+    const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.id}`;
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    const row = listSurface.getByTestId('post-list-standard-row');
+    const pathname = canvas.getByTestId('content-warning-list-pathname');
+    const initialPath = pathname.textContent;
+    const card = listSurface.getByTestId('post-list-item-card');
+    await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
+    const cardBounds = card.getBoundingClientRect();
+    const cardCoords = (x: number) => ({
+      clientX: x,
+      clientY: cardBounds.top + 2,
+      pageX: x + window.scrollX,
+      pageY: cardBounds.top + 2 + window.scrollY,
+    });
+    const cardStart = cardCoords(cardBounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: card, coords: cardStart },
+      { target: card, coords: cardCoords(cardBounds.left + 40) },
+      { target: card, coords: cardStart },
+      { keys: '[/MouseLeft]', target: card, coords: cardStart },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
+    // Drive RN Web's real responder with coordinates on the empty avatar column.
+    await waitFor(() => expect(row.getBoundingClientRect().height).toBeGreaterThan(0));
+    const bounds = row.getBoundingClientRect();
+    // userEvent defaults pageX/Y to zero rather than deriving them from clientX/Y.
+    const coords = (clientX: number) => ({
+      clientX,
+      clientY: bounds.bottom - 2,
+      pageX: clientX + window.scrollX,
+      pageY: bounds.bottom - 2 + window.scrollY,
+    });
+    const start = coords(bounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: row, coords: coords(bounds.left + 40) },
+      { target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: canvasElement, coords: coords(bounds.left - 2) },
+      {
+        keys: '[/MouseLeft]',
+        target: canvasElement,
+        coords: coords(bounds.left - 2),
+      },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(
+      listSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+      }),
+    ).toBeVisible();
 
     await userEvent.click(
       listSurface.getByRole('button', {
@@ -6765,6 +6880,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       layoutSurface.getByRole('button', {
         name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
@@ -6777,6 +6893,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
     ).toBeVisible();
@@ -8056,6 +8173,67 @@ export const ReplyModalMediaUploadDirtyClose: Story = {
       expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyModalComposerMediaEditorGeometry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMediaEditor768' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-reply-editor-geometry', state: 'READY' },
+            },
+          },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-reply-editor-geometry' },
+              uploadUrl: 'https://upload.example/reply-editor-geometry',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async () => {
+    const { originalFetch } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('reply-editor-geometry.svg')],
+      canceled: false,
+    });
+
+    try {
+      const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+      const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+      expect(surface.getBoundingClientRect().width).toBe(600);
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
+    } finally {
+      globalThis.fetch = originalFetch;
+      resetImagePickerMock();
     }
   },
   render: () => <ReplyModalPresentationStory />,

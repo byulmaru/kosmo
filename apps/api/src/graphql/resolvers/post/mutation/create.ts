@@ -204,25 +204,32 @@ builder.mutationField('createPost', (t) =>
         throw new ValidationError('Mention target is unavailable', { field: 'mentions' });
       }
 
+      const targetHandles = new Map(
+        targets.map((target) => [
+          target.id,
+          formatRelativeHandle(
+            { handle: target.handle, instanceId: target.instanceId },
+            {
+              configuredLocalInstance: configuredLocalInstance!,
+              profileInstance: { domain: target.domain, id: target.instanceId },
+            },
+          ),
+        ]),
+      );
+
       if (mentions.length > 0) {
-        const targetHandles = new Map(
-          selectedTargets.map((target) => [
-            target.id,
-            formatRelativeHandle(
-              { handle: target.handle, instanceId: target.instanceId },
-              {
-                configuredLocalInstance: configuredLocalInstance!,
-                profileInstance: { domain: target.domain, id: target.instanceId },
-              },
-            ),
-          ]),
-        );
         mentionReferences = mentions.map(({ end, profileId, start }) => {
           const relativeHandle = targetHandles.get(profileId.id);
           if (!relativeHandle) {
             throw new ValidationError('Mention target is unavailable', { field: 'mentions' });
           }
-          return { end, profileId: profileId.id, relativeHandle, start };
+          return {
+            end,
+            handle: relativeHandle,
+            profileId: profileId.id,
+            relativeHandle,
+            start,
+          };
         });
       }
 
@@ -249,6 +256,7 @@ builder.mutationField('createPost', (t) =>
           if (candidateProfileId) {
             mentionReferences.push({
               end: candidate.end,
+              handle: targetHandles.get(candidateProfileId)!,
               profileId: candidateProfileId,
               relativeHandle: candidate.relativeHandle,
               start: candidate.start,

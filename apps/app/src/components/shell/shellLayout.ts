@@ -77,6 +77,7 @@ export function getWebMobileShellHeader(
   width: number,
   pathname: string,
   routeSegments: readonly string[],
+  guestPublicContent = false,
 ): WebMobileShellHeader | null {
   if (!web || getShellLayout(web, width) !== 'mobile') {
     return null;
@@ -117,7 +118,7 @@ export function getWebMobileShellHeader(
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
-    return { leading: 'back', title: '게시글' };
+    return { leading: guestPublicContent ? 'menu' : 'back', title: '게시글' };
   }
 
   return null;

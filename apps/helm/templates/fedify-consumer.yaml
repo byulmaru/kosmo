@@ -37,6 +37,16 @@ spec:
     spec:
       serviceAccountName: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
       automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: fedify-consumer
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            - pod-template-hash
       containers:
         - name: fedify-consumer
           image: {{ include "kosmo.imageRef" . | quote }}

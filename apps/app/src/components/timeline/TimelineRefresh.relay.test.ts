@@ -137,7 +137,7 @@ const profile = {
   relativeHandle: '@author',
   avatar: null,
   private: { defaultPostVisibility: 'PUBLIC' },
-  viewerState: { profileMute: null },
+  viewerState: { profileBlock: null, profileMute: null },
 };
 function payload(field: string, ids: string[], hasNextPage = true) {
   return {

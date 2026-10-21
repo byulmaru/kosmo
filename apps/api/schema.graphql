@@ -428,6 +428,7 @@ input PinProfilePostInput {
 
 type PinProfilePostPayload {
   changed: Boolean!
+  post: Post
   profile: Profile!
 }
 
@@ -435,6 +436,7 @@ type Post implements Node {
   content: PostContent
   createdAt: DateTime!
   id: ID!
+  isPinned: Boolean
   profile: Profile!
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
@@ -505,7 +507,7 @@ type Profile implements Node {
   migrationSource: Profile
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
-  pinnedPosts(after: String, before: String, first: Int, last: Int): PostConnection!
+  pinnedPosts: [Post!]!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
@@ -813,6 +815,7 @@ input UnpinProfilePostInput {
 
 type UnpinProfilePostPayload {
   changed: Boolean!
+  post: Post
   profile: Profile!
 }
 

@@ -97,8 +97,9 @@ projection 및 post-commit delivery 경계를 inventory로 유지한다. Listene
   `federation.ts`의 관측되지 않은 `onError` 경계에서 malformed body 외부 실패로 로그만 남긴다.
   `withInboundObservability`가 typed listener 오류를 먼저 observed로 표시하므로 typed handler 안에서
   발생한 `SyntaxError`는 이 예외에 해당하지 않고 내부 오류로 capture한다.
-- raw Activity JSON, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
-  URI는 필요한 경우 origin 수준 context로만 남기며 tag/fingerprint에는 넣지 않는다.
+- raw Activity JSON, Note 본문·수신 대상, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
+  기존 수신 실패·거절 structured log에는 복구 대상을 식별하기 위해 전체 object URI를 origin과 함께 남긴다.
+  Sentry context는 origin 수준으로 유지하고 URI를 metric, tag 또는 fingerprint에 넣지 않는다.
 
 Inbound Reaction transaction 뒤 Effects Workflow start 실패는 Create의
 `reaction_notification_effect_failed` 또는 Undo의 `reaction_undo_notification_effect_failed` reason으로

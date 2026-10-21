@@ -5,6 +5,7 @@ import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
+  RemoteNoteMentionLimitExceededError,
 } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -26,10 +27,9 @@ import {
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { InboundObservation } from './inbound-observability';
-import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
-  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+  Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>
 >;
 
 type RemoteNoteMaterializationContext = Pick<
@@ -153,7 +153,7 @@ const projectRemoteNote = async (
           ? 'external_failure'
           : 'internal_failure',
       reasonCode: 'remote_mention_materialization_rejected',
-      objectOrigin: note.id?.origin,
+      objectUri: note.id?.href,
       error,
     });
     return [];
@@ -197,6 +197,8 @@ type HydratedRemoteNoteMaterializationResult =
       reason:
         | 'invalid_note'
         | 'note_content_length_exceeded'
+        | 'note_mention_limit_exceeded'
+        | 'no_active_local_mention'
         | 'unsupported_note'
         | 'unusable_author';
       status: 'rejected';
@@ -210,6 +212,7 @@ type RemoteNoteMaterializationSource =
     }
   | {
       advertisingActorUri?: string | URL;
+      signingProfileId?: string;
       kind: 'hydrated';
     };
 
@@ -217,12 +220,13 @@ type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
   | 'note_attribution_mismatch'
   | 'note_content_length_exceeded'
+  | 'note_mention_limit_exceeded'
   | 'note_identity_mismatch'
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
   | 'reply_profile_blocked'
   | 'stored_author_mismatch'
-  | 'unsupported_note_visibility'
+  | 'no_active_local_mention'
   | 'unusable_author';
 
 type RemoteNotePostMaterializationResult =
@@ -246,17 +250,14 @@ type RemoteNotePostMaterialized = Extract<
   { status: 'created' | 'duplicate' }
 >;
 
-const resolveNoteVisibility = (
-  note: Note,
-  followersUri?: string | null,
-): PostVisibility | undefined =>
+const resolveNoteVisibility = (note: Note, followersUri?: string | null): PostVisibility =>
   note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
     ? PostVisibility.PUBLIC
     : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
       ? PostVisibility.UNLISTED
       : followersUri && [...note.toIds, ...note.ccIds].some((uri) => uri.href === followersUri)
         ? PostVisibility.FOLLOWERS
-        : undefined;
+        : PostVisibility.DIRECT;
 
 const createRemoteNotePost = async ({
   context,
@@ -373,34 +374,38 @@ const materializeRemoteNote = async ({
     return { reason: 'stored_author_mismatch', status: 'rejected' };
   }
 
-  let storedActor: StoredRemoteProfileActor | undefined;
-  if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
+  let storedActor: StoredRemoteProfileActor;
+  try {
+    storedActor =
+      source.kind === 'create'
+        ? source.storedActor
+        : await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: attributionUri,
+            contextOrigin: context.canonicalOrigin,
+            ...(source.signingProfileId === undefined
+              ? {}
+              : { profileId: source.signingProfileId }),
+          });
+  } catch (error) {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof ConflictError ||
+      error instanceof NotFoundError
+    ) {
+      return { reason: 'unusable_author', status: 'rejected' };
+    }
+    throw error;
+  }
+
+  const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
+  if (visibility === PostVisibility.DIRECT) {
+    const targetHrefs = await collectInboundMentionTargetHrefs(note);
+    const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
+    if (!hasActiveLocalProfile) {
+      return { reason: 'no_active_local_mention', status: 'rejected' };
     }
   }
 
-  const visibility = resolveNoteVisibility(
-    note,
-    source.kind === 'create'
-      ? source.storedActor.actor.followersUri
-      : storedActor?.actor.followersUri,
-  );
-  if (!visibility) {
-    return { reason: 'unsupported_note_visibility', status: 'rejected' };
-  }
   let projection;
   try {
     projection = await projectRemoteNote(
@@ -411,6 +416,9 @@ const materializeRemoteNote = async ({
   } catch (error) {
     if (error instanceof RemoteNoteContentLengthExceededError) {
       return { reason: 'note_content_length_exceeded', status: 'rejected' };
+    }
+    if (error instanceof RemoteNoteMentionLimitExceededError) {
+      return { reason: 'note_mention_limit_exceeded', status: 'rejected' };
     }
     if (error instanceof TypeError) {
       return { reason: 'note_media_projection_rejected', status: 'rejected' };
@@ -424,26 +432,6 @@ const materializeRemoteNote = async ({
     projection.media.length === 0
   ) {
     return { reason: 'empty_note', status: 'rejected' };
-  }
-
-  if (source.kind === 'create') {
-    storedActor = source.storedActor;
-  } else if (!storedActor) {
-    try {
-      storedActor = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: attributionUri,
-        contextOrigin: context.canonicalOrigin,
-      });
-    } catch (error) {
-      if (
-        error instanceof RemoteActorMaterializationError ||
-        error instanceof ConflictError ||
-        error instanceof NotFoundError
-      ) {
-        return { reason: 'unusable_author', status: 'rejected' };
-      }
-      throw error;
-    }
   }
 
   const result = await createRemoteNotePost({
@@ -483,6 +471,7 @@ export const materializeHydratedRemoteNote = async ({
   objectUri,
   observation,
   receivedAt,
+  signingProfileId,
 }: {
   advertisingActorUri?: string | URL;
   context: RemoteNoteMaterializationContext;
@@ -490,27 +479,38 @@ export const materializeHydratedRemoteNote = async ({
   objectUri: URL;
   observation: Pick<InboundObservation, 'activityType' | 'handler'>;
   receivedAt: Temporal.Instant;
+  signingProfileId?: string;
 }): Promise<HydratedRemoteNoteMaterializationResult> => {
   const result = await materializeRemoteNote({
     context,
     note,
     objectUri,
     receivedAt,
-    source: { advertisingActorUri, kind: 'hydrated' },
+    source: {
+      ...(advertisingActorUri === undefined ? {} : { advertisingActorUri }),
+      ...(signingProfileId === undefined ? {} : { signingProfileId }),
+      kind: 'hydrated',
+    },
   });
   if (result.status === 'rejected') {
-    if (result.reason === 'note_content_length_exceeded') {
+    if (
+      result.reason === 'note_content_length_exceeded' ||
+      result.reason === 'note_mention_limit_exceeded'
+    ) {
       observeInbound({
         ...observation,
-        objectOrigin: objectUri.href,
+        objectUri: objectUri.href,
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: result.reason,
       });
-      return { reason: 'note_content_length_exceeded', status: 'rejected' };
+      return { reason: result.reason, status: 'rejected' };
     }
-    if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {
+    if (result.reason === 'empty_note') {
       return { reason: 'unsupported_note', status: 'rejected' };
+    }
+    if (result.reason === 'no_active_local_mention') {
+      return { reason: result.reason, status: 'rejected' };
     }
     if (result.reason === 'unusable_author') {
       return { reason: 'unusable_author', status: 'rejected' };
@@ -547,7 +547,7 @@ export const handleInboundCreateNote = async ({
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
       result.reason === 'stored_author_mismatch' ||
-      result.reason === 'unsupported_note_visibility'
+      result.reason === 'no_active_local_mention'
         ? 'validation'
         : 'projection';
     observeInbound({
@@ -555,7 +555,7 @@ export const handleInboundCreateNote = async ({
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
-      objectOrigin: objectUri,
+      objectUri,
       phase,
       reasonCode: result.reason,
     });

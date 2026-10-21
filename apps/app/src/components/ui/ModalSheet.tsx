@@ -1,11 +1,9 @@
 import { XIcon } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { IconButton } from './IconButton';
-import { ModalSheetHost } from './ModalSheetHost';
+import { ModalOverlay } from './ModalOverlay';
 import type { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren<{
@@ -30,16 +28,6 @@ export function ModalSheet({
 }: Props) {
   const theme = useTheme();
   const elevation = useElevation();
-  const overlayMotion = useOverlayMotion(visible);
-  // Android Modal has no onDismiss callback. Web and iOS hosts report dismissal after
-  // releasing their focus trap, so only Android needs the overlay presence fallback.
-  const wasMounted = useRef(overlayMotion.mounted);
-  useEffect(() => {
-    if (Platform.OS === 'android' && wasMounted.current && !overlayMotion.mounted) {
-      onDismiss?.();
-    }
-    wasMounted.current = overlayMotion.mounted;
-  }, [onDismiss, overlayMotion.mounted]);
   const close = () => {
     if (visible && !dismissDisabled) {
       onClose();
@@ -47,106 +35,54 @@ export function ModalSheet({
   };
 
   return (
-    <ModalSheetHost
+    <ModalOverlay
       accessibilityLabel={title}
-      animationType="none"
-      closeRequestDisabled={!visible || dismissDisabled}
-      interactionDisabled={!visible}
-      onRequestClose={close}
+      backdropAccessibilityLabel={`${title} 닫기`}
+      dismissDisabled={dismissDisabled}
+      onRequestClose={onClose}
       onShow={onShow}
-      onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
+      onDismiss={onDismiss}
+      presentation="dialog"
       role={Platform.OS === 'web' ? role : 'dialog'}
-      transparent
-      visible={overlayMotion.mounted}
+      visible={visible}
     >
-      <View
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
-        pointerEvents={visible ? 'auto' : 'none'}
-        style={styles.backdrop}
+      <Pressable
+        accessibilityLabel={title}
+        accessibilityViewIsModal={Platform.OS !== 'web'}
+        onAccessibilityEscape={close}
+        onPress={(event) => event.stopPropagation()}
+        role={Platform.OS === 'web' ? undefined : 'dialog'}
+        style={[
+          styles.surface,
+          elevation.overlay,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
       >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
-          ]}
-        />
-        <Pressable
-          accessibilityLabel={`${title} 닫기`}
-          accessibilityRole="button"
-          disabled={!visible || dismissDisabled}
-          onPress={close}
-          style={StyleSheet.absoluteFill}
-        />
-        <Animated.View
-          style={[
-            styles.motionSurface,
-            {
-              opacity: overlayMotion.progress,
-              transform: [
-                {
-                  translateY: overlayMotion.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [12, 0],
-                  }),
-                },
-                {
-                  scale: overlayMotion.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.98, 1],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <Pressable
-            accessibilityLabel={title}
-            accessibilityViewIsModal={Platform.OS !== 'web'}
-            onAccessibilityEscape={close}
-            onPress={(event) => event.stopPropagation()}
-            role={Platform.OS === 'web' ? undefined : 'dialog'}
-            style={[
-              styles.surface,
-              elevation.overlay,
-              { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
-            ]}
+        <View style={styles.header}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.foregroundPrimary }]}
           >
-            <View style={styles.header}>
-              <Text
-                accessibilityRole="header"
-                style={[styles.title, { color: theme.foregroundPrimary }]}
-              >
-                {title}
-              </Text>
-              <IconButton
-                accessibilityLabel="닫기"
-                disabled={!visible || dismissDisabled}
-                onPress={close}
-                style={styles.close}
-                targetSize={44}
-                visualSize={44}
-              >
-                <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-              </IconButton>
-            </View>
-            {children}
-          </Pressable>
-        </Animated.View>
-      </View>
-    </ModalSheetHost>
+            {title}
+          </Text>
+          <IconButton
+            accessibilityLabel="닫기"
+            disabled={!visible || dismissDisabled}
+            onPress={close}
+            style={styles.close}
+            targetSize={44}
+            visualSize={44}
+          >
+            <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+          </IconButton>
+        </View>
+        {children}
+      </Pressable>
+    </ModalOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    padding: space[16],
-  },
-  motionSurface: { maxWidth: 420, width: '100%' },
   surface: {
     borderRadius: radius[16],
     borderWidth: borderWidths[1],

@@ -74,6 +74,7 @@ mock.module('@/components/profile/ProfileMuteController', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/content-report/ContentReportContext', {
   exports: {
+    getContentReportBlockProfile: () => undefined,
     useContentReportMenuItem: (input: ReportMenuInput) => {
       capturedReport.value = input;
       return {
@@ -110,6 +111,11 @@ mock.module('./PostMoreMenu', {
 mock.module('./PostReactionController', {
   exports: { usePostReactionController: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./ProfilePinAction', {
+  exports: {
+    useProfilePinAction: () => ({ pending: false }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./useRepostFailureToast', {
   exports: { useRepostFailureToast: () => () => undefined },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -145,6 +151,7 @@ describe('PostActionSurface mute wiring', () => {
       throw new Error('PostActionSurface did not render ProfileMuteAction.');
     }
     assert.deepEqual(capturedReport.value, {
+      blockProfile: undefined,
       id: target.id,
       kind: 'POST',
       label: '@author의 게시물 · post:1',

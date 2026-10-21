@@ -17,6 +17,7 @@ import {
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
@@ -471,102 +472,119 @@ function InteractiveComposer({
   };
 
   const shouldShowPicker = pickerOpen && !props.submitting;
-  const picker = shouldShowPicker ? (
-    <View pointerEvents="box-none" style={mobile ? styles.mobilePicker : styles.pickerLayer}>
-      {!mobile ? (
-        <Pressable
-          accessibilityLabel="반응 선택 닫기"
-          accessibilityRole="button"
-          onPress={closePicker}
-          style={styles.pickerDismiss}
-        />
-      ) : null}
+  const pickerContent = (
+    <FullReactionPicker
+      onClose={closePicker}
+      onQueryChange={setPickerQuery}
+      onSelect={(option) => {
+        if (props.submitting) {
+          return;
+        }
+        const value = `${body}${option.emoji}`;
+        props.onBodyChange(value);
+        setDraft((previous) => {
+          const caret = { start: value.length, end: value.length };
+          return {
+            ...updatePostComposerDraftBody(previous, value),
+            previousSelection: caret,
+            selection: caret,
+          };
+        });
+        closePicker();
+      }}
+      options={reactionOptions}
+      presentation={mobile ? 'mobile' : 'web'}
+      query={pickerQuery}
+      selectedValues={[]}
+    />
+  );
+  const mobilePicker = mobile ? (
+    <ModalOverlay
+      accessibilityLabel="반응 선택"
+      backdropTestID="full-reaction-picker-backdrop-dismiss"
+      onRequestClose={closePicker}
+      presentation="sheet"
+      testID="post-composer-emoji-picker"
+      visible={shouldShowPicker}
+    >
+      {pickerContent}
+    </ModalOverlay>
+  ) : null;
+  const picker = mobile ? (
+    mobilePicker
+  ) : shouldShowPicker ? (
+    <View pointerEvents="box-none" style={styles.pickerLayer}>
+      <Pressable
+        accessibilityLabel="반응 선택 닫기"
+        accessibilityRole="button"
+        onPress={closePicker}
+        style={styles.pickerDismiss}
+      />
       <View
         pointerEvents="box-none"
         style={[
           styles.pickerPanel,
-          mobile
-            ? styles.mobilePickerPanel
-            : {
-                height: pickerPosition.height,
-                left: pickerPosition.left,
-                top: pickerPosition.top,
-              },
+          {
+            height: pickerPosition.height,
+            left: pickerPosition.left,
+            top: pickerPosition.top,
+          },
         ]}
         testID="post-composer-emoji-picker"
       >
-        <FullReactionPicker
-          onClose={closePicker}
-          onQueryChange={setPickerQuery}
-          onSelect={(option) => {
-            if (props.submitting) {
-              return;
-            }
-            const value = `${body}${option.emoji}`;
-            props.onBodyChange(value);
-            setDraft((previous) => {
-              const caret = { start: value.length, end: value.length };
-              return {
-                ...updatePostComposerDraftBody(previous, value),
-                previousSelection: caret,
-                selection: caret,
-              };
-            });
-            closePicker();
-          }}
-          options={reactionOptions}
-          presentation={mobile ? 'mobile' : 'web'}
-          query={pickerQuery}
-          selectedValues={[]}
-        />
+        {pickerContent}
       </View>
     </View>
   ) : null;
 
   if (mobile && editor) {
     return (
-      <ComposerMediaEditor
-        media={items.filter((item) => item.state === 'ready')}
-        mobileState={editor.mobileState}
-        onAltTextChange={(key, altText) => {
-          setItems((current) =>
-            current.map((item) => (item.key === key ? { ...item, altText } : item)),
-          );
-        }}
-        onBack={() => setEditor(null)}
-        onClose={() => setEditor(null)}
-        onDone={() => setEditor(null)}
-        onPreviewPress={
-          editor.mobileState === 'altKeyboard'
-            ? () =>
-                setEditor((current) => (current ? { ...current, mobileState: 'default' } : current))
-            : undefined
-        }
-        onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
-        onSensitiveMediaChange={setSensitiveMedia}
-        onToolChange={(tool) =>
-          setEditor((current) => {
-            if (!current) {
-              return current;
-            }
-            return {
-              ...current,
-              mobileState:
-                tool === 'sensitive'
-                  ? 'sensitive'
-                  : current.mobileState === 'altKeyboard'
-                    ? 'default'
-                    : 'altKeyboard',
-              tool,
-            };
-          })
-        }
-        presentation={mobile ? 'mobile' : 'web'}
-        selectedKey={editor.key}
-        sensitiveMedia={sensitiveMedia}
-        showImageEditPreview={false}
-        tool={editor.tool}
-      />
+      <View style={{ height: '100dvh' as never, width: '100%' }}>
+        <ComposerMediaEditor
+          media={items.filter((item) => item.state === 'ready')}
+          mobileState={editor.mobileState}
+          onAltTextChange={(key, altText) => {
+            setItems((current) =>
+              current.map((item) => (item.key === key ? { ...item, altText } : item)),
+            );
+          }}
+          onBack={() => setEditor(null)}
+          onClose={() => setEditor(null)}
+          onDone={() => setEditor(null)}
+          onPreviewPress={
+            editor.mobileState === 'altKeyboard'
+              ? () =>
+                  setEditor((current) =>
+                    current ? { ...current, mobileState: 'default' } : current,
+                  )
+              : undefined
+          }
+          onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
+          onSensitiveMediaChange={setSensitiveMedia}
+          onToolChange={(tool) =>
+            setEditor((current) => {
+              if (!current) {
+                return current;
+              }
+              return {
+                ...current,
+                mobileState:
+                  tool === 'sensitive'
+                    ? 'sensitive'
+                    : current.mobileState === 'altKeyboard'
+                      ? 'default'
+                      : 'altKeyboard',
+                tool,
+              };
+            })
+          }
+          presentation="mobile"
+          selectedKey={editor.key}
+          sensitiveMedia={sensitiveMedia}
+          showImageEditPreview={false}
+          tool={editor.tool}
+        />
+      </View>
     );
   }
 
@@ -668,6 +686,7 @@ function InteractiveComposer({
       {!mobile && overlayOpen ? (
         <ComposerOverlayFixture
           accessibilityLabel="글쓰기"
+          height={editor ? 678 : undefined}
           maxWidth={editor ? 920 : 600}
           onRequestClose={closeOverlay}
           visible
@@ -900,6 +919,9 @@ export const MentionAutocompleteContract: Story = {
       start: args.body.length,
       end: args.body.length,
     }));
+    const [selectionToApply, setSelectionToApply] = useState<
+      PostComposerTextSelection | undefined
+    >();
     return (
       <PostComposer
         {...args}
@@ -907,19 +929,24 @@ export const MentionAutocompleteContract: Story = {
         onSelectionChange={(nextSelection) => {
           args.onSelectionChange(nextSelection);
           setSelection(nextSelection);
+          setSelectionToApply(undefined);
         }}
         onBodyChange={(nextBody) => {
           args.onBodyChange(nextBody);
           setBody(nextBody);
+          setSelectionToApply(undefined);
         }}
         selection={selection}
+        selectionToApply={selectionToApply}
         onSelectMention={(candidate, query) => {
           const inserted = replacePostComposerMentionQuery(body, query, candidate);
           if (inserted) {
             args.onSelectMention?.(candidate, query);
             const caret = inserted.range.end + 1;
+            const nextSelection = { start: caret, end: caret };
             setBody(inserted.body);
-            setSelection({ start: caret, end: caret });
+            setSelection(nextSelection);
+            setSelectionToApply(nextSelection);
           }
         }}
       />
@@ -932,7 +959,11 @@ export const MentionAutocompleteContract: Story = {
     expect(canvas.getByRole('listbox', { name: '멘션할 프로필 결과' })).toBeVisible();
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await waitFor(() => expect(body).toHaveValue('@alice '));
+    await waitFor(() => expect((body as HTMLTextAreaElement).selectionStart).toBe(7));
     expect(canvas.queryByRole('listbox', { name: '멘션할 프로필 결과' })).toBeNull();
+    await userEvent.keyboard('이어서');
+    await waitFor(() => expect(body).toHaveValue('@alice 이어서'));
+    expect((body as HTMLTextAreaElement).selectionStart).toBe('@alice 이어서'.length);
   },
 };
 
@@ -1122,21 +1153,23 @@ export const MobilePlaygroundContract: Story = {
 
 export const MobileRuntimeAltEditorContract: Story = {
   render: () => (
-    <ComposerMediaEditor
-      media={readyComposerMedia}
-      mobileState="alt"
-      onAltTextChange={fn()}
-      onBack={fn()}
-      onClose={fn()}
-      onDone={fn()}
-      onSelectMedia={fn()}
-      onSensitiveMediaChange={fn()}
-      onToolChange={fn()}
-      presentation="mobile"
-      selectedKey="ready"
-      sensitiveMedia={false}
-      tool="alt"
-    />
+    <View style={{ height: '100dvh' as never, width: '100%' }}>
+      <ComposerMediaEditor
+        media={readyComposerMedia}
+        mobileState="alt"
+        onAltTextChange={fn()}
+        onBack={fn()}
+        onClose={fn()}
+        onDone={fn()}
+        onSelectMedia={fn()}
+        onSensitiveMediaChange={fn()}
+        onToolChange={fn()}
+        presentation="mobile"
+        selectedKey="ready"
+        sensitiveMedia={false}
+        tool="alt"
+      />
+    </View>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -1562,14 +1595,6 @@ const styles = StyleSheet.create({
   authorHandle: textStyles.uiCopyM,
   authorName: textStyles.uiLabelL,
   composition: { alignItems: 'center', width: '100%' },
-  mobilePicker: {
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    zIndex: 20,
-  },
   overlayClose: { position: 'absolute', right: space[16], top: space[12] },
   pickerDismiss: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
   pickerLayer: {
@@ -1581,7 +1606,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   pickerPanel: { position: 'absolute', zIndex: 1 },
-  mobilePickerPanel: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   railTarget: { maxWidth: 326, width: '100%' },
   railMediaFixture: { maxWidth: 326, width: '100%' },
   overlayTarget: { maxWidth: 600, width: '100%' },

@@ -92,21 +92,6 @@ export function PostComposerHost({
     triggerFocusRef,
   });
 
-  const composer = (
-    <PostComposerController
-      expandControlRef={expandControlRef}
-      focusOnMount={overlayVisible}
-      onPostCreated={() => requestClose('created')}
-      onSubmittingChange={setSubmitting}
-      profile={profile}
-      profiles={profiles}
-      registerNativeBackHandler={registerNativeBackHandler}
-      {...(mode === 'rail'
-        ? { onExpand, onRequestClose: requestClose, presentation: mode }
-        : { onRequestClose: requestClose, presentation: mode })}
-    />
-  );
-
   const header =
     mode === 'overlay' ? (
       <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
@@ -125,36 +110,57 @@ export function PostComposerHost({
       </View>
     ) : null;
 
-  const dialog = (
+  const composer = (
     <ToastProvider>
-      <View
-        accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
-        accessibilityViewIsModal={overlayVisible}
-        aria-modal={overlayVisible || undefined}
-        onAccessibilityEscape={requestNativeBack}
-        ref={dialogRef}
-        role={overlayVisible ? 'dialog' : undefined}
-        style={[
-          styles.dialog,
-          mode !== 'rail' && !nativeMobile && elevation.overlay,
-          mode === 'rail'
-            ? styles.railDialog
-            : mode === 'mobile'
-              ? styles.mobileDialog
-              : styles.overlayDialog,
-          { backgroundColor: composerSurface, borderColor: theme.borderDefault },
-        ]}
-        testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
-      >
-        {header}
-        <KeyboardAvoidingView
-          behavior="height"
-          keyboardVerticalOffset={insets.top}
-          style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
-        >
-          {composer}
-        </KeyboardAvoidingView>
-      </View>
+      <PostComposerController
+        expandControlRef={expandControlRef}
+        expanded={overlayVisible}
+        focusOnMount={overlayVisible}
+        onPostCreated={() => requestClose('created')}
+        onSubmittingChange={setSubmitting}
+        profile={profile}
+        profiles={profiles}
+        registerNativeBackHandler={registerNativeBackHandler}
+        renderSurface={({ form, mediaEditorOpen }) => (
+          <View
+            accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
+            accessibilityViewIsModal={overlayVisible}
+            aria-modal={overlayVisible || undefined}
+            onAccessibilityEscape={requestNativeBack}
+            ref={dialogRef}
+            role={overlayVisible ? 'dialog' : undefined}
+            style={[
+              styles.dialog,
+              mode !== 'rail' && !nativeMobile && elevation.overlay,
+              mode === 'rail'
+                ? styles.railDialog
+                : mode === 'mobile'
+                  ? styles.mobileDialog
+                  : styles.overlayDialog,
+              mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
+              { backgroundColor: composerSurface, borderColor: theme.borderDefault },
+            ]}
+            testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
+          >
+            {header}
+            <KeyboardAvoidingView
+              behavior="height"
+              keyboardVerticalOffset={insets.top}
+              style={[
+                styles.composerFrame,
+                mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                  ? styles.composerFrameFill
+                  : null,
+              ]}
+            >
+              {form}
+            </KeyboardAvoidingView>
+          </View>
+        )}
+        {...(mode === 'rail'
+          ? { onExpand, onRequestClose: requestClose, presentation: mode }
+          : { onRequestClose: requestClose, presentation: mode })}
+      />
     </ToastProvider>
   );
 
@@ -180,7 +186,7 @@ export function PostComposerHost({
               { backgroundColor: theme.backgroundCanvas },
             ]}
           >
-            {dialog}
+            {composer}
           </View>
         ) : (
           <OverlayBackdrop
@@ -189,7 +195,7 @@ export function PostComposerHost({
             testID="post-composer-backdrop"
           >
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
-              {dialog}
+              {composer}
             </Pressable>
           </OverlayBackdrop>
         )}
@@ -214,7 +220,7 @@ export function PostComposerHost({
       {mode !== 'rail' ? (
         <OverlayBackdrop onRequestClose={requestClose} style={styles.webBackdrop} />
       ) : null}
-      {dialog}
+      {composer}
     </View>
   );
 }
@@ -247,6 +253,10 @@ const styles = StyleSheet.create({
     maxWidth: 640,
     maxHeight: 'calc(100dvh - 96px)' as never,
     width: '100%',
+  },
+  mediaEditorDialog: {
+    height: 678,
+    maxWidth: 'min(920px, calc(100vw - 48px))' as never,
   },
   mobileDialog: { borderRadius: 0, borderWidth: 0, height: '100%', width: '100%' },
   header: {

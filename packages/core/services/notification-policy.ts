@@ -50,24 +50,6 @@ export const materializeNotification = async (
     return [];
   }
 
-  const legacyNotification = await database
-    .select({ id: Notifications.id })
-    .from(Notifications)
-    .where(
-      and(
-        eq(Notifications.kind, kind),
-        eq(Notifications.recipientProfileId, recipientProfileId),
-        eq(Notifications.sourceId, sourceId),
-        isNull(Notifications.recipientAccountId),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  if (legacyNotification) {
-    return [legacyNotification.id];
-  }
-
   await database
     .insert(Notifications)
     .values(
@@ -89,10 +71,7 @@ export const materializeNotification = async (
         eq(Notifications.kind, kind),
         eq(Notifications.recipientProfileId, recipientProfileId),
         eq(Notifications.sourceId, sourceId),
-        or(
-          inArray(Notifications.recipientAccountId, recipientAccountIds),
-          isNull(Notifications.recipientAccountId),
-        ),
+        inArray(Notifications.recipientAccountId, recipientAccountIds),
       ),
     )
     .orderBy(Notifications.recipientAccountId, Notifications.id)

@@ -28,12 +28,6 @@ const activeAccountWhere = (accountId: string) =>
 const recipientAccountWhere = (accountId: string) =>
   and(eq(Notifications.recipientAccountId, accountId), activeAccountWhere(accountId));
 
-const socialRecipientWhere = (accountId: string) =>
-  and(
-    activeAccountWhere(accountId),
-    or(eq(Notifications.recipientAccountId, accountId), isNull(Notifications.recipientAccountId)),
-  );
-
 export const visibleViewerNotificationWhere = ({
   ctx,
   profileId,
@@ -58,7 +52,7 @@ export const visibleViewerNotificationWhere = ({
   }
 
   const profileNotifications = and(
-    socialRecipientWhere(accountId),
+    recipientAccount,
     ne(Notifications.kind, NotificationKind.OPERATIONAL),
     isNotNull(Notifications.recipientProfileId),
     profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
@@ -72,7 +66,7 @@ export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
   const accountId = ctx.session?.accountId;
   return accountId
     ? and(
-        socialRecipientWhere(accountId),
+        recipientAccountWhere(accountId),
         ne(Notifications.kind, NotificationKind.OPERATIONAL),
         isNotNull(Notifications.recipientProfileId),
         notificationMembershipWhere(accountId, db),

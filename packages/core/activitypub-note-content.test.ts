@@ -5,7 +5,9 @@ import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
   remoteNoteContentMaxLength,
+  RemoteNoteMentionLimitExceededError,
 } from './activitypub-note-content';
+import { postContentDocumentToHtml, postContentDocumentToText } from './post-content/server';
 
 const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
 const bobProfileId = '019f6678-86fa-709b-984e-1520766b8442';
@@ -314,21 +316,27 @@ describe('projectRemoteNoteContent', () => {
     assert.deepEqual(formatted, compact);
   });
 
-  it('projects typed Mention candidates onto matching anchor identities without storing anchor text', () => {
+  it('captures the resolved Profile handle for typed Mentions without trusting anchor text', () => {
     const result = projectRemoteNoteContent({
       content:
-        '<p>Hello <a class="h-card" href="https://remote.example/@alice">@alice</a> and ' +
+        '<p>Hello <a class="h-card" href="https://remote.example/@alice">@spoof</a> and ' +
         '<span class="h-card"><a class="u-url mention" href="https://remote.example/@bob">' +
         '<span class="p-name">@bob</span></a></span> and ' +
         '<a href="https://example.com/guide">guide</a></p>',
       mentions: [
         {
           profileId: aliceProfileId,
+          relativeHandle: '@alice@remote.example',
           targetHref: 'https://remote.example/@alice',
         },
         {
           profileId: bobProfileId,
+          relativeHandle: '@bob@remote.example',
           targetHref: 'https://remote.example/@bob',
+        },
+        {
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/@alice',
         },
       ],
       summary: null,
@@ -342,12 +350,12 @@ describe('projectRemoteNoteContent', () => {
           { type: 'text', text: 'Hello ' },
           {
             type: 'mention',
-            attrs: { profileId: aliceProfileId },
+            attrs: { handle: '@alice@remote.example', profileId: aliceProfileId },
           },
           { type: 'text', text: ' and ' },
           {
             type: 'mention',
-            attrs: { profileId: bobProfileId },
+            attrs: { handle: '@bob@remote.example', profileId: bobProfileId },
           },
           { type: 'text', text: ' and ' },
           {
@@ -358,6 +366,25 @@ describe('projectRemoteNoteContent', () => {
         ],
       },
     ]);
+    assert.equal(
+      postContentDocumentToText(result),
+      'Hello @alice@remote.example and @bob@remote.example and guide',
+    );
+    assert.equal(
+      postContentDocumentToText(
+        result,
+        new Map([
+          [aliceProfileId, '@alice-current@remote.example'],
+          [bobProfileId, '@bob-current@remote.example'],
+        ]),
+      ),
+      'Hello @alice-current@remote.example and @bob-current@remote.example and guide',
+    );
+    assert.equal(
+      postContentDocumentToHtml(result),
+      '<p>Hello <span>@alice@remote.example</span> and <span>@bob@remote.example</span> and ' +
+        '<a href="https://example.com/guide">guide</a></p>',
+    );
   });
 
   it('keeps a Mention anchor with an unmatched URL as a safe link', () => {
@@ -471,8 +498,16 @@ describe('projectRemoteNoteContent', () => {
     const result = projectRemoteNoteContent({
       content: '<p><a href="https://profile.example/@same">@same</a></p>',
       mentions: [
-        { profileId: aliceProfileId, targetHref: 'https://profile.example/@same' },
-        { profileId: bobProfileId, targetHref: 'https://PROFILE.EXAMPLE:443/@same' },
+        {
+          profileId: aliceProfileId,
+          relativeHandle: '@alice@profile.example',
+          targetHref: 'https://profile.example/@same',
+        },
+        {
+          profileId: bobProfileId,
+          relativeHandle: '@bob@profile.example',
+          targetHref: 'https://PROFILE.EXAMPLE:443/@same',
+        },
       ],
       summary: null,
       mediaType: 'text/html',
@@ -499,7 +534,11 @@ describe('projectRemoteNoteContent', () => {
         '<a href="javascript:steal()">@alice</a></p>',
       mentions: [
         { profileId: aliceProfileId, targetHref: 'not a URI' },
-        { profileId: aliceProfileId, targetHref: 'https://remote.example/users/alice' },
+        {
+          profileId: aliceProfileId,
+          relativeHandle: '',
+          targetHref: 'https://remote.example/users/alice',
+        },
       ],
       summary: null,
       mediaType: 'text/html',
@@ -532,6 +571,83 @@ describe('projectRemoteNoteContent', () => {
         content: [{ type: 'text', text: 'before @alice after' }],
       },
     ]);
+  });
+
+  it('allows 16 matched Mention body nodes and rejects a 17th repeated occurrence', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    const project = (count: number) =>
+      projectRemoteNoteContent({
+        content: `<p>${Array.from({ length: count }, () => `<a href="${targetHref}"></a>`).join(
+          '',
+        )}</p>`,
+        mentions: [{ profileId: aliceProfileId, relativeHandle: '@alice', targetHref }],
+        summary: null,
+        mediaType: 'text/html',
+      });
+
+    const allowed = project(16);
+    const paragraph = allowed.body.content[0];
+    assert.equal(
+      paragraph?.type === 'paragraph'
+        ? paragraph.content?.filter((node) => node.type === 'mention').length
+        : 0,
+      16,
+    );
+    assert.throws(() => project(17), RemoteNoteMentionLimitExceededError);
+  });
+
+  it('counts only matched Mention nodes and excludes qualified-handle domain length', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    const unmatched = projectRemoteNoteContent({
+      content: `<p>${Array.from(
+        { length: 17 },
+        () => '<a href="https://other.example/users/alice">@alice</a>',
+      ).join('')}</p>`,
+      mentions: [{ profileId: aliceProfileId, relativeHandle: '@alice', targetHref }],
+      summary: null,
+      mediaType: 'text/html',
+    });
+    assert.equal(
+      unmatched.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).filter((node) => node.type === 'mention')
+          : [],
+      ).length,
+      0,
+    );
+    assert.equal(postContentDocumentToText(unmatched), '@alice'.repeat(17));
+
+    const qualifiedHandle = `@${'a'.repeat(64)}@${'long-domain-'.repeat(10)}.example`;
+    const allowed = projectRemoteNoteContent({
+      content: `<p><a href="${targetHref}"></a></p>`,
+      mentions: [{ profileId: aliceProfileId, relativeHandle: qualifiedHandle, targetHref }],
+      summary: null,
+      mediaType: 'text/html',
+    });
+    assert.deepEqual(allowed.body.content[0], {
+      type: 'paragraph',
+      content: [{ type: 'mention', attrs: { handle: qualifiedHandle, profileId: aliceProfileId } }],
+    });
+  });
+
+  it('rejects a matched Mention whose username exceeds 64 characters', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: `<p><a href="${targetHref}"></a></p>`,
+          mentions: [
+            {
+              profileId: aliceProfileId,
+              relativeHandle: `@${'a'.repeat(65)}@example.com`,
+              targetHref,
+            },
+          ],
+          summary: null,
+          mediaType: 'text/html',
+        }),
+      RemoteNoteMentionLimitExceededError,
+    );
   });
 });
 

@@ -434,6 +434,29 @@ test('a valid parent-author Reply represents only its own recipient; an ineligib
   assert.equal(fallthrough[0]?.recipientProfileId, localMentioned.id);
 });
 
+test('a tombstoned Reply parent does not suppress its typed Mention', async () => {
+  const author = await createProfile(InstanceKind.ACTIVITYPUB);
+  const recipient = await createProfile();
+  const parent = await createPostForLocal(recipient.id);
+  const reply = await createTestPost({
+    authorProfileId: author.id,
+    mentionProfileIds: [recipient.id],
+    replyParentId: parent.id,
+  });
+
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
+
+  assert.deepEqual(await createReplyNotification(reply.id), []);
+  assert.deepEqual(await readSourceNotifications(reply.id), []);
+
+  const mentionIds = await createMentionNotification(reply.id);
+  const notifications = await readSourceNotifications(reply.id);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
+  assert.equal(notifications[0]?.recipientProfileId, recipient.id);
+  assert.deepEqual(mentionIds, [notifications[0]?.id]);
+});
+
 test('a local typed Mention materializes idempotently while a local Post without the relation is a no-op', async () => {
   const author = await createProfile();
   const recipient = await createProfile();

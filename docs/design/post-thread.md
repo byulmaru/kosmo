@@ -21,6 +21,13 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
   `{displayName}님에게 답글` attribution을 어느 행에도 중복 표시하지 않는다. 조상과 하위가 공용
   `PostListItem`을 사용하더라도 상세 thread caller가 이 목록 전용 metadata를 명시적으로 끈다.
 
+## 상세 초기 표시 위치 · PROD-1033
+
+- 상세 화면은 알림·목록·직접 URL 등 진입 경로와 관계없이 URL이 지정한 현재 Post를 헤더 아래부터 표시한다.
+- 조상 Post는 기존 순서로 유지하며 위로 스크롤해 확인할 수 있다. 최신 작성자 handle로 주소를 교정해도 대상 Post의 초기 위치를 유지한다.
+- 초기 이미지·레이아웃 변화 후에도 대상 Post가 헤더에 가려지지 않도록 위치를 보정한다. 사용자가 직접 스크롤한 뒤에는 자동 보정을 중단하고, 이후 답글 pagination이 대상 Post로 되돌리지 않는다.
+- 미디어 뷰어의 별도 scroller와 뒤로가기의 기존 위치 복원 계약은 유지한다.
+
 ## Row boundary
 
 - current row와 마지막 row 뒤에는 generic thread 구분선을 표시하지 않는다. 그 외 row는 다음 row와의 경계에 구분선을 표시한다.

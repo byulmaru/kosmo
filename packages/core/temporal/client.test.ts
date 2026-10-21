@@ -22,6 +22,8 @@ process.env.TEMPORAL_NAMESPACE ??= 'test';
 const { runWorkflow, temporalClient } = await import('./client');
 const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow, remoteProfileUpdateWorkflow } =
   await import('./remote-profile');
+const { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES, remotePostLookupWorkflow } =
+  await import('./remote-post');
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
   spawnSync(
@@ -64,6 +66,46 @@ test('Temporal namespace가 없으면 client module import에서 거부한다', 
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /TEMPORAL_NAMESPACE is required/);
+});
+
+test('Remote Post lookup Workflow ID includes its signing, attribution, and byte-budget constraints', () => {
+  const input = { objectUri: 'https://remote.example/notes/1' };
+  const id = remotePostLookupWorkflow.workflowIdFromArgs(input);
+
+  assert.equal(
+    id,
+    `remotePostLookupWorkflow:${JSON.stringify([
+      input.objectUri,
+      'configured-local',
+      'any-author',
+      REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+    ])}`,
+  );
+  assert.equal(
+    remotePostLookupWorkflow.workflowIdFromArgs({
+      ...input,
+      maxDocumentBytes: REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+    }),
+    id,
+  );
+  assert.notEqual(
+    remotePostLookupWorkflow.workflowIdFromArgs({ ...input, maxDocumentBytes: 1 }),
+    id,
+  );
+  assert.notEqual(
+    remotePostLookupWorkflow.workflowIdFromArgs({
+      ...input,
+      signingProfileId: '00000000-0000-4000-8000-000000000001',
+    }),
+    id,
+  );
+  assert.notEqual(
+    remotePostLookupWorkflow.workflowIdFromArgs({
+      ...input,
+      advertisingActorUri: 'https://remote.example/users/alice',
+    }),
+    id,
+  );
 });
 
 test('Temporal runtime 입력으로 실제 process-global Client를 export한다', () => {

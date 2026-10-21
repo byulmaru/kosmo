@@ -1,7 +1,10 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
+import {
+  getContentReportBlockProfile,
+  useContentReportMenuItem,
+} from '@/components/content-report/ContentReportContext';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
@@ -12,6 +15,7 @@ import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
+import { useProfilePinAction } from './ProfilePinAction';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
@@ -29,9 +33,18 @@ const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
     visibility
+    ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
       relativeHandle
+      ...ContentReportOverlay_blockProfile
+      viewerState {
+        blockedBy
+        isSelf
+        profileBlock {
+          id
+        }
+      }
       ...ProfileMuteAction_profile
     }
     ...PostActionBar_post @alias(as: "actionBar")
@@ -62,16 +75,22 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
+  const profilePinAction = useProfilePinAction(target.profilePin!);
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
   });
   const reportItem = useContentReportMenuItem({
+    blockProfile: getContentReportBlockProfile(target.profile),
     id: target.id,
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
-  const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
+  const moreItems = [
+    copyLinkItem,
+    ...(profilePinAction.item ? [profilePinAction.item] : []),
+    ...(sessionId ? [reportItem] : []),
+  ];
 
   const canMute =
     authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
@@ -82,6 +101,9 @@ export function PostActionSurface({
         execution={authentication.execution}
         more={more}
         moreItems={moreItems}
+        morePending={profilePinAction.pending}
+        moreSheetIconSize={profilePinAction.item ? 24 : undefined}
+        onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
         onRepostError={onRepostError}
@@ -121,6 +143,7 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
+      {profilePinAction.confirmation}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
@@ -150,6 +150,7 @@ type PostComposerBaseProps = {
   children?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
+  expanded?: boolean;
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialBodyText?: string;
@@ -159,6 +160,7 @@ type PostComposerBaseProps = {
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
+  renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
   registerNativeBackHandler?: (handler: (() => void) | null) => void;
 };
 
@@ -260,6 +262,7 @@ function PostComposerContents({
   contextGuard,
   contextGenerationRef,
   editorRef,
+  expanded = true,
   expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
@@ -279,6 +282,7 @@ function PostComposerContents({
   replyParentId,
   replyParentVisibility,
   repostSourceId,
+  renderSurface,
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
@@ -343,6 +347,7 @@ function PostComposerContents({
         if (!inserted) {
           return previous;
         }
+        const selectionToApply = { start: inserted.range.end + 1, end: inserted.range.end + 1 };
         return {
           body: inserted.body,
           mentionRanges: [
@@ -355,10 +360,8 @@ function PostComposerContents({
             inserted.range,
           ].sort((left, right) => left.start - right.start),
           previousSelection: { start: query.start, end: query.start },
-          selection: {
-            start: inserted.range.end + 1,
-            end: inserted.range.end + 1,
-          },
+          selection: selectionToApply,
+          selectionToApply,
         };
       });
     },
@@ -382,6 +385,9 @@ function PostComposerContents({
     key: string;
     tool: 'alt' | 'sensitive';
   } | null>(null);
+  if (!expanded && mediaEditor !== null) {
+    setMediaEditor(null);
+  }
   const profilePickerDismissRef = useRef<(() => void) | null>(null);
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const onProfilePickerDismissChange = useCallback((dismiss: (() => void) | null) => {
@@ -581,6 +587,19 @@ function PostComposerContents({
     return () => cancelAnimationFrame(frame);
   }, [focusOnMount, presentation]);
 
+  useEffect(() => {
+    if (!focusOnMount || Platform.OS === 'web') {
+      return;
+    }
+    // Keep the native composer stable when an app switch leaves its keyboard open.
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        Keyboard.dismiss();
+      }
+    });
+    return () => subscription.remove();
+  }, [focusOnMount]);
+
   const productionSurface: PostComposerVisibility = visibility;
   const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
   const pickerProfiles =
@@ -588,7 +607,7 @@ function PostComposerContents({
       ? [...profiles, selectedProfileKey]
       : profiles;
 
-  return (
+  const form = (
     <Form
       accessibilityLabel={
         composerMode === 'reply'
@@ -686,7 +705,6 @@ function PostComposerContents({
                 );
                 const mediaEditorContent = mediaEditor ? (
                   <ComposerMediaEditor
-                    fillContainer
                     media={items}
                     mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
                     onAltTextChange={onAltTextChange}
@@ -725,6 +743,7 @@ function PostComposerContents({
                   items,
                   mentionCandidates: currentMentionCandidates,
                   mentionSearchState,
+                  selectionToApply: draft.selectionToApply,
                   onRetryMentionSearch:
                     mentionSearchState === 'error' && retry ? () => retry() : undefined,
                   onSelectMention: (
@@ -799,6 +818,8 @@ function PostComposerContents({
       />
     </Form>
   );
+
+  return renderSurface ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null }) : form;
 }
 
 const styles = StyleSheet.create({

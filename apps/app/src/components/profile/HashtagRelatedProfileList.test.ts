@@ -9,6 +9,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 let renderer: ReactTestRenderer | null = null;
 let paginationCompletion: ((error?: Error | null) => void) | undefined;
+let profileTagMuteEnabled = false;
 let profileEdges = [
   { cursor: 'cursor-a', node: { id: 'profile-a' } },
   { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -44,6 +45,9 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
+});
+mockModule(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
+  useFeatureFlag: (key: string) => key === 'profile-tag-mute' && profileTagMuteEnabled,
 });
 mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
   ProfileTagMuteAction: 'ProfileTagMuteAction',
@@ -100,6 +104,7 @@ afterEach(async () => {
     renderer = null;
   }
   paginationCompletion = undefined;
+  profileTagMuteEnabled = false;
   profileEdges = [
     { cursor: 'cursor-a', node: { id: 'profile-a' } },
     { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -150,7 +155,8 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     }
   });
 
-  it('상세 헤더 우측 action에 목록과 같은 Hashtag를 전달한다', async () => {
+  it('프로필 태그 mute flag가 켜지면 헤더 action에 목록과 같은 Hashtag를 전달한다', async () => {
+    profileTagMuteEnabled = true;
     await act(async () => {
       renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
     });
@@ -162,11 +168,16 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     assert.equal(header.props.trailing.props.hashtag.id, 'opaque-hashtag');
   });
 
-  it('목록 항목과 자동 pagination 표식을 같은 ScrollView 안에 렌더한다', async () => {
+  it('기본 off에서는 mute action 없이 leading, 목록, pagination을 유지한다', async () => {
+    const leading = createElement('BackButton');
     await act(async () => {
-      renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
+      renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {}, leading }));
     });
     assert.ok(renderer);
+
+    const header = renderer.root.find((node) => (node.type as unknown) === 'PageHeader');
+    assert.equal(header.props.trailing, null);
+    assert.equal(header.props.leading, leading);
 
     const scrollView = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');
     assert.deepEqual(

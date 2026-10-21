@@ -19,6 +19,7 @@ export { postQuoteOwnerWorkflow } from './quote-owner';
 export { activitypubQuoteResolutionWorkflow } from './quote-resolution';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
+export { remotePostLookupWorkflow } from './remote-post-lookup';
 export { remoteProfileFeaturedWorkflow } from './remote-profile-featured';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
 export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';

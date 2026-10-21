@@ -7,7 +7,7 @@
 - renderer는 현재 Post Content document의 Mention node와 같은 revision에서 투영된 `PostContent.mentionedProfiles: [Profile!]!`을 입력으로 받는다. 서버는 document의 canonical Profile UUID를 엄격하게 검증·저장하고, GraphQL은 기존 Media와 같은 방식으로 이 UUID를 client-facing global ID로 projection한다. node의 global ID와 relation의 `Profile.id`를 정확히 매칭할 때만 Mention target을 만든다.
 - `mentionedProfiles`는 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile만 포함하며, 같은 Profile은 한 번만 제공한다. Post visibility·eligibility는 PostContent 조회에서 기존 정책을 적용하고, 이 field는 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다. document occurrence의 순서는 document가 소유하므로 relation 배열의 positional order를 renderer 입력으로 사용하지 않는다.
 - renderer는 raw ActivityPub `tag`, actor URI, 본문 anchor를 다시 해석하지 않는다. Mention을 해결하기 위한 WebFinger, actor fetch, Profile materialization과 표시 문자열·handle 문자열 비교도 수행하지 않는다.
-- canonical Mention node는 `profileId`만 가지며, renderer는 exact match한 Profile을 `PostContentMention`에 전달한다. 서로 다른 `profileId`는 각각의 Profile로 구분하고, 표시 문자열·handle 문자열로 대상을 합치거나 선택하지 않는다. `PostContentRenderer`는 node 순서와 ID lookup만 소유하고 Mention의 표시·fallback 정책을 직접 렌더링하지 않는다.
+- canonical Mention node는 `profileId`와 optional `handle`을 가질 수 있다. `handle`은 parsing 시 이미 확인된 Profile의 `relativeHandle` snapshot이며 text projection에만 쓰고, Renderer는 exact match한 Profile을 `PostContentMention`에 전달한다. 서로 다른 `profileId`는 각각의 Profile로 구분하고, 표시 문자열·handle 문자열로 대상을 합치거나 선택하지 않는다. `PostContentRenderer`는 node 순서와 ID lookup만 소유하고 Mention의 표시·fallback 정책을 직접 렌더링하지 않는다.
 - 일반 link mark는 기존 link semantics를 유지한다. `PROD-340`의 unresolved·malformed·identity mismatch fallback은 저장된 안전한 link 또는 text로 표시하고 Profile navigation affordance를 추가하지 않는다.
 
 ## Profile 이동
@@ -16,7 +16,7 @@
 - client에서 Profile ID를 다시 encode/decode하거나 document node와 relation 응답을 positional/parallel zip하지 않는다. global ID exact match가 실패하면 Profile target을 만들지 않는다.
 - 활성 Mention link는 [Profile identity](./typography.md#profile-identity)의 기존 text-link 의미·타이포그래피 강조 계약과 일반 link semantics를 재사용해 본문 일반 link와 구분한다. 새 색상·타이포그래피 token이나 tooltip은 추가하지 않는다. accessible name에는 visible `relativeHandle`과 target Profile의 `displayName`을 포함한다.
 - 새로운 Mention 전용 route, external Actor URL direct navigation 또는 remote Profile redirect를 만들지 않는다. Post visibility·eligibility는 기존 조회 결과를 그대로 사용하며, viewer별 Profile Domain Block 정책은 이 renderer 계약에서 새로 완성하지 않는다. Mention 관계가 viewer의 접근 범위를 넓히지 않는다.
-- `PostContentMention`은 매칭된 Profile의 `relativeHandle`을 표시하고 기존 `/${relativeHandle}` route로 이동한다. Profile이 전달되지 않아 unavailable 또는 deleted가 된 경우에는 `@알 수 없는 사용자`를 표시하고 Profile 이동 없이 비활성화한다. 대체 문구를 만들거나 actor URI·외부 URL로 우회하지 않으며, 비활성 상태는 click, keyboard focus와 navigation target을 제공하지 않는 text로 수렴한다.
+- `PostContentMention`은 매칭된 Profile의 `relativeHandle`을 표시하고 기존 `/${relativeHandle}` route로 이동한다. Profile이 전달되지 않아 unavailable 또는 deleted가 된 경우에는 Mention node의 `handle` attr가 있어도 `@알 수 없는 사용자`를 표시하고 Profile 이동 없이 비활성화한다. 대체 문구를 만들거나 actor URI·외부 URL로 우회하지 않으며, 비활성 상태는 click, keyboard focus와 navigation target을 제공하지 않는 text로 수렴한다.
 - 동일 Post에서 반복 Mention occurrence는 문서 순서를 유지하고, 매칭된 Profile의 `relativeHandle`을 각각 표시한다. 같은 Profile을 가리킨다는 이유로 occurrence를 하나로 합쳐 표시하지 않으며, relation 중복 여부는 저장 계층의 set semantics를 따른다.
 
 ## Web·Native 접근성

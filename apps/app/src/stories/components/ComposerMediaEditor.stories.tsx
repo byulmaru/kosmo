@@ -107,7 +107,7 @@ export const Sensitive: Story = {
 
 export const CompactWebAlt: Story = {
   render: (args) => (
-    <View style={{ width: 720 }}>
+    <View style={{ height: 678, width: 720 }}>
       <ComposerMediaEditor {...args} />
     </View>
   ),
@@ -152,7 +152,7 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
   useEffect(() => setTool(props.tool), [props.tool]);
 
-  return (
+  const editor = (
     <ComposerMediaEditor
       {...props}
       media={media}
@@ -195,11 +195,22 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
       tool={tool}
     />
   );
+
+  return props.presentation === 'mobile' ? (
+    <View
+      style={{ height: '100dvh' as never, width: '100%' }}
+      testID="composer-media-editor-story-surface"
+    >
+      {editor}
+    </View>
+  ) : (
+    editor
+  );
 }
 
 function WebEditorStory(props: ComposerMediaEditorProps) {
   return (
-    <View style={{ width: 920 }}>
+    <View style={{ height: 678, width: 920 }} testID="composer-media-editor-story-surface">
       <InteractiveEditor {...props} />
     </View>
   );
@@ -290,10 +301,15 @@ export const MobileDefaultGeometryContract: Story = {
   ...MobileDefault,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByTestId('mobile-composer-media-editor')).toHaveStyle({
-      height: '844px',
-      width: '390px',
-    });
+    const surface = canvas.getByTestId('composer-media-editor-story-surface');
+    const editor = canvas.getByTestId('mobile-composer-media-editor');
+    expect(surface.getBoundingClientRect().width).toBe(390);
+    expect(surface.getBoundingClientRect().height).toBe(844);
+    expect(editor.getBoundingClientRect().width).toBe(390);
+    expect(editor.getBoundingClientRect().height).toBe(844);
+    expect(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '완료' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '대체 텍스트 편집' })).toBeVisible();
     expect(canvas.queryByTestId('mobile-composer-media-editor-tool-sheet')).toBeNull();
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
   },

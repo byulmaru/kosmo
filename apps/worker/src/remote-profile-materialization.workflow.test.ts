@@ -56,6 +56,7 @@ let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriAc
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
 let collectRemoteFeaturedActivity: typeof WorkerActivities.collectRemoteFeaturedActivity;
+let collectRemoteFeaturedItemsActivity: typeof WorkerActivities.collectRemoteFeaturedItemsActivity;
 let getRemoteProfileActorStateActivity: typeof RemoteProfileMaterializationActivities.getRemoteProfileActorStateActivity;
 let fetchRemoteProfileActorActivity: typeof RemoteProfileMaterializationActivities.fetchRemoteProfileActorActivity;
 let applyRemoteProfileActorActivity: typeof RemoteProfileMaterializationActivities.applyRemoteProfileActorActivity;
@@ -73,6 +74,7 @@ before(async () => {
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
     collectRemoteFeaturedActivity,
+    collectRemoteFeaturedItemsActivity,
   } = await import('./activities'));
   ({
     getRemoteProfileActorStateActivity,
@@ -2451,23 +2453,34 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
       }) as never,
   );
 
-  assert.deepEqual(
-    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
-    [],
-  );
+  const input = { actorUri, featuredUri, profileId: remote.id };
+  const featuredItems = await collectRemoteFeaturedItemsActivity(input);
+  assert.deepEqual(featuredItems, {
+    documentBytes: new TextEncoder().encode(JSON.stringify(collection)).byteLength,
+    itemUris: [],
+    signingProfileId: follower.id,
+  });
   assert.deepEqual(signed, [follower.id]);
   assert.deepEqual(publicLoads, []);
+
+  signed.length = 0;
+  assert.deepEqual(await collectRemoteFeaturedActivity(input), []);
+  assert.deepEqual(signed, [follower.id]);
 
   await db
     .update(Profiles)
     .set({ state: ProfileState.SUSPENDED })
     .where(eq(Profiles.id, follower.id));
   signed.length = 0;
-  assert.deepEqual(
-    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
-    [],
-  );
+  assert.deepEqual(await collectRemoteFeaturedItemsActivity(input), {
+    documentBytes: new TextEncoder().encode(JSON.stringify(collection)).byteLength,
+    itemUris: [],
+  });
   assert.deepEqual(signed, []);
+  assert.deepEqual(publicLoads, [featuredUri]);
+
+  publicLoads.length = 0;
+  assert.deepEqual(await collectRemoteFeaturedActivity(input), []);
   assert.deepEqual(publicLoads, [featuredUri]);
 });
 
