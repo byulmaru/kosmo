@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
-import { AtSign, MessageCircle, Quote } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostActionSurface } from '@/components/post/PostActionSurface';
@@ -16,7 +15,8 @@ import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
-import type { ViewStyle } from 'react-native';
+import { notificationKindPresentations } from './notificationKindPresentation';
+import { NotificationKindRail } from './NotificationLinkTarget';
 import type { PostMediaOpenHandler } from '@/components/post/PostMediaImage';
 import type { PostNotificationPost_post$key } from './__generated__/PostNotificationPost_post.graphql';
 
@@ -47,16 +47,6 @@ const PostNotificationPostFragment = graphql`
 
 type PostNotificationKind = 'mention' | 'quote' | 'reply';
 
-const presentations = {
-  mention: { Icon: AtSign, label: '멘션 알림', reason: null },
-  quote: {
-    Icon: Quote,
-    label: '인용 알림',
-    reason: '회원님의 게시글을 인용했습니다',
-  },
-  reply: { Icon: MessageCircle, label: '답글 알림', reason: null },
-} as const;
-
 /** Shared Post composition for recipient-relative Mention, Reply, and Quote notifications. */
 export function PostNotificationPost({
   kind,
@@ -74,8 +64,8 @@ export function PostNotificationPost({
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
-  const { Icon, label, reason } = presentations[kind];
-  const [replyRailFocusVisible, setReplyRailFocusVisible] = useState(false);
+  const { Icon, label } = notificationKindPresentations[kind];
+  const reason = kind === 'quote' ? '회원님의 게시글을 인용했습니다' : null;
   const onMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       onActivate?.();
@@ -97,55 +87,15 @@ export function PostNotificationPost({
     <>
       <View role="article" style={styles.root} testID={`${kind}-notification-post`}>
         <Text style={styles.srOnly}>{label}</Text>
-        {kind === 'reply' ? (
-          <NavigationLink href={detailHref}>
-            <Pressable
-              accessibilityLabel={`${label} 게시글로 이동`}
-              accessibilityRole="link"
-              onBlur={() => setReplyRailFocusVisible(false)}
-              onFocus={(event) => {
-                const target = event.currentTarget as unknown as {
-                  matches?: (selector: string) => boolean;
-                };
-                setReplyRailFocusVisible(
-                  Platform.OS !== 'web' || Boolean(target.matches?.(':focus-visible')),
-                );
-              }}
-              onPointerDown={() => setReplyRailFocusVisible(false)}
-              onPress={onActivate}
-              style={StyleSheet.flatten([
-                styles.replyRail,
-                {
-                  outlineColor: theme.stateFocusRing,
-                  outlineOffset: -2,
-                  outlineStyle: replyRailFocusVisible ? 'solid' : 'none',
-                  outlineWidth: replyRailFocusVisible ? 2 : 0,
-                } as ViewStyle,
-              ])}
-              testID="reply-notification-rail"
-            >
-              <View
-                aria-hidden
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                style={styles.kind}
-                testID={`${kind}-notification-kind`}
-              >
-                <Icon color={theme.foregroundSecondary} size={32} />
-              </View>
-            </Pressable>
-          </NavigationLink>
-        ) : (
-          <View
-            aria-hidden
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={styles.kind}
-            testID={`${kind}-notification-kind`}
-          >
-            <Icon color={theme.foregroundSecondary} size={32} />
-          </View>
-        )}
+        <NotificationKindRail
+          accessibilityLabel={`${label} 게시글로 이동`}
+          href={detailHref}
+          iconTestID={`${kind}-notification-kind`}
+          onActivate={onActivate}
+          testID={`${kind}-notification-rail`}
+        >
+          <Icon color={theme.foregroundSecondary} size={32} />
+        </NotificationKindRail>
         <View style={styles.content}>
           <View style={styles.header}>
             <NavigationLink href={profileHref}>
@@ -222,8 +172,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     minWidth: 0,
   },
-  kind: { alignItems: 'center', flexShrink: 0, height: 48, justifyContent: 'center', width: 48 },
-  replyRail: { alignSelf: 'stretch', flexShrink: 0, width: 48 },
   srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', left: 0, top: 0 },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {

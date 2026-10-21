@@ -3,6 +3,7 @@ import baseMeta, {
   CompositionContract as composition,
   OperationalActivationContract as operationalActivation,
   PendingContract as pending,
+  PostNotificationRailActivationContract as postNotificationRailActivation,
   ProtectionContract as protection,
   ReactionRepostProfileTargetsContract as reactionRepostProfileTargets,
   ReplyActionsContract as replyActions,
@@ -32,3 +33,4 @@ export const ReplyQuoteContract: Story = replyQuote;
 export const ReplyActionsContract: Story = replyActions;
 export const ReplyRailActivationContract: Story = replyRailActivation;
 export const ReactionRepostProfileTargetsContract: Story = reactionRepostProfileTargets;
+export const PostNotificationRailActivationContract: Story = postNotificationRailActivation;

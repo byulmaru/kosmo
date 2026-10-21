@@ -1,5 +1,4 @@
 import { Link } from 'expo-router';
-import { AtSign, MessageCircle, Quote, Repeat2, Smile, UserRoundPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
@@ -8,6 +7,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { notificationKindPresentations } from './notificationKindPresentation';
+import { NotificationKindRail, NotificationLinkTarget } from './NotificationLinkTarget';
 import type { Href } from 'expo-router';
 import type { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
@@ -85,14 +86,7 @@ type OperationalNotificationProps = {
   pending?: never;
 };
 
-export type SourceUnavailableNotificationKind =
-  | 'follow'
-  | 'followRequest'
-  | 'reaction'
-  | 'repost'
-  | 'mention'
-  | 'reply'
-  | 'quote';
+export type SourceUnavailableNotificationKind = keyof typeof notificationKindPresentations;
 
 type SourceUnavailableNotificationProps = {
   kind: SourceUnavailableNotificationKind;
@@ -112,16 +106,6 @@ const actions = {
   followRequest: '팔로우를 요청했습니다',
   reaction: '이 게시글에 반응했습니다',
   repost: '이 게시글을 재게시했습니다',
-} as const;
-
-const sourceUnavailableKinds = {
-  follow: { Icon: UserRoundPlus, label: '팔로우 알림' },
-  followRequest: { Icon: UserRoundPlus, label: '팔로우 요청 알림' },
-  reaction: { Icon: Smile, label: '반응 알림' },
-  repost: { Icon: Repeat2, label: '재게시 알림' },
-  mention: { Icon: AtSign, label: '멘션 알림' },
-  reply: { Icon: MessageCircle, label: '답글 알림' },
-  quote: { Icon: Quote, label: '인용 알림' },
 } as const;
 
 /** Presentation only. The consumer owns navigation and Read state. */
@@ -188,7 +172,7 @@ function SourceUnavailableNotificationTarget({
   unread = false,
 }: SourceUnavailableNotificationProps) {
   const theme = useTheme();
-  const { Icon, label } = sourceUnavailableKinds[kind];
+  const { Icon, label } = notificationKindPresentations[kind];
   const iconColor =
     kind === 'reaction'
       ? theme.actionReactionBase
@@ -293,6 +277,17 @@ function isReactionRepostNotification(
   return props.kind === 'reaction' || props.kind === 'repost';
 }
 
+function getActorCountSummary(actors: readonly [Actor, ...Actor[]], totalActorCount?: number) {
+  const suppliedCount = totalActorCount ?? actors.length;
+  const count = Math.max(
+    actors.length,
+    Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
+  );
+  const otherCount = count - 1;
+  const subject = `${actors[0].name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
+  return { otherCount, subject };
+}
+
 function NotificationTarget(props: FollowNotificationProps) {
   const {
     disabled = false,
@@ -307,16 +302,10 @@ function NotificationTarget(props: FollowNotificationProps) {
   const web = Platform.OS === 'web';
   const actors = props.actors;
   const actor = actors[0];
-  const suppliedCount = props.totalActorCount ?? actors.length;
-  const count = Math.max(
-    actors.length,
-    Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
-  );
-  const otherCount = count - 1;
-  const subject = `${actor.name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
+  const { otherCount, subject } = getActorCountSummary(actors, props.totalActorCount);
   const destination = kind === 'follow' ? '프로필' : '팔로우 요청 관리 화면';
   const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''} ${destination}${kind === 'followRequest' ? '으로' : '로'} 이동`;
-  const KindIcon = UserRoundPlus;
+  const KindIcon = notificationKindPresentations[kind].Icon;
   const iconColor = theme.foregroundSecondary;
   const avatarStack = (
     <View style={styles.avatars}>
@@ -386,13 +375,7 @@ function ReactionRepostNotificationTargets({
 }: ReactionRepostNotificationProps) {
   const theme = useTheme();
   const actor = actors[0];
-  const suppliedCount = totalActorCount ?? actors.length;
-  const count = Math.max(
-    actors.length,
-    Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
-  );
-  const otherCount = count - 1;
-  const subject = `${actor.name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
+  const { otherCount, subject } = getActorCountSummary(actors, totalActorCount);
   const excerpt =
     preview === null
       ? '게시글을 볼 수 없습니다'
@@ -402,7 +385,7 @@ function ReactionRepostNotificationTargets({
   const media =
     preview && !preview.contentWarning && !preview.sensitiveMedia ? preview.media?.[0] : undefined;
   const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''}${excerpt ? ` ${excerpt}.` : ''}${media ? ` ${media.altText?.trim() || '첨부 이미지'}.` : ''} 게시글로 이동`;
-  const KindIcon = kind === 'reaction' ? Smile : Repeat2;
+  const KindIcon = notificationKindPresentations[kind].Icon;
   const iconColor = kind === 'reaction' ? theme.actionReactionBase : theme.actionRepostBase;
   const visibleActors = actors.slice(0, 3);
   const copy = (
@@ -418,17 +401,17 @@ function ReactionRepostNotificationTargets({
 
   return (
     <View style={[styles.row, styles.postActionRow, Platform.OS === 'web' && styles.webRow]}>
-      <NotificationLinkTarget
+      <NotificationKindRail
         accessibilityLabel={label}
         disabled={disabled}
         href={href}
         onActivate={onNavigate}
         pending={pending}
-        style={styles.kindTarget}
         testID="notification-kind-target"
+        iconTestID={`${kind}-notification-kind`}
       >
         <KindIcon color={iconColor} size={32} />
-      </NotificationLinkTarget>
+      </NotificationKindRail>
       <View style={styles.summary}>
         <View style={styles.avatarAndTime}>
           <View style={styles.profileAvatars}>
@@ -494,81 +477,9 @@ function ReactionRepostNotificationTargets({
   );
 }
 
-function NotificationLinkTarget({
-  accessibilityLabel,
-  children,
-  disabled = false,
-  href,
-  onActivate,
-  pending = false,
-  style,
-  testID,
-}: {
-  accessibilityLabel: string;
-  children: ReactElement;
-  disabled?: boolean;
-  href: Href;
-  onActivate?: () => void;
-  pending?: boolean;
-  style: ViewStyle;
-  testID?: string;
-}) {
-  const theme = useTheme();
-  const web = Platform.OS === 'web';
-  const [focusVisible, setFocusVisible] = useState(false);
-  const blocked = disabled || pending;
-  const target = (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="link"
-      accessibilityState={{ busy: pending, disabled: blocked }}
-      aria-busy={pending}
-      aria-disabled={blocked}
-      disabled={blocked}
-      onBlur={() => setFocusVisible(false)}
-      onFocus={(event) => {
-        const control = event.currentTarget as unknown as {
-          matches?: (selector: string) => boolean;
-        };
-        setFocusVisible(web && Boolean(control.matches?.(':focus-visible')));
-      }}
-      onPointerDown={() => setFocusVisible(false)}
-      onPress={blocked ? undefined : onActivate}
-      style={StyleSheet.flatten([
-        style,
-        {
-          outlineColor: theme.stateFocusRing,
-          outlineOffset: -2,
-          outlineStyle: focusVisible ? 'solid' : 'none',
-          outlineWidth: focusVisible ? 2 : 0,
-          opacity: blocked ? 0.5 : 1,
-        } as ViewStyle,
-      ])}
-      testID={testID}
-    >
-      {children}
-    </Pressable>
-  );
-
-  return blocked ? (
-    target
-  ) : (
-    <Link asChild href={href} push={Platform.OS !== 'web'}>
-      {target}
-    </Link>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
-  kindTarget: {
-    alignItems: 'center',
-    flexShrink: 0,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
   profileTarget: {
     alignItems: 'center',
     flexShrink: 0,
