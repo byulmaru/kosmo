@@ -225,7 +225,7 @@ export async function uploadImage({
   issue,
 }: {
   readonly asset: ImagePickerAsset;
-  readonly complete: (mediaId: string) => Promise<void>;
+  readonly complete?: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
   readonly issue: () => Promise<IssuedImageUpload>;
 }): Promise<string | null> {
@@ -247,8 +247,10 @@ export async function uploadImage({
       return null;
     }
 
-    operation = 'complete';
-    await complete(issued.mediaId);
+    if (complete) {
+      operation = 'complete';
+      await complete(issued.mediaId);
+    }
   } catch (error) {
     const stage: ImageUploadStage =
       operation === 'issue' ? 'issue' : operation === 'complete' ? 'complete' : 'transfer';

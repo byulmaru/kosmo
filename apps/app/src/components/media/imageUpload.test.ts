@@ -222,6 +222,31 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
   assert.equal(captureCalls.length, 0);
 });
 
+test('returns the uploaded Media ID without completing it when no completion handler is supplied', async (t) => {
+  const calls: string[] = [];
+  installManipulator({ height: 100, width: 100 });
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === 'file:///cache/normalized.webp') {
+      calls.push('read-normalized');
+      return new Response(new Blob(['webp']), { status: 200 });
+    }
+    calls.push(`${init?.method}:${String(input)}`);
+    return new Response(null, { status: 204 });
+  });
+
+  const mediaId = await uploadImage({
+    asset: createAsset(),
+    isActive: () => true,
+    issue: async () => {
+      calls.push('issue');
+      return { mediaId: 'media-deferred', uploadUrl: 'https://upload.example/deferred' };
+    },
+  });
+
+  assert.equal(mediaId, 'media-deferred');
+  assert.deepEqual(calls, ['issue', 'read-normalized', 'PUT:https://upload.example/deferred']);
+});
+
 test('falls back to PNG when the browser rejects WebP encoding and propagates its content type', async (t) => {
   const unsupportedWebpError = new Error(
     'The browser does not support encoding "image/webp" images. Got "image/png" instead. Try a different format like JPEG or PNG.',

@@ -41,6 +41,7 @@ export type ComposerMediaItem = {
 };
 
 export type PostComposerMediaValue = {
+  readonly completeUploads: () => Promise<void>;
   readonly hasPendingMedia: boolean;
   readonly items: readonly {
     readonly altText: string | null;
@@ -60,6 +61,7 @@ export type PostComposerMediaControlsRenderProps = {
 };
 
 export const emptyPostComposerMediaValue: PostComposerMediaValue = {
+  completeUploads: async () => undefined,
   hasPendingMedia: false,
   items: [],
   sensitiveMedia: false,
@@ -137,20 +139,6 @@ export function PostComposerMediaControls({
     try {
       const mediaId = await uploadImage({
         asset,
-        complete: (id) =>
-          new Promise<void>((resolve, reject) => {
-            commitCompleteMediaUpload({
-              variables: { input: { id } },
-              onCompleted: (response, errors) => {
-                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                  return;
-                }
-                resolve();
-              },
-              onError: reject,
-            });
-          }),
         isActive: () => mounted.current && !removedMediaKeys.current.has(key),
         issue: () =>
           new Promise((resolve, reject) => {
@@ -294,16 +282,73 @@ export function PostComposerMediaControls({
   };
 
   useEffect(() => {
+    const items = media.flatMap((item) =>
+      item.state === 'ready' && item.mediaId
+        ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
+        : [],
+    );
+
+    const completeUploads = async () => {
+      const mediaChanged = new Error('Composer media changed before completion');
+      if (
+        !mounted.current ||
+        mediaRef.current !== media ||
+        media.some((item) => item.state !== 'ready' || !item.mediaId)
+      ) {
+        throw mediaChanged;
+      }
+
+      for (const [index, item] of media.entries()) {
+        const mediaValue = items[index];
+        if (!mounted.current || mediaRef.current !== media || !mediaValue) {
+          throw mediaChanged;
+        }
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            commitCompleteMediaUpload({
+              variables: { input: { id: mediaValue.mediaId } },
+              onCompleted: (response, errors) => {
+                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
+                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
+                  return;
+                }
+                resolve();
+              },
+              onError: reject,
+            });
+          });
+        } catch (error) {
+          if (mounted.current && mediaRef.current === media) {
+            const failure = asImageUploadError(error, 'complete', 'complete').failure;
+            const itemNumber = index + 1;
+            const next = media.map((current) =>
+              current.key === item.key
+                ? { ...current, failure, state: 'failed' as const }
+                : current,
+            );
+            mediaRef.current = next;
+            setMedia(next);
+            showToast(formatImageUploadFailureMessage(`${itemNumber}번째 이미지`, failure), {
+              tone: 'danger',
+            });
+          }
+          throw error;
+        }
+
+        if (!mounted.current || mediaRef.current !== media) {
+          throw mediaChanged;
+        }
+      }
+    };
+
     onValueChange({
+      completeUploads,
       hasPendingMedia: media.some((item) => item.state !== 'ready'),
-      items: media.flatMap((item) =>
-        item.state === 'ready' && item.mediaId
-          ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
-          : [],
-      ),
+      items,
       sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
     });
-  }, [media, onValueChange, sensitiveMedia]);
+  }, [commitCompleteMediaUpload, media, onValueChange, sensitiveMedia, showToast]);
 
   useEffect(() => {
     mounted.current = true;
