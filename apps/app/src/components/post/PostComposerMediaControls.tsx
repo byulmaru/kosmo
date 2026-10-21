@@ -160,10 +160,10 @@ export function PostComposerMediaControls({
             });
           }),
         isActive: () => mounted.current && !removedMediaKeys.current.has(key),
-        issue: (size) =>
+        issue: () =>
           new Promise((resolve, reject) => {
             commitIssueMediaUploadUrl({
-              variables: { input: { actorProfileId: profileId, size } },
+              variables: { input: { actorProfileId: profileId } },
               onCompleted: (response, errors) => {
                 if (errors?.length) {
                   reject(new Error('이미지 업로드를 시작하지 못했습니다.'));

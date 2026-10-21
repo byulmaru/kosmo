@@ -38,8 +38,6 @@
     "./validation/profile": "./validation/profile.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1151.0",
-    "@aws-sdk/s3-request-presigner": "^3.1151.0",
     "@kosmo/fedify": "workspace:*",
     "@temporalio/client": "^1.22.0",
     "core-js": "^3.49.0",

@@ -14,11 +14,15 @@ Current media direction:
   Media can be attached to a Post or used as a Profile representation.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
-- New Local Media uploads stage bytes in a private R2 bucket and persist an opaque, versioned upload reference. Clients
-  providing normalized upload size use a PUT URL signed for that exact `ContentLength`; clients omitting size retain the
-  existing Media REST URL issuance/completion path and its limits until a separate compatibility-removal decision. Final
-  public URL and media type still come from Media Storage Service.
-- Do not expose staging bucket reads or credentials to clients. The browser receives only a short-lived, upload-only URL.
+- All new Local Media uploads use the existing Media server path without requiring a client-reported size. The server
+  enforces a shared 16 MiB per-file limit from the bytes actually received before storing them in private staging.
+  Staged bytes are not public; `completeMediaUpload` succeeds only after Media Storage Service confirms the final result.
+  Previously issued uploads remain completable through their existing path, and Ready Media is unaffected.
+- The Media service owns private staging R2 access. Kosmo API and Worker use the existing Media service origin and API
+  key; neither needs staging R2 credentials. Media Storage Service remains the source of the final public URL and media type.
+- Deploy all Media service instances with upload-ticket, byte-upload and private staging metadata-check support before the
+  Kosmo API or Worker. Roll back Kosmo before Media; older Media instances may make a metadata check appear as a missing
+  source.
 - Remote Media remains a canonical product concept, but its Media Storage Service projection and persistence shape are
   deferred until a real Remote Media implementation requires them. Do not add future File or remote-storage columns to
   the Local upload slice.

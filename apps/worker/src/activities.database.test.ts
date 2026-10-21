@@ -2431,12 +2431,23 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
 test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   const mediaIds: string[] = [];
-  const requests: string[] = [];
+  const requests: { authorization: string | undefined; method: string; url: string }[] = [];
   let headResponseStatus = 200;
   const server = createServer((request, response) => {
-    requests.push(request.method ?? '');
+    requests.push({
+      authorization: request.headers.authorization,
+      method: request.method ?? '',
+      url: request.url ?? '',
+    });
     if (request.method !== 'HEAD') {
       response.writeHead(405).end();
+      return;
+    }
+    if (
+      request.headers.authorization !== 'Bearer test-api-key' ||
+      !/^\/v1\/uploads\/u_[0-9a-f-]{36}\?staging=true$/.test(request.url ?? '')
+    ) {
+      response.writeHead(400).end();
       return;
     }
     if (headResponseStatus !== 200) {
@@ -2459,10 +2470,8 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   const stagingConfig = [
-    ['MEDIA_STAGING_R2_ENDPOINT', `http://127.0.0.1:${address.port}`],
-    ['MEDIA_STAGING_R2_BUCKET', 'staging-bucket'],
-    ['MEDIA_STAGING_R2_ACCESS_KEY_ID', 'test-access-key'],
-    ['MEDIA_STAGING_R2_SECRET_ACCESS_KEY', 'test-secret-key'],
+    ['MEDIA_STORAGE_SERVICE_ORIGIN', `http://127.0.0.1:${address.port}`],
+    ['MEDIA_STORAGE_SERVICE_API_KEY', 'test-api-key'],
   ] as const;
   const previousStagingConfig = stagingConfig.map(([key]) => process.env[key]);
   for (const [key, value] of stagingConfig) {
@@ -2515,6 +2524,13 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       sourceKey: `uploads/${uploadId}/${uuid}`,
       contentType: 'image/jpeg',
     });
+    assert.deepEqual(requests, [
+      {
+        authorization: 'Bearer test-api-key',
+        method: 'HEAD',
+        url: `/v1/uploads/${uploadId}?staging=true`,
+      },
+    ]);
     assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
 
     await assert.rejects(
@@ -2547,7 +2563,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       hasFailureType('NexusMediaUploadSourceError'),
     );
     assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
-    assert.deepEqual(requests, ['HEAD']);
+    assert.equal(requests.length, 1);
 
     const transientFailure = await createUploadingMedia();
     const transientFailureState = await readMediaState(transientFailure.mediaId);
@@ -2557,9 +2573,14 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       (error: unknown) =>
         error instanceof Error &&
         !(error instanceof ApplicationFailure) &&
-        (error as Error & { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ===
-          503,
+        error.message === 'Media Storage Service rejected upload metadata (503)',
     );
+    const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
+    assert.deepEqual(requests[1], {
+      authorization: 'Bearer test-api-key',
+      method: 'HEAD',
+      url: `/v1/uploads/u_${transientUuid}?staging=true`,
+    });
     assert.deepEqual(await readMediaState(transientFailure.mediaId), transientFailureState);
   } finally {
     stagingConfig.forEach(([key], index) => {

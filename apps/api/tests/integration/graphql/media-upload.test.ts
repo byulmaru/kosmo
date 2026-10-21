@@ -58,11 +58,7 @@ describe('Local Media upload GraphQL 경계', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     stagingR2 = await createStagingR2Fixture();
-    process.env.MEDIA_STAGING_R2_ENDPOINT = stagingR2.endpoint;
-    process.env.MEDIA_STAGING_R2_BUCKET = 'staging-bucket';
-    process.env.MEDIA_STAGING_R2_ACCESS_KEY_ID = 'test-access-key';
-    process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY = 'test-secret-key';
-    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media.example';
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = stagingR2.endpoint;
     process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
 
     ({ AccountProfiles, Accounts, db, firstOrThrow, Instances, Media, pg, Profiles, Sessions } =
@@ -117,11 +113,23 @@ describe('Local Media upload GraphQL 경계', () => {
       assertNoGraphQLErrors(result);
       assert.equal(result.data?.issueMediaUploadUrl.media.state, 'UPLOADING');
       assert.ok(Date.parse(result.data!.issueMediaUploadUrl.expiresAt) > Date.now());
-      assertSignedUpload(result.data!.issueMediaUploadUrl.uploadUrl);
+      assertStagingUpload(result.data!.issueMediaUploadUrl.uploadUrl);
     }
+
+    assert.deepEqual(
+      stagingR2.issuanceRequests.map(({ authorization, body }) => ({ authorization, body })),
+      Array.from({ length: 3 }, () => ({
+        authorization: 'Bearer secret',
+        body: JSON.stringify({ staging: true }),
+      })),
+    );
 
     const stored = await db.select().from(Media);
     assert.equal(stored.length, 3);
+    assert.deepEqual(
+      stored.map((media) => parseNexusMediaUploadReference(media.storageReference!)!.id).sort(),
+      stagingR2.issuanceRequests.map(({ id }) => id).sort(),
+    );
     const byStorageReference = new Map(stored.map((media) => [media.storageReference, media]));
     assert.equal(byStorageReference.size, 3);
     for (const media of stored) {
@@ -188,31 +196,13 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(await db.$count(Media), 1);
   });
 
-  test('size 생략·null은 기존 Media Storage Service 발급 경로와 active session Profile을 유지한다', async (t) => {
+  test('upload input 생략·null·빈 객체는 active session Profile로 fallback한다', async () => {
     const auth = await createAuthenticatedSession();
-    let requestCount = 0;
-    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-      assert.equal(String(input), 'https://media.example/v1/uploads');
-      assert.equal(init?.method, 'POST');
-      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer secret');
-      assert.equal(new Headers(init?.headers).get('content-type'), 'application/json');
-      assert.equal(init?.body, '{}');
-      requestCount += 1;
-      return Response.json(
-        {
-          id: `legacy-reference-${requestCount}`,
-          uploadUrl: `https://media.example/upload/${requestCount}`,
-          expiresAt: new Date(Date.now() + 600_000).toISOString(),
-        },
-        { status: 201 },
-      );
-    });
 
     const results = await Promise.all([
-      requestIssueMediaUploadUrl(auth.token, undefined, 'none'),
+      requestIssueMediaUploadUrl(auth.token),
       requestIssueMediaUploadUrl(auth.token, undefined, 'null'),
       requestIssueMediaUploadUrl(auth.token, undefined, 'empty'),
-      requestIssueMediaUploadUrl(auth.token, undefined, 'sizeNull'),
     ]);
 
     for (const result of results) {
@@ -221,44 +211,40 @@ describe('Local Media upload GraphQL 경계', () => {
     }
 
     const stored = await db.select().from(Media);
-    assert.equal(requestCount, 4);
-    assert.equal(stored.length, 4);
+    assert.equal(stagingR2.issuanceRequests.length, 3);
+    assert.equal(stored.length, 3);
     assert.deepEqual(
       stored.map((media) => media.profileId),
-      [auth.profile.id, auth.profile.id, auth.profile.id, auth.profile.id],
+      [auth.profile.id, auth.profile.id, auth.profile.id],
     );
-    assert.deepEqual(stored.map((media) => media.storageReference).sort(), [
-      'legacy-reference-1',
-      'legacy-reference-2',
-      'legacy-reference-3',
-      'legacy-reference-4',
-    ]);
+    assert.ok(stored.every((media) => media.storageReference?.startsWith('nexus:v1:')));
   });
 
-  test('size outside 1..16 MiB is rejected before issuing a URL or creating Media', async (t) => {
+  test('Media Storage가 유효하지 않은 UUID 업로드 ID를 반환하면 Media를 만들지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
-    let legacyRequestCount = 0;
-    t.mock.method(globalThis, 'fetch', async () => {
-      legacyRequestCount += 1;
+    const uploadUrl = `${stagingR2.endpoint}/v1/uploads/u_invalid`;
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), `${stagingR2.endpoint}/v1/uploads`);
+      assert.equal(init?.method, 'POST');
+      assert.equal(init?.body, JSON.stringify({ staging: true }));
       return Response.json(
         {
-          id: 'legacy-invalid-size',
-          uploadUrl: 'https://media.example/upload/invalid-size',
+          id: 'u_invalid',
+          uploadUrl,
           expiresAt: new Date(Date.now() + 600_000).toISOString(),
         },
         { status: 201 },
       );
     });
-    for (const size of [0, 16_777_217]) {
-      const result = await requestIssueMediaUploadUrl(auth.token, undefined, 'size', size);
-      assert.ok(result.errors?.[0]);
-      assert.equal(result.data, null);
-    }
-    assert.equal(legacyRequestCount, 0);
+
+    const result = await requestIssueMediaUploadUrl(auth.token);
+
+    assert.ok(result.errors?.[0]);
+    assert.equal(result.data, null);
     assert.equal(await db.$count(Media), 0);
   });
 
-  test('서명된 R2 PUT 업로드 후 Nexus workflow가 완료한 Media를 반환한다', async (t) => {
+  test('발급한 staging URL로 PUT 업로드 후 Nexus workflow가 완료한 Media를 반환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
@@ -268,14 +254,15 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.ok(sourceReference);
     const session = parseNexusMediaUploadReference(sourceReference);
     assert.ok(session);
-    assertSignedUpload(uploadUrl, session.sourceKey);
+    assertStagingUpload(uploadUrl, session.id);
 
     const upload = await fetch(uploadUrl, {
       body: onePixelPng,
       headers: { 'Content-Type': 'image/png' },
       method: 'PUT',
     });
-    assert.equal(upload.status, 200);
+    assert.equal(upload.status, 201);
+    assert.deepEqual(await upload.json(), { id: session.id });
     const stagedObject = stagingR2.objects.get(session.sourceKey);
     assert.equal(stagedObject?.contentLength, onePixelPng.length);
     assert.equal(stagedObject?.contentType, 'image/png');
@@ -296,6 +283,9 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.ok(completed.data?.completeMediaUpload.media.readyAt);
     assert.equal(execution.mock.callCount(), 1);
     assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, storedMedia.id, auth.account.id);
+    assert.deepEqual(stagingR2.metadataRequests, [
+      { authorization: 'Bearer secret', url: `/v1/uploads/${session.id}?staging=true` },
+    ]);
     const repeated = await requestCompleteMediaUpload(media.id, auth.token);
     assertNoGraphQLErrors(repeated);
     assert.deepEqual(repeated.data, completed.data);
@@ -326,6 +316,43 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(unchanged.readyAt, null);
     assert.equal(unchanged.url, null);
     assert.equal(unchanged.mediaType, null);
+  });
+
+  test('동시 완료 요청은 같은 Temporal workflow 결과를 공유한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const media = await db.select().from(Media).then(firstOrThrow);
+    const bothRequestsStarted = Promise.withResolvers<void>();
+    let executionCount = 0;
+    const execution = mockCompletingWorkflow(
+      t,
+      async ({ mediaId }) => {
+        executionCount += 1;
+        await bothRequestsStarted.promise;
+        await markMediaReady(mediaId);
+        return workflowResult(parseNexusMediaUploadReference(media.storageReference!)!.id);
+      },
+      (dispatchCount) => {
+        if (dispatchCount === 2) {
+          bothRequestsStarted.resolve();
+        }
+      },
+    );
+
+    const results = await Promise.all([
+      requestCompleteMediaUpload(issued.data!.issueMediaUploadUrl.media.id, auth.token),
+      requestCompleteMediaUpload(issued.data!.issueMediaUploadUrl.media.id, auth.token),
+    ]);
+
+    for (const result of results) {
+      assertNoGraphQLErrors(result);
+    }
+    assert.deepEqual(results[1]!.data, results[0]!.data);
+    assert.equal(execution.mock.callCount(), 2);
+    assert.equal(executionCount, 1);
+    assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, media.id, auth.account.id);
+    assertMediaUploadWorkflowOptions(execution.mock.calls[1]!, media.id, auth.account.id);
   });
 
   test('workflow dispatch가 거부되어도 READY로 기록된 결과를 반환한다', async (t) => {
@@ -398,7 +425,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(unchanged.mediaType, null);
   });
 
-  test('R2 source 검사에서 missing, 만료, 크기, MIME와 metadata 오류를 거부한다', async () => {
+  test('Nexus source 검사에서 missing, 만료, 크기, MIME와 metadata 오류를 거부한다', async () => {
     const storageReference = `nexus:v1:${crypto.randomUUID()}`;
     const session = parseNexusMediaUploadReference(storageReference);
     assert.ok(session);
@@ -429,6 +456,14 @@ describe('Local Media upload GraphQL 경계', () => {
         { contentLength: 1, contentType: null, lastModified: new Date() },
         'Media upload source metadata is invalid',
       ],
+      [
+        { contentLength: null, contentType: 'image/png', lastModified: new Date() },
+        'Media upload source metadata is invalid',
+      ],
+      [
+        { contentLength: 1, contentType: 'image/png', lastModified: null },
+        'Media upload source metadata is invalid',
+      ],
     ] as const) {
       stagingR2.objects.set(session.sourceKey, object);
       await assert.rejects(
@@ -448,7 +483,7 @@ describe('Local Media upload GraphQL 경계', () => {
     });
   });
 
-  test('유효하지 않은 Account와 선택 Profile은 R2 URL 발급 전에 거부한다', async () => {
+  test('유효하지 않은 Account와 선택 Profile은 Media Storage URL 발급 전에 거부한다', async () => {
     const suspendedInstance = await createInstance(InstanceKind.LOCAL, InstanceState.SUSPENDED);
     const actors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
@@ -463,27 +498,29 @@ describe('Local Media upload GraphQL 경계', () => {
       assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     }
     assert.equal(await db.$count(Media), 0);
+    assert.equal(stagingR2.issuanceRequests.length, 0);
   });
 
-  test('R2 설정이 없으면 Media를 생성하지 않는다', async () => {
+  test('Media Storage 설정이 없으면 Media를 생성하지 않는다', async () => {
     const auth = await createAuthenticatedSession();
-    const originalSecret = process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY;
-    delete process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY;
+    const originalApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+    delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
     try {
       const result = await requestIssueMediaUploadUrl(auth.token);
       assert.ok(result.errors?.[0]);
       assert.equal(result.data, null);
     } finally {
-      if (originalSecret === undefined) {
-        delete process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY;
+      if (originalApiKey === undefined) {
+        delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
       } else {
-        process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY = originalSecret;
+        process.env.MEDIA_STORAGE_SERVICE_API_KEY = originalApiKey;
       }
     }
     assert.equal(await db.$count(Media), 0);
+    assert.equal(stagingR2.issuanceRequests.length, 0);
   });
 
-  test('Media persistence 실패는 signed upload URL을 응답하지 않는다', async (t) => {
+  test('Media persistence 실패는 발급한 upload URL을 응답하지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
     await pg.unsafe(`
       CREATE FUNCTION fail_media_insert() RETURNS trigger
@@ -505,7 +542,8 @@ describe('Local Media upload GraphQL 경계', () => {
 
     assert.ok(result.errors?.[0]);
     assert.equal(result.data, null);
-    assert.doesNotMatch(JSON.stringify(result), /test-secret-key/);
+    assert.equal(stagingR2.issuanceRequests.length, 1);
+    assert.equal(JSON.stringify(result).includes(stagingR2.issuanceRequests[0]!.uploadUrl), false);
     assert.equal(await db.$count(Media), 0);
   });
 
@@ -536,7 +574,7 @@ describe('Local Media upload GraphQL 경계', () => {
       async (input: string | URL | Request, init?: RequestInit) => {
         assert.equal(
           String(input),
-          'https://media.example/v1/uploads/opaque%2Freference%3Fprovider-owned',
+          `${stagingR2.endpoint}/v1/uploads/opaque%2Freference%3Fprovider-owned`,
         );
         assert.equal(init?.method, undefined);
         assert.deepEqual(init?.headers, { Authorization: 'Bearer secret' });
@@ -737,10 +775,9 @@ type CompleteMediaUploadData = {
 const requestIssueMediaUploadUrl = (
   token?: string,
   actorProfileId?: string,
-  inputMode: 'size' | 'sizeNull' | 'none' | 'null' | 'empty' = 'size',
-  size: number | null = onePixelPng.length,
+  inputMode: 'none' | 'null' | 'empty' = actorProfileId === undefined ? 'none' : 'empty',
 ) => {
-  if (inputMode === 'none') {
+  if (inputMode === 'none' && actorProfileId === undefined) {
     return requestGraphQL<IssueMediaUploadUrlData>(
       `mutation IssueMediaUploadUrl {
         issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
@@ -759,11 +796,10 @@ const requestIssueMediaUploadUrl = (
         inputMode === 'null'
           ? null
           : inputMode === 'empty'
-            ? {}
-            : {
-                ...(actorProfileId ? { actorProfileId } : {}),
-                ...(inputMode === 'sizeNull' ? { size: null } : { size }),
-              },
+            ? actorProfileId === undefined
+              ? {}
+              : { actorProfileId }
+            : undefined,
     },
     token,
   );
@@ -817,23 +853,15 @@ const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
 const representationResponse = () =>
   Response.json({ mediaType: 'image/webp', url: 'https://media.example/media.webp' });
 
-const assertSignedUpload = (uploadUrl: string, sourceKey?: string) => {
+const assertStagingUpload = (uploadUrl: string, id?: string) => {
   const url = new URL(uploadUrl);
   assert.equal(url.protocol, 'http:');
-  assert.equal(url.hostname, '127.0.0.1');
-  assert.ok(url.pathname.startsWith('/staging-bucket/uploads/u_'));
-  if (sourceKey) {
-    assert.equal(url.pathname, `/staging-bucket/${sourceKey}`);
+  assert.equal(url.hostname, 'upload.localhost');
+  assert.match(url.pathname, /^\/v1\/uploads\/u_[0-9a-f-]{36}$/);
+  assert.equal(url.search, '');
+  if (id) {
+    assert.equal(url.pathname, `/v1/uploads/${id}`);
   }
-  assert.equal(url.searchParams.get('X-Amz-Expires'), '600');
-  assert.ok(url.searchParams.has('X-Amz-Credential'));
-  assert.ok(url.searchParams.has('X-Amz-Signature'));
-  assert.ok(url.searchParams.get('X-Amz-SignedHeaders')?.split(';').includes('content-length'));
-  assert.equal(
-    [...url.searchParams.keys()].some((key) => key.toLowerCase().includes('checksum')),
-    false,
-  );
-  assert.equal(url.href.includes(process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY ?? ''), false);
 };
 
 const assertStoredMedia = (media: typeof Media.$inferSelect | undefined) => {
@@ -849,7 +877,10 @@ const assertStoredMedia = (media: typeof Media.$inferSelect | undefined) => {
 const mockCompletingWorkflow = (
   t: TestContext,
   complete: (input: { mediaId: string; accountId: string }) => Promise<unknown>,
+  onDispatch?: (dispatchCount: number) => void,
 ) => {
+  const executions = new Map<string, Promise<unknown>>();
+  let dispatchCount = 0;
   return t.mock.method(
     temporalClient.workflow,
     'execute',
@@ -857,8 +888,18 @@ const mockCompletingWorkflow = (
       _workflow: Parameters<typeof temporalClient.workflow.execute>[0],
       options: Parameters<typeof temporalClient.workflow.execute>[1],
     ) => {
+      dispatchCount += 1;
+      onDispatch?.(dispatchCount);
+      const workflowId = options.workflowId ?? '';
+      const existing = executions.get(workflowId);
+      if (existing) {
+        return (await existing) as never;
+      }
+
       const input = options.args?.[0] as { mediaId: string; accountId: string };
-      return (await complete(input)) as never;
+      const execution = complete(input);
+      executions.set(workflowId, execution);
+      return (await execution) as never;
     },
   );
 };

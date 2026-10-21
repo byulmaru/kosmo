@@ -298,7 +298,6 @@ enum InstanceKind {
 
 input IssueMediaUploadUrlInput {
   actorProfileId: ID
-  size: Int
 }
 
 type IssueMediaUploadUrlPayload {

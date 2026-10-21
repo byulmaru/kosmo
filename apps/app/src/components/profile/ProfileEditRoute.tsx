@@ -96,8 +96,8 @@ const query = graphql`
 `;
 
 const issueMediaUploadUrlMutation = graphql`
-  mutation ProfileEditRouteIssueMediaUploadUrlMutation($input: IssueMediaUploadUrlInput) {
-    issueMediaUploadUrl(input: $input) {
+  mutation ProfileEditRouteIssueMediaUploadUrlMutation {
+    issueMediaUploadUrl {
       media {
         id
       }
@@ -265,10 +265,10 @@ function EditableProfileRoute({
             mounted.current &&
             fieldRef.current.generation === generation &&
             fieldRef.current.asset === asset,
-          issue: (size) =>
+          issue: () =>
             new Promise((resolve, reject) => {
               commitIssueMediaUploadUrl({
-                variables: { input: { size } },
+                variables: {},
                 onCompleted: (response, errors) => {
                   if (errors?.length) {
                     reject(new Error('Profile image upload could not start'));

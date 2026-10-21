@@ -75,24 +75,28 @@ Temporal helper processes receive neither PostgreSQL nor queue credentials.
 pnpm owns the child process lifecycle and one interrupt stops the development
 processes.
 
-New uploads use a private staging R2 bucket. The API and Worker need
-`MEDIA_STAGING_R2_ENDPOINT`, `MEDIA_STAGING_R2_BUCKET`,
-`MEDIA_STAGING_R2_ACCESS_KEY_ID`, and `MEDIA_STAGING_R2_SECRET_ACCESS_KEY` in
-their server-only Vault environments. Configure the bucket's CORS rule to allow
-`PUT` from `http://localhost:5173`, `https://dev.kos.moe`, and `https://kos.moe`,
-with the `Content-Type` request header. Keep public reads disabled; the API
-returns a separate upload-only signed URL to the browser. Clients that provide
-normalized upload size use a PUT URL signed for that exact `ContentLength`.
-Clients that omit size retain the existing Media REST URL issuance and
-completion path under its existing size limits until a separate compatibility
-removal decision. Keep `MEDIA_STORAGE_SERVICE_ORIGIN` and
-`MEDIA_STORAGE_SERVICE_API_KEY` configured for that legacy path. None of these
-values belong in the browser bundle.
+New uploads send bytes through the existing Media HTTP upload service. It
+enforces a shared 16 MiB per-file limit using the bytes actually received
+before storing them in the Media service's private staging R2. Staged bytes stay
+private until the explicit completion confirms the Media Storage Service's
+final result. Preserve the Media ingress CORS policy for browser uploads;
+browser-to-R2 CORS and direct-to-R2 upload URLs are not part of the client path.
 
-The signed PUT URL expires after 10 minutes, while a staged source is accepted
-only when its storage `LastModified` timestamp is within 24 hours. Completion is
-an explicit request; repeated requests join the stable workflow while it is
-running, and already Ready Media is returned directly. A terminally failed
+The Kosmo API and Worker use `MEDIA_STORAGE_SERVICE_ORIGIN` and
+`MEDIA_STORAGE_SERVICE_API_KEY` in their server-only Vault environments for
+Media operations, including completion of previously issued uploads. The Media
+service owns staging R2 access; Kosmo does not need staging R2 credentials. Keep
+staging reads private and do not put Media credentials in the browser bundle.
+
+Before deploying the Kosmo API or Worker, deploy Media service instances that
+all support upload-ticket issuance, byte upload, and private staging metadata
+checks. Roll back Kosmo before rolling back Media. An older Media instance can
+return 404 for a staging metadata check, which appears to Kosmo as a missing
+source.
+
+A staged source is accepted only when its storage `LastModified` timestamp is
+within 24 hours. Repeated completion requests join the stable workflow while it
+is running, and already Ready Media is returned directly. A terminally failed
 workflow is not restarted for the same Media ID. A caller timeout or disconnect,
 including the 30-second request timeout, does not cancel that workflow. The
 Media Storage Service workflow removes a source it consumes. A missing or

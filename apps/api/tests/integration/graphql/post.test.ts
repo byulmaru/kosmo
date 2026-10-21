@@ -78,10 +78,8 @@ describe('Post Reply GraphQL 경계', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     stagingR2 = await createStagingR2Fixture();
-    process.env.MEDIA_STAGING_R2_ENDPOINT = stagingR2.endpoint;
-    process.env.MEDIA_STAGING_R2_BUCKET = 'staging-bucket';
-    process.env.MEDIA_STAGING_R2_ACCESS_KEY_ID = 'test-access-key';
-    process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY = 'test-secret-key';
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = stagingR2.endpoint;
+    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
 
     ({
       AccountProfiles,
@@ -1267,7 +1265,8 @@ describe('Post Reply GraphQL 경계', () => {
       headers: { 'Content-Type': 'image/png' },
       method: 'PUT',
     });
-    assert.equal(uploadedResponse.status, 200);
+    assert.equal(uploadedResponse.status, 201);
+    assert.deepEqual(await uploadedResponse.json(), { id: session.id });
     assert.equal(stagingR2.objects.get(session.sourceKey)?.contentLength, onePixelPng.length);
 
     const execute = t.mock.method(
@@ -2439,10 +2438,10 @@ const requestMediaNode = (mediaId: string, token?: string) =>
 
 const requestIssueMediaUploadUrl = (token?: string) =>
   requestGraphQL<IssueMediaUploadUrlData>(
-    `mutation PostIntegrationIssueMediaUploadUrl($input: IssueMediaUploadUrlInput) {
-      issueMediaUploadUrl(input: $input) { media { id state } uploadUrl }
+    `mutation PostIntegrationIssueMediaUploadUrl {
+      issueMediaUploadUrl { media { id state } uploadUrl }
     }`,
-    { input: { size: onePixelPng.length } },
+    {},
     token,
   );
 
