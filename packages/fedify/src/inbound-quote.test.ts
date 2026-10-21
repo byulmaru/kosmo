@@ -429,7 +429,7 @@ test('Create listener materializes the Quote body first and then records its res
   assert.equal(quoteState.status, PostQuoteConsentStatus.PENDING);
 });
 
-test('an authorization-free duplicate Create preserves the approved Quote and its Source', async () => {
+test('authorization-free duplicate Create and Update preserve the approved Quote and its Source', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   await createRemoteActor('quote', 'https://quote.example/users/quote');
   const sourceUri = new URL('https://source.example/notes/duplicate-create');
@@ -481,9 +481,10 @@ test('an authorization-free duplicate Create preserves the approved Quote and it
 
   await handleInboundUpdate(context, new Update({ actor: actorUri, object: original }), receivedAt);
   const afterUpdate = (await readQuote()).post;
-  assert.equal(afterUpdate.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
-  assert.equal(afterUpdate.quoteConsentApprovalUri, null);
+  assert.equal(afterUpdate.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+  assert.equal(afterUpdate.quoteConsentApprovalUri, approved.quoteConsentApprovalUri);
   assert.equal(afterUpdate.repostSourceId, source.post.id);
+  assert.equal(afterUpdate.currentContentId, approved.currentContentId);
 });
 
 test('a remote Quote without authorization remains pending and keeps its body visible', async () => {
