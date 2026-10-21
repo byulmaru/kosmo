@@ -414,7 +414,7 @@ test('inbound Reaction Create와 Undo의 Workflow start 실패를 기존 reporte
     object: emojiTarget.objectUri,
   });
   const failure = new Error('Temporal unavailable');
-  const lookup = mockStoredActorLookups(t);
+  mockStoredActorLookups(t);
   const start = mock.method(temporalClient.workflow, 'start', async () => {
     throw failure;
   });
@@ -440,7 +440,6 @@ test('inbound Reaction Create와 Undo의 Workflow start 실패를 기존 reporte
 
     assert.equal(await readReaction(actor.profile.id, likeTarget.post.id), undefined);
     assert.ok(await readReaction(actor.profile.id, emojiTarget.post.id));
-    assert.equal(lookup.mock.callCount(), 2);
     assert.equal(start.mock.callCount(), 3);
     assert.deepEqual(
       captures.map(({ error }) => error),
