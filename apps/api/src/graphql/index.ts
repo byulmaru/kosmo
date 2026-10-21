@@ -3,6 +3,7 @@ import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
 import { applySelectedProfileExtension } from '../context';
 import { useError } from './plugins/error';
+import { useMutationPrimaryDatabase } from './plugins/primary-database';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
@@ -32,7 +33,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   },
   maskedErrors: false,
   landingPage: false,
-  plugins: [useExecutionCancellation(), useError()],
+  plugins: [useExecutionCancellation(), useMutationPrimaryDatabase(), useError()],
 });
 
 yoga.on(['GET', 'POST', 'OPTIONS'], '/', async (c) => {

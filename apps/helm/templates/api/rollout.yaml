@@ -72,6 +72,8 @@ spec:
                   key: password
             - name: PGHOST
               value: {{ include "kosmo.postgresPoolerName" . | quote }}
+            - name: PGREADHOST
+              value: {{ ternary (include "kosmo.postgresReadPoolerName" .) "" (eq .Values.env "prod") | quote }}
             - name: PGPORT
               value: "5432"
             - name: PGUSER

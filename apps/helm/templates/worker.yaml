@@ -105,6 +105,8 @@ spec:
                   key: password
             - name: PGHOST
               value: {{ include "kosmo.postgresPoolerName" . | quote }}
+            - name: PGREADHOST
+              value: ""
             - name: PGPORT
               value: "5432"
             - name: PGUSER

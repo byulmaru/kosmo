@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { pg } from '@kosmo/core/db';
+import { pg, pgRead } from '@kosmo/core/db';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
@@ -64,7 +64,7 @@ if (import.meta.main) {
           await closeFedifyQueue();
         } finally {
           try {
-            await pg.end({ timeout: 5 });
+            await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
           } finally {
             await server[Symbol.asyncDispose]();
           }
