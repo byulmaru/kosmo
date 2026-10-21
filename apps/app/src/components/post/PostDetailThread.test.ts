@@ -388,6 +388,66 @@ describe('PostDetailThread Native initial target scroll', () => {
 });
 
 describe('PostDetailThread Web initial target scroll cleanup', () => {
+  for (const restorationStartsAt of ['frame', 'current measurement', 'header measurement']) {
+    it(`재사용된 상세는 ${restorationStartsAt} 대기 중 시작된 history 복원을 덮지 않는다`, async () => {
+      const frames: FrameRequestCallback[] = [];
+      const measurements: Array<() => void> = [];
+      let preservingScrollPosition = false;
+      let offset = 120;
+      globalThis.scrollTo = ((options: ScrollToOptions) => {
+        offset = options.top!;
+      }) as typeof globalThis.scrollTo;
+      globalThis.requestAnimationFrame = (callback) => {
+        frames.push(callback);
+        return frames.length;
+      };
+      await act(async () => {
+        renderer = create(
+          createElement(PostDetailThread, {
+            header: createElement('Header'),
+            identity: 'reused-history-route',
+            post: {} as never,
+            preserveScrollPosition: () => preservingScrollPosition,
+          }),
+          {
+            createNodeMock: (element) => ({
+              measureInWindow: (done: (...values: number[]) => void) => {
+                const current =
+                  (element.props as Record<string, unknown>).testID ===
+                  'post-thread-current-post-current';
+                measurements.push(() => done(0, current ? 1200 : 0, 390, current ? 200 : 64));
+              },
+            }),
+          },
+        );
+      });
+      if (restorationStartsAt !== 'frame') {
+        await act(async () => {
+          while (frames.length) {
+            frames.shift()!(0);
+          }
+        });
+        assert.equal(measurements.length, 1);
+      }
+      if (restorationStartsAt === 'header measurement') {
+        await act(async () => measurements.shift()!());
+        assert.equal(measurements.length, 1);
+      }
+
+      // POP can reuse this rendered tree without updating its props.
+      preservingScrollPosition = true;
+      await act(async () => {
+        while (frames.length) {
+          frames.shift()!(0);
+        }
+        while (measurements.length) {
+          measurements.shift()!();
+        }
+      });
+      assert.equal(offset, 120);
+    });
+  }
+
   it('초기 positioning이 꺼진 route는 현재 Post로 자동 scroll하지 않는다', async () => {
     const frames: FrameRequestCallback[] = [];
     const scrollTo = mock.fn();
@@ -402,7 +462,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
         createElement(PostDetailThread, {
           header: createElement('Header'),
           identity: 'history-restored-route',
-          initialPositioningEnabled: false,
+          preserveScrollPosition: () => true,
           post: {} as never,
         }),
         {
@@ -461,7 +521,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
         createElement(PostDetailThread, {
           header: createElement('Header'),
           identity: 'history-restored-route',
-          initialPositioningEnabled: false,
+          preserveScrollPosition: () => true,
           post: {} as never,
         }),
       );

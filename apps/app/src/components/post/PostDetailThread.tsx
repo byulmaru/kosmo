@@ -116,24 +116,24 @@ export function PostDetailThread({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
-  initialPositioningEnabled = true,
   identity,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
   presentation = 'route',
+  preserveScrollPosition,
   replyProfile,
 }: {
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
-  initialPositioningEnabled?: boolean;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation?: 'route' | 'viewer';
+  preserveScrollPosition?: () => boolean;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   return (
@@ -142,12 +142,12 @@ export function PostDetailThread({
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
-      initialPositioningEnabled={initialPositioningEnabled}
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
       presentation={presentation}
+      preserveScrollPosition={preserveScrollPosition}
       replyProfile={replyProfile}
     />
   );
@@ -158,26 +158,26 @@ function PostDetailThreadContent({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
-  initialPositioningEnabled,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
   presentation,
+  preserveScrollPosition,
   replyProfile,
 }: {
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
-  initialPositioningEnabled: boolean;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation: 'route' | 'viewer';
+  preserveScrollPosition?: () => boolean;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { width } = useWindowDimensions();
-  const shouldKeepCurrentInViewRef = useRef(presentation === 'route' && initialPositioningEnabled);
+  const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
   const currentRowRef = useRef<NativeView>(null);
   const headerRef = useRef<NativeView>(null);
   const nativeScrollRef = useRef<NativeScrollView>(null);
@@ -208,8 +208,9 @@ function PostDetailThreadContent({
     }
   }, []);
   const scheduleInitialScroll = useCallback(() => {
+    // Router can reuse a rendered route on POP; read restoration when scrolling, not rendering.
     if (
-      !initialPositioningEnabled ||
+      preserveScrollPosition?.() ||
       !shouldKeepCurrentInViewRef.current ||
       initialScrollFrameRef.current !== null
     ) {
@@ -221,7 +222,7 @@ function PostDetailThreadContent({
 
     initialScrollFrameRef.current = requestAnimationFrame(() => {
       initialScrollFrameRef.current = null;
-      if (!shouldKeepCurrentInViewRef.current) {
+      if (!shouldKeepCurrentInViewRef.current || preserveScrollPosition?.()) {
         return;
       }
 
@@ -232,7 +233,7 @@ function PostDetailThreadContent({
       }
 
       currentRow.measureInWindow((_x, currentTop) => {
-        if (!shouldKeepCurrentInViewRef.current) {
+        if (!shouldKeepCurrentInViewRef.current || preserveScrollPosition?.()) {
           return;
         }
         // Native sticky-header measurements retain the scrolled content coordinate.
@@ -242,7 +243,7 @@ function PostDetailThreadContent({
         boundary?.measureInWindow((_headerX, headerTop, _headerWidth, measuredHeight) => {
           const headerHeight =
             Platform.OS === 'web' ? measuredHeight : nativeHeaderHeightRef.current;
-          if (!shouldKeepCurrentInViewRef.current) {
+          if (!shouldKeepCurrentInViewRef.current || preserveScrollPosition?.()) {
             return;
           }
 
@@ -272,7 +273,7 @@ function PostDetailThreadContent({
         });
       });
     });
-  }, [initialPositioningEnabled]);
+  }, [preserveScrollPosition]);
   const headerLaidOut = useCallback(
     (event: LayoutChangeEvent) => {
       nativeHeaderHeightRef.current = event.nativeEvent.layout.height;
