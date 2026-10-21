@@ -112,6 +112,7 @@ function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps)
       />
       <ComposerOverlayFixture
         accessibilityLabel="미디어 편집"
+        height={678}
         maxWidth={920}
         onRequestClose={() => setEditorOpen(false)}
         visible={editorOpen}

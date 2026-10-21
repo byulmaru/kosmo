@@ -157,6 +157,7 @@ describe('Fedify inbox routes', () => {
           actorOrigin: 'https://remote.example',
           handler: 'follow',
           objectOrigin: 'https://kos.moe',
+          objectUri: 'https://kos.moe/ap/actor/019f6f67-1111-7777-8888-123456789abc',
           outcome: 'rejected',
           phase: 'validation',
           reasonCode: 'invalid_listener_input',

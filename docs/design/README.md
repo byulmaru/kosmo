@@ -39,6 +39,8 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 - [local-timeline.md](./local-timeline.md) — Home·Local 타임라인 탭, route, 상태와 재조회 계약
 - [notifications.md](./notifications.md) — 인앱 알림과 Native Push의 공통 정보 표시 경계
 
+- [public-content-onboarding.md](./public-content-onboarding.md) — 공개 방문자 안내의 Web 배치·닫기·접근성
+
 ## 갱신 규칙
 
 - 디자인 결정이 바뀌면 그 변경을 담는 PR에서 관련 문서도 함께 갱신한다.

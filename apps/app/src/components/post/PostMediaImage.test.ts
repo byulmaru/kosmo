@@ -16,6 +16,12 @@ const ImageMock = Object.assign((props: Record<string, unknown>) => createElemen
   ) => {
     const attempts = getSizeAttempts.get(uri) ?? 0;
     getSizeAttempts.set(uri, attempts + 1);
+    if (uri.includes('/delayed-')) {
+      const callbacks = pendingGetSizes.get(uri) ?? [];
+      callbacks.push(success);
+      pendingGetSizes.set(uri, callbacks);
+      return;
+    }
     if (uri.endsWith('/transient-size-error.webp') && attempts === 0) {
       failure?.();
       return;
@@ -27,6 +33,7 @@ const ImageMock = Object.assign((props: Record<string, unknown>) => createElemen
   },
 });
 const getSizeAttempts = new Map<string, number>();
+const pendingGetSizes = new Map<string, Array<(width: number, height: number) => void>>();
 
 mock.module('react-native', {
   exports: {
@@ -59,6 +66,7 @@ before(async () => {
 
 afterEach(async () => {
   getSizeAttempts.clear();
+  pendingGetSizes.clear();
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -66,20 +74,81 @@ afterEach(async () => {
 });
 
 describe('PostMediaImage', () => {
-  it('이미지 로딩 중에만 공용 Skeleton을 표시한다', async () => {
+  it('처음에는 로딩을 표시하고 성공 뒤 오류는 fallback을 표시한다', async () => {
     await render(0, media('landscape', '가로 이미지'));
     assert.equal(rendered('Skeleton').length, 1);
     assert.equal(rendered('Skeleton')[0]?.props.height, '100%');
     assert.equal(rendered('Skeleton')[0]?.props.width, '100%');
+    assert.equal(image('landscape').props.accessibilityState.busy, true);
 
     await act(async () => image('landscape').props.onLoad());
     assert.equal(rendered('Skeleton').length, 0);
-
-    await act(async () => image('landscape').props.onLoadStart());
-    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image('landscape').props.accessibilityState.busy, false);
 
     await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Skeleton').length, 0);
+    assert.ok(byTestId('post-media-error-landscape'));
+  });
+
+  it('같은 Media ID의 새 URL은 다시 loading으로 시작하고 이전 source의 성공 이벤트는 무시한다', async () => {
+    const original = media('same-id', '같은 이미지');
+    await render(0, original);
+    const previousLoad = image(original.id).props.onLoad;
+
+    await act(async () => previousLoad());
+    assert.equal(rendered('Skeleton').length, 0);
+
+    const updated = { ...original, url: 'https://media.example/delayed-same-id-updated.webp' };
+    await render(0, updated);
+    assert.equal(image(original.id).props.source.uri, updated.url);
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image(original.id).props.accessibilityState.busy, true);
+    assert.equal(frameAspectRatio(original.id), 1);
+
+    await act(async () => previousLoad());
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image(original.id).props.accessibilityState.busy, true);
+
+    await act(async () => image(original.id).props.onLoad());
+    assert.equal(rendered('Skeleton').length, 0);
+    assert.equal(image(original.id).props.accessibilityState.busy, false);
+
+    const newMedia = { ...media('new-media', '새 이미지'), url: updated.url };
+    const previousMediaLoad = image(original.id).props.onLoad;
+    await render(0, newMedia);
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image('new-media').props.accessibilityState.busy, true);
+
+    await act(async () => previousMediaLoad());
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image('new-media').props.accessibilityState.busy, true);
+  });
+
+  it('이전 URL의 크기 조회는 무시하고 같은 URL의 pending 조회는 재시도 뒤 반영한다', async () => {
+    const original = {
+      ...media('same-id', '가로 이미지'),
+      url: 'https://media.example/delayed-old.webp',
+    };
+    await render(0, original);
+    const oldUrlSize = pendingGetSizes.get(original.url)?.[0];
+    assert.ok(oldUrlSize);
+
+    const updated = { ...original, url: 'https://media.example/delayed-current.webp' };
+    await render(0, updated);
+    const currentUrlSize = pendingGetSizes.get(updated.url)?.[0];
+    assert.ok(currentUrlSize);
+
+    await act(async () => oldUrlSize(2400, 900));
+    assert.equal(frameAspectRatio('same-id'), 1);
+
+    await act(async () => image('same-id').props.onError());
+    await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(frameAspectRatio('same-id'), 1);
+    assert.equal(getSizeAttempts.get(updated.url), 1);
+
+    await act(async () => currentUrlSize(1600, 900));
+    assert.equal(frameAspectRatio('same-id'), 1600 / 900);
   });
 
   it('nullable Alt Text fallback과 원본 비율을 적용하되 세로 이미지는 정사각형으로 제한한다', async () => {
@@ -92,13 +161,19 @@ describe('PostMediaImage', () => {
     assert.equal(frameAspectRatio('portrait'), 1);
   });
 
-  it('Image 이벤트 callback을 재사용한다', async () => {
-    await render(0, media('landscape', '가로 이미지'));
-    const firstOnLoad = image('landscape').props.onLoad;
+  it('Image lookup 실패 뒤 native onLoad 크기를 사용한다', async () => {
+    const item = media('transient-size-error', '가로 이미지');
+    await render(0, item);
+    assert.equal(frameAspectRatio(item.id), 1);
 
-    await act(async () => firstOnLoad());
+    await act(async () =>
+      image(item.id).props.onLoad({
+        nativeEvent: { source: { width: 1800, height: 900 } },
+      }),
+    );
 
-    assert.equal(image('landscape').props.onLoad, firstOnLoad);
+    assert.equal(frameAspectRatio(item.id), 2);
+    assert.equal(getSizeAttempts.get(item.url!), 1);
   });
 
   it('interactive 정상 image tile은 viewer 목적을 알리고 선택 index만 연다', async () => {
@@ -141,12 +216,21 @@ describe('PostMediaImage', () => {
   it('단일 이미지 오류에서 action만 표시하고 같은 URL로 Image를 다시 mount한다', async () => {
     await render(0, media('landscape', '가로 이미지'));
     const source = image('landscape').props.source;
+    const sizeAttempts = getSizeAttempts.get(source.uri as string);
 
     await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Image').length, 0);
 
     await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
     assert.deepEqual(image('landscape').props.source, source);
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(image('landscape').props.accessibilityState.busy, true);
+    assert.equal(frameAspectRatio('landscape'), 1600 / 900);
+    assert.equal(getSizeAttempts.get(source.uri as string), sizeAttempts);
+
+    await act(async () => image('landscape').props.onLoad());
+    assert.equal(rendered('Skeleton').length, 0);
+    assert.equal(image('landscape').props.accessibilityState.busy, false);
 
     await act(async () => image('landscape').props.onError());
     assert.equal(pressable('가로 이미지 다시 시도').props.accessibilityRole, 'button');

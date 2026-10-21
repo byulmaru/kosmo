@@ -79,8 +79,18 @@ type Props = ProfileBlockActionTarget &
         icon: ActionMenuItem['icon'];
         renderMenuItem: (props: ProfileBlockMenuItemRenderProps) => ReactNode;
         surface: 'menu';
+        buttonLabel?: never;
+        onBlocked?: never;
+        presentation?: never;
       }
-    | { icon?: never; renderMenuItem?: never; surface: 'button' }
+    | {
+        buttonLabel?: string;
+        icon?: never;
+        onBlocked?: () => void;
+        presentation?: 'reportCompletion';
+        renderMenuItem?: never;
+        surface: 'button';
+      }
   );
 
 export function ProfileBlockAction({
@@ -90,6 +100,9 @@ export function ProfileBlockAction({
   profileBlock,
   renderMenuItem,
   surface,
+  buttonLabel,
+  onBlocked,
+  presentation,
 }: Props) {
   const profileData = useFragment(profileFragment, profile ?? null);
   const profileBlockData = useFragment(profileBlockFragment, profileBlock ?? null);
@@ -111,7 +124,7 @@ export function ProfileBlockAction({
   }
   const targetProfileId = targetProfile.id;
 
-  const label = nextBlocked ? '차단' : '차단 해제';
+  const label = buttonLabel ?? (nextBlocked ? '차단' : '차단 해제');
   const close = () => {
     if (!pending) {
       setOpen(false);
@@ -136,6 +149,9 @@ export function ProfileBlockAction({
     const finish = (status: 'success' | 'error') => {
       notify(status);
       setOpen(false);
+      if (nextBlocked && status === 'success') {
+        onBlocked?.();
+      }
     };
     try {
       if (nextBlocked) {
@@ -190,8 +206,12 @@ export function ProfileBlockAction({
           controlRef={actionRef}
           disabled={pending}
           onPress={activate}
-          style={{ minWidth: 96, width: 96 }}
-          tone="secondary"
+          style={
+            presentation === 'reportCompletion'
+              ? { minWidth: 0, width: '100%' }
+              : { minWidth: 96, width: 96 }
+          }
+          tone={presentation === 'reportCompletion' ? 'danger' : 'secondary'}
         >
           {label}
         </Button>

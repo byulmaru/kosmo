@@ -8,6 +8,7 @@ import baseMeta, {
   LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
   ProductionMoreShareReferences as productionMoreShareReferences,
+  ReplyModalComposerMediaEditorGeometry as replyModalComposerMediaEditorGeometry,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -41,3 +42,4 @@ export const LinkedSourceQuoteDark: Story = {
 };
 
 export const ProductionMoreShareReferences: Story = productionMoreShareReferences;
+export const ReplyModalComposerMediaEditorGeometry: Story = replyModalComposerMediaEditorGeometry;

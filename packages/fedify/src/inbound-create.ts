@@ -23,6 +23,7 @@ export const handleInboundCreate = async (
       outcome: 'rejected',
       activityType: 'Create',
       handler: 'create',
+      ...(objectUri ? { objectUri } : {}),
       phase: 'validation',
       reasonCode: 'missing_activity_identity',
     });
@@ -41,6 +42,7 @@ export const handleInboundCreate = async (
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
+      objectUri,
       phase: 'actor_lookup',
       reasonCode: 'remote_actor_unavailable',
     });
@@ -56,7 +58,7 @@ export const handleInboundCreate = async (
       activityType: 'Create',
       actorOrigin: actorUri,
       handler: 'create',
-      objectOrigin: objectUri,
+      objectUri,
       phase: 'object_lookup',
       reasonCode: 'create_object_lookup_failed',
     });
@@ -94,7 +96,7 @@ export const handleInboundCreate = async (
     activityType: 'Create',
     actorOrigin: actorUri,
     handler: 'create',
-    objectOrigin: objectUri,
+    objectUri,
     phase: 'protocol',
     reasonCode: 'create_object_not_note',
   });

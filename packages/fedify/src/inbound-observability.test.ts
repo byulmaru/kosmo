@@ -11,7 +11,7 @@ import {
 } from './inbound-observability';
 
 describe('inbound ActivityPub observability', () => {
-  test('captures only bounded internal metadata and strips URI paths', () => {
+  test('retains the object URI in structured logs and keeps Sentry context bounded', () => {
     const logs: unknown[] = [];
     const captures: unknown[] = [];
     const restore = setInboundObservabilityReporter({
@@ -28,6 +28,7 @@ describe('inbound ActivityPub observability', () => {
         error,
         handler: 'create',
         objectOrigin: 'https://remote.example/notes/1',
+        objectUri: 'https://remote.example/notes/1?revision=2',
         outcome: 'internal_failure',
         phase: 'projection',
         reasonCode: 'post_commit_projection_failed',
@@ -40,6 +41,7 @@ describe('inbound ActivityPub observability', () => {
           activityOrigin: 'https://remote.example',
           handler: 'create',
           objectOrigin: 'https://remote.example',
+          objectUri: 'https://remote.example/notes/1?revision=2',
           outcome: 'internal_failure',
           phase: 'projection',
           reasonCode: 'post_commit_projection_failed',
@@ -71,9 +73,61 @@ describe('inbound ActivityPub observability', () => {
           error,
         },
       ]);
+
+      observeInbound({
+        activityType: 'Create',
+        handler: 'create',
+        objectOrigin: 'remote.example/notes/2?token=private',
+        objectUri: 'https://remote.example/notes/2?revision=2',
+        outcome: 'internal_failure',
+        phase: 'projection',
+        reasonCode: 'invalid_object_origin',
+      });
+
+      assert.deepEqual(logs[1], {
+        activityType: 'Create',
+        handler: 'create',
+        objectUri: 'https://remote.example/notes/2?revision=2',
+        outcome: 'internal_failure',
+        phase: 'projection',
+        reasonCode: 'invalid_object_origin',
+      });
+      assert.deepEqual(
+        (captures[1] as { context: { extra: Record<string, string> } }).context.extra,
+        {},
+      );
     } finally {
       restore();
     }
+  });
+
+  test('logs a rejected Note URI with its reason through the default warning reporter', (t) => {
+    const warnings: unknown[][] = [];
+    t.mock.method(console, 'warn', (...args: unknown[]) => warnings.push(args));
+
+    observeInbound({
+      activityType: 'Create',
+      handler: 'create',
+      objectUri: 'https://remote.example/notes/direct?revision=2',
+      outcome: 'rejected',
+      phase: 'validation',
+      reasonCode: 'no_active_local_mention',
+    });
+
+    assert.deepEqual(warnings, [
+      [
+        'ActivityPub inbound observation',
+        {
+          activityType: 'Create',
+          handler: 'create',
+          objectOrigin: 'https://remote.example',
+          objectUri: 'https://remote.example/notes/direct?revision=2',
+          outcome: 'rejected',
+          phase: 'validation',
+          reasonCode: 'no_active_local_mention',
+        },
+      ],
+    ]);
   });
 
   test('does not capture expected or external failures', () => {
@@ -117,6 +171,7 @@ describe('inbound ActivityPub observability', () => {
         actorOrigin: 'https://remote.example/users/alice',
         handler: 'create',
         objectOrigin: 'https://remote.example/notes/1',
+        objectUri: 'https://remote.example/notes/1?revision=2',
         outcome: 'rejected',
         phase: 'projection',
         reasonCode: 'note_content_length_exceeded',
@@ -163,26 +218,45 @@ describe('inbound ActivityPub observability', () => {
     }
   });
 
-  test('listener wrapper reports internal errors once and rethrows', async () => {
+  test('listener wrapper logs the exact object URI for internal errors and rethrows', async () => {
+    const logs: unknown[] = [];
     const captures: unknown[] = [];
     const restore = setInboundObservabilityReporter({
-      log: () => undefined,
+      log: (observation) => logs.push(observation),
       captureException: (error, context) => captures.push({ error, context }),
     });
 
     try {
       const error = new Error('database failed');
+      const objectUri = new URL('https://remote.example/notes/1?revision=2');
       const listener = withInboundObservability('create', async () => {
         throw error;
       });
 
-      await assert.rejects(() => listener({} as never, new Create({})), error);
+      await assert.rejects(() => listener({} as never, new Create({ object: objectUri })), error);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Create',
+          activityOrigin: undefined,
+          actorOrigin: undefined,
+          handler: 'create',
+          objectOrigin: objectUri.origin,
+          objectUri: objectUri.href,
+          outcome: 'internal_failure',
+          phase: 'listener',
+          reasonCode: 'unexpected_listener_error',
+        },
+      ]);
       assert.equal(captures.length, 1);
       assert.equal(hasInboundErrorBeenObserved(error), true);
       assert.equal(
         (captures[0] as { context: { tags: { activity_type: string } } }).context.tags
           .activity_type,
         'Create',
+      );
+      assert.deepEqual(
+        (captures[0] as { context: { extra: Record<string, string> } }).context.extra,
+        { object_origin: objectUri.origin },
       );
     } finally {
       restore();

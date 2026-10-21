@@ -8,6 +8,7 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
+import { PostDetailBackground } from './PostDetailBackground';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -126,11 +127,13 @@ function presentationKind(post: {
 }
 
 export function PostSourcePresentationView({
+  onBackgroundPress,
   onMediaOpen,
   post: postKey,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
+  onBackgroundPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   post: PostSourcePresentationView_post$key;
   showPostAvatar?: boolean;
@@ -195,7 +198,12 @@ export function PostSourcePresentationView({
   }
 
   return (
-    <View role="article" style={styles.root} testID="post-source-presentation">
+    <PostDetailBackground
+      onBackgroundPress={onBackgroundPress}
+      role="article"
+      style={styles.root}
+      testID="post-source-presentation"
+    >
       {postHeader}
       <PostBodyPressTarget
         content={post.content}
@@ -205,7 +213,7 @@ export function PostSourcePresentationView({
         testID="post-body"
       />
       <PostSourcePreview source={source} style={sourcePreviewStyle} />
-    </View>
+    </PostDetailBackground>
   );
 }
 

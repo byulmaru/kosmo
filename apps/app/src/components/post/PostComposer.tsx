@@ -82,6 +82,7 @@ export type PostComposerProps = Readonly<{
   mentionCandidates?: PostComposerMentionCandidateResults;
   mentionSearchState?: PostComposerMentionSearchState;
   selection: PostComposerTextSelection;
+  selectionToApply?: PostComposerTextSelection;
   onSelectMention?: PostComposerMentionSelection;
   onRetryMentionSearch?: () => void;
   onBodyChange: (value: string) => void;
@@ -274,6 +275,7 @@ export function PostComposer({
   items,
   mentionCandidates,
   mentionSearchState,
+  selectionToApply,
   onSelectMention = () => undefined,
   onRetryMentionSearch,
   onBodyChange,
@@ -365,6 +367,7 @@ export function PostComposer({
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
+        selectionToApply={selectionToApply}
         onBodyChange={onBodyChange}
         onSelectionChange={onSelectionChange}
         onSelectMention={onSelectMention}
@@ -399,7 +402,7 @@ export function PostComposer({
               placeholder={composerPlaceholder}
               ref={bodyRef ?? bodyInputRef}
               scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
-              selection={mentionInput.selection}
+              {...(mentionInput.selection ? { selection: mentionInput.selection } : {})}
               style={[
                 styles.body,
                 hasTrailingContent
@@ -740,6 +743,7 @@ export function MobileFullscreenComposerShellCandidate({
   items,
   mentionCandidates,
   mentionSearchState,
+  selectionToApply,
   onSelectionChange,
   keyboard = false,
   onBodyChange,
@@ -882,6 +886,7 @@ export function MobileFullscreenComposerShellCandidate({
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
+        selectionToApply={selectionToApply}
         onBodyChange={onBodyChange}
         onSelectionChange={onSelectionChange}
         onSelectMention={onSelectMention}
@@ -929,7 +934,7 @@ export function MobileFullscreenComposerShellCandidate({
               }
               ref={bodyRef ?? bodyInputRef}
               scrollEnabled={bodyUsesTrailingContentLayout ? false : undefined}
-              selection={mentionInput.selection}
+              {...(mentionInput.selection ? { selection: mentionInput.selection } : {})}
               style={[
                 styles.mobileBody,
                 bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,

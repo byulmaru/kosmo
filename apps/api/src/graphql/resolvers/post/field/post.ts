@@ -1,5 +1,6 @@
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
+import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
 import { repostSourceLoader } from '../loader/repost-source';
@@ -51,6 +52,10 @@ builder.objectFields(Post, (t) => ({
   reactionCounts: t.field({
     type: [ReactionCount],
     resolve: (post, _, ctx) => reactionCountLoader(ctx).load(post.id),
+  }),
+  isPinned: t.boolean({
+    nullable: true,
+    resolve: async (post, _, ctx) => (await postProfilePinLoader(ctx).load(post.id)) !== null,
   }),
   viewerRepost: t.field({
     type: Post,

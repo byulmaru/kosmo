@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { db, Notifications } from '@kosmo/core/db';
+import { db, Notifications, Reactions } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
@@ -193,6 +193,168 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   }
 });
 
+test('Reaction·Repost 알림 사진과 게시글은 각각 한 번 이동하고 Best Effort Read를 시작한다', async ({
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'E2E Notification Recipient',
+    handle: 'e2e-notification-recipient',
+  });
+  const reactionActor = await createE2ESession({
+    displayName: 'E2E Reaction Actor',
+    handle: 'e2e-reaction-actor',
+  });
+  const repostActor = await createE2ESession({
+    displayName: 'E2E Repost Actor',
+    handle: 'e2e-repost-actor',
+  });
+  if (!recipient.profile || !reactionActor.profile || !repostActor.profile) {
+    throw new Error('Reaction and Repost Notification fixtures require local profiles.');
+  }
+
+  const relatedPost = await createE2EPost({
+    body: 'E2E related notification post body',
+    profileId: recipient.profile.id,
+  });
+  const [reaction] = await db
+    .insert(Reactions)
+    .values({ postId: relatedPost.id, profileId: reactionActor.profile.id, type: '❤️' })
+    .returning();
+  const repost = await createE2EPost({
+    content: false,
+    profileId: repostActor.profile.id,
+    repostSourceId: relatedPost.id,
+  });
+  const [reactionNotification, repostNotification] = await db
+    .insert(Notifications)
+    .values([
+      {
+        kind: NotificationKind.REACTION,
+        recipientAccountId: recipient.account.id,
+        recipientProfileId: recipient.profile.id,
+        sourceId: reaction!.id,
+      },
+      {
+        kind: NotificationKind.REPOST,
+        recipientAccountId: recipient.account.id,
+        recipientProfileId: recipient.profile.id,
+        sourceId: repost.id,
+      },
+    ])
+    .returning();
+  const reactionNotificationId = toGlobalId('ReactionNotification', reactionNotification!.id);
+  const repostNotificationId = toGlobalId('RepostNotification', repostNotification!.id);
+  const relatedPostHref = `/@${recipient.profile.handle}/${toGlobalId('Post', relatedPost.id)}`;
+
+  await setE2ESessionCookie(context, recipient.token);
+
+  const readRequestIds: string[][] = [];
+  let readMode: 'pass' | 'delay' | 'fail' = 'pass';
+  let releaseDelayedRead!: () => void;
+  const delayedReadGate = new Promise<void>((resolve) => {
+    releaseDelayedRead = resolve;
+  });
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'NotificationListItemMarkReadMutation') {
+      await route.fallback();
+      return;
+    }
+
+    readRequestIds.push((operation.variables?.ids as string[] | undefined) ?? []);
+    if (readMode === 'fail') {
+      await route.abort('failed');
+      return;
+    }
+    if (readMode === 'delay') {
+      const response = await route.fetch();
+      await delayedReadGate;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await page.goto('/notifications');
+
+    const reactionRow = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Reaction Actor' });
+    const reactionProfileLink = reactionRow.getByRole('link', {
+      name: 'E2E Reaction Actor 프로필로 이동',
+    });
+    const reactionPostLink = reactionRow.getByTestId('notification-post-summary-target');
+    await expect(reactionProfileLink).toHaveAttribute('href', '/@e2e-reaction-actor');
+    await expect(reactionPostLink).toHaveAttribute('href', relatedPostHref);
+    const reactionProfileBox = await reactionProfileLink.boundingBox();
+    expect(reactionProfileBox).not.toBeNull();
+    expect(reactionProfileBox!.width).toBeGreaterThanOrEqual(24);
+    expect(reactionProfileBox!.height).toBeGreaterThanOrEqual(24);
+
+    readMode = 'delay';
+    const reactionReadResponse = waitForGraphQLOperation(
+      page,
+      'NotificationListItemMarkReadMutation',
+    );
+    await reactionProfileLink.click();
+    await expect(page).toHaveURL('/@e2e-reaction-actor');
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[reactionNotificationId]]);
+    await expect.poll(() => notificationReadAt(reactionNotification!.id)).not.toBeNull();
+    releaseDelayedRead();
+    await reactionReadResponse;
+
+    readRequestIds.length = 0;
+    readMode = 'pass';
+    await page.goto('/notifications');
+    const reactionPostTarget = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Reaction Actor' })
+      .getByTestId('notification-post-summary-target');
+    await reactionPostTarget.click();
+    await expect(page).toHaveURL(relatedPostHref);
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[reactionNotificationId]]);
+    await expect.poll(() => notificationReadAt(reactionNotification!.id)).not.toBeNull();
+
+    readRequestIds.length = 0;
+    readMode = 'fail';
+    await page.goto('/notifications');
+    const repostRow = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Repost Actor' });
+    const repostProfileLink = repostRow.getByRole('link', {
+      name: 'E2E Repost Actor 프로필로 이동',
+    });
+    const repostPostTarget = repostRow.getByTestId('notification-post-summary-target');
+    await expect(repostProfileLink).toHaveAttribute('href', '/@e2e-repost-actor');
+    await expect(repostPostTarget).toHaveAttribute('href', relatedPostHref);
+    await repostProfileLink.click();
+    await expect(page).toHaveURL('/@e2e-repost-actor');
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[repostNotificationId]]);
+    expect(await notificationReadAt(repostNotification!.id)).toBeNull();
+
+    readRequestIds.length = 0;
+    readMode = 'pass';
+    await page.goto('/notifications');
+    await page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Repost Actor' })
+      .getByTestId('notification-post-summary-target')
+      .click();
+    await expect(page).toHaveURL(relatedPostHref);
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[repostNotificationId]]);
+    await expect.poll(() => notificationReadAt(repostNotification!.id)).not.toBeNull();
+  } finally {
+    releaseDelayedRead();
+    await page.unroute('**/graphql');
+  }
+});
+
 test('Account Operational 알림은 Web 목록에 표시되고 내부 경로로 이동한다', async ({
   context,
   page,
@@ -256,6 +418,7 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
     .insert(Notifications)
     .values({
       kind: NotificationKind.REPLY,
+      recipientAccountId: recipient.account.id,
       recipientProfileId: recipient.profile.id,
       sourceId: reply.id,
     })
@@ -305,6 +468,162 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
   await page.unroute('**/graphql');
+});
+
+test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지·수동 이동·handle 교정을 유지한다', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ height: 844, width: 390 });
+
+  const recipient = await createE2ESession({
+    displayName: 'E2E Reply Scroll Recipient',
+    handle: 'e2e-reply-scroll-recipient',
+  });
+  const replyAuthor = await createE2ESession({
+    displayName: 'E2E Reply Scroll Author',
+    handle: 'e2e-reply-scroll-author',
+  });
+  if (!recipient.profile || !replyAuthor.profile) {
+    throw new Error('Reply Notification scroll fixture requires local profiles.');
+  }
+
+  const imageUrl = 'https://example.com/e2e-reply-scroll-ancestor.svg';
+  const rootBody = `E2E long reply ancestor ${'긴 조상 본문 '.repeat(80)}`;
+  const root = await createE2EPost({
+    body: rootBody,
+    media: [{ altText: '늦게 불러오는 조상 이미지', url: imageUrl }],
+    profileId: recipient.profile.id,
+  });
+  const middle = await createE2EPost({
+    body: `E2E middle reply ancestor ${'중간 조상 본문 '.repeat(12)}`,
+    profileId: recipient.profile.id,
+    replyParentId: root.id,
+  });
+  const sourceBody = 'E2E source reply should be visible on entry';
+  const source = await createE2EPost({
+    body: sourceBody,
+    profileId: replyAuthor.profile.id,
+    replyParentId: middle.id,
+  });
+  const sourceId = toGlobalId('Post', source.id);
+  for (let index = 0, parentId = source.id; index < 21; index += 1) {
+    const descendant = await createE2EPost({
+      body: `E2E source descendant ${index}`,
+      profileId: replyAuthor.profile.id,
+      replyParentId: parentId,
+    });
+    parentId = descendant.id;
+  }
+  await db.insert(Notifications).values({
+    kind: NotificationKind.REPLY,
+    recipientAccountId: recipient.account.id,
+    recipientProfileId: recipient.profile.id,
+    sourceId: source.id,
+  });
+
+  let releaseAncestorImage!: () => void;
+  const ancestorImageGate = new Promise<void>((resolve) => {
+    releaseAncestorImage = resolve;
+  });
+  let markAncestorImageRequested!: () => void;
+  const ancestorImageRequested = new Promise<void>((resolve) => {
+    markAncestorImageRequested = resolve;
+  });
+  const assertQuerySuccess = async (
+    responsePromise: ReturnType<typeof waitForGraphQLOperation>,
+  ) => {
+    const response = await responsePromise;
+    const body = (await response.json()) as { errors?: unknown[] };
+    expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+    expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  };
+  await page.route(imageUrl, async (route) => {
+    markAncestorImageRequested();
+    await ancestorImageGate;
+    await route.fulfill({
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="1200"><rect width="320" height="1200" fill="#ddd"/></svg>',
+      contentType: 'image/svg+xml',
+    });
+  });
+
+  try {
+    await setE2ESessionCookie(context, recipient.token);
+    await page.goto('/home');
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+    const notificationsResponse = waitForGraphQLOperation(page, 'NotificationsPageQuery');
+    await page.getByRole('link', { name: /^알림/ }).first().click();
+    await expect(page).toHaveURL('/notifications');
+    await assertQuerySuccess(notificationsResponse);
+
+    const replyRow = page.getByTestId('reply-notification-post');
+    await expect(replyRow.getByTestId('post-list-row-body')).toContainText(sourceBody);
+    const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await replyRow.getByTestId('post-list-row-body').click();
+    await assertQuerySuccess(detailResponse);
+    await ancestorImageRequested;
+
+    const sourceRow = page.getByTestId(`post-thread-current-${sourceId}`);
+    await expect(sourceRow).toBeInViewport();
+    const header = page.getByRole('heading', { name: '게시글', exact: true }).locator('..');
+    const sourceHeaderOffset = async () => {
+      const sourceBox = await sourceRow.boundingBox();
+      const headerBox = await header.boundingBox();
+      return sourceBox && headerBox ? sourceBox.y - (headerBox.y + headerBox.height) : -1;
+    };
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    releaseAncestorImage();
+    const ancestorImage = page.locator(`img[src="${imageUrl}"]`).first();
+    await expect
+      .poll(() => ancestorImage.evaluate((image) => (image as HTMLImageElement).naturalHeight))
+      .toBe(1200);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    const nextPageResponse = waitForGraphQLOperation(page, 'PostDetailThreadNextPageQuery');
+    const beforeManualScroll = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, 10_000);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(beforeManualScroll);
+    await assertQuerySuccess(nextPageResponse);
+    await expect(page.getByText('E2E source descendant 20', { exact: true })).toBeAttached();
+    await expect(sourceRow).not.toBeInViewport();
+
+    await page.goto('/home');
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+
+    const ordinaryDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await page.goto(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await assertQuerySuccess(ordinaryDetailResponse);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await page.goto(`/@stale-reply-author/${sourceId}`);
+    await assertQuerySuccess(correctedDetailResponse);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    await page.mouse.wheel(0, -10_000);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+
+    await page.getByRole('link', { name: '홈', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(sourceRow).toBeAttached();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+    await expect(sourceRow).not.toBeInViewport();
+  } finally {
+    releaseAncestorImage();
+    await page.unroute(imageUrl);
+  }
 });
 
 test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 재시도에서 상태를 보존한다', async ({

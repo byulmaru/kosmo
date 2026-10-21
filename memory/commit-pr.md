@@ -9,7 +9,7 @@
 
 - 작업 시작 전에 사용자의 명시된 의도와 `git status --short --branch`를 확인한다. 이미 의도가 정해졌다면 다시 묻지 않는다.
 - 이슈·브랜치·PR 범위와 소유권을 바꾸는 선택, 공개 결과·보안·롤아웃·되돌릴 수 없는 원격 상태를 바꾸는 선택만 사람 결정 경계로 올린다. 현재 요청과 기존 canonical contract 안의 routine 선택은 계속 진행한다.
-- 새 PR은 단일 PR이어도 공식 `github/gh-stack`의 1-layer Stack으로 만들고 `gh stack submit`으로 생성·갱신한다. `gh stack`이 실패하면 일반 `gh pr create`나 unstacked PR로 우회하지 않는다.
+- 새 PR은 단일 PR이어도 공식 `github/gh-stack`의 1-layer Stack으로 만들고 `gh stack submit`으로 생성·갱신한다. `gh stack` 오류는 원인을 진단해 복구 가능한 설치·환경·사용법 문제를 고친 뒤 공식 명령으로 재시도한다. 복구할 수 없으면 현재 상태와 blocker를 보고하고, 일반 `gh pr create`, unstacked PR 또는 수동 Stack/base metadata로 우회하지 않는다.
 - 의도하지 않은 사용자 변경을 staging하지 않는다. 변경의 scoped 결과, 필요한 검증과 수정까지 끝낸 뒤 보고한다.
 
 ## Load By Task

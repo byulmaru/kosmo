@@ -102,6 +102,7 @@ const customBubblingEventTypes = Object.fromEntries(
     },
   ]),
 );
+const modalDismissEvent = { topDismiss: { registrationName: 'onDismiss' } };
 const fakePrivate = {
   RCTEventEmitter: {
     register(emitter) {
@@ -110,7 +111,7 @@ const fakePrivate = {
   },
   ReactNativeViewConfigRegistry: {
     customBubblingEventTypes,
-    customDirectEventTypes: {},
+    customDirectEventTypes: modalDismissEvent,
     get(type) {
       return {
         uiViewClassName: type,
@@ -133,7 +134,7 @@ const fakePrivate = {
           visible: true,
         },
         bubblingEventTypes: {},
-        directEventTypes: {},
+        directEventTypes: type === 'RCTModalHostView' ? modalDismissEvent : {},
       };
     },
   },
@@ -396,6 +397,7 @@ const nativeExports = {
   ActivityIndicator,
   Animated,
   Easing: { bezier: () => () => 1 },
+  findNodeHandle: renderer.findNodeHandle,
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Modal,
   Platform,
@@ -462,6 +464,16 @@ function tagByViewName(name) {
 function viewProps(tag) {
   return views.get(tag)?.props;
 }
+function modalDidDismiss() {
+  const tag = firstTag(({ type }) => type === 'RCTModalHostView');
+  if (tag === undefined) {
+    throw new Error('The native Modal host is not mounted');
+  }
+  if (!nativeEmitter) {
+    throw new Error('ReactNativeRenderer-dev did not register its native event bridge');
+  }
+  nativeEmitter.receiveEvent(tag, 'topDismiss', {});
+}
 function touchStart(tag) {
   installEnvironment();
   if (!views.has(tag)) {
@@ -504,6 +516,7 @@ function cleanup() {
 
 module.exports = {
   cleanup,
+  modalDidDismiss,
   nativeExports,
   render,
   responderTag,

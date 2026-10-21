@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ElementType } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ReplyComposerSurface as ReplyComposerSurfaceComponent } from './ReplyComposerSurface';
 
@@ -21,6 +21,7 @@ let composerProps:
       replyParentVisibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
       repostSourceId?: string;
       editorRef?: { current: unknown };
+      renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
@@ -86,7 +87,8 @@ mockModule(new URL('./PostBody.tsx', import.meta.url), { PostBody: 'PostBody' })
 mockModule(new URL('./PostComposerController.tsx', import.meta.url), {
   PostComposerController: (props: NonNullable<typeof composerProps>) => {
     composerProps = props;
-    return createElement('PostComposer');
+    const form = createElement('PostComposer');
+    return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
   },
 });
 mockModule(new URL('./PostSourcePresentationView.tsx', import.meta.url), {

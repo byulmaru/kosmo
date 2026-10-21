@@ -10,6 +10,7 @@ import type { PostDetailThread as PostDetailThreadComponent } from './PostDetail
 
 let renderer: ReactTestRenderer | null = null;
 let documentScrollListener: (() => void) | null = null;
+const documentScrollListeners = new Set<() => void>();
 let loadNextCalls = 0;
 let loadNextCompletions: Array<(error: Error | null) => void> = [];
 let loadNextCallsByKey: Record<string, number> = {};
@@ -31,12 +32,16 @@ Object.assign(globalThis, {
 
 globalThis.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
   if (type === 'scroll') {
-    documentScrollListener = listener as () => void;
+    documentScrollListeners.add(listener as () => void);
+    documentScrollListener = () => documentScrollListeners.forEach((callback) => callback());
   }
 }) as typeof globalThis.addEventListener;
 globalThis.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
-  if (type === 'scroll' && documentScrollListener === listener) {
-    documentScrollListener = null;
+  if (type === 'scroll') {
+    documentScrollListeners.delete(listener as () => void);
+    if (documentScrollListeners.size === 0) {
+      documentScrollListener = null;
+    }
   }
 }) as typeof globalThis.removeEventListener;
 
@@ -152,8 +157,10 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  platform.OS = 'web';
   documentElement.scrollHeight = 2401;
   documentScrollListener = null;
+  documentScrollListeners.clear();
   loadNextCalls = 0;
   loadNextCompletions = [];
   loadNextCallsByKey = {};
@@ -288,3 +295,229 @@ async function render(presentation: 'route' | 'viewer') {
   });
   assert.ok(renderer);
 }
+
+describe('PostDetailThread Native initial target scroll', () => {
+  it('진입 prop 없이 대상 답글부터 표시하고 지연 이미지 보정과 수동 이동을 유지한다', async () => {
+    platform.OS = 'ios';
+    let offset = 0;
+    let sourceContentTop = 2100;
+    const frames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'native-source',
+          post: {} as never,
+          presentation: 'route',
+        }),
+        {
+          createNodeMock: (element) => {
+            if ((element.props as Record<string, unknown>).testID === 'post-detail-scroll') {
+              return {
+                getNativeScrollRef: () => ({
+                  measureInWindow: (done: (...args: number[]) => void) => done(0, 126, 390, 700),
+                }),
+                scrollTo: ({ y }: { y: number }) => {
+                  offset = y;
+                  renderer!.root.findByProps({ testID: 'post-detail-scroll' }).props.onScroll({
+                    nativeEvent: {
+                      contentOffset: { y },
+                      layoutMeasurement: { height: 700 },
+                      contentSize: { height: 8000 },
+                    },
+                  });
+                },
+              };
+            }
+            if (
+              (element.props as Record<string, unknown>).testID ===
+              'post-thread-current-post-current'
+            ) {
+              return {
+                measureInWindow: (done: (...args: number[]) => void) =>
+                  done(0, 126 + sourceContentTop - offset, 390, 200),
+              };
+            }
+            return {
+              measureInWindow: (done: (...args: number[]) => void) =>
+                done(0, 126 - offset, 390, 64),
+            };
+          },
+        },
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const header = scroll
+      .findAllByType('View' as never)
+      .find((node) => node.props.style?.zIndex === 10)!;
+    const flush = async () => {
+      await act(async () => {
+        while (frames.length) {
+          frames.shift()!(0);
+        }
+      });
+    };
+    await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
+    await flush();
+    assert.equal(offset, 2036);
+    sourceContentTop = 1800;
+    await act(async () => scroll.props.onContentSizeChange(390, 7700));
+    await flush();
+    assert.equal(offset, 1736);
+    assert.equal(126 + sourceContentTop - offset, 190);
+    await act(async () => scroll.props.onScrollBeginDrag());
+    offset = 2400;
+    await act(async () =>
+      scroll.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: offset },
+          layoutMeasurement: { height: 700 },
+          contentSize: { height: 7700 },
+        },
+      }),
+    );
+    sourceContentTop = 1600;
+    await act(async () => scroll.props.onContentSizeChange(390, 7500));
+    await flush();
+    assert.equal(offset, 2400);
+  });
+});
+
+describe('PostDetailThread Web initial target scroll cleanup', () => {
+  it('초기 positioning이 꺼진 route는 현재 Post로 자동 scroll하지 않는다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    let measureCalls = 0;
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-route',
+          initialPositioningEnabled: false,
+          post: {} as never,
+        }),
+        {
+          createNodeMock: () => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              measureCalls += 1;
+              done(0, 1200, 390, 200);
+            },
+          }),
+        },
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const header = scroll.findAllByType('View' as never).find((node) => node.props.onLayout)!;
+    await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(measureCalls, 0);
+    assert.equal(scrollTo.mock.callCount(), 0);
+  });
+
+  it('mount 후 초기 positioning을 끄면 대기 중인 alignment도 취소한다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    let measureCalls = 0;
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-route',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: () => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              measureCalls += 1;
+              done(0, 1200, 390, 200);
+            },
+          }),
+        },
+      );
+    });
+    assert.ok(frames.length > 0);
+
+    await act(async () => {
+      renderer!.update(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-route',
+          initialPositioningEnabled: false,
+          post: {} as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(measureCalls, 0);
+    assert.equal(scrollTo.mock.callCount(), 0);
+  });
+
+  it('측정 중 상세를 떠나면 늦은 결과가 복원된 화면을 스크롤하지 않는다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    let measureCurrent: ((...values: number[]) => void) | undefined;
+    const scrollTo = mock.fn();
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'web-target',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              if (
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current'
+              ) {
+                measureCurrent = done;
+              } else {
+                done(0, 0, 390, 64);
+              }
+            },
+          }),
+        },
+      );
+    });
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+    assert.ok(measureCurrent);
+    await act(async () => renderer!.unmount());
+    renderer = null;
+    await act(async () => measureCurrent!(0, 1200, 390, 200));
+    assert.equal(scrollTo.mock.callCount(), 0);
+  });
+});

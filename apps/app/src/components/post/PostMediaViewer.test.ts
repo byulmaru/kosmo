@@ -281,7 +281,13 @@ describe('PostMediaViewer', () => {
 
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
     assert.equal(textContents().includes('네 줄 이상이 될 수 있는 원문입니다.'), true);
-    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
+    assert.equal(
+      renderer?.root.findAll(
+        (node) =>
+          (node.type as unknown) === 'View' && node.props.testID === 'post-content-renderer',
+      ).length,
+      1,
+    );
     assert.equal(rendered('PostContentWarning').length, 0);
     assert.equal(rendered('PostMediaGallery').length, 0);
     assert.equal(rendered('Avatar')[0]?.props.label, '작성자');
@@ -293,7 +299,13 @@ describe('PostMediaViewer', () => {
       }),
     );
     await act(async () => pressable('원문 더 보기').props.onPress());
-    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
+    assert.equal(
+      renderer?.root.findAll(
+        (node) =>
+          (node.type as unknown) === 'View' && node.props.testID === 'post-content-renderer',
+      ).length,
+      1,
+    );
     assert.ok(
       byTestId('post-media-viewer-body-scroll').findByProps({ testID: 'post-content-renderer' }),
     );

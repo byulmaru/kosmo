@@ -203,6 +203,7 @@ export function PostDeletionAction({
               onPress={onPress}
               popupRole="menu"
               processing={pending || requesting || isDeleting ? 'pending' : 'default'}
+              retainFocusWhilePending={pending}
               testID="more"
             />
           );

@@ -14,7 +14,9 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 2026-10-13 Notification 행의 API 조회 권한을 Quote/source 객체 조회 권한과 분리했다. 저장 행이 존재하는 동안에는
 Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다. 기존 비동기 정리 정책은 유지한다.
 
-2026-10-16 사용자의 승인으로 Quote Notification에서 원래 행동 Account를 다른 대상 Profile에서도 제외하며, 기존 Profile 단위 자기 인용 억제는 유지한다. 현재 억제 범위는 [Notification](../objects/notification.md)에 정의한다.
+2026-10-16 사용자의 승인으로 Quote Notification의 Account 수신·대상 Profile Membership과 자기 인용 정책을
+갱신했다. “같은 Account의 다른 Profile은 억제하지 않는다”는 이전 문장은 역사적 결정이며 현재 계약이 아니다.
+현재 수신자와 억제 범위는 [Notification](../objects/notification.md#profile-범위-notification-수신-account)이 정의한다.
 
 ## 날짜
 
@@ -56,7 +58,9 @@ Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기
 - 우선순위는 최초 대표 Notification 선택에만 적용한다. 이미 저장된 대표 Notification은 ID, Type, Read State와
   최초 읽음 시각을 유지하며 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
   Quote 승인이 늦어 이미 생성된 Reply 또는 Mention이 있을 때도 같다. Followee Post는 독립 정책을 유지한다.
-- Quote 자기 행동 억제와 원래 행동 Account 제외는 [Notification](../objects/notification.md) 정책을 따른다.
+- Quote Notification은 생성 시도마다 direct Source Author Profile의 현재 Membership으로 수신자를 정한다. 원래 행동
+  Account 제외와 자기 인용 억제는 위 Notification 정책을 따른다. Quote의 최초 알림 생성 판단, 재처리·재승인·정리 뒤
+  재생성 금지 정책은 그대로 적용한다.
 - Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 새 알림을 생성한다. 저장된 Notification 행의 API 조회는
   Recipient 권한을 따르며, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다.
   Source가 조회 불가여도 Quote 자체 Content를 유지하는 Post 정책은 바꾸지 않는다.
@@ -129,7 +133,7 @@ Quote와 Mention만 최초 선택 후보인 경우에도 Type별 생성·Mute �
 
 알림 제공 여부는 원문과 인용글의 조회 권한을 넓히지 않는다. 2026-10-16 결정 전에는 Profile 단위 자기 인용
 억제를 적용하고 Account를 공유하는 다른 Profile은 억제하지 않는다고 결정했다. Account 공유에 관한 그 부분은
-역사적 결정이며 현재 규칙은 [Notification의 Profile 범위 수신 정책](../objects/notification.md)에 따른다.
+역사적 결정이며 현재 규칙은 [Notification의 Profile 범위 수신 정책](../objects/notification.md#profile-범위-notification-수신-account)을 따른다.
 
 ## 검토한 대안
 
@@ -144,9 +148,10 @@ Quote와 Mention만 최초 선택 후보인 경우에도 Type별 생성·Mute �
 
 ## 남은 결정
 
-현재 Post 구조는 Reply와 Quote의 동시 성립을 허용하므로 해당 구조 전제는 제거하지 않는다. 최초 후보는
-Reply → Mention → Quote 순서로 선택하며, 이미 저장된 대표 Notification은 뒤늦게 더 높은 우선순위 Type이
-생성 가능해져도 보존한다. PROD-903 자체의 제품 정책상 미결정 사항은 없다.
+현재 Post 구조는 Reply와 Quote의 동시 성립을 허용하므로 해당 구조 전제는 제거하지 않는다. Reply → Mention → Quote
+대표 순서는 대상 Profile의 수신 Account에 적용한다. Account 수신 및 자기 인용의 현재 범위는 Notification 문서를
+따르며, 이미 저장된 대표 Notification은 뒤늦게 더 높은 우선순위 Type이 생성 가능해져도 보존한다. PROD-903 자체의
+제품 정책상 미결정 사항은 없다.
 Followee Post는 독립 정책을 따르며, 저장 Notification 행은 존재하는 동안 Recipient 권한으로 조회하고 Related
 Profile·Related Post·source 필드는 각각의 일반 객체 조회 권한을 따른다. 기존 unavailable Notification 정책의
 Best Effort 정리는 유지한다.
