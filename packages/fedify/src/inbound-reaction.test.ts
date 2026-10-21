@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { Create, EmojiReact, Like, Note, Undo } from '@fedify/vocab';
+import { Create, EmojiReact, Like, Note, Person, Undo } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubReactions,
@@ -14,20 +14,24 @@ import {
   Profiles,
   Reactions,
 } from '@kosmo/core/db';
+import { seedDatabase } from '@kosmo/core/db/seed';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq } from 'drizzle-orm';
 import { handleInboundUndo } from './inbound-follow';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import { handleInboundReaction } from './inbound-reaction';
+import { materializeRemoteProfileActor } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { InboundCaptureContext } from './inbound-observability';
 
@@ -123,6 +127,184 @@ test('Like와 EmojiReact의 supported·missing·unsupported content를 공통 �
 
     await handleInboundReaction(createContext(null), activity);
     assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, expected);
+  }
+});
+
+test('아직 저장되지 않은 Like·EmojiReact actor를 materialize한 뒤 기존 Reaction 경로로 저장한다', async () => {
+  const publicOrigin = 'http://127.0.0.1:4173';
+  process.env.PUBLIC_ORIGIN = publicOrigin;
+  await seedDatabase({ publicOrigin });
+
+  const likeActorUri = new URL(`https://${crypto.randomUUID()}.example/users/alice`);
+  const emojiActorUri = new URL(`https://${crypto.randomUUID()}.example/users/alice`);
+  const likeTarget = await createLocalTarget();
+  const emojiTarget = await createLocalTarget();
+  const like = new Like({
+    actor: likeActorUri,
+    id: new URL(`/activities/${crypto.randomUUID()}`, likeActorUri),
+    object: likeTarget.objectUri,
+  });
+  const emojiReact = new EmojiReact({
+    actor: emojiActorUri,
+    content: '🎉',
+    id: new URL(`/activities/${crypto.randomUUID()}`, emojiActorUri),
+    object: emojiTarget.objectUri,
+  });
+  const lookup = mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+      assert.ok(options && typeof options === 'object');
+      const workflowOptions = options as { args?: Array<{ actorUri: string }> };
+      const actorUri = new URL(workflowOptions.args?.[0]?.actorUri ?? '');
+      const actor = new Person({ id: actorUri, preferredUsername: 'alice' });
+      const profile = await materializeRemoteProfileActor({
+        actorUri,
+        context: { lookupObject: async () => actor },
+      });
+      return profile.id;
+    },
+  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined);
+
+  try {
+    await handleInboundReaction(createContext(null), like);
+    await handleInboundReaction(createContext(null), emojiReact);
+
+    assert.equal(lookup.mock.callCount(), 2);
+    assert.equal(start.mock.callCount(), 2);
+
+    for (const { activity, actorUri, target, expectedType } of [
+      { activity: like, actorUri: likeActorUri, target: likeTarget, expectedType: '❤️' },
+      {
+        activity: emojiReact,
+        actorUri: emojiActorUri,
+        target: emojiTarget,
+        expectedType: '🎉',
+      },
+    ]) {
+      const actorRow = await db
+        .select({ profileId: ActivityPubActors.profileId })
+        .from(ActivityPubActors)
+        .where(eq(ActivityPubActors.uri, actorUri.href))
+        .then(firstOrThrow);
+
+      const reaction = await readReaction(actorRow.profileId, target.post.id);
+      assert.equal(reaction?.type, expectedType);
+      const mapping = await db
+        .select({ reactionId: ActivityPubReactions.reactionId })
+        .from(ActivityPubReactions)
+        .where(eq(ActivityPubReactions.uri, activity.id!.href))
+        .then(firstOrThrow);
+      assert.equal(mapping.reactionId, reaction?.id);
+    }
+  } finally {
+    start.mock.restore();
+    lookup.mock.restore();
+  }
+});
+
+test('known하지만 비활성인 actor는 materialize하지 않고 Reaction을 거부한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const target = await createLocalTarget();
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, actor.profile.id));
+  const unexpectedLookup = mock.method(temporalClient.workflow, 'execute', async () => {
+    throw new Error('Known actor must not be looked up again');
+  });
+
+  try {
+    await handleInboundReaction(
+      createContext(null),
+      new Like({
+        actor: new URL(actor.actorUri),
+        id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+        object: target.objectUri,
+      }),
+    );
+
+    assert.equal(unexpectedLookup.mock.callCount(), 0);
+    assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, actor.profile.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.SUSPENDED,
+    );
+  } finally {
+    unexpectedLookup.mock.restore();
+  }
+});
+
+test('non-HTTP actor/object identity rejects before remote actor lookup', async () => {
+  const target = await createLocalTarget();
+  const unexpectedLookup = mock.method(temporalClient.workflow, 'execute', async () => {
+    throw new Error('Invalid identity must not trigger actor lookup');
+  });
+
+  try {
+    await handleInboundReaction(
+      createContext(null),
+      new Like({
+        actor: new URL('urn:actor:invalid'),
+        id: new URL(`https://invalid.example/activities/${crypto.randomUUID()}`),
+        object: target.objectUri,
+      }),
+    );
+    await handleInboundReaction(
+      createContext(null),
+      new Like({
+        actor: new URL(`https://${crypto.randomUUID()}.example/users/alice`),
+        id: new URL(`https://invalid.example/activities/${crypto.randomUUID()}`),
+        object: new URL('urn:object:invalid'),
+      }),
+    );
+
+    assert.equal(unexpectedLookup.mock.callCount(), 0);
+  } finally {
+    unexpectedLookup.mock.restore();
+  }
+});
+
+test('unknown actor lookup failure propagates without Reaction persistence', async () => {
+  const actorUri = new URL(`https://${crypto.randomUUID()}.example/users/alice`);
+  const target = await createLocalTarget();
+  const failure = new Error('Remote actor lookup unavailable');
+  const lookup = mock.method(temporalClient.workflow, 'execute', async () => {
+    throw failure;
+  });
+
+  try {
+    await assert.rejects(
+      handleInboundReaction(
+        createContext(null),
+        new Like({
+          actor: actorUri,
+          id: new URL(`/activities/${crypto.randomUUID()}`, actorUri),
+          object: target.objectUri,
+        }),
+      ),
+      failure,
+    );
+
+    assert.equal(lookup.mock.callCount(), 1);
+    assert.equal(
+      await db
+        .select()
+        .from(ActivityPubActors)
+        .where(eq(ActivityPubActors.uri, actorUri.href))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal(await db.$count(Reactions, and(eq(Reactions.postId, target.post.id))), 0);
+  } finally {
+    lookup.mock.restore();
   }
 });
 

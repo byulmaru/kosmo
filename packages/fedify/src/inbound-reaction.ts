@@ -5,6 +5,10 @@ import { materializeInboundReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
+} from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { EmojiReact } from '@fedify/vocab';
 
@@ -18,13 +22,15 @@ const toReactionType = (activity: Like | EmojiReact): string => {
 };
 
 export const handleInboundReaction = async (
-  _context: InboxContext<void>,
+  context: InboxContext<void>,
   activity: Like | EmojiReact,
 ): Promise<void> => {
   const activityUri = activity.id;
-  const actorUri = uniqueHref(activity.actorIds);
-  const objectUri = uniqueHref(activity.objectIds);
-  if (!isHttpUri(activityUri) || !actorUri || !objectUri) {
+  const actorUrl = uniqueHref(activity.actorIds);
+  const objectUrl = uniqueHref(activity.objectIds);
+  const actorUri = actorUrl ? new URL(actorUrl) : null;
+  const objectUri = objectUrl ? new URL(objectUrl) : null;
+  if (!isHttpUri(activityUri) || !isHttpUri(actorUri) || !isHttpUri(objectUri)) {
     observeInbound({
       outcome: 'rejected',
       activityType: activity instanceof Like ? 'Like' : 'EmojiReact',
@@ -35,17 +41,25 @@ export const handleInboundReaction = async (
     return;
   }
 
+  if (!(await findStoredRemoteProfileActorByUri(actorUri))) {
+    await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri, receivedAt: Temporal.Now.instant() },
+    });
+  }
+
   const result = await materializeInboundReaction({
     activityUri: activityUri.href,
-    actorUri,
-    objectUri,
+    actorUri: actorUri.href,
+    objectUri: objectUri.href,
     onWorkflowStartError: (error) =>
       observeInbound({
         activityType: activity instanceof Like ? 'Like' : 'EmojiReact',
-        actorOrigin: actorUri,
+        actorOrigin: actorUri.href,
         error,
         handler: 'reaction',
-        objectOrigin: objectUri,
+        objectOrigin: objectUri.href,
         outcome: 'internal_failure',
         phase: 'effect',
         reasonCode: 'reaction_notification_effect_failed',
@@ -57,9 +71,9 @@ export const handleInboundReaction = async (
     observeInbound({
       outcome: 'rejected',
       activityType,
-      actorOrigin: actorUri,
+      actorOrigin: actorUri.href,
       handler: 'reaction',
-      objectOrigin: objectUri,
+      objectOrigin: objectUri.href,
       phase: 'projection',
       reasonCode: 'reaction_projection_rejected',
     });
@@ -67,9 +81,9 @@ export const handleInboundReaction = async (
     observeInbound({
       outcome: 'noop',
       activityType,
-      actorOrigin: actorUri,
+      actorOrigin: actorUri.href,
       handler: 'reaction',
-      objectOrigin: objectUri,
+      objectOrigin: objectUri.href,
       phase: 'projection',
       reasonCode: 'duplicate_reaction_noop',
     });

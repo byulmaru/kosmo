@@ -18,6 +18,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { TestContext } from 'node:test';
@@ -27,6 +28,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
 import type { handleInboundAnnounce as HandleInboundAnnounce } from './inbound-announce';
 import type { handleInboundUndo as HandleInboundUndo } from './inbound-follow';
+import type * as RemoteActorMaterialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -50,6 +52,7 @@ let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundAnnounce: typeof HandleInboundAnnounce;
 let handleInboundUndo: typeof HandleInboundUndo;
+let materializeRemoteProfileActor: typeof RemoteActorMaterialization.materializeRemoteProfileActor;
 let localInstanceId: string;
 
 describe('inbound Announce materialization', () => {
@@ -72,6 +75,7 @@ describe('inbound Announce materialization', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAnnounce } = await import('./inbound-announce'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
+    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -97,13 +101,17 @@ describe('inbound Announce materialization', () => {
     await pg.end();
   });
 
-  test('materializes a direct Repost and stores the Announce as its current ActivityPub identity', async () => {
+  test('materializes a direct Repost and stores the Announce as its current ActivityPub identity', async (t) => {
     const actor = await createRemoteActor(actorUri);
     const source = await createRemoteSource();
     const activity = announce('announce-a', sourceUri);
+    const lookup = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw new Error('Stored actor should not trigger remote lookup');
+    });
 
     await handleInboundAnnounce(context(), activity, receivedAt);
 
+    assert.equal(lookup.mock.callCount(), 0);
     const { mapping, repost } = await currentRepost(activity.id!);
     assert.equal(repost.profileId, actor.id);
     assert.equal(repost.repostSourceId, source.id);
@@ -111,6 +119,98 @@ describe('inbound Announce materialization', () => {
     assert.equal(repost.visibility, PostVisibility.UNLISTED);
     assert.equal(repost.state, PostState.ACTIVE);
     assert.equal(mapping.receivedAt.toString(), receivedAt.toString());
+  });
+
+  test('resolves and stores an unknown sender before materializing its Repost', async (t) => {
+    const source = await createRemoteSource();
+    const activity = announce('unknown-actor', sourceUri);
+    const remoteActor = new Person({ id: actorUri, preferredUsername: 'alice' });
+    const lookup = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.deepEqual((options as { args: unknown[] }).args, [
+          {
+            actorUri: actorUri.href,
+            contextOrigin: publicOrigin,
+            receipt: {
+              activityUri: activity.id!.href,
+              receivedAt: receivedAt.toString(),
+            },
+          },
+        ]);
+        const profile = await materializeRemoteProfileActor({
+          actorUri,
+          context: { lookupObject: async () => remoteActor },
+          now: receivedAt,
+        });
+        return profile.id;
+      },
+    );
+
+    await handleInboundAnnounce(context(), activity, receivedAt);
+
+    assert.equal(lookup.mock.callCount(), 1);
+    const storedActor = await db
+      .select()
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.uri, actorUri.href))
+      .then(firstOrThrow);
+    const storedProfile = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, storedActor.profileId))
+      .then(firstOrThrow);
+    const { repost, mapping } = await currentRepost(activity.id!);
+    assert.equal(storedProfile.state, ProfileState.ACTIVE);
+    assert.equal(repost.profileId, storedProfile.id);
+    assert.equal(repost.repostSourceId, source.id);
+    assert.equal(mapping.uri, activity.id!.href);
+  });
+
+  test('propagates an unknown sender lookup failure without creating a Repost', async (t) => {
+    await createRemoteSource();
+    const activity = announce('unknown-actor-lookup-failure', sourceUri);
+    const lookupError = new Error('Remote actor lookup failed');
+    const lookup = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw lookupError;
+    });
+
+    await assert.rejects(
+      handleInboundAnnounce(context(), activity, receivedAt),
+      (error) => error === lookupError,
+    );
+
+    assert.equal(lookup.mock.callCount(), 1);
+    assert.equal(
+      (await db.select().from(ActivityPubPosts).where(eq(ActivityPubPosts.uri, activity.id!.href)))
+        .length,
+      0,
+    );
+  });
+
+  test('does not resolve a stored but disabled sender', async (t) => {
+    const actor = await createRemoteActor(actorUri);
+    const source = await createRemoteSource();
+    const activity = announce('disabled-actor', sourceUri);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, actor.id));
+    const lookup = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw new Error('Stored disabled actor should not trigger remote lookup');
+    });
+
+    await handleInboundAnnounce(context(), activity, receivedAt);
+
+    assert.equal(lookup.mock.callCount(), 0);
+    assert.equal((await findReposts(actor.id, source.id)).length, 0);
+    assert.equal(
+      (await db.select().from(ActivityPubPosts).where(eq(ActivityPubPosts.uri, activity.id!.href)))
+        .length,
+      0,
+    );
   });
 
   test('accepts an exact canonical local Note URI without an ActivityPub mapping', async () => {

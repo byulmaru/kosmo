@@ -368,6 +368,8 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   제거로 Reply Parent 관계가 `null`이 된 뒤에는 `inReplyTo`를 제공하지 않는다.
 - Content와 Reply Parent 없이 Repost Source만 있는 Repost는 Note로 표현하지 않는다. 후속 Announce와
   Reaction Activity는 대상 Post의 같은 ActivityPub Post identity를 `object`로 재사용한다.
+- 검증된 inbound ActivityPub `Announce`의 발신 계정이 아직 저장되어 있지 않으면 해당 원격 계정을 확인·등록한 뒤
+  기존 재게시 조건을 적용한다. 계정을 확인할 수 없거나 사용 불가능한 상태이면 재게시를 만들지 않는다.
 - Local Note는 FEP-c0e0 `emojiReactions` collection URI를 광고한다. collection projection은 현재 Note에
   연결된 Reaction 중 ActivityPub identity로 표현할 수 있는 Local Profile과 Remote Profile의 Reaction을 포함하며,
   collection 접근은 Note 역참조와 같은 Post Visibility, Post Eligibility와 Author Profile/Instance availability

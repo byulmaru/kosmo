@@ -7,7 +7,10 @@ import { repostPost } from '@kosmo/core/services';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
-import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
+} from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
 
@@ -52,9 +55,14 @@ export const handleInboundAnnounce = async (
     return;
   }
 
-  const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
+  const storedActor =
+    (await findStoredRemoteProfileActorByUri(actorUri)) ??
+    (await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri, receivedAt },
+    }));
   if (
-    !storedActor ||
     storedActor.profile.state !== ProfileState.ACTIVE ||
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)

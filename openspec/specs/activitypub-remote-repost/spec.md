@@ -10,21 +10,26 @@ Temporal 전환 외에 새로운 ActivityPub materialization 경계를 만들지
 
 ### Requirement: verified Announce delivery validation
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-495 시스템은 Fedify가 검증한 remote `Announce` 중 유일한 HTTP(S) actor, activity와 object identity를 가지며 저장된 usable remote Actor가 보낸 delivery만 처리해야 한다(MUST). personal inbox는 경로의 Local Recipient가 유효해야 하고 shared inbox의 recipient 부재는 허용해야 한다(MUST). `to` 또는 `cc`에 개별 Local Recipient가 없다는 이유만으로 shared-inbox delivery를 거절하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-495 시스템은 Fedify가 검증한 remote `Announce` 중 유일한 HTTP(S) actor, activity와 object identity를 가진 delivery를 처리해야 한다(MUST). 발신 actor가 저장되어 있지 않으면 actor URI로 원격 계정을 확인·등록한 뒤 기존 usable remote Actor와 Repost 조건을 적용해야 한다(MUST). actor를 확인할 수 없거나 사용할 수 없으면 Repost side effect 없이 거절해야 한다(MUST). personal inbox는 경로의 Local Recipient가 유효해야 하고 shared inbox의 recipient 부재는 허용해야 한다(MUST). `to` 또는 `cc`에 개별 Local Recipient가 없다는 이유만으로 shared-inbox delivery를 거절하지 않아야 한다(MUST).
 
-#### Scenario: personal inbox의 유효한 Announce
+#### Scenario: personal inbox의 usable Actor가 보낸 Announce
 
-- **WHEN** 저장된 usable remote Actor가 유효한 Local Recipient의 personal inbox로 verified Announce를 보낸다
+- **WHEN** usable remote Actor가 유효한 Local Recipient의 personal inbox로 verified Announce를 보낸다
 - **THEN** 시스템은 actor, activity와 object identity 검증을 통과시켜 대상 Post 해석으로 진행한다
+
+#### Scenario: 아직 저장되지 않은 Actor가 보낸 Announce
+
+- **WHEN** verified Announce의 발신 Actor가 아직 저장되어 있지 않지만 actor URI로 usable remote Actor를 확인·등록할 수 있다
+- **THEN** 시스템은 발신 Actor를 확인·등록한 뒤 대상 Post 해석으로 진행한다
 
 #### Scenario: shared inbox의 유효한 Announce
 
 - **WHEN** 같은 verified Announce가 recipient가 없는 shared inbox로 전달되고 `to`와 `cc`에 개별 Local Profile이 없다
 - **THEN** 시스템은 recipient 부재만으로 거절하지 않고 같은 actor, activity와 object 검증을 적용한다
 
-#### Scenario: 잘못된 identity 또는 actor
+#### Scenario: 잘못된 identity 또는 사용할 수 없는 Actor
 
-- **WHEN** actor, activity 또는 object identity가 누락·다중·비 HTTP(S)이거나 actor가 unknown, unusable 또는 verified sender와 일치하지 않는다
+- **WHEN** actor, activity 또는 object identity가 누락·다중·비 HTTP(S)이거나 Actor를 확인할 수 없거나 사용할 수 없거나 verified sender와 일치하지 않는다
 - **THEN** 시스템은 Post, Repost와 ActivityPub Post mapping side effect 없이 delivery를 거절한다
 
 ### Requirement: existing ActivityPub Post identity resolution
