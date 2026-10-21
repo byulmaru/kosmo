@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { pg } from '@kosmo/core/db';
+import { pg, pgRead } from '@kosmo/core/db';
 import { closeFedifyQueue, federation } from '@kosmo/fedify';
 import type { Server } from 'node:http';
 
@@ -83,7 +83,7 @@ async function run(): Promise<void> {
       await closeFedifyQueue();
     } finally {
       try {
-        await pg.end({ timeout: 5 });
+        await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
       } finally {
         await closeHttpServer(server, listening);
       }

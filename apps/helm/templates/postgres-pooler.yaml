@@ -1,22 +1,28 @@
+{{- $poolers := list (dict "name" (include "kosmo.postgresPoolerName" .) "type" "rw") -}}
+{{- if eq .Values.env "prod" -}}
+{{- $poolers = append $poolers (dict "name" (include "kosmo.postgresReadPoolerName" .) "type" "ro") -}}
+{{- end -}}
+{{- range $pooler := $poolers }}
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Pooler
 metadata:
-  name: {{ include "kosmo.postgresPoolerName" . }}
+  name: {{ $pooler.name }}
   labels:
-    helm.sh/chart: {{ include "kosmo.chart" . }}
+    helm.sh/chart: {{ include "kosmo.chart" $ }}
     app.kubernetes.io/name: postgres-pooler
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
 spec:
   cluster:
-    name: {{ include "kosmo.postgresName" . }}
-  instances: {{ ternary .Values.postgres.pooler.replicas.prod .Values.postgres.pooler.replicas.dev (eq .Values.env "prod") }}
-  type: rw
+    name: {{ include "kosmo.postgresName" $ }}
+  instances: {{ ternary $.Values.postgres.pooler.replicas.prod $.Values.postgres.pooler.replicas.dev (eq $.Values.env "prod") }}
+  type: {{ $pooler.type }}
   pgbouncer:
     poolMode: transaction
     parameters:
-      max_client_conn: {{ .Values.postgres.pooler.maxClientConnections | quote }}
-      default_pool_size: {{ .Values.postgres.pooler.defaultPoolSize | quote }}
+      max_client_conn: {{ $.Values.postgres.pooler.maxClientConnections | quote }}
+      default_pool_size: {{ $.Values.postgres.pooler.defaultPoolSize | quote }}
       server_reset_query: "DISCARD ALL"
   template:
     spec:
@@ -26,10 +32,11 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              cnpg.io/poolerName: {{ include "kosmo.postgresPoolerName" . | quote }}
+              cnpg.io/poolerName: {{ $pooler.name | quote }}
           matchLabelKeys:
             - pod-template-hash
       containers:
         - name: pgbouncer
           resources:
-{{ toYaml .Values.postgres.pooler.resources | indent 12 }}
+{{ toYaml $.Values.postgres.pooler.resources | indent 12 }}
+{{- end }}

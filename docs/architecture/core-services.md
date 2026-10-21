@@ -84,10 +84,14 @@ application query 계층이 계산한다.
 GraphQL의 요청별 가시성·owner policy는 PostgreSQL RLS나 session actor state로 계산하지 않는다.
 GraphQL application SQL은 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`로 구성한 process
 shared DB access 경계를 사용한다. API, Web, Worker, Fedify consumer와 Admin의 ordinary `PG*` connection은
-하나의 shared non-owner runtime role과 transaction-mode CloudNativePG Pooler를 사용한다. Fedify
-MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`과 migration owner의 `PGHOST`는 direct read-write Service를
-사용한다. GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은
-target architecture에 포함하지 않는다.
+하나의 shared non-owner runtime role과 transaction-mode read-write CloudNativePG Pooler를 사용한다. Production
+API, Web, Admin의 `PGREADHOST`는 read-only CloudNativePG Pooler를 가리킨다. Worker와 Fedify consumer 및
+standby가 없는 dev에는 `PGREADHOST`가 비어 있고, local에서는 생략한다. 따라서
+API, Web, Admin의 ordinary SELECT는 인증과 ACL 조회를 포함해 replica lag를 허용하지만, writes와
+transaction-bound queries, GraphQL Mutation의 즉시 nested response, durable effect가 의존하는 committed state
+reads는 primary의 최신 상태를 사용한다. Fedify MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`과 migration
+owner의 `PGHOST`는 direct read-write Service를 사용한다. GraphQL operation 전용 DB session, actor GUC,
+operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은 target architecture에 포함하지 않는다.
 
 Temporal-first GraphQL mutation은 위 caller 인증·membership·visibility 검증과 입력 정규화를 마친 뒤
 serializable actor/domain input, exported `WorkflowDefinition`과 capability별 `mode`·conflict·reuse 옵션을
