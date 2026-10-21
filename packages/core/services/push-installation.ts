@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, ne } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import {
   AccountProfiles,
@@ -76,15 +76,12 @@ export const findEligiblePushInstallations = async ({
     .innerJoin(
       AccountProfiles,
       and(
+        eq(AccountProfiles.accountId, Notifications.recipientAccountId),
         eq(AccountProfiles.profileId, Notifications.recipientProfileId),
-        or(
-          isNull(Notifications.recipientAccountId),
-          eq(AccountProfiles.accountId, Notifications.recipientAccountId),
-        ),
       ),
     )
-    .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
-    .innerJoin(PushInstallations, eq(PushInstallations.accountId, AccountProfiles.accountId))
+    .innerJoin(Accounts, eq(Accounts.id, Notifications.recipientAccountId))
+    .innerJoin(PushInstallations, eq(PushInstallations.accountId, Notifications.recipientAccountId))
     .innerJoin(Sessions, eq(Sessions.id, PushInstallations.sessionId))
     .where(
       and(

@@ -20,6 +20,15 @@ spec:
       server_reset_query: "DISCARD ALL"
   template:
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              cnpg.io/poolerName: {{ include "kosmo.postgresPoolerName" . | quote }}
+          matchLabelKeys:
+            - pod-template-hash
       containers:
         - name: pgbouncer
           resources:

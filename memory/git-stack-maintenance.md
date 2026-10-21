@@ -27,9 +27,9 @@
 - 수동 복구 push가 필요하면 반드시 기록한 SHA를 넣은
   `git push --force-with-lease=<branch>:<expected-remote-sha> origin <branch>`만 사용한다.
   인자 없는 `--force-with-lease`나 broad force refspec은 사용하지 않는다.
-- `gh stack`이 실패하면 `gh pr create`, extension이 제안하는 ordinary unstacked PR, base
-  retarget으로 우회하지 않는다. 부분 branch push, PR 상태, 원격 Stack 상태를 조회해 blocker로
-  보고한다.
+- `gh stack` 오류는 원인을 진단해 복구 가능한 설치·환경·사용법 문제를 고친 뒤 공식 명령으로 재시도한다.
+  복구할 수 없으면 부분 branch push, PR 상태, 원격 Stack 상태를 조회해 blocker로 보고한다.
+  `gh pr create`, extension이 제안하는 ordinary unstacked PR, 수동 Stack/base metadata 수정으로 우회하지 않는다.
 
 ## Adopt Existing Branches Or Pull Requests
 
@@ -103,8 +103,8 @@
 
 ## Manual Recovery Boundary
 
-- official CLI가 실패한 뒤 local ancestry 복구가 필요할 때만 backup을 기준으로 수동
-  `git rebase --onto <new-base> <old-parent-tip> <branch>`를 사용한다.
+- 복구 가능한 원인을 바로잡고도 official CLI로 처리할 수 없으며 local ancestry 복구가 필요한 경우에만 backup을
+  기준으로 수동 `git rebase --onto <new-base> <old-parent-tip> <branch>`를 사용한다.
 - `<old-parent-tip>`은 branch가 기존에 쌓인 직전 parent의 이전 tip이어야 하며, 사용 전
   `git merge-base --is-ancestor <old-parent-tip> <branch>`로 경계를 확인한다.
 - 자식부터 한 번에 trunk로 옮기지 않는다. `main -> A -> B -> C`에서 A가 바뀌면 B를 A 위로,

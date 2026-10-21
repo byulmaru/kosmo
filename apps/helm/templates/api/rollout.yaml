@@ -30,6 +30,16 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/version: {{ .Values.version | quote }}
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            - rollouts-pod-template-hash
       containers:
         - name: api
           image: {{ include "kosmo.imageRef" . | quote }}

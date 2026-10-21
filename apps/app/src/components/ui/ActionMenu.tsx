@@ -23,7 +23,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
-import { ModalSheetHost } from './ModalSheetHost';
+import { ModalOverlay } from './ModalOverlay';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
 type ActionMenuIcon = ComponentType<{
@@ -123,7 +123,7 @@ export function ActionMenu({
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const presentation = useContext(ActionMenuPresentationContext);
   const web = Platform.OS === 'web' && presentation === 'platform';
-  const overlayMotion = useOverlayMotion(open);
+  const overlayMotion = useOverlayMotion(web && open);
 
   const positionWebMenu = useCallback(() => {
     const trigger = triggerRef.current as unknown as HTMLElement | null;
@@ -199,6 +199,14 @@ export function ActionMenu({
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();
   }, []);
+  const onNativeDismiss = useCallback(() => {
+    const onSelect = pendingSelectionRef.current;
+    pendingSelectionRef.current = null;
+    if (onSelect) {
+      focusTrigger();
+      onSelect();
+    }
+  }, [focusTrigger]);
   const dismiss = useCallback(
     (restoreFocus = true) => {
       if (disabled) {
@@ -249,21 +257,6 @@ export function ActionMenu({
     },
     [dismiss, open, web],
   );
-
-  useEffect(() => {
-    if (web || open || overlayMotion.mounted) {
-      return;
-    }
-
-    const onSelect = pendingSelectionRef.current;
-    if (!onSelect) {
-      return;
-    }
-
-    pendingSelectionRef.current = null;
-    focusTrigger();
-    onSelect();
-  }, [focusTrigger, open, overlayMotion.mounted, web]);
 
   useLayoutEffect(() => {
     if (!web || !open || !overlayMotion.mounted) {
@@ -524,121 +517,72 @@ export function ActionMenu({
         onPress: toggle,
         ref: triggerRef,
       })}
-      <ModalSheetHost
+      <ModalOverlay
         accessibilityLabel={accessibilityLabel}
-        animationType="none"
-        interactionDisabled={!open}
+        backdropTestID="action-menu-backdrop"
+        dismissDisabled={disabled}
         onRequestClose={() => dismiss()}
+        onDismiss={onNativeDismiss}
+        presentation="sheet"
         role="dialog"
-        transparent
-        visible={overlayMotion.mounted}
+        visible={open}
       >
-        <View
-          accessibilityElementsHidden={!open}
-          importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-          pointerEvents={open ? 'auto' : 'none'}
-          style={styles.backdrop}
+        <BottomSheetSurface
+          closeDisabled={!open || disabled}
+          onClose={() => dismiss()}
+          style={[elevation.overlay, { paddingBottom: insets.bottom + space[8] }]}
         >
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
-            ]}
-          />
-          <Pressable
-            accessible={false}
-            aria-hidden
-            importantForAccessibility="no"
-            onPress={() => dismiss()}
-            style={StyleSheet.absoluteFill}
-            testID="action-menu-backdrop"
-          />
-          <Animated.View
-            style={[
-              {
-                opacity: overlayMotion.progress,
-                transform: [
-                  {
-                    translateY: overlayMotion.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [16, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <BottomSheetSurface
-              closeDisabled={!open || disabled}
-              onClose={() => dismiss()}
-              style={[elevation.overlay, { paddingBottom: insets.bottom + space[8] }]}
-            >
-              <View accessibilityLabel={accessibilityLabel} accessibilityRole="menu">
-                {items.map((item, index) => {
-                  const Icon = item.icon;
-                  const itemColor =
-                    item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
-                  const control = (
-                    <Pressable
-                      accessibilityLabel={item.accessibilityLabel ?? item.label}
-                      accessibilityRole="menuitem"
-                      aria-busy={item.busy || undefined}
-                      accessibilityState={{ busy: item.busy, disabled: !open || item.disabled }}
-                      disabled={!open || item.disabled}
-                      onPress={() => select(item)}
-                      style={[styles.item, styles.nativeItem]}
-                    >
-                      {item.busy ? (
-                        <ActivityIndicator color={itemColor} />
-                      ) : Icon ? (
-                        <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
-                      ) : null}
-                      <Text
-                        style={[
-                          styles.label,
-                          {
-                            color: itemColor,
-                          },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                  return (
-                    <View key={item.key}>
-                      {index > 0 ? (
-                        <View
-                          style={[styles.nativeDivider, { borderTopColor: theme.borderSubtle }]}
-                        />
-                      ) : null}
-                      {renderItem
-                        ? renderItem({ children: control, item, onSelect: () => select(item) })
-                        : control}
-                    </View>
-                  );
-                })}
-              </View>
-              {error ? (
-                <Text
-                  accessibilityLiveRegion="polite"
-                  accessibilityRole="alert"
-                  style={[styles.error, { color: theme.danger }]}
+          <View accessibilityLabel={accessibilityLabel} accessibilityRole="menu">
+            {items.map((item, index) => {
+              const Icon = item.icon;
+              const itemColor =
+                item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
+              const control = (
+                <Pressable
+                  accessibilityLabel={item.accessibilityLabel ?? item.label}
+                  accessibilityRole="menuitem"
+                  aria-busy={item.busy || undefined}
+                  accessibilityState={{ busy: item.busy, disabled: !open || item.disabled }}
+                  disabled={!open || item.disabled}
+                  onPress={() => select(item)}
+                  style={[styles.item, styles.nativeItem]}
                 >
-                  {error}
-                </Text>
-              ) : null}
-            </BottomSheetSurface>
-          </Animated.View>
-        </View>
-      </ModalSheetHost>
+                  {item.busy ? (
+                    <ActivityIndicator color={itemColor} />
+                  ) : Icon ? (
+                    <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
+                  ) : null}
+                  <Text style={[styles.label, { color: itemColor }]}>{item.label}</Text>
+                </Pressable>
+              );
+              return (
+                <View key={item.key}>
+                  {index > 0 ? (
+                    <View style={[styles.nativeDivider, { borderTopColor: theme.borderSubtle }]} />
+                  ) : null}
+                  {renderItem
+                    ? renderItem({ children: control, item, onSelect: () => select(item) })
+                    : control}
+                </View>
+              );
+            })}
+          </View>
+          {error ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+              style={[styles.error, { color: theme.danger }]}
+            >
+              {error}
+            </Text>
+          ) : null}
+        </BottomSheetSurface>
+      </ModalOverlay>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
   control: { position: 'relative' },
   error: { paddingHorizontal: space[12], paddingVertical: space[8], ...textStyles.uiCopyS },
   item: {

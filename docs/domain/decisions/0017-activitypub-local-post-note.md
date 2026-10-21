@@ -37,7 +37,14 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
   Content의 eligible remote ActivityPub Mentioned Profile actor URI만 `to`로 사용하며, `cc`에는 Public이나 followers
   collection을 넣지 않는다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다. eligible remote
   actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 outbound 예외는 signed-fetch 권한을 부여하지 않으며,
-  ActivityPub DIRECT/limited audience의 inbound 처리는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 범위다.
+  ActivityPub DIRECT/limited audience의 inbound 권한은 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)가 정의한다.
+- 수신 `Create(Note)`와 remote source에서 fetch/hydrate해 공통 Note materializer로 전달한 Note는 기존 우선순위대로 Public,
+  Unlisted, Author Followers를 분류하고, 어느 marker도 없으면 DIRECT 후보로 분류한다. DIRECT 저장은 typed Mention href가 ACTIVE Local
+  Profile과 ACTIVE Local Instance를 가리킬 때 허용하며, inbox 종류나 `context.recipient`와의 일치는 조건이 아니다. 현재 검증된
+  typed Mention relation은 local/remote Profile 모두에 보존하고, 읽을 수 있는 Profile은 작성자와 현재 Mentioned Profile이다.
+  `to`/`cc`는 기존 visibility marker 분류에만 사용하며, 그 주소만으로 Mention relation이나 DIRECT 접근 권한을 만들지 않는다.
+  audience 주소가 없거나 Mention과 달라도 검증된 Mention 수신을 막지 않는다. Follow는 요구하지 않으며, Mention되지 않은 inbox
+  recipient는 읽을 수 없다. Note Update와 과거 Note 복구는 이 범위에 포함하지 않는다.
 - Reply Parent 관계가 있으면 requester의 Parent 조회 가능성과 무관하게 Parent의 ActivityPub Post identity를
   `inReplyTo`로 제공한다. Parent의 실제 표현은 Parent 자체의 역참조 권한으로 보호하며, Reply Parent 관계가
   없을 때만 `inReplyTo`를 생략한다. Parent의 Tombstone 전이는 저장 관계를 변경하지 않는다. 현재 physical

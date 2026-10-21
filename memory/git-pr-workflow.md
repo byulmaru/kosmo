@@ -23,8 +23,8 @@
   - 없을 때 사용자 환경에 설치: `gh extension install github/gh-stack`
 - extension은 사용자 로컬 GitHub CLI에 설치하며 repository dependency나 workspace package로
   추가하지 않는다.
-- `gh stack`이 없거나 명령이 실패하면 원인과 현재 local/remote 상태를 보고하고 멈춘다.
-  일반 `gh pr create`나 extension이 제안하는 ordinary unstacked PR fallback으로 우회하지 않는다.
+- extension이 없으면 설치하고, `gh stack` 오류는 원인을 진단해 복구 가능한 설치·환경·사용법 문제를 고친 뒤 공식 명령으로 재시도한다. 복구할 수 없으면 현재 local/remote 상태와 blocker를 보고한다.
+  `gh pr create`, extension이 제안하는 ordinary unstacked PR fallback, 수동 Stack/base metadata 수정으로 우회하지 않는다.
 - 1-layer Stack은 local tracking과 `gh stack submit` 경로를 사용하지만 GitHub REST의 PR
   `stack` 필드는 `null`이다. 원격 Stack 객체는 PR이 2개 이상일 때 생성된다.
 
@@ -99,9 +99,9 @@
     객체와 bottom-to-top branch order
 - 1-layer PR의 REST `stack: null`은 공식 API의 정상 표현이다. 이 경우 local 1-layer tracking과
   `gh stack submit` 생성 경로는 보고하되 원격 Stack 객체가 생성됐다고 주장하지 않는다.
-- `gh stack submit`이 실패하면 부분적으로 생성·수정된 PR, branch push, auto-merge/Draft 상태를
-  조회해 보고하고 멈춘다. `gh pr create`나 ordinary unstacked PR fallback으로 나머지를 만들지
-  않는다.
+- `gh stack submit`이 실패하면 원인을 진단해 복구 가능한 문제를 바로잡고 공식 명령으로 재시도한다.
+  복구할 수 없으면 부분적으로 생성·수정된 PR, branch push, auto-merge/Draft 상태를 조회해 보고한다.
+  `gh pr create`, ordinary unstacked PR fallback, 수동 Stack/base metadata 수정으로 나머지를 만들지 않는다.
 
 ## Edit A PR
 

@@ -59,9 +59,11 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('react-native', {
   Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },
+  useWindowDimensions: () => ({ height: 800, width: 1_280 }),
   View: 'View',
 });
 mockModule(new URL('../content-report/ContentReportContext.tsx', import.meta.url), {
+  getContentReportBlockProfile: () => undefined,
   useContentReportMenuItem: () => ({
     key: 'report-profile',
     label: '신고',

@@ -14,28 +14,34 @@
 
 ### Notification Projection Exception
 
-Profile-scoped Notification은 여러 source의 사용자용 projection이므로 일반적인 polymorphic
-relationship 금지 규칙에 다음 한정 예외를 둔다.
+Social Notification은 여러 source의 사용자용 projection이므로 일반적인 polymorphic relationship 금지
+규칙에 다음 한정 예외를 둔다.
 
 - `notification` 하나에 `kind` enum과 `source_id uuid`를 저장하며 `source_id`에는 의도적으로 foreign
   key를 만들지 않는다. `kind`가 실제 source table과 application validation을 결정한다.
-- 명확한 소유 관계인 `recipient_profile_id`는 `profile.id` foreign key와 물리 삭제 cascade를 유지한다.
-- source 중복은 `(recipient_profile_id, kind, source_id)` unique constraint로 막고, 정상 source
-  생성·삭제 action이 Notification 저장·정리를 호출한다. 같은 source가 여러 Recipient에게 투영되는 kind를
-  허용한다. source-only cleanup용 `(kind, source_id)` index는 선제 추가하지 않고 실제 조회 경로가 이를
-  요구할 때 별도 migration으로 결정한다.
+- `recipient_account_id`는 필수이며 `account.id` foreign key와 물리 삭제 cascade를 유지한다.
+  `recipient_profile_id`는 선택이며 값이 있으면 `profile.id` foreign key와 물리 삭제 cascade를 유지한다.
+  Social Notification은 Account와 대상 Profile을 모두 가지며 Operational Notification은 Account만 가진다.
+- Social source 중복은 `(recipient_account_id, recipient_profile_id, kind, source_id)` unique constraint로
+  막는다. Recipient Profile이 없는 Operational Notification은 `(recipient_account_id, kind, source_id)` partial unique로
+  중복을 막는다. 정상 source 생성·삭제 action이 Notification 저장·정리를 호출한다.
+- `Posts`, `Reactions`, `ProfileFollows`, `ProfileFollowRequests`는 확인된 원래 행동 Account를 nullable
+  `actor_account_id` foreign key로 행 생성 시 기록하고 이후 바꾸지 않는다. 과거 행에서 추정하거나 backfill하지 않는다.
+- 같은 source가 여러 Account·Profile Recipient에게 투영되는 kind를 허용한다. source-only cleanup용
+  `(kind, source_id)` index는 선제 추가하지 않고 실제 조회 경로가 이를 요구할 때 별도 migration으로 결정한다.
 - `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지
   않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다. Operational은 제목,
   선택 본문, 목적지 링크만 저장하고 actor snapshot이나 원인 객체를 추가하지 않는다.
 - Notification API는 저장 행이 존재하는 동안 Recipient 권한에 따라 목록, count, Node와 Read에서 해당 item을
   조회한다. Related Post/Profile과 source 필드는 현재 요청의 일반 객체 조회 권한을 적용하며 원본 접근을 우회하지 않는다.
-  기존 source 가용성 기반 정리와 물리 삭제 시점은 이 API 접근 규칙과 별도이며, 삭제 뒤까지 Notification 보존을 보장하지 않는다.
+  Local·Remote Post 삭제가 확정된 뒤 후속 effect가 삭제된 Post를 원인 또는 대상으로 하는 Notification을 정리한다.
+  effect는 확정된 삭제의 Post ID를 사용하며, 정리 실패는 Post 삭제 결과를 바꾸지 않고 effect를 재시도한다.
+  정리 완료 전까지 행은 조회될 수 있다. 그 밖의 source 가용성 정리와 이미 남아 있는 legacy unavailable Notification은 기존 Best Effort 정책을 따른다.
 - 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
-- Recipient는 Profile 또는 Account 중 정확히 하나다. `recipient_profile_id`와
-  `recipient_account_id`는 각 소유 테이블을 참조하며, DB CHECK는 두 컬럼 중 정확히 하나만 값이 있도록 한다.
-  `kind`와 Recipient의 조합은 알림 생성 경로가 결정하고, Operational producer는 Account를 대상으로 한다.
+- Recipient 권한은 정확한 `recipient_account_id`를 요구하며 `recipient_profile_id`가 있으면 해당 Profile의 현재
+  Membership도 요구한다. `kind`와 Account/Profile 조합은 알림 생성 경로가 결정한다.
 - Operational Notification의 `source_id`는 UUID idempotency key이며 source 객체 foreign key가 아니다.
-  `(recipient_account_id, kind, source_id)`가 같은 수신자·요청의 중복 생성을 막는다. Operational은 loose
+  Recipient Profile이 없는 `(recipient_account_id, kind, source_id)` partial unique가 같은 수신자·요청의 중복 생성을 막는다. Operational은 loose
   source 조회나 social source cleanup에 포함하지 않는다. `(kind, source_id, id)` index는 Worker의 send별
   keyset page 조회를 지원하며 source cleanup 용도가 아니다.
 - 일반 Notification 조회는 Operational Recipient Account가 ACTIVE일 때 이를 노출한다.

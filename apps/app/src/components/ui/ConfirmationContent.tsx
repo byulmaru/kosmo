@@ -10,7 +10,7 @@ type Props = {
   children?: ReactNode;
   confirmDisabled?: boolean;
   confirmLabel: string;
-  message: string;
+  message?: string;
   onCancel: () => void;
   onConfirm: () => void;
   pending?: boolean;
@@ -33,7 +33,9 @@ export function ConfirmationContent({
 
   return (
     <View style={styles.root}>
-      <Text style={[styles.message, { color: theme.foregroundSecondary }]}>{message}</Text>
+      {message !== undefined ? (
+        <Text style={[styles.message, { color: theme.foregroundSecondary }]}>{message}</Text>
+      ) : null}
       {children}
       <View style={styles.actions}>
         <Button

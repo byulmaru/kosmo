@@ -40,11 +40,14 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Profile Post List
 
-- 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. 현재 Local first-party
-  UI는 이 순서의 첫 visible pinned Post만 별도 pinned segment와 고정 표시로 렌더한다. Remote inbound UI는 검증된 Featured
-  collection 전체를 원격 순서의 pinned segment로 표시한다.
+- 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. Local first-party UI는
+  조회 가능한 고정 Post 전체를 이 순서대로 별도 pinned segment에 표시하고 개별 관리한다. Remote inbound UI도 검증된
+  Featured collection 전체를 원격 순서의 pinned segment로 표시한다.
 - pin 관계가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. visibility filtering은 남은 visible pin의 상대 순서를
   바꾸지 않는다.
+- Local pin/unpin 성공 뒤에도 이미 표시 중인 pinned segment는 이전 목록 구성과 순서를 유지할 수 있다. 이후 Profile 목록을 다시
+  조회할 때 서버에 저장된 목록과 순서를 반영한다. 고정 목록은 페이지네이션 없이 조회 가능한 전체를 반환하며, 기존 chronology의
+  pagination 및 pagination failure retry는 유지한다.
 - 기존 chronology는 Target Profile이 작성한 eligible Post 중 Reply Parent가 없는 Content Post와 Repost를 포함하며, pin 관계로
   후보·순서·cursor·page limit을 바꾸지 않는다. 따라서 chronology 후보인 Post는 pinned segment와 원래 chronology 위치에
   모두 표시될 수 있다. Reply Parent가 있는 Post는 Quote이기도 하더라도 기존 chronology에는 포함하지 않는다.

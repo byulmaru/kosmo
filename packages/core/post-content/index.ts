@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const postContentSchemaVersion = 1 as const;
+export const postContentMentionMaxOccurrences = 16;
+export const postContentMentionHandleUsernameMaxLength = 64;
 
 export const postContentMentionFallbackText = '@알 수 없는 사용자';
 
@@ -28,6 +30,8 @@ export interface PostContentMentionNode {
   readonly attrs: {
     /** The stable Profile identity verified at the inbound boundary. */
     readonly profileId: string;
+    /** The Profile's relative handle when the Mention was parsed. */
+    readonly handle?: string;
   };
 }
 
@@ -147,11 +151,30 @@ function splitsPostContentSurrogatePair(value: string, offset: number): boolean 
 }
 
 const postContentProfileIdSchema = z.uuid();
+const postContentMentionHandleSchema = z.string().min(1);
+
+export function isPostContentMentionHandleUsernameWithinLimit(handle: string): boolean {
+  const usernameStart = handle.startsWith('@') ? 1 : 0;
+  const domainSeparator = handle.indexOf('@', usernameStart);
+  const usernameEnd = domainSeparator === -1 ? handle.length : domainSeparator;
+  return usernameEnd - usernameStart <= postContentMentionHandleUsernameMaxLength;
+}
 
 export function normalizePostContentProfileId(value: unknown): string {
   const result = postContentProfileIdSchema.safeParse(value);
   if (!result.success) {
     throw new TypeError('Mention Profile ID must be a UUID');
+  }
+  return result.data;
+}
+
+export function normalizePostContentMentionHandle(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const result = postContentMentionHandleSchema.safeParse(value);
+  if (!result.success) {
+    throw new TypeError('Mention fallback handle must be a relative Profile handle');
   }
   return result.data;
 }
@@ -243,7 +266,10 @@ function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'
   return (
     isRecordWithKeys(value, ['profileId']) &&
     typeof value.profileId === 'string' &&
-    value.profileId.length > 0
+    value.profileId.length > 0 &&
+    (!('handle' in value) ||
+      value.handle === undefined ||
+      postContentMentionHandleSchema.safeParse(value.handle).success)
   );
 }
 

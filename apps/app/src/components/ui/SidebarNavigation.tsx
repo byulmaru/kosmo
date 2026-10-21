@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Ellipsis,
   House,
+  LogIn,
   LogOut,
   Mail,
   Search,
@@ -34,6 +35,7 @@ export type SidebarPresentation = 'compact' | 'drawer' | 'full';
 
 export type SidebarNavigationProps = {
   currentDestination?: NavigationDestination | null;
+  guestPublicContent?: boolean;
   logoutError?: string | null;
   logoutPending?: boolean;
   onLogout: () => void;
@@ -42,10 +44,15 @@ export type SidebarNavigationProps = {
   presentation?: SidebarPresentation;
   profile?: NavigationProfile | null;
   renderControl?: (props: SidebarNavigationRenderControlProps) => ReactElement;
+  renderGuestAction?: (props: SidebarGuestActionRenderProps) => ReactElement;
   showRightBorder?: boolean;
   showFeedback?: boolean;
   unreadNotificationCount?: number | null;
 };
+
+export type SidebarGuestActionRenderProps = Readonly<{
+  children: ReactElement;
+}>;
 
 export type SidebarNavigationRenderControlProps = Readonly<{
   children: ReactElement;
@@ -81,6 +88,7 @@ type SidebarControlProps = {
   onPress: () => void;
   profile?: NavigationProfile;
   renderControl?: (props: SidebarNavigationRenderControlProps) => ReactElement;
+  renderGuestAction?: (props: SidebarGuestActionRenderProps) => ReactElement;
   selected?: boolean;
   nested?: boolean;
   trailingIcon?: LucideIcon;
@@ -103,6 +111,7 @@ function SidebarControl({
   onPress,
   profile,
   renderControl,
+  renderGuestAction,
   selected = false,
   nested = false,
   trailingIcon: TrailingIcon,
@@ -156,7 +165,7 @@ function SidebarControl({
       style={StyleSheet.flatten([
         styles.control,
         compact ? styles.compactControl : styles.wideControl,
-        tone === 'primary' ? styles.primaryControl : undefined,
+        destination === 'compose' ? styles.composeControl : undefined,
         Platform.OS === 'web'
           ? ({
               outlineColor: focusVisible ? theme.stateFocusRing : undefined,
@@ -194,7 +203,7 @@ function SidebarControl({
               styles.visual,
               compact ? styles.compactVisual : styles.wideVisual,
               !compact && nested ? styles.nestedVisual : undefined,
-              tone === 'primary' ? styles.primaryControl : undefined,
+              destination === 'compose' ? styles.composeControl : undefined,
               Platform.OS === 'web'
                 ? ({
                     transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
@@ -268,7 +277,9 @@ function SidebarControl({
     </Pressable>
   );
 
-  const renderedControl = href ? (
+  const renderedControl = renderGuestAction ? (
+    renderGuestAction({ children: control })
+  ) : href ? (
     <Link asChild href={href} rel="noopener noreferrer" target="_blank">
       {control}
     </Link>
@@ -289,6 +300,7 @@ function SidebarControl({
 
 export function SidebarNavigation({
   currentDestination = null,
+  guestPublicContent = false,
   logoutError = null,
   logoutPending = false,
   onLogout,
@@ -297,6 +309,7 @@ export function SidebarNavigation({
   presentation = 'full',
   profile = null,
   renderControl,
+  renderGuestAction,
   showRightBorder = true,
   showFeedback = true,
   unreadNotificationCount = null,
@@ -352,177 +365,212 @@ export function SidebarNavigation({
         },
       ]}
     >
-      <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
-        {primaryItems.map(([destination, label, Icon]) => {
-          const disabled = destination === 'profile' && profile === null;
-          const notifications = destination === 'notifications';
-          return (
-            <SidebarControl
-              accessibilityLabel={
-                notifications
-                  ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
-                  : undefined
-              }
-              compact={compact}
-              destination={destination}
-              disabled={disabled}
-              Icon={Icon}
-              key={destination}
-              label={label}
-              onPress={() => onNavigate(destination)}
-              profile={destination === 'profile' ? (profile ?? undefined) : undefined}
-              renderControl={renderControl}
-              selected={currentDestination === destination}
-              unreadCount={notifications ? unreadNotificationCount : null}
-            />
-          );
-        })}
-        {compact ? (
+      {guestPublicContent ? (
+        <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
+          {!compact ? (
+            <View style={styles.guestIntro}>
+              <Text
+                accessibilityRole="header"
+                style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+              >
+                공개 콘텐츠를 보고 있어요
+              </Text>
+              <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
+                로그인하면 프로필을 선택하거나 만들고 대화에 참여할 수 있어요.
+              </Text>
+            </View>
+          ) : null}
           <SidebarControl
-            compact
-            destination="compose"
-            Icon={SquarePen}
-            label="글쓰기"
-            onPress={() => onNavigate('compose')}
-            renderControl={renderControl}
-            selected={currentDestination === 'compose'}
+            compact={compact}
+            Icon={UserRoundPlus}
+            label="가입하기"
+            onPress={() => undefined}
+            renderGuestAction={renderGuestAction}
             tone="primary"
           />
-        ) : null}
-      </View>
-
-      <View
-        style={[
-          styles.footer,
-          compact ? styles.compactFooter : styles.wideFooter,
-          { borderColor: theme.borderSubtle },
-        ]}
-      >
-        {showFeedback && Platform.OS === 'web' ? (
           <SidebarControl
             compact={compact}
-            href="https://discord.gg/Zjd7ENfuxz"
-            Icon={UsersRound}
-            label="디스코드 커뮤니티 참여하기"
+            Icon={LogIn}
+            label="로그인"
             onPress={() => undefined}
+            renderGuestAction={renderGuestAction}
           />
-        ) : null}
-
-        {showFeedback ? (
-          <SidebarControl
-            compact={compact}
-            destination="feedback"
-            Icon={Mail}
-            label="피드백 보내기"
-            onPress={() => onNavigate('feedback')}
-            renderControl={renderControl}
-            selected={currentDestination === 'feedback'}
-          />
-        ) : null}
-
-        {compact ? (
-          <ActionMenu
-            accessibilityLabel="설정 및 기타 메뉴"
-            disabled={logoutPending}
-            error={logoutError}
-            items={[
-              {
-                icon: SettingsIcon,
-                key: 'settings',
-                label: '설정',
-                onSelect: renderControl ? () => undefined : () => onNavigate('settings'),
-              },
-              {
-                busy: logoutPending,
-                dismissOnSelect: false,
-                disabled: logoutPending,
-                icon: LogOut,
-                key: 'logout',
-                label: '로그아웃',
-                onSelect: onLogout,
-              },
-            ]}
-            onOpenChange={changeUtilityOpen}
-            renderItem={({ children, item, onSelect }) =>
-              item.key === 'settings' && renderControl
-                ? renderControl({
-                    children,
-                    destination: 'settings',
-                    disabled: false,
-                    onPress: onSelect,
-                    selected: currentDestination === 'settings',
-                  })
-                : children
-            }
-            renderTrigger={({ disabled, expanded, onPress, ref }) => (
+        </View>
+      ) : (
+        <>
+          <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
+            {primaryItems.map(([destination, label, Icon]) => {
+              const disabled = destination === 'profile' && profile === null;
+              const notifications = destination === 'notifications';
+              return (
+                <SidebarControl
+                  accessibilityLabel={
+                    notifications
+                      ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
+                      : undefined
+                  }
+                  compact={compact}
+                  destination={destination}
+                  disabled={disabled}
+                  Icon={Icon}
+                  key={destination}
+                  label={label}
+                  onPress={() => onNavigate(destination)}
+                  profile={destination === 'profile' ? (profile ?? undefined) : undefined}
+                  renderControl={renderControl}
+                  selected={currentDestination === destination}
+                  unreadCount={notifications ? unreadNotificationCount : null}
+                />
+              );
+            })}
+            {compact ? (
               <SidebarControl
                 compact
-                controlRef={ref}
-                disabled={disabled}
-                expanded={expanded}
-                hasMenu
-                Icon={Ellipsis}
-                label="설정 및 기타"
-                onPress={onPress}
-                selected={currentDestination === 'settings'}
+                destination="compose"
+                Icon={SquarePen}
+                label="글쓰기"
+                onPress={() => onNavigate('compose')}
+                renderControl={renderControl}
+                selected={currentDestination === 'compose'}
+                tone="primary"
               />
-            )}
-            webHorizontalPlacement="after"
-            webVerticalPlacement="end"
-          />
-        ) : (
-          <>
-            <SidebarControl
-              compact={false}
-              expanded={utilityOpen}
-              Icon={SettingsIcon}
-              label="설정 및 기타"
-              onPress={() => {
-                if (currentDestination !== 'settings') {
-                  changeUtilityOpen(!utilityOpen);
-                }
-              }}
-              selected={false}
-              trailingIcon={utilityOpen ? ChevronUp : ChevronDown}
-            />
-            {utilityOpen ? (
-              <View style={styles.inlineUtility}>
-                <SidebarControl
-                  compact={false}
-                  destination="settings"
-                  Icon={SettingsIcon}
-                  label="설정"
-                  onPress={() =>
-                    renderControl
-                      ? changeUtilityOpen(false)
-                      : selectInlineUtility(() => onNavigate('settings'))
-                  }
-                  renderControl={renderControl}
-                  selected={currentDestination === 'settings'}
-                  nested
-                />
-                <SidebarControl
-                  compact={false}
-                  busy={logoutPending}
-                  Icon={LogOut}
-                  label="로그아웃"
-                  onPress={onLogout}
-                  nested
-                />
-              </View>
             ) : null}
-          </>
-        )}
-      </View>
-      {!compact && logoutError ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          accessibilityRole="alert"
-          style={[styles.error, { color: theme.danger }]}
-        >
-          {logoutError}
-        </Text>
-      ) : null}
+          </View>
+
+          <View
+            style={[
+              styles.footer,
+              compact ? styles.compactFooter : styles.wideFooter,
+              { borderColor: theme.borderSubtle },
+            ]}
+          >
+            {showFeedback && Platform.OS === 'web' ? (
+              <SidebarControl
+                compact={compact}
+                href="https://discord.gg/Zjd7ENfuxz"
+                Icon={UsersRound}
+                label="디스코드 커뮤니티 참여하기"
+                onPress={() => undefined}
+              />
+            ) : null}
+
+            {showFeedback ? (
+              <SidebarControl
+                compact={compact}
+                destination="feedback"
+                Icon={Mail}
+                label="피드백 보내기"
+                onPress={() => onNavigate('feedback')}
+                renderControl={renderControl}
+                selected={currentDestination === 'feedback'}
+              />
+            ) : null}
+
+            {compact ? (
+              <ActionMenu
+                accessibilityLabel="설정 및 기타 메뉴"
+                disabled={logoutPending}
+                error={logoutError}
+                items={[
+                  {
+                    icon: SettingsIcon,
+                    key: 'settings',
+                    label: '설정',
+                    onSelect: renderControl ? () => undefined : () => onNavigate('settings'),
+                  },
+                  {
+                    busy: logoutPending,
+                    dismissOnSelect: false,
+                    disabled: logoutPending,
+                    icon: LogOut,
+                    key: 'logout',
+                    label: '로그아웃',
+                    onSelect: onLogout,
+                  },
+                ]}
+                onOpenChange={changeUtilityOpen}
+                renderItem={({ children, item, onSelect }) =>
+                  item.key === 'settings' && renderControl
+                    ? renderControl({
+                        children,
+                        destination: 'settings',
+                        disabled: false,
+                        onPress: onSelect,
+                        selected: currentDestination === 'settings',
+                      })
+                    : children
+                }
+                renderTrigger={({ disabled, expanded, onPress, ref }) => (
+                  <SidebarControl
+                    compact
+                    controlRef={ref}
+                    disabled={disabled}
+                    expanded={expanded}
+                    hasMenu
+                    Icon={Ellipsis}
+                    label="설정 및 기타"
+                    onPress={onPress}
+                    selected={currentDestination === 'settings'}
+                  />
+                )}
+                webHorizontalPlacement="after"
+                webVerticalPlacement="end"
+              />
+            ) : (
+              <>
+                <SidebarControl
+                  compact={false}
+                  expanded={utilityOpen}
+                  Icon={SettingsIcon}
+                  label="설정 및 기타"
+                  onPress={() => {
+                    if (currentDestination !== 'settings') {
+                      changeUtilityOpen(!utilityOpen);
+                    }
+                  }}
+                  selected={false}
+                  trailingIcon={utilityOpen ? ChevronUp : ChevronDown}
+                />
+                {utilityOpen ? (
+                  <View style={styles.inlineUtility}>
+                    <SidebarControl
+                      compact={false}
+                      destination="settings"
+                      Icon={SettingsIcon}
+                      label="설정"
+                      onPress={() =>
+                        renderControl
+                          ? changeUtilityOpen(false)
+                          : selectInlineUtility(() => onNavigate('settings'))
+                      }
+                      renderControl={renderControl}
+                      selected={currentDestination === 'settings'}
+                      nested
+                    />
+                    <SidebarControl
+                      compact={false}
+                      busy={logoutPending}
+                      Icon={LogOut}
+                      label="로그아웃"
+                      onPress={onLogout}
+                      nested
+                    />
+                  </View>
+                ) : null}
+              </>
+            )}
+          </View>
+          {!compact && logoutError ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+              style={[styles.error, { color: theme.danger }]}
+            >
+              {logoutError}
+            </Text>
+          ) : null}
+        </>
+      )}
     </View>
   );
 }
@@ -541,6 +589,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   group: { gap: space[4] },
+  guestIntro: { gap: space[8], marginBottom: space[8] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
     alignItems: 'center',
@@ -560,7 +609,7 @@ const styles = StyleSheet.create({
   },
   compactVisual: { justifyContent: 'center' },
   wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[8] },
-  primaryControl: { borderRadius: radius.full },
+  composeControl: { borderRadius: radius.full },
   iconFrame: { alignItems: 'center', position: 'relative', width: iconSizes[20] },
   trailingIcon: { marginLeft: 'auto', marginRight: space[16] },
   unread: {

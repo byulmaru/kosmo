@@ -3,13 +3,17 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { collectRemoteFeaturedPostIds, federation } from '@kosmo/fedify';
+import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
+import {
+  collectRemoteFeaturedItemUris,
+  collectRemoteFeaturedPostIds,
+  federation,
+} from '@kosmo/fedify';
 import { and, eq, isNotNull } from 'drizzle-orm';
+import { createBoundedDocumentLoader } from './remote-document';
 import type { RemoteProfileFeaturedSyncInput } from '../workflows/remote-profile-featured';
 
-export const collectRemoteFeaturedActivity = async (
-  input: RemoteProfileFeaturedSyncInput,
-): Promise<string[] | null> => {
+const getRemoteFeaturedContext = async (input: RemoteProfileFeaturedSyncInput) => {
   const current = await db
     .select({ instance: Instances, profile: Profiles })
     .from(ActivityPubActors)
@@ -60,9 +64,51 @@ export const collectRemoteFeaturedActivity = async (
   const documentLoader = follower
     ? await context.getDocumentLoader({ identifier: follower.id })
     : context.documentLoader;
+
+  return { context, documentLoader, signingProfileId: follower?.id };
+};
+
+export const collectRemoteFeaturedActivity = async (
+  input: RemoteProfileFeaturedSyncInput,
+): Promise<string[] | null> => {
+  const featuredContext = await getRemoteFeaturedContext(input);
+  if (featuredContext === null) {
+    return null;
+  }
+
   return collectRemoteFeaturedPostIds({
     ...input,
-    context,
-    documentLoader,
+    context: featuredContext.context,
+    documentLoader: featuredContext.documentLoader,
   });
+};
+
+export const collectRemoteFeaturedItemsActivity = async (
+  input: RemoteProfileFeaturedSyncInput,
+): Promise<{
+  readonly documentBytes: number;
+  readonly itemUris: string[];
+  readonly signingProfileId?: string;
+} | null> => {
+  const featuredContext = await getRemoteFeaturedContext(input);
+  if (featuredContext === null) {
+    return null;
+  }
+
+  const bounded = createBoundedDocumentLoader(
+    featuredContext.documentLoader,
+    REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+  );
+  const itemUris = await collectRemoteFeaturedItemUris({
+    documentLoader: bounded.documentLoader,
+    featuredUri: input.featuredUri,
+  });
+
+  return {
+    documentBytes: bounded.documentBytes,
+    itemUris: itemUris.map(({ href }) => href),
+    ...(featuredContext.signingProfileId === undefined
+      ? {}
+      : { signingProfileId: featuredContext.signingProfileId }),
+  };
 };

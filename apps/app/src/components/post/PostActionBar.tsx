@@ -169,6 +169,8 @@ export function PostActionBar({
               menuExpanded={more.menuExpanded}
               onPress={more.onPress}
               popupRole={more.popupRole}
+              processing={morePending ? 'pending' : 'default'}
+              retainFocusWhilePending={morePending}
               stateful={Boolean(more.popupRole)}
               testID="more"
             />
@@ -198,6 +200,7 @@ export function PostActionBar({
                   onPress={trigger.onPress}
                   popupRole="menu"
                   processing={morePending ? 'pending' : 'default'}
+                  retainFocusWhilePending={morePending}
                   testID="more"
                 />
               )}

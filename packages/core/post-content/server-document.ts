@@ -1,9 +1,12 @@
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
+  isPostContentMentionHandleUsernameWithinLimit,
+  normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
   postContentMentionFallbackText,
+  postContentMentionMaxOccurrences,
   postContentSchemaVersion,
 } from './index';
 import { postContentSchema } from './schema';
@@ -68,8 +71,10 @@ function canonicalizePostContentBody(
       if (node.isText) {
         appendNormalizedText(inline, node.text!, node.marks);
       } else if (node.type === postContentSchema.nodes.mention) {
+        const handle = normalizePostContentMentionHandle(node.attrs.handle);
         inline.push(
           postContentSchema.nodes.mention.create({
+            ...(handle === undefined ? {} : { handle }),
             profileId: normalizePostContentProfileId(node.attrs.profileId),
           }),
         );
@@ -113,12 +118,23 @@ export function validateLocalPostContentDocument(
   authoredBodyText?: string,
 ): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
-  const hasMentions = document.body.content.some(
-    (block) =>
-      block.type === 'paragraph' && (block.content ?? []).some((node) => node.type === 'mention'),
+  const mentionNodes = document.body.content.flatMap((block) =>
+    block.type === 'paragraph'
+      ? (block.content ?? []).flatMap((node) => (node.type === 'mention' ? [node] : []))
+      : [],
   );
+  const hasMentions = mentionNodes.length > 0;
   if (hasMentions && authoredBodyText === undefined) {
     throw new TypeError('Local PostContent Mention nodes require the authored body text');
+  }
+  if (
+    mentionNodes.length > postContentMentionMaxOccurrences ||
+    mentionNodes.some(
+      ({ attrs }) =>
+        attrs.handle !== undefined && !isPostContentMentionHandleUsernameWithinLimit(attrs.handle),
+    )
+  ) {
+    throw new ValidationError('PostContent Mention exceeds its limits', { field: 'mentions' });
   }
   const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
   const bodyText =
@@ -160,7 +176,11 @@ function postContentBodyToText(
             return node.text;
           }
           if (node.type === 'mention') {
-            return mentionHandles?.get(node.attrs.profileId) ?? postContentMentionFallbackText;
+            return (
+              mentionHandles?.get(node.attrs.profileId) ??
+              node.attrs.handle ??
+              postContentMentionFallbackText
+            );
           }
           return '\n';
         })
@@ -275,11 +295,12 @@ function assertPostContentJsonKeys(value: unknown): void {
     if (!isRecord(value.attrs)) {
       throw new TypeError('Mention attrs must be an object');
     }
-    assertOnlyKeys(value.attrs, ['profileId', 'label']);
+    assertOnlyKeys(value.attrs, ['profileId', 'label', 'handle']);
     normalizePostContentProfileId(value.attrs.profileId);
     if (value.attrs.label !== undefined && typeof value.attrs.label !== 'string') {
       throw new TypeError('Legacy Mention label must be a string');
     }
+    normalizePostContentMentionHandle(value.attrs.handle);
   }
 }
 

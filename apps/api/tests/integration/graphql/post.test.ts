@@ -196,11 +196,11 @@ describe('Post Reply GraphQL 경계', () => {
     assert.ok(paragraph?.type === 'paragraph');
     assert.deepEqual(paragraph.content, [
       { type: 'text', text: '😀 hi ' },
-      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'mention', attrs: { handle: relativeHandle, profileId: mentioned.id } },
       { type: 'text', text: ', and ' },
-      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'mention', attrs: { handle: relativeHandle, profileId: mentioned.id } },
       { type: 'text', text: '; also ' },
-      { type: 'mention', attrs: { profileId: remoteMentioned.id } },
+      { type: 'mention', attrs: { handle: remoteRelativeHandle, profileId: remoteMentioned.id } },
     ]);
     const storedMentions = await db
       .select()
@@ -215,7 +215,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(projected);
     assert.equal(
       projected.data?.node?.content.bodyText,
-      '😀 hi @알 수 없는 사용자, and @알 수 없는 사용자; also @알 수 없는 사용자',
+      `😀 hi ${relativeHandle}, and ${relativeHandle}; also ${remoteRelativeHandle}`,
     );
     assert.deepEqual(
       projected.data?.node?.content.mentionedProfiles
@@ -438,7 +438,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(strangerRead.data?.node, null);
   });
 
-  test('createPost resolves typed local and stored remote handles without normalizing their body text', async () => {
+  test('createPost stores typed Mention handles from their matched Profiles', async () => {
     const auth = await createAuthenticatedSession();
     const local = await createProfile('typed_local');
     const remote = await createRemoteActorProfile('typed_remote');
@@ -486,8 +486,23 @@ describe('Post Reply GraphQL 경계', () => {
     const paragraph = content.document.body.content[0];
     assert.ok(paragraph?.type === 'paragraph');
     assert.deepEqual(
-      paragraph.content?.flatMap((node) => (node.type === 'mention' ? [node.attrs.profileId] : [])),
-      [local.id, local.id, remote.id, idnProfile.id],
+      paragraph.content?.flatMap((node) =>
+        node.type === 'mention'
+          ? [{ handle: node.attrs.handle, profileId: node.attrs.profileId }]
+          : [],
+      ),
+      [
+        { handle: `@${local.handle}`, profileId: local.id },
+        { handle: `@${local.handle}`, profileId: local.id },
+        {
+          handle: `@${remote.handle}@${remoteInstance.domain}`,
+          profileId: remote.id,
+        },
+        {
+          handle: `@${idnProfile.handle}@${idnInstance.domain}`,
+          profileId: idnProfile.id,
+        },
+      ],
     );
     const storedMentions = await db
       .select()
@@ -496,6 +511,15 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(
       storedMentions.map(({ profileId }) => profileId).sort(),
       [idnProfile.id, local.id, remote.id].sort(),
+    );
+
+    const projected = await requestPostContent(result.data!.createPost.post.id, auth.token);
+    assertNoGraphQLErrors(projected);
+    assert.equal(
+      projected.data?.node?.content.bodyText,
+      `${filler} 😀 @${local.handle}, @${local.handle}! ` +
+        `@${remote.handle}@${remoteInstance.domain}, ` +
+        `@${idnProfile.handle}@${idnInstance.domain}.`,
     );
   });
 

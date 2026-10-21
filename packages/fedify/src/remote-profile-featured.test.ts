@@ -155,6 +155,34 @@ test('rejects mixed inline items and mismatched fetched page IDs', async () => {
   );
 });
 
+test('rejects non-HTTP item URIs before starting per-item lookups', async () => {
+  const documentLoader = await createLoader([
+    new OrderedCollection({
+      id: collectionUri,
+      items: [new URL('ftp://remote.example/notes/1')],
+    }),
+  ]);
+
+  await assert.rejects(
+    collectRemoteFeaturedItemUris({ documentLoader, featuredUri: collectionUri }),
+    /item URI must use HTTP\(S\)/u,
+  );
+});
+
+test('rejects non-HTTP Featured collection URIs before loading the document', async () => {
+  const documentLoader: DocumentLoader = async () => {
+    throw new Error('Unexpected collection load');
+  };
+
+  await assert.rejects(
+    collectRemoteFeaturedItemUris({
+      documentLoader,
+      featuredUri: 'ftp://remote.example/users/alice/featured',
+    }),
+    /Remote Featured URI must use HTTP\(S\)/u,
+  );
+});
+
 test('rejects page and item limit exhaustion', async () => {
   const item = (index: number) => new URL(`https://remote.example/notes/${index}`);
   const itemLimitPage = new URL(`${collectionUri.href}?page=item-limit`);

@@ -80,13 +80,12 @@ PROD-735 검토 중 사용자가 프로필 화면이 아니라 프로필 태그 
   TagChip은 탐색 링크로 유지하며, 프로필 화면에 태그 뮤트용 벨·메뉴·확인 진입점을 두지 않는다.
 - 태그 상세 페이지의 뮤트 대상은 그 페이지의 canonical Hashtag다. 규칙 Owner는 현재 selected Profile이며,
   출발한 Profile이나 목록에 표시된 사람을 뮤트하는 동작과 구분한다. 기존 Profile 자체의 뮤트 기능은 유지한다.
-- 기존 뮤트 확인·피드백 패턴을 재사용한다. 해당 태그를 프로필에 단 사람의 새 알림만 끄는 영구 뮤트를
-  제공하며 범위·방식·기간 선택을 추가하지 않는다. 효과·권한·기존 규칙 보존은
-  [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)과 기존 계약을 따른다.
+- 기존 뮤트 확인·피드백 패턴을 재사용한다. 효과·권한·기존 규칙 보존은 [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)을 따른다.
 - 뮤트 권한·상태와 관련 Profile 목록 조회를 분리한다. selected Profile이 없어도 기존 Account 인증 아래의
   목록 탐색을 유지하며, 뮤트로 관련 Profile 목록을 숨기거나 후보 정책을 변경하지 않는다.
-- PROD-735는 이 진입점 변경과 클라이언트 검증을 소유한다. 서버 규칙은 PROD-1029, 실제 Profile Tag 기반
-  새 알림 억제는 PROD-1048이 소유한다.
+- PROD-735는 이 진입점 변경과 클라이언트 검증을, PROD-1029는 Hashtag Mute Rule의 서버 구현을 소유한다.
+  PROD-1048은 Profile Tag 기반 Notification Scope 적용의 구현 slice를 소유하며, Rule의 전체 제품 범위를 뜻하지
+  않는다.
 
 태그에 관한 동작을 해당 태그의 상세 맥락에 모으고, 프로필 자체의 뮤트와 혼동되지 않게 하는 결정이다.
 기존 문서의 “태그 맥락”은 프로필 화면의 새 벨·메뉴를 승인한 근거로 사용하지 않는다. 프로필 화면 진입점을

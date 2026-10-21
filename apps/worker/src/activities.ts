@@ -6,6 +6,7 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export { deletePostRelatedNotificationsActivity } from './activities/delete-post-related-notifications';
 export {
   followImportedProfileActivity,
   resolveImportedLocalProfileActivity,
@@ -39,7 +40,11 @@ export {
   sendQuoteOwnerEffectActivity,
 } from './activities/quote-owner';
 export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
-export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
+export { lookupRemotePostActivity } from './activities/remote-post-lookup';
+export {
+  collectRemoteFeaturedActivity,
+  collectRemoteFeaturedItemsActivity,
+} from './activities/remote-profile-featured';
 export {
   applyRemoteProfileActorActivity,
   fetchRemoteProfileActorActivity,

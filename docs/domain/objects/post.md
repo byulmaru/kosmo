@@ -347,9 +347,10 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ### 원격 Note의 최초 materialization과 Reply Parent
 
-- 검증된 Public/Unlisted 원격 Note는 `inReplyTo` 유무와 관계없이 최초 저장한다. 요청 URI와 Note
-  identity, 단일 attribution과 작성자 검증, 지원되는 Content 및 수신 한계를 통과해야 한다. PUBLIC/UNLISTED 신규 원문 조회 경로는
-  Followers Only/DIRECT Note를 허용하지 않으며, 기존 Create의 Followers Only 수신 계약은 유지한다.
+- 검증된 원격 Note는 `inReplyTo` 유무와 관계없이 최초 저장한다. 요청 URI와 Note identity, 단일
+  attribution과 작성자 검증, 지원되는 Content 및 수신 한계를 통과해야 한다. 수신 `Create(Note)`와 지원되는 원문 조회로
+  fetch/hydrate한 Note는 모두 아래 [수신 규칙](#activitypub-local-note-표현)에 따라 분류한다. 따라서 Public/Unlisted marker가 없고
+  검증된 작성자의 canonical followers URI가 audience에 있는 Note는 원문 조회에서도 Followers Only로 저장한다.
 - Reply Parent는 기존 DB의 Local canonical identity 또는 Remote exact URI mapping으로만 조회한다.
   Parent identity가 모호하거나 지원되지 않거나, Parent가 없거나 기존 Post 생성 계약상 부적합하면
   `replyParentId = null`로 Note 자체를 저장한다. DB 장애와 예상하지 못한 오류는 fallback 조건이 아니다.
@@ -369,12 +370,14 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   일부 유효 이미지로 축소 저장하지 않는다. nullable Media Type·Alt Text와 attachment별 Media identity를 보존한다.
 - attachment-only Note는 하나 이상의 유효한 이미지가 있으면 허용한다. 신규 원문 조회에서 본문과 유효한
   이미지가 모두 없는 Note는 저장하지 않는다. 이 조건을 기존 Create에 일괄 적용해 기존 동작을 바꾸지 않는다.
-- Note identity·attribution·Public/Unlisted audience·content/media·수신 한계 검증은 신규 작성자 persistence보다
-  먼저 수행한다. Note의 `attributedTo`와 실제 저장할 Actor의 exact URI 일치는 Actor persistence 전에 검증한다.
-  불일치한 Actor를 저장하거나 기존 Profile을 그 Actor에 재연결한 뒤 실패 처리하지 않는다.
+- Note identity·attribution 검증은 신규 작성자 persistence보다 먼저 수행한다. Note의 `attributedTo`와 실제 저장할
+  Actor의 exact URI 일치는 Actor persistence 전에 검증한다. 불일치한 Actor를 저장하거나 기존 Profile을 그 Actor에
+  재연결한 뒤 실패 처리하지 않는다.
 - Remote Actor/Profile과 Post는 독립된 원자적 저장 경계다. Actor 내부 Profile·Actor metadata·Profile 표현의
-  원자성을 유지한다. 유효한 작성자가 commit된 뒤 Post가 실패하거나 duplicate로 종료돼도 작성자와 그 표현을
-  보상 삭제하지 않는다. Instance 확보도 기존 독립 경계를 유지하며 Note/Post 실패를 이유로 삭제하지 않는다.
+  원자성을 유지한다. Audience나 content/media 검증이 Note를 거부하더라도 이미 저장된 작성자와 그 표현은
+  유지한다. 해당 Note의 ActivityPub Post mapping, Post, PostContent와 Post effects는 생성하지 않는다. 유효한 작성자가
+  commit된 뒤 Post가 실패하거나 duplicate로 종료돼도 작성자와 그 표현을 보상 삭제하지 않는다. Instance 확보도
+  기존 독립 경계를 유지하며 Note/Post 실패를 이유로 삭제하지 않는다.
 - Post·PostContent·currentContent·ActivityPub mapping·첨부 Media·최초 Reply Parent 관계는 같은 Post
   transaction에서 commit/rollback한다. DB 장애와 예상하지 못한 오류는 전파한다. Post effects는 성공한 Post
   commit 뒤에만 실행하고, 실패·duplicate에서는 시작하지 않는다. commit 뒤 effects 실패는 저장 결과를 되돌리지 않는다.
@@ -446,11 +449,13 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   collection을 분류하려고 network dereference하거나 `/followers` 경로 휴리스틱을 사용하지 않고 추가 addressee로
   무시한다. raw malformed audience syntax는 기존 ActivityPub vocabulary hydration과 top-level Note 기본 검증에서
   처리하며, 이 무시 규칙은 구문상 유효하게 파싱된 extra IRI에만 적용한다.
-- Public marker와 author canonical followers marker가 모두 없으면 actor-only ActivityPub Direct/limited audience와 foreign
-  followers-looking URI만 있는 audience는 지원하지 않으며 Post side effect 없이 건너뛴다. 이런 추가 actor URI와
-  spoofed-looking URI 자체로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는
-  viewer access를 만들지 않는다. 여기서 정한 audience 분류는 body/tag Mention identity 보존과 별개이며, audience URI만으로 Mention
-  관계를 만들지 않는다.
+- Public marker와 author canonical followers marker가 모두 없으면 DIRECT 후보로 분류한다. 수신 `Create(Note)`와 remote source에서
+  fetch/hydrate해 공통 Note materializer로 전달한 Note는 inbox 종류와 `context.recipient`에 관계없이, verified typed Mention href가
+  ACTIVE Local Profile과 ACTIVE Local Instance를 하나 이상 가리킬 때 저장한다. Post의 기존 typed Mention 관계는 local/remote
+  Profile 모두 보존하며, DIRECT 조회 권한은 그 현재 관계에서만 나온다. Local Follow는 요구하지 않고, Mention되지 않은 inbox
+  recipient는 읽을 수 없다. `to`/`cc`는 기존 Public/Unlisted/Followers marker 우선순위 분류에만 사용하며,
+  `to`/`cc`/`bto`/`bcc` 주소만으로 Mention 관계나 DIRECT 권한을 만들지 않는다. audience 주소가 없거나 Mention과 달라도 검증된
+  Mention 수신을 허용한다. Note Update와 과거 Note 복구는 포함하지 않는다.
 - actor·object·attribution과 top-level Note의 기본 검증은 여전히 materialization 전에 통과해야 한다. 이 검증은
   audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility를
   결정하기 위한 경계다.
@@ -482,10 +487,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 ### ActivityPub Profile Featured collection
 
 - Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
-  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. 현재 Local
-  first-party UI는 server-authoritative order의 첫 visible pinned Post만 렌더하지만, API·저장 관계는 이 cardinality에 고정되지 않는다.
-  새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고, 관계 변경이 없으면 같은 order를 반환한다. 새 pin의 앞·뒤 배치와
-  별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
+  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. Local first-party UI는
+  server-authoritative 순서로 조회 가능한 고정 Post 전체를 표시하고, Remote는 검증된 Featured collection을 원격 순서로 표시한다.
+  새 pin은 기존 pin의 상대 순서를 보존해 추가한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
 - Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
@@ -641,8 +645,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- ActivityPub DIRECT/limited audience의 inbound 처리는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)
-  계약에서 정의한다. Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
+- ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
+  Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
   따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
   Note의 typed Mention 보존은 별도 수신 계약을 따른다.

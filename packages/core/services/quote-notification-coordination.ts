@@ -8,7 +8,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
 import type { Transaction } from '../db';
@@ -238,6 +238,7 @@ export const materializeReplyNotificationIfEligible = async (
       and(
         eq(Posts.id, postId),
         ne(Posts.profileId, ReplyParents.profileId),
+        eq(ReplyParents.state, PostState.ACTIVE),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),

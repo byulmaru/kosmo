@@ -55,6 +55,16 @@ spec:
     spec:
       serviceAccountName: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
       automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: worker
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            - pod-template-hash
       containers:
         - name: worker
           image: {{ include "kosmo.imageRef" . | quote }}
