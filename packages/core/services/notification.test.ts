@@ -47,7 +47,7 @@ import {
   deleteFollowRequestNotification,
   deleteNotificationBySource,
 } from './notification';
-import { materializeNotification } from './notification-policy';
+import { isNotificationSuppressed, materializeNotification } from './notification-policy';
 import { createPost, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
@@ -645,6 +645,37 @@ test('Follow·Follow Request 알림은 Recipient Mute와 양방향 Block을 반�
   await createFollowRequestNotification(request.id);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
   assert.equal((await readNotifications(request.id)).length, 1);
+});
+
+test('Notification 정책은 허용과 Profile Tag 억제를 각각 한 번의 DB query로 판정한다', async () => {
+  const recipient = await createProfile();
+  const related = await createProfile();
+  const hashtag = await createHashtag('notification-policy-query-count');
+
+  const assertPolicyQuery = async (expectedSuppressed: boolean) => {
+    const previousDebug = pg.options.debug;
+    let submittedQueries = 0;
+    pg.options.debug = () => {
+      submittedQueries += 1;
+    };
+
+    try {
+      assert.equal(
+        await isNotificationSuppressed(db, recipient.id, related.id),
+        expectedSuppressed,
+      );
+      assert.equal(submittedQueries, 1);
+    } finally {
+      pg.options.debug = previousDebug;
+    }
+  };
+
+  await assertPolicyQuery(false);
+
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+  await createHashtagMuteRule({ ownerProfileId: recipient.id, targetHashtagId: hashtag.id });
+
+  await assertPolicyQuery(true);
 });
 
 test('일치하는 Profile Tag는 구현된 여섯 일반 알림 경로를 억제하고 문자열만 일치하면 생성한다', async () => {

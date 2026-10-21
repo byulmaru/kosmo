@@ -1,7 +1,6 @@
-import { and, arrayContains, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, arrayContains, eq, exists, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   AccountProfiles,
-  first,
   HashtagMuteRules,
   Notifications,
   ProfileBlocks,
@@ -94,51 +93,51 @@ export const isNotificationSuppressed = async (
   recipientProfileId: string,
   relatedProfileId: string,
 ): Promise<boolean> => {
-  const profileBlock = await database
-    .select({ id: ProfileBlocks.id })
-    .from(ProfileBlocks)
-    .where(profileBlockPairWhere(recipientProfileId, relatedProfileId))
-    .limit(1)
-    .then(first);
-
-  if (profileBlock) {
-    return true;
-  }
-
-  const profileMute = await database
-    .select({ id: ProfileMutes.id })
-    .from(ProfileMutes)
-    .where(
-      and(
-        eq(ProfileMutes.ownerProfileId, recipientProfileId),
-        eq(ProfileMutes.targetProfileId, relatedProfileId),
-        or(isNull(ProfileMutes.expiresAt), gt(ProfileMutes.expiresAt, sql`CURRENT_TIMESTAMP`)),
+  const [result] = await database.execute<{ suppressed: boolean }>(sql`
+    SELECT ${or(
+      exists(
+        database
+          .select({ id: ProfileBlocks.id })
+          .from(ProfileBlocks)
+          .where(profileBlockPairWhere(recipientProfileId, relatedProfileId)),
       ),
-    )
-    .limit(1)
-    .then(first);
-
-  if (profileMute) {
-    return true;
-  }
-
-  const profileTagMute = await database
-    .select({ id: HashtagMuteRules.id })
-    .from(HashtagMuteRules)
-    .innerJoin(ProfileHashtags, eq(HashtagMuteRules.targetHashtagId, ProfileHashtags.hashtagId))
-    .where(
-      and(
-        eq(HashtagMuteRules.ownerProfileId, recipientProfileId),
-        eq(ProfileHashtags.profileId, relatedProfileId),
-        arrayContains(HashtagMuteRules.scopes, [HashtagMuteScope.NOTIFICATION]),
-        or(
-          isNull(HashtagMuteRules.expiresAt),
-          gt(HashtagMuteRules.expiresAt, sql`CURRENT_TIMESTAMP`),
-        ),
+      exists(
+        database
+          .select({ id: ProfileMutes.id })
+          .from(ProfileMutes)
+          .where(
+            and(
+              eq(ProfileMutes.ownerProfileId, recipientProfileId),
+              eq(ProfileMutes.targetProfileId, relatedProfileId),
+              or(
+                isNull(ProfileMutes.expiresAt),
+                gt(ProfileMutes.expiresAt, sql`CURRENT_TIMESTAMP`),
+              ),
+            ),
+          ),
       ),
-    )
-    .limit(1)
-    .then(first);
+      exists(
+        database
+          .select({ id: HashtagMuteRules.id })
+          .from(HashtagMuteRules)
+          .innerJoin(
+            ProfileHashtags,
+            eq(HashtagMuteRules.targetHashtagId, ProfileHashtags.hashtagId),
+          )
+          .where(
+            and(
+              eq(HashtagMuteRules.ownerProfileId, recipientProfileId),
+              eq(ProfileHashtags.profileId, relatedProfileId),
+              arrayContains(HashtagMuteRules.scopes, [HashtagMuteScope.NOTIFICATION]),
+              or(
+                isNull(HashtagMuteRules.expiresAt),
+                gt(HashtagMuteRules.expiresAt, sql`CURRENT_TIMESTAMP`),
+              ),
+            ),
+          ),
+      ),
+    )} AS suppressed
+  `);
 
-  return Boolean(profileTagMute);
+  return Boolean(result?.suppressed);
 };
