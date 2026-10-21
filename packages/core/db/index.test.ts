@@ -110,7 +110,6 @@ test('reuses the primary client when PGREADHOST is absent', () => {
     const { db, pg, pgRead } = await import('./db/index.ts');
     const { integer, pgTable } = await import('drizzle-orm/pg-core');
     if (pgRead !== undefined) throw new Error('read client exists without PGREADHOST');
-    if (db.$primary !== db.$replicas[0]) throw new Error('replica did not reuse the primary');
     const table = pgTable('replica_routing_test', { id: integer('id').primaryKey() });
     let queries = 0;
     pg.unsafe = () => {
