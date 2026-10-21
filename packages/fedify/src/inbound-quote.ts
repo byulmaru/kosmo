@@ -520,8 +520,6 @@ export const prepareStoredInboundQuote = async (
     };
   }
   if (
-    input.duplicateCreate &&
-    !input.authorizationUpdate &&
     expectation.expectedStatus === PostQuoteConsentStatus.APPROVED &&
     input.approvalUri === null
   ) {
