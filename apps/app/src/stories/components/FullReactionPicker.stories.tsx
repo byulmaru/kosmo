@@ -269,6 +269,7 @@ const meta = {
   excludeStories: [
     'InteractionContract',
     'SearchScrollResetContract',
+    'MobileWebSearchScrollResetContract',
     'LoadingContract',
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
@@ -798,4 +799,9 @@ export const MobileHandleExpansionContract: Story = {
     await userEvent.click(canvas.getByTestId('full-reaction-picker-drag-handle'));
     await waitFor(() => expect(parseFloat(getComputedStyle(sheet).height)).toBeGreaterThan(480));
   },
+};
+
+export const MobileWebSearchScrollResetContract: Story = {
+  ...SearchScrollResetContract,
+  globals: mobileGlobals,
 };

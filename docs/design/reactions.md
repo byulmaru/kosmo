@@ -48,7 +48,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16의 완전 수식 emoji 중 기본형 1,906개를 검색하거나 category별로 탐색한다. 피부색 변형 1,875개는 피커의 탐색·검색에서 숨기되, 서버는 전체 3,781개 Type을 계속 허용하고 기존 변형 반응의 표시·해제를 유지한다. Web·iOS·Android는 Unicode 문자열을 시스템 이모지 글꼴로 표시하며, 모양과 지원 범위는 브라우저·OS 버전에 따라 달라질 수 있다. 기존 Quick Picker의 여섯 Type은 `빠른 반응` 첫 영역에 유지한다. 피부색 선택 UI와 custom reaction은 후속 범위다.
 
-- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. 최근 반응이 없는 Browse 표본에는 최근 사용 section이 없다. Runtime은 최근 기록이 있으면 빠른 반응 아래에 `최근 사용`을 표시하며, 검색 중에는 숨긴다. Category shortcut control은 두지 않는다. Web은 `compact` 이상에서 최대 360×624px·8열, 모바일 레이아웃에서 최대 288×420px·6열로 표시하고 빠른 반응 6개를 아래 그리드의 첫 6열에 맞춘다. Mobile Figma 표본은 7열이며, runtime은 화면 너비와 시스템 글자 크기에 따라 48pt 이상의 터치 영역이 들어가는 열 수를 사용한다. Mobile 빠른 반응 6개와 category 행은 동일한 열 간격을 사용하며, 남는 열은 오른쪽에 비워 둔다. 마지막 덜 찬 category 행도 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
+- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. 최근 반응이 없는 Browse 표본에는 최근 사용 section이 없다. Runtime은 최근 기록이 있으면 빠른 반응 아래에 `최근 사용`을 표시하며, 검색 중에는 숨긴다. Category shortcut control은 두지 않는다. Web은 `compact` 이상에서 최대 360×624px·8열, 모바일 레이아웃에서 최대 288×420px·최대 6열로 표시한다. Mobile Figma 표본은 7열이며, runtime은 화면 너비와 시스템 글자 크기에 따라 48pt 이상의 터치 영역이 들어가는 열 수를 사용한다. Mobile 빠른 반응 6개와 category 행은 동일한 열 간격을 사용하며, 남는 열은 오른쪽에 비워 둔다. 마지막 덜 찬 category 행도 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - 최근 사용은 선택한 Profile별로 로컬 기기에만 최신 16개를 중복 없이 보관하고, 피커에는 해당 화면의 열 수에 맞춰 최대 두 줄을 표시한다. 반응 추가를 선택하면 가장 앞으로 옮기고, 해제는 순서를 바꾸지 않는다. 서버 동기화는 하지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 모바일 레이아웃에서는 하단 탐색을 가리지 않는 쪽에 배치한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다. Web 검색 입력은 16px UI/Copy/L을 사용해 작은 입력에 focus할 때의 자동 확대 조건을 피한다. 사용자 pinch zoom과 브라우저 기본 확대는 유지한다. Native 입력은 기존 UI/Copy/M을 유지한다.
 - Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 initial height는 720이다. 손잡이를 위로 끌거나 활성화하면 상단 safe area까지 펼치고, 펼친 상태에서 아래로 끌면 초기 높이로 접으며, 접힌 상태에서 아래로 끌면 닫는다. `Scrolled`는 sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
@@ -61,6 +61,12 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
 - Web의 미선택 Reaction button은 hover에서 `stateHover`, press에서 `statePressed` 배경을 표시한다. 선택 배경과 pending 표시는 유지한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
 - sticky header·category, grid scroll, safe area, software keyboard, Web keyboard, VoiceOver·TalkBack의 실제 focus·dismiss·reflow는 Production runtime QA에서 검증한다.
+
+### 모바일 목록 스크롤바
+
+- PROD-1163은 모바일 Web과 iOS·Android의 목록에 기본 스크롤 표시기를 사용한다. 모바일 Web의 기존 dialog와 Native bottom sheet, 목록 가상화와 이모지 그리드 배치를 유지한다. Desktop Web의 스크롤바는 변경하지 않는다.
+- 표시·숨김 시점과 바 드래그 지원은 OS·브라우저 기본 동작을 따른다. 모든 플랫폼에서 일시 표시와 직접 드래그를 동일하게 보장하지 않는다.
+- 별도 바나 조작 전용 여백을 추가하지 않는다. 검색·선택·일반 스크롤·Native 시트 핸들·keyboard·보조 기술 탐색은 기존 동작을 유지한다. Empty·Loading에는 기존처럼 목록을 표시하지 않는다.
 
 ## Post Action Bar 통합
 

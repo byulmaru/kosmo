@@ -6,6 +6,7 @@ import baseMeta, {
   MobileGridGeometryContract as mobileGridGeometryContract,
   MobileHandleExpansionContract as mobileHandleExpansionContract,
   MobileOverlayContract as mobileOverlayContract,
+  MobileWebSearchScrollResetContract as mobileWebSearchScrollResetContract,
   RecentSectionContract as recentSectionContract,
   RecentTwoRowsMobileWebContract as recentTwoRowsMobileWebContract,
   RecentTwoRowsNativeContract as recentTwoRowsNativeContract,
@@ -41,3 +42,5 @@ export const RecentTwoRowsNativeContract: Story = recentTwoRowsNativeContract;
 export const SequentialKeyboardBrowseContract: Story = sequentialKeyboardBrowseContract;
 export const WebGridGeometryContract: Story = webGridGeometryContract;
 export const WebMobileGridGeometryContract: Story = webMobileGridGeometryContract;
+
+export const MobileWebSearchScrollResetContract: Story = mobileWebSearchScrollResetContract;
