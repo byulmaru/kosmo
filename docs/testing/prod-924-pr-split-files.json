@@ -161,5 +161,38 @@
     ]
   },
   "remoteMutation": "none",
-  "requiredOrder": [1094, 961, 940]
+  "requiredOrder": [1094, 961, 940],
+  "privateSource": {
+    "pr": 962,
+    "base": "9987966eb324f6449a40afecdfc41a6eeeabe651",
+    "originalHead": "256a77113aca9ddb5218b8c0776dab31e4aabbac",
+    "files": [
+      "apps/worker/package.json",
+      "apps/worker/src/activities/quote-owner.ts",
+      "apps/worker/src/quote-private-source.database.test.ts",
+      "apps/worker/src/workflows/quote-owner.ts",
+      "docs/architecture/decisions/0030-quote-consent-owner.md",
+      "docs/domain/decisions/0029-quote-consent-and-federation.md",
+      "docs/domain/objects/post.md",
+      "docs/testing/prod-924-pr-split-files.json",
+      "docs/testing/prod-924-pr-split-validation.md",
+      "memory/temporal/activities.md",
+      "openspec/changes/materialize-followers-only-quote-source/.openspec.yaml",
+      "openspec/changes/materialize-followers-only-quote-source/decisions.md",
+      "openspec/changes/materialize-followers-only-quote-source/design.md",
+      "openspec/changes/materialize-followers-only-quote-source/proposal.md",
+      "openspec/changes/materialize-followers-only-quote-source/specs/activitypub-followers-quote-source/spec.md",
+      "openspec/changes/materialize-followers-only-quote-source/tasks.md",
+      "packages/core/temporal/post-quote-owner.ts",
+      "packages/fedify/src/inbound-create-note.ts",
+      "packages/fedify/src/inbound-quote.test.ts",
+      "packages/fedify/src/inbound-quote.ts"
+    ],
+    "candidateBranch": "PROD-793",
+    "mergeParents": [
+      "256a77113aca9ddb5218b8c0776dab31e4aabbac",
+      "9987966eb324f6449a40afecdfc41a6eeeabe651"
+    ],
+    "dependencies": [961, 940]
+  }
 }

@@ -556,6 +556,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   Content, Reply Parent와 자체 Post Eligibility는 독립적으로 유지한다.
 - 미저장 Public·Unlisted 원문은 기존 원격 Note 저장 경계를 통해 확보할 수 있다. Followers Only 원문은
   이미 저장된 경우에만 연결하며, 조회 시점에는 현재 viewer의 권한을 다시 적용한다.
+  다만 미저장 Source를 URL만으로 참조하고 FEP-044f 승인 참조가 있는 경우에는 아래 승인 증거·
+  Local Follower 인증 조회 경계를 적용한다. Public·Unlisted일 수 있어도 공개 범위를 알아내기 위한
+  비인증 사전 조회를 하지 않으며, 적합한 Local Follower가 없으면 원문을 확보하지 않고 PENDING을 유지한다.
+  embedded Public 원문과 승인 참조 없는 URL-only·legacy 원문의 기존 저장 경계는 유지한다.
 - Source가 Reply여도 Source 자체의 identity·Author·Visibility로 판정한다. Parent가 없거나 조회 불가하다는
   이유로 Source를 Parent로 바꾸거나 Source 자체의 조회 권한을 제한하지 않는다.
 - 미저장 Followers Only Source의 후속 authenticated fetch는 인증된 선행 처리에서 검증한 Source URI와
@@ -565,6 +569,29 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   정책의 방향을 따르고, 인용 승인 철회는 별도의 검증된 철회 행동으로 반영한다.
 - 이 수신 계약은 직접 Source를 표시하며 재귀적으로 인용을 펼치거나 `quote-inline` 본문을 다시 쓰지 않는다.
 - 이 계약의 근거와 후속 범위는 [ADR 0027](../decisions/0027-activitypub-remote-quote-approval.md)에 기록한다.
+
+### 미저장 Followers Only Quote Source 조회
+
+- 미저장 Source의 URL-only FEP-044f 승인 참조는 현재 issuer 승인 증거를 검증한 뒤 저장된 Source
+  작성자와 established Follow가 있는 Active Local Profile의 identity로만 조회한다. 조회 전에는 원문
+  공개 범위를 알 수 없으므로 Public·Unlisted에도 같은 경계를 적용한다. 승인 증거·작성자 대응·
+  적합한 Follower·서명 key가 없으면 비인증 조회로 대체하지 않고 PENDING 및 작성 본문을 유지한다.
+  이 선택은 Follower 없는 URL-only Public 원문의 자동 확보보다 조회 전 인증 경계의 일관성을 우선한다.
+- 원격 Quote가 참조하는 Followers Only Source가 아직 저장되지 않았으면, 인증된 선행 처리에서 검증한
+  Source URI와 작성자 Profile의 ActivityPub identity 사이의 대응이 있을 때만 원문을 조회한다. 작성자는
+  ActivityPub identity가 이미 저장된 Remote Profile이어야 한다. Quote 작성자, Activity 전달 주체, URI의
+  host·경로 또는 검증되지 않은 attribution을 Source 작성자의 근거로 대신 사용하지 않는다.
+- Source 작성자와 established Follow Relationship이 있는 Active Local Profile을 결정적인 규칙으로 하나
+  선택하고, 그 Profile identity로 인증된 원문 조회를 수행한다. Source URI만 있거나 작성자 대응을 신뢰할 수
+  없거나 적합한 Local Follower가 없으면 원문을 조회하거나 저장하지 않는다.
+- 조회 뒤 저장 직전에 Source identity, 예상 작성자, 작성자의 canonical followers collection을 포함하는
+  Followers Only audience, 선택한 같은 Local Profile의 Active 상태와 established Follow를 다시 확인한다.
+  검증이 실패하면 Source와 관련 상태를 생성하거나 변경하지 않는다.
+- 검증된 원문은 기존 Post 저장과 조회 정책을 따른다. 원문을 조회한 Local Follower의 권한은 다른 viewer의
+  조회 권한으로 사용하지 않는다. Source를 조회할 수 없는 viewer에게는 Quote 자체의 조회 정책을 통과한
+  본문을 유지하고 Source 관계만 숨긴다.
+- 원문 URI만으로 작성자를 탐색하는 기능, 일반 목적 signed-fetch API와 임의의 Followers Only Post
+  backfill은 이 범위에 포함하지 않는다. 원격 Quote의 승인·철회와 resolution은 별도 Quote 수신 계약을 따른다.
 
 ### 검색
 

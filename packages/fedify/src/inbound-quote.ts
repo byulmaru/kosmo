@@ -3,9 +3,24 @@ import '@kosmo/core/polyfill';
 import { randomUUID } from 'node:crypto';
 import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note, QuoteAuthorization } from '@fedify/vocab';
-import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
+import { Note, PUBLIC_COLLECTION, QuoteAuthorization } from '@fedify/vocab';
+import {
+  ActivityPubActors,
+  db,
+  first,
+  Instances,
+  Posts,
+  ProfileFollows,
+  Profiles,
+} from '@kosmo/core/db';
+import {
+  InstanceKind,
+  InstanceState,
+  PostQuoteConsentStatus,
+  PostState,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
 import {
   loadPendingQuoteConsentByBinding,
   loadQuoteConsentByApprovalUri,
@@ -13,11 +28,18 @@ import {
 } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { findPostByActivityPubUri, resolveActivityPubPostUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
-import { materializeHydratedRemoteNote } from './inbound-create-note';
-import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
+import {
+  materializeHydratedRemoteNote,
+  prepareFollowersOnlyQuoteNote,
+} from './inbound-create-note';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
+  RemoteActorDiscoveryUnavailableError,
+} from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
 import type { DocumentLoader } from '@fedify/fedify/runtime';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
@@ -469,6 +491,34 @@ export const materializeInboundQuoteSource = async (input: NoteCommand, context:
   ) {
     return;
   }
+  // A URL-only approval does not reveal the Source audience. Do not probe it anonymously:
+  // VERIFY binds fresh issuer proof to a stored author and an eligible signed Local Follower.
+  if (input.format === 'FEP_044F' && input.approvalUri && !input.embeddedSource) {
+    return;
+  }
+  const targetObject = input.embeddedSource
+    ? await Note.fromJsonLd(input.embeddedSource, {
+        contextLoader: context.contextLoader ?? getDocumentLoader(),
+      })
+    : await new Note({ quote: new URL(input.targetUri) }).getQuote({
+        contextLoader: context.contextLoader,
+        documentLoader: context.documentLoader,
+        crossOrigin: 'trust',
+        suppressError: true,
+      });
+  const quote = await loadQuoteSource(input.postId);
+  const isPublic =
+    targetObject instanceof Note &&
+    [...targetObject.toIds, ...targetObject.ccIds].some(
+      (uri) => uri.href === PUBLIC_COLLECTION.href,
+    );
+  if (
+    !isPublic &&
+    quote?.actorUri === input.actorUri &&
+    (await readCurrentSourceAuthorization(input, context, quote))
+  ) {
+    return;
+  }
   await materializeTarget({
     context,
     postId: input.postId,
@@ -478,15 +528,163 @@ export const materializeInboundQuoteSource = async (input: NoteCommand, context:
       targetUri: input.targetUri,
       authorizationId: input.approvalUri ? new URL(input.approvalUri) : null,
       authorization: null,
-      targetObject: input.embeddedSource
-        ? await Note.fromJsonLd(input.embeddedSource, {
-            contextLoader: context.contextLoader ?? getDocumentLoader(),
-          })
-        : null,
+      targetObject,
       fepPropertyPresent: input.format === ActivityPubQuoteFormat.FEP_044F,
       malformed: false,
     },
   });
+};
+
+const readCurrentSourceAuthorization = async (
+  input: NoteCommand,
+  context: QuoteContext,
+  quote: QuoteSource,
+) => {
+  if (input.format !== 'FEP_044F' || !input.approvalUri || !input.targetUri) {
+    return null;
+  }
+  const note = new Note({
+    id: new URL(quote.uri),
+    attribution: new URL(input.actorUri),
+    quote: new URL(input.targetUri),
+    quoteAuthorization: new URL(input.approvalUri),
+  });
+  const loader = await currentAuthorizationLoader(context);
+  const authorization = await note.getQuoteAuthorization({
+    contextLoader: context.contextLoader,
+    documentLoader: loader,
+    crossOrigin: 'trust',
+    suppressError: true,
+  });
+  const author = authorization?.attributionId;
+  if (!author || !isHttpUri(author)) {
+    return null;
+  }
+  const verified = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+    attributedTo: author,
+    authorization: new URL(input.approvalUri),
+    documentLoader: loader,
+    interactionTarget: new URL(input.targetUri),
+    interactingObject: note,
+  });
+  if (!verified.verified) {
+    return null;
+  }
+  return { author, verified };
+};
+
+/** Fresh issuer proof selects an author; only its established Local follower signs the fetch. */
+const preparePrivateQuoteSource = async (
+  input: NoteCommand,
+  context: QuoteContext,
+  quote: QuoteSource,
+  expectation: QuoteExpectation,
+): Promise<PreparedInboundQuote | null> => {
+  const binding = await readCurrentSourceAuthorization(input, context, quote);
+  if (!binding) {
+    return null;
+  }
+  const { author, verified } = binding;
+  let actor;
+  try {
+    const stored = await findStoredRemoteProfileActorByUri(author);
+    if (
+      !stored ||
+      stored.profile.state !== ProfileState.ACTIVE ||
+      stored.instance.state === InstanceState.SUSPENDED
+    ) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    actor =
+      stored.instance.state === InstanceState.UNRESPONSIVE
+        ? await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: author,
+            contextOrigin: context.canonicalOrigin,
+            receipt: { receivedAt: Temporal.Now.instant() },
+          })
+        : stored;
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    throw error;
+  }
+  if (!actor || actor.actor.uri !== author.href) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const follower = await db
+    .select({ profileId: Profiles.id })
+    .from(ProfileFollows)
+    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(ProfileFollows.followeeProfileId, actor.profile.id),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+      ),
+    )
+    .orderBy(asc(Profiles.id))
+    .limit(1)
+    .then(first);
+  if (!follower || !(await matchesQuoteExpectation(input.postId, expectation))) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  let sourceNote;
+  try {
+    const keys = await context.getActorKeyPairs(follower.profileId);
+    const key = [...keys]
+      .filter((k) => k.privateKey !== null)
+      .sort((a, b) => a.keyId.href.localeCompare(b.keyId.href))[0];
+    if (!key?.privateKey) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    sourceNote = await context.lookupObject(new URL(input.targetUri), {
+      contextLoader: context.contextLoader,
+      crossOrigin: 'trust',
+      documentLoader: context.getDocumentLoader({ keyId: key.keyId, privateKey: key.privateKey }),
+    });
+  } catch {
+    return { kind: 'NOOP', retryable: true };
+  }
+  if (!(sourceNote instanceof Note)) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const privateSource = await prepareFollowersOnlyQuoteNote({
+    context,
+    note: sourceNote,
+    objectUri: new URL(input.targetUri),
+    expectedActor: actor,
+    followerProfileId: follower.profileId,
+    postId: randomUUID(),
+  });
+  if (!privateSource) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  return {
+    kind: 'CHANGE',
+    retryable: false,
+    privateSource,
+    change: {
+      ...expectation,
+      quote: identity(quote),
+      source: {
+        postId: privateSource.postId,
+        profileId: actor.profile.id,
+        uri: input.targetUri,
+        authorActorUri: author.href,
+      },
+      operation: 'RESOLVE',
+      quoteAuthorActorUri: input.actorUri,
+      result: 'APPROVED',
+      proof: {
+        kind: 'AUTHORIZATION',
+        approvalUri: verified.authorizationId.href,
+        issuerActorUri: author.href,
+      },
+    },
+  };
 };
 
 /** Reads identities and fresh protocol proof; never changes Posts or consent. */
@@ -534,6 +732,12 @@ export const prepareStoredInboundQuote = async (
     (sourceId !== expectation.expectedRepostSourceId || source?.uri !== input.targetUri)
   ) {
     return { kind: 'NOOP', retryable: false };
+  }
+  if (!source && phase === 'VERIFY') {
+    const privatePrepared = await preparePrivateQuoteSource(input, context, quote, expectation);
+    if (privatePrepared) {
+      return privatePrepared;
+    }
   }
   if (
     !source?.actorUri ||

@@ -26,6 +26,7 @@ import {
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { PreparedPrivateQuoteSource } from '@kosmo/core/temporal/post-quote-owner';
 import type { InboundObservation } from './inbound-observability';
 
 type StoredRemoteProfileActor = NonNullable<
@@ -584,4 +585,64 @@ export const handleInboundCreateNote = async ({
     });
   }
   return result;
+};
+
+/** Prepare only the private projection. General hydration continues to reject private Notes. */
+export const prepareFollowersOnlyQuoteNote = async ({
+  context,
+  note,
+  objectUri,
+  expectedActor,
+  followerProfileId,
+  postId,
+}: {
+  context: RemoteNoteMaterializationContext;
+  note: Note;
+  objectUri: URL;
+  expectedActor: StoredRemoteProfileActor;
+  followerProfileId: string;
+  postId: string;
+}): Promise<PreparedPrivateQuoteSource | null> => {
+  const followersUri = expectedActor.actor.followersUri;
+  const visibility = resolveNoteVisibility(note, followersUri);
+  if (
+    !isHttpUri(objectUri) ||
+    note.id?.href !== objectUri.href ||
+    uniqueHref(note.attributionIds) !== expectedActor.actor.uri ||
+    !visibility ||
+    visibility === PostVisibility.DIRECT
+  ) {
+    return null;
+  }
+  try {
+    const { document, media, mentionProfileIds } = await projectRemoteNote(
+      context,
+      note,
+      'Unknown',
+    );
+    if (!postContentDocumentToText(document).length && !media.length) {
+      return null;
+    }
+    const replyParentId = await resolveReplyParentId(context, note);
+    return {
+      postId,
+      profileId: expectedActor.profile.id,
+      actorUri: expectedActor.actor.uri,
+      followersUri,
+      followerProfileId,
+      objectUri: objectUri.href,
+      visibility,
+      document,
+      media,
+      mentionProfileIds,
+      publishedAt: note.published?.toString() ?? null,
+      receivedAt: Temporal.Now.instant().toString(),
+      ...(replyParentId ? { replyParentId } : {}),
+    };
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof RemoteNoteContentLengthExceededError) {
+      return null;
+    }
+    throw error;
+  }
 };
