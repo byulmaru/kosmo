@@ -23,12 +23,14 @@
     "@temporalio/workflow": "^1.22.0",
     "drizzle-orm": "1.0.0-beta.22",
     "firebase-admin": "^14.4.0",
+    "nexus-rpc": "0.0.2",
     "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@fedify/fedify": "^2.4.0",
+    "@temporalio/nexus": "1.22.0",
     "@temporalio/testing": "^1.22.0"
   }
 }

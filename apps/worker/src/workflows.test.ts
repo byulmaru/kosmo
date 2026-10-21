@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NotificationKind } from '@kosmo/core/enums';
+import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { operationalNotificationWorkflow } from '@kosmo/core/temporal/operational-notification';
 import {
   PROFILE_BLOCK_UPDATE_ID,
@@ -14,19 +15,34 @@ import {
   ApplicationFailure,
   WithStartWorkflowOperation,
   WorkflowFailedError,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
 } from '@temporalio/client';
+import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporalio/nexus';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { operation, service, serviceHandler } from 'nexus-rpc';
+import {
+  MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL,
+  MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL,
+  mockMediaUploadNexusOperationWorkflow,
+} from './test-fixtures/media-upload-nexus-operation';
 import { settleEffects } from './workflows/settle-effects';
+import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
+import type { MockMediaUploadOperationInput } from './test-fixtures/media-upload-nexus-operation';
 import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
@@ -60,6 +76,10 @@ const legacyPostDeleteWorkflowPath = new URL(
 ).pathname;
 const legacyRemoteProfileFeaturedWorkflowPath = new URL(
   './test-fixtures/legacy-remote-profile-featured.ts',
+  import.meta.url,
+).pathname;
+const mediaUploadNexusWorkflowPath = new URL(
+  './test-fixtures/media-upload-nexus-operation.ts',
   import.meta.url,
 ).pathname;
 
@@ -3123,6 +3143,251 @@ test(
     assert.deepEqual(pages, [
       { sendId },
       { afterNotificationId: '00000000-0000-4000-8000-000000000102', sendId },
+    ]);
+  },
+);
+
+const nexusMediaUploadTestService = service('media', {
+  startUpload: operation<NexusMediaUploadStartInput, MediaUploadWorkflowResult>(),
+  publishUpload: operation<{ readonly id: string }, { readonly id: string }>(),
+});
+
+type NexusMediaUploadStartInput = {
+  readonly id: string;
+  readonly sourceKey: string;
+  readonly contentType: NexusMediaUploadContentType;
+  readonly maxBytes: number;
+  readonly maxDimension: number;
+};
+
+test(
+  'Media Upload Workflow는 publish 확인 뒤 원격 처리 결과로만 finalize한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const callerTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-caller-${process.pid}`;
+    const nexusTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-nexus-${process.pid}`;
+    const nexusEndpoint = await environment.createNexusEndpoint('media-upload', nexusTaskQueue);
+    const createUpload = (
+      contentType: NexusMediaUploadStartInput['contentType'],
+      shouldFail = false,
+    ) => {
+      const uuid = crypto.randomUUID();
+      const remoteId = `u_${uuid}`;
+      return {
+        input: { mediaId: crypto.randomUUID(), accountId: crypto.randomUUID() },
+        prepared: {
+          id: remoteId,
+          sourceKey: `uploads/${remoteId}/${uuid}`,
+          contentType,
+        },
+        result: {
+          id: remoteId,
+          url: `https://media.example/${remoteId}.webp`,
+          mediaType: 'image/webp',
+        },
+        shouldFail,
+        publicationAck: Promise.withResolvers<void>(),
+      };
+    };
+    const uploads = [
+      createUpload('image/jpeg'),
+      createUpload('image/png', true),
+      createUpload('image/webp'),
+    ];
+    const [success, failure, cancelled] = uploads;
+    const uploadById = new Map<string, (typeof uploads)[number]>(
+      uploads.flatMap((upload) => [
+        [upload.input.mediaId, upload] as const,
+        [upload.prepared.id, upload] as const,
+      ]),
+    );
+    const events: string[] = [];
+    const activityCalls: string[] = [];
+    const startInputs: NexusMediaUploadStartInput[] = [];
+    const finalized: Array<{ mediaId: string; result: MediaUploadWorkflowResult }> = [];
+
+    const nexusServiceHandler = serviceHandler(nexusMediaUploadTestService, {
+      startUpload: new WorkflowRunOperationHandler<
+        NexusMediaUploadStartInput,
+        MediaUploadWorkflowResult
+      >(async (ctx, input) => {
+        startInputs.push(input);
+        events.push(`start:${input.id}`);
+        const upload = uploadById.get(input.id);
+        if (!upload) {
+          throw new Error(`Unexpected upload ID: ${input.id}`);
+        }
+        const operationInput: MockMediaUploadOperationInput = {
+          result: upload.result,
+          shouldFail: upload.shouldFail,
+        };
+        const handle = await startWorkflow(ctx, mockMediaUploadNexusOperationWorkflow, {
+          workflowId: `mock-media-upload:${input.id}`,
+          workflowExecutionTimeout: '25 hours',
+          args: [operationInput],
+        });
+        events.push(`start-ack:${input.id}`);
+        return handle;
+      }),
+      publishUpload: async (_ctx, { id }) => {
+        events.push(`publish:${id}`);
+        const upload = uploadById.get(id);
+        assert.ok(upload);
+        await getClient()
+          .workflow.getHandle(`mock-media-upload:${id}`)
+          .signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
+        events.push(`publish-ack:${id}`);
+        upload.publicationAck.resolve();
+        return { id };
+      },
+    });
+
+    const nexusWorker = await Worker.create({
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      nexusServices: [nexusServiceHandler],
+      taskQueue: nexusTaskQueue,
+      workflowsPath: mediaUploadNexusWorkflowPath,
+    });
+    const callerWorker = await Worker.create({
+      activities: {
+        prepareMediaUploadActivity: async (input: MediaUploadWorkflowInput) => {
+          activityCalls.push(`prepare:${input.mediaId}`);
+          const upload = uploadById.get(input.mediaId);
+          assert.ok(upload);
+          return upload.prepared;
+        },
+        finalizeMediaUploadActivity: async ({
+          mediaId,
+          remoteUploadId,
+          result,
+        }: {
+          readonly mediaId: string;
+          readonly remoteUploadId: string;
+          readonly result: MediaUploadWorkflowResult;
+        }) => {
+          assert.equal(remoteUploadId, result.id);
+          activityCalls.push(`finalize:${mediaId}`);
+          finalized.push({ mediaId, result });
+          return result;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue: callerTaskQueue,
+      workflowsPath,
+    });
+
+    const nexusWorkerRun = nexusWorker.run();
+    void nexusWorkerRun.catch(() => undefined);
+    try {
+      await callerWorker.runUntil(async () => {
+        const successOptions = {
+          args: [success.input],
+          taskQueue: callerTaskQueue,
+          workflowId: mediaUploadWorkflow.workflowIdFromArgs(success.input),
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+        } as const;
+        const [successHandle, existingSuccessHandle] = await Promise.all([
+          environment.client.workflow.start('mediaUploadWorkflow', successOptions),
+          environment.client.workflow.start('mediaUploadWorkflow', successOptions),
+        ]);
+        assert.equal(successHandle.workflowId, `media-upload:${success.input.mediaId}`);
+        assert.equal(existingSuccessHandle.workflowId, successHandle.workflowId);
+        assert.equal(existingSuccessHandle.firstExecutionRunId, successHandle.firstExecutionRunId);
+        await success.publicationAck.promise;
+
+        const successStartAckIndex = events.indexOf(`start-ack:${success.prepared.id}`);
+        const successPublishIndex = events.indexOf(`publish:${success.prepared.id}`);
+        assert.ok(successStartAckIndex >= 0 && successStartAckIndex < successPublishIndex);
+        assert.equal(
+          events.filter((event) => event === `publish:${success.prepared.id}`).length,
+          1,
+        );
+        assert.deepEqual(finalized, []);
+
+        await environment.client.workflow
+          .getHandle(`mock-media-upload:${success.prepared.id}`)
+          .signal(MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL);
+        assert.deepEqual(
+          await Promise.all([successHandle.result(), existingSuccessHandle.result()]),
+          [success.result, success.result],
+        );
+        assert.deepEqual(finalized, [{ mediaId: success.input.mediaId, result: success.result }]);
+        await assert.rejects(
+          environment.client.workflow.start('mediaUploadWorkflow', successOptions),
+        );
+
+        const failureHandle = await environment.client.workflow.start('mediaUploadWorkflow', {
+          args: [failure.input],
+          taskQueue: callerTaskQueue,
+          workflowId: mediaUploadWorkflow.workflowIdFromArgs(failure.input),
+        });
+        await failure.publicationAck.promise;
+
+        const failureStartAckIndex = events.indexOf(`start-ack:${failure.prepared.id}`);
+        const failurePublishIndex = events.indexOf(`publish:${failure.prepared.id}`);
+        assert.ok(failureStartAckIndex >= 0 && failureStartAckIndex < failurePublishIndex);
+        assert.equal(
+          events.filter((event) => event === `publish:${failure.prepared.id}`).length,
+          1,
+        );
+        assert.equal(
+          finalized.some(({ mediaId }) => mediaId === failure.input.mediaId),
+          false,
+        );
+
+        const cancelledHandle = await environment.client.workflow.start('mediaUploadWorkflow', {
+          args: [cancelled.input],
+          taskQueue: callerTaskQueue,
+          workflowId: mediaUploadWorkflow.workflowIdFromArgs(cancelled.input),
+        });
+        await cancelled.publicationAck.promise;
+        assert.equal(
+          events.filter((event) => event === `publish:${cancelled.prepared.id}`).length,
+          1,
+        );
+        await cancelledHandle.cancel();
+        await assert.rejects(cancelledHandle.result());
+        assert.equal(
+          finalized.some(({ mediaId }) => mediaId === cancelled.input.mediaId),
+          false,
+        );
+
+        await environment.client.workflow
+          .getHandle(`mock-media-upload:${failure.prepared.id}`)
+          .signal(MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL);
+        await assert.rejects(failureHandle.result(), WorkflowFailedError);
+        assert.equal(
+          finalized.some(({ mediaId }) => mediaId === failure.input.mediaId),
+          false,
+        );
+      });
+    } finally {
+      nexusWorker.shutdown();
+      await nexusWorkerRun;
+      await environment.deleteNexusEndpoint(nexusEndpoint);
+    }
+
+    assert.deepEqual(
+      startInputs,
+      uploads.map(({ prepared }) => ({
+        ...prepared,
+        maxBytes: 16_777_216,
+        maxDimension: 8192,
+      })),
+    );
+    assert.deepEqual(activityCalls, [
+      `prepare:${success.input.mediaId}`,
+      `finalize:${success.input.mediaId}`,
+      `prepare:${failure.input.mediaId}`,
+      `prepare:${cancelled.input.mediaId}`,
     ]);
   },
 );

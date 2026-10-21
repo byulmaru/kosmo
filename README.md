@@ -75,10 +75,35 @@ Temporal helper processes receive neither PostgreSQL nor queue credentials.
 pnpm owns the child process lifecycle and one interrupt stops the development
 processes.
 
-The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
-to issue browser upload URLs and persist the completed public representation
-reported by Media Storage Service. These are server-only values loaded through
-the same Vault environment and must not be exposed to the browser bundle.
+New uploads send bytes through the existing Media HTTP upload service. It
+enforces a shared 16 MiB per-file limit using the bytes actually received
+before storing them in the Media service's private staging R2. Staged bytes stay
+private until the explicit completion confirms the Media Storage Service's
+final result. Preserve the Media ingress CORS policy for browser uploads;
+browser-to-R2 CORS and direct-to-R2 upload URLs are not part of the client path.
+
+The Kosmo API and Worker use `MEDIA_STORAGE_SERVICE_ORIGIN` and
+`MEDIA_STORAGE_SERVICE_API_KEY` in their server-only Vault environments for
+Media operations, including completion of previously issued uploads. The Media
+service owns staging R2 access; Kosmo does not need staging R2 credentials. Keep
+staging reads private and do not put Media credentials in the browser bundle.
+
+Before deploying the Kosmo API or Worker, deploy Media service instances that
+all support upload-ticket issuance, byte upload, and private staging metadata
+checks. Roll back Kosmo before rolling back Media. An older Media instance can
+return 404 for a staging metadata check, which appears to Kosmo as a missing
+source.
+
+A staged source is accepted only when its storage `LastModified` timestamp is
+within 24 hours. Repeated completion requests join the stable workflow while it
+is running, and already Ready Media is returned directly. A terminally failed
+workflow is not restarted for the same Media ID. A caller timeout or disconnect,
+including the 30-second request timeout, does not cancel that workflow. The
+Media Storage Service workflow removes a source it consumes. A missing or
+expired source, or another failure before Ready is persisted, leaves Media in
+Uploading with its final URL, Media Type, and Ready At unset; the existing UI
+retry starts a new upload session. Configure and verify a 48-hour lifecycle rule
+for unconsumed staging objects before rollout.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on

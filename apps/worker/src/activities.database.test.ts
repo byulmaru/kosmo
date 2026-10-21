@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, afterEach, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
@@ -9,6 +10,8 @@ import {
   ApplicationType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -23,7 +26,11 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
 import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
@@ -33,6 +40,10 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type {
   captureOperationalNotificationAudienceActivity as CaptureOperationalNotificationAudienceActivity,
@@ -46,6 +57,10 @@ import type {
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
+import type {
+  finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
+  prepareMediaUploadActivity as PrepareMediaUploadActivity,
+} from './activities/media-upload';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -58,6 +73,7 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
@@ -86,6 +102,8 @@ let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
+let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
+let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -99,6 +117,7 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    Media,
     NotificationQuoteJudgments,
     Notifications,
     OAuthAuthorizationCodes,
@@ -127,6 +146,8 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
+  ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
+    await import('./activities/media-upload'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -2404,5 +2425,304 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     } else {
       process.env.FIREBASE_PROJECT_ID = previousProjectId;
     }
+  }
+});
+
+test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+  const requests: { authorization: string | undefined; method: string; url: string }[] = [];
+  let headResponseStatus = 200;
+  const server = createServer((request, response) => {
+    requests.push({
+      authorization: request.headers.authorization,
+      method: request.method ?? '',
+      url: request.url ?? '',
+    });
+    if (request.method !== 'HEAD') {
+      response.writeHead(405).end();
+      return;
+    }
+    if (
+      request.headers.authorization !== 'Bearer test-api-key' ||
+      !/^\/v1\/uploads\/u_[0-9a-f-]{36}\?staging=true$/.test(request.url ?? '')
+    ) {
+      response.writeHead(400).end();
+      return;
+    }
+    if (headResponseStatus !== 200) {
+      response
+        .writeHead(headResponseStatus, { 'Content-Type': 'application/xml' })
+        .end(
+          '<Error><Code>ServiceUnavailable</Code><Message>Transient staging failure</Message></Error>',
+        );
+      return;
+    }
+    response
+      .writeHead(200, {
+        'Content-Length': '128',
+        'Content-Type': 'image/jpeg',
+        'Last-Modified': new Date().toUTCString(),
+      })
+      .end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const stagingConfig = [
+    ['MEDIA_STORAGE_SERVICE_ORIGIN', `http://127.0.0.1:${address.port}`],
+    ['MEDIA_STORAGE_SERVICE_API_KEY', 'test-api-key'],
+  ] as const;
+  const previousStagingConfig = stagingConfig.map(([key]) => process.env[key]);
+  for (const [key, value] of stagingConfig) {
+    process.env[key] = value;
+  }
+
+  const createUploadingMedia = async (storageReference = `nexus:v1:${crypto.randomUUID()}`) => {
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, accountId: fixture.account.id, storageReference };
+  };
+  const readMediaState = async (mediaId: string) => {
+    const media = await db
+      .select({
+        accountId: Media.accountId,
+        mediaType: Media.mediaType,
+        readyAt: Media.readyAt,
+        source: Media.source,
+        state: Media.state,
+        storageReference: Media.storageReference,
+        url: Media.url,
+      })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    return { ...media, readyAt: media.readyAt?.toString() ?? null };
+  };
+  const hasFailureType = (type: string) => (error: unknown) =>
+    error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
+
+  try {
+    const uploading = await createUploadingMedia();
+    const uploadingState = await readMediaState(uploading.mediaId);
+    const uuid = uploading.storageReference.slice('nexus:v1:'.length);
+    const uploadId = `u_${uuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(uploading), {
+      id: uploadId,
+      sourceKey: `uploads/${uploadId}/${uuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(requests, [
+      {
+        authorization: 'Bearer test-api-key',
+        method: 'HEAD',
+        url: `/v1/uploads/${uploadId}?staging=true`,
+      },
+    ]);
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    await assert.rejects(
+      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    const ready = await createUploadingMedia();
+    await db
+      .update(Media)
+      .set({
+        mediaType: 'image/webp',
+        readyAt: Temporal.Now.instant(),
+        state: MediaState.READY,
+        url: 'https://media.example/ready.webp',
+      })
+      .where(eq(Media.id, ready.mediaId));
+    const readyState = await readMediaState(ready.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(ready),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(ready.mediaId), readyState);
+
+    const invalidSource = await createUploadingMedia('nexus:v1:invalid');
+    const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidSource),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
+    assert.equal(requests.length, 1);
+
+    const transientFailure = await createUploadingMedia();
+    const transientFailureState = await readMediaState(transientFailure.mediaId);
+    headResponseStatus = 503;
+    await assert.rejects(
+      prepareMediaUploadActivity(transientFailure),
+      (error: unknown) =>
+        error instanceof Error &&
+        !(error instanceof ApplicationFailure) &&
+        error.message === 'Media Storage Service rejected upload metadata (503)',
+    );
+    const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
+    assert.deepEqual(requests[1], {
+      authorization: 'Bearer test-api-key',
+      method: 'HEAD',
+      url: `/v1/uploads/u_${transientUuid}?staging=true`,
+    });
+    assert.deepEqual(await readMediaState(transientFailure.mediaId), transientFailureState);
+  } finally {
+    stagingConfig.forEach(([key], index) => {
+      const value = previousStagingConfig[index];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+      server.closeAllConnections();
+    });
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완료를 수렴시킨다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+
+  const createUploadingMedia = async () => {
+    const referenceId = crypto.randomUUID();
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference: `nexus:v1:${referenceId}`,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, remoteUploadId: `u_${referenceId}` };
+  };
+
+  try {
+    const { mediaId, remoteUploadId } = await createUploadingMedia();
+    const result: MediaUploadWorkflowResult = {
+      id: remoteUploadId,
+      url: 'https://media.example/ready.webp',
+      mediaType: 'image/webp',
+    };
+    const input: MediaUploadWorkflowInput & {
+      readonly remoteUploadId: string;
+      readonly result: MediaUploadWorkflowResult;
+    } = {
+      mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId,
+      result,
+    };
+    const expectNonRetryableFailure = (error: unknown) =>
+      error instanceof ApplicationFailure && error.nonRetryable === true;
+
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, accountId: crypto.randomUUID() }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...input,
+        result: { ...result, url: 'javascript:alert(1)' } as MediaUploadWorkflowResult,
+      }),
+      expectNonRetryableFailure,
+    );
+
+    const stillUploading = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(stillUploading.state, MediaState.UPLOADING);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const firstReady = await db
+      .select({ readyAt: Media.readyAt, state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(firstReady.state, MediaState.READY);
+    assert.ok(firstReady.readyAt);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const retriedReady = await db
+      .select({ readyAt: Media.readyAt, state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(retriedReady.state, MediaState.READY);
+    assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+
+    const concurrent = await createUploadingMedia();
+    const concurrentResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: concurrent.remoteUploadId,
+      url: 'https://media.example/concurrent.webp',
+    };
+    const concurrentInput = {
+      mediaId: concurrent.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: concurrent.remoteUploadId,
+      result: concurrentResult,
+    };
+    assert.deepEqual(
+      await Promise.all([
+        finalizeMediaUploadActivity(concurrentInput),
+        finalizeMediaUploadActivity(concurrentInput),
+      ]),
+      [concurrentResult, concurrentResult],
+    );
+    const converged = await db
+      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .from(Media)
+      .where(eq(Media.id, concurrent.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(converged.state, MediaState.READY);
+    assert.equal(converged.url, concurrentResult.url);
+    assert.ok(converged.readyAt);
+  } finally {
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
   }
 });
