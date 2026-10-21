@@ -7,6 +7,7 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -252,14 +253,22 @@ describe('GraphQL Repost', () => {
 
   test('deletePost는 GraphQL 경로에서 Repost를 Tombstone 처리하고 상태를 갱신한다', async () => {
     const auth = await createAuthenticatedSession();
-    const recipient = await createProfile('delete-notification-recipient');
-    const source = await createContentPost(recipient.id);
+    const recipient = await createAuthenticatedSession();
+    const source = await createContentPost(recipient.profile.id);
     await requestRepost(source.id, auth.token);
     const repost = await db
       .select()
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
+
+    await db.insert(Notifications).values({
+      kind: NotificationKind.REPOST,
+      recipientAccountId: recipient.account.id,
+      recipientProfileId: recipient.profile.id,
+      sourceId: repost.id,
+    });
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 1);
 
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
@@ -281,8 +290,9 @@ describe('GraphQL Repost', () => {
     });
     assert.equal(activities.filter((type) => type === 'deletePostTransitionActivity').length, 1);
     assert.equal(activities.filter((type) => type === 'sendRepostUndoActivity').length, 1);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 0);
     assert.equal(
-      activities.filter((type) => type === 'deleteRepostNotificationActivity').length,
+      activities.filter((type) => type === 'deletePostRelatedNotificationsActivity').length,
       1,
     );
     const committed = await db
