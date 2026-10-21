@@ -38,6 +38,8 @@ let profile: Profile = {
   relativeHandle: '@target',
 };
 let mutationConfigs: MutationConfig[] = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
+const generationRef = { current: 1 };
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -48,6 +50,14 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('@/analytics/client', {
+  trackAnalytics: (event: string, properties: Record<string, unknown>) => {
+    analyticsCalls.push([event, properties]);
+  },
+});
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => generationRef,
 });
 mockModule('react-relay', {
   graphql: (strings: TemplateStringsArray) =>
@@ -106,6 +116,8 @@ before(async () => {
 
 afterEach(async () => {
   mutationConfigs = [];
+  analyticsCalls.length = 0;
+  generationRef.current = 1;
   profile = {
     displayName: '현재 Profile',
     handle: 'target',
@@ -196,6 +208,9 @@ describe('ProfileMigrationSourceControl', () => {
       ),
       true,
     );
+    assert.deepEqual(analyticsCalls, [
+      ['profile_migration_requested', { action: 'source_registered' }],
+    ]);
   });
 
   it('selected Instance 주소가 없으면 global origin 없이 주소 부재를 표시한다', async () => {
@@ -215,7 +230,7 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField')[0].props.accessibilityLabel, '기존 계정 주소');
   });
 
-  it('부분 GraphQL errors가 있어도 같은 Profile ID의 등록 및 해제 payload를 성공으로 처리한다', async () => {
+  it('부분 GraphQL errors가 있어도 같은 Profile ID의 등록 및 해제 성공을 각각 추적한다', async () => {
     await render(true);
     await act(async () => rendered('TextField')[0].props.onChangeText('@source@remote.example'));
     await act(async () => rendered('Button')[0].props.onPress());
@@ -224,10 +239,16 @@ describe('ProfileMigrationSourceControl', () => {
       id: 'profile-source',
       relativeHandle: '@source@remote.example',
     };
+    profile.instance.canonicalOrigin = null;
     await act(async () =>
       mutationConfigs[0].onCompleted(
-        { registerProfileMigrationSource: { profile: { id: profile.id } } },
-        [{ message: 'a non-fatal field failed' }],
+        { registerProfileMigrationSource: { profile: { ...profile } } },
+        [
+          {
+            message: 'a non-fatal field failed',
+            path: ['registerProfileMigrationSource', 'profile', 'instance', 'canonicalOrigin'],
+          },
+        ],
       ),
     );
 
@@ -240,13 +261,22 @@ describe('ProfileMigrationSourceControl', () => {
     profile.migrationSource = null;
     await act(async () =>
       mutationConfigs[1].onCompleted(
-        { unregisterProfileMigrationSource: { profile: { id: profile.id } } },
-        [{ message: 'a non-fatal field failed' }],
+        { unregisterProfileMigrationSource: { profile: { ...profile } } },
+        [
+          {
+            message: 'a non-fatal field failed',
+            path: ['unregisterProfileMigrationSource', 'profile', 'instance', 'canonicalOrigin'],
+          },
+        ],
       ),
     );
 
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
+    assert.deepEqual(analyticsCalls, [
+      ['profile_migration_requested', { action: 'source_registered' }],
+      ['profile_migration_requested', { action: 'source_unregistered' }],
+    ]);
   });
 
   it('빈 입력은 mutation 없이 검증 오류를 표시한다', async () => {
@@ -287,6 +317,9 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('Button')[1].props.accessibilityLabel, '기존 계정 등록 해제');
     assert.equal(rendered('Button')[0].props.disabled, true);
     assert.equal(rendered('Button')[1].props.disabled, false);
+    assert.deepEqual(analyticsCalls, [
+      ['profile_migration_requested', { action: 'source_unregistered' }],
+    ]);
   });
 
   it('각 mutation 오류 뒤 Owner action 이름은 구별되고 오류 안내를 유지한다', async () => {
@@ -326,6 +359,7 @@ describe('ProfileMigrationSourceControl', () => {
       ),
       true,
     );
+    assert.deepEqual(analyticsCalls, []);
   });
 
   it('실패해도 입력을 보존하고 같은 값으로 재시도한다', async () => {
@@ -501,6 +535,7 @@ describe('ProfileMigrationSourceControl', () => {
       ),
       true,
     );
+    assert.deepEqual(analyticsCalls, []);
   });
 
   it('actor boundary remount 뒤 이전 등록 mutation의 완료는 새 actor 화면에 반영되지 않는다', async () => {
@@ -508,6 +543,7 @@ describe('ProfileMigrationSourceControl', () => {
     await act(async () => rendered('TextField')[0].props.onChangeText('@source@remote.example'));
     await act(async () => rendered('Button')[0].props.onPress());
     const staleCompletion = mutationConfigs[0].onCompleted;
+    generationRef.current = 2;
 
     assert.ok(renderer);
     await act(async () =>
@@ -534,6 +570,7 @@ describe('ProfileMigrationSourceControl', () => {
       rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
       false,
     );
+    assert.deepEqual(analyticsCalls, []);
   });
 });
 

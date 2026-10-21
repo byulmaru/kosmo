@@ -1,6 +1,7 @@
 import { MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
@@ -145,6 +146,9 @@ export function PostDeletionAction({
         restoreFocusOnDismissRef.current = false;
         setRequesting(false);
         setConfirmationOpen(false);
+        if (postId === data.id) {
+          trackAnalytics('post_deleted', {});
+        }
         onDeleted?.();
       },
       onError: fail,

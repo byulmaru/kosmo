@@ -185,6 +185,7 @@ describe('PostHog Web client', () => {
     const instance = instances[0];
     assert.ok(instance);
     const properties = {
+      post_type: 'post' as const,
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT' as const,
     };

@@ -50,6 +50,7 @@ let fileReadFailure = false;
 let webFileReadCalls = 0;
 let nativeFileReadCalls = 0;
 const mutationCalls: MutationOptions[] = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 
 mock.module('react-native', {
   exports: {
@@ -61,6 +62,13 @@ mock.module('react-native', {
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/analytics/client', {
+  exports: {
+    trackAnalytics: (event: string, properties: Record<string, unknown>) => {
+      analyticsCalls.push([event, properties]);
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-relay', {
@@ -163,6 +171,7 @@ afterEach(async () => {
   webFileReadCalls = 0;
   nativeFileReadCalls = 0;
   mutationCalls.length = 0;
+  analyticsCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -222,6 +231,7 @@ describe('SettingsFollowingImportDetail', () => {
       true,
     );
     assert.equal(button('이 Profile로 팔로잉 가져오기')?.props.disabled, true);
+    assert.deepEqual(analyticsCalls, [['following_import_requested', {}]]);
   });
 
   it('파일 선택 취소는 안전하고 mutation을 보내지 않는다', async () => {
@@ -392,6 +402,7 @@ describe('SettingsFollowingImportDetail', () => {
       rendered('Text').some((node) => node.props.accessibilityRole === 'alert'),
       true,
     );
+    assert.deepEqual(analyticsCalls, []);
 
     await press('CSV 파일 선택');
     assert.equal(textContent().includes('CSV 2번째 행의 계정을 확인해 주세요'), false);
@@ -402,6 +413,7 @@ describe('SettingsFollowingImportDetail', () => {
 
     assert.match(textContent(), /팔로잉 가져오기를 시작했어요/);
     assert.equal(textContent().includes('CSV 2번째 행의 계정을 확인해 주세요'), false);
+    assert.deepEqual(analyticsCalls, [['following_import_requested', {}]]);
   });
 });
 

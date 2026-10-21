@@ -44,6 +44,7 @@ let queryMode: 'error' | 'success' = 'success';
 let relayActorLifecycleKey = 'actor-a';
 let mutationInFlight = false;
 const mutationCalls: Array<Record<string, unknown>> = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 let mutationConfigs: Array<{
   onCompleted: (response: never, errors?: ReadonlyArray<unknown> | null) => void;
   onError: (error: Error) => void;
@@ -55,6 +56,13 @@ mock.module('react-native', {
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/analytics/client', {
+  exports: {
+    trackAnalytics: (event: string, properties: Record<string, unknown>) => {
+      analyticsCalls.push([event, properties]);
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-relay', {
@@ -175,6 +183,7 @@ afterEach(async () => {
   relayActorLifecycleKey = 'actor-a';
   mutationInFlight = false;
   mutationCalls.length = 0;
+  analyticsCalls.length = 0;
   mutationConfigs = [];
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -243,6 +252,7 @@ describe('SettingsProfileDetail', () => {
       mutationConfigs[0]!.onCompleted({
         updateProfile: {
           profile: {
+            id: profile.id,
             followPolicy: 'OPEN',
             private: { defaultPostVisibility: 'FOLLOWERS' },
           },
@@ -254,6 +264,7 @@ describe('SettingsProfileDetail', () => {
       defaultPostVisibility: 'FOLLOWERS',
       followPolicy: 'OPEN',
     });
+    assert.deepEqual(analyticsCalls, [['profile_updated', {}]]);
     assert.deepEqual(queryFetchKeys, [0, 0, 0]);
   });
 
@@ -294,6 +305,7 @@ describe('SettingsProfileDetail', () => {
 
     mutationInFlight = false;
     await act(async () => mutationConfigs[0]!.onError(new Error('save failed')));
+    assert.deepEqual(analyticsCalls, []);
 
     assert.deepEqual(rendered('ProfilePostingSettings')[0].props.value, {
       defaultPostVisibility: 'UNLISTED',
@@ -352,6 +364,7 @@ describe('SettingsProfileDetail', () => {
       } as never),
     );
 
+    assert.deepEqual(analyticsCalls, [['profile_deleted', {}]]);
     assert.deepEqual(resetCurrentActorCalls, [null]);
     assert.equal(deleteSelectedProfileCalls, 1);
     assert.deepEqual(writeSelectedProfileCalls, []);
@@ -405,6 +418,7 @@ describe('SettingsProfileDetail', () => {
     assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
+    assert.deepEqual(analyticsCalls, []);
 
     resetCurrentActorAccepted = false;
     await act(async () => deletion()?.onConfirm());
@@ -452,6 +466,7 @@ describe('SettingsProfileDetail', () => {
     assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
+    assert.deepEqual(analyticsCalls, []);
   });
 
   it('network failure keeps the confirmation retryable and leaves actor and storage unchanged', async () => {

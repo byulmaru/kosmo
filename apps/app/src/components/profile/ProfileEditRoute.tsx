@@ -3,10 +3,12 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { uploadImage as uploadImageAsset } from '@/components/media/imageUpload';
 import { asImageUploadError } from '@/components/media/imageUploadErrors';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
 import { ProfileEditHeader } from './ProfileEditHeader';
 import {
@@ -185,6 +187,7 @@ function EditableProfileRoute({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const initialAvatar = createProfileEditRouteImage(profile.avatar);
   const initialHeader = createProfileEditRouteImage(profile.header);
   // The picker trigger can unmount before confirmation closes; the editor remains a focus target.
@@ -376,6 +379,8 @@ function EditableProfileRoute({
 
   const submit = useCallback(
     (draft: ProfileEditDraft) => {
+      const requestGeneration = environmentGenerationRef?.current;
+      const requestProfileId = profile.id;
       const avatarId = profileEditImageInput(avatarRef.current);
       const headerId = profileEditImageInput(headerRef.current);
       setServerErrors(undefined);
@@ -408,6 +413,12 @@ function EditableProfileRoute({
           setValue(savedDraft);
           setCleanValue(savedDraft);
           setSubmitState({ kind: 'idle' });
+          if (
+            response.updateProfile.profile.id === requestProfileId &&
+            environmentGenerationRef?.current === requestGeneration
+          ) {
+            trackAnalytics('profile_updated', {});
+          }
           allowNextNavigation(() => {
             try {
               router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
@@ -419,7 +430,14 @@ function EditableProfileRoute({
         onError: handleSaveFailure,
       });
     },
-    [allowNextNavigation, commitUpdateProfile, handleSaveFailure, router],
+    [
+      allowNextNavigation,
+      commitUpdateProfile,
+      environmentGenerationRef,
+      handleSaveFailure,
+      profile.id,
+      router,
+    ],
   );
 
   useEffect(() => {

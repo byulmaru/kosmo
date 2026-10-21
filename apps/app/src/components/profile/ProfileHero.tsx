@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
@@ -97,6 +98,7 @@ export function ProfileHero({
   }, [unmuteFocusRevision]);
   const theme = useTheme();
   const { accountId } = useSession();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
@@ -171,6 +173,7 @@ export function ProfileHero({
     icon: Link2,
     label: '프로필 링크 복사',
     onSelect: () => {
+      const requestGeneration = environmentGenerationRef?.current;
       void (async () => {
         try {
           const copied = await setStringAsync(
@@ -178,6 +181,9 @@ export function ProfileHero({
           );
           if (!copied) {
             throw new Error('Clipboard did not confirm the copy.');
+          }
+          if (environmentGenerationRef?.current === requestGeneration) {
+            trackAnalytics('link_copied', { target: 'profile' });
           }
         } catch {
           showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {

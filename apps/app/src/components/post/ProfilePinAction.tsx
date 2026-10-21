@@ -1,9 +1,11 @@
 import { Pin } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactNode } from 'react';
 import type { View } from 'react-native';
@@ -73,6 +75,7 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
 }> {
   const post = useFragment(profilePinFragment, postKey);
   const { selectedProfileId } = useSession();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { showToast } = useToast();
   const [commitPin, pinPending] = useMutation<ProfilePinActionPinMutation>(pinMutation);
   const [commitUnpin, unpinPending] = useMutation<ProfilePinActionUnpinMutation>(unpinMutation);
@@ -98,14 +101,23 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
       const finishFailure = () => {
         showToast(`${post.profile.relativeHandle}의 ${failureMessage}`, { tone: 'danger' });
       };
+      const requestGeneration = environmentGenerationRef?.current;
       const variables = { postId: post.id };
 
       if (operation === 'unpin') {
         commitUnpin({
-          onCompleted: (response) => {
+          onCompleted: (response, errors) => {
             const result = response.unpinProfilePost;
             if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
               finishFailure();
+              return;
+            }
+            if (
+              !errors?.length &&
+              result.changed &&
+              environmentGenerationRef?.current === requestGeneration
+            ) {
+              trackAnalytics('post_unpinned', {});
             }
           },
           onError: finishFailure,
@@ -115,17 +127,33 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
       }
 
       commitPin({
-        onCompleted: (response) => {
+        onCompleted: (response, errors) => {
           const result = response.pinProfilePost;
           if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
             finishFailure();
+            return;
+          }
+          if (
+            !errors?.length &&
+            result.changed &&
+            environmentGenerationRef?.current === requestGeneration
+          ) {
+            trackAnalytics('post_pinned', {});
           }
         },
         onError: finishFailure,
         variables,
       });
     },
-    [commitPin, commitUnpin, post.id, post.profile.relativeHandle, selectedProfileId, showToast],
+    [
+      commitPin,
+      commitUnpin,
+      environmentGenerationRef,
+      post.id,
+      post.profile.relativeHandle,
+      selectedProfileId,
+      showToast,
+    ],
   );
 
   const onSelect = useCallback(() => {

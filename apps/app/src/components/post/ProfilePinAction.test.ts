@@ -26,6 +26,7 @@ import type { useProfilePinAction as useProfilePinActionType } from './ProfilePi
 
 const profileA = 'profile-pin-owner-a';
 const profileB = 'profile-pin-owner-b';
+const generationRef = { current: 1 };
 const require = createRequire(import.meta.url);
 const requests: Array<{
   name: string;
@@ -33,6 +34,7 @@ const requests: Array<{
   variables: Variables;
 }> = [];
 const toasts: string[] = [];
+const analyticsCalls: unknown[][] = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const artifacts = [pinFragment, pinMutation, unpinMutation];
@@ -58,6 +60,12 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ selectedProfileId
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast: (message: string) => toasts.push(message) }),
 });
+mockModule('@/analytics/client', {
+  trackAnalytics: (...args: unknown[]) => analyticsCalls.push(args),
+});
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => generationRef,
+});
 mockModule('@/components/ui/ConfirmationContent', {
   ConfirmationContent: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ConfirmationContent', props, children),
@@ -82,7 +90,9 @@ afterEach(async () => {
   renderer = null;
   requests.length = 0;
   toasts.length = 0;
+  analyticsCalls.length = 0;
   selectedProfileId = profileA;
+  generationRef.current = 1;
 });
 
 function createEnvironment(targetRequests = requests) {
@@ -192,11 +202,12 @@ function mutationResponse(
   profileId: string,
   isPinned: boolean | null,
   pinnedPostIds: string[] = isPinned ? [postId] : [],
+  changed = true,
 ): GraphQLResponse {
   return {
     data: {
       [field]: {
-        changed: true,
+        changed,
         profile: {
           __typename: 'Profile',
           id: profileId,
@@ -282,12 +293,17 @@ test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정
   assert.equal(requests[1]?.name, 'ProfilePinActionPinMutation');
   assert.deepEqual(requests[1]?.variables, { postId: 'post-b' });
   await respond(0, mutationResponse('pinProfilePost', 'post-a', profileA, true, ['post-a']));
+  assert.deepEqual(analyticsCalls, [['post_pinned', {}]]);
   assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
   assert.equal(actions()[1]!.props.item.label, '프로필에 고정');
   await respond(
     1,
     mutationResponse('pinProfilePost', 'post-b', profileA, true, ['post-a', 'post-b']),
   );
+  assert.deepEqual(analyticsCalls, [
+    ['post_pinned', {}],
+    ['post_pinned', {}],
+  ]);
 
   await act(async () => {
     renderer!.update(
@@ -304,6 +320,11 @@ test('실제 Relay mutation은 게시물별 메뉴 상태를 갱신하고 고정
   await unpin();
   assert.equal(requests[2]?.name, 'ProfilePinActionUnpinMutation');
   await respond(2, mutationResponse('unpinProfilePost', 'post-a', profileA, false, ['post-b']));
+  assert.deepEqual(analyticsCalls, [
+    ['post_pinned', {}],
+    ['post_pinned', {}],
+    ['post_unpinned', {}],
+  ]);
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
   assert.equal(requests.length, 3);
   const source = environment.getStore().getSource();
@@ -325,6 +346,22 @@ test('durable pin success with an unreadable projection hides only the pin actio
   assert.equal(actions()[0]!.props.item, undefined);
   assert.deepEqual(toasts, []);
   assert.equal(requests.length, 1);
+  assert.deepEqual(analyticsCalls, []);
+});
+
+test('changed false pin response does not record a pin event', async () => {
+  const environment = createEnvironment();
+  seedPost(environment, 'post-unchanged', profileA, false);
+  await render(environment, ['post-unchanged']);
+
+  await pin();
+  await respond(
+    0,
+    mutationResponse('pinProfilePost', 'post-unchanged', profileA, false, [], false),
+  );
+
+  assert.deepEqual(analyticsCalls, []);
+  assert.deepEqual(toasts, []);
 });
 
 test('null mutation data clears pending state and preserves the cached pin status', async () => {
@@ -343,6 +380,7 @@ test('null mutation data clears pending state and preserves the cached pin statu
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
   assert.equal(environment.getStore().getSource().get('post-null-data')?.isPinned, false);
   assert.deepEqual(toasts, ['@pin-owner-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+  assert.deepEqual(analyticsCalls, []);
 });
 
 test('unpin remains pending until failure, then keeps the pin and allows retry', async () => {
@@ -361,6 +399,7 @@ test('unpin remains pending until failure, then keeps the pin and allows retry',
   assert.equal(actions()[0]!.props.item.label, '프로필 고정 해제');
   assert.equal(environment.getStore().getSource().get('post-unpin-failure')?.isPinned, true);
   assert.deepEqual(toasts, ['@pin-owner-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+  assert.deepEqual(analyticsCalls, []);
 
   await unpin();
   assert.equal(requests.length, 2);
@@ -395,6 +434,7 @@ test('actor 전환 뒤 늦은 응답은 이전 Relay store와 요청 시점 작�
   await pin(1);
 
   selectedProfileId = profileB;
+  generationRef.current += 1;
   await render(environmentB, ['post-b']);
   await respond(0, mutationResponse('pinProfilePost', 'post-a-success', profileA, true), requestsA);
   await act(async () => requestsA[1]!.sink.error(new Error('offline')));
@@ -403,4 +443,5 @@ test('actor 전환 뒤 늦은 응답은 이전 Relay store와 요청 시점 작�
   assert.equal(environmentB.getStore().getSource().get('post-b')?.isPinned, false);
   assert.equal(actions()[0]!.props.item.label, '프로필에 고정');
   assert.deepEqual(toasts, ['@pin-owner-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+  assert.deepEqual(analyticsCalls, []);
 });

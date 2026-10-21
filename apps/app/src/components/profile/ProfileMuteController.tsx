@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
+import { trackAnalytics } from '@/analytics/client';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ProfileMuteControllerMuteMutation } from './__generated__/ProfileMuteControllerMuteMutation.graphql';
@@ -125,6 +126,9 @@ export function useProfileMuteMutations() {
                   finish(error ?? new Error('Profile mute response did not confirm the relation.'));
                   return;
                 }
+                if (profileMute.targetProfile?.id === change.targetProfileId) {
+                  trackAnalytics('profile_muted', {});
+                }
                 finish();
               },
               onError: (error) => {
@@ -154,6 +158,9 @@ export function useProfileMuteMutations() {
                     error ?? new Error('Profile unmute response did not confirm the relation.'),
                   );
                   return;
+                }
+                if (response?.unmuteProfile?.targetProfile?.id === change.targetProfileId) {
+                  trackAnalytics('profile_unmuted', {});
                 }
                 finish();
               },

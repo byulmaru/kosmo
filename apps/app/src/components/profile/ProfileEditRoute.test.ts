@@ -60,6 +60,7 @@ const toastCalls: Array<{
   message: string;
   options: { tone: 'danger' | 'info' | 'success' | 'warning' };
 }> = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 let preventRemoveCallback: ((options: { data: { action: NavigationAction } }) => void) | null =
   null;
 let preventRemoveEnabled = false;
@@ -185,6 +186,11 @@ mockModule('react-native', {
 mockModule('@/observability/sentry', {
   captureHandledError: () => undefined,
 });
+mockModule('@/analytics/client', {
+  trackAnalytics: (event: string, properties: Record<string, unknown>) => {
+    analyticsCalls.push([event, properties]);
+  },
+});
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
@@ -258,6 +264,7 @@ afterEach(async () => {
   screenProps = null;
   toastMessages.length = 0;
   toastCalls.length = 0;
+  analyticsCalls.length = 0;
   triggerBeforeRemoveOnReplace = false;
   deferBeforeRemoveOnReplace = false;
   pendingReplaceCompletion = null;
@@ -587,6 +594,7 @@ describe('ProfileEditRoute', () => {
       config.onCompleted({
         updateProfile: {
           profile: {
+            id: 'profile-owner',
             relativeHandle: '@updated',
             tags: [
               { id: 'hashtag-fediverse', name: 'Fediverse' },
@@ -600,6 +608,7 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
     assert.equal(requireScreenProps().submitState.kind, 'idle');
     assert.deepEqual(toastMessages, ['프로필을 저장하지 못했어요.']);
+    assert.deepEqual(analyticsCalls, []);
     assert.equal(issued, 3);
     const firstUpdate = mutationCalls.get('ProfileEditRouteUpdateProfileMutation')?.[0];
     assert.deepEqual(firstUpdate?.variables, {
@@ -615,6 +624,7 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
     assert.equal(requireScreenProps().submitState.kind, 'idle');
     assert.deepEqual(toastMessages, ['프로필을 저장하지 못했어요.', '프로필을 저장하지 못했어요.']);
+    assert.deepEqual(analyticsCalls, []);
     assert.equal(issued, 3);
     assert.equal(fetchMock.mock.callCount(), 6);
 
@@ -624,6 +634,28 @@ describe('ProfileEditRoute', () => {
     assert.deepEqual(routerReplacements, ['/@updated']);
     assert.deepEqual(requireScreenProps().value.tags, ['Fediverse', '새태그']);
     assert.deepEqual(requireScreenProps().initialValue.tags, ['Fediverse', '새태그']);
+    assert.deepEqual(analyticsCalls, [['profile_updated', {}]]);
+  });
+
+  it('저장 payload의 다른 Profile ID는 product flow를 유지하되 추적하지 않는다', async () => {
+    await renderRoute();
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            id: 'profile-other',
+            relativeHandle: '@other',
+            tags: [{ id: 'hashtag-other', name: 'Other' }],
+          },
+        },
+      } as never),
+    );
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+
+    assert.deepEqual(analyticsCalls, []);
+    assert.deepEqual(routerReplacements, ['/@other']);
+    assert.equal(requireScreenProps().submitState.kind, 'idle');
   });
 
   it('Tag server validation 오류에서 draft를 보존하고 수정 후 server 표시 이름으로 정렬한다', async () => {
