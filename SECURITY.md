@@ -43,8 +43,9 @@ namespace, Vault path, PostgreSQL cluster와 Temporal namespace를 사용하지�
 ## 보안 불변식
 
 - OIDC issuer·client·redirect, state와 PKCE를 검증한 뒤에만 Kosmo Session을 만든다.
-  Session은 ACTIVE Account와 ACTIVE Session에만 권한을 부여하고 logout·revocation을
-  우회해서는 안 된다.
+  Session 기반 인가는 조회 snapshot의 ACTIVE Account와 ACTIVE Session을 확인하며, 아래에
+  명시한 replica 지연 수용 범위의 영향을 받을 수 있다. 이는 인증·권한 검사를 생략할 근거가
+  아니다.
 - 데이터 조회와 변경 전에 Account–Profile membership, owner 권한, lifecycle과
   visibility 정책을 적용한다. 인증만으로 객체 권한을 대신하지 않는다.
 - ActivityPub signature, actor·object attribution, audience, follower 관계와 local/remote
@@ -117,9 +118,25 @@ all-or-nothing read boundary다. Node·kubelet 권한을 이미 가진 운영 �
 ## 알려진 제한과 보완 통제
 
 - 장기 로그인 유지는 제품 의도다. 현재 Session에는 server-enforced absolute·idle expiry가
-  없고 Web cookie는 장기 유지되며, ACTIVE state와 명시적 logout·revocation이 이를
-  보완한다. 이 제한은 영구 불변식이나 일괄 제외 근거가 아니다. Token 탈취·재사용,
-  revocation 우회 또는 과도한 blast radius 경로는 여전히 finding이다.
+  없고 Web cookie는 장기 유지된다. ACTIVE state 확인은 계속 필요하지만, 아래의 read replica
+  일관성 위험 때문에 primary에 commit된 logout·revocation이 즉시 반영된다고 보장하지 않는다.
+  이 제한은 영구 불변식이나 일괄 제외 근거가 아니다.
+  수용된 stale snapshot 상태에서 단순히 재요청한다는 사실만으로 finding으로 보지 않는다.
+- **수용 위험 — read replica 인증·권한 snapshot:** API·Web·Admin의 일반 SELECT는 Session,
+  Account, membership, auth·ACL과 visibility를 포함해 read replica의 snapshot을 사용한다. 따라서
+  primary에 commit된 logout·Session revocation·Account 비활성화·membership 또는 visibility
+  변경은 replica에 반영되기 전까지 이전 상태로 인가될 수 있다. 이 위험은 선택된 read-load
+  분리 구조를 따르는 데서 발생한다. 해당 경로에 필요한 기존 Account·Session·membership·owner·
+  lifecycle·visibility 검사는 계속 적용된다. Native write·transaction·`execute`와 GraphQL mutation 실행
+  (nested result 포함)은 primary를 사용한다. 따라서 stale snapshot이 허용한 보호 조회나 mutation이
+  replica에 변경이 반영되기 전에 실행될 수 있다. Worker·Fedify consumer도 durable post-commit
+  effect를 위해 primary를 사용한다. 이 primary 실행은 앞서 replica snapshot으로 만든 인증
+  context를 소급해 갱신하지 않는다. 이 구현은 복제 지연의 상한을 보장하지 않는다. 책임자는
+  PR #1238 작성자(@robin-maki)다. replica topology·lag 요구사항이나 Session revocation 보장이
+  바뀌면 재검토한다. 이 수용은 replica snapshot 지연에 한정한다. 별도의 credential 유출,
+  invalid·forged credential을 받아들이거나 state·권한 검사를 생략하는 경로, replica가 revocation을
+  반영한 뒤에도 폐기된 Session credential을 인증하는 경로, 공격자가 lag를 일으키거나 증폭하는
+  구체적 경로는 별도로 finding 여부를 검토한다.
 - GraphQL의 viewer별 visibility와 owner 권한은 PostgreSQL RLS가 아니라 중앙 application
   policy가 적용한다. Shared non-owner runtime role과 database constraint가 구조적 경계를
   보완한다. RLS 부재 자체는 finding이 아니지만 application policy 우회는 finding이다.
@@ -135,7 +152,8 @@ all-or-nothing read boundary다. Node·kubelet 권한을 이미 가진 운영 �
 
 ## 재검토 조건
 
-OIDC·Session 정책, Admin ingress·mutation, Media Storage 계약, 새 ActivityPub activity나
+OIDC·Session 정책, read replica topology·lag 요구사항, Admin ingress·mutation, Media Storage
+계약, 새 ActivityPub activity나
 remote fetch, runtime Secret·database role, analytics·telemetry, GraphQL query·rate limit,
 GitHub workflow·runner·Environment, release·mobile signing 경계가 바뀌면 이 정책을 현재
 source와 live evidence에 맞게 재검토한다.
