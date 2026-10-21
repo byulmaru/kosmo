@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -11,6 +12,7 @@ import type { FeedbackForm as FeedbackFormComponent } from './FeedbackForm';
 let captureOutcome: 'resolve' | 'reject' = 'resolve';
 let captureFeedbackCalls = 0;
 const generationRef = { current: 1 };
+const require = createRequire(import.meta.url);
 const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 let FeedbackForm: typeof FeedbackFormComponent;
 let renderer: ReactTestRenderer | null = null;
@@ -29,9 +31,11 @@ mockModule('react-native', {
 mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => ({ canceled: true, assets: [] }),
 });
-mockModule('lucide-react-native', {
+const icons = {
   ImagePlusIcon: (props: Record<string, unknown>) => createElement('ImagePlusIcon', props),
-});
+};
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('@/analytics/client', {
   trackAnalytics: (event: string, properties: Record<string, unknown>) => {
     analyticsCalls.push([event, properties]);

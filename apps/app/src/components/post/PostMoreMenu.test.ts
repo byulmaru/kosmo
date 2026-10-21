@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -19,7 +20,10 @@ let menuItem: ReturnType<typeof UsePostMoreMenuItemExport> | null = null;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('lucide-react-native', { Link2: 'Link2' });
+const require = createRequire(import.meta.url);
+const icons = { Link2: 'Link2' };
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('@/analytics/client', {
   trackAnalytics: (event: string, properties: Record<string, unknown>) => {
     analyticsCalls.push([event, properties]);

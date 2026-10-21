@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -35,11 +36,14 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   View: 'View',
 });
-mockModule('lucide-react-native', {
+const require = createRequire(import.meta.url);
+const icons = {
   RefreshCw: 'RefreshCw',
   Volume2: 'Volume2',
   VolumeOff: 'VolumeOff',
-});
+};
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) =>
     parts.join('').match(/(?:mutation|query|fragment)\s+(\w+)/)?.[1],

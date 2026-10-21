@@ -4,17 +4,24 @@
 
 ## 기존 계측
 
-| 행동                                       | 기존 이벤트                                                                                  |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| 유효한 프로필 표시                         | `profile_view_succeeded`                                                                     |
-| 프로필 생성·선택                           | `profile_created`, `profile_selected`                                                        |
-| 게시글 작성                                | `post_created`                                                                               |
-| 재게시·취소                                | `repost_succeeded`                                                                           |
-| 반응 추가·삭제                             | `reaction_added`, `reaction_removed`                                                         |
-| 북마크 추가·삭제                           | `bookmark_added`, `bookmark_removed`                                                         |
-| 팔로우 관계·요청 생성                      | `follow_succeeded`                                                                           |
-| 검색 제출·결과 로드·결과 선택              | `search_submitted`, `search_results_loaded`, `search_result_selected`                        |
-| 프로필 해시태그 선택·목록 표시·프로필 선택 | `profile_hashtag_clicked`, `profile_hashtag_list_viewed`, `profile_hashtag_profile_selected` |
+아래는 기존 앱 이벤트의 명시적 속성 목록이다. `선택`으로 표시한 속성만 생략할 수 있다. 기존 전송 속성을 문서에 대조한 것으로 수집 범위를 추가하거나 재정의하지 않는다. SDK identity/session metadata는 포함하지 않는다.
+
+| 행동                               | 기존 이벤트                          | 앱 속성                                                                                                                                        |
+| ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 유효한 프로필 표시                 | `profile_view_succeeded`             | 없음                                                                                                                                           |
+| 프로필 생성                        | `profile_created`                    | `selected_profile_id: string`                                                                                                                  |
+| 프로필 선택                        | `profile_selected`                   | `selected_profile_id: string`; 선택: `selection_cause: auto \| direct`, `previous_profile_id: string`                                          |
+| 게시글 작성                        | `post_created`                       | `selected_profile_id: string`, `visibility: PUBLIC \| UNLISTED \| FOLLOWERS \| DIRECT`; 이번 변경에서 `post_type: post \| reply \| quote` 추가 |
+| 재게시·취소                        | `repost_succeeded`                   | `result: created \| removed`                                                                                                                   |
+| 반응 추가·삭제                     | `reaction_added`, `reaction_removed` | `reaction_type: default \| custom`                                                                                                             |
+| 북마크 추가·삭제                   | `bookmark_added`, `bookmark_removed` | 없음                                                                                                                                           |
+| 팔로우 관계·요청 생성              | `follow_succeeded`                   | `selected_profile_id: string`, `result: follow \| request`                                                                                     |
+| 검색 제출                          | `search_submitted`                   | `tab: popular \| latest \| media \| people`, `source: keyboard \| tab \| recent`                                                               |
+| 검색 결과 로드                     | `search_results_loaded`              | `tab: popular \| latest \| media \| people`, `has_results: boolean`                                                                            |
+| 검색 결과 선택                     | `search_result_selected`             | `tab: popular \| latest \| media \| people`                                                                                                    |
+| 프로필 해시태그 선택               | `profile_hashtag_clicked`            | `hashtag_id: string`                                                                                                                           |
+| 프로필 해시태그 목록 표시          | `profile_hashtag_list_viewed`        | `hashtag_id: string`, `result_count: number`                                                                                                   |
+| 프로필 해시태그 목록의 프로필 선택 | `profile_hashtag_profile_selected`   | `hashtag_id: string`                                                                                                                           |
 
 웹의 SDK `$pageview`·자동 클릭과 앱 소유 이벤트는 다르다. 클릭만으로 mutation의 성공을 알 수 없으므로 위 성공 이벤트나 아래 추가 이벤트의 대체 자료로 해석하지 않는다. Native SDK는 명시적 앱 이벤트만 수집하며 자동 화면 조회 계측은 이 변경에 포함하지 않는다.
 

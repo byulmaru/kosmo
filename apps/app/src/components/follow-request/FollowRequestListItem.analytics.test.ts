@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -53,7 +54,10 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   View: 'View',
 });
-mockModule('lucide-react-native', { CheckIcon: 'CheckIcon', XIcon: 'XIcon' });
+const require = createRequire(import.meta.url);
+const icons = { CheckIcon: 'CheckIcon', XIcon: 'XIcon' };
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('@/analytics/client', {
   trackAnalytics: (...args: unknown[]) => analyticsCalls.push(args),
 });

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type SettingsThemeRouteExport from '@/app/(tabs)/(protected)/settings/theme';
 import type { ThemePreference } from '@/theme/themePreference';
-import type SettingsThemeRouteExport from './theme';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,7 +18,10 @@ const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', { useRouter: () => ({}) });
-mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon' });
+const require = createRequire(import.meta.url);
+const icons = { ArrowLeftIcon: 'ArrowLeftIcon' };
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
@@ -64,7 +68,7 @@ mockModule('@/theme/tokens', {
 let SettingsThemeRoute: typeof SettingsThemeRouteExport;
 
 before(async () => {
-  ({ default: SettingsThemeRoute } = await import('./theme'));
+  ({ default: SettingsThemeRoute } = await import('@/app/(tabs)/(protected)/settings/theme'));
 });
 
 afterEach(async () => {

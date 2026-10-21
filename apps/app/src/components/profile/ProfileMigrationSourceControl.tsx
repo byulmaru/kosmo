@@ -95,14 +95,14 @@ export function ProfileMigrationSourceControl({
     const requestGeneration = environmentGenerationRef?.current;
     registerCommit({
       variables: { input: { sourceHandle: normalizedInput } },
-      onCompleted: (response, errors) => {
+      onCompleted: (response) => {
         const nextProfile = response.registerProfileMigrationSource?.profile;
         if (!nextProfile || nextProfile.id !== profile.id) {
           setRegisterState('error');
           return;
         }
 
-        if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+        if (environmentGenerationRef?.current === requestGeneration) {
           trackAnalytics('profile_migration_requested', { action: 'source_registered' });
         }
         setRegisterState('success');
@@ -119,14 +119,14 @@ export function ProfileMigrationSourceControl({
     const requestGeneration = environmentGenerationRef?.current;
     unregisterCommit({
       variables: {},
-      onCompleted: (response, errors) => {
+      onCompleted: (response) => {
         const nextProfile = response.unregisterProfileMigrationSource?.profile;
         if (!nextProfile || nextProfile.id !== profile.id) {
           setUnregisterState('error');
           return;
         }
 
-        if (!errors?.length && environmentGenerationRef?.current === requestGeneration) {
+        if (environmentGenerationRef?.current === requestGeneration) {
           trackAnalytics('profile_migration_requested', { action: 'source_unregistered' });
         }
         setSourceHandle('');

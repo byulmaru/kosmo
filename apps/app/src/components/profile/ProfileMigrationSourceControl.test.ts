@@ -230,7 +230,7 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField')[0].props.accessibilityLabel, '기존 계정 주소');
   });
 
-  it('부분 GraphQL errors가 있어도 같은 Profile ID의 등록 및 해제 payload를 성공으로 처리한다', async () => {
+  it('부분 GraphQL errors가 있어도 같은 Profile ID의 등록 및 해제 성공을 각각 추적한다', async () => {
     await render(true);
     await act(async () => rendered('TextField')[0].props.onChangeText('@source@remote.example'));
     await act(async () => rendered('Button')[0].props.onPress());
@@ -239,10 +239,16 @@ describe('ProfileMigrationSourceControl', () => {
       id: 'profile-source',
       relativeHandle: '@source@remote.example',
     };
+    profile.instance.canonicalOrigin = null;
     await act(async () =>
       mutationConfigs[0].onCompleted(
-        { registerProfileMigrationSource: { profile: { id: profile.id } } },
-        [{ message: 'a non-fatal field failed' }],
+        { registerProfileMigrationSource: { profile: { ...profile } } },
+        [
+          {
+            message: 'a non-fatal field failed',
+            path: ['registerProfileMigrationSource', 'profile', 'instance', 'canonicalOrigin'],
+          },
+        ],
       ),
     );
 
@@ -255,14 +261,22 @@ describe('ProfileMigrationSourceControl', () => {
     profile.migrationSource = null;
     await act(async () =>
       mutationConfigs[1].onCompleted(
-        { unregisterProfileMigrationSource: { profile: { id: profile.id } } },
-        [{ message: 'a non-fatal field failed' }],
+        { unregisterProfileMigrationSource: { profile: { ...profile } } },
+        [
+          {
+            message: 'a non-fatal field failed',
+            path: ['unregisterProfileMigrationSource', 'profile', 'instance', 'canonicalOrigin'],
+          },
+        ],
       ),
     );
 
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
-    assert.deepEqual(analyticsCalls, []);
+    assert.deepEqual(analyticsCalls, [
+      ['profile_migration_requested', { action: 'source_registered' }],
+      ['profile_migration_requested', { action: 'source_unregistered' }],
+    ]);
   });
 
   it('빈 입력은 mutation 없이 검증 오류를 표시한다', async () => {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -45,7 +46,10 @@ mockModule('react-relay', {
   useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('react-native', { View: 'View' });
-mockModule('lucide-react-native', { MoreHorizontal: 'MoreHorizontal', Trash2: 'Trash2' });
+const require = createRequire(import.meta.url);
+const icons = { MoreHorizontal: 'MoreHorizontal', Trash2: 'Trash2' };
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('@/analytics/client', {
   trackAnalytics: (...args: unknown[]) => analyticsCalls.push(args),
 });
