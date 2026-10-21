@@ -2101,7 +2101,7 @@ describe('inbound Create dispatch', () => {
   test('same-author duplicates still validate audience, content, emptiness, and author availability', async () => {
     const profile = await createStoredRemoteActor();
     const objectUri = new URL('https://objects.example/notes/validated-duplicate');
-    await materializeHydratedRemoteNote({
+    const original = await materializeHydratedRemoteNote({
       context: createContext(),
       note: new Note({
         attribution: remoteActorUri,
@@ -2114,14 +2114,31 @@ describe('inbound Create dispatch', () => {
       receivedAt,
     });
 
-    const invalidDuplicates = [
-      {
-        expected: { reason: 'unsupported_note', status: 'rejected' },
+    assert.ok(original.status === 'created');
+    assert.deepEqual(
+      await materializeHydratedRemoteNote({
+        context: createContext(),
         note: new Note({
           attribution: remoteActorUri,
           content: 'Followers only',
           id: objectUri,
           to: new URL('https://remote.example/users/alice/followers'),
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      { postId: original.postId, status: 'duplicate' },
+    );
+
+    const invalidDuplicates = [
+      {
+        expected: { reason: 'no_active_local_mention', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Direct without a local Mention',
+          id: objectUri,
+          to: new URL('https://remote.example/users/bob'),
         }),
       },
       {
@@ -2180,6 +2197,7 @@ describe('inbound Create dispatch', () => {
     const materialized = await getMaterializedPost(objectUri);
     assert.equal(materialized.post.profileId, profile.id);
     assert.equal(postContentDocumentToText(materialized.content.document), 'First write');
+    assert.equal(materialized.post.visibility, PostVisibility.PUBLIC);
     assert.equal(await db.$count(PostContents), 1);
   });
 
