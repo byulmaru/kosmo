@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Bookmarks,
   db,
@@ -551,7 +552,7 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         'addReaction(input: { postId: $post, type: "🎉" }) { reaction { id } }',
         'repostPost(input: { sourceId: $post }) { repost { id } }',
         'createPost(input: { bodyText: "blocked reply", visibility: PUBLIC, replyParentId: $post }) { post { id } }',
-        'createPost(input: { bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }',
+        `createPost(input: { admissionId: "${Date.now()}:${randomUUID()}", bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }`,
       ];
       for (const mutation of mutations) {
         const isFollow = mutation.startsWith('followProfile');

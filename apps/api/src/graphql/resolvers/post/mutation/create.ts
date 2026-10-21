@@ -69,6 +69,7 @@ builder.mutationField('createPost', (t) =>
         ),
     },
     input: {
+      admissionId: t.input.string({ required: false }),
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({
@@ -265,6 +266,7 @@ builder.mutationField('createPost', (t) =>
       }
 
       const result = await createPost({
+        admissionId: input.admissionId ?? undefined,
         accountId: ctx.session.accountId,
         ...(mentionReferences.length > 0 ? { authoredBodyText: input.bodyText } : {}),
         document: postContentDocumentFromTextAndMedia(

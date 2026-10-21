@@ -33,7 +33,10 @@
     "./validation": "./validation/index.ts",
     "./validation/post-policy": "./validation/post-policy.ts",
     "./validation/profile-tag-parity-fixture": "./validation/profile-tag-parity-fixture.ts",
-    "./validation/profile": "./validation/profile.ts"
+    "./validation/profile": "./validation/profile.ts",
+    "./temporal/post": "./temporal/post.ts",
+    "./temporal/post-quote-owner": "./temporal/post-quote-owner.ts",
+    "./temporal/post-admission": "./temporal/post-admission.ts"
   },
   "dependencies": {
     "@kosmo/fedify": "workspace:*",

@@ -37,7 +37,7 @@ import {
 import { notificationSourceAvailabilityWhere } from '../visibility/notification';
 import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
-import { createPost as persistPost } from './post';
+import { createPostPersisted } from './post';
 import { createQuoteNotification } from './quote-notification';
 
 const instanceIds: string[] = [];
@@ -96,7 +96,7 @@ const createTestPost = async ({
   readonly replyParentId?: string;
   readonly visibility?: PostVisibility;
 }) => {
-  const result = await persistPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText(`mention ${crypto.randomUUID()}`),
     mentionProfileIds,
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
@@ -158,7 +158,7 @@ const createPostForLocal = async (
       ? postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, mentions)
       : postContentDocumentFromText(authoredBodyText);
 
-  const result = await persistPost({
+  const result = await createPostPersisted({
     accountId: accountIdsByProfile.get(profileId),
     authoredBodyText: mentions.length > 0 ? authoredBodyText : undefined,
     document,

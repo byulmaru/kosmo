@@ -28,7 +28,7 @@ import {
   ProfileState,
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
-import { createPost } from './post';
+import { createPostPersisted } from './post';
 import { createQuoteNotification } from './quote-notification';
 
 const profileIds: string[] = [];
@@ -80,7 +80,7 @@ const createProfile = async () => {
 };
 
 const createContentPost = async (profileId: string, repostSourceId?: string) => {
-  const result = await createPost({
+  const result = await createPostPersisted({
     accountId: accountIdsByProfile.get(profileId)!,
     document: postContentDocumentFromText(crypto.randomUUID()),
     origin: 'LOCAL',
