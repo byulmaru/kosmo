@@ -150,14 +150,23 @@ test('아직 저장되지 않은 Like·EmojiReact actor를 materialize한 뒤 �
     id: new URL(`/activities/${crypto.randomUUID()}`, emojiActorUri),
     object: emojiTarget.objectUri,
   });
+  const lookupInputs: Array<{ actorUri: string; contextOrigin?: string }> = [];
   const lookup = mock.method(
     temporalClient.workflow,
     'execute',
     async (workflow: unknown, options: unknown) => {
       assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
       assert.ok(options && typeof options === 'object');
-      const workflowOptions = options as { args?: Array<{ actorUri: string }> };
-      const actorUri = new URL(workflowOptions.args?.[0]?.actorUri ?? '');
+      const workflowOptions = options as {
+        args?: Array<{ actorUri: string; contextOrigin?: string }>;
+      };
+      const lookupInput = workflowOptions.args?.[0];
+      assert.ok(lookupInput);
+      lookupInputs.push({
+        actorUri: lookupInput.actorUri,
+        contextOrigin: lookupInput.contextOrigin,
+      });
+      const actorUri = new URL(lookupInput.actorUri);
       const actor = new Person({ id: actorUri, preferredUsername: 'alice' });
       const profile = await materializeRemoteProfileActor({
         actorUri,
@@ -169,11 +178,16 @@ test('아직 저장되지 않은 Like·EmojiReact actor를 materialize한 뒤 �
   const start = mock.method(temporalClient.workflow, 'start', async () => undefined);
 
   try {
-    await handleInboundReaction(createContext(null), like);
-    await handleInboundReaction(createContext(null), emojiReact);
+    const context = { ...createContext(null), canonicalOrigin: publicOrigin };
+    await handleInboundReaction(context, like);
+    await handleInboundReaction(context, emojiReact);
 
     assert.equal(lookup.mock.callCount(), 2);
     assert.equal(start.mock.callCount(), 2);
+    assert.deepEqual(lookupInputs, [
+      { actorUri: likeActorUri.href, contextOrigin: publicOrigin },
+      { actorUri: emojiActorUri.href, contextOrigin: publicOrigin },
+    ]);
 
     for (const { activity, actorUri, target, expectedType } of [
       { activity: like, actorUri: likeActorUri, target: likeTarget, expectedType: '❤️' },
