@@ -22,7 +22,8 @@ Accepted — 2026-09-10 사용자 승인. 동의 상태와 현재 승인·재승
   진본인 `QuoteAuthorization`이 해당 인용·Source·Source Author를 정확히 가리킬 때만 승인한다.
 - FEP `quote`가 없는 레거시 인용은 유효한 원문 확인 후 승인서 없이 표시할 수 있다. 이는 호환을 위한
   승인 상태이며 원문 작성자의 명시적 동의를 증명하지 않는다. Source 조회 권한은 별도로 적용한다.
-- 인증된 embedded `Update(Note)`에 포함된 승인 정보의 추가·교체·제거와 유효한 승인 철회를 반영한다.
+- 인증된 embedded `Update(Note)`에 포함된 승인 참조의 추가·교체와 유효한 승인 철회를 반영한다.
+  승인 참조 누락만으로 이미 검증된 승인과 승인 참조를 제거하지 않는다.
   IRI-only Note 추가 fetch·hydration과 authorization-only Update 표현은 이 범위에 포함하지 않는다. Source를 숨길 때도 인용 작성자의 Content와
   저장된 Source 관계를 보존하며, 중복 수신과 늦은 처리 결과로 철회 상태가 되돌아가지 않게 한다.
 - 미저장 Public·Unlisted Source는 기존 원격 Note 저장 계약을 재사용한다. Followers Only Source는 현재
@@ -110,3 +111,10 @@ hydration/serialization 회귀, PROD-792의 Quote/QuoteAuthorization 계약을 �
 요청했다. 승인 대상은 이 ADR과 Post 계약, 최신 이슈의 포함·제외 범위, 의존성과 PROD-792의 구현·통합
 검증·정합성 확인·archive 책임이다. 출처는 PROD-792 Spec 대화
 `01a07e8d-8c62-7c90-ab60-482fb0edf379`의 2026-09-10 사용자 승인이다.
+
+## 2026-10-21 승인 참조 누락 처리 정렬
+
+[PR #961 리뷰](https://github.com/byulmaru/kosmo/pull/961#discussion_r4333366354)에 대한 사용자의 수정 지시에 따라,
+승인 참조가 없는 embedded Update는 새 승인 근거가 없는 것으로 처리한다. 이미 검증된 승인과 승인 참조는
+유지하며, 누락만으로 Pending으로 전이하거나 Source를 숨기지 않는다. 이 결정은 2026-09-17 범위 중
+승인 참조 제거에 따른 Pending 전이를 대체한다. 신규·교체 승인 참조의 검증 대기와 유효한 거절·철회 처리는 유지한다.

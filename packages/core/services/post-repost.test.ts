@@ -655,7 +655,7 @@ test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하�
   assert.equal(repeatedDeletedAt?.toString(), firstDeletedAt.toString());
 });
 
-test('deletePost는 Notification cleanup effect를 위해 Post Delete Workflow를 시작한다', async () => {
+test('deletePost는 삭제 owner가 끝나면 관련 Notification을 정리한다', async () => {
   const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const recipient = await createProfile();
   const recipientAccount = await createAccount();
@@ -682,7 +682,6 @@ test('deletePost는 Notification cleanup effect를 위해 Post Delete Workflow�
     sourceId: created.post.id,
   });
   const { temporalClient } = await import('../temporal/client');
-  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
   await runDelete({
     actorProfileId: author.profile.id,
@@ -690,21 +689,16 @@ test('deletePost는 Notification cleanup effect를 위해 Post Delete Workflow�
     postId: created.post.id,
   });
 
+  await temporalClient.workflow.getHandle(`post-delete-mutation:${created.post.id}`).result();
+
   assert.equal(
     await db
       .select()
       .from(Notifications)
       .where(eq(Notifications.sourceId, created.post.id))
       .then((rows) => rows.length),
-    1,
+    0,
   );
-  assert.equal(start.mock.callCount(), 1);
-  const workflowStart = start.mock.calls[0];
-  assert.ok(workflowStart);
-  assert.equal(workflowStart.arguments[0], 'postDeleteWorkflow');
-  const workflowOptions = workflowStart.arguments[1];
-  assert.ok(workflowOptions);
-  assert.deepEqual(workflowOptions.args, [{ origin: 'ACTIVITYPUB', postId: created.post.id }]);
   assert.equal(
     await db
       .select({ state: Posts.state })
