@@ -8,7 +8,7 @@ Remote `Like`·`EmojiReact`와 대응 `Undo`를 기존 Reaction lifecycle에 안
 
 ### Requirement: Typed inbound Reaction activity validation
 
-**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498, PROD-567. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, actor URI와 고유한 HTTP(S) object URI를 가진 `Like`와 `EmojiReact`를 처리해야 한다(MUST). actor URI가 아직 저장되어 있지 않으면 원격 계정을 확인·등록한 뒤 기존 active Remote Profile actor 조건을 적용해야 한다(MUST). actor를 확인할 수 없는 경우 Reaction과 ActivityPub mapping을 저장해서는 안 되며(MUST NOT), lookup 오류는 inbox 재시도를 위해 전파해야 한다(MUST). Activity의 `to`·`cc` 등 audience 존재 여부, 대상 Post Author 포함 여부와 personal/shared inbox route를 수신 Reaction의 유효성 또는 권한 증거로 사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498, PROD-567. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, actor URI와 고유한 HTTP(S) object URI를 가진 `Like`와 `EmojiReact`를 처리해야 한다(MUST). actor URI가 아직 저장되어 있지 않으면 원격 계정을 확인·등록한 뒤 기존 active Remote Profile actor 조건을 적용해야 한다(MUST). actor/Profile/Instance가 active 조건을 만족하지 못하거나 원격 actor materialization이 영구 거부되면 Reaction과 ActivityPub mapping을 저장해서는 안 되며(MUST NOT); 일시적 또는 예상하지 못한 lookup 오류는 inbox 재시도를 위해 전파해야 한다(MUST). Activity의 `to`·`cc` 등 audience 존재 여부, 대상 Post Author 포함 여부와 personal/shared inbox route를 수신 Reaction의 유효성 또는 권한 증거로 사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Local Post 대상 activity
 
@@ -40,11 +40,16 @@ Remote `Like`·`EmojiReact`와 대응 `Undo`를 기존 Reaction lifecycle에 안
 - **THEN** 시스템은 Reaction과 ActivityPub mapping을 만들지 않는다
 - **AND** actor lookup을 시작하거나 object를 네트워크에서 fetch, backfill 또는 materialize하지 않는다
 
-#### Scenario: Remote Profile actor를 확인할 수 없음
+#### Scenario: 영구적으로 사용할 수 없는 Remote Profile actor
 
-- **WHEN** 유효한 actor URI의 원격 계정을 확인할 수 없거나 actor/Profile/Instance가 기존 active 조건을 통과하지 못한다
+- **WHEN** actor/Profile/Instance가 기존 active 조건을 통과하지 못하거나 원격 actor materialization이 영구 거부된다
 - **THEN** 시스템은 Reaction과 ActivityPub mapping을 만들지 않는다
-- **AND** lookup 오류가 발생하면 inbox 재시도를 위해 오류를 전파한다
+
+#### Scenario: 일시적 또는 예상하지 못한 Remote Profile lookup 오류
+
+- **WHEN** 유효한 actor URI의 확인 중 일시적 오류 또는 예상하지 못한 lookup 오류가 발생한다
+- **THEN** 시스템은 Reaction과 ActivityPub mapping을 만들지 않는다
+- **AND** inbox 재시도를 위해 오류를 전파한다
 
 #### Scenario: Unavailable target
 

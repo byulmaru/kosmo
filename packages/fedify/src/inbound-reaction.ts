@@ -1,13 +1,14 @@
 import '@kosmo/core/polyfill';
 
 import { Like } from '@fedify/vocab';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { materializeInboundReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
-  findStoredRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { EmojiReact } from '@fedify/vocab';
@@ -41,12 +42,31 @@ export const handleInboundReaction = async (
     return;
   }
 
-  if (!(await findStoredRemoteProfileActorByUri(actorUri))) {
+  try {
     await findOrMaterializeRemoteProfileActorByUri({
       actorUri,
       contextOrigin: context.canonicalOrigin,
       receipt: { activityUri, receivedAt: Temporal.Now.instant() },
     });
+  } catch (error) {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof ConflictError ||
+      error instanceof NotFoundError
+    ) {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: activity instanceof Like ? 'Like' : 'EmojiReact',
+        actorOrigin: actorUri.origin,
+        handler: 'reaction',
+        objectOrigin: objectUri.origin,
+        phase: 'actor_lookup',
+        reasonCode: 'remote_actor_materialization_rejected',
+      });
+      return;
+    }
+
+    throw error;
   }
 
   const result = await materializeInboundReaction({
