@@ -24,9 +24,9 @@ const inputSchema = z.strictObject({
 const {
   verifyPostDeletionActivity,
   deletePostTransitionActivity,
+  deletePostRelatedNotificationsActivity,
   sendLocalPostDeleteActivity,
   sendLocalPostQuoteRevocationsActivity,
-  deleteRepostNotificationActivity,
   sendRepostUndoActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -73,15 +73,15 @@ export async function postDeleteMutationWorkflow(input: PostDeleteInput): Promis
   if (!execution?.ok) {
     return;
   }
-  if (execution.result.sourcePostId) {
-    await settleEffects([
-      deleteRepostNotificationActivity(input.postId),
-      ...(input.origin === 'LOCAL' ? [sendRepostUndoActivity(input.postId)] : []),
-    ]);
-  } else {
-    await settleEffects([
-      sendLocalPostQuoteRevocationsActivity(input.postId),
-      ...(input.origin === 'LOCAL' ? [sendLocalPostDeleteActivity(input.postId)] : []),
-    ]);
-  }
+  await settleEffects([
+    deletePostRelatedNotificationsActivity(input.postId),
+    ...(execution.result.sourcePostId
+      ? input.origin === 'LOCAL'
+        ? [sendRepostUndoActivity(input.postId)]
+        : []
+      : [
+          sendLocalPostQuoteRevocationsActivity(input.postId),
+          ...(input.origin === 'LOCAL' ? [sendLocalPostDeleteActivity(input.postId)] : []),
+        ]),
+  ]);
 }

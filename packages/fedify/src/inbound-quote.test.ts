@@ -1260,7 +1260,7 @@ test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 is
   currentContext = context;
 });
 
-test('Update authorization add/remove와 Delete listener가 expectation 및 철회 계약을 지킨다', async () => {
+test('Update의 승인 참조 교체·누락과 Delete listener가 기존 승인 및 철회 계약을 지킨다', async () => {
   const sourceActor = await createRemoteActor(
     'lifecycle-source',
     'https://source.example/users/lifecycle',
@@ -1440,7 +1440,7 @@ test('Update authorization add/remove와 Delete listener가 expectation 및 철�
   assert.equal(stored.approvalUri, replacementAuthorization.id!.href);
 
   await deliver(
-    new Update({ actor: quotePerson.id!, object: base }),
+    new Update({ actor: quotePerson.id!, object: base.clone({ content: 'edited quote body' }) }),
     quoteKeyPair.privateKey,
     quoteKeyUri,
   );
@@ -1454,7 +1454,8 @@ test('Update authorization add/remove와 Delete listener가 expectation 및 철�
     .from(Posts)
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(stored.approvalUri, replacementAuthorization.id!.href);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -1510,6 +1511,18 @@ test('Update authorization add/remove와 Delete listener가 expectation 및 철�
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   assert.equal(stored.status, PostQuoteConsentStatus.REVOKED);
+  await deliver(
+    new Update({ actor: quotePerson.id!, object: base }),
+    quoteKeyPair.privateKey,
+    quoteKeyUri,
+  );
+  const afterMissingApproval = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(afterMissingApproval.quoteConsentStatus, PostQuoteConsentStatus.REVOKED);
+  assert.equal(afterMissingApproval.quoteConsentApprovalUri, stored.approvalUri);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,

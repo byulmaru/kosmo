@@ -198,8 +198,9 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Approved가 된다. 승인서는 해당 인용, 직접 Source, Source Author에 정확히 대응하고 진본임을 검증해야 한다.
 - 레거시 인용은 FEP `quote`가 없고 유효한 원문을 확인하면 별도 `QuoteAuthorization` 없이 Approved가 된다.
   이 호환 정책은 원문 작성자의 명시적 동의를 확인했다는 뜻이 아니며 Source 조회 권한을 넓히지 않는다.
-- 인용 작성자의 검증된 embedded `Update(Note)`로 승인 정보가 추가·교체·제거되면 승인 상태를 다시 판정한다. 승인서가
-  필요한 FEP 인용은 새 승인서 검증이 끝나기 전이나 승인서가 제거된 뒤에 Source를 표시하지 않는다.
+- 인용 작성자의 검증된 embedded `Update(Note)`에 승인 참조가 추가·교체되면 승인 상태를 다시 판정한다. 승인서가
+  필요한 FEP 인용은 새 승인서 검증이 끝나기 전에 Source를 표시하지 않는다. 승인 참조가 누락된 Update만으로
+  이미 검증된 승인과 승인 참조를 제거하지 않으며, 기존 승인은 검증된 거절·철회 근거가 확인될 때 변경한다.
   이 행동은 일반 Note의 Content·Media·Visibility 수정이나 인용 대상 변경을 정의하지 않는다.
 - IRI-only `Update(Note)`를 받은 뒤 원격 Note를 추가 fetch·hydrate하는 경로와 authorization-only Update
   표현은 이 계약에 포함하지 않는다.
