@@ -474,6 +474,7 @@ test('Profile Tag checks Quote Author, then keeps a suppressed first judgment af
   const quoteAuthorMatchedSource = await createContentPost(sourceAuthorWithoutTag.id);
   const quoteReplyParent = await createContentPost(sourceAuthorWithoutTag.id);
   const quoteAuthorMatched = await createPost({
+    accountId: accountIdsByProfile.get(quoteAuthorWithTag.id)!,
     document: postContentDocumentFromText(crypto.randomUUID()),
     origin: 'LOCAL',
     profileId: quoteAuthorWithTag.id,
@@ -524,6 +525,51 @@ test('Profile Tag checks Quote Author, then keeps a suppressed first judgment af
   assert.equal(retainedJudgment?.quotePostId, firstJudgment?.quotePostId);
   assert.equal(retainedJudgment?.decidedAt.toString(), firstJudgment?.decidedAt.toString());
   assert.equal(retainedJudgment?.outcome, 'SUPPRESSED');
+});
+
+test('Profile Tag mute suppresses a standalone Quote for every recipient Account', async () => {
+  const sourceAuthor = await createProfile();
+  const recipientAccountIds = [
+    accountIdsByProfile.get(sourceAuthor.id)!,
+    await addAccountToProfile(sourceAuthor.id),
+  ];
+  const taggedAuthor = await createProfile();
+  const hashtag = await createHashtag('standalone-quote-topic');
+  await db.insert(ProfileHashtags).values({ profileId: taggedAuthor.id, hashtagId: hashtag.id });
+  const rule = await createHashtagMuteRule({
+    ownerProfileId: sourceAuthor.id,
+    targetHashtagId: hashtag.id,
+  });
+  const source = await createContentPost(sourceAuthor.id);
+  const mutedQuote = await createContentPost(taggedAuthor.id, source.id);
+
+  assert.deepEqual(await createQuoteNotification(mutedQuote.id), []);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, mutedQuote.id)), 0);
+  assert.equal(await db.$count(Posts, eq(Posts.id, mutedQuote.id)), 1);
+  const judgment = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, mutedQuote.id))
+    .then(firstOrThrow);
+  assert.equal(judgment.outcome, 'SUPPRESSED');
+
+  const untaggedAuthor = await createProfile();
+  const allowedQuote = await createContentPost(untaggedAuthor.id, source.id);
+  const allowedIds = await createQuoteNotification(allowedQuote.id);
+  const allowedNotifications = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, allowedQuote.id));
+  assert.deepEqual(
+    allowedNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    recipientAccountIds.sort(),
+  );
+  assert.deepEqual(allowedIds.sort(), allowedNotifications.map(({ id }) => id).sort());
+  assert.ok(allowedNotifications.every(({ kind }) => kind === NotificationKind.QUOTE));
+
+  await db.delete(HashtagMuteRules).where(eq(HashtagMuteRules.id, rule.id));
+  assert.deepEqual(await createQuoteNotification(mutedQuote.id), []);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, mutedQuote.id)), 0);
 });
 
 test('Hashtag Mute lookup failure rolls back the Quote judgment and retry uses the stored Quote', async () => {

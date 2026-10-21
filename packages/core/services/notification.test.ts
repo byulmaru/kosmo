@@ -33,8 +33,12 @@ import {
   PostVisibility,
   ProfileFollowPolicy,
 } from '../enums';
-import { postContentDocumentFromText } from '../post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '../post-content/server';
 import { createReplyNotification } from './create-reply-notification';
+import { createMentionNotification } from './mention-notification';
 import {
   createFollowNotification,
   createFollowRequestNotification,
@@ -191,14 +195,15 @@ type ProfileTargetNotificationKind =
   | typeof NotificationKind.FOLLOW_REQUEST
   | typeof NotificationKind.REACTION
   | typeof NotificationKind.REPLY
-  | typeof NotificationKind.REPOST;
+  | typeof NotificationKind.REPOST
+  | typeof NotificationKind.MENTION;
 
 const createProfileTargetSource = async (
   kind: ProfileTargetNotificationKind,
   relatedProfileId: string,
   recipientProfileId: string,
   postText: string,
-): Promise<{ readonly id: string; readonly create: () => Promise<void> }> => {
+): Promise<{ readonly id: string; readonly create: () => Promise<string[]> }> => {
   switch (kind) {
     case NotificationKind.FOLLOW: {
       const follow = getEstablishedFollow(
@@ -212,7 +217,11 @@ const createProfileTargetSource = async (
     case NotificationKind.FOLLOW_REQUEST: {
       const request = await db
         .insert(ProfileFollowRequests)
-        .values({ followerProfileId: relatedProfileId, followeeProfileId: recipientProfileId })
+        .values({
+          actorAccountId: accountIdsByProfile.get(relatedProfileId) ?? null,
+          followerProfileId: relatedProfileId,
+          followeeProfileId: recipientProfileId,
+        })
         .returning()
         .then(firstOrThrow);
       return {
@@ -227,6 +236,7 @@ const createProfileTargetSource = async (
     case NotificationKind.REPLY: {
       const parent = await createContentPost(recipientProfileId, postText);
       const reply = await createPost({
+        accountId: getAccountId(relatedProfileId),
         document: postContentDocumentFromText(postText),
         origin: 'LOCAL',
         profileId: relatedProfileId,
@@ -238,11 +248,38 @@ const createProfileTargetSource = async (
     case NotificationKind.REPOST: {
       const source = await createContentPost(recipientProfileId, postText);
       const { repost } = await repostPost({
+        actorAccountId: getAccountId(relatedProfileId),
         actorProfileId: relatedProfileId,
         origin: 'LOCAL',
         sourcePostId: source.id,
       });
       return { id: repost.id, create: () => createRepostNotification(repost.id) };
+    }
+    case NotificationKind.MENTION: {
+      const recipient = await db
+        .select({ handle: Profiles.handle })
+        .from(Profiles)
+        .where(eq(Profiles.id, recipientProfileId))
+        .then(firstOrThrow);
+      const relativeHandle = `@${recipient.handle}`;
+      const authoredBodyText = `${postText} ${relativeHandle}`;
+      const post = await createPost({
+        accountId: getAccountId(relatedProfileId),
+        authoredBodyText,
+        document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+          {
+            start: postText.length + 1,
+            end: authoredBodyText.length,
+            handle: recipient.handle,
+            profileId: recipientProfileId,
+            relativeHandle,
+          },
+        ]),
+        origin: 'LOCAL',
+        profileId: relatedProfileId,
+        visibility: PostVisibility.PUBLIC,
+      }).then(({ post }) => post);
+      return { id: post.id, create: () => createMentionNotification(post.id) };
     }
   }
   assert.fail(`Unsupported profile target notification kind: ${kind}`);
@@ -610,7 +647,7 @@ test('Follow·Follow Request 알림은 Recipient Mute와 양방향 Block을 반�
   assert.equal((await readNotifications(request.id)).length, 1);
 });
 
-test('일치하는 Profile Tag는 구현된 다섯 일반 알림 경로를 억제하고 문자열만 일치하면 생성한다', async () => {
+test('일치하는 Profile Tag는 구현된 여섯 일반 알림 경로를 억제하고 문자열만 일치하면 생성한다', async () => {
   const recipient = await createProfile();
   const kinds = [
     NotificationKind.FOLLOW,
@@ -618,6 +655,7 @@ test('일치하는 Profile Tag는 구현된 다섯 일반 알림 경로를 억�
     NotificationKind.REACTION,
     NotificationKind.REPLY,
     NotificationKind.REPOST,
+    NotificationKind.MENTION,
   ] as const;
 
   for (const [index, kind] of kinds.entries()) {
@@ -760,8 +798,16 @@ test('같은 Account의 Recipient 중 Rule Owner Profile만 Profile Tag Mute를 
   await sourceA2.create();
 
   assert.deepEqual(await readNotifications(sourceA1.id), []);
-  const [notificationA2] = await readNotifications(sourceA2.id);
-  assert.equal(notificationA2?.recipientProfileId, recipientA2.id);
+  const notificationsA2 = await readNotifications(sourceA2.id);
+  assert.deepEqual(
+    notificationsA2
+      .map(({ recipientAccountId, recipientProfileId }) => [recipientAccountId, recipientProfileId])
+      .sort(),
+    [
+      [account.id, recipientA2.id],
+      [getAccountId(recipientA2.id), recipientA2.id],
+    ].sort(),
+  );
 });
 
 test('Rule·Profile Tag 변경은 저장된 Notification ID와 Read State를 바꾸지 않는다', async () => {
