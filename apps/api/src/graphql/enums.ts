@@ -19,6 +19,7 @@ createEnumRef('HashtagMuteScope');
 createEnumRef('MediaState');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');
+createEnumRef('PostQuotePolicy');
 createEnumRef('ProfileFollowPolicy');
 createEnumRef('InstanceKind');
 createEnumRef('ProfileState');

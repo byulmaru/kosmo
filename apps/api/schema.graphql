@@ -130,6 +130,7 @@ input CreatePostInput {
   contentWarning: String
   media: [CreatePostMediaInput!]
   mentions: [CreatePostMentionInput!]
+  quotePolicy: PostQuotePolicy
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -438,6 +439,7 @@ type Post implements Node {
   id: ID!
   isPinned: Boolean
   profile: Profile!
+  quotePolicy: PostQuotePolicy
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
@@ -474,6 +476,12 @@ type PostContent implements Node {
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+enum PostQuotePolicy {
+  AUTHOR
+  EVERYONE
+  FOLLOWERS
+}
 
 enum PostState {
   ACTIVE

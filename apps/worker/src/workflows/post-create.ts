@@ -26,6 +26,7 @@ const inputSchema = z.strictObject({
   profileId: z.uuid(),
   replyParentId: z.uuid().optional(),
   repostSourceId: z.uuid().optional(),
+  quotePolicy: z.enum(['EVERYONE', 'FOLLOWERS', 'AUTHOR']).nullish(),
   visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
 }) satisfies z.ZodType<PostCreateInput>;
 const {

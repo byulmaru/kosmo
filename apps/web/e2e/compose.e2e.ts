@@ -357,13 +357,19 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  const directOption = visibilityMenu.getByRole('menuitemradio', { name: '언급한 프로필만' });
-  await expect(directOption).toBeFocused();
-  await expect(directOption).toHaveAttribute('aria-checked', 'true');
+  await expect(visibilityMenu).toHaveCount(0);
+  await expect(visibilityTrigger).toHaveAccessibleName('공개 범위: 언급한 프로필만');
+  await expect(visibilityTrigger).toBeFocused();
+  await visibilityTrigger.click();
+  await expect(
+    visibilityMenu.getByRole('menuitemradio', { name: '언급한 프로필만' }),
+  ).toBeFocused();
   await page.keyboard.press('ArrowUp');
-  const followersOption = visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' });
-  await expect(followersOption).toBeFocused();
-  await expect(followersOption).toHaveAttribute('aria-checked', 'true');
+  await expect(visibilityMenu).toHaveCount(0);
+  await expect(visibilityTrigger).toHaveAccessibleName('공개 범위: 팔로워만');
+  await expect(visibilityTrigger).toBeFocused();
+  await visibilityTrigger.click();
+  await expect(visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(visibilityMenu).toHaveCount(0);
   await expect(composer.getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
@@ -373,6 +379,13 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   const publicOption = visibilityMenu.getByRole('menuitemradio', { name: '공개', exact: true });
   await expect(publicOption).toBeFocused();
   await page.keyboard.press('Space');
+  await expect(publicOption).toHaveAttribute('aria-checked', 'true');
+  const quoteGroup = visibilityMenu.getByRole('group', { name: '인용 허용 정책' });
+  const authorOnlyOption = quoteGroup.getByRole('menuitemradio', { name: /^본인만:/ });
+  await authorOnlyOption.focus();
+  await page.keyboard.press('Home');
+  await expect(quoteGroup.getByRole('menuitemradio', { name: /^모두:/ })).toBeFocused();
+  await authorOnlyOption.click();
   await expect(visibilityMenu).toHaveCount(0);
   await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeFocused();
 
@@ -388,6 +401,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(operation?.variables).toMatchObject({
     input: {
       bodyText: `${body}\n\nsecond line`,
+      quotePolicy: 'AUTHOR',
       visibility: 'PUBLIC',
     },
   });

@@ -42,10 +42,16 @@ import {
 } from '../temporal/post';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
-import { revokePostQuoteConsentsForSource } from './post-quote-consent';
+import {
+  assertPostQuotePolicy,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  revokePostQuoteConsentsForSource,
+} from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { DatabaseHandle, Transaction } from '../db';
+import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 export type LocalPostInput = {
@@ -65,6 +71,7 @@ export type LocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -256,8 +263,16 @@ const validateQuoteSource = async (
   if (source.visibility === PostVisibility.DIRECT) {
     throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    throw new ValidationError('Quote approval is not available', { field: 'repostSourceId' });
+  if (
+    source.instanceKind === InstanceKind.LOCAL &&
+    source.profileId !== actorProfileId &&
+    !(await isLocalQuoteAllowedByPolicy(tx, {
+      actorProfileId,
+      sourceAuthorProfileId: source.profileId,
+      sourcePostId: source.id,
+    }))
+  ) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
   return source;
 };
@@ -611,6 +626,12 @@ export async function createPostPersisted(
   handle?: DatabaseHandle,
   initialContentId?: string,
 ): Promise<CreatedPost | DuplicatePost> {
+  const localQuotePolicy =
+    input.origin === 'LOCAL'
+      ? input.quotePolicy == null
+        ? defaultPostQuotePolicy
+        : assertPostQuotePolicy(input.quotePolicy)
+      : undefined;
   let result: CreatedPost;
   try {
     result = await getDatabaseConnection(handle).transaction(async (tx) => {
@@ -636,6 +657,7 @@ export async function createPostPersisted(
           return { created: true as const, post: existing, content };
         }
       }
+      let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
@@ -732,7 +754,7 @@ export async function createPostPersisted(
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
+        quoteSource = await validateQuoteSource(tx, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
@@ -786,11 +808,15 @@ export async function createPostPersisted(
           createdAt,
           id: postId,
           currentContentId: content.id,
+          quotePolicy: localQuotePolicy,
           profileId: input.profileId,
           repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
           quoteConsentStatus:
             input.origin === 'LOCAL' && input.repostSourceId !== undefined
-              ? PostQuoteConsentStatus.APPROVED
+              ? quoteSource?.instanceKind === InstanceKind.LOCAL ||
+                quoteSource?.profileId === input.profileId
+                ? PostQuoteConsentStatus.APPROVED
+                : PostQuoteConsentStatus.PENDING
               : undefined,
           state: PostState.ACTIVE,
           visibility: input.visibility,

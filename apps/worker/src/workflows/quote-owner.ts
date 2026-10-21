@@ -82,6 +82,7 @@ const schema = z.discriminatedUnion('kind', [
       document: z.custom(isPostContentDocumentV1),
       authoredBodyText: z.string().optional(),
       visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
+      quotePolicy: z.enum(['EVERYONE', 'FOLLOWERS', 'AUTHOR']).nullish(),
       repostSourceId: z.uuid(),
       media: z
         .array(z.strictObject({ mediaId: z.uuid(), altText: z.string().nullable() }))

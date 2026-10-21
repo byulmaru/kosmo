@@ -1,5 +1,10 @@
 import { db, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, InstanceKind, PostVisibility } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  InstanceKind,
+  PostQuotePolicy,
+  PostVisibility,
+} from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
@@ -84,6 +89,7 @@ builder.mutationField('createPost', (t) =>
       actorProfileId: t.input.globalID({ for: Profile, required: false }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
+      quotePolicy: t.input.field({ type: PostQuotePolicy, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
@@ -286,6 +292,7 @@ builder.mutationField('createPost', (t) =>
         profileId,
         replyParentId: input.replyParentId?.id,
         repostSourceId: input.repostSourceId?.id,
+        quotePolicy: input.quotePolicy ?? undefined,
         visibility: input.visibility,
       });
 

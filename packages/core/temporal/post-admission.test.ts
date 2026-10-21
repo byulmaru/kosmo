@@ -17,6 +17,7 @@ const input: PostCreateInput = {
 test('Quote identities bind one Post and its initial payload to existing UUIDv7 keys', () => {
   const initial = postCreateIdentities(input);
   assert.deepEqual(postCreateIdentities({ ...input }), initial);
+  assert.deepEqual(postCreateIdentities({ ...input, quotePolicy: 'EVERYONE' }), initial);
   assert.notEqual(initial.postId, initial.contentId);
   for (const id of Object.values(initial)) {
     assert.equal(validate(id), true);
@@ -26,6 +27,7 @@ test('Quote identities bind one Post and its initial payload to existing UUIDv7 
     { ...input, profileId: input.repostSourceId! },
     { ...input, authoredBodyText: 'different' },
     { ...input, visibility: 'UNLISTED' as const },
+    { ...input, quotePolicy: 'AUTHOR' as const },
     { ...input, media: [{ mediaId: input.profileId, altText: 'different' }] },
   ]) {
     const identities = postCreateIdentities(changed);

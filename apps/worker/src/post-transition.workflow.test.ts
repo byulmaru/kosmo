@@ -33,7 +33,8 @@ test(
       workflowsPath,
       activities: {
         reservePostIdActivity: async () => postId,
-        createPostTransitionActivity: async (_input: unknown, id: string) => {
+        createPostTransitionActivity: async (input: { quotePolicy?: string }, id: string) => {
+          assert.equal(input.quotePolicy, 'AUTHOR');
           attempts.push(id);
           if (attempts.length === 1) {
             throw new Error('commit completion response lost');
@@ -67,6 +68,7 @@ test(
               },
             },
             visibility: 'PUBLIC',
+            quotePolicy: 'AUTHOR',
           },
         ],
       });

@@ -403,6 +403,7 @@ test(
             document: local.quote.content.document,
             authoredBodyText: 'authored body https://kept.example/link',
             visibility: PostVisibility.PUBLIC,
+            quotePolicy: 'AUTHOR',
           },
         };
         const result = await localHandle.executeUpdate<{ status: string }, [QuoteOwnerCommand]>(
@@ -418,6 +419,7 @@ test(
           .then(firstOrThrow);
         assert.equal(row.repostSourceId, local.source.post.id);
         assert.equal(row.quoteConsentApprovalUri, null);
+        assert.equal(row.quotePolicy, 'AUTHOR');
         const contents = await db
           .select()
           .from(PostContents)

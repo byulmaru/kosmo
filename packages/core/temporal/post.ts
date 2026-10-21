@@ -79,6 +79,9 @@ export function postCreateInputKey(input: PostCreateInput): string {
     profileId: input.profileId,
     replyParentId: input.replyParentId ?? null,
     repostSourceId: input.repostSourceId ?? null,
+    ...(input.quotePolicy && input.quotePolicy !== 'EVERYONE'
+      ? { quotePolicy: input.quotePolicy }
+      : {}),
     visibility: input.visibility,
   });
 }

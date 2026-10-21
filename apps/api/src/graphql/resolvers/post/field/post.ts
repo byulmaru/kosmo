@@ -1,9 +1,9 @@
-import { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
+import { repostSourceLoader } from '../loader/repost-source';
 import { Post, PostContent } from '../ref';
 
 const ReactionCount = builder.simpleObject('ReactionCount', {
@@ -31,12 +31,20 @@ builder.objectFields(Post, (t) => ({
   repostSource: t.field({
     type: Post,
     nullable: true,
-    resolve: (post) =>
-      post.currentContentId != null &&
-      post.quoteConsentStatus != null &&
-      post.quoteConsentStatus !== PostQuoteConsentStatus.APPROVED
-        ? null
-        : post.repostSourceId,
+    resolve: async (post, _, ctx) => {
+      if (!post.repostSourceId) {
+        return null;
+      }
+
+      return (
+        (
+          await repostSourceLoader(ctx).load({
+            quotePostId: post.id,
+            sourcePostId: post.repostSourceId,
+          })
+        )?.sourcePostId ?? null
+      );
+    },
   }),
   repostCount: t.int({
     resolve: async (post, _, ctx) => (await repostCountLoader(ctx).load(post.id))?.count ?? 0,
