@@ -484,7 +484,12 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: space[12],
   },
-  searchInput: { flex: 1, padding: 0, ...textStyles.uiCopyM },
+  searchInput: {
+    flex: 1,
+    padding: 0,
+    // Keep focused Web inputs at 16px to avoid iPhone browser auto-zoom.
+    ...Platform.select({ web: textStyles.uiCopyL, default: textStyles.uiCopyM }),
+  },
   sectionHeading: { marginBottom: space[8] },
   sectionSpacing: { marginTop: space[16] },
   sectionTitle: textStyles.uiLabelM,
