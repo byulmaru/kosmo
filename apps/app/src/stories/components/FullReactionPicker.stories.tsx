@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiPickerOptions } from '@/components/reaction/reactionEmojiCatalog';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
@@ -267,10 +267,9 @@ const meta = {
   },
   component: FullReactionPicker,
   excludeStories: [
-    'MobileScrollbarContract',
-    'NativePresentationScrollbarContract',
     'InteractionContract',
     'SearchScrollResetContract',
+    'MobileWebSearchScrollResetContract',
     'LoadingContract',
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
@@ -387,7 +386,7 @@ export const MobileGridGeometryContract: Story = {
     const quickRow = canvas.getByTestId('full-reaction-section-quick-row-0');
     const symbolsHeading = canvas.getByRole('heading', { name: '기호' });
     const expressionsHeading = canvas.getByRole('heading', { name: '표정과 감정' });
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
     for (const row of rows) {
       expect(getComputedStyle(row).justifyContent).toBe('normal');
     }
@@ -437,7 +436,7 @@ export const WebMobileGridGeometryContract: Story = {
     const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
       'button',
     );
-    expect(grid).toHaveLength(5);
+    expect(grid).toHaveLength(6);
     expectQuickColumnsToAlign(canvasElement);
   },
 };
@@ -475,7 +474,7 @@ export const RecentTwoRowsMobileWebContract: Story = {
   play: async ({ canvasElement }) => {
     const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
     expect(rows).toHaveLength(2);
-    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([5, 5]);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
   },
 };
 
@@ -487,7 +486,7 @@ export const RecentTwoRowsNativeContract: Story = {
       /^full-reaction-section-recent-row-/,
     );
     expect(rows).toHaveLength(2);
-    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([7, 7]);
   },
 };
 
@@ -499,7 +498,7 @@ function expectQuickColumnsToAlign(canvasElement: HTMLElement) {
   const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
     'button',
   );
-  expect(quick).toHaveLength(Math.min(6, grid.length));
+  expect(quick).toHaveLength(6);
   for (let column = 0; column < quick.length; column += 1) {
     expect(
       Math.abs(
@@ -780,69 +779,7 @@ export const MobileHandleExpansionContract: Story = {
   },
 };
 
-export const MobileScrollbarContract: Story = {
-  args: { options: reactionEmojiPickerOptions },
+export const MobileWebSearchScrollResetContract: Story = {
+  ...SearchScrollResetContract,
   globals: mobileGlobals,
-  play: async ({ args, canvasElement }) => {
-    args.onSelect.mockClear();
-    const user = userEvent.setup();
-    const canvas = within(canvasElement.ownerDocument.body);
-    const list = () => canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
-    const bar = () => canvas.getByTestId('full-reaction-picker-scrollbar');
-    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '0' }));
-    list().scroll({ top: 100, behavior: 'instant' });
-    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '1' }));
-    const listBounds = list().getBoundingClientRect();
-    expect(bar().getBoundingClientRect().left).toBeGreaterThanOrEqual(listBounds.right);
-    const bounds = bar().getBoundingClientRect();
-    const point = (y: number) => ({ x: bounds.left + bounds.width / 2, y, pageY: y });
-    await user.pointer({ keys: '[MouseLeft>]', target: bar(), coords: point(bounds.top + 4) });
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    expect(bar()).toHaveStyle({ opacity: '1' });
-    await user.pointer({
-      target: bar(),
-      coords: point(listBounds.top + listBounds.height / 2),
-    });
-    await waitFor(() => expect(list().scrollTop).toBeGreaterThan(100));
-    await user.pointer({ target: bar(), coords: point(listBounds.bottom + 100) });
-    await waitFor(() =>
-      expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
-        2,
-      ),
-    );
-    expect(args.onSelect).not.toHaveBeenCalled();
-    fireEvent.pointerCancel(bar(), { pointerId: 1 });
-    await waitFor(() => expect(bar()).toHaveStyle({ opacity: '0' }));
-    // A focusable control exposes the same position without requiring a drag.
-    bar().focus();
-    await user.keyboard('{Home}');
-    await waitFor(() => expect(list().scrollTop).toBe(0));
-    await user.keyboard('{End}');
-    await waitFor(() =>
-      expect(Math.abs(list().scrollHeight - list().clientHeight - list().scrollTop)).toBeLessThan(
-        2,
-      ),
-    );
-    const search = canvas.getByRole('searchbox', { name: '반응 검색' });
-    await user.type(search, 'a');
-    expect(search).toHaveFocus();
-    await waitFor(() => expect(list().scrollTop).toBe(0));
-    await user.clear(search);
-    await user.type(search, 'zzzzzzzzzz');
-    await waitFor(() =>
-      expect(canvas.queryByTestId('full-reaction-picker-scrollbar')).not.toBeInTheDocument(),
-    );
-    await user.clear(search);
-    await waitFor(() => expect(list().scrollTop).toBe(0));
-    const firstEmoji = within(list()).getAllByRole('button')[0]!;
-    await user.click(firstEmoji);
-    expect(args.onSelect).toHaveBeenCalledOnce();
-  },
-};
-
-// This exercises the sheet composition in RN Web; Native responders have separate unit coverage.
-export const NativePresentationScrollbarContract: Story = {
-  ...MobileScrollbarContract,
-  args: { options: reactionEmojiPickerOptions, presentation: 'mobile' },
-  parameters: mobileParameters,
 };

@@ -59,7 +59,7 @@ jobs:
             command: pnpm --filter @kosmo/api test
             database: true
           - name: App
-            command: pnpm --filter @kosmo/app test && pnpm --filter @kosmo/app export:web
+            command: pnpm --filter @kosmo/app test
             playwright: true
           - name: Web
             command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit

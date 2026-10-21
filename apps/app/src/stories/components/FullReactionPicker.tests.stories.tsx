@@ -6,8 +6,7 @@ import baseMeta, {
   MobileGridGeometryContract as mobileGridGeometryContract,
   MobileHandleExpansionContract as mobileHandleExpansionContract,
   MobileOverlayContract as mobileOverlayContract,
-  MobileScrollbarContract as mobileScrollbarContract,
-  NativePresentationScrollbarContract as nativePresentationScrollbarContract,
+  MobileWebSearchScrollResetContract as mobileWebSearchScrollResetContract,
   RecentSectionContract as recentSectionContract,
   RecentTwoRowsMobileWebContract as recentTwoRowsMobileWebContract,
   RecentTwoRowsNativeContract as recentTwoRowsNativeContract,
@@ -44,5 +43,4 @@ export const SequentialKeyboardBrowseContract: Story = sequentialKeyboardBrowseC
 export const WebGridGeometryContract: Story = webGridGeometryContract;
 export const WebMobileGridGeometryContract: Story = webMobileGridGeometryContract;
 
-export const MobileScrollbarContract: Story = mobileScrollbarContract;
-export const NativePresentationScrollbarContract: Story = nativePresentationScrollbarContract;
+export const MobileWebSearchScrollResetContract: Story = mobileWebSearchScrollResetContract;

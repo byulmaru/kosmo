@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
+  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -14,7 +15,6 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
-import { ReactionPickerList, reactionScrollbarWidth } from './ReactionPickerList';
 import type React from 'react';
 
 export type FullReactionPickerOption = Readonly<{
@@ -62,22 +62,9 @@ export function FullReactionPicker({
   const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
   const compactWeb = !mobile && viewportWidth < breakpoints.compact;
-  const scrollbar = mobile || compactWeb;
-  const [pickerWidth, setPickerWidth] = useState<number | null>(null);
-  const gridWidth =
-    (pickerWidth ?? (mobile ? viewportWidth - 2 * borderWidths[1] : compactWeb ? 288 : 360)) -
-    2 * space[16] -
-    (!mobile ? 2 * borderWidths[1] : 0) -
-    (scrollbar ? reactionScrollbarWidth + space[4] : 0);
   const { columns, columnGap, targetSize } = mobile
-    ? getMobileReactionGridLayout(gridWidth, fontScale)
-    : {
-        columns: compactWeb
-          ? Math.max(1, Math.min(6, Math.floor((gridWidth + space[8]) / (32 + space[8]))))
-          : 8,
-        columnGap: 0,
-        targetSize: 32,
-      };
+    ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
+    : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
   const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
@@ -113,33 +100,13 @@ export function FullReactionPicker({
       })),
     ]),
   ];
-  const layoutKey = `${gridWidth}:${fontScale}:${query}:${searchResults.length}`;
-  const [textMetrics, setTextMetrics] = useState<{
-    key: string;
-    heights: Record<string, number>;
-  }>({ key: layoutKey, heights: {} });
-  if (textMetrics.key !== layoutKey) {
-    setTextMetrics({ key: layoutKey, heights: {} });
-  }
-  const textHeights = textMetrics.key === layoutKey ? textMetrics.heights : {};
-  const measureText = (key: string, height: number) => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-    setTextMetrics((current) =>
-      current.key !== layoutKey || current.heights[key] === height
-        ? current
-        : { ...current, heights: { ...current.heights, [key]: height } },
-    );
-  };
-  const textScale = Platform.OS === 'web' ? 1 : fontScale;
   let itemOffset = 0;
   const itemLayouts = gridItems.map((item) => {
     const length =
       item.kind === 'count'
-        ? (textHeights.count ?? (textStyles.uiCopyS.lineHeight ?? 0) * textScale) + space[16]
+        ? (textStyles.uiCopyS.lineHeight ?? 0) + space[16]
         : item.kind === 'heading'
-          ? (textHeights[item.sectionId] ?? (textStyles.uiLabelM.lineHeight ?? 0) * textScale) +
+          ? (textStyles.uiLabelM.lineHeight ?? 0) +
             space[8] +
             (item.sectionIndex > 0 ? space[16] : 0)
           : targetSize + (item.rowIndex > 0 && !mobile ? space[8] : 0);
@@ -171,7 +138,6 @@ export function FullReactionPicker({
     <View
       accessibilityLabel="반응 선택"
       onAccessibilityEscape={onClose}
-      onLayout={(event) => setPickerWidth(event.nativeEvent.layout.width)}
       ref={pickerRef}
       role={!mobile && Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
@@ -218,12 +184,15 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <ReactionPickerList
+        <FlatList
           key={normalizedQuery}
           contentContainerStyle={styles.scrollContent}
           data={gridItems}
-          // Native needs the full extent to drag beyond the already measured render window.
-          getItemLayout={(_data, index) => ({ ...itemLayouts[index]!, index })}
+          getItemLayout={
+            Platform.OS === 'web'
+              ? (_data, index) => ({ ...itemLayouts[index]!, index })
+              : undefined
+          }
           initialNumToRender={12}
           keyExtractor={(item) =>
             item.kind === 'count'
@@ -234,7 +203,6 @@ export function FullReactionPicker({
           renderItem={({ item }) =>
             item.kind === 'count' ? (
               <Text
-                onLayout={(event) => measureText('count', event.nativeEvent.layout.height)}
                 style={[
                   styles.resultCount,
                   styles.resultCountSpacing,
@@ -245,7 +213,6 @@ export function FullReactionPicker({
               </Text>
             ) : item.kind === 'heading' ? (
               <View
-                onLayout={(event) => measureText(item.sectionId, event.nativeEvent.layout.height)}
                 style={[styles.sectionHeading, item.sectionIndex > 0 && styles.sectionSpacing]}
                 testID={`full-reaction-section-${item.sectionId}`}
               >
@@ -274,8 +241,7 @@ export function FullReactionPicker({
               </View>
             )
           }
-          scrollbar={scrollbar}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={mobile || compactWeb}
           testID="full-reaction-picker-scroll"
           updateCellsBatchingPeriod={16}
           // Web keeps a wide window for Tab traversal; Native mounts nearby rows.
