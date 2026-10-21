@@ -183,11 +183,11 @@ function PostDetailContent({
   ) : (
     <PostDetailThread
       header={header}
-      initialPositioningEnabled={!isHistoryEntryRestoration()}
       identity={postId}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
       post={post.thread}
+      preserveScrollPosition={isHistoryEntryRestoration}
       replyProfile={data.currentSession?.selectedProfile ?? null}
     />
   );
