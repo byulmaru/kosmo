@@ -1328,6 +1328,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     document: postContentDocumentFromText('Quote body'),
     origin: 'LOCAL',
     profileId: actor.id,
@@ -1454,6 +1455,7 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     document: postContentDocumentFromText('Quote body'),
     origin: 'LOCAL',
     profileId: actor.id,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { WithStartWorkflowOperation } from '@temporalio/client';
+import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 
@@ -162,6 +162,7 @@ test(
     let verified = 0;
     let attempts = 0;
     let delivered = 0;
+    const cleaned: string[] = [];
     const worker = await Worker.create({
       connection: environment.nativeConnection,
       taskQueue,
@@ -177,6 +178,9 @@ test(
             throw new Error('commit completion response lost');
           }
           return { ok: true, result: { postId, sourcePostId: null } };
+        },
+        deletePostRelatedNotificationsActivity: async (id: string) => {
+          cleaned.push(id);
         },
         sendLocalPostDeleteActivity: async () => {
           delivered += 1;
@@ -202,6 +206,7 @@ test(
       assert.equal(verified, 1);
       assert.equal(attempts, 2);
       assert.equal(delivered, 1);
+      assert.deepEqual(cleaned, [postId]);
     });
   },
 );
@@ -230,6 +235,9 @@ test(
           writes++;
           return { ok: true, result: { postId, sourcePostId: null } };
         },
+        deletePostRelatedNotificationsActivity: async (id: string) => {
+          effects.push(`notifications:${id}`);
+        },
         sendLocalPostQuoteRevocationsActivity: async (id: string) => {
           effects.push(`quotes:${id}`);
         },
@@ -254,7 +262,89 @@ test(
       );
       await (await start.workflowHandle()).result();
       assert.equal(writes, 1);
-      assert.deepEqual(effects.sort(), [`delete:${postId}`, `quotes:${postId}`]);
+      assert.deepEqual(effects.sort(), [
+        `delete:${postId}`,
+        `notifications:${postId}`,
+        `quotes:${postId}`,
+      ]);
     });
   },
 );
+
+for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+  for (const isRepost of [false, true]) {
+    test(
+      `Post Delete ${origin} ${isRepost ? 'Repost' : 'Content'}는 공통 알림 정리와 sibling effects를 모두 정산한다`,
+      { timeout: 120_000 },
+      async (t) => {
+        const environment = await TestWorkflowEnvironment.createLocal({
+          server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+        });
+        t.after(() => environment.teardown());
+        const taskQueue = `delete-cleanup-${origin}-${isRepost}-${process.pid}`;
+        const effects: string[] = [];
+        const cleanupFails = origin === 'LOCAL' && !isRepost;
+        const worker = await Worker.create({
+          connection: environment.nativeConnection,
+          taskQueue,
+          workflowsPath,
+          activities: {
+            verifyPostDeletionActivity: async () => ({
+              ok: true,
+              result: { active: true, sourcePostId: isRepost ? profileId : null },
+            }),
+            deletePostTransitionActivity: async () => ({
+              ok: true,
+              result: { postId, sourcePostId: isRepost ? profileId : null },
+            }),
+            deletePostRelatedNotificationsActivity: async (id: string) => {
+              effects.push(`notifications:${id}`);
+              if (cleanupFails) {
+                throw ApplicationFailure.nonRetryable('cleanup failed');
+              }
+            },
+            sendLocalPostQuoteRevocationsActivity: async (id: string) => {
+              effects.push(`quotes:${id}`);
+            },
+            sendLocalPostDeleteActivity: async (id: string) => {
+              effects.push(`delete:${id}`);
+            },
+            sendRepostUndoActivity: async (id: string) => {
+              effects.push(`undo:${id}`);
+            },
+          },
+        });
+        await worker.runUntil(async () => {
+          const operation = new WithStartWorkflowOperation('postDeleteMutationWorkflow', {
+            taskQueue,
+            workflowId: taskQueue,
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            args: [{ postId, actorProfileId: profileId, origin }],
+          });
+          const result = await environment.client.workflow.executeUpdateWithStart('deletePost', {
+            updateId: 'delete',
+            startWorkflowOperation: operation,
+          });
+          assert.deepEqual(result, {
+            ok: true,
+            result: { postId, sourcePostId: isRepost ? profileId : null },
+          });
+          const handle = await operation.workflowHandle();
+          if (cleanupFails) {
+            await assert.rejects(handle.result());
+          } else {
+            await handle.result();
+          }
+          assert.deepEqual(
+            effects.sort(),
+            [
+              `notifications:${postId}`,
+              ...(!isRepost ? [`quotes:${postId}`] : []),
+              ...(origin === 'LOCAL' ? [`${isRepost ? 'undo' : 'delete'}:${postId}`] : []),
+            ].sort(),
+          );
+        });
+      },
+    );
+  }
+}
