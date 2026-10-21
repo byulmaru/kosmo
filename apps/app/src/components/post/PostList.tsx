@@ -1,11 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import {
-  Platform,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { getShellLayout } from '@/components/shell/shellLayout';

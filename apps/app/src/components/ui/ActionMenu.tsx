@@ -8,21 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
-import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { ModalOverlay } from './ModalOverlay';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
