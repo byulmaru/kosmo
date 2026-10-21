@@ -2439,10 +2439,10 @@ const requestMediaNode = (mediaId: string, token?: string) =>
 
 const requestIssueMediaUploadUrl = (token?: string) =>
   requestGraphQL<IssueMediaUploadUrlData>(
-    `mutation PostIntegrationIssueMediaUploadUrl {
-      issueMediaUploadUrl { media { id state } uploadUrl }
+    `mutation PostIntegrationIssueMediaUploadUrl($input: IssueMediaUploadUrlInput) {
+      issueMediaUploadUrl(input: $input) { media { id state } uploadUrl }
     }`,
-    {},
+    { input: { size: onePixelPng.length } },
     token,
   );
 

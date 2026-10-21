@@ -10,6 +10,7 @@ import {
 import { operation, service } from 'nexus-rpc';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
   MediaUploadWorkflowInput,
   MediaUploadWorkflowResult,
@@ -19,7 +20,7 @@ import type * as activities from '../activities';
 type ProcessUploadInput = {
   readonly id: string;
   readonly sourceKey: string;
-  readonly contentType: 'image/jpeg' | 'image/png' | 'image/webp';
+  readonly contentType: NexusMediaUploadContentType;
   readonly maxBytes: number;
   readonly maxDimension: number;
 };

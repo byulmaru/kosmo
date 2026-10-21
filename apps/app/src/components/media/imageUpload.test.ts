@@ -202,16 +202,16 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
       calls.push(`complete:${id}`);
     },
     isActive: () => true,
-    issue: async () => {
-      calls.push('issue');
+    issue: async (size) => {
+      calls.push(`issue:${size}`);
       return { mediaId: 'media-1', uploadUrl: 'https://upload.example/1' };
     },
   });
 
   assert.equal(mediaId, 'media-1');
   assert.deepEqual(calls, [
-    'issue',
     'read-normalized',
+    `issue:${bytes.byteLength}`,
     'PUT:https://upload.example/1',
     'complete:media-1',
   ]);
@@ -674,9 +674,10 @@ test('does not issue an upload when inactive before starting', async (t) => {
 test('stops after a late issue result becomes inactive', async (t) => {
   let active = true;
   let completeCalled = false;
-  const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
-    Promise.reject(new Error('fetch must not run')),
-  );
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    assert.equal(String(input), 'file:///cache/normalized.webp');
+    return new Response(new Blob(['webp'], { type: 'image/webp' }), { status: 200 });
+  });
 
   const result = await uploadImage({
     asset: createAsset(),
@@ -691,14 +692,19 @@ test('stops after a late issue result becomes inactive', async (t) => {
   });
 
   assert.equal(result, null);
-  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(fetchMock.mock.callCount(), 1);
   assert.equal(completeCalled, false);
 });
 
 test('stops after PUT when the upload becomes inactive', async (t) => {
   let active = true;
   let completeCalled = false;
-  t.mock.method(globalThis, 'fetch', async () => {
+  let fetchCount = 0;
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+    fetchCount += 1;
+    if (String(input) === 'file:///cache/normalized.webp') {
+      return new Response(new Blob(['webp'], { type: 'image/webp' }), { status: 200 });
+    }
     active = false;
     return new Response(null, { status: 204 });
   });
@@ -713,6 +719,7 @@ test('stops after PUT when the upload becomes inactive', async (t) => {
   });
 
   assert.equal(result, null);
+  assert.equal(fetchCount, 2);
   assert.equal(completeCalled, false);
 });
 
@@ -893,14 +900,15 @@ test('normalizes a generic PUT rejection as a safe transient transfer failure', 
   });
 });
 
-test('does not capture a stale failure after the upload becomes inactive', async () => {
+test('does not capture a stale failure after the upload becomes inactive', async (t) => {
   let activeChecks = 0;
+  mockSuccessfulFetch(t);
 
   await assert.rejects(
     uploadImage({
       asset: createAsset(),
       complete: async () => undefined,
-      isActive: () => activeChecks++ === 0,
+      isActive: () => activeChecks++ < 2,
       issue: async () => {
         throw new Error('private issue detail');
       },
@@ -913,10 +921,11 @@ test('does not capture a stale failure after the upload becomes inactive', async
   assert.equal(captureCalls.length, 0);
 });
 
-test('preserves the original upload failure when capture throws', async () => {
+test('preserves the original upload failure when capture throws', async (t) => {
   const rawDetail = 'private issue detail';
   const original = new Error(rawDetail);
   let captureCount = 0;
+  mockSuccessfulFetch(t);
   captureHandledErrorImpl = () => {
     captureCount += 1;
     throw new Error('sentry unavailable');

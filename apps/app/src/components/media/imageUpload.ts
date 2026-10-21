@@ -178,7 +178,7 @@ export async function uploadImage({
   readonly asset: ImagePickerAsset;
   readonly complete: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
-  readonly issue: () => Promise<IssuedImageUpload>;
+  readonly issue: (size: number) => Promise<IssuedImageUpload>;
 }): Promise<string | null> {
   if (!isActive()) {
     return null;
@@ -201,13 +201,18 @@ export async function uploadImage({
       );
     }
 
-    issued = await issue();
     operation = 'normalize';
+    const normalizedImage = await createNormalizedImageBody(asset);
     if (!isActive()) {
       return null;
     }
 
-    const normalizedImage = await createNormalizedImageBody(asset);
+    operation = 'issue';
+    issued = await issue(normalizedImage.body.byteLength);
+    if (!isActive()) {
+      return null;
+    }
+
     operation = 'put';
     const response = await fetch(issued.uploadUrl, {
       body: normalizedImage.body,

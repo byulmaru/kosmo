@@ -66,17 +66,23 @@ Profile이 달라도 참조할 수 있다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                                                                                  | 결과                                                                                             |
-| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. Kosmo가 private staging bucket에 제한된 upload-only URL을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
-| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 staged source 입력 metadata가 확인되고 Media Storage Service에서 공개 표현이 확인된다                                        | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                                  | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
-| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                     | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
-| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                                         | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                                                                                                                                                 | 결과                                                                                             |
+| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Local 업로드 시작 | Profile   | Media     | 정규화된 업로드 크기(선택)     | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. 크기가 있으면 Kosmo가 private staging bucket에 제한된 upload-only URL을 발급하고, 생략되면 기존 Media REST 업로드 경로를 유지한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
+| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 staged source 입력 metadata가 확인되고 Media Storage Service에서 공개 표현이 확인된다                                                                                                       | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                                                                                                 | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
+| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                                                                                    | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
+| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                                                                                                        | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
 
 Local 업로드 완료는 클라이언트가 명시적으로 보내는 공개 확정 요청이며, Post나 Profile 표현 저장이 이를 대신하지 않는다.
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
+
+클라이언트는 `issueMediaUploadUrl` → 업로드 `PUT` → `completeMediaUpload` 흐름을 유지한다. 새 클라이언트는
+정규화된 업로드 크기를 보내며, private staging PUT 권한은 해당 크기와 정확히 일치하는 `ContentLength`에 서명된다.
+크기를 생략하는 클라이언트는 별도 호환성 제거 결정 전까지 기존 Media REST URL 발급·완료 경로와 기존 크기 제한을
+유지한다. `completeMediaUpload`는 새 업로드의 공개 확정 시점이며, 기존 Ready Media에는 이 호환성 변경이 영향을
+주지 않는다.
 
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.

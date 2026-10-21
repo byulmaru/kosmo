@@ -28,6 +28,7 @@ import {
   mockMediaUploadNexusOperationWorkflow,
 } from './test-fixtures/media-upload-nexus-operation';
 import { settleEffects } from './workflows/settle-effects';
+import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
@@ -3154,7 +3155,7 @@ const nexusMediaUploadTestService = service('media', {
 type NexusMediaUploadStartInput = {
   readonly id: string;
   readonly sourceKey: string;
-  readonly contentType: 'image/jpeg' | 'image/png' | 'image/webp';
+  readonly contentType: NexusMediaUploadContentType;
   readonly maxBytes: number;
   readonly maxDimension: number;
 };
@@ -3171,86 +3172,44 @@ test(
     const callerTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-caller-${process.pid}`;
     const nexusTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-nexus-${process.pid}`;
     const nexusEndpoint = await environment.createNexusEndpoint('media-upload', nexusTaskQueue);
+    const createUpload = (
+      contentType: NexusMediaUploadStartInput['contentType'],
+      shouldFail = false,
+    ) => {
+      const uuid = crypto.randomUUID();
+      const remoteId = `u_${uuid}`;
+      return {
+        input: { mediaId: crypto.randomUUID(), accountId: crypto.randomUUID() },
+        prepared: {
+          id: remoteId,
+          sourceKey: `uploads/${remoteId}/${uuid}`,
+          contentType,
+        },
+        result: {
+          id: remoteId,
+          url: `https://media.example/${remoteId}.webp`,
+          mediaType: 'image/webp',
+        },
+        shouldFail,
+        publicationAck: Promise.withResolvers<void>(),
+      };
+    };
     const uploads = [
-      {
-        input: {
-          mediaId: '00000000-0000-4000-8000-000000000051',
-          accountId: '00000000-0000-4000-8000-000000000052',
-        },
-        prepared: {
-          id: 'u_00000000-0000-4000-8000-000000000061',
-          sourceKey:
-            'uploads/u_00000000-0000-4000-8000-000000000061/00000000-0000-4000-8000-000000000062',
-          contentType: 'image/jpeg' as const,
-        },
-        result: {
-          id: 'u_00000000-0000-4000-8000-000000000061',
-          url: 'https://media.example/success.webp',
-          mediaType: 'image/webp',
-        },
-        shouldFail: false,
-      },
-      {
-        input: {
-          mediaId: '00000000-0000-4000-8000-000000000071',
-          accountId: '00000000-0000-4000-8000-000000000072',
-        },
-        prepared: {
-          id: 'u_00000000-0000-4000-8000-000000000081',
-          sourceKey:
-            'uploads/u_00000000-0000-4000-8000-000000000081/00000000-0000-4000-8000-000000000082',
-          contentType: 'image/png' as const,
-        },
-        result: {
-          id: 'u_00000000-0000-4000-8000-000000000081',
-          url: 'https://media.example/failure.webp',
-          mediaType: 'image/webp',
-        },
-        shouldFail: true,
-      },
-      {
-        input: {
-          mediaId: '00000000-0000-4000-8000-000000000091',
-          accountId: '00000000-0000-4000-8000-000000000092',
-        },
-        prepared: {
-          id: 'u_00000000-0000-4000-8000-000000000093',
-          sourceKey:
-            'uploads/u_00000000-0000-4000-8000-000000000093/00000000-0000-4000-8000-000000000094',
-          contentType: 'image/webp' as const,
-        },
-        result: {
-          id: 'u_00000000-0000-4000-8000-000000000093',
-          url: 'https://media.example/cancelled.webp',
-          mediaType: 'image/webp',
-        },
-        shouldFail: false,
-      },
-    ] satisfies Array<{
-      readonly input: MediaUploadWorkflowInput;
-      readonly prepared: Omit<NexusMediaUploadStartInput, 'maxBytes' | 'maxDimension'>;
-      readonly result: MediaUploadWorkflowResult;
-      readonly shouldFail: boolean;
-    }>;
-    const preparedByMediaId = new Map(
-      uploads.map(({ input, prepared }) => [input.mediaId, prepared]),
-    );
-    const resultByUploadId = new Map(uploads.map(({ prepared, result }) => [prepared.id, result]));
-    const failedUploadIds = new Set(
-      uploads.filter(({ shouldFail }) => shouldFail).map(({ prepared }) => prepared.id),
+      createUpload('image/jpeg'),
+      createUpload('image/png', true),
+      createUpload('image/webp'),
+    ];
+    const [success, failure, cancelled] = uploads;
+    const uploadById = new Map<string, (typeof uploads)[number]>(
+      uploads.flatMap((upload) => [
+        [upload.input.mediaId, upload] as const,
+        [upload.prepared.id, upload] as const,
+      ]),
     );
     const events: string[] = [];
     const activityCalls: string[] = [];
     const startInputs: NexusMediaUploadStartInput[] = [];
     const finalized: Array<{ mediaId: string; result: MediaUploadWorkflowResult }> = [];
-    const publicationAckResolvers = new Map<string, () => void>();
-    const publicationAcks = new Map<string, Promise<void>>();
-    for (const { prepared } of uploads) {
-      publicationAcks.set(
-        prepared.id,
-        new Promise<void>((resolve) => publicationAckResolvers.set(prepared.id, () => resolve())),
-      );
-    }
 
     const nexusServiceHandler = serviceHandler(nexusMediaUploadTestService, {
       startUpload: new WorkflowRunOperationHandler<
@@ -3259,13 +3218,13 @@ test(
       >(async (ctx, input) => {
         startInputs.push(input);
         events.push(`start:${input.id}`);
-        const result = resultByUploadId.get(input.id);
-        if (!result) {
+        const upload = uploadById.get(input.id);
+        if (!upload) {
           throw new Error(`Unexpected upload ID: ${input.id}`);
         }
         const operationInput: MockMediaUploadOperationInput = {
-          result,
-          shouldFail: failedUploadIds.has(input.id),
+          result: upload.result,
+          shouldFail: upload.shouldFail,
         };
         const handle = await startWorkflow(ctx, mockMediaUploadNexusOperationWorkflow, {
           workflowId: `mock-media-upload:${input.id}`,
@@ -3277,11 +3236,13 @@ test(
       }),
       publishUpload: async (_ctx, { id }) => {
         events.push(`publish:${id}`);
+        const upload = uploadById.get(id);
+        assert.ok(upload);
         await getClient()
           .workflow.getHandle(`mock-media-upload:${id}`)
           .signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
         events.push(`publish-ack:${id}`);
-        publicationAckResolvers.get(id)?.();
+        upload.publicationAck.resolve();
         return { id };
       },
     });
@@ -3297,9 +3258,9 @@ test(
       activities: {
         prepareMediaUploadActivity: async (input: MediaUploadWorkflowInput) => {
           activityCalls.push(`prepare:${input.mediaId}`);
-          const prepared = preparedByMediaId.get(input.mediaId);
-          assert.ok(prepared);
-          return prepared;
+          const upload = uploadById.get(input.mediaId);
+          assert.ok(upload);
+          return upload.prepared;
         },
         finalizeMediaUploadActivity: async ({
           mediaId,
@@ -3326,7 +3287,6 @@ test(
     void nexusWorkerRun.catch(() => undefined);
     try {
       await callerWorker.runUntil(async () => {
-        const success = uploads[0]!;
         const successOptions = {
           args: [success.input],
           taskQueue: callerTaskQueue,
@@ -3341,9 +3301,7 @@ test(
         assert.equal(successHandle.workflowId, `media-upload:${success.input.mediaId}`);
         assert.equal(existingSuccessHandle.workflowId, successHandle.workflowId);
         assert.equal(existingSuccessHandle.firstExecutionRunId, successHandle.firstExecutionRunId);
-        const successAck = publicationAcks.get(success.prepared.id);
-        assert.ok(successAck);
-        await successAck;
+        await success.publicationAck.promise;
 
         const successStartAckIndex = events.indexOf(`start-ack:${success.prepared.id}`);
         const successPublishIndex = events.indexOf(`publish:${success.prepared.id}`);
@@ -3366,15 +3324,12 @@ test(
           environment.client.workflow.start('mediaUploadWorkflow', successOptions),
         );
 
-        const failure = uploads[1]!;
         const failureHandle = await environment.client.workflow.start('mediaUploadWorkflow', {
           args: [failure.input],
           taskQueue: callerTaskQueue,
           workflowId: mediaUploadWorkflow.workflowIdFromArgs(failure.input),
         });
-        const failureAck = publicationAcks.get(failure.prepared.id);
-        assert.ok(failureAck);
-        await failureAck;
+        await failure.publicationAck.promise;
 
         const failureStartAckIndex = events.indexOf(`start-ack:${failure.prepared.id}`);
         const failurePublishIndex = events.indexOf(`publish:${failure.prepared.id}`);
@@ -3388,15 +3343,12 @@ test(
           false,
         );
 
-        const cancelled = uploads[2]!;
         const cancelledHandle = await environment.client.workflow.start('mediaUploadWorkflow', {
           args: [cancelled.input],
           taskQueue: callerTaskQueue,
           workflowId: mediaUploadWorkflow.workflowIdFromArgs(cancelled.input),
         });
-        const cancelledAck = publicationAcks.get(cancelled.prepared.id);
-        assert.ok(cancelledAck);
-        await cancelledAck;
+        await cancelled.publicationAck.promise;
         assert.equal(
           events.filter((event) => event === `publish:${cancelled.prepared.id}`).length,
           1,
@@ -3423,28 +3375,19 @@ test(
       await environment.deleteNexusEndpoint(nexusEndpoint);
     }
 
-    assert.deepEqual(startInputs, [
-      {
-        ...uploads[0]!.prepared,
+    assert.deepEqual(
+      startInputs,
+      uploads.map(({ prepared }) => ({
+        ...prepared,
         maxBytes: 16_777_216,
         maxDimension: 8192,
-      },
-      {
-        ...uploads[1]!.prepared,
-        maxBytes: 16_777_216,
-        maxDimension: 8192,
-      },
-      {
-        ...uploads[2]!.prepared,
-        maxBytes: 16_777_216,
-        maxDimension: 8192,
-      },
-    ]);
+      })),
+    );
     assert.deepEqual(activityCalls, [
-      `prepare:${uploads[0]!.input.mediaId}`,
-      `finalize:${uploads[0]!.input.mediaId}`,
-      `prepare:${uploads[1]!.input.mediaId}`,
-      `prepare:${uploads[2]!.input.mediaId}`,
+      `prepare:${success.input.mediaId}`,
+      `finalize:${success.input.mediaId}`,
+      `prepare:${failure.input.mediaId}`,
+      `prepare:${cancelled.input.mediaId}`,
     ]);
   },
 );

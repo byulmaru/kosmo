@@ -3,10 +3,11 @@ import 'temporal-polyfill/global';
 import { randomUUID } from 'node:crypto';
 import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { ValidationError } from './error';
+import { MEDIA_UPLOAD_MAX_BYTES } from './temporal/media-upload';
 
 const MEDIA_UPLOAD_REFERENCE_PREFIX = 'nexus:v1:';
 const MEDIA_UPLOAD_PUT_URL_TTL_SECONDS = 600;
-const MEDIA_UPLOAD_MAX_BYTES = 16_777_216;
 const MEDIA_UPLOAD_SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 const MEDIA_UPLOAD_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -16,28 +17,6 @@ export type NexusMediaUploadSession = {
   id: string;
   sourceKey: string;
 };
-
-export type NexusMediaUploadSourceErrorCode =
-  | 'MISSING'
-  | 'EXPIRED'
-  | 'UNSUPPORTED_CONTENT_TYPE'
-  | 'TOO_LARGE'
-  | 'INVALID_METADATA';
-
-export class NexusMediaUploadSourceError extends Error {
-  constructor(readonly code: NexusMediaUploadSourceErrorCode) {
-    super(
-      {
-        MISSING: 'Media upload source is missing',
-        EXPIRED: 'Media upload source has expired',
-        UNSUPPORTED_CONTENT_TYPE: 'Media upload source has an unsupported content type',
-        TOO_LARGE: 'Media upload source exceeds the maximum size',
-        INVALID_METADATA: 'Media upload source metadata is invalid',
-      }[code],
-    );
-    this.name = 'NexusMediaUploadSourceError';
-  }
-}
 
 export const isNexusMediaUpload = (storageReference: string | null): boolean =>
   storageReference?.startsWith(MEDIA_UPLOAD_REFERENCE_PREFIX) ?? false;
@@ -58,11 +37,21 @@ export const parseNexusMediaUploadReference = (
   return { id, sourceKey: `uploads/${id}/${uuid}` };
 };
 
-export const issueNexusMediaUploadPutUrl = async (): Promise<{
+export const issueNexusMediaUploadPutUrl = async (
+  contentLength: number,
+): Promise<{
   storageReference: string;
   uploadUrl: string;
   expiresAt: Temporal.Instant;
 }> => {
+  if (
+    !Number.isSafeInteger(contentLength) ||
+    contentLength < 1 ||
+    contentLength > MEDIA_UPLOAD_MAX_BYTES
+  ) {
+    throw new ValidationError('Media upload size must be between 1 byte and 16 MiB');
+  }
+
   const uuid = randomUUID();
   const storageReference = `${MEDIA_UPLOAD_REFERENCE_PREFIX}${uuid}`;
   const id = `u_${uuid}`;
@@ -73,7 +62,7 @@ export const issueNexusMediaUploadPutUrl = async (): Promise<{
   try {
     uploadUrl = await getSignedUrl(
       client,
-      new PutObjectCommand({ Bucket: config.bucket, Key: sourceKey }),
+      new PutObjectCommand({ Bucket: config.bucket, ContentLength: contentLength, Key: sourceKey }),
       { expiresIn: MEDIA_UPLOAD_PUT_URL_TTL_SECONDS },
     );
   } finally {
@@ -92,7 +81,7 @@ export const headNexusMediaUploadSource = async (
 ): Promise<NexusMediaUploadSession & { contentType: NexusMediaUploadContentType }> => {
   const session = parseNexusMediaUploadReference(storageReference);
   if (!session) {
-    throw new NexusMediaUploadSourceError('INVALID_METADATA');
+    throw new ValidationError('Media upload source metadata is invalid');
   }
 
   const config = getStagingR2Config();
@@ -104,7 +93,7 @@ export const headNexusMediaUploadSource = async (
     );
   } catch (error) {
     if (isNotFound(error)) {
-      throw new NexusMediaUploadSourceError('MISSING');
+      throw new ValidationError('Media upload source is missing');
     }
     throw error;
   } finally {
@@ -116,25 +105,25 @@ export const headNexusMediaUploadSource = async (
     !Number.isSafeInteger(metadata.ContentLength) ||
     metadata.ContentLength < 0
   ) {
-    throw new NexusMediaUploadSourceError('INVALID_METADATA');
+    throw new ValidationError('Media upload source metadata is invalid');
   }
   if (metadata.ContentLength > MEDIA_UPLOAD_MAX_BYTES) {
-    throw new NexusMediaUploadSourceError('TOO_LARGE');
+    throw new ValidationError('Media upload source exceeds the maximum size');
   }
   if (!metadata.LastModified || !Number.isFinite(metadata.LastModified.getTime())) {
-    throw new NexusMediaUploadSourceError('INVALID_METADATA');
+    throw new ValidationError('Media upload source metadata is invalid');
   }
   if (Date.now() >= metadata.LastModified.getTime() + MEDIA_UPLOAD_SOURCE_TTL_MS) {
-    throw new NexusMediaUploadSourceError('EXPIRED');
+    throw new ValidationError('Media upload source has expired');
   }
 
   const contentType = metadata.ContentType?.split(';', 1)[0]?.trim().toLowerCase();
   if (!contentType) {
-    throw new NexusMediaUploadSourceError('INVALID_METADATA');
+    throw new ValidationError('Media upload source metadata is invalid');
   }
   const validatedContentType = MEDIA_UPLOAD_CONTENT_TYPES.find((type) => type === contentType);
   if (!validatedContentType) {
-    throw new NexusMediaUploadSourceError('UNSUPPORTED_CONTENT_TYPE');
+    throw new ValidationError('Media upload source has an unsupported content type');
   }
 
   return { ...session, contentType: validatedContentType };

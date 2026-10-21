@@ -2,10 +2,10 @@ import '@kosmo/core/polyfill';
 
 import { db, first, Media as MediaTable } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
+import { ValidationError } from '@kosmo/core/error';
 import {
   headNexusMediaUploadSource,
   isNexusMediaUpload,
-  NexusMediaUploadSourceError,
   parseNexusMediaUploadReference,
 } from '@kosmo/core/media-upload';
 import { ApplicationFailure } from '@temporalio/activity';
@@ -56,12 +56,8 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
   try {
     return await headNexusMediaUploadSource(storageReference);
   } catch (error) {
-    if (error instanceof NexusMediaUploadSourceError) {
-      throw ApplicationFailure.nonRetryable(
-        error.message,
-        'NexusMediaUploadSourceError',
-        error.code,
-      );
+    if (error instanceof ValidationError) {
+      throw ApplicationFailure.nonRetryable(error.message, 'NexusMediaUploadSourceError');
     }
     throw error;
   }

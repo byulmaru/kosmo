@@ -81,11 +81,13 @@ New uploads use a private staging R2 bucket. The API and Worker need
 their server-only Vault environments. Configure the bucket's CORS rule to allow
 `PUT` from `http://localhost:5173`, `https://dev.kos.moe`, and `https://kos.moe`,
 with the `Content-Type` request header. Keep public reads disabled; the API
-returns a separate upload-only signed URL to the browser. Existing uploads
-issued by the Media Storage Service continue to use
-`MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY` when the API
-completes those legacy references. None of these values belong in the browser
-bundle.
+returns a separate upload-only signed URL to the browser. Clients that provide
+normalized upload size use a PUT URL signed for that exact `ContentLength`.
+Clients that omit size retain the existing Media REST URL issuance and
+completion path under its existing size limits until a separate compatibility
+removal decision. Keep `MEDIA_STORAGE_SERVICE_ORIGIN` and
+`MEDIA_STORAGE_SERVICE_API_KEY` configured for that legacy path. None of these
+values belong in the browser bundle.
 
 The signed PUT URL expires after 10 minutes, while a staged source is accepted
 only when its storage `LastModified` timestamp is within 24 hours. Completion is

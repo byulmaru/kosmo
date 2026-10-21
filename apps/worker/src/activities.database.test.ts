@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, afterEach, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
@@ -56,7 +57,10 @@ import type {
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
-import type { finalizeMediaUploadActivity as FinalizeMediaUploadActivity } from './activities/media-upload';
+import type {
+  finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
+  prepareMediaUploadActivity as PrepareMediaUploadActivity,
+} from './activities/media-upload';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -99,6 +103,7 @@ let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
+let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -141,7 +146,8 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
-  ({ finalizeMediaUploadActivity } = await import('./activities/media-upload'));
+  ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
+    await import('./activities/media-upload'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -2419,6 +2425,159 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     } else {
       process.env.FIREBASE_PROJECT_ID = previousProjectId;
     }
+  }
+});
+
+test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+  const requests: string[] = [];
+  let headResponseStatus = 200;
+  const server = createServer((request, response) => {
+    requests.push(request.method ?? '');
+    if (request.method !== 'HEAD') {
+      response.writeHead(405).end();
+      return;
+    }
+    if (headResponseStatus !== 200) {
+      response
+        .writeHead(headResponseStatus, { 'Content-Type': 'application/xml' })
+        .end(
+          '<Error><Code>ServiceUnavailable</Code><Message>Transient staging failure</Message></Error>',
+        );
+      return;
+    }
+    response
+      .writeHead(200, {
+        'Content-Length': '128',
+        'Content-Type': 'image/jpeg',
+        'Last-Modified': new Date().toUTCString(),
+      })
+      .end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const stagingConfig = [
+    ['MEDIA_STAGING_R2_ENDPOINT', `http://127.0.0.1:${address.port}`],
+    ['MEDIA_STAGING_R2_BUCKET', 'staging-bucket'],
+    ['MEDIA_STAGING_R2_ACCESS_KEY_ID', 'test-access-key'],
+    ['MEDIA_STAGING_R2_SECRET_ACCESS_KEY', 'test-secret-key'],
+  ] as const;
+  const previousStagingConfig = stagingConfig.map(([key]) => process.env[key]);
+  for (const [key, value] of stagingConfig) {
+    process.env[key] = value;
+  }
+
+  const createUploadingMedia = async (storageReference = `nexus:v1:${crypto.randomUUID()}`) => {
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, accountId: fixture.account.id, storageReference };
+  };
+  const readMediaState = async (mediaId: string) => {
+    const media = await db
+      .select({
+        accountId: Media.accountId,
+        mediaType: Media.mediaType,
+        readyAt: Media.readyAt,
+        source: Media.source,
+        state: Media.state,
+        storageReference: Media.storageReference,
+        url: Media.url,
+      })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    return { ...media, readyAt: media.readyAt?.toString() ?? null };
+  };
+  const hasFailureType = (type: string) => (error: unknown) =>
+    error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
+
+  try {
+    const uploading = await createUploadingMedia();
+    const uploadingState = await readMediaState(uploading.mediaId);
+    const uuid = uploading.storageReference.slice('nexus:v1:'.length);
+    const uploadId = `u_${uuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(uploading), {
+      id: uploadId,
+      sourceKey: `uploads/${uploadId}/${uuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    await assert.rejects(
+      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    const ready = await createUploadingMedia();
+    await db
+      .update(Media)
+      .set({
+        mediaType: 'image/webp',
+        readyAt: Temporal.Now.instant(),
+        state: MediaState.READY,
+        url: 'https://media.example/ready.webp',
+      })
+      .where(eq(Media.id, ready.mediaId));
+    const readyState = await readMediaState(ready.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(ready),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(ready.mediaId), readyState);
+
+    const invalidSource = await createUploadingMedia('nexus:v1:invalid');
+    const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidSource),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
+    assert.deepEqual(requests, ['HEAD']);
+
+    const transientFailure = await createUploadingMedia();
+    const transientFailureState = await readMediaState(transientFailure.mediaId);
+    headResponseStatus = 503;
+    await assert.rejects(
+      prepareMediaUploadActivity(transientFailure),
+      (error: unknown) =>
+        error instanceof Error &&
+        !(error instanceof ApplicationFailure) &&
+        (error as Error & { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ===
+          503,
+    );
+    assert.deepEqual(await readMediaState(transientFailure.mediaId), transientFailureState);
+  } finally {
+    stagingConfig.forEach(([key], index) => {
+      const value = previousStagingConfig[index];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+      server.closeAllConnections();
+    });
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
   }
 });
 

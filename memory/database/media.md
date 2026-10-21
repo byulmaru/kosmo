@@ -14,8 +14,10 @@ Current media direction:
   Media can be attached to a Post or used as a Profile representation.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
-- New Local Media uploads stage bytes in a private R2 bucket and persist an opaque, versioned upload reference. Final public
-  URL and media type still come from Media Storage Service; legacy references continue through the existing completion path.
+- New Local Media uploads stage bytes in a private R2 bucket and persist an opaque, versioned upload reference. Clients
+  providing normalized upload size use a PUT URL signed for that exact `ContentLength`; clients omitting size retain the
+  existing Media REST URL issuance/completion path and its limits until a separate compatibility-removal decision. Final
+  public URL and media type still come from Media Storage Service.
 - Do not expose staging bucket reads or credentials to clients. The browser receives only a short-lived, upload-only URL.
 - Remote Media remains a canonical product concept, but its Media Storage Service projection and persistence shape are
   deferred until a real Remote Media implementation requires them. Do not add future File or remote-storage columns to

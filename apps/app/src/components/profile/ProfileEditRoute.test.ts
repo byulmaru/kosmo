@@ -494,6 +494,14 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireScreenProps().serverErrors, undefined);
     assert.equal(requireScreenProps().value.avatar.uploadState, 'ready');
     assert.equal(issued, 1);
+    assert.equal(
+      (
+        mutationCalls.get('ProfileEditRouteIssueMediaUploadUrlMutation')?.[0]?.variables.input as {
+          size: number;
+        }
+      ).size,
+      new Blob(['normalized-webp']).size,
+    );
     assert.equal(fetchMock.mock.callCount(), 2);
   });
 
