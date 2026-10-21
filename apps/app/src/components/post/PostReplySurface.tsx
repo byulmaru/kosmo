@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { graphql, useFragment } from 'react-relay';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { usePostComposerBinding } from './PostComposerCoordinator';
+import { getPostReplyActionCount } from './postReplyCount';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { View } from 'react-native';
@@ -11,6 +12,7 @@ import type { PostActionBarProps } from './PostActionBar';
 const PostReplySurfaceFragment = graphql`
   fragment PostReplySurface_post on Post {
     id
+    replyCount
     content {
       id
     }
@@ -28,6 +30,7 @@ export function usePostReplySurface(postKey: PostReplySurface_post$key) {
     ? {
         accessibilityLabel: '답글',
         controlRef: triggerRef,
+        count: getPostReplyActionCount(Boolean(post.content), post.replyCount),
         expanded: authentication.execution.kind === 'enabled' && binding.expanded,
         onPress: () => {
           if (authentication.execution.kind === 'resolution-required') {

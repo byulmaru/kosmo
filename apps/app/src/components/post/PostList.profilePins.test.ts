@@ -177,6 +177,7 @@ const postNode = (id: string, isPinned: boolean) => ({
     media: [],
     mentionedProfiles: [],
   },
+  replyCount: 0,
   replyParent: null,
   repostSource: null,
   viewerBookmark: null,

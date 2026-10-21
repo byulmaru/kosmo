@@ -320,6 +320,29 @@ test('Native count actions keep the compact 16px icon slot inside the social tar
   assert.equal(findByType(root, 'Text').children[0], '12.3K');
 });
 
+test('Reply count remains accessible on the Reply control without changing interaction state', async () => {
+  platform.OS = 'ios';
+  const root = await renderBar({
+    post: null,
+    reply: {
+      accessibilityLabel: '답글',
+      count: 12_345,
+      expanded: true,
+      onPress: () => undefined,
+      processing: 'default',
+    },
+  });
+  const button = findByTestID(root, 'post-action-reply');
+
+  assert.equal(button.props.accessibilityLabel, '답글, 12.3K');
+  assert.deepEqual(button.props.accessibilityState, {
+    busy: false,
+    disabled: false,
+    expanded: true,
+  });
+  assert.equal(findByType(root, 'Text').children[0], '12.3K');
+});
+
 test('Native PostActionBar wiring keeps target sizes and the zero-gap trailing group', async () => {
   for (const [os, targetSize] of nativePlatforms) {
     platform.OS = os;

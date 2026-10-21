@@ -16,6 +16,10 @@ const deletePostMutation = graphql`
   mutation PostDeletionActionDeletePostMutation($id: ID!) {
     deletePost(input: { id: $id }) {
       postId @deleteRecord
+      replyParent {
+        id
+        replyCount
+      }
     }
   }
 `;
@@ -125,14 +129,8 @@ export function PostDeletionAction({
         response: PostDeletionActionDeletePostMutation['response'],
         errors: ReadonlyArray<{ message: string }> | null | undefined,
       ) => {
-        if (errors?.length) {
-          fail(new Error(errors[0]?.message ?? failureMessage));
-          return;
-        }
-
-        const postId = response?.deletePost?.postId;
-        if (!postId) {
-          fail(new Error(failureMessage));
+        if (!response?.deletePost?.postId) {
+          fail(new Error(errors?.[0]?.message ?? failureMessage));
           return;
         }
         if (

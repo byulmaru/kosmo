@@ -5,6 +5,7 @@ import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
+import { formatPostActionCount } from './postActionCount';
 import { usePostBookmarkAction } from './PostBookmarkAction';
 import { PostDeletionAction } from './PostDeletionAction';
 import { ReactionAction } from './ReactionAction';
@@ -87,6 +88,7 @@ export function PostActionBar({
     onBookmarkError,
   );
   const resolvedBookmark = bookmark ?? bookmarkAction;
+  const replyCountLabel = formatPostActionCount(reply?.count);
 
   return (
     <View
@@ -99,7 +101,11 @@ export function PostActionBar({
     >
       {reply ? (
         <PostActionControl
-          accessibilityLabel={reply.accessibilityLabel}
+          accessibilityLabel={
+            replyCountLabel
+              ? `${reply.accessibilityLabel}, ${replyCountLabel}`
+              : reply.accessibilityLabel
+          }
           alignToStart
           count={reply.count}
           countFollowsInteraction

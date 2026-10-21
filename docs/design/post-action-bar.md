@@ -45,6 +45,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   실제 layout에 포함하며, 부모 밖으로 확장하는 `hitSlop`이나 고정 28px 부모 안의 overlap을 사용하지 않는다.
   코드·렌더 검증과 실제 Native touch·focus 검증은 별도 증거로 기록한다.
 
+## Reply count
+
+- 집계 의미와 조회 범위는 [Post의 Reply 수](../domain/objects/post.md#reply-수)를 따른다.
+- Home·Local·Profile·Bookmarks 목록, Post 상세와 스레드, Media Viewer의 공용 Action Bar에서 같은
+  Reply 수를 표시한다. 숫자가 1 이상이면 Reply glyph 옆에 표시하고, 0이면 숫자를 생략한다. 조회 실패나
+  미제공을 0으로 바꾸거나 별도 숫자로 표시하지 않는다.
+- 기존 locale 기반 `Intl.NumberFormat` compact notation, glyph와 count 간격, 색상과 플랫폼별 target을
+  유지한다. 제공된 0도 렌더할 수 있는 공용 control의 표현 능력은 유지하며, production Reply가 0을
+  생략하는 정책과 구분한다.
+- 표시된 Reply 수는 보조 기술로도 확인할 수 있어야 한다. Reply의 accessible name과 기존 expanded·disabled
+  의미를 유지하고, 숫자를 별도 클릭 영역이나 새 navigation으로 만들지 않는다.
+- 순수 Repost의 Reply는 기존처럼 바깥 contentless Post 기준 disabled다. 직접 Repost Source의 Reply 수를
+  바깥 Reply에 대신 표시하지 않는다. Quote는 자신의 Reply 수를 표시한다.
+
 ## Action semantic colors
 
 - Reaction은 active·Web hover에서 semantic `actionReactionBase` (`#F97066`)를 사용한다.

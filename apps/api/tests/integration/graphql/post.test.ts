@@ -47,6 +47,7 @@ const onePixelPng = Buffer.from(
 
 let db: typeof CoreDb.db;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -77,6 +78,7 @@ describe('Post Reply GraphQL 경계', () => {
       AccountProfiles,
       Accounts,
       ActivityPubActors,
+      ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
@@ -1904,6 +1906,224 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('replyCount는 여러 Parent의 직접 eligible Reply만 집계하고 Quote 관계와 분리한다', async () => {
+    const author = await createProfile('reply-count-author');
+    const remoteAuthor = await createRemoteActorProfile('reply-count-remote-author');
+    const disabledAuthor = await createProfile(
+      'reply-count-disabled-author',
+      ProfileState.DISABLED,
+    );
+    const suspendedInstance = await createInstance(
+      InstanceKind.ACTIVITYPUB,
+      InstanceState.SUSPENDED,
+    );
+    const suspendedAuthor = await createProfile('reply-count-suspended-author', {
+      instanceId: suspendedInstance.id,
+    });
+    const root = await createContentfulPost(author.id);
+    const otherRoot = await createContentfulPost(author.id);
+    const quoteSource = await createContentfulPost(author.id);
+    const direct = await createContentfulPost(author.id, { replyParentId: root.id });
+    await createContentfulPost(author.id, { replyParentId: direct.id });
+    const replyQuote = await createContentfulPost(author.id, {
+      replyParentId: root.id,
+      repostSourceId: quoteSource.id,
+    });
+    const replyToQuote = await createContentfulPost(author.id, { replyParentId: replyQuote.id });
+    const pureQuote = await createContentfulPost(author.id, { repostSourceId: root.id });
+    await db
+      .insert(Posts)
+      .values({
+        profileId: author.id,
+        repostSourceId: root.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remoteReply = await createContentfulPost(remoteAuthor.id, { replyParentId: root.id });
+    const unlinkedRemotePost = await createContentfulPost(remoteAuthor.id);
+    const remoteInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, remoteAuthor.instanceId))
+      .then(firstOrThrow);
+    const receivedAt = Temporal.Now.instant();
+    await db.insert(ActivityPubPosts).values([
+      {
+        postId: remoteReply.id,
+        publishedAt: receivedAt,
+        receivedAt,
+        uri: `https://${remoteInstance.domain}/notes/${crypto.randomUUID()}`,
+      },
+      {
+        postId: unlinkedRemotePost.id,
+        publishedAt: receivedAt,
+        receivedAt,
+        uri: `https://${remoteInstance.domain}/notes/${crypto.randomUUID()}`,
+      },
+    ]);
+    await createContentfulPost(author.id, {
+      replyParentId: otherRoot.id,
+      state: PostState.DELETED,
+    });
+    await createContentfulPost(disabledAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(suspendedAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(author.id, { replyParentId: otherRoot.id });
+
+    const result = await requestReplyCounts([
+      root.id,
+      otherRoot.id,
+      direct.id,
+      replyQuote.id,
+      replyToQuote.id,
+      pureQuote.id,
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.nodes.map((node) => ({ id: node?.id, replyCount: node?.replyCount })),
+      [
+        { id: encodeGlobalId('Post', root.id), replyCount: 3 },
+        { id: encodeGlobalId('Post', otherRoot.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', direct.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', replyQuote.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', replyToQuote.id), replyCount: 0 },
+        { id: encodeGlobalId('Post', pureQuote.id), replyCount: 0 },
+      ],
+    );
+  });
+
+  test('replyCount는 페이지 크기와 무관하게 전체 direct Reply 수를 반환한다', async () => {
+    const author = await createProfile('reply-count-page-author');
+    const root = await createContentfulPost(author.id);
+    await Promise.all(
+      Array.from({ length: 21 }, () => createContentfulPost(author.id, { replyParentId: root.id })),
+    );
+
+    const page = await requestReplyDescendants(root.id, { first: 20 });
+    const count = await requestReplyCounts([root.id]);
+
+    assertNoGraphQLErrors(page);
+    assert.equal(page.data?.node?.replyDescendants.edges.length, 20);
+    assert.equal(page.data?.node?.replyDescendants.pageInfo.hasNextPage, true);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.replyCount, 21);
+  });
+
+  test('replyCount는 각 direct Reply의 viewer visibility와 block 방향을 적용한다', async () => {
+    const viewer = await createAuthenticatedSession();
+    const publicAuthor = await createProfile('reply-count-public-author');
+    const followedAuthor = await createProfile('reply-count-followed-author');
+    const hiddenFollowerAuthor = await createProfile('reply-count-hidden-follower-author');
+    const mentionedAuthor = await createProfile('reply-count-mentioned-author');
+    const hiddenMentionAuthor = await createProfile('reply-count-hidden-mention-author');
+    const viewerBlockedAuthor = await createProfile('reply-count-viewer-blocked-author');
+    const authorBlockedViewer = await createProfile('reply-count-author-blocked-viewer');
+    const root = await createContentfulPost(publicAuthor.id);
+    await createContentfulPost(publicAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(followedAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await createContentfulPost(hiddenFollowerAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const mentionedReply = await createContentfulPost(mentionedAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const hiddenMentionReply = await createContentfulPost(hiddenMentionAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(mentionedReply.currentContentId);
+    assert.ok(hiddenMentionReply.currentContentId);
+    await db.insert(PostMentions).values([
+      { postContentId: mentionedReply.currentContentId, profileId: viewer.profile.id },
+      { postContentId: hiddenMentionReply.currentContentId, profileId: hiddenFollowerAuthor.id },
+    ]);
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: followedAuthor.id,
+      followerProfileId: viewer.profile.id,
+    });
+    await db.insert(ProfileBlocks).values([
+      { ownerProfileId: viewer.profile.id, targetProfileId: viewerBlockedAuthor.id },
+      { ownerProfileId: authorBlockedViewer.id, targetProfileId: viewer.profile.id },
+    ]);
+    const outgoingBlockedReply = await createContentfulPost(viewerBlockedAuthor.id, {
+      replyParentId: root.id,
+    });
+    await createContentfulPost(authorBlockedViewer.id, { replyParentId: root.id });
+
+    const [authenticated, anonymous, directlyReadable] = await Promise.all([
+      requestReplyCounts([root.id], viewer.token),
+      requestReplyCounts([root.id]),
+      requestGraphQL<{ node: { id: string } | null }>(
+        `query DirectReply($id: ID!) { node(id: $id) { id } }`,
+        { id: encodeGlobalId('Post', outgoingBlockedReply.id) },
+        viewer.token,
+      ),
+    ]);
+
+    assertNoGraphQLErrors(authenticated);
+    assertNoGraphQLErrors(anonymous);
+    assertNoGraphQLErrors(directlyReadable);
+    assert.equal(directlyReadable.data?.node?.id, encodeGlobalId('Post', outgoingBlockedReply.id));
+    assert.equal(authenticated.data?.nodes[0]?.replyCount, 4);
+    assert.equal(anonymous.data?.nodes[0]?.replyCount, 3);
+  });
+
+  test('Reply 생성·삭제 응답은 요청 viewer의 직접 Parent에 서버 확정 수치를 반환한다', async () => {
+    const author = await createAuthenticatedSession();
+    const parentAuthor = await createProfile('reply-count-mutation-parent');
+    const parent = await createContentfulPost(parentAuthor.id);
+    const created = await requestGraphQL<{
+      createPost: { post: { id: string; replyParent: { id: string; replyCount: number } | null } };
+    }>(
+      `mutation CreateReplyWithCount($input: CreatePostInput!) {
+        createPost(input: $input) {
+          post { id replyParent { id replyCount } }
+        }
+      }`,
+      {
+        input: {
+          bodyText: 'counted reply',
+          replyParentId: encodeGlobalId('Post', parent.id),
+          visibility: PostVisibility.PUBLIC,
+        },
+      },
+      author.token,
+    );
+
+    assertNoGraphQLErrors(created);
+    const reply = created.data!.createPost.post;
+    assert.deepEqual(reply.replyParent, {
+      id: encodeGlobalId('Post', parent.id),
+      replyCount: 1,
+    });
+
+    const deleted = await requestGraphQL<{
+      deletePost: { postId: string; replyParent: { id: string; replyCount: number } | null };
+    }>(
+      `mutation DeleteReplyWithCount($input: DeletePostInput!) {
+        deletePost(input: $input) {
+          postId
+          replyParent { id replyCount }
+        }
+      }`,
+      { input: { id: reply.id } },
+      author.token,
+    );
+
+    assertNoGraphQLErrors(deleted);
+    assert.deepEqual(deleted.data?.deletePost, {
+      postId: reply.id,
+      replyParent: { id: encodeGlobalId('Post', parent.id), replyCount: 0 },
+    });
+  });
+
   test('숨겨진 Parent와 ineligible Parent 아래의 visible descendant를 filter-before-limit으로 유지한다', async () => {
     const rootAuthor = await createProfile('boundary-root-author');
     const hiddenAuthor = await createProfile('boundary-hidden-author');
@@ -2045,6 +2265,11 @@ type PostNode = {
   replyParent: { id: string } | null;
 };
 
+type PostReplyCountNode = {
+  id: string;
+  replyCount: number | null;
+};
+
 type CreatePostNode = {
   __typename: 'Post';
   id: string;
@@ -2130,6 +2355,17 @@ const requestPostNode = (postId: string) =>
       }
     }`,
     { postId: encodeGlobalId('Post', postId) },
+  );
+
+const requestReplyCounts = (postIds: string[], token?: string) =>
+  requestGraphQL<{ nodes: Array<PostReplyCountNode | null> }>(
+    `query PostReplyCounts($postIds: [ID!]!) {
+      nodes(ids: $postIds) {
+        ... on Post { id replyCount }
+      }
+    }`,
+    { postIds: postIds.map((id) => encodeGlobalId('Post', id)) },
+    token,
   );
 
 const requestPostContent = (postId: string, token?: string) =>

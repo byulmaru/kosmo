@@ -30,3 +30,13 @@ test('omits invalid count inputs instead of formatting them', async () => {
     assert.equal(module.formatPostActionCount(count), undefined);
   }
 });
+
+test('omits zero, missing, and contentless Reply counts while retaining positive counts', async () => {
+  const { getPostReplyActionCount } = await import('./postReplyCount');
+
+  assert.equal(getPostReplyActionCount(true, 0), undefined);
+  assert.equal(getPostReplyActionCount(true, null), undefined);
+  assert.equal(getPostReplyActionCount(true, undefined), undefined);
+  assert.equal(getPostReplyActionCount(false, 8), undefined);
+  assert.equal(getPostReplyActionCount(true, 8), 8);
+});
