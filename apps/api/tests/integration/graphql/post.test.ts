@@ -20,6 +20,10 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import {
+  headNexusMediaUploadSource,
+  parseNexusMediaUploadReference,
+} from '@kosmo/core/media-upload';
+import {
   canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
@@ -28,6 +32,7 @@ import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { createStagingR2Fixture } from './staging-r2.fixture';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
@@ -37,8 +42,6 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
-process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
-process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media.example';
 
 const onePixelPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -68,11 +71,17 @@ let localOutboundFederation: typeof LocalOutboundFederation;
 let projectLocalPostNote: typeof ProjectLocalPostNote;
 let app: Hono<Env>;
 let localInstanceId: string;
+let stagingR2: Awaited<ReturnType<typeof createStagingR2Fixture>>;
 
 describe('Post Reply GraphQL 경계', () => {
   before(async () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
+    stagingR2 = await createStagingR2Fixture();
+    process.env.MEDIA_STAGING_R2_ENDPOINT = stagingR2.endpoint;
+    process.env.MEDIA_STAGING_R2_BUCKET = 'staging-bucket';
+    process.env.MEDIA_STAGING_R2_ACCESS_KEY_ID = 'test-access-key';
+    process.env.MEDIA_STAGING_R2_SECRET_ACCESS_KEY = 'test-secret-key';
 
     ({
       AccountProfiles,
@@ -114,11 +123,13 @@ describe('Post Reply GraphQL 경계', () => {
   });
 
   beforeEach(async () => {
+    stagingR2.reset();
     await resetFixtures();
   });
 
   after(async () => {
     await pg.end();
+    await stagingR2.close();
   });
 
   test('replyParentId 생략은 기존 일반 Post 계약을 유지한다', async () => {
@@ -1240,55 +1251,59 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('업로드 발급부터 PostContent와 Local Note Media projection까지 하나의 흐름으로 연결한다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const storageReference = `u_${crypto.randomUUID()}`;
-    const uploadUrl = 'https://media.example/v1/uploads/integration-signed-url';
     const publicMediaUrl = 'https://media.example/media/integration.webp';
-    const representationUrl = `https://media.example/v1/uploads/${storageReference}`;
-    let uploaded: Buffer | null = null;
-
-    t.mock.method(
-      globalThis,
-      'fetch',
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url = String(input);
-        if (url === 'https://media.example/v1/uploads' && init?.method === 'POST') {
-          return Response.json(
-            {
-              expiresAt: Temporal.Now.instant().add({ minutes: 5 }).toString(),
-              id: storageReference,
-              uploadUrl,
-            },
-            { status: 201 },
-          );
-        }
-        if (url === uploadUrl && init?.method === 'PUT') {
-          uploaded = Buffer.from(await new Response(init.body).arrayBuffer());
-          return new Response(null, { status: 201 });
-        }
-        if (url === representationUrl && init?.method === undefined) {
-          assert.deepEqual(uploaded, onePixelPng);
-          return Response.json({ mediaType: 'storage-defined-format', url: publicMediaUrl });
-        }
-        throw new Error(`Unexpected Media Storage request: ${init?.method ?? 'GET'} ${url}`);
-      },
-    );
 
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
     const mediaId = issued.data?.issueMediaUploadUrl.media.id;
     assert.ok(mediaId);
     assert.equal(issued.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+    const storedMedia = await db.select().from(Media).then(firstOrThrow);
+    const session = parseNexusMediaUploadReference(storedMedia.storageReference!);
+    assert.ok(session);
 
     const uploadedResponse = await fetch(issued.data!.issueMediaUploadUrl.uploadUrl, {
       body: onePixelPng,
       headers: { 'Content-Type': 'image/png' },
       method: 'PUT',
     });
-    assert.equal(uploadedResponse.status, 201);
+    assert.equal(uploadedResponse.status, 200);
+    assert.equal(stagingR2.objects.get(session.sourceKey)?.contentLength, onePixelPng.length);
 
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (
+        _workflow: Parameters<typeof temporalClient.workflow.execute>[0],
+        options: Parameters<typeof temporalClient.workflow.execute>[1],
+      ) => {
+        const { accountId, mediaId: workflowMediaId } = options.args?.[0] as {
+          accountId: string;
+          mediaId: string;
+        };
+        assert.equal(workflowMediaId, storedMedia.id);
+        assert.equal(accountId, auth.account.id);
+        await headNexusMediaUploadSource(storedMedia.storageReference!);
+        await db
+          .update(Media)
+          .set({
+            mediaType: 'storage-defined-format',
+            readyAt: Temporal.Now.instant(),
+            state: MediaState.READY,
+            url: publicMediaUrl,
+          })
+          .where(eq(Media.id, storedMedia.id));
+        return {
+          id: session.id,
+          mediaType: 'storage-defined-format',
+          url: publicMediaUrl,
+        } as never;
+      },
+    );
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+    assert.equal(execute.mock.callCount(), 1);
 
     const created = await requestCreatePost(
       {

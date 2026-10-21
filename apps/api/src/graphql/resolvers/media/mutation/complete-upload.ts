@@ -1,6 +1,10 @@
 import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
+import { isNexusMediaUpload } from '@kosmo/core/media-upload';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
@@ -42,6 +46,46 @@ builder.mutationField('completeMediaUpload', (t) =>
       }
       if (media.storageReference === null) {
         throw new Error('Uploading Local Media is missing its storage reference');
+      }
+
+      const findReadyMedia = () =>
+        db
+          .select()
+          .from(MediaTable)
+          .where(
+            and(
+              eq(MediaTable.id, media.id),
+              eq(MediaTable.accountId, ctx.session.accountId),
+              eq(MediaTable.source, MediaSource.LOCAL),
+              eq(MediaTable.state, MediaState.READY),
+            ),
+          )
+          .limit(1)
+          .then(first);
+
+      if (isNexusMediaUpload(media.storageReference)) {
+        try {
+          await runWorkflow(mediaUploadWorkflow, {
+            args: [{ mediaId: media.id, accountId: ctx.session.accountId }],
+            mode: 'execute',
+            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+          });
+        } catch (error) {
+          const readyMedia = await findReadyMedia().catch(() => undefined);
+          if (readyMedia) {
+            return { media: readyMedia };
+          }
+          throw error;
+        }
+
+        const readyMedia = await findReadyMedia();
+        if (!readyMedia) {
+          throw new Error('Failed to complete Media upload');
+        }
+        return {
+          media: readyMedia,
+        };
       }
 
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
@@ -98,21 +142,11 @@ builder.mutationField('completeMediaUpload', (t) =>
         return { media: completed };
       }
 
-      return {
-        media: await db
-          .select()
-          .from(MediaTable)
-          .where(
-            and(
-              eq(MediaTable.id, media.id),
-              eq(MediaTable.accountId, ctx.session.accountId),
-              eq(MediaTable.source, MediaSource.LOCAL),
-              eq(MediaTable.state, MediaState.READY),
-            ),
-          )
-          .limit(1)
-          .then(firstOrThrowWith(() => new Error('Failed to complete Media upload'))),
-      };
+      const readyMedia = await findReadyMedia();
+      if (!readyMedia) {
+        throw new Error('Failed to complete Media upload');
+      }
+      return { media: readyMedia };
     },
   }),
 );

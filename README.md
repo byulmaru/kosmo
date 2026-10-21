@@ -75,10 +75,29 @@ Temporal helper processes receive neither PostgreSQL nor queue credentials.
 pnpm owns the child process lifecycle and one interrupt stops the development
 processes.
 
-The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
-to issue browser upload URLs and persist the completed public representation
-reported by Media Storage Service. These are server-only values loaded through
-the same Vault environment and must not be exposed to the browser bundle.
+New uploads use a private staging R2 bucket. The API and Worker need
+`MEDIA_STAGING_R2_ENDPOINT`, `MEDIA_STAGING_R2_BUCKET`,
+`MEDIA_STAGING_R2_ACCESS_KEY_ID`, and `MEDIA_STAGING_R2_SECRET_ACCESS_KEY` in
+their server-only Vault environments. Configure the bucket's CORS rule to allow
+`PUT` from `http://localhost:5173`, `https://dev.kos.moe`, and `https://kos.moe`,
+with the `Content-Type` request header. Keep public reads disabled; the API
+returns a separate upload-only signed URL to the browser. Existing uploads
+issued by the Media Storage Service continue to use
+`MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY` when the API
+completes those legacy references. None of these values belong in the browser
+bundle.
+
+The signed PUT URL expires after 10 minutes, while a staged source is accepted
+only when its storage `LastModified` timestamp is within 24 hours. Completion is
+an explicit request; repeated requests join the stable workflow while it is
+running, and already Ready Media is returned directly. A terminally failed
+workflow is not restarted for the same Media ID. A caller timeout or disconnect,
+including the 30-second request timeout, does not cancel that workflow. The
+Media Storage Service workflow removes a source it consumes. A missing or
+expired source, or another failure before Ready is persisted, leaves Media in
+Uploading with its final URL, Media Type, and Ready At unset; the existing UI
+retry starts a new upload session. Configure and verify a 48-hour lifecycle rule
+for unconsumed staging objects before rollout.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on

@@ -5,6 +5,7 @@ export { databaseCountsSnapshotWorkflow } from './database-counts-snapshot';
 export { postDeleteWorkflow } from './delete';
 export { followingAccountsImportWorkflow } from './following-accounts-import';
 export { hashtagMuteRuleWorkflow } from './hashtag-mute-rule';
+export { mediaUploadWorkflow } from './media-upload';
 export { operationalNotificationDeliveryWorkflow } from './operational-notification';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';

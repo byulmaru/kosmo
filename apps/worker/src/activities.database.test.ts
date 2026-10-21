@@ -9,6 +9,8 @@ import {
   ApplicationType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -23,7 +25,11 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
 import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
@@ -33,6 +39,10 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type {
   captureOperationalNotificationAudienceActivity as CaptureOperationalNotificationAudienceActivity,
@@ -46,6 +56,7 @@ import type {
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
+import type { finalizeMediaUploadActivity as FinalizeMediaUploadActivity } from './activities/media-upload';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -58,6 +69,7 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
@@ -86,6 +98,7 @@ let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
+let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -99,6 +112,7 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    Media,
     NotificationQuoteJudgments,
     Notifications,
     OAuthAuthorizationCodes,
@@ -127,6 +141,7 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
+  ({ finalizeMediaUploadActivity } = await import('./activities/media-upload'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -2404,5 +2419,130 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     } else {
       process.env.FIREBASE_PROJECT_ID = previousProjectId;
     }
+  }
+});
+
+test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완료를 수렴시킨다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+
+  const createUploadingMedia = async () => {
+    const referenceId = crypto.randomUUID();
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference: `nexus:v1:${referenceId}`,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, remoteUploadId: `u_${referenceId}` };
+  };
+
+  try {
+    const { mediaId, remoteUploadId } = await createUploadingMedia();
+    const result: MediaUploadWorkflowResult = {
+      id: remoteUploadId,
+      url: 'https://media.example/ready.webp',
+      mediaType: 'image/webp',
+    };
+    const input: MediaUploadWorkflowInput & {
+      readonly remoteUploadId: string;
+      readonly result: MediaUploadWorkflowResult;
+    } = {
+      mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId,
+      result,
+    };
+    const expectNonRetryableFailure = (error: unknown) =>
+      error instanceof ApplicationFailure && error.nonRetryable === true;
+
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, accountId: crypto.randomUUID() }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...input,
+        result: { ...result, url: 'javascript:alert(1)' } as MediaUploadWorkflowResult,
+      }),
+      expectNonRetryableFailure,
+    );
+
+    const stillUploading = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(stillUploading.state, MediaState.UPLOADING);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const firstReady = await db
+      .select({ readyAt: Media.readyAt, state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(firstReady.state, MediaState.READY);
+    assert.ok(firstReady.readyAt);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const retriedReady = await db
+      .select({ readyAt: Media.readyAt, state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(retriedReady.state, MediaState.READY);
+    assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+
+    const concurrent = await createUploadingMedia();
+    const concurrentResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: concurrent.remoteUploadId,
+      url: 'https://media.example/concurrent.webp',
+    };
+    const concurrentInput = {
+      mediaId: concurrent.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: concurrent.remoteUploadId,
+      result: concurrentResult,
+    };
+    assert.deepEqual(
+      await Promise.all([
+        finalizeMediaUploadActivity(concurrentInput),
+        finalizeMediaUploadActivity(concurrentInput),
+      ]),
+      [concurrentResult, concurrentResult],
+    );
+    const converged = await db
+      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .from(Media)
+      .where(eq(Media.id, concurrent.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(converged.state, MediaState.READY);
+    assert.equal(converged.url, concurrentResult.url);
+    assert.ok(converged.readyAt);
+  } finally {
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
   }
 });
