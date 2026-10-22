@@ -102,6 +102,7 @@ stub('react-native', {
 });
 stub('expo-router', {
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
+  usePathname: () => '/home',
   useRouter: () => ({ push: () => undefined }),
 });
 stub('lucide-react-native', { MessageCircle: 'MessageCircle', Pin: 'Pin' });

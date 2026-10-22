@@ -1,16 +1,16 @@
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
-import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
+import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileNameBlock_profile$key } from '@/components/profile/__generated__/ProfileNameBlock_profile.graphql';
@@ -148,14 +148,15 @@ export function PostSourcePresentationView({
     return null;
   }
 
-  const postProfileHref = `/${post.profile.relativeHandle}` as const;
-  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
+  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
   const postHeader = (
     <View style={styles.authorHeader}>
       <View style={styles.authorSlot}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
           href={postProfileHref}
+          resetScroll
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
@@ -230,8 +231,8 @@ export function PostSourcePreview({
   const theme = useTheme();
   const [pointerHovered, setPointerHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
-  const sourceProfileHref = `/${source.profile.relativeHandle}` as const;
-  const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as const;
+  const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
+  const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
   if (!interactive && pointerHovered) {
     setPointerHovered(false);
@@ -244,6 +245,7 @@ export function PostSourcePreview({
             <PresentationLink
               accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
               href={sourceProfileHref}
+              resetScroll
             >
               <Author profile={source.profile} showAvatar />
             </PresentationLink>
@@ -330,21 +332,31 @@ function PresentationLink({
   accessibilityLabel,
   children,
   href,
+  resetScroll = false,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
-  href: `/${string}`;
+  href: Href;
+  resetScroll?: boolean;
 }) {
-  return (
+  const trigger = (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="link"
+      style={styles.presentationLink}
+    >
+      {children}
+    </Pressable>
+  );
+
+  return resetScroll ? (
     <NavigationLink resetScroll href={href} push={Platform.OS !== 'web'}>
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="link"
-        style={styles.presentationLink}
-      >
-        {children}
-      </Pressable>
+      {trigger}
     </NavigationLink>
+  ) : (
+    <Link asChild href={href} push={Platform.OS !== 'web'}>
+      {trigger}
+    </Link>
   );
 }
 
@@ -357,23 +369,19 @@ function PostBodyPressTarget({
   testID,
 }: {
   content: PresentationContent;
-  href: `/${string}`;
+  href: Href;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
   const router = useRouter();
-  const { record: recordScrollNavigation } = usePrimaryNavigationScroll();
 
   return (
     <Pressable
       accessible={false}
       focusable={false}
-      onPress={() => {
-        recordScrollNavigation(href);
-        router.push(href);
-      }}
+      onPress={() => router.push(href)}
       style={style}
       tabIndex={-1}
       testID={testID}

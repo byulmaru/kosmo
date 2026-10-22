@@ -239,6 +239,7 @@ function PostDetailThreadContent({
         if (!shouldKeepCurrentInViewRef.current || preserveScrollPosition?.()) {
           return;
         }
+        const measuredScrollOffset = Platform.OS === 'web' ? window.scrollY : null;
         // Native sticky-header measurements retain the scrolled content coordinate.
         // Its viewport stays fixed; combine that origin with the laid-out header height.
         const boundary =
@@ -252,8 +253,14 @@ function PostDetailThreadContent({
 
           const currentOffset =
             Platform.OS === 'web' ? window.scrollY : nativeScrollOffsetRef.current;
-          const correction = currentTop - (headerTop + headerHeight);
-          let nextOffset = Math.max(0, currentOffset + correction);
+          // A short page can clip the sticky header outside its intended viewport inset.
+          const headerViewportTop =
+            Platform.OS === 'web'
+              ? Number.parseFloat(window.getComputedStyle(headerView as unknown as Element).top) ||
+                0
+              : headerTop;
+          const correction = currentTop - (headerViewportTop + headerHeight);
+          let nextOffset = Math.max(0, (measuredScrollOffset ?? currentOffset) + correction);
 
           if (Platform.OS === 'web') {
             const maxOffset = Math.max(

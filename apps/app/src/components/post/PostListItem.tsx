@@ -1,11 +1,10 @@
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
-import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -121,16 +120,12 @@ export function PostListItem({
   const metrics = postListMetrics[presentation];
   const post = useFragment(PostListItemFragment, postKey);
   const router = useRouter();
-  const { record: recordScrollNavigation } = usePrimaryNavigationScroll();
   const openViewer = usePostMediaViewerHost();
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailPost = post.content ? post : (post.repostSource ?? post);
   const detailHref = `/${detailPost.profile.relativeHandle}/${detailPost.id}` as const;
-  const openDetail = useCallback(() => {
-    recordScrollNavigation(detailHref);
-    router.push(detailHref);
-  }, [detailHref, recordScrollNavigation, router]);
+  const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -397,15 +392,11 @@ function PostListRow({
   surfacePostId?: string;
 }) {
   const router = useRouter();
-  const { record: recordScrollNavigation } = usePrimaryNavigationScroll();
   const post = useFragment(PostListRowFragment, postKey);
   const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
-  const openDetail = useCallback(() => {
-    recordScrollNavigation(detailHref);
-    router.push(detailHref);
-  }, [detailHref, recordScrollNavigation, router]);
+  const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -443,13 +434,13 @@ function PostListRow({
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
-          <NavigationLink resetScroll href={detailHref} push={Platform.OS !== 'web'}>
+          <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
               <TimestampText style={styles.time}>
                 {formatTimelineTimestamp(post.createdAt)}
               </TimestampText>
             </Pressable>
-          </NavigationLink>
+          </Link>
         </PostDetailBackground>
         {post.content ? (
           <PostDetailBackground onBackgroundPress={openDetail} style={styles.bodyLink}>
