@@ -392,6 +392,8 @@ export const PendingContract: Story = {
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveAttribute('aria-busy', 'true'));
     expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(getComputedStyle(trigger).cursor).toBe('auto');
+    expect(trigger).toHaveFocus();
     trigger.click();
     await userEvent.keyboard('{Enter}');
     expect(body.queryByRole('menuitem', { name: '프로필에 고정' })).not.toBeInTheDocument();
