@@ -1,4 +1,4 @@
-import { AccountProfiles, db, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, db, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
@@ -81,7 +81,13 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
     defaultPostVisibility: 'FOLLOWERS',
     followPolicy: 'APPROVAL_REQUIRED',
   });
-  await expect(page.getByText('#책', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('#책', { exact: true })).not.toBeVisible();
+  expect(
+    await db
+      .select({ hashtagId: ProfileHashtags.hashtagId })
+      .from(ProfileHashtags)
+      .where(eq(ProfileHashtags.profileId, created[0]!.id)),
+  ).toHaveLength(0);
   const savedMutations = [...mutations];
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   await expectCompleted(page);
