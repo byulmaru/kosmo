@@ -51,6 +51,64 @@ const postArticle = (page: Page, body: string) =>
 const postActionBar = (page: Page, body: string) =>
   postArticle(page, body).getByRole('toolbar', { name: '액션 바' });
 
+for (const viewport of [
+  { height: 844, width: 390 },
+  { height: 720, width: 1280 },
+]) {
+  for (const folded of [false, true]) {
+    test(`타래 끝쪽 답글은 ${folded ? '본문이 접혀 있어도' : '본문이 짧아도'} 헤더 바로 아래에 표시된다 (${viewport.width}px)`, async ({
+      context,
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const viewer = await createE2ESession({ handle: 'e2e-tail-scroll-viewer' });
+      const warning = folded ? 'E2E folded tail reply' : undefined;
+      const posts = [];
+      for (let index = 0; index < 9; index += 1) {
+        const body = `E2E tail reply ${index}${folded ? ' 접힌 긴 본문'.repeat(40) : ''}`;
+        const post = await createE2EPost({
+          body,
+          contentWarning: warning,
+          profileId: viewer.profile!.id,
+          replyParentId: posts.at(-1)?.id,
+        });
+        posts.push({ body, globalId: toGlobalId('Post', post.id), id: post.id });
+      }
+      const detailPath = (index: number) => `/@${viewer.profile!.handle}/${posts[index]!.globalId}`;
+      await setE2ESessionCookie(context, viewer.token);
+      await gotoPostDetail(page, detailPath(8));
+
+      for (const index of [8, 7, 6]) {
+        if (index !== 8) {
+          const response = waitForGraphQLOperation(page, 'PostDetailQuery');
+          await page.locator(`a[href="${detailPath(index)}"]`).click();
+          await expectGraphQLSuccess(await response);
+        }
+        const current = page.getByTestId(`post-thread-current-${posts[index]!.globalId}`);
+        await expect(current).toBeInViewport();
+        if (warning) {
+          await expect(
+            current.getByRole('button', { name: `${warning}, 본문, 보기`, exact: true }),
+          ).toBeVisible();
+          await expect(current.getByText(posts[index]!.body, { exact: true })).toHaveCount(0);
+        }
+        const header = page.getByRole('heading', { name: '게시글', exact: true }).locator('..');
+        await expect
+          .poll(async () => {
+            const [currentBox, headerBox] = await Promise.all([
+              current.boundingBox(),
+              header.boundingBox(),
+            ]);
+            return currentBox && headerBox
+              ? Math.abs(currentBox.y - headerBox.y - headerBox.height)
+              : Infinity;
+          })
+          .toBeLessThanOrEqual(1);
+      }
+    });
+  }
+}
+
 test('현재 Light 정책의 실제 게시글 액션은 Home·Local·Profile·상세와 Web 3폭에서 같은 상태를 유지한다', async ({
   context,
   page,

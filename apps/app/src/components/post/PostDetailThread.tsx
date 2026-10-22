@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -176,7 +176,10 @@ function PostDetailThreadContent({
   preserveScrollPosition?: () => boolean;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const shellChrome = useShellChrome();
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [nativeViewportHeight, setNativeViewportHeight] = useState(0);
   const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
   const currentRowRef = useRef<NativeView>(null);
   const headerRef = useRef<NativeView>(null);
@@ -277,9 +280,18 @@ function PostDetailThreadContent({
   const headerLaidOut = useCallback(
     (event: LayoutChangeEvent) => {
       nativeHeaderHeightRef.current = event.nativeEvent.layout.height;
+      setHeaderHeight(event.nativeEvent.layout.height);
       scheduleInitialScroll();
     },
     [scheduleInitialScroll],
+  );
+  const nativeLaidOut: NonNullable<ScrollViewProps['onLayout']> = useCallback(
+    (event) => {
+      nativeScrollProps.onLayout?.(event);
+      setNativeViewportHeight(event.nativeEvent.layout.height);
+      scheduleInitialScroll();
+    },
+    [nativeScrollProps.onLayout, scheduleInitialScroll],
   );
   const nativeContentSizeChanged: NonNullable<ScrollViewProps['onContentSizeChange']> = useCallback(
     (contentWidth, contentHeight) => {
@@ -379,12 +391,20 @@ function PostDetailThreadContent({
     } satisfies ThreadRenderablePost,
   };
 
+  const viewportHeight =
+    Platform.OS === 'web'
+      ? height - (shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0)
+      : nativeViewportHeight;
+
   const thread = (
     <>
       <PostThreadLayout<ThreadRenderablePost>
         ancestors={ancestors}
         current={current}
         currentRef={currentRowRef}
+        currentSectionMinHeight={
+          presentation === 'route' ? Math.max(0, viewportHeight - headerHeight) : undefined
+        }
         descendants={descendants}
         onCurrentLayout={scheduleInitialScroll}
         onLayout={scheduleInitialScroll}
@@ -453,6 +473,7 @@ function PostDetailThreadContent({
               nativeScrollProps={{
                 ...nativeScrollProps,
                 onContentSizeChange: nativeContentSizeChanged,
+                onLayout: nativeLaidOut,
                 onScroll: nativeScrolled,
                 onScrollBeginDrag: cancelInitialScroll,
               }}
