@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useSession } from '@/session/SessionProvider';
+import {
+  createReactionDeleteUpdater,
+  createReactionOptimisticUpdater,
+} from './PostReactionController.optimistic';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
@@ -131,6 +135,11 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
+      const optimisticUpdater = createReactionOptimisticUpdater({
+        nextSelected,
+        postId,
+        type: optionId,
+      });
       inFlightTypes.current.add(optionId);
       setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
@@ -179,12 +188,15 @@ export function usePostReactionController(
         commitAdd({
           onCompleted,
           onError: () => finish(false),
+          optimisticUpdater,
           variables: { postId, type: optionId },
         });
       } else {
         commitDelete({
           onCompleted,
           onError: () => finish(false),
+          optimisticUpdater,
+          updater: createReactionDeleteUpdater({ postId, type: optionId }),
           variables: { postId, type: optionId },
         });
       }
