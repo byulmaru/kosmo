@@ -233,8 +233,8 @@ export function Coachmark({
             <View
               accessibilityElementsHidden={!presentationReady}
               accessible={false}
-              accessibilityLabel={label}
-              accessibilityViewIsModal
+              accessibilityLabel={Platform.OS === 'web' ? undefined : label}
+              accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true}
               aria-hidden={!presentationReady || undefined}
               importantForAccessibility={presentationReady ? 'auto' : 'no-hide-descendants'}
               onAccessibilityEscape={close}
