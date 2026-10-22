@@ -85,6 +85,10 @@ function viewerReactionIds(environment: Environment) {
   return environment.getStore().getSource().get(postId)?.viewerReactions?.__refs;
 }
 
+function reactionCountIds(environment: Environment) {
+  return environment.getStore().getSource().get(postId)?.reactionCounts?.__refs;
+}
+
 function reactionCounts(environment: Environment) {
   const source = environment.getStore().getSource();
   const refs = source.get(postId)?.reactionCounts?.__refs ?? [];
@@ -378,19 +382,20 @@ describe('PostReactionController Relay cache contract', () => {
     const { environment, fail } = createEnvironment();
     const optimisticUpdater = createReactionOptimisticUpdater({
       nextSelected: true,
-      optimisticCountId: 'client:reaction-count:party:1',
-      optimisticReactionId: 'client:reaction:party:1',
       postId,
       type: 'PARTY',
     });
 
     const first = startAdd(environment, optimisticUpdater);
+    const firstReactionId = viewerReactionIds(environment)?.[2];
+    const firstCountId = reactionCountIds(environment)?.[2];
+    assert.ok(firstReactionId);
+    assert.ok(firstCountId);
+
     const second = startAdd(
       environment,
       createReactionOptimisticUpdater({
         nextSelected: true,
-        optimisticCountId: 'client:reaction-count:party:2',
-        optimisticReactionId: 'client:reaction:party:2',
         postId,
         type: 'PARTY',
       }),
@@ -399,7 +404,7 @@ describe('PostReactionController Relay cache contract', () => {
     assert.deepEqual(viewerReactionIds(environment), [
       'reaction-heart',
       'reaction-eyes',
-      'client:reaction:party:1',
+      firstReactionId,
     ]);
     assert.deepEqual(reactionCounts(environment), [
       { count: 1, type: 'HEART' },
@@ -409,11 +414,18 @@ describe('PostReactionController Relay cache contract', () => {
 
     fail();
     await assert.rejects(first);
+    const secondReactionId = viewerReactionIds(environment)?.[2];
+    const secondCountId = reactionCountIds(environment)?.[2];
+    assert.ok(secondReactionId);
+    assert.ok(secondCountId);
+    assert.notEqual(secondReactionId, firstReactionId);
+    assert.notEqual(secondCountId, firstCountId);
     assert.deepEqual(viewerReactionIds(environment), [
       'reaction-heart',
       'reaction-eyes',
-      'client:reaction:party:2',
+      secondReactionId,
     ]);
+    assert.deepEqual(reactionCountIds(environment), ['count-heart', 'count-eyes', secondCountId]);
     assert.deepEqual(reactionCounts(environment), [
       { count: 1, type: 'HEART' },
       { count: 1, type: 'EYES' },
@@ -435,12 +447,14 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: true,
-        optimisticCountId: 'client:reaction-count:party:rebase-base',
-        optimisticReactionId: 'client:reaction:party:rebase-base',
         postId,
         type: 'PARTY',
       }),
     );
+    const optimisticReactionId = viewerReactionIds(environment)?.[2];
+    const optimisticCountId = reactionCountIds(environment)?.[2];
+    assert.ok(optimisticReactionId);
+    assert.ok(optimisticCountId);
 
     environment.commitUpdate((store) => {
       const post = store.get(postId);
@@ -468,7 +482,13 @@ describe('PostReactionController Relay cache contract', () => {
       'reaction-heart',
       'reaction-eyes',
       'reaction-refreshed-smile',
-      'client:reaction:party:rebase-base',
+      optimisticReactionId,
+    ]);
+    assert.deepEqual(reactionCountIds(environment), [
+      'count-heart',
+      'count-eyes',
+      'count-refreshed-smile',
+      optimisticCountId,
     ]);
     assert.deepEqual(reactionCounts(environment), [
       { count: 1, type: 'HEART' },
@@ -487,8 +507,6 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: false,
-        optimisticCountId: 'client:reaction-count:heart:1',
-        optimisticReactionId: 'client:reaction:heart:1',
         postId,
         type: 'HEART',
       }),
@@ -512,8 +530,6 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: true,
-        optimisticCountId: 'client:reaction-count:party:rebase',
-        optimisticReactionId: 'client:reaction:party:rebase',
         postId,
         type: 'PARTY',
       }),
@@ -522,8 +538,6 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: false,
-        optimisticCountId: 'client:reaction-count:heart:rebase',
-        optimisticReactionId: 'client:reaction:heart:rebase',
         postId,
         type: 'HEART',
       }),
@@ -558,14 +572,16 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: true,
-        optimisticCountId: 'client:reaction-count:party:server',
-        optimisticReactionId: 'client:reaction:party:server',
         postId,
         type: 'PARTY',
       }),
     );
+    const optimisticReactionId = viewerReactionIds(environment)?.[2];
+    const optimisticCountId = reactionCountIds(environment)?.[2];
+    assert.ok(optimisticReactionId);
+    assert.ok(optimisticCountId);
 
-    assert.ok(environment.getStore().getSource().get('client:reaction:party:server'));
+    assert.ok(environment.getStore().getSource().get(optimisticReactionId));
     respond({
       data: {
         addReaction: {
@@ -592,11 +608,8 @@ describe('PostReactionController Relay cache contract', () => {
       { count: 7, type: 'PARTY' },
       { count: 4, type: 'EYES' },
     ]);
-    assert.equal(environment.getStore().getSource().get('client:reaction:party:server'), undefined);
-    assert.equal(
-      environment.getStore().getSource().get('client:reaction-count:party:server'),
-      undefined,
-    );
+    assert.equal(environment.getStore().getSource().get(optimisticReactionId), undefined);
+    assert.equal(environment.getStore().getSource().get(optimisticCountId), undefined);
   });
 
   it('accepts a nullable delete payload with GraphQL errors without guessing counts', async () => {
@@ -605,8 +618,6 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       createReactionOptimisticUpdater({
         nextSelected: false,
-        optimisticCountId: 'client:reaction-count:heart:null',
-        optimisticReactionId: 'client:reaction:heart:null',
         postId,
         type: 'HEART',
       }),

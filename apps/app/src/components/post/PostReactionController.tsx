@@ -13,8 +13,6 @@ import type { PostReactionControllerDeleteReactionMutation } from './__generated
 
 type ReactionCount = Readonly<{ count: number; type: string }>;
 
-let nextOptimisticOperationId = 0;
-
 export type PostReactionController = Readonly<{
   disabled: boolean;
   errorTypeIds: ReadonlyArray<string>;
@@ -137,13 +135,8 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
-      const optimisticOperationId = ++nextOptimisticOperationId;
-      const optimisticReactionId = `client:PostReaction:${postId}:${optimisticOperationId}:Reaction`;
-      const optimisticCountId = `client:PostReaction:${postId}:${optimisticOperationId}:ReactionCount`;
       const optimisticUpdater = createReactionOptimisticUpdater({
         nextSelected,
-        optimisticCountId,
-        optimisticReactionId,
         postId,
         type: optionId,
       });

@@ -3,21 +3,23 @@ import type { PostReactionControllerDeleteReactionMutation } from './__generated
 
 type ReactionOptimisticUpdaterOptions = Readonly<{
   nextSelected: boolean;
-  optimisticCountId: string;
-  optimisticReactionId: string;
   postId: string;
   type: string;
 }>;
+
+let nextOptimisticOperationId = 0;
 
 const getReactionType = (record: RecordProxy | null) => record?.getValue('type');
 
 export function createReactionOptimisticUpdater({
   nextSelected,
-  optimisticCountId,
-  optimisticReactionId,
   postId,
   type,
 }: ReactionOptimisticUpdaterOptions) {
+  const optimisticOperationId = ++nextOptimisticOperationId;
+  const optimisticReactionId = `client:PostReaction:${postId}:${optimisticOperationId}:Reaction`;
+  const optimisticCountId = `client:PostReaction:${postId}:${optimisticOperationId}:ReactionCount`;
+
   return (store: RecordSourceSelectorProxy) => {
     const post = store.get(postId);
     if (!post) {
