@@ -7,7 +7,7 @@ import type { ComponentType, ReactNode } from 'react';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 mock.module('react-native', {
-  exports: { View: 'View' },
+  exports: { Platform: { OS: 'web' }, View: 'View' },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PostContentPrivacyBoundary: ComponentType<{
