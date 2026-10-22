@@ -270,6 +270,7 @@ export function FormOverlay({
   return (
     <ModalOverlay
       accessibilityLabel={title}
+      backdropTestID={`${testIDPrefix}-overlay-backdrop`}
       dismissDisabled={formState.submitting}
       navigationBarTranslucent
       onDismiss={handleDismiss}
