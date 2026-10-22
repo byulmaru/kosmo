@@ -15,8 +15,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 2026-09-10 PROD-889 결정으로 `정보`를 Settings root의 추가 direct destination으로 두고
 `/settings/info` detail에서 공개 정책 문서 진입점을 제공한다. `정보`는 기존 Settings 목록·detail·back·header
 조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크를
-포함한다. 이 정책 링크 범위와 별개로, 인증된 모든 플랫폼에서는 이 detail에 `개발 정보`의 nested destination을
-하나 더 제공하며 채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
+포함한다. 이 정책 링크 범위와 별개로, Web에서는 기존 `개발 정보` nested destination을 유지하고,
+Android/iOS Native에서는 `developer-information` flag가 켜진 경우에만 이 detail에 같은 진입점을 제공하며
+채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
 소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
@@ -67,13 +68,16 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `개발 정보` link row를 제공하며 channel
-  selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
+  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link를 제공하고, Web과 `developer-information` flag가
+  켜진 Native에서 `개발 정보` link row를 제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다.
+  정책 문서의 본문·시행일·이메일 처리와
   public route 간 cross-link는 각 정책 문서가 소유한다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
   `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존
-  `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를 제공하고, 현재 실행에 대한 `현재 updateId`,
+  `developer-information` flag가 켜진 경우 `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를
+  제공하고, 현재 실행에 대한 `현재 updateId`,
   `runtimeVersion`, `실행 유형`, `생성 시각`, `업데이트 상태`를 읽기 전용 진단 행으로 표시한다.
+  flag가 꺼져 있거나 평가되지 않은 Native direct route는 기존 Settings unavailable 상태를 표시한다.
   `checkError`와 `downloadError`는 실제 값이 있을 때만 각각 optional 진단 행으로 표시하며 Web에서 Expo OTA
   값을 임의로 채우지 않는다.
 - 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
@@ -194,12 +198,20 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 ## Native channel과 OTA 진단
 
-- 인증된 Android/iOS Native `설정 → 정보 → 개발 정보`에서만 `dev`·`prod` channel selector를 제공한다. 로그인
+- 인증된 Android/iOS Native `설정 → 정보 → 개발 정보`에서만 `developer-information` flag가 켜진 경우
+  `dev`·`prod` channel selector와 OTA 진단을 제공한다. flag가 꺼져 있거나 평가되지 않으면 정보 화면의
+  `개발 정보` 진입점과 direct route의 channel·OTA 콘텐츠를 숨기고 기존 Settings unavailable 상태를 표시한다.
+  공개 정책 링크는 계속 표시한다. 로그인
   화면에는 채널 선택기를 두지 않으며, 로그인하지 못한 사용자는 앱 내부에서 채널을 되돌릴 수 없다. Web의
   `설정 → 정보 → 개발 정보`는 `getPublicConfig('channel')`의 현재 channel을 읽기 전용으로 표시한다.
+- 개발 channel에서는 기존 예외로 모든 feature flag가 자동 활성화되므로 `developer-information`도 별도
+  계정 평가 없이 활성화된다.
+- `prod`에서는 기존 flagd `isDeveloper` evaluator의 승인된 3개 계정 targeting을 유지하며, 그 계정만
+  `developer-information`을 활성화한다.
 - 선택한 값은 API·Web·OIDC·Sentry·OTA의 하나의 environment로 해석한다. 고정 OTA URL과 persistent header는
   [Expo OTA 운영](../operations/expo-ota.md)의 계약을 따른다.
-- Android/iOS Native `개발 정보`는 읽기 전용으로 현재 실행 중인 Expo `expo-updates`의 전체 `updateId`,
+- `developer-information` flag가 켜진 Android/iOS Native `개발 정보`는 읽기 전용으로 현재 실행 중인 Expo
+  `expo-updates`의 전체 `updateId`,
   `runtimeVersion`, 실행 유형(내장 번들 또는 OTA), `createdAt`, 업데이트 상태를 표시한다. 현재 실행 중인
   값을 기준으로 하며 다운로드 대기 중인 업데이트 ID를 현재 실행 ID로 표시하지 않는다. Web에는 이 OTA
   전용 행을 표시하지 않는다.
@@ -312,9 +324,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전`과 `팔로잉 가져오기` → `뮤트 및 차단` →
   `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
-  link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
-  `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
-  `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
+  link를 문서 순서대로 읽는다. Web과 flag가 켜진 Native에서는 이어서 `개발 정보` link를 읽는다.
+  `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, flag가
+  켜진 Native는 `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을
+  만들지 않는다.
   Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
