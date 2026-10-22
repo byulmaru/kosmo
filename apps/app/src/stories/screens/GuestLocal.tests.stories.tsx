@@ -1,5 +1,6 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import baseMeta, {
+  Compact1024 as compact1024,
   InitialErrorRetry as initialErrorRetry,
   Mobile390 as mobile390,
 } from './GuestLocal.stories';
@@ -12,6 +13,33 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const CompactBrandMark: Story = {
+  ...compact1024,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const navigation = await canvas.findByRole('navigation', { name: '주요 메뉴' });
+    const menu = within(navigation);
+    const logo = menu.getByLabelText('KOSMO 로고');
+    const signup = menu.getByRole('link', { name: '가입하기' });
+    await expect(logo).toBeVisible();
+    await waitFor(() => {
+      const image = logo.querySelector('img');
+      expect(image?.naturalWidth).toBe(1024);
+      expect(image?.naturalHeight).toBe(1024);
+    });
+    const logoBox = logo.getBoundingClientRect();
+    const menuBox = navigation.getBoundingClientRect();
+    expect(logoBox.width).toBe(48);
+    expect(logoBox.height).toBe(48);
+    expect(logoBox.left).toBeGreaterThanOrEqual(menuBox.left);
+    expect(logoBox.right).toBeLessThanOrEqual(menuBox.right);
+    expect(logoBox.bottom).toBeLessThanOrEqual(signup.getBoundingClientRect().top);
+    signup.focus();
+    await userEvent.tab();
+    expect(menu.getByRole('link', { name: '로그인' })).toHaveFocus();
+  },
+};
 
 export const InitialErrorRetry: Story = {
   ...initialErrorRetry,

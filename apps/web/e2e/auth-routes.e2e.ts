@@ -203,26 +203,39 @@ for (const viewport of [
       await expect(navigation.getByRole('button', { name: '설정 및 기타' })).toHaveCount(0);
 
       const logo = navigation.getByLabel('KOSMO 로고', { exact: true });
-      if (viewport.layout === 'compact') {
-        await expect(logo).toHaveCount(0);
-      } else {
-        await expect(logo).toBeVisible();
-        await expect
-          .poll(async () => {
-            const box = await logo.boundingBox();
-            return box ? { height: Math.round(box.height), width: Math.round(box.width) } : null;
-          })
-          .toEqual({ height: 101, width: 160 });
-        await expect
-          .poll(() =>
-            logo.evaluate((element) => {
-              const image =
-                element instanceof HTMLImageElement ? element : element.querySelector('img');
-              return image ? { height: image.naturalHeight, width: image.naturalWidth } : null;
-            }),
-          )
-          .toEqual({ height: 1050, width: 1665 });
-      }
+      await expect(logo).toBeVisible();
+      await expect
+        .poll(async () => {
+          const box = await logo.boundingBox();
+          return box ? { height: Math.round(box.height), width: Math.round(box.width) } : null;
+        })
+        .toEqual(
+          viewport.layout === 'compact' ? { height: 48, width: 48 } : { height: 101, width: 160 },
+        );
+      await expect
+        .poll(() =>
+          logo.evaluate((element) => {
+            const image =
+              element instanceof HTMLImageElement ? element : element.querySelector('img');
+            return image ? { height: image.naturalHeight, width: image.naturalWidth } : null;
+          }),
+        )
+        .toEqual(
+          viewport.layout === 'compact'
+            ? { height: 1024, width: 1024 }
+            : { height: 1050, width: 1665 },
+        );
+      const logoBox = await logo.boundingBox();
+      const navigationBox = await navigation.boundingBox();
+      const signupBox = await signup.boundingBox();
+      expect(logoBox).not.toBeNull();
+      expect(navigationBox).not.toBeNull();
+      expect(signupBox).not.toBeNull();
+      expect(logoBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
+      expect(logoBox!.x + logoBox!.width).toBeLessThanOrEqual(
+        navigationBox!.x + navigationBox!.width,
+      );
+      expect(logoBox!.y + logoBox!.height).toBeLessThanOrEqual(signupBox!.y);
 
       await signup.focus();
       await page.keyboard.press('Tab');

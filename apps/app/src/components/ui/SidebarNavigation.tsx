@@ -374,11 +374,9 @@ export function SidebarNavigation({
     >
       {guestPublicContent ? (
         <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
-          {!compact ? (
-            <View style={styles.guestIntro}>
-              <BrandLogo variant="full" width={160} />
-            </View>
-          ) : null}
+          <View style={compact ? styles.guestCompactIntro : styles.guestIntro}>
+            <BrandLogo variant={compact ? 'mark' : 'full'} width={compact ? iconSizes[48] : 160} />
+          </View>
           <SidebarControl
             compact={compact}
             Icon={UserRoundPlus}
@@ -589,6 +587,7 @@ const styles = StyleSheet.create({
   },
   group: { gap: space[4] },
   guestIntro: { marginBottom: space[8], padding: space[8] },
+  guestCompactIntro: { marginBottom: space[8], paddingVertical: space[8] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
     alignItems: 'center',
