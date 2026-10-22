@@ -13,6 +13,7 @@ type StoryArgs = Pick<CoachmarkProps, 'description' | 'title' | 'visible'> & {
   onBackgroundPress: () => void;
   onClose: () => void;
   onComplete: () => void;
+  onShown: () => void;
 };
 
 type CoachmarkFixtureProps = StoryArgs & {
@@ -24,6 +25,7 @@ function CoachmarkFixture({
   onBackgroundPress,
   onClose,
   onComplete,
+  onShown,
   title,
   updateArgs,
   visible,
@@ -60,7 +62,47 @@ function CoachmarkFixture({
           onComplete();
           setVisible(false);
         }}
+        onShown={onShown}
         visible={updateArgs ? visible : localVisible}
+      />
+    </View>
+  );
+}
+
+function TargetReadinessFixture({
+  onClose,
+  onComplete,
+  onShown,
+}: Pick<StoryArgs, 'onClose' | 'onComplete' | 'onShown'>) {
+  const anchorRef = useRef<NativeView>(null);
+  const triggerRef = useRef<NativeView>(null);
+  const [targetReady, setTargetReady] = useState(false);
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <View style={styles.stage}>
+      <Button controlRef={triggerRef} onPress={() => setTargetReady(true)}>
+        대상 준비
+      </Button>
+      {targetReady ? (
+        <Button controlRef={anchorRef} testID="coachmark-ready-target">
+          준비된 대상
+        </Button>
+      ) : null}
+      <Coachmark
+        anchorRef={anchorRef}
+        description="대상이 준비되면 안내를 표시합니다."
+        onClose={() => {
+          onClose();
+          setVisible(false);
+        }}
+        onComplete={() => {
+          onComplete();
+          setVisible(false);
+        }}
+        onShown={onShown}
+        preferredFocusRef={triggerRef}
+        visible={visible}
       />
     </View>
   );
@@ -207,6 +249,7 @@ const meta = {
     onBackgroundPress: fn(),
     onClose: fn(),
     onComplete: fn(),
+    onShown: fn(),
     visible: false,
   },
   argTypes: {
@@ -258,6 +301,7 @@ export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onComplete.mockClear();
     args.onClose.mockClear();
+    args.onShown.mockClear();
     args.onBackgroundPress.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '안내 열기' });
@@ -266,6 +310,7 @@ export const InteractionContract: Story = {
 
     const surface = await screen.findByTestId('coachmark-surface');
     const close = within(surface).getByRole('button', { name: '완료' });
+    await waitFor(() => expect(args.onShown).toHaveBeenCalledOnce());
     await waitFor(() => expect(close).toHaveFocus());
     const background = canvas.getByRole('button', { name: '배경 동작' });
     const backgroundRect = background.getBoundingClientRect();
@@ -289,6 +334,38 @@ export const InteractionContract: Story = {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
+  },
+};
+
+export const Tests: Story = {
+  render: (args) => (
+    <TargetReadinessFixture
+      onClose={args.onClose}
+      onComplete={args.onComplete}
+      onShown={args.onShown}
+    />
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onClose.mockClear();
+    args.onComplete.mockClear();
+    args.onShown.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '대상 준비' });
+    expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('coachmark-backdrop')).not.toBeInTheDocument();
+    expect(args.onShown).not.toHaveBeenCalled();
+
+    trigger.focus();
+    await userEvent.click(trigger);
+    const target = await canvas.findByTestId('coachmark-ready-target');
+    const surface = await screen.findByTestId('coachmark-surface');
+    await waitFor(() => expect(target.getBoundingClientRect().width).toBeGreaterThan(0));
+    await waitFor(() => expect(args.onShown).toHaveBeenCalledOnce());
+    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+    expect(args.onComplete).toHaveBeenCalledOnce();
+    expect(args.onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
 

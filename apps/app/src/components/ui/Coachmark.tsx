@@ -27,6 +27,8 @@ export type CoachmarkProps = PropsWithChildren<{
   onComplete: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  onShown?: () => void;
+  preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
   title?: string;
   visible: boolean;
 }>;
@@ -52,6 +54,8 @@ export function Coachmark({
   onComplete,
   onNext,
   onPrevious,
+  onShown,
+  preferredFocusRef,
   title,
   visible,
 }: CoachmarkProps) {
@@ -75,6 +79,8 @@ export function Coachmark({
     y: number;
   } | null>(null);
   const [bubble, setBubble] = useState<Layout>({ height: 0, width: MAX_WIDTH });
+  const [shown, setShown] = useState(false);
+  const targetReady = Boolean(anchorRef.current && anchor && anchor.width > 0 && anchor.height > 0);
 
   const close = () => {
     if (visible) {
@@ -84,9 +90,31 @@ export function Coachmark({
 
   useOverlayLifecycle({
     focusScopeRef: dialogRef,
-    open: overlayMotion.mounted,
+    open: overlayMotion.mounted && targetReady,
     onRequestClose: close,
+    preferredFocusRef,
   });
+
+  // Persistence is tied to the measured, entered presentation rather than visibility alone.
+  useEffect(() => {
+    if (!visible) {
+      setShown(false);
+      return;
+    }
+
+    if (
+      !shown &&
+      overlayMotion.entered &&
+      targetReady &&
+      anchor &&
+      anchor.width > 0 &&
+      anchor.height > 0 &&
+      bubble.height > 0
+    ) {
+      setShown(true);
+      onShown?.();
+    }
+  }, [anchor, bubble.height, onShown, overlayMotion.entered, shown, targetReady, visible]);
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {
@@ -110,20 +138,23 @@ export function Coachmark({
     return () => cancelAnimationFrame(frame);
   });
 
-  const position = anchor
-    ? getCoachmarkPosition({
-        anchor,
-        bubble,
-        viewport: {
-          bottomInset: insets.bottom,
-          height,
-          leftInset: insets.left,
-          rightInset: insets.right,
-          topInset: insets.top,
-          width,
-        },
-      })
-    : null;
+  const position =
+    targetReady && anchor
+      ? getCoachmarkPosition({
+          anchor,
+          bubble,
+          viewport: {
+            bottomInset: insets.bottom,
+            height,
+            leftInset: insets.left,
+            rightInset: insets.right,
+            topInset: insets.top,
+            width,
+          },
+        })
+      : null;
+  const modalVisible = overlayMotion.mounted && targetReady;
+  const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
   const progress = Children.map(children, (child) =>
     typeof child === 'string' || typeof child === 'number' ? (
       <Text style={styles.footerLabel}>{child}</Text>
@@ -148,24 +179,27 @@ export function Coachmark({
       role="dialog"
       statusBarTranslucent
       transparent
-      visible={overlayMotion.mounted}
+      visible={modalVisible}
     >
       <View
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
-        pointerEvents={visible ? 'auto' : 'none'}
+        accessibilityElementsHidden={!presentationReady}
+        importantForAccessibility={presentationReady ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={presentationReady ? 'auto' : 'none'}
         style={styles.backdrop}
       >
         <Animated.View
           pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+            {
+              backgroundColor: theme.overlayScrim,
+              opacity: presentationReady ? overlayMotion.progress : 0,
+            },
           ]}
         />
         {position ? (
           <Animated.View
-            pointerEvents={visible ? 'auto' : 'none'}
+            pointerEvents={presentationReady ? 'auto' : 'none'}
             style={[
               styles.bubble,
               {
@@ -197,12 +231,12 @@ export function Coachmark({
               testID="coachmark-arrow"
             />
             <View
-              accessibilityElementsHidden={!visible}
+              accessibilityElementsHidden={!presentationReady}
               accessible={false}
               accessibilityLabel={label}
               accessibilityViewIsModal
-              aria-hidden={!visible || undefined}
-              importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+              aria-hidden={!presentationReady || undefined}
+              importantForAccessibility={presentationReady ? 'auto' : 'no-hide-descendants'}
               onAccessibilityEscape={close}
               onLayout={({ nativeEvent }) => {
                 const nextWidth = nativeEvent.layout.width;
@@ -254,7 +288,7 @@ export function Coachmark({
                   <View style={styles.actions}>
                     <Button
                       accessibilityLabel="건너뛰기"
-                      disabled={!visible}
+                      disabled={!presentationReady}
                       onPress={close}
                       size="compact"
                       tone="secondary"
@@ -266,7 +300,7 @@ export function Coachmark({
                       {onNext || onPrevious ? (
                         <Button
                           accessibilityLabel="이전"
-                          disabled={!visible || !onPrevious}
+                          disabled={!presentationReady || !onPrevious}
                           onPress={onPrevious}
                           size="compact"
                           tone="secondary"
@@ -284,7 +318,7 @@ export function Coachmark({
                       <Button
                         accessibilityLabel={onNext ? '다음' : '완료'}
                         controlRef={focusCoachmarkAction}
-                        disabled={!visible}
+                        disabled={!presentationReady}
                         onPress={onNext ?? onComplete}
                         size="compact"
                         tone="primary"
@@ -306,7 +340,7 @@ export function Coachmark({
         ) : null}
         <Pressable
           accessible={false}
-          disabled={!visible}
+          disabled={!presentationReady}
           aria-hidden
           focusable={false}
           importantForAccessibility="no"
