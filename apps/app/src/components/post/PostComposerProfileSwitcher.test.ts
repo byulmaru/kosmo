@@ -183,7 +183,7 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
     assert.equal(triggerFocusCount, 1);
   });
 
-  it('Native picker background cancels after inside presses preserve the open picker', async () => {
+  it('Native picker background cancels and inside presses preserve the open picker', async () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposerProfileSwitcher, {

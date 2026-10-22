@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { spacing } from '@/theme/tokens';
@@ -37,17 +37,23 @@ export function PostComposerProfilePickerLayer({
           height: Math.max(0, viewport.height - insets.top - insets.bottom - spacing.md * 2),
         }}
       >
-        <View
+        <Pressable
+          accessible={false}
           onAccessibilityEscape={onRequestClose}
+          onPress={onRequestClose}
           onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
           style={styles.bounds}
         >
           {height > 0 ? (
-            <View testID="post-composer-profile-picker">
+            <Pressable
+              accessible={false}
+              onPress={(event) => event.stopPropagation()}
+              testID="post-composer-profile-picker"
+            >
               {children(Math.max(0, height - spacing.sm * 2))}
-            </View>
+            </Pressable>
           ) : null}
-        </View>
+        </Pressable>
       </KeyboardAvoidingView>
     </ModalOverlay>
   );
