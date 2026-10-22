@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { OverlayPortal } from '@/components/ui/OverlayPortal';
-import { breakpoints, spacing } from '@/theme/tokens';
+import { breakpoints, space, spacing } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type React from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType, ViewStyle } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
@@ -43,6 +44,7 @@ export function FullReactionOverlay({
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const web = Platform.OS === 'web';
+  const overlayMotion = useOverlayMotion(web && open);
   const compactWeb = web && viewportWidth < breakpoints.compact;
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [contentHeight, setContentHeight] = useState<number | null>(null);
@@ -56,11 +58,14 @@ export function FullReactionOverlay({
     [triggerRef],
   );
   const close = useCallback(() => {
+    if (!open) {
+      return;
+    }
     onClose();
     if (web) {
       requestAnimationFrame(() => triggerRef.current?.focus());
     }
-  }, [onClose, triggerRef, web]);
+  }, [onClose, open, triggerRef, web]);
   const restoreNativeFocus = useCallback(() => triggerRef.current?.focus(), [triggerRef]);
   const onContentLayout = useCallback((event: LayoutChangeEvent) => {
     setContentHeight(event.nativeEvent.layout.height);
@@ -96,7 +101,7 @@ export function FullReactionOverlay({
     };
   }, [close, measureAnchor, open, triggerRef, web]);
 
-  if (web && !open) {
+  if (web && !overlayMotion.mounted) {
     return null;
   }
 
@@ -166,16 +171,41 @@ export function FullReactionOverlay({
   );
 
   if (web) {
+    const interactionDisabled = !open;
     return (
       <OverlayPortal>
-        <View style={[styles.webRoot, webFixedPositionStyle]}>
-          <View
-            {...webPlacementProps}
-            style={[styles.webPosition, { left, top, width: shellWidth }]}
-            testID="full-reaction-overlay-position"
-          >
-            {webPicker}
-          </View>
+        <View
+          accessibilityElementsHidden={interactionDisabled}
+          aria-hidden={interactionDisabled || undefined}
+          pointerEvents={interactionDisabled ? 'none' : 'box-none'}
+          style={[styles.webRoot, webFixedPositionStyle]}
+        >
+          <div inert={interactionDisabled} style={{ display: 'contents' }}>
+            <Animated.View
+              {...webPlacementProps}
+              accessibilityElementsHidden={interactionDisabled}
+              aria-hidden={interactionDisabled || undefined}
+              pointerEvents={interactionDisabled ? 'none' : 'auto'}
+              style={[
+                styles.webPosition,
+                { left, top, width: shellWidth },
+                {
+                  opacity: overlayMotion.progress,
+                  transform: [
+                    {
+                      translateY: overlayMotion.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [space[8], 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+              testID="full-reaction-overlay-position"
+            >
+              {webPicker}
+            </Animated.View>
+          </div>
         </View>
       </OverlayPortal>
     );
