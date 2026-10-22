@@ -8,6 +8,8 @@
 
 PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 콘텐츠에 Local 목록을 표시한다. 로그인과 선택 Profile 없이 첫 조회·다음 페이지 조회와 공개 Profile·Post 탐색을 제공한다. 방문자 메뉴·긴 로고·하단 CTA는 [public-content-onboarding.md](./public-content-onboarding.md)를 따른다.
 
+비로그인 첫 화면의 헤더는 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다.
+
 공개 첫 화면에는 인증용 Home·Local 탭을 추가하지 않는다. 모바일 메뉴 헤더와 기존 목록의 로딩·빈 결과·오류·재시도 표현을 재사용하며, Profile이 없다는 이유로 공개 읽기를 Profile 준비 화면으로 바꾸지 않는다. 인증 `/local`과 Native의 Profile 준비·로그인 흐름은 그대로 유지한다.
 
 ## 화면 구조

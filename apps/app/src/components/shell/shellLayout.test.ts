@@ -124,7 +124,7 @@ describe('getShellLayout', () => {
   it('gives only confirmed mobile Web guests the public Local menu header', () => {
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/', [], true), {
       leading: 'menu',
-      title: '로컬',
+      title: '타임라인 둘러보기',
     });
     assert.equal(getWebMobileShellHeader(true, 390, '/', [], false), null);
     assert.equal(getWebMobileShellHeader(false, 390, '/', [], true), null);

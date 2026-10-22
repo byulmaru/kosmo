@@ -61,7 +61,7 @@ export const MobileMenuAfterDismissal: Story = {
   ...mobile390,
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await expect(body.findByRole('heading', { name: '로컬' })).resolves.toBeVisible();
+    await expect(body.findByRole('heading', { name: '타임라인 둘러보기' })).resolves.toBeVisible();
     await userEvent.click(body.getByRole('button', { name: '가입 안내 닫기' }));
     const menu = body.getByRole('button', { name: '메뉴 열기' });
     menu.focus();

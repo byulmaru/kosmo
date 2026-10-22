@@ -67,7 +67,7 @@ export function GuestLocalScreen() {
     <LocalTimeline>
       {() =>
         getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
-          <PageHeader title="로컬" />
+          <PageHeader title="타임라인 둘러보기" />
         ) : null
       }
     </LocalTimeline>

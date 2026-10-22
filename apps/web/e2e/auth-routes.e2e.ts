@@ -140,7 +140,7 @@ test('쿠키 없는 루트 직접 진입과 새로고침은 공개 Local 게시�
   await page.goto('/');
 
   await expect(page).toHaveURL((url) => url.pathname === '/');
-  await expect(page.getByRole('heading', { name: '로컬', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '타임라인 둘러보기', exact: true })).toBeVisible();
   await expect(page.getByText(body, { exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '홈', exact: true })).toHaveCount(0);
