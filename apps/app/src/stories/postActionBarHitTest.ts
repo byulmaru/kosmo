@@ -1,4 +1,5 @@
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { colors } from '@/theme/tokens';
 
 type Point = { x: number; y: number };
 
@@ -82,6 +83,10 @@ export async function checkActionBarScrollCancelledPress(
 ) {
   const point = actionBarWhitespace(container)[1]!;
   const target = container.ownerDocument.elementFromPoint(point.x, point.y)!;
+  const scope = within(container);
+  expect(target).toBe(scope.getByRole('toolbar', { name: '액션 바' }));
+  const feedback = scope.getByTestId('post-list-item-feedback');
+  const pointerUser = userEvent.setup({ document: container.ownerDocument });
   const scrollY = window.scrollY;
   expect(document.documentElement.scrollHeight - window.innerHeight).toBeGreaterThan(scrollY + 30);
   const coords = {
@@ -90,15 +95,20 @@ export async function checkActionBarScrollCancelledPress(
     pageX: point.x + window.scrollX,
     pageY: point.y + scrollY,
   };
-  await userEvent.pointer({ keys: '[MouseLeft>]', target, coords });
+  await pointerUser.pointer({ keys: '[MouseLeft>]', target, coords });
+  await waitFor(() =>
+    expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+  );
+  const pressedColor = getComputedStyle(feedback).backgroundColor;
   const scrolled = new Promise<void>((resolve) =>
     window.addEventListener('scroll', () => resolve(), { once: true }),
   );
   window.scrollBy(0, 30);
   await scrolled;
   expect(window.scrollY).toBeGreaterThan(scrollY);
+  await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).not.toBe(pressedColor));
   // Preserve the host and page position so only the scroll can cancel this press.
-  await userEvent.pointer({
+  await pointerUser.pointer({
     keys: '[/MouseLeft]',
     target,
     coords: { ...coords, clientY: point.y - (window.scrollY - scrollY) },
