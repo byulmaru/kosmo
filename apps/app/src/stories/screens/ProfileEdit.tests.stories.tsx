@@ -868,3 +868,73 @@ export const BioCounterMatchesServerUtf16Boundary: Story = {
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
   },
 };
+
+const longTagListStory = {
+  render: () => (
+    <ProfileEditScreenHarness
+      initialValue={{
+        ...initialDraft,
+        tags: Array.from({ length: 40 }, (_, index) => `태그${index}가나다라마바`),
+      }}
+    />
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const view = canvasElement.ownerDocument.defaultView!;
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+    const add = canvas.getByRole('button', { name: '태그 추가' });
+    const displayName = canvas.getByRole('textbox', { name: '표시 이름' });
+    const lastTag = canvas.getByRole('button', { name: '#태그39가나다라마바 제거' });
+
+    expectProfileEditScreenToUseDocumentScroll(canvasElement);
+    expect(canvas.getAllByTestId('profile-tag-chip')).toHaveLength(40);
+    lastTag.scrollIntoView({ block: 'center' });
+    await userEvent.click(lastTag);
+    expect(canvas.queryByText('#태그39가나다라마바')).not.toBeInTheDocument();
+
+    const expectInputRowInViewport = async () => {
+      input.scrollIntoView({ block: 'center' });
+      await waitFor(() => {
+        const header = canvas.getByTestId('profile-edit-screen-header').getBoundingClientRect();
+        for (const control of [input, add]) {
+          const bounds = control.getBoundingClientRect();
+          expect(bounds.top).toBeGreaterThanOrEqual(header.bottom);
+          expect(bounds.bottom).toBeLessThanOrEqual(view.innerHeight);
+        }
+      });
+    };
+
+    await expectInputRowInViewport();
+    await userEvent.type(input, '새태그!');
+    await userEvent.click(add);
+    expect(
+      canvas.getByText('Profile Tag는 1~20자의 문자, 숫자 또는 밑줄만 사용할 수 있어요.'),
+    ).toBeVisible();
+    expect(input).toHaveValue('새태그!');
+    expect(canvas.getAllByTestId('profile-tag-chip')).toHaveLength(39);
+    await expectInputRowInViewport();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '새태그');
+    await userEvent.click(add);
+    expect(canvas.getByText('#새태그')).toBeVisible();
+    expect(canvas.getAllByTestId('profile-tag-chip')).toHaveLength(40);
+    expect(input).toHaveValue('');
+    expect(displayName).toHaveValue('코스모');
+    expect(canvas.getByRole('textbox', { name: '소개' })).toHaveValue('창작과 개발을 좋아합니다.');
+    await expectInputRowInViewport();
+    expectProfileEditScreenToUseDocumentScroll(canvasElement);
+  },
+} satisfies Story;
+
+export const LongTagList390: Story = longTagListStory;
+
+export const LongTagList1024: Story = {
+  ...longTagListStory,
+  globals: { viewport: { isRotated: false, value: 'kosmoProfileCompact' } },
+};
+
+export const LongTagList1440: Story = {
+  ...longTagListStory,
+  globals: { viewport: { isRotated: false, value: 'kosmoProfileFull' } },
+};

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
 import { RouteScrollContainer } from '../ui/RouteScrollContainer';
@@ -104,6 +104,7 @@ export function ProfileEditScreen({
       testID="profile-edit-screen"
       style={[
         styles.root,
+        Platform.OS === 'web' ? styles.webRoot : styles.nativeRoot,
         {
           backgroundColor: theme.backgroundCanvas,
         },
@@ -136,9 +137,10 @@ const styles = StyleSheet.create({
   root: {
     alignSelf: 'center',
     maxWidth: 600,
-    minHeight: '100%',
     width: '100%',
   },
+  webRoot: { minHeight: '100%' },
+  nativeRoot: { flex: 1, minHeight: 0 },
   content: { width: '100%' },
   nativeContent: { flexGrow: 1 },
   nativeScroll: { flex: 1 },
