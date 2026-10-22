@@ -979,6 +979,8 @@ export const ActionBarCatalogInteraction: Story = {
   render: () => <CatalogStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const actionOpacity = (button: HTMLElement, testID: string) =>
+      getComputedStyle(within(button).getByTestId(`post-action-${testID}-visual`)).opacity;
     const buttons = canvas.getAllByRole('button');
     const reactionButtons = buttons.filter(
       (button) => button.getAttribute('aria-label') === '반응',
@@ -1066,7 +1068,7 @@ export const ActionBarCatalogInteraction: Story = {
     expect(getComputedStyle(replyGlyph).zIndex).toBe('1');
     const replyHoverBounds = replyHover.getBoundingClientRect();
     const replyIconBounds = defaultReply.querySelector('svg')!.getBoundingClientRect();
-    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(defaultReply.querySelector('svg')).toHaveStyle({ stroke: colors.light.primary });
     expect(replyHoverBounds.width).toBe(28);
     expect(replyHoverBounds.height).toBe(28);
     expect(replyHoverBounds.left + replyHoverBounds.width / 2).toBeCloseTo(
@@ -1089,33 +1091,33 @@ export const ActionBarCatalogInteraction: Story = {
 
     const pointerUser = userEvent.setup();
     await pointerUser.pointer({ target: defaultReply, keys: '[MouseLeft>]' });
-    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    await waitFor(() => expect(actionOpacity(defaultReply, 'reply')).toBe('0.72'));
     expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(defaultReply).getByTestId('post-action-reply-hover')).toBeVisible();
     await pointerUser.pointer({ target: defaultReply, keys: '[/MouseLeft]' });
     await userEvent.unhover(defaultReply);
-    expect(getComputedStyle(defaultReply).opacity).toBe('1');
-    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(actionOpacity(defaultReply, 'reply')).toBe('1');
+    expect(defaultReply.querySelector('svg')).toHaveStyle({ stroke: colors.light.textSecondary });
     expect(within(defaultReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
     fireEvent.focus(defaultReply);
     fireEvent.keyDown(defaultReply, { code: 'Space', key: ' ' });
-    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    await waitFor(() => expect(actionOpacity(defaultReply, 'reply')).toBe('0.72'));
     expect(within(defaultReply).getByTestId('post-action-reply-hover')).toBeVisible();
-    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(defaultReply.querySelector('svg')).toHaveStyle({ stroke: colors.light.primary });
     expect(replyCount).toHaveStyle({ color: colors.light.primary });
     fireEvent.keyUp(defaultReply, { code: 'Space', key: ' ' });
-    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('1'));
+    await waitFor(() => expect(actionOpacity(defaultReply, 'reply')).toBe('1'));
 
     const resolutionReply = within(toolbars[4]!).getByRole('button', {
       name: replyAccessibilityLabel,
     });
     expect(within(resolutionReply).queryByTestId('post-action-reply-hover')).toBeNull();
     fireEvent.mouseDown(resolutionReply, { buttons: 1 });
-    await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('0.72'));
+    await waitFor(() => expect(actionOpacity(resolutionReply, 'reply')).toBe('0.72'));
     expect(within(resolutionReply).getByTestId('post-action-reply-hover')).toBeVisible();
     fireEvent.mouseUp(resolutionReply, { buttons: 0 });
-    await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('1'));
+    await waitFor(() => expect(actionOpacity(resolutionReply, 'reply')).toBe('1'));
 
     await userEvent.hover(defaultMore);
     expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.primary });
@@ -1125,11 +1127,11 @@ export const ActionBarCatalogInteraction: Story = {
     expect(getComputedStyle(moreHover).borderRadius).toBe('999px');
     expect(getComputedStyle(moreHover).height).toBe('28px');
     expect(getComputedStyle(moreHover).width).toBe('28px');
-    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(defaultMore.querySelector('svg')).toHaveStyle({ stroke: colors.light.primary });
     expect(defaultMore.getBoundingClientRect().width).toBe(28);
     expect(defaultMore.getBoundingClientRect().height).toBe(36);
     await userEvent.unhover(defaultMore);
-    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultMore.querySelector('svg')).toHaveStyle({ stroke: colors.light.textSecondary });
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
 
     for (const [label, testID, actionColor, defaultColor] of [
@@ -1138,13 +1140,13 @@ export const ActionBarCatalogInteraction: Story = {
     ] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const icon = button.querySelector('svg');
-      expect(icon).toHaveAttribute('stroke', defaultColor);
+      expect(icon).toHaveStyle({ stroke: defaultColor });
       await userEvent.hover(button);
       const hover = within(button).getByTestId(`post-action-${testID}-hover`);
       expect(hover).toHaveStyle({ backgroundColor: actionColor });
       expect(getComputedStyle(hover).opacity).toBe('0.3');
       expect(getComputedStyle(hover).zIndex).toBe('0');
-      expect(icon).toHaveAttribute('stroke', actionColor);
+      expect(icon).toHaveStyle({ stroke: actionColor });
       expect(
         getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
       ).toBe('1');
@@ -1155,17 +1157,17 @@ export const ActionBarCatalogInteraction: Story = {
         });
       }
       await userEvent.unhover(button);
-      expect(icon).toHaveAttribute('stroke', defaultColor);
+      expect(icon).toHaveStyle({ stroke: defaultColor });
       expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
       if (testID === 'repost') {
         const count = button.querySelector('[dir="auto"]');
         fireEvent.mouseDown(button, { buttons: 1 });
-        await waitFor(() => expect(getComputedStyle(button).opacity).toBe('0.72'));
-        expect(icon).toHaveAttribute('stroke', actionColor);
+        await waitFor(() => expect(actionOpacity(button, testID)).toBe('0.72'));
+        await waitFor(() => expect(icon).toHaveStyle({ stroke: actionColor }));
         expect(count).toHaveStyle({ color: defaultColor });
         fireEvent.mouseUp(button, { buttons: 0 });
-        await waitFor(() => expect(getComputedStyle(button).opacity).toBe('1'));
-        expect(icon).toHaveAttribute('stroke', defaultColor);
+        await waitFor(() => expect(actionOpacity(button, testID)).toBe('1'));
+        await waitFor(() => expect(icon).toHaveStyle({ stroke: defaultColor }));
         expect(count).toHaveStyle({ color: defaultColor });
       }
     }
@@ -1173,7 +1175,7 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });
     const defaultReactionIcon = defaultReaction.querySelector('svg');
     expect(defaultReactionIcon?.querySelector('path[d="M18 12v6"]')).not.toBeNull();
-    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveStyle({ stroke: colors.light.textSecondary });
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(defaultReaction);
     expect(defaultReaction).not.toHaveStyle({ backgroundColor: reactionActionColor });
@@ -1183,10 +1185,10 @@ export const ActionBarCatalogInteraction: Story = {
     expect(getComputedStyle(reactionHover).borderRadius).toBe('999px');
     expect(getComputedStyle(reactionHover).height).toBe('28px');
     expect(getComputedStyle(reactionHover).width).toBe('28px');
-    expect(defaultReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(defaultReactionIcon).toHaveStyle({ stroke: reactionActionColor });
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.unhover(defaultReaction);
-    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveStyle({ stroke: colors.light.textSecondary });
     expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(defaultReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
@@ -1208,7 +1210,7 @@ export const ActionBarCatalogInteraction: Story = {
 
     const activeRepost = within(toolbars[2]!).getByRole('button', { name: '재게시 취소' });
     const activeRepostIcon = activeRepost.querySelector('svg');
-    expect(activeRepostIcon).toHaveAttribute('stroke', repostActionColors.light);
+    expect(activeRepostIcon).toHaveStyle({ stroke: repostActionColors.light });
     expect(activeRepost.querySelector('[dir="auto"]')).toHaveStyle({
       color: repostActionColors.light,
     });
@@ -1216,16 +1218,16 @@ export const ActionBarCatalogInteraction: Story = {
     const activeReaction = within(toolbars[2]!).getByRole('button', { name: '반응' });
     const activeReactionIcon = activeReaction.querySelector('svg');
     expect(activeReactionIcon?.querySelector('path[d="M18 12v6"]')).not.toBeNull();
-    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveStyle({ stroke: reactionActionColor });
     expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(activeReaction);
-    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveStyle({ stroke: reactionActionColor });
     expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     const activeReactionHover = within(activeReaction).getByTestId('post-action-reaction-hover');
     expect(activeReactionHover).toHaveStyle({ backgroundColor: reactionActionColor });
     expect(getComputedStyle(activeReactionHover).opacity).toBe('0.3');
     await userEvent.unhover(activeReaction);
-    expect(activeReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReactionIcon).toHaveStyle({ stroke: reactionActionColor });
     expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
@@ -1265,7 +1267,7 @@ export const ActionSemanticColorsDarkInteraction: Story = {
     const defaultRepost = defaultToolbar.getByRole('button', { name: '재게시' });
     const defaultRepostIcon = defaultRepost.querySelector('svg');
 
-    expect(defaultRepostIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
+    expect(defaultRepostIcon).toHaveStyle({ stroke: colors.dark.textSecondary });
     expect(defaultRepost.querySelector('[dir="auto"]')).toHaveStyle({
       color: colors.dark.textSecondary,
     });
@@ -1273,30 +1275,30 @@ export const ActionSemanticColorsDarkInteraction: Story = {
     expect(defaultToolbar.getByTestId('post-action-repost-hover')).toHaveStyle({
       backgroundColor: repostActionColors.dark,
     });
-    expect(defaultRepostIcon).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(defaultRepostIcon).toHaveStyle({ stroke: repostActionColors.dark });
     expect(defaultRepost.querySelector('[dir="auto"]')).toHaveStyle({
       color: colors.dark.textSecondary,
     });
     await userEvent.unhover(defaultRepost);
-    expect(defaultRepostIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
+    expect(defaultRepostIcon).toHaveStyle({ stroke: colors.dark.textSecondary });
 
     const defaultReaction = defaultToolbar.getByRole('button', { name: '반응' });
     const defaultReactionIcon = defaultReaction.querySelector('svg');
-    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.dark.textSecondary);
+    expect(defaultReactionIcon).toHaveStyle({ stroke: colors.dark.textSecondary });
     await userEvent.hover(defaultReaction);
     expect(defaultToolbar.getByTestId('post-action-reaction-hover')).toHaveStyle({
       backgroundColor: reactionActionColor,
     });
-    expect(defaultReactionIcon).toHaveAttribute('stroke', reactionActionColor);
+    expect(defaultReactionIcon).toHaveStyle({ stroke: reactionActionColor });
 
     const activeToolbar = within(toolbars[2]!);
     const activeRepost = activeToolbar.getByRole('button', { name: '재게시 취소' });
-    expect(activeRepost.querySelector('svg')).toHaveAttribute('stroke', repostActionColors.dark);
+    expect(activeRepost.querySelector('svg')).toHaveStyle({ stroke: repostActionColors.dark });
     expect(activeRepost.querySelector('[dir="auto"]')).toHaveStyle({
       color: repostActionColors.dark,
     });
     const activeReaction = activeToolbar.getByRole('button', { name: '반응' });
-    expect(activeReaction.querySelector('svg')).toHaveAttribute('stroke', reactionActionColor);
+    expect(activeReaction.querySelector('svg')).toHaveStyle({ stroke: reactionActionColor });
     expect(activeReaction.querySelector('svg')).toHaveAttribute('fill', 'none');
   },
   render: () => <CatalogStory />,

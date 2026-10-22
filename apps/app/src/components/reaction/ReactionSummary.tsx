@@ -1,18 +1,23 @@
 import { Ellipsis } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostDetailBackground } from '@/components/post/PostDetailBackground';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { IconButton } from '@/components/ui/IconButton';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { StateView } from '@/components/ui/StateView';
-import { useTheme } from '@/theme/ThemeProvider';
+import {
+  useAnimatedColorTransition,
+  useAnimatedOpacityTransition,
+} from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing } from '@/theme/tokens';
 import { getReactionSummaryLayout } from './reactionSummaryLayout';
 import type { Href } from 'expo-router';
 import type React from 'react';
 import type { RefObject } from 'react';
-import type { LayoutChangeEvent, View as NativeView } from 'react-native';
+import type { LayoutChangeEvent, View as NativeView, ViewStyle } from 'react-native';
+import type { AnimatedOpacityValue } from '@/components/ui/useAnimatedColorTransition';
 import type { ReactionToggleIntent } from './ReactionSelector';
 
 export type ReactionSummaryEntry = Readonly<{ count: number; type: string }>;
@@ -41,6 +46,98 @@ const copy = {
 } as const;
 
 const summaryControlSize = getInteractionTargetSize(Platform.OS);
+
+type ReactionSummaryEntryVisualProps = {
+  count: number;
+  disabled: boolean;
+  pending: boolean;
+  pressed: boolean;
+  selected: boolean;
+  type: string;
+};
+
+function ReactionSummaryEntryVisual({
+  count,
+  disabled,
+  pending,
+  pressed,
+  selected,
+  type,
+}: ReactionSummaryEntryVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const animatedSelectedBackground = useAnimatedColorTransition({
+    color: selected ? (pressed ? theme.primaryHover : theme.primary) : 'transparent',
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: disabled ? 'instant' : pressed ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+  const animatedOpacity = useAnimatedOpacityTransition({
+    instantKey: theme,
+    interactionKey: pressed && !selected && !disabled ? 'pressed' : 'idle',
+    opacity: selected ? 1 : pending || disabled ? 0.6 : pressed ? 0.85 : 1,
+    reducedMotion,
+    role: pending || disabled ? 'instant' : 'interaction',
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.entry,
+        {
+          backgroundColor: theme.card,
+          borderColor: theme.border,
+          opacity: animatedOpacity as AnimatedOpacityValue,
+        } as ViewStyle,
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.entrySelectedBackground,
+          { backgroundColor: animatedSelectedBackground, opacity: 0.7 } as ViewStyle,
+        ]}
+        testID="reaction-summary-selected-background"
+      />
+      <Text style={[styles.entryEmoji, { color: theme.text }]}>{type}</Text>
+      <Text style={[styles.entryCount, { color: theme.text }]}>{count}</Text>
+    </Animated.View>
+  );
+}
+
+function ReactionSummaryPeopleOverflowVisual({
+  hiddenCount,
+  pressed,
+}: {
+  hiddenCount: number;
+  pressed: boolean;
+}) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const animatedOpacity = useAnimatedOpacityTransition({
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.85 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.moreControl,
+        {
+          backgroundColor: theme.card,
+          borderColor: theme.border,
+          opacity: animatedOpacity as AnimatedOpacityValue,
+        } as ViewStyle,
+      ]}
+    >
+      <Text style={[styles.moreLabel, { color: theme.text }]}>+{hiddenCount}</Text>
+    </Animated.View>
+  );
+}
 
 export function ReactionSummary({
   disabled = false,
@@ -142,16 +239,11 @@ export function ReactionSummary({
         nativeID={peopleControlId}
         onPress={peopleHref ? undefined : onMore}
         ref={peopleControlRef}
-        style={({ pressed }) => [
-          styles.moreControl,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
+        style={undefined}
       >
-        <Text style={[styles.moreLabel, { color: theme.text }]}>+{hiddenCount}</Text>
+        {({ pressed }) => (
+          <ReactionSummaryPeopleOverflowVisual hiddenCount={hiddenCount} pressed={pressed} />
+        )}
       </Pressable>
     ) : (
       <IconButton
@@ -218,32 +310,17 @@ export function ReactionSummary({
                 disabled={entryDisabled}
                 key={`${entry.type}-${index}`}
                 onPress={() => onToggle?.({ nextSelected: !selected, optionId: entry.type })}
-                style={({ pressed }) => [
-                  styles.entry,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.border,
-                    opacity: selected ? 1 : entryDisabled ? 0.6 : pressed ? 0.85 : 1,
-                  },
-                ]}
+                style={undefined}
               >
                 {({ pressed }) => (
-                  <>
-                    {selected ? (
-                      <View
-                        style={[
-                          styles.entrySelectedBackground,
-                          {
-                            backgroundColor: pressed ? theme.primaryHover : theme.primary,
-                            opacity: 0.7,
-                          },
-                        ]}
-                        testID="reaction-summary-selected-background"
-                      />
-                    ) : null}
-                    <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
-                    <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
-                  </>
+                  <ReactionSummaryEntryVisual
+                    count={entry.count}
+                    disabled={disabled || onToggle === undefined}
+                    pending={pending}
+                    pressed={pressed}
+                    selected={selected}
+                    type={entry.type}
+                  />
                 )}
               </Pressable>
             );
