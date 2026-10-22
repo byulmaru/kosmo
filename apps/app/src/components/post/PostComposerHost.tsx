@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
+import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -61,6 +62,8 @@ export function PostComposerHost({
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
+  // The portal host stays outside the clipped card and inside the dialog focus scope.
+  const focusScopeRef = useRef<View>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const requestClose = useCallback(
     (reason: PostComposerRequestCloseReason = 'dismiss') => {
@@ -86,6 +89,7 @@ export function PostComposerHost({
   }, []);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
+    focusScopeRef,
     onRequestClose: requestClose,
     open: overlayVisible,
     preferredFocusRef: expandControlRef,
@@ -127,34 +131,45 @@ export function PostComposerHost({
             accessibilityViewIsModal={overlayVisible}
             aria-modal={overlayVisible || undefined}
             onAccessibilityEscape={requestNativeBack}
-            ref={dialogRef}
             role={overlayVisible ? 'dialog' : undefined}
+            ref={focusScopeRef}
             style={[
-              styles.dialog,
-              mode !== 'rail' && !nativeMobile && elevation.overlay,
-              mode === 'rail'
-                ? styles.railDialog
-                : mode === 'mobile'
-                  ? styles.mobileDialog
-                  : styles.overlayDialog,
-              mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
-              { backgroundColor: composerSurface, borderColor: theme.borderDefault },
+              styles.focusScope,
+              mode === 'mobile' ? styles.mobileFocusScope : null,
+              mode === 'overlay' ? { maxWidth: mediaEditorOpen ? 920 : 640 } : null,
             ]}
-            testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
           >
-            {header}
-            <KeyboardAvoidingView
-              behavior="height"
-              keyboardVerticalOffset={insets.top}
-              style={[
-                styles.composerFrame,
-                mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
-                  ? styles.composerFrameFill
-                  : null,
-              ]}
-            >
-              {form}
-            </KeyboardAvoidingView>
+            <OverlayPortalProvider hostRef={focusScopeRef}>
+              <View
+                ref={dialogRef}
+                style={[
+                  styles.dialog,
+                  mode !== 'rail' && !nativeMobile && elevation.overlay,
+                  mode === 'rail'
+                    ? styles.railDialog
+                    : mode === 'mobile'
+                      ? styles.mobileDialog
+                      : styles.overlayDialog,
+                  mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
+                  { backgroundColor: composerSurface, borderColor: theme.borderDefault },
+                ]}
+                testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
+              >
+                {header}
+                <KeyboardAvoidingView
+                  behavior="height"
+                  keyboardVerticalOffset={insets.top}
+                  style={[
+                    styles.composerFrame,
+                    mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                      ? styles.composerFrameFill
+                      : null,
+                  ]}
+                >
+                  {form}
+                </KeyboardAvoidingView>
+              </View>
+            </OverlayPortalProvider>
           </View>
         )}
         {...(mode === 'rail'
@@ -226,6 +241,8 @@ export function PostComposerHost({
 }
 
 const styles = StyleSheet.create({
+  focusScope: { minHeight: 0, flexShrink: 1, width: '100%' },
+  mobileFocusScope: { flex: 1 },
   railHost: { minWidth: 0, width: '100%' },
   webOverlayHost: {
     alignItems: 'center',

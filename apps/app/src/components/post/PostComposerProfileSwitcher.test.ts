@@ -69,6 +69,12 @@ mockModule('react-relay', {
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: (props: Record<string, unknown>) => createElement('ProfilePicker', props),
 });
+mockModule(require.resolve('./PostComposerProfilePickerLayer'), {
+  PostComposerProfilePickerLayer: (props: {
+    open: boolean;
+    children: (height: number) => unknown;
+  }) => createElement('PickerLayer', props, props.open ? (props.children(300) as never) : null),
+});
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -126,6 +132,8 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
       picker?.props.onSelect(profiles[1]!.id);
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
+    assert.equal(selectionSuccessCount, 0);
+    await act(async () => renderer?.root.findByType('PickerLayer' as never).props.onDismiss());
     assert.equal(selectionSuccessCount, 1);
     assert.equal(triggerFocusCount, 0);
 
@@ -134,6 +142,7 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
       picker?.props.onSelect(profiles[1]!.id);
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
+    await act(async () => renderer?.root.findByType('PickerLayer' as never).props.onDismiss());
     assert.equal(selectionSuccessCount, 2);
     assert.equal(triggerFocusCount, 0);
   });
@@ -156,6 +165,8 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
 
     await openPicker();
     await act(async () => dismiss?.());
+    assert.equal(triggerFocusCount, 0);
+    await act(async () => renderer?.root.findByType('PickerLayer' as never).props.onDismiss());
     assert.equal(triggerFocusCount, 1);
   });
 

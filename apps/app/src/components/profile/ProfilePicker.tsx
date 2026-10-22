@@ -21,6 +21,7 @@ type Props = Readonly<{
   busy?: boolean;
   footer?: ReactNode;
   menuFooter?: ReactNode;
+  maxHeight?: number;
   onSelect: (id: string) => void;
   pickerRef?: Ref<View>;
   profiles: readonly ProfilePickerProfile[];
@@ -38,12 +39,14 @@ const webFullPickerBounds = {
 const webDrawerPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 206px))',
 } as unknown as ViewStyle;
+const webScrollContainment = { overscrollBehavior: 'contain' } as unknown as ViewStyle;
 const nativePickerBounds: ViewStyle = { maxHeight: '100%' };
 
 export function ProfilePicker({
   busy = false,
   footer,
   menuFooter,
+  maxHeight,
   onSelect,
   pickerRef,
   profiles,
@@ -116,7 +119,7 @@ export function ProfilePicker({
       style={[
         styles.menu,
         scrollableWebPicker ? styles.redesignedMenu : undefined,
-        surfaceBounds,
+        maxHeight === undefined ? surfaceBounds : { maxHeight },
         Platform.OS === 'web' ? elevation.floating : elevation.overlay,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -129,8 +132,13 @@ export function ProfilePicker({
         <ScrollView
           accessibilityLabel={scrollableWebPicker ? '전환할 프로필 목록' : undefined}
           contentContainerStyle={styles.profileListContent}
+          keyboardShouldPersistTaps={maxHeight === undefined ? undefined : 'handled'}
+          nestedScrollEnabled={maxHeight !== undefined}
           role={scrollableWebPicker ? 'group' : undefined}
-          style={styles.profileList}
+          style={[
+            styles.profileList,
+            Platform.OS === 'web' && maxHeight !== undefined ? webScrollContainment : undefined,
+          ]}
         >
           {profileOptions}
         </ScrollView>
