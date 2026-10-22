@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
@@ -13,6 +14,7 @@ import { layoutRecipes } from '@/theme/tokens';
 export default function SettingsInfoRoute() {
   const router = useRouter();
   const theme = useTheme();
+  const developerInformationEnabled = useFeatureFlag('developer-information');
   const detailHeaderMode = useSettingsDetailHeaderMode();
   const backButton =
     detailHeaderMode === 'back' ? (
@@ -51,12 +53,14 @@ export default function SettingsInfoRoute() {
           href="/child-safety"
           label="아동 안전 정책"
         />
-        <SettingsLinkRow
-          accessibilityLabel="개발 정보 설정 열기"
-          href="/settings/developer"
-          label="개발 정보"
-          primary
-        />
+        {Platform.OS === 'web' || developerInformationEnabled ? (
+          <SettingsLinkRow
+            accessibilityLabel="개발 정보 설정 열기"
+            href="/settings/developer"
+            label="개발 정보"
+            primary
+          />
+        ) : null}
       </View>
     </RouteScrollContainer>
   );
