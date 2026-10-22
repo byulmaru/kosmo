@@ -31,7 +31,7 @@
     "fast-json-stable-stringify": "^2.1.0",
     "graphql": "^16.14.0",
     "graphql-yoga": "^5.24.4",
-    "hono": "^4.13.7",
+    "hono": "^4.13.11",
     "openid-client": "6.8.4",
     "remeda": "^2.34.1",
     "ts-pattern": "^5.9.0",
