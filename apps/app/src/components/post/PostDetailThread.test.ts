@@ -16,12 +16,16 @@ let loadNextCompletions: Array<(error: Error | null) => void> = [];
 let loadNextCallsByKey: Record<string, number> = {};
 let loadNextCompletionsByKey: Record<string, Array<(error: Error | null) => void>> = {};
 const platform = { OS: 'web' };
+const windowDimensions = { height: 800, width: 1200 };
+let shellChromePresent = false;
+const headerViewportStyle = { top: '0px' };
 const documentElement = { scrollHeight: 2401 };
 
 Object.assign(globalThis, {
   cancelAnimationFrame: () => undefined,
   document: { documentElement },
   innerHeight: 800,
+  getComputedStyle: () => headerViewportStyle,
   requestAnimationFrame: (callback: FrameRequestCallback) => {
     callback(0);
     return 1;
@@ -52,7 +56,7 @@ mock.module('react-native', {
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
-    useWindowDimensions: () => ({ height: 800, width: 1200 }),
+    useWindowDimensions: () => windowDimensions,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -124,7 +128,7 @@ mock.module('@/components/post/PostComposerCoordinator', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/shell/ShellChromeContext', {
-  exports: { useShellChrome: () => null },
+  exports: { useShellChrome: () => (shellChromePresent ? {} : null) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/ui/Button', {
@@ -158,6 +162,10 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'web';
+  windowDimensions.width = 1200;
+  shellChromePresent = false;
+  headerViewportStyle.top = '0px';
+  Object.assign(globalThis, { innerHeight: 800, scrollY: 800 });
   documentElement.scrollHeight = 2401;
   documentScrollListener = null;
   documentScrollListeners.clear();
@@ -388,6 +396,95 @@ describe('PostDetailThread Native initial target scroll', () => {
 });
 
 describe('PostDetailThread Web initial target scroll cleanup', () => {
+  for (const mobile of [false, true]) {
+    it(`짧은 ${mobile ? 'mobile shell' : 'standalone'} 상세의 잘린 sticky header 대신 viewport 상단에 정렬한다`, async () => {
+      windowDimensions.width = mobile ? 390 : 1200;
+      shellChromePresent = mobile;
+      headerViewportStyle.top = mobile ? '64px' : '0px';
+      documentElement.scrollHeight = 844;
+      Object.assign(globalThis, { innerHeight: 657, scrollY: 2446 });
+      const frames: FrameRequestCallback[] = [];
+      globalThis.requestAnimationFrame = (callback) => {
+        frames.push(callback);
+        return frames.length;
+      };
+      globalThis.scrollTo = ((options: ScrollToOptions) => {
+        Object.assign(globalThis, { scrollY: options.top });
+      }) as typeof globalThis.scrollTo;
+      await act(async () => {
+        renderer = create(
+          createElement(PostDetailThread, {
+            header: mobile ? null : createElement('Header'),
+            identity: 'short-mobile-viewport',
+            post: {} as never,
+          }),
+          {
+            createNodeMock: (element) => ({
+              measureInWindow: (done: (...values: number[]) => void) => {
+                const current =
+                  (element.props as Record<string, unknown>).testID ===
+                  'post-thread-current-post-current';
+                if (current) {
+                  done(0, -2382, 390, 180);
+                } else {
+                  done(0, mobile ? -2202 : -2266, 390, mobile ? 0 : 64);
+                }
+              },
+            }),
+          },
+        );
+      });
+      await act(async () => {
+        while (frames.length) {
+          frames.shift()!(0);
+        }
+      });
+      assert.equal(globalThis.scrollY, 0);
+    });
+  }
+
+  it('current와 header의 비동기 측정 사이에 브라우저가 offset을 조정해도 문서의 대상 위치를 유지한다', async () => {
+    Object.assign(globalThis, { scrollY: 2446 });
+    const frames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    globalThis.scrollTo = ((options: ScrollToOptions) => {
+      Object.assign(globalThis, { scrollY: options.top });
+    }) as typeof globalThis.scrollTo;
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'viewport-offset-adjustment',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              const current =
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current';
+              if (current) {
+                done(0, -1546, 390, 180);
+              } else {
+                Object.assign(globalThis, { scrollY: 187 });
+                done(0, 0, 390, 64);
+              }
+            },
+          }),
+        },
+      );
+    });
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+    assert.equal(globalThis.scrollY, 836);
+  });
+
   for (const restorationStartsAt of ['frame', 'current measurement', 'header measurement']) {
     it(`재사용된 상세는 ${restorationStartsAt} 대기 중 시작된 history 복원을 덮지 않는다`, async () => {
       const frames: FrameRequestCallback[] = [];

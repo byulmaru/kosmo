@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -236,7 +237,7 @@ export function PostListItem({
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
           onBackgroundPress={openDetail}
         >
-          <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+          <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
               accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
               accessibilityRole="link"
@@ -249,7 +250,7 @@ export function PostListItem({
                 {post.profile.displayName}님이 재게시함
               </Text>
             </Pressable>
-          </Link>
+          </NavigationLink>
         </PostAttributionRow>
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
@@ -266,7 +267,7 @@ export function PostListItem({
       {pinnedAttribution}
       {replyAttribution}
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.quoteRow}>
-        <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+        <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
@@ -282,7 +283,7 @@ export function PostListItem({
               size={48}
             />
           </Pressable>
-        </Link>
+        </NavigationLink>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
             onBackgroundPress={openDetail}
@@ -413,7 +414,7 @@ function PostListRow({
       style={styles.standardRow}
       testID="post-list-standard-row"
     >
-      <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+      <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
         <Pressable
           aria-hidden
           accessibilityElementsHidden
@@ -429,7 +430,7 @@ function PostListRow({
             size={48}
           />
         </Pressable>
-      </Link>
+      </NavigationLink>
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />

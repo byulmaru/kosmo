@@ -23,6 +23,7 @@ function MockPressable({ children, ...props }: { children?: ReactNode; [key: str
 }
 
 mockModule('expo-router', {
+  usePathname: () => '/home',
   Link: ({ children }: { children?: unknown }) => children,
   useRouter: () => ({ push: () => undefined }),
 });

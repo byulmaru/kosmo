@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -155,6 +156,7 @@ export function PostSourcePresentationView({
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
           href={postProfileHref}
+          resetScroll
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
@@ -243,6 +245,7 @@ export function PostSourcePreview({
             <PresentationLink
               accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
               href={sourceProfileHref}
+              resetScroll
             >
               <Author profile={source.profile} showAvatar />
             </PresentationLink>
@@ -329,20 +332,30 @@ function PresentationLink({
   accessibilityLabel,
   children,
   href,
+  resetScroll = false,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
   href: Href;
+  resetScroll?: boolean;
 }) {
-  return (
+  const trigger = (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="link"
+      style={styles.presentationLink}
+    >
+      {children}
+    </Pressable>
+  );
+
+  return resetScroll ? (
+    <NavigationLink resetScroll href={href} push={Platform.OS !== 'web'}>
+      {trigger}
+    </NavigationLink>
+  ) : (
     <Link asChild href={href} push={Platform.OS !== 'web'}>
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="link"
-        style={styles.presentationLink}
-      >
-        {children}
-      </Pressable>
+      {trigger}
     </Link>
   );
 }
