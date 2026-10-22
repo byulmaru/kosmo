@@ -4,23 +4,41 @@
 
 아래 geometry와 크기 수치는 플랫폼 공용 `logical unit`으로 표기한다(Web CSS px, iOS pt, Android dp). 실제 Native 기기 렌더링은 별도 검증 대상이다.
 
+## 페이지별 노출 정책
+
+[PROD-1200](https://linear.app/byulmaru/issue/PROD-1200)의 공통 정책은 다음과 같다.
+
+- 자동 안내는 로그인했고 사용 가능한 프로필을 보유한 계정에 제공한다. 현재 선택한 프로필이 없다는 사실만으로 프로필 미보유로 판단하지 않는다.
+- 최초 자동 안내는 계정별·안내별 한 번이다. 첫 단계가 실제로 표시된 시점에 이력을 기록하고, 중간에 닫거나 페이지를 떠나도 자동으로 다시 시작하지 않는다. 기록된 이력은 프로필·기기를 바꾸어도 유지하며 다른 계정과 공유하지 않는다.
+- 홈·로컬은 같은 안내 단위를 사용한다. 검색, 태그 상세, 프로필, 게시글 상세, 작성은 각각 별도 안내이며 개별 태그·사람·게시글마다 반복하지 않는다.
+- 수동 도움말은 최초 노출 이력과 무관하게 현재 화면에서 사용할 수 있는 기능만 안내하고 항상 첫 단계부터 시작한다. 비로그인 또는 프로필이 없는 사용자도 현재 사용할 수 있는 기능의 도움말을 볼 수 있다.
+- 로딩·빈 화면·오류 등으로 안내 대상이 준비되지 않았으면 표시와 이력 기록을 보류한다. 서로 다른 안내를 동시에 표시하지 않는다.
+- 이전·다음·닫기·다시 보기는 실제 팔로우·반응·게시를 실행하지 않는다. 작성 내용·검색어·선택을 유지하며, 기능 사용이나 다른 페이지 방문을 완료 조건으로 요구하지 않는다.
+- 표시 후 저장 실패 또는 두 기기의 동시 최초 진입에서는 중복 자동 안내가 발생할 수 있다. 서버 저장 완료 전까지 기기 간 정확히 한 번 표시를 보장하지 않는다.
+
+PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단계·문구·실제 대상·도움말 위치와 해당 화면의 Web·iOS·Android 통합 검증은 PROD-1201~1206에서 연결한다.
+
 ## 공개 계약
 
 `apps/app/src/components/ui/Coachmark.tsx`의 공개 props는 다음과 같다.
 
-| Prop          | 필수 | 타입                      | 역할                                                                                                                   |
-| ------------- | ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `visible`     | 예   | `boolean`                 | 말풍선 표시와 퇴장 상태를 제어한다.                                                                                    |
-| `anchorRef`   | 예   | `RefObject<View \| null>` | 실제 대상 `View`의 화면 좌표를 배치 기준으로 사용한다.                                                                 |
-| `title`       | 선택 | `string`                  | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.                                            |
-| `description` | 예   | `string`                  | 짧은 안내 본문이다.                                                                                                    |
-| `onClose`     | 예   | `() => void`              | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.                                                   |
-| `onComplete`  | 예   | `() => void`              | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                                          |
-| `onPrevious`  | 선택 | `() => void`              | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                                          |
-| `onNext`      | 선택 | `() => void`              | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                                           |
-| `children`    | 선택 | `ReactNode`               | 하단 action 행에서 건너뛰기 왼쪽에 단계 번호 등 보조 내용을 합성한다. 문자열·숫자(0 포함)는 공용 Text로 감싸 표시한다. |
+| Prop                | 필수 | 타입                                     | 역할                                                                                                                   |
+| ------------------- | ---- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `visible`           | 예   | `boolean`                                | 말풍선 표시와 퇴장 상태를 제어한다.                                                                                    |
+| `anchorRef`         | 예   | `RefObject<View \| null>`                | 실제 대상 `View`의 화면 좌표를 배치 기준으로 사용한다.                                                                 |
+| `title`             | 선택 | `string`                                 | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.                                            |
+| `description`       | 예   | `string`                                 | 짧은 안내 본문이다.                                                                                                    |
+| `onClose`           | 예   | `() => void`                             | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.                                                   |
+| `onComplete`        | 예   | `() => void`                             | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                                          |
+| `onPrevious`        | 선택 | `() => void`                             | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                                          |
+| `onNext`            | 선택 | `() => void`                             | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                                           |
+| `onShown`           | 선택 | `() => void`                             | 대상과 말풍선의 배치 및 진입이 완료되어 실제 표시되었을 때 호출한다.                                                   |
+| `preferredFocusRef` | 선택 | `RefObject<View \| HTMLElement \| null>` | 종료 후 Web 포커스를 돌려줄 대상을 지정한다.                                                                           |
+| `children`          | 선택 | `ReactNode`                              | 하단 action 행에서 건너뛰기 왼쪽에 단계 번호 등 보조 내용을 합성한다. 문자열·숫자(0 포함)는 공용 Text로 감싸 표시한다. |
 
 단계 상태·진행 번호·최초 노출 저장은 caller가 소유한다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
+
+페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 준비 전 거절된 요청은 준비 완료 시 다시 요청할 수 있으며, 수락된 대기 요청은 이력 소비를 의미하지 않는다.
 
 ## 배치와 동작
 
@@ -35,7 +53,7 @@
 - 본문은 기본 두세 줄 이내로 작성하되, 확대·번역·좁은 화면에서 줄 수를 강제로 잘라내지 않는다. 긴 소개·동의·설정은 별도 sheet나 화면으로 구성한다.
 - 배경과 표면은 theme semantic color를 사용하고 표면 elevation은 `elevation.overlay`를 따른다.
 - 배경에는 `theme.overlayScrim`을 칠해 조작을 막고 target에는 spotlight 구멍을 만들지 않는다. 건너뛰기, Escape, Native back, backdrop dismiss는 `onClose`로 수렴한다. 대상도 backdrop 뒤에서 차단되므로 대상 터치로 투어를 진행하지 않는다.
-- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지한다. 종료 후 포커스 처리는 공용 overlay에 맡기며 특정 trigger 또는 현재 단계 대상으로의 복귀를 보장하지 않는다.
+- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지한다. 종료 후 포커스 처리는 공용 overlay에 맡긴다. caller가 `preferredFocusRef`로 도움말 trigger 등 복귀 대상을 지정할 수 있으며, 지정하지 않으면 기존 활성 요소로의 복귀 규칙을 따른다.
 
 ## Storybook 검증
 
@@ -56,3 +74,8 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 - 화면 위·아래로 벗어난 대상과 긴 내용의 배치가 안전 영역 안에 머무는지 단위 테스트로 검증한다. 높이 320, 상단 inset 12·하단 inset 20에서는 말풍선의 최대 높이 256, 상단 28·하단 284 경계를 사용한다.
 - `CompactViewportContract`는 320×240 viewport 아래에 남은 대상과 긴 안내를 사용한다. 상하 16px 경계 안의 표면, 내부 스크롤, 키보드로 마지막 완료 action에 접근하여 종료하는 동작을 검증한다.
+
+### 공통 제어 검증 기록 · 2026-10-23
+
+- AppProviders와 공통 제어 단위 테스트 20개, Coachmark Web Storybook 테스트 8개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 대기 안내와 중복 억제, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
+- 화면별 대상 준비 신호와 이탈 시 취소 연결 및 Native 실기기 검증은 PROD-1201~1206의 화면 통합 범위다.
