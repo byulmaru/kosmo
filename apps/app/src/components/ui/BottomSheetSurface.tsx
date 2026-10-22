@@ -196,7 +196,7 @@ export function BottomSheetSurface({
 
 const styles = StyleSheet.create({
   handle: { borderRadius: radius.full, height: 4, width: 36 },
-  handlePressable: { alignItems: 'center', height: 48, justifyContent: 'center', width: 56 },
+  handlePressable: { alignItems: 'center', height: 48, justifyContent: 'center', width: '100%' },
   handleTarget: { alignItems: 'center', height: 48, justifyContent: 'center' },
   surface: {
     borderTopLeftRadius: radius[16],
