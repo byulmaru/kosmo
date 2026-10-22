@@ -11,9 +11,13 @@ import { StateView } from '@/components/ui/StateView';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing, textStyles } from '@/theme/tokens';
+import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { ReactNode } from 'react';
 import type { FirstProfileTagDiscovery_profile$key } from './__generated__/FirstProfileTagDiscovery_profile.graphql';
-import type { FirstProfileTagDiscoveryList_hashtag$key } from './__generated__/FirstProfileTagDiscoveryList_hashtag.graphql';
+import type {
+  FirstProfileTagDiscoveryList_hashtag$data,
+  FirstProfileTagDiscoveryList_hashtag$key,
+} from './__generated__/FirstProfileTagDiscoveryList_hashtag.graphql';
 import type { FirstProfileTagDiscoveryNextPageQuery } from './__generated__/FirstProfileTagDiscoveryNextPageQuery.graphql';
 import type { FirstProfileTagDiscoveryQuery } from './__generated__/FirstProfileTagDiscoveryQuery.graphql';
 import type { FirstProfileTagDiscoveryTagQuery } from './__generated__/FirstProfileTagDiscoveryTagQuery.graphql';
@@ -75,37 +79,35 @@ export function FirstProfileTagDiscoveryRoute({ empty, onContinue, profileId }: 
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
   return (
-    <FollowButtonGroup>
-      <View style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}>
-        <View style={styles.screen}>
-          <View style={styles.intro}>
-            <Text
-              accessibilityRole="header"
-              style={[styles.title, { color: theme.foregroundPrimary }]}
-            >
-              관심사가 같은 사람을 만나보세요
-            </Text>
-            <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-              프로필에 저장한 태그를 골라 둘러보고, 마음에 드는 사람을 팔로우해 보세요.
-            </Text>
-          </View>
-          <View style={styles.content}>
-            <RouteBoundary
-              loading={<StateView loading title="저장한 태그를 불러오는 중이에요" />}
-              title="저장한 태그를 불러오지 못했어요"
-            >
-              <SavedTagQuery empty={empty} profileId={profileId} />
-            </RouteBoundary>
-          </View>
-          <View style={[styles.actions, { borderColor: theme.border }]}>
-            <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-              팔로우하지 않아도 지금은 넘어갈 수 있어요.
-            </Text>
-            <Button onPress={onContinue}>계속하기</Button>
-          </View>
+    <View style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}>
+      <View style={styles.screen}>
+        <View style={styles.intro}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.foregroundPrimary }]}
+          >
+            관심사가 같은 사람을 만나보세요
+          </Text>
+          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+            프로필에 저장한 태그를 골라 둘러보고, 마음에 드는 사람을 팔로우해 보세요.
+          </Text>
+        </View>
+        <View style={styles.content}>
+          <RouteBoundary
+            loading={<StateView loading title="저장한 태그를 불러오는 중이에요" />}
+            title="저장한 태그를 불러오지 못했어요"
+          >
+            <SavedTagQuery empty={empty} profileId={profileId} />
+          </RouteBoundary>
+        </View>
+        <View style={[styles.actions, { borderColor: theme.border }]}>
+          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+            팔로우하지 않아도 지금은 넘어갈 수 있어요.
+          </Text>
+          <Button onPress={onContinue}>계속하기</Button>
         </View>
       </View>
-    </FollowButtonGroup>
+    </View>
   );
 }
 
@@ -146,16 +148,20 @@ function SavedTags({
     return empty;
   }
 
-  return (
-    <View style={styles.content}>
+  const renderControls = (disabled: boolean) => (
+    <>
       <ScrollView contentContainerStyle={styles.tags} style={styles.tagSelector}>
         {tags.map((tag) => (
           <Button
             accessibilityLabel={`#${tag.name}`}
             aria-pressed={tag.id === selected.id}
-            accessibilityState={{ selected: tag.id === selected.id }}
+            accessibilityState={{ disabled, selected: tag.id === selected.id }}
+            disabled={disabled}
             key={tag.id}
             onPress={() => {
+              if (disabled) {
+                return;
+              }
               setVisitedIds((current) =>
                 current.includes(selected.id) ? current : [...current, selected.id],
               );
@@ -175,6 +181,11 @@ function SavedTags({
       >
         #{selected.name} 관련 프로필
       </Text>
+    </>
+  );
+
+  return (
+    <View style={styles.content}>
       {tags
         .filter((tag) => tag.id === selected.id || visitedIds.includes(tag.id))
         .map((tag) => {
@@ -187,12 +198,27 @@ function SavedTags({
               style={[styles.content, !active && styles.hidden]}
             >
               <RouteBoundary
+                error={(retry) => (
+                  <>
+                    {renderControls(!active)}
+                    <StateView
+                      actionLabel="다시 시도"
+                      alert
+                      description="잠시 후 다시 시도해주세요."
+                      onAction={retry}
+                      title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
+                    />
+                  </>
+                )}
                 loading={
-                  <StateView loading title={`#${tag.name} 관련 프로필을 불러오는 중이에요`} />
+                  <>
+                    {renderControls(true)}
+                    <StateView loading title={`#${tag.name} 관련 프로필을 불러오는 중이에요`} />
+                  </>
                 }
                 title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
               >
-                <TagQuery active={active} hashtagId={tag.id} />
+                <TagQuery active={active} hashtagId={tag.id} renderControls={renderControls} />
               </RouteBoundary>
             </View>
           );
@@ -201,7 +227,15 @@ function SavedTags({
   );
 }
 
-function TagQuery({ active, hashtagId }: { active: boolean; hashtagId: string }) {
+function TagQuery({
+  active,
+  hashtagId,
+  renderControls,
+}: {
+  active: boolean;
+  hashtagId: string;
+  renderControls: (disabled: boolean) => ReactNode;
+}) {
   const { fetchKey, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileTagDiscoveryTagQuery>(
     tagQuery,
@@ -210,31 +244,72 @@ function TagQuery({ active, hashtagId }: { active: boolean; hashtagId: string })
   );
   if (data.node?.__typename !== 'Hashtag' || !data.node.relatedProfiles) {
     return (
-      <StateView
-        actionLabel="다시 시도"
-        alert
-        onAction={refetch}
-        title="이 태그의 관련 프로필을 확인할 수 없어요"
-      />
+      <>
+        {renderControls(!active)}
+        <StateView
+          actionLabel="다시 시도"
+          alert
+          onAction={refetch}
+          title="이 태그의 관련 프로필을 확인할 수 없어요"
+        />
+      </>
     );
   }
-  return <RelatedProfiles active={active} hashtag={data.node.relatedProfiles} />;
+  return (
+    <RelatedProfiles
+      active={active}
+      hashtag={data.node.relatedProfiles}
+      renderControls={renderControls}
+    />
+  );
 }
 
 function RelatedProfiles({
   active,
   hashtag,
+  renderControls,
 }: {
   active: boolean;
   hashtag: FirstProfileTagDiscoveryList_hashtag$key;
+  renderControls: (disabled: boolean) => ReactNode;
 }) {
   const pagination = usePaginationFragment<
     FirstProfileTagDiscoveryNextPageQuery,
     FirstProfileTagDiscoveryList_hashtag$key
   >(listFragment, hashtag);
+  return (
+    <FollowButtonGroup disabled={!active || pagination.isLoadingNext}>
+      {(mutationLoading) => (
+        <RelatedProfilesContent
+          active={active}
+          mutationLoading={mutationLoading}
+          pagination={pagination}
+          renderControls={renderControls}
+        />
+      )}
+    </FollowButtonGroup>
+  );
+}
+
+function RelatedProfilesContent({
+  active,
+  mutationLoading,
+  pagination,
+  renderControls,
+}: {
+  active: boolean;
+  mutationLoading: boolean;
+  pagination: {
+    data: FirstProfileTagDiscoveryList_hashtag$data;
+    hasNext: boolean;
+    isLoadingNext: boolean;
+    loadNext: LoadNext;
+  };
+  renderControls: (disabled: boolean) => ReactNode;
+}) {
   const profiles = pagination.data.relatedProfiles.edges;
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
-    hasNext: active && pagination.hasNext,
+    hasNext: active && !mutationLoading && pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
     itemCount: profiles.length,
     loadNext: pagination.loadNext,
@@ -243,28 +318,31 @@ function RelatedProfiles({
   });
 
   return (
-    <ScrollView {...nativeScrollProps} contentContainerStyle={styles.list}>
-      {profiles.length ? (
-        profiles.map((edge) => (
-          <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
-        ))
-      ) : (
-        <StateView
-          description="다른 태그를 골라 보거나 지금은 넘어갈 수 있어요."
-          title="관련 프로필이 없어요"
+    <>
+      {renderControls(!active || mutationLoading || pagination.isLoadingNext)}
+      <ScrollView {...nativeScrollProps} contentContainerStyle={styles.list}>
+        {profiles.length ? (
+          profiles.map((edge) => (
+            <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
+          ))
+        ) : (
+          <StateView
+            description="다른 태그를 골라 보거나 지금은 넘어갈 수 있어요."
+            title="관련 프로필이 없어요"
+          />
+        )}
+        <PaginationSurface
+          endRef={endRef}
+          error={active && loadError}
+          errorMessage="관련 프로필을 더 불러오지 못했어요"
+          hasNext={active && pagination.hasNext}
+          isLoading={pagination.isLoadingNext}
+          loadingLabel="관련 프로필을 더 불러오는 중"
+          onRetry={active && !mutationLoading ? loadNextPage : undefined}
+          style={styles.pagination}
         />
-      )}
-      <PaginationSurface
-        endRef={endRef}
-        error={active && loadError}
-        errorMessage="관련 프로필을 더 불러오지 못했어요"
-        hasNext={active && pagination.hasNext}
-        isLoading={pagination.isLoadingNext}
-        loadingLabel="관련 프로필을 더 불러오는 중"
-        onRetry={loadNextPage}
-        style={styles.pagination}
-      />
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 

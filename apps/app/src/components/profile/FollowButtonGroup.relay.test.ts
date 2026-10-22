@@ -117,7 +117,13 @@ function createEnvironment(followPolicy: FollowPolicy = 'OPEN') {
   return environment;
 }
 
-async function render(environment: Environment, panel: string | null, grouped = true) {
+async function render(
+  environment: Environment,
+  panel: string | null,
+  grouped = true,
+  disabled = false,
+  renderLoading = false,
+) {
   const owner = createOperationDescriptor(profileQuery, { handle: 'target' }).request;
   const button = panel
     ? createElement(FollowButton, {
@@ -132,7 +138,14 @@ async function render(environment: Environment, panel: string | null, grouped = 
   const tree = createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
     // The standalone first-profile flow keeps its tree while the Environment changes.
-    children: grouped ? createElement(FollowButtonGroup, { children: button }) : button,
+    children: grouped
+      ? createElement(FollowButtonGroup, {
+          disabled,
+          children: renderLoading
+            ? (loading: boolean) => createElement('GroupContent', { loading }, button)
+            : button,
+        })
+      : button,
   });
   await act(async () => {
     if (renderer) {
@@ -326,4 +339,32 @@ test('그룹 밖 FollowButton은 기존 독립 action lifecycle을 유지한다'
   await respond(0, { data: followPayload('OPEN') });
   assert.equal(button().props.disabled, false);
   assert.equal(button().props.children, '팔로잉');
+});
+
+test('그룹의 외부 비활성화는 mutation을 시작하지 않고 실제 loading과 구분한다', async () => {
+  const environment = createEnvironment();
+  await render(environment, 'tag-a', true, true, true);
+  assert.equal(button().props.disabled, true);
+  assert.equal(button().props.accessibilityState.disabled, true);
+  assert.equal(button().props.accessibilityState.busy, false);
+  assert.equal(renderer!.root.findByType('GroupContent' as never).props.loading, false);
+  await press();
+  assert.equal(requests.length, 0);
+  await render(environment, 'tag-a', true, false, true);
+  assert.equal(button().props.disabled, false);
+  await press();
+  assert.equal(requests.length, 1);
+  assert.equal(button().props.accessibilityState.busy, true);
+  assert.equal(renderer!.root.findByType('GroupContent' as never).props.loading, true);
+  await render(environment, 'tag-a', true, true, true);
+  await respond(0, { data: followPayload('OPEN') });
+  assert.equal(button().props.children, '팔로잉');
+  assert.equal(button().props.disabled, true);
+  assert.equal(button().props.accessibilityState.busy, false);
+  assert.equal(renderer!.root.findByType('GroupContent' as never).props.loading, false);
+  await press();
+  assert.equal(requests.length, 1);
+  await render(environment, 'tag-a', true, false, true);
+  await press();
+  assert.equal(requests[1]?.name, 'FollowButtonUnfollowProfileMutation');
 });

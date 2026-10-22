@@ -24,7 +24,7 @@
 ## Risks / Limits
 
 - 소스 조사는 API 재사용 가능성을 보여 주지만 다중 태그 UI의 상태 일치를 실행으로 증명하지 않는다.
-- 태그 전환으로 버튼이 재마운트될 때 pending 상태와 중복 실행 방지가 유지되는지 확인해야 한다.
+- 2026-10-23 사용자 선택에 따라 목록 조회와 관계 변경을 순차 처리한다. 초기·페이지 조회와 관계 변경 동안의 태그 선택 제한, 처리 후 복구, 계속하기를 검증한다.
 - 새 DB·서버 정책·migration은 계획하지 않는다. 구현 중 실제 필요가 발견되면 근거와 범위를 다시 확인한다.
 - 로컬·CI·Web E2E·iOS·Android runtime·운영 결과는 구분한다. 이 세션은 구현과 runtime 테스트를 수행하지 않았다.
 
@@ -34,6 +34,6 @@
 
 ## Implementation Checkpoint
 
-방문한 태그의 목록은 각 Relay query와 connection을 유지한 채 숨긴다. 아직 방문하지 않은 태그를 미리 조회하지 않는다. `FollowButtonGroup`은 목록 밖에서 표준 mutation hook을 소유해 패널 전환 중에도 중복 action을 막는다. 서버 관계 정책과 그룹 밖 기존 버튼 동작은 유지한다.
+방문한 태그의 목록은 각 Relay query와 connection을 유지한 채 숨긴다. 아직 방문하지 않은 태그를 미리 조회하지 않는다. 각 로드된 목록의 `FollowButtonGroup`이 표준 mutation hook을 소유한다. 초기 조회 중에는 태그를 전환하지 않고, 페이지 조회와 관계 변경은 기존 Relay loading 상태로 서로 겹치지 않게 한다. 서버 관계 정책과 그룹 밖 기존 버튼 동작은 유지한다.
 
-행동 테스트 실행은 GitHub CI에 인계한다. 테스트 코드 작성과 정적 검사 통과를 Web·Native runtime 검증 완료로 표시하지 않는다.
+기존 head `35b305c6`의 GitHub CI는 통과했다. 순차 처리 수정 뒤 새 head의 CI를 다시 확인한다. 테스트 코드 작성이나 Web CI를 Native runtime 검증 완료로 표시하지 않는다.

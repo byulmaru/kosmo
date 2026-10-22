@@ -125,13 +125,21 @@ function useFollowButtonMutations() {
 
 type FollowButtonMutations = ReturnType<typeof useFollowButtonMutations>;
 
-const FollowButtonGroupContext = createContext<FollowButtonMutations | null>(null);
+const FollowButtonGroupContext = createContext<
+  (FollowButtonMutations & { disabled: boolean }) | null
+>(null);
 
-export function FollowButtonGroup({ children }: { children: ReactNode }) {
+export function FollowButtonGroup({
+  children,
+  disabled = false,
+}: {
+  children: ReactNode | ((loading: boolean) => ReactNode);
+  disabled?: boolean;
+}) {
   const mutations = useFollowButtonMutations();
   return (
-    <FollowButtonGroupContext.Provider value={mutations}>
-      {children}
+    <FollowButtonGroupContext.Provider value={{ ...mutations, disabled }}>
+      {typeof children === 'function' ? children(mutations.loading) : children}
     </FollowButtonGroupContext.Provider>
   );
 }
@@ -153,11 +161,18 @@ function StandaloneFollowButton(props: FollowButtonProps) {
 function FollowButtonAction({
   profile,
   style,
-  mutations: { commitFollow, commitCancel, commitUnfollow, loading },
-}: FollowButtonProps & { mutations: FollowButtonMutations }) {
+  mutations: {
+    commitFollow,
+    commitCancel,
+    commitUnfollow,
+    disabled: groupDisabled = false,
+    loading,
+  },
+}: FollowButtonProps & { mutations: FollowButtonMutations & { disabled?: boolean } }) {
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
+  const disabled = groupDisabled || loading;
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
@@ -180,7 +195,7 @@ function FollowButtonAction({
   }
 
   const toggleFollow = () => {
-    if (loading) {
+    if (disabled) {
       return;
     }
 
@@ -291,10 +306,10 @@ function FollowButtonAction({
         aria-pressed={isFollowing || isPending}
         accessibilityState={{
           busy: loading,
-          disabled: loading,
+          disabled,
           selected: isFollowing || isPending,
         }}
-        disabled={loading}
+        disabled={disabled}
         onPress={toggleFollow}
         style={styles.relationButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}

@@ -50,7 +50,7 @@ async function createdProfileId(accountId: string) {
   return rows[0]!.id;
 }
 
-test('저장한 두 태그에서 팔로우와 승인 요청 상태를 공유하고 성립한 관계만 홈에서 이어 본다', async ({
+test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상태와 홈을 이어 본다', async ({
   context,
   page,
 }) => {
@@ -108,76 +108,147 @@ test('저장한 두 태그에서 팔로우와 승인 요청 상태를 공유하�
     .from(ProfileHashtags)
     .where(eq(ProfileHashtags.profileId, viewerId));
   expect(new Set(savedTags.map(({ id }) => id))).toEqual(new Set([books.id, music.id]));
-  await openDiscovery(page);
-  await expect(page).toHaveURL(/\/first-profile\/discover$/);
-  await page.getByRole('button', { name: '#책', exact: true }).click();
-  await expect(
-    profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }),
-  ).toBeEnabled();
-  expect(followMutations).toEqual([]);
-  await profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }).click();
-  await expect(
-    profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
-  ).toBeEnabled();
-  await page.getByRole('button', { name: '#음악', exact: true }).click();
-  await expect(
-    profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
-  ).toBeEnabled();
-  await profileRow(page, approval.handle)
-    .getByRole('button', { name: '팔로우', exact: true })
-    .click();
-  await expect(
-    profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
-  ).toBeEnabled();
-  await page.getByRole('button', { name: '#책', exact: true }).click();
-  await expect(
-    profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
-  ).toBeEnabled();
-  expect(new Set(tagQueries)).toEqual(
-    new Set([toGlobalId('Hashtag', books.id), toGlobalId('Hashtag', music.id)]),
-  );
-  expect(followMutations).toEqual([
-    'FollowButtonFollowProfileMutation',
-    'FollowButtonFollowProfileMutation',
-  ]);
-  expect(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, viewerId),
-          eq(ProfileFollows.followeeProfileId, open.id),
+  let releaseTagQuery!: () => void;
+  let notifyTagQueryFetched!: () => void;
+  const tagQueryRelease = new Promise<void>((resolve) => {
+    releaseTagQuery = resolve;
+  });
+  const tagQueryFetched = new Promise<void>((resolve) => {
+    notifyTagQueryFetched = resolve;
+  });
+  let releaseFollowMutation!: () => void;
+  let notifyFollowMutationFetched!: () => void;
+  const followMutationRelease = new Promise<void>((resolve) => {
+    releaseFollowMutation = resolve;
+  });
+  const followMutationFetched = new Promise<void>((resolve) => {
+    notifyFollowMutationFetched = resolve;
+  });
+  let holdFirstTagQuery = true;
+  let holdFirstFollowMutation = true;
+  await page.route('**/graphql', async (route) => {
+    const name = readGraphQLOperation(route.request().postData())?.operationName;
+    if (holdFirstTagQuery && name === 'FirstProfileTagDiscoveryTagQuery') {
+      holdFirstTagQuery = false;
+      const response = await route.fetch();
+      notifyTagQueryFetched();
+      await tagQueryRelease;
+      await route.fulfill({ response });
+      return;
+    }
+    if (holdFirstFollowMutation && name === 'FollowButtonFollowProfileMutation') {
+      holdFirstFollowMutation = false;
+      const response = await route.fetch();
+      notifyFollowMutationFetched();
+      await followMutationRelease;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await openDiscovery(page);
+    await expect(page).toHaveURL(/\/first-profile\/discover$/);
+    await tagQueryFetched;
+    await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '계속하기', exact: true })).toBeEnabled();
+    expect(tagQueries).toHaveLength(1);
+    expect(followMutations).toEqual([]);
+    releaseTagQuery();
+    await expect(
+      profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: '#책', exact: true }).click();
+    await expect(
+      profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }),
+    ).toBeEnabled();
+    expect(followMutations).toEqual([]);
+    const tagQueriesBeforeFollow = tagQueries.length;
+    await profileRow(page, open.handle)
+      .getByRole('button', { name: '팔로우', exact: true })
+      .click();
+    await followMutationFetched;
+    await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
+    await expect(
+      profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      profileRow(page, approval.handle).getByRole('button', { name: '팔로우', exact: true }),
+    ).toBeDisabled();
+    await expect(page.getByRole('button', { name: '계속하기', exact: true })).toBeEnabled();
+    expect(tagQueries).toHaveLength(tagQueriesBeforeFollow);
+    expect(followMutations).toEqual(['FollowButtonFollowProfileMutation']);
+    expect(
+      await db
+        .select()
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, viewerId),
+            eq(ProfileFollows.followeeProfileId, open.id),
+          ),
         ),
-      ),
-  ).toHaveLength(1);
-  expect(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, viewerId),
-          eq(ProfileFollows.followeeProfileId, approval.id),
+    ).toHaveLength(1);
+    releaseFollowMutation();
+    await expect(
+      profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: '#음악', exact: true }).click();
+    await expect(
+      profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
+    ).toBeEnabled();
+    await profileRow(page, approval.handle)
+      .getByRole('button', { name: '팔로우', exact: true })
+      .click();
+    await expect(
+      profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: '#책', exact: true }).click();
+    await expect(
+      profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
+    ).toBeEnabled();
+    expect(new Set(tagQueries)).toEqual(
+      new Set([toGlobalId('Hashtag', books.id), toGlobalId('Hashtag', music.id)]),
+    );
+    expect(followMutations).toEqual([
+      'FollowButtonFollowProfileMutation',
+      'FollowButtonFollowProfileMutation',
+    ]);
+    expect(
+      await db
+        .select()
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, viewerId),
+            eq(ProfileFollows.followeeProfileId, approval.id),
+          ),
         ),
-      ),
-  ).toHaveLength(0);
-  expect(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.followerProfileId, viewerId),
-          eq(ProfileFollowRequests.followeeProfileId, approval.id),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(ProfileFollowRequests)
+        .where(
+          and(
+            eq(ProfileFollowRequests.followerProfileId, viewerId),
+            eq(ProfileFollowRequests.followeeProfileId, approval.id),
+          ),
         ),
-      ),
-  ).toHaveLength(1);
-  await page.getByRole('button', { name: '계속하기', exact: true }).click();
-  await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByText('팔로우한 사람의 이어 읽을 글', { exact: true })).toBeVisible();
-  await expect(page.getByText('승인 전에는 볼 수 없는 글', { exact: true })).toHaveCount(0);
-  expect(followMutations).toHaveLength(2);
+    ).toHaveLength(1);
+    await page.getByRole('button', { name: '계속하기', exact: true }).click();
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(page.getByText('팔로우한 사람의 이어 읽을 글', { exact: true })).toBeVisible();
+    await expect(page.getByText('승인 전에는 볼 수 없는 글', { exact: true })).toHaveCount(0);
+    expect(followMutations).toHaveLength(2);
+  } finally {
+    releaseTagQuery();
+    releaseFollowMutation();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
 });
 
 test('태그 저장 실패 초안은 사용하지 않고 이전 저장값으로 진행하며 조회 실패는 재시도한다', async ({
