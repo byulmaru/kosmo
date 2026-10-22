@@ -150,6 +150,7 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 ## 조회 정책
 
 - Post의 일반 조회와 배포는 현재 Post Content만 사용한다.
+- V1 읽기에서는 알 수 없는 block·inline node와 그 자손을 생략하고, 아는 형제 node의 순서와 내용을 유지한다. 알 수 없는 node 내용은 표시하지 않는다. 이 projection에서도 Content Warning, 알려진 순서의 Media 참조와 Sensitive Media 표시는 유지한다.
 - 현재 Post Content의 Referenced Media는 body의 Media node 순서로 제공한다.
 - Current Post의 Mentioned Profile은 현재 Post Content의 revision-owned 관계에서 투영한다. 구 reader가 지원하지
   않는 Mention을 받아도 본문 text를 보존해 읽을 수 있는 호환 경계를 먼저 검증하며, Mention 저장 활성화는 그

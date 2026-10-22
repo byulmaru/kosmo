@@ -8,6 +8,7 @@
 - `mentionedProfiles`는 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile만 포함하며, 같은 Profile은 한 번만 제공한다. Post visibility·eligibility는 PostContent 조회에서 기존 정책을 적용하고, 이 field는 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다. document occurrence의 순서는 document가 소유하므로 relation 배열의 positional order를 renderer 입력으로 사용하지 않는다.
 - renderer는 raw ActivityPub `tag`, actor URI, 본문 anchor를 다시 해석하지 않는다. Mention을 해결하기 위한 WebFinger, actor fetch, Profile materialization과 표시 문자열·handle 문자열 비교도 수행하지 않는다.
 - canonical Mention node는 `profileId`와 optional `handle`을 가질 수 있다. `handle`은 parsing 시 이미 확인된 Profile의 `relativeHandle` snapshot이며 text projection에만 쓰고, Renderer는 exact match한 Profile을 `PostContentMention`에 전달한다. 서로 다른 `profileId`는 각각의 Profile로 구분하고, 표시 문자열·handle 문자열로 대상을 합치거나 선택하지 않는다. `PostContentRenderer`는 node 순서와 ID lookup만 소유하고 Mention의 표시·fallback 정책을 직접 렌더링하지 않는다.
+- V1 body에 알 수 없는 block·inline node가 있으면 reader는 그 node와 자손을 생략하고 알려진 형제의 순서와 표시를 유지한다. 이때 링크와 Mention도 그대로 렌더링하며, 알 수 없는 node의 본문은 표시하지 않는다. Content Warning, 알려진 Media와 Sensitive Media 상태는 이 생략으로 바뀌지 않는다.
 - 일반 link mark는 기존 link semantics를 유지한다. `PROD-340`의 unresolved·malformed·identity mismatch fallback은 저장된 안전한 link 또는 text로 표시하고 Profile navigation affordance를 추가하지 않는다.
 
 ## Profile 이동

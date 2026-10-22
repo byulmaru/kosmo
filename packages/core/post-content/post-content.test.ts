@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPostContentDocumentV1 } from './index';
+import { isPostContentDocumentV1, readPostContentDocumentV1 } from './index';
 import {
   arePostContentRevisionsEqual,
   canonicalizePostContentDocument,
@@ -579,6 +579,20 @@ for (const [name, document] of [
     },
   ],
   [
+    'unknown block node',
+    {
+      type: 'doc',
+      content: [{ type: 'future_block', content: [{ type: 'paragraph' }] }],
+    },
+  ],
+  [
+    'unknown inline node',
+    {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'future_inline', text: 'body' }] }],
+    },
+  ],
+  [
     'unsafe link',
     {
       type: 'doc',
@@ -635,6 +649,127 @@ test('rejects unsupported schema versions', () => {
       }),
     /Unsupported PostContent schema version/,
   );
+});
+
+test('projects supported V1 nodes around unknown nodes without weakening strict validation', () => {
+  const document = {
+    version: 1,
+    summary: 'warning',
+    body: {
+      type: 'doc',
+      attrs: { futureFlag: true, sensitiveMedia: true },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'before ' },
+            { type: 'future_inline', content: [{ type: 'text', text: 'hidden inline' }] },
+            {
+              type: 'text',
+              text: 'linked',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/' } }],
+            },
+            { type: 'text', text: ' ' },
+            { type: 'mention', attrs: { handle: '@alice', profileId: 'UHJvZmlsZS0x' } },
+            { type: 'text', text: ' after' },
+          ],
+        },
+        {
+          type: 'future_block',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hidden block' }] }],
+        },
+        { type: 'paragraph', content: [{ type: 'text', text: 'known sibling' }] },
+        { type: 'media', attrs: { mediaId: 'media-1' } },
+      ],
+    },
+  };
+
+  assert.equal(isPostContentDocumentV1(document), false);
+  assert.deepEqual(readPostContentDocumentV1(document), {
+    version: 1,
+    summary: 'warning',
+    body: {
+      type: 'doc',
+      attrs: { futureFlag: true, sensitiveMedia: true },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'before ' },
+            {
+              type: 'text',
+              text: 'linked',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/' } }],
+            },
+            { type: 'text', text: ' ' },
+            { type: 'mention', attrs: { handle: '@alice', profileId: 'UHJvZmlsZS0x' } },
+            { type: 'text', text: ' after' },
+          ],
+        },
+        { type: 'paragraph', content: [{ type: 'text', text: 'known sibling' }] },
+        { type: 'media', attrs: { mediaId: 'media-1' } },
+      ],
+    },
+  });
+});
+
+test('keeps document metadata in a read projection when every body node is unknown', () => {
+  const document = readPostContentDocumentV1({
+    version: 1,
+    summary: 'warning',
+    body: {
+      type: 'doc',
+      attrs: { sensitiveMedia: true },
+      content: [{ type: 'future_block', content: [{ type: 'text', text: 'hidden' }] }],
+    },
+  });
+
+  assert.deepEqual(document?.body.content, []);
+  assert.equal(document?.summary, 'warning');
+  assert.equal(document?.body.attrs?.sensitiveMedia, true);
+});
+
+test('read projection rejects malformed known nodes and unsupported document versions', () => {
+  const invalidDocuments = [
+    {
+      version: 1,
+      summary: null,
+      body: { type: 'doc', content: [{ type: 'media', attrs: {} }] },
+    },
+    {
+      version: 1,
+      summary: null,
+      body: { type: 'doc', content: [{ type: 'paragraph', content: { type: 'text' } }] },
+    },
+    {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: 'unsafe',
+                marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      version: 2,
+      summary: null,
+      body: { type: 'doc', content: [{ type: 'paragraph' }] },
+    },
+  ];
+
+  for (const document of invalidDocuments) {
+    assert.equal(readPostContentDocumentV1(document), null);
+  }
 });
 
 test('compares canonical body and summary meaning', () => {

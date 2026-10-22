@@ -1,4 +1,4 @@
-import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
@@ -63,7 +63,7 @@ export function PostContentRenderer({
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
-  const document = isPostContentDocumentV1(value) ? value.body : null;
+  const document = readPostContentDocumentV1(value)?.body ?? null;
   const isProtected = Boolean(contentWarning);
   const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
   const forcedRevealed = contentWarningPresentation === 'revealed';
