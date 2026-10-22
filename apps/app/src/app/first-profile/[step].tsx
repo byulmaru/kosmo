@@ -13,7 +13,10 @@ export default function FirstProfileStepRoute() {
   const router = useRouter();
   const flow = useFirstProfileOnboarding();
   usePreventRemove(flow.busy, () => undefined);
-  if (step !== 'complete' && !firstProfileSteps.includes(step as FirstProfileStep)) {
+  if (
+    (step !== 'complete' && !firstProfileSteps.includes(step as FirstProfileStep)) ||
+    (step !== 'handle' && !flow.profileSelected)
+  ) {
     return <Redirect href="/first-profile/handle" />;
   }
   const current = step as FirstProfileStep | 'complete';
@@ -34,7 +37,7 @@ export default function FirstProfileStepRoute() {
           ? router.back()
           : router.replace(
               (current === 'complete'
-                ? `/first-profile/${flow.completedFrom}`
+                ? '/home'
                 : firstProfileSteps.indexOf(current) > 0
                   ? `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(current) - 1]}`
                   : '/local') as Href,
@@ -42,19 +45,16 @@ export default function FirstProfileStepRoute() {
       }
       onChange={flow.setDraft}
       onComplete={() => {
-        if (
-          flow.complete(current === 'complete' ? flow.completedFrom : current) &&
-          current !== 'complete'
-        ) {
+        flow.complete(current === 'complete' ? 'review' : current, () => {
           router.push('/first-profile/complete');
-        }
+        });
       }}
       onNext={() => {
-        if (current !== 'complete' && flow.validateStep(current)) {
-          next();
+        if (current !== 'complete') {
+          flow.next(current, next);
         }
       }}
-      onSkip={next}
+      onSkip={() => flow.skip(next)}
       onAvatarEdit={() => {
         void flow.pickImage('avatar');
       }}
@@ -66,8 +66,9 @@ export default function FirstProfileStepRoute() {
       onHeaderRemove={() => flow.removeImage('header')}
       onHeaderRetry={() => flow.retryImage('header')}
       result={flow.result}
+      summary={flow.summary}
       startAction={
-        <Link asChild href="/home">
+        <Link asChild href="/home" replace>
           <Button>시작하기</Button>
         </Link>
       }

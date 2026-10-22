@@ -2,7 +2,7 @@ import { localProfileHandleSchema } from '@kosmo/core/validation';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { graphql, useFragment, useLazyLoadQuery, useMutation } from 'react-relay';
 import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import {
   releaseImagePreview,
@@ -17,6 +17,7 @@ import {
   completeProfileEditImageUpload,
   createProfileEditRouteImage,
   failProfileEditImageUpload,
+  profileEditImageInput,
   removeProfileEditImage,
   replaceProfileEditImage,
   retryProfileEditImageUpload,
@@ -26,40 +27,36 @@ import { Splash } from '@/components/Splash';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor, useRelayAuthLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
-import {
-  defaultFirstProfileValues,
-  firstProfileChanges,
-  initialFirstProfileDraft,
-  prepareFirstProfileDraft,
-} from './firstProfileOnboardingState';
+import { initialFirstProfileDraft, prepareFirstProfileStep } from './firstProfileOnboardingState';
 import type { PropsWithChildren } from 'react';
 import type { ImageUploadStage } from '@/components/media/imageUploadErrors';
 import type { ProfileEditRouteImage } from '@/components/profile/profileEditMedia';
 import type { FirstProfileOnboardingCompleteMediaMutation } from './__generated__/FirstProfileOnboardingCompleteMediaMutation.graphql';
 import type { FirstProfileOnboardingCreateMutation } from './__generated__/FirstProfileOnboardingCreateMutation.graphql';
 import type { FirstProfileOnboardingIssueMediaMutation } from './__generated__/FirstProfileOnboardingIssueMediaMutation.graphql';
+import type { FirstProfileOnboardingProfile_profile$key } from './__generated__/FirstProfileOnboardingProfile_profile.graphql';
 import type { FirstProfileOnboardingQuery } from './__generated__/FirstProfileOnboardingQuery.graphql';
 import type { FirstProfileOnboardingSaveMutation } from './__generated__/FirstProfileOnboardingSaveMutation.graphql';
 import type { FirstProfileOnboardingSelectMutation } from './__generated__/FirstProfileOnboardingSelectMutation.graphql';
+import type { FirstProfileOnboardingScreenProps } from './FirstProfileOnboardingScreen';
 import type {
   FirstProfileDraft,
   FirstProfileErrors,
   FirstProfileStep,
-  FirstProfileValues,
 } from './firstProfileOnboardingState';
 
 type ImageField = 'avatar' | 'header';
 type Images = Record<ImageField, ProfileEditRouteImage>;
-type Identity = { id: string; handle: string; relativeHandle: string };
+type Identity = { id: string; handle: string };
 type Result = { kind: 'idle' } | { kind: 'success' } | { kind: 'error'; message: string };
 type FlowValue = {
   busy: boolean;
-  completedFrom: FirstProfileStep;
-  complete: (
-    step: FirstProfileStep,
-    recovery?: { profile: Identity | null; refetch: () => void },
-  ) => boolean;
+  complete: (step: FirstProfileStep, onComplete: () => void) => void;
+  next: (step: FirstProfileStep, onSaved: () => void) => void;
+  skip: (onSkipped: () => void) => void;
+  summary?: FirstProfileOnboardingScreenProps['summary'];
   createdProfile: Identity | null;
+  profileSelected: boolean;
   draft: FirstProfileDraft;
   errors: FirstProfileErrors;
   images: Images;
@@ -68,7 +65,6 @@ type FlowValue = {
   retryImage: (field: ImageField) => void;
   result: Result;
   setDraft: (value: FirstProfileDraft) => void;
-  validateStep: (step: FirstProfileStep) => boolean;
 };
 const FlowContext = createContext<FlowValue | null>(null);
 
@@ -86,14 +82,13 @@ const query = graphql`
             role
           }
         }
+        ...FirstProfileOnboardingProfile_profile
       }
     }
     me {
       id
       profiles {
         id
-        handle
-        relativeHandle
       }
     }
   }
@@ -104,7 +99,6 @@ const createMutation = graphql`
       profile {
         id
         handle
-        relativeHandle
       }
     }
   }
@@ -118,46 +112,38 @@ const selectMutation = graphql`
     }
   }
 `;
-// Serial mutation roots bind the actor before each profile-scoped action, including the first session actor.
-const saveMutation = graphql`
-  mutation FirstProfileOnboardingSaveMutation($profileId: ID!, $input: UpdateProfileInput!) {
-    selectProfile(input: { id: $profileId }) {
-      profile {
-        id
-      }
+const profileFragment = graphql`
+  fragment FirstProfileOnboardingProfile_profile on Profile @catch(to: NULL) {
+    handle
+    displayName
+    bio
+    followPolicy
+    private {
+      defaultPostVisibility
     }
+    tags {
+      name
+    }
+    avatar {
+      url
+    }
+    header {
+      url
+    }
+  }
+`;
+const saveMutation = graphql`
+  mutation FirstProfileOnboardingSaveMutation($input: UpdateProfileInput!) {
     updateProfile(input: $input) {
       profile {
         id
-        displayName
-        bio
-        followPolicy
-        private {
-          defaultPostVisibility
-        }
-        tags {
-          id
-          name
-        }
-        avatar {
-          id
-          url
-        }
-        header {
-          id
-          url
-        }
+        ...FirstProfileOnboardingProfile_profile
       }
     }
   }
 `;
 const issueMediaMutation = graphql`
   mutation FirstProfileOnboardingIssueMediaMutation($profileId: ID!) {
-    selectProfile(input: { id: $profileId }) {
-      profile {
-        id
-      }
-    }
     issueMediaUploadUrl(input: { actorProfileId: $profileId }) {
       media {
         id
@@ -167,12 +153,7 @@ const issueMediaMutation = graphql`
   }
 `;
 const completeMediaMutation = graphql`
-  mutation FirstProfileOnboardingCompleteMediaMutation($profileId: ID!, $mediaId: ID!) {
-    selectProfile(input: { id: $profileId }) {
-      profile {
-        id
-      }
-    }
+  mutation FirstProfileOnboardingCompleteMediaMutation($mediaId: ID!) {
     completeMediaUpload(input: { id: $mediaId }) {
       media {
         id
@@ -214,11 +195,15 @@ function SessionConfirmationError() {
 }
 
 function FirstProfileQuery({ children }: PropsWithChildren) {
-  const { fetchKey, refetch } = useRouteBoundary();
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileOnboardingQuery>(
     query,
     {},
     { fetchKey, fetchPolicy: 'network-only' },
+  );
+  const profile = useFragment<FirstProfileOnboardingProfile_profile$key>(
+    profileFragment,
+    data.currentSession?.selectedProfile,
   );
   const flow = useFirstProfileOnboarding();
   const { accountId, sessionId } = useSession();
@@ -229,19 +214,14 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
   if (data.me.id !== accountId || data.currentSession.id !== sessionId) {
     return <SessionConfirmationError />;
   }
-  const handle = localProfileHandleSchema.safeParse(flow.draft.handle);
-  // A failed create response can hide a committed profile. The fresh account query owns recovery.
-  const createdProfile =
-    flow.createdProfile ??
-    (handle.success
-      ? (data.me.profiles.find((profile) => profile.handle === handle.data) ?? null)
-      : null);
   const selected = data.currentSession.selectedProfile;
   if (
-    createdProfile &&
-    ((selectedProfileId && selectedProfileId !== createdProfile.id) ||
-      (selected?.id === createdProfile.id &&
-        (selected.instance.kind !== 'LOCAL' || selected.viewerState?.membership?.role !== 'OWNER')))
+    flow.createdProfile &&
+    selectedProfileId &&
+    (selectedProfileId !== flow.createdProfile.id ||
+      selected?.id !== flow.createdProfile.id ||
+      selected.instance.kind !== 'LOCAL' ||
+      selected.viewerState?.membership?.role !== 'OWNER')
   ) {
     return (
       <StateView
@@ -250,23 +230,30 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
       />
     );
   }
-  if (!createdProfile && data.me.profiles.length > 0) {
+  if (!flow.createdProfile && data.me.profiles.length > 0) {
     return <Redirect href="/home" />;
   }
-  return (
-    <FlowContext.Provider
-      value={{
-        ...flow,
-        createdProfile,
-        draft: createdProfile ? { ...flow.draft, handle: createdProfile.handle } : flow.draft,
-        complete: (step) => flow.complete(step, { profile: createdProfile, refetch }),
-        setDraft: (value) =>
-          flow.setDraft({ ...value, handle: createdProfile?.handle ?? value.handle }),
-      }}
-    >
-      {children}
-    </FlowContext.Provider>
-  );
+  const visibility = profile?.private?.defaultPostVisibility;
+  const followPolicy = profile?.followPolicy;
+  const summary =
+    profile &&
+    (visibility === 'PUBLIC' || visibility === 'UNLISTED' || visibility === 'FOLLOWERS') &&
+    (followPolicy === 'OPEN' || followPolicy === 'APPROVAL_REQUIRED')
+      ? {
+          draft: {
+            handle: profile.handle,
+            displayName: profile.displayName,
+            bio: profile.bio ?? '',
+            tags: profile.tags.map((tag) => tag.name),
+            tagInput: '',
+            defaultPostVisibility: visibility,
+            followPolicy,
+          },
+          avatar: { kind: 'current' as const, previewUri: profile.avatar?.url ?? null },
+          header: { kind: 'current' as const, previewUri: profile.header?.url ?? null },
+        }
+      : null;
+  return <FlowContext.Provider value={{ ...flow, summary }}>{children}</FlowContext.Provider>;
 }
 
 function FirstProfileFlow({ children }: PropsWithChildren) {
@@ -277,9 +264,6 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     header: createProfileEditRouteImage(),
   }));
   const [createdProfile, setCreatedProfile] = useState<Identity | null>(null);
-  const [savedValues, setSavedValues] = useState<FirstProfileValues | null>(null);
-  const [needsSaveConfirmation, setNeedsSaveConfirmation] = useState(false);
-  const [completedFrom, setCompletedFrom] = useState<FirstProfileStep>('handle');
   const [errors, setErrors] = useState<FirstProfileErrors>({});
   const [result, setResult] = useState<Result>({ kind: 'idle' });
   const [mediaBusy, setMediaBusy] = useState(false);
@@ -315,28 +299,6 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
   );
 
   const fail = (message: string) => setResult({ kind: 'error', message });
-  const finish = (identity: Identity, values: FirstProfileValues) => {
-    if (selectedProfileId !== identity.id) {
-      if (!resetCurrentActor(identity.id)) {
-        return;
-      }
-      void writeSelectedProfile(identity.id);
-    }
-    setSavedValues(values);
-    setNeedsSaveConfirmation(false);
-    setDraft((current) => ({
-      ...current,
-      handle: identity.handle,
-      displayName: current.displayName.trim() ? values.displayName : '',
-      bio: values.bio ?? '',
-      tags: values.tags,
-      tagInput: '',
-      defaultPostVisibility: values.defaultPostVisibility,
-      followPolicy: values.followPolicy,
-    }));
-    setResult({ kind: 'success' });
-  };
-
   const uploadField = (
     identity: Identity,
     field: ImageField,
@@ -372,11 +334,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       variables: { profileId: identity.id },
       onCompleted: (response, responseErrors) => {
         const issued = response?.issueMediaUploadUrl;
-        if (
-          responseErrors?.length ||
-          response?.selectProfile?.profile.id !== identity.id ||
-          !issued
-        ) {
+        if (responseErrors?.length || !issued) {
           failed(new Error('Image issuance failed'), 'issue');
           return;
         }
@@ -384,13 +342,12 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         void transferImage(asset, issued.uploadUrl).then(
           () => {
             commitComplete({
-              variables: { profileId: identity.id, mediaId: issued.media.id },
+              variables: { mediaId: issued.media.id },
               onCompleted: (completed, completeErrors) => {
                 setMediaBusy(false);
                 const media = completed?.completeMediaUpload?.media;
                 if (
                   completeErrors?.length ||
-                  completed?.selectProfile?.profile.id !== identity.id ||
                   media?.id !== issued.media.id ||
                   media.state !== 'READY'
                 ) {
@@ -415,80 +372,58 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     });
   };
 
-  const persist = (
-    identity: Identity,
-    baseline: FirstProfileValues,
-    value: FirstProfileValues,
-    requestImages: Images,
+  const saveStep = (
+    step: 'details' | 'tags' | 'posting',
+    onSaved: () => void,
+    requestImages = images,
   ) => {
-    const field = (['avatar', 'header'] as const).find(
-      (field) => requestImages[field].asset && !requestImages[field].mediaId,
-    );
-    if (field) {
-      uploadField(identity, field, requestImages[field], (ready) =>
-        persist(identity, baseline, value, { ...requestImages, [field]: ready }),
+    if (!createdProfile || selectedProfileId !== createdProfile.id) {
+      return;
+    }
+    const prepared = prepareFirstProfileStep(draft, step);
+    if (!prepared.ok) {
+      setErrors(prepared.errors);
+      fail('입력한 내용을 확인해 주세요.');
+      return;
+    }
+    if (step === 'details') {
+      const field = (['avatar', 'header'] as const).find(
+        (field) => requestImages[field].asset && !requestImages[field].mediaId,
       );
-      return;
+      if (field) {
+        uploadField(createdProfile, field, requestImages[field], (ready) =>
+          saveStep(step, onSaved, { ...requestImages, [field]: ready }),
+        );
+        return;
+      }
     }
-    const next = {
-      ...value,
-      avatarId: requestImages.avatar.mediaId,
-      headerId: requestImages.header.mediaId,
-    };
-    const changes = needsSaveConfirmation ? next : firstProfileChanges(next, baseline);
-    if (!changes) {
-      commitSelect({
-        variables: { profileId: identity.id },
-        onCompleted: (response, responseErrors) => {
-          if (responseErrors?.length || response?.selectProfile?.profile.id !== identity.id) {
-            fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.');
-            return;
-          }
-          finish(identity, next);
-        },
-        onError: () => fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.'),
-      });
-      return;
-    }
-    setNeedsSaveConfirmation(true);
+    const value = prepared.value;
     commitSave({
       variables: {
-        profileId: identity.id,
-        input: { ...changes, ...(changes.tags ? { tags: [...changes.tags] } : {}) },
+        input: {
+          ...value,
+          ...(value.tags ? { tags: [...value.tags] } : {}),
+          ...(step === 'details'
+            ? {
+                avatarId: profileEditImageInput(requestImages.avatar),
+                headerId: profileEditImageInput(requestImages.header),
+              }
+            : {}),
+        },
       },
-      onCompleted: (response, responseErrors) => {
-        const saved = response?.updateProfile?.profile;
-        const visibility = saved?.private?.defaultPostVisibility;
-        if (
-          !saved ||
-          saved.id !== identity.id ||
-          response?.selectProfile?.profile.id !== identity.id ||
-          !['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(visibility ?? '') ||
-          !['OPEN', 'APPROVAL_REQUIRED'].includes(saved.followPolicy)
-        ) {
-          fail('프로필을 저장하지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.');
+      onCompleted: (response) => {
+        if (response?.updateProfile?.profile.id !== createdProfile.id) {
+          fail('프로필을 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.');
           return;
         }
-        if (responseErrors?.length) {
-          fail('저장 결과를 확인하지 못했어요. 같은 프로필로 다시 시도해 주세요.');
-          return;
+        const tags = value.tags;
+        if (step === 'tags' && tags) {
+          setDraft((current) => ({ ...current, tags, tagInput: '' }));
         }
-        setImages({
-          avatar: createProfileEditRouteImage(saved.avatar),
-          header: createProfileEditRouteImage(saved.header),
-        });
-        finish(identity, {
-          ...next,
-          displayName: saved.displayName,
-          bio: saved.bio ?? null,
-          tags: saved.tags.map((tag) => tag.name),
-          followPolicy: saved.followPolicy as FirstProfileValues['followPolicy'],
-          defaultPostVisibility: visibility as FirstProfileValues['defaultPostVisibility'],
-          avatarId: saved.avatar?.id ?? null,
-          headerId: saved.header?.id ?? null,
-        });
+        setResult({ kind: 'idle' });
+        onSaved();
       },
-      onError: () => fail('프로필을 저장하지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.'),
+      onError: () => fail('프로필을 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.'),
     });
   };
 
@@ -515,58 +450,93 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     fail('프로필을 만들지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.');
   };
 
-  const complete: FlowValue['complete'] = (step, recovery) => {
-    if (busy) {
-      return false;
+  const createAndSelect = (onSelected: () => void) => {
+    const handle = localProfileHandleSchema.safeParse(draft.handle);
+    if (!handle.success) {
+      setErrors({ handle: handle.error.issues[0]?.message ?? '핸들을 확인해 주세요.' });
+      return;
     }
-    const prepared = prepareFirstProfileDraft(draft);
-    if (!prepared.ok) {
-      setErrors(prepared.errors);
-      fail('입력한 내용을 확인해 주세요.');
-      return false;
-    }
-    setErrors({});
-    setResult({ kind: 'idle' });
-    setCompletedFrom(step);
-    const { handle, ...values } = prepared.value;
-    const value = { ...values, avatarId: images.avatar.mediaId, headerId: images.header.mediaId };
-    const identity = createdProfile ?? recovery?.profile;
-    if (identity) {
-      const baseline = savedValues ?? defaultFirstProfileValues(identity.handle);
-      setCreatedProfile(identity);
-      setSavedValues(baseline);
-      persist(identity, baseline, value, images);
-      return true;
-    }
-    const failed = (cause: unknown) => {
-      creationFailed(cause);
-      recovery?.refetch();
+    const select = (identity: Identity) => {
+      if (selectedProfileId === identity.id) {
+        onSelected();
+        return;
+      }
+      commitSelect({
+        variables: { profileId: identity.id },
+        onCompleted: (response, responseErrors) => {
+          if (responseErrors?.length || response?.selectProfile?.profile.id !== identity.id) {
+            fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.');
+            return;
+          }
+          if (resetCurrentActor(identity.id)) {
+            void writeSelectedProfile(identity.id);
+            onSelected();
+          }
+        },
+        onError: () => fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.'),
+      });
     };
+    if (createdProfile) {
+      select(createdProfile);
+      return;
+    }
     commitCreate({
-      variables: { handle },
+      variables: { handle: handle.data },
       onCompleted: (response, responseErrors) => {
         const identity = response?.createProfile?.profile;
         if (!identity) {
-          failed(responseErrors);
+          creationFailed(responseErrors);
           return;
         }
-        const baseline = defaultFirstProfileValues(identity.handle);
         setCreatedProfile(identity);
-        setSavedValues(baseline);
-        persist(identity, baseline, value, images);
+        setDraft((current) => ({ ...current, handle: identity.handle }));
+        select(identity);
       },
-      onError: failed,
+      onError: creationFailed,
     });
-    return true;
   };
 
   return (
     <FlowContext.Provider
       value={{
         busy,
-        completedFrom,
-        complete,
+        complete: (step, onComplete) => {
+          if (busy) {
+            return;
+          }
+          setErrors({});
+          setResult({ kind: 'idle' });
+          const finish = () => {
+            setResult({ kind: 'success' });
+            onComplete();
+          };
+          if (step === 'handle') {
+            createAndSelect(finish);
+          } else if (createdProfile && selectedProfileId === createdProfile.id) {
+            finish();
+          }
+        },
+        next: (step, onSaved) => {
+          if (busy) {
+            return;
+          }
+          setErrors({});
+          setResult({ kind: 'idle' });
+          if (step === 'handle') {
+            createAndSelect(onSaved);
+          } else if (step !== 'review') {
+            saveStep(step, onSaved);
+          }
+        },
+        skip: (onSkipped) => {
+          if (!busy && createdProfile && selectedProfileId === createdProfile.id) {
+            setErrors({});
+            setResult({ kind: 'idle' });
+            onSkipped();
+          }
+        },
         createdProfile,
+        profileSelected: createdProfile !== null && selectedProfileId === createdProfile.id,
         draft,
         errors,
         images,
@@ -577,24 +547,6 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
             setErrors({});
             setResult({ kind: 'idle' });
           }
-        },
-        validateStep: (step) => {
-          const prepared = prepareFirstProfileDraft(draft);
-          const fields =
-            step === 'handle'
-              ? ['handle']
-              : step === 'details'
-                ? ['displayName', 'bio']
-                : step === 'tags'
-                  ? ['tags']
-                  : [];
-          const relevant = prepared.ok
-            ? {}
-            : Object.fromEntries(
-                Object.entries(prepared.errors).filter(([field]) => fields.includes(field)),
-              );
-          setErrors(relevant);
-          return Object.keys(relevant).length === 0;
         },
         pickImage: async (field) => {
           if (busy) {

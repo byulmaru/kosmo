@@ -5,7 +5,6 @@ import { expect, test } from './fixtures';
 import { readGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
-const steps = ['handle', 'details', 'tags', 'posting', 'review'] as const;
 test.beforeEach(resetE2EDatabase);
 
 async function ownedProfiles(accountId: string) {
@@ -26,112 +25,145 @@ async function expectCompleted(page: Page) {
   await expect(page.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
 }
-
-for (const origin of steps) {
-  test(`${origin}에서 완료한 뒤 같은 Profile로 돌아가 수정한다`, async ({ context, page }) => {
-    const session = await createE2ESession({ profile: false });
-    await setE2ESessionCookie(context, session.token);
-    await page.setViewportSize({ width: 390, height: 844 });
-    const operationNames: string[] = [];
-    page.on('request', (request) => {
-      const operation = readGraphQLOperation(request.postData());
-      if (operation?.operationName) {
-        operationNames.push(operation.operationName);
-      }
-    });
-    await page.goto('/home');
-    await expect(page).toHaveURL(/\/first-profile\/handle$/);
-    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(`first_${origin}`);
-    for (let index = 0; index < steps.indexOf(origin); index += 1) {
-      await page.getByRole('button', { name: '다음', exact: true }).click();
-      if (steps[index + 1] === 'details') {
-        await page.getByRole('textbox', { name: '표시 이름' }).fill('첫 프로필');
-        await page.getByRole('textbox', { name: '소개' }).fill('보존할 소개');
-      }
-      if (steps[index + 1] === 'tags') {
-        await page.getByRole('textbox', { name: '프로필 태그', exact: true }).fill('책');
-        await page.getByRole('button', { name: '추가', exact: true }).click();
-        await expect(page.getByText('#책', { exact: true })).toBeVisible();
-      }
-      if (steps[index + 1] === 'posting') {
-        await page.getByRole('radio', { name: /팔로워만:/ }).click();
-        await page.getByRole('switch', { name: '팔로우 요청 자동 승인' }).click();
-      }
+function trackMutations(page: Page) {
+  const mutations: string[] = [];
+  page.on('request', (request) => {
+    const name = readGraphQLOperation(request.postData())?.operationName;
+    if (name?.startsWith('FirstProfileOnboarding') && name.endsWith('Mutation')) {
+      mutations.push(name);
     }
-    await page
-      .getByRole('button', {
-        name: origin === 'review' ? '프로필 만들기' : '바로 시작',
-        exact: true,
-      })
-      .click();
-    await expectCompleted(page);
-    const initial = await ownedProfiles(session.account.id);
-    expect(initial).toHaveLength(1);
-    expect(initial[0]!.handle).toBe(`first_${origin}`);
-    expect(initial[0]!.defaultPostVisibility).toBe(
-      steps.indexOf(origin) >= 3 ? 'FOLLOWERS' : 'UNLISTED',
-    );
-    expect(initial[0]!.followPolicy).toBe(
-      steps.indexOf(origin) >= 3 ? 'APPROVAL_REQUIRED' : 'OPEN',
-    );
-
-    await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`/first-profile/${origin}$`));
-    let index = steps.indexOf(origin);
-    if (origin === 'handle') {
-      await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toHaveAttribute(
-        'readonly',
-      );
-      await page.getByRole('button', { name: '다음', exact: true }).click();
-    } else {
-      while (index > 1) {
-        await page.getByRole('button', { name: '이전 화면' }).click();
-        index -= 1;
-        await expect(page).toHaveURL(new RegExp(`/first-profile/${steps[index]}$`));
-      }
-      await expect(page.getByRole('textbox', { name: '소개' })).toHaveValue('보존할 소개');
-    }
-    await page.getByRole('textbox', { name: '표시 이름' }).fill('수정한 이름');
-    await page.getByRole('button', { name: '바로 시작' }).click();
-    await expectCompleted(page);
-    const edited = await ownedProfiles(session.account.id);
-    expect(edited).toHaveLength(1);
-    expect(edited[0]!.id).toBe(initial[0]!.id);
-    expect(edited[0]!.displayName).toBe('수정한 이름');
-    expect(
-      operationNames.filter((name) => name === 'FirstProfileOnboardingCreateMutation'),
-    ).toHaveLength(1);
-    const saveCount = operationNames.filter(
-      (name) => name === 'FirstProfileOnboardingSaveMutation',
-    ).length;
-    await page.goBack();
-    await page.getByRole('button', { name: '바로 시작' }).click();
-    await expectCompleted(page);
-    expect(
-      operationNames.filter((name) => name === 'FirstProfileOnboardingSaveMutation'),
-    ).toHaveLength(saveCount);
-    expect(await ownedProfiles(session.account.id)).toHaveLength(1);
   });
+  return mutations;
 }
 
-test('생성 후 저장 실패는 Profile과 입력을 보존하고 같은 Profile로 재시도한다', async ({
+test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Profile을 저장한다', async ({
   context,
   page,
 }) => {
   const session = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, session.token);
-  await page.goto('/first-profile/handle');
-  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_retry');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mutations = trackMutations(page);
+  await page.goto('/home');
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
+  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_steps');
+  expect(await ownedProfiles(session.account.id)).toHaveLength(0);
   await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('textbox', { name: '표시 이름' }).fill('재시도할 이름');
-  let fail = true;
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  const created = await ownedProfiles(session.account.id);
+  expect(created).toHaveLength(1);
+  expect(created[0]).toMatchObject({
+    handle: 'first_steps',
+    displayName: 'first_steps',
+    bio: null,
+    defaultPostVisibility: 'UNLISTED',
+    followPolicy: 'OPEN',
+  });
+
+  await page.getByRole('textbox', { name: '표시 이름' }).fill('저장한 이름');
+  await page.getByRole('textbox', { name: '소개' }).fill('저장한 소개');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/tags$/);
+  expect((await ownedProfiles(session.account.id))[0]).toMatchObject({
+    id: created[0]!.id,
+    displayName: '저장한 이름',
+    bio: '저장한 소개',
+  });
+  await page.getByRole('textbox', { name: '프로필 태그', exact: true }).fill('책');
+  await page.getByRole('button', { name: '추가', exact: true }).click();
+  await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
+  await page.getByRole('radio', { name: /팔로워만:/ }).click();
+  await page.getByRole('switch', { name: '팔로우 요청 자동 승인' }).click();
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/review$/);
+  expect((await ownedProfiles(session.account.id))[0]).toMatchObject({
+    id: created[0]!.id,
+    defaultPostVisibility: 'FOLLOWERS',
+    followPolicy: 'APPROVAL_REQUIRED',
+  });
+  await expect(page.getByText('#책', { exact: true })).toHaveCount(0);
+  const savedMutations = [...mutations];
+  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  await expectCompleted(page);
+  expect(mutations).toEqual(savedMutations);
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
+    1,
+  );
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingSelectMutation')).toHaveLength(
+    1,
+  );
+
+  await page.getByRole('button', { name: '이전 화면' }).click();
+  await expect(page).toHaveURL(/\/first-profile\/review$/);
+  for (const step of ['posting', 'tags', 'details']) {
+    await page.getByRole('button', { name: '이전 화면' }).click();
+    await expect(page).toHaveURL(new RegExp(`/first-profile/${step}$`));
+  }
+  await page.getByRole('textbox', { name: '표시 이름' }).fill('수정한 이름');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/tags$/);
+  await expect(page.getByText('#책', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '바로 시작' }).click();
+  await expectCompleted(page);
+  const edited = await ownedProfiles(session.account.id);
+  expect(edited).toHaveLength(1);
+  expect(edited[0]).toMatchObject({ id: created[0]!.id, displayName: '수정한 이름' });
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
+    1,
+  );
+});
+
+test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, session.token);
+  const mutations = trackMutations(page);
+  await page.goto('/first-profile/handle');
+  await expect(page.getByRole('button', { name: '바로 시작' })).toBeDisabled();
+  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_quick');
+  await page.getByRole('button', { name: '바로 시작' }).click();
+  await expectCompleted(page);
+  expect(await ownedProfiles(session.account.id)).toMatchObject([
+    {
+      handle: 'first_quick',
+      displayName: 'first_quick',
+      defaultPostVisibility: 'UNLISTED',
+      followPolicy: 'OPEN',
+    },
+  ]);
+  expect(mutations).toEqual([
+    'FirstProfileOnboardingCreateMutation',
+    'FirstProfileOnboardingSelectMutation',
+  ]);
+  await page.getByRole('button', { name: '이전 화면' }).click();
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toHaveAttribute(
+    'readonly',
+  );
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  expect(mutations).toHaveLength(2);
+});
+
+test('선택 단계의 저장 실패 후에도 같은 Profile로 건너뛰고 완료할 수 있다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, session.token);
+  const mutations = trackMutations(page);
+  await page.goto('/first-profile/handle');
+  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_skip');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  const created = await ownedProfiles(session.account.id);
+  await page.getByRole('textbox', { name: '표시 이름' }).fill('저장되지 않은 이름');
   await page.route('**/graphql', async (route) => {
     if (
-      fail &&
       readGraphQLOperation(route.request().postData())?.operationName ===
-        'FirstProfileOnboardingSaveMutation'
+      'FirstProfileOnboardingSaveMutation'
     ) {
-      fail = false;
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ data: null, errors: [{ message: 'save unavailable' }] }),
@@ -140,16 +172,79 @@ test('생성 후 저장 실패는 Profile과 입력을 보존하고 같은 Profi
       await route.fallback();
     }
   });
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page.getByRole('button', { name: '지금은 건너뛰기' })).toBeEnabled();
+  await expect(page.getByRole('textbox', { name: '표시 이름' })).toHaveValue('저장되지 않은 이름');
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
+  await expect(page).toHaveURL(/\/first-profile\/tags$/);
   await page.getByRole('button', { name: '바로 시작' }).click();
-  await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
-  const before = await ownedProfiles(session.account.id);
-  expect(before).toHaveLength(1);
-  await page.getByRole('button', { name: '다시 시도' }).click();
   await expectCompleted(page);
-  const after = await ownedProfiles(session.account.id);
-  expect(after).toHaveLength(1);
-  expect(after[0]!.id).toBe(before[0]!.id);
-  expect(after[0]!.displayName).toBe('재시도할 이름');
+  await expect(page.getByText('저장되지 않은 이름', { exact: true })).toHaveCount(0);
+  expect(await ownedProfiles(session.account.id)).toEqual(created);
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingSaveMutation')).toHaveLength(1);
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
+    1,
+  );
+});
+
+test('생성 실패는 핸들 입력을 유지하고 다음을 다시 시도할 수 있다', async ({ context, page }) => {
+  const session = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, session.token);
+  let fail = true;
+  await page.route('**/graphql', async (route) => {
+    if (
+      fail &&
+      readGraphQLOperation(route.request().postData())?.operationName ===
+        'FirstProfileOnboardingCreateMutation'
+    ) {
+      fail = false;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: null, errors: [{ message: 'create unavailable' }] }),
+      });
+    } else {
+      await route.fallback();
+    }
+  });
+  await page.goto('/first-profile/handle');
+  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_retry');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page.getByRole('button', { name: '다음', exact: true })).toBeEnabled();
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toHaveValue('first_retry');
+  expect(await ownedProfiles(session.account.id)).toHaveLength(0);
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  expect(await ownedProfiles(session.account.id)).toHaveLength(1);
+});
+
+test('생성 후 흐름을 나갔다가 다시 진입하면 기존 Profile로 홈에 돌아간다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, session.token);
+  const mutations = trackMutations(page);
+  await page.goto('/first-profile/handle');
+  await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_reentry');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page).toHaveURL(/\/first-profile\/details$/);
+  const created = await ownedProfiles(session.account.id);
+  await page.getByRole('button', { name: '바로 시작' }).click();
+  await expectCompleted(page);
+  await page.getByRole('link', { name: '시작하기', exact: true }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/home$/);
+  for (const step of ['handle', 'details', 'complete']) {
+    await page.goto(`/first-profile/${step}`);
+    await expect(page).toHaveURL(/\/home$/);
+  }
+  expect(await ownedProfiles(session.account.id)).toEqual(created);
+  expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
+    1,
+  );
 });
 
 test('Profile이 없는 인증 사용자도 공개 프로필을 읽고 첫 프로필 만들기로 진입한다', async ({

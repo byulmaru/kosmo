@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  defaultFirstProfileValues,
-  firstProfileChanges,
   initialFirstProfileDraft,
   prepareFirstProfileDraft,
+  prepareFirstProfileStep,
 } from './firstProfileOnboardingState';
 
 describe('first profile draft', () => {
@@ -83,23 +82,41 @@ describe('first profile draft', () => {
     }
   });
 
-  it('does not save unchanged values and treats tag order as unordered', () => {
-    const baseline = { ...defaultFirstProfileValues('spring'), tags: ['책', '애니메이션'] };
-    assert.equal(firstProfileChanges({ ...baseline, tags: ['애니메이션', '책'] }, baseline), null);
+  it('validates and prepares only the optional step being saved', () => {
+    const draft = {
+      ...initialFirstProfileDraft,
+      handle: 'spring',
+      displayName: '  봄  ',
+      bio: '  소개  ',
+      tagInput: 'bad tag',
+      defaultPostVisibility: 'FOLLOWERS' as const,
+      followPolicy: 'APPROVAL_REQUIRED' as const,
+    };
+    assert.deepEqual(prepareFirstProfileStep(draft, 'details'), {
+      ok: true,
+      value: { displayName: '봄', bio: '소개' },
+    });
+    assert.equal(prepareFirstProfileStep(draft, 'tags').ok, false);
+    assert.deepEqual(prepareFirstProfileStep(draft, 'posting'), {
+      ok: true,
+      value: { defaultPostVisibility: 'FOLLOWERS', followPolicy: 'APPROVAL_REQUIRED' },
+    });
   });
 
-  it('sends changed fields and explicit image removal only', () => {
-    const baseline = { ...defaultFirstProfileValues('spring'), avatarId: 'media-avatar' };
-    assert.deepEqual(
-      firstProfileChanges(
-        { ...baseline, avatarId: null, bio: '소개', followPolicy: 'APPROVAL_REQUIRED' },
-        baseline,
-      ),
-      {
-        avatarId: null,
-        bio: '소개',
-        followPolicy: 'APPROVAL_REQUIRED',
-      },
-    );
+  it('keeps defaults for empty details and commits the pending tag only in the tag step', () => {
+    const draft = {
+      ...initialFirstProfileDraft,
+      handle: 'spring',
+      tags: ['책'],
+      tagInput: '#애니메이션',
+    };
+    assert.deepEqual(prepareFirstProfileStep(draft, 'details'), {
+      ok: true,
+      value: { displayName: 'spring', bio: null },
+    });
+    assert.deepEqual(prepareFirstProfileStep(draft, 'tags'), {
+      ok: true,
+      value: { tags: ['책', '애니메이션'] },
+    });
   });
 });

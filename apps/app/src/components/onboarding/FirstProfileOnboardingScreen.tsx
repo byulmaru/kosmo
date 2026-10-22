@@ -22,7 +22,7 @@ import { TextArea, TextField } from '@/components/ui/TextField';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import { firstProfileSteps, prepareFirstProfileDraft } from './firstProfileOnboardingState';
+import { firstProfileSteps } from './firstProfileOnboardingState';
 import type { ReactNode } from 'react';
 import type { ProfileEditImageDraft } from '@/components/profile/profileEditState';
 import type {
@@ -76,6 +76,11 @@ export type FirstProfileOnboardingScreenProps = {
   onHeaderRetry: () => void;
   result: { kind: 'idle' | 'success' } | { kind: 'error'; message: string };
   startAction?: ReactNode;
+  summary?: {
+    draft: FirstProfileDraft;
+    avatar: ProfileEditImageDraft;
+    header: ProfileEditImageDraft;
+  } | null;
   step: FirstProfileStep | 'complete';
   webHost: string;
 };
@@ -101,14 +106,10 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
   const inputStep = step !== 'complete';
-  const prepared = prepareFirstProfileDraft(draft);
-  const title = inputStep
-    ? copy[step].title
-    : result.kind === 'success'
-      ? '첫 프로필이\n준비됐어요'
-      : result.kind === 'error'
-        ? '프로필을 준비하지 못했어요'
-        : '프로필을 준비하고 있어요';
+  const summaryDraft = props.summary?.draft ?? draft;
+  const summaryAvatar = props.summary?.avatar ?? avatar;
+  const summaryHeader = props.summary?.header ?? header;
+  const title = inputStep ? copy[step].title : '첫 프로필이\n준비됐어요';
   const description = inputStep ? copy[step].description : undefined;
   const handleError =
     errors.handle ??
@@ -118,46 +119,57 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
   const hasImageError = [avatar, header].some(
     (image) => image.kind === 'replacement' && image.uploadState === 'error',
   );
-  const summary = (
-    <View style={[styles.summary, { borderColor: theme.borderDefault }]}>
-      {header.previewUri ? (
-        <Image
-          accessible={false}
-          resizeMode="cover"
-          source={{ uri: header.previewUri }}
-          style={styles.summaryHeader}
+  const summary =
+    props.summary === null ? (
+      <Text
+        accessibilityRole="alert"
+        style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}
+      >
+        프로필 요약을 불러오지 못했어요. 저장한 프로필로 시작할 수 있어요.
+      </Text>
+    ) : (
+      <View style={[styles.summary, { borderColor: theme.borderDefault }]}>
+        {summaryHeader.previewUri ? (
+          <Image
+            accessible={false}
+            resizeMode="cover"
+            source={{ uri: summaryHeader.previewUri }}
+            style={styles.summaryHeader}
+          />
+        ) : null}
+        <Avatar
+          imageUri={summaryAvatar.previewUri}
+          label={summaryDraft.displayName.trim() || summaryDraft.handle}
+          size={64}
         />
-      ) : null}
-      <Avatar
-        imageUri={avatar.previewUri}
-        label={draft.displayName.trim() || draft.handle}
-        size={64}
-      />
-      <Text style={[textStyles.uiHeadingS, { color: theme.foregroundPrimary }]}>
-        {draft.displayName.trim() || draft.handle.trim()}
-      </Text>
-      <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-        @{draft.handle.trim()}
-      </Text>
-      {draft.bio.trim() ? (
-        <Text style={[textStyles.contentM, { color: theme.foregroundPrimary }]}>
-          {draft.bio.trim()}
+        <Text style={[textStyles.uiHeadingS, { color: theme.foregroundPrimary }]}>
+          {summaryDraft.displayName.trim() || summaryDraft.handle.trim()}
         </Text>
-      ) : null}
-      <View style={styles.tags}>
-        {(prepared.ok ? prepared.value.tags : draft.tags).map((name) => (
-          <ProfileTagChip key={name} name={name} removable={false} />
-        ))}
+        <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+          @{summaryDraft.handle.trim()}
+        </Text>
+        {summaryDraft.bio.trim() ? (
+          <Text style={[textStyles.contentM, { color: theme.foregroundPrimary }]}>
+            {summaryDraft.bio.trim()}
+          </Text>
+        ) : null}
+        <View style={styles.tags}>
+          {summaryDraft.tags.map((name) => (
+            <ProfileTagChip key={name} name={name} removable={false} />
+          ))}
+        </View>
+        <Text style={[textStyles.uiCopyM, { color: theme.foregroundPrimary }]}>
+          게시물 기본 공개 범위:{' '}
+          {
+            visibilityOptions.find((option) => option.value === summaryDraft.defaultPostVisibility)
+              ?.label
+          }
+        </Text>
+        <Text style={[textStyles.uiCopyM, { color: theme.foregroundPrimary }]}>
+          팔로우 요청 자동 승인: {summaryDraft.followPolicy === 'OPEN' ? '켜짐' : '꺼짐'}
+        </Text>
       </View>
-      <Text style={[textStyles.uiCopyM, { color: theme.foregroundPrimary }]}>
-        게시물 기본 공개 범위:{' '}
-        {visibilityOptions.find((option) => option.value === draft.defaultPostVisibility)?.label}
-      </Text>
-      <Text style={[textStyles.uiCopyM, { color: theme.foregroundPrimary }]}>
-        팔로우 요청 자동 승인: {draft.followPolicy === 'OPEN' ? '켜짐' : '꺼짐'}
-      </Text>
-    </View>
-  );
+    );
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -367,8 +379,8 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               </View>
             </View>
           ) : null}
-          {step === 'review' || (step === 'complete' && result.kind === 'success') ? summary : null}
-          {result.kind === 'error' && !(step === 'details' && hasImageError) ? (
+          {step === 'review' || step === 'complete' ? summary : null}
+          {inputStep && result.kind === 'error' && !(step === 'details' && hasImageError) ? (
             <Text
               accessibilityRole="alert"
               style={[textStyles.uiCopyM, { color: theme.feedbackDangerOnSubtle }]}
@@ -376,7 +388,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               {result.message}
             </Text>
           ) : null}
-          {(step === 'review' || step === 'complete') && Object.keys(errors).length ? (
+          {step === 'review' && Object.keys(errors).length ? (
             <View>
               {Object.values(errors).map((error) => (
                 <Text
@@ -396,14 +408,10 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 loading={busy}
                 onPress={step === 'review' ? onComplete : onNext}
               >
-                {step === 'review' ? (created ? '저장하고 시작' : '프로필 만들기') : '다음'}
+                {step === 'review' ? '시작하기' : '다음'}
               </Button>
-            ) : result.kind === 'success' ? (
-              startAction
             ) : (
-              <Button disabled={busy} loading={busy} onPress={onComplete}>
-                {result.kind === 'error' ? '다시 시도' : '프로필을 준비하고 있어요'}
-              </Button>
+              startAction
             )}
             {inputStep && step !== 'handle' && step !== 'review' ? (
               <Button disabled={busy} onPress={onSkip} tone="secondary">

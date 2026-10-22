@@ -87,7 +87,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 
 ## 조회 정책
 
-- [First Profile Onboarding Policy](./policies/first-profile-onboarding.md): 첫 Profile 준비, 명시적 완료와 생성 후 수정.
+- [First Profile Onboarding Policy](./policies/first-profile-onboarding.md): 첫 단계의 Profile 생성·선택과 선택 정보의 단계별 저장·생략.
 
 - [Post List Policy](./policies/post-list.md): Home, Local, Profile, Hashtag Post List의 후보와 제어 결정.
 - [Admin Console Read Policy](./policies/admin-console-read.md): Admin Console Viewer의 Account, Profile,

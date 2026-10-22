@@ -33,18 +33,6 @@ export const initialFirstProfileDraft: FirstProfileDraft = {
   followPolicy: 'OPEN',
 };
 
-export function defaultFirstProfileValues(handle: string): FirstProfileValues {
-  return {
-    displayName: handle,
-    bio: null,
-    tags: [],
-    defaultPostVisibility: 'UNLISTED',
-    followPolicy: 'OPEN',
-    avatarId: null,
-    headerId: null,
-  };
-}
-
 export function prepareFirstProfileDraft(
   draft: FirstProfileDraft,
 ):
@@ -85,31 +73,33 @@ export function prepareFirstProfileDraft(
   };
 }
 
-export function firstProfileChanges(
-  value: FirstProfileValues,
-  baseline: FirstProfileValues,
-): Partial<FirstProfileValues> | null {
-  const changes: Partial<FirstProfileValues> = {};
-  if (value.displayName !== baseline.displayName) {
-    changes.displayName = value.displayName;
+export function prepareFirstProfileStep(
+  draft: FirstProfileDraft,
+  step: 'details' | 'tags' | 'posting',
+): { ok: true; value: Partial<FirstProfileValues> } | { ok: false; errors: FirstProfileErrors } {
+  const prepared = prepareFirstProfileDraft({
+    ...initialFirstProfileDraft,
+    handle: draft.handle,
+    ...(step === 'details' ? { displayName: draft.displayName, bio: draft.bio } : {}),
+    ...(step === 'tags' ? { tags: draft.tags, tagInput: draft.tagInput } : {}),
+    ...(step === 'posting'
+      ? { defaultPostVisibility: draft.defaultPostVisibility, followPolicy: draft.followPolicy }
+      : {}),
+  });
+  if (!prepared.ok) {
+    return prepared;
   }
-  if (value.bio !== baseline.bio) {
-    changes.bio = value.bio;
-  }
-  if (value.defaultPostVisibility !== baseline.defaultPostVisibility) {
-    changes.defaultPostVisibility = value.defaultPostVisibility;
-  }
-  if (value.followPolicy !== baseline.followPolicy) {
-    changes.followPolicy = value.followPolicy;
-  }
-  if (JSON.stringify([...value.tags].sort()) !== JSON.stringify([...baseline.tags].sort())) {
-    changes.tags = [...value.tags];
-  }
-  if (value.avatarId !== baseline.avatarId) {
-    changes.avatarId = value.avatarId;
-  }
-  if (value.headerId !== baseline.headerId) {
-    changes.headerId = value.headerId;
-  }
-  return Object.keys(changes).length ? changes : null;
+  const value = prepared.value;
+  return {
+    ok: true,
+    value:
+      step === 'details'
+        ? { displayName: value.displayName, bio: value.bio }
+        : step === 'tags'
+          ? { tags: value.tags }
+          : {
+              defaultPostVisibility: value.defaultPostVisibility,
+              followPolicy: value.followPolicy,
+            },
+  };
 }

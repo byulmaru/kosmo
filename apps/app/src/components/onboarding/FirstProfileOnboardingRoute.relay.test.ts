@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Suspense, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
@@ -12,6 +12,7 @@ import type {
   useRelayActor as useRelayActorExport,
 } from '@/relay/RelayActorProvider';
 import type * as Feature from './FirstProfileOnboardingRoute';
+import type { FirstProfileStep } from './firstProfileOnboardingState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
@@ -34,6 +35,7 @@ let pickerResult: object;
 let RelayActorProvider: typeof RelayActorProviderExport;
 let actorControls: ReturnType<typeof useRelayActorExport>;
 let useRelayActor: typeof useRelayActorExport;
+let navigate: (step: FirstProfileStep | 'complete') => void;
 let sessionValue = {
   accountId: 'account-1' as string | null,
   sessionId: 'session-1' as string | null,
@@ -43,7 +45,7 @@ let sessionValue = {
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|mutation|fragment) (\w+)/)?.[1];
     assert.ok(name);
     return require(`./__generated__/${name}.graphql.ts`).default;
   },
@@ -88,7 +90,7 @@ mockModule('@/components/media/imageUpload', {
   },
 });
 
-function Probe() {
+function Probe({ step }: { step: FirstProfileStep | 'complete' }) {
   flow = feature.useFirstProfileOnboarding();
   actorControls = useRelayActor();
   return createElement('Draft', {
@@ -96,44 +98,69 @@ function Probe() {
     profile: flow.createdProfile?.id,
     busy: flow.busy,
     result: flow.result.kind,
+    step,
   });
 }
-function renderTree() {
+function TestApp() {
+  const [step, setStep] = useState<FirstProfileStep | 'complete'>('handle');
+  navigate = setStep;
   return createElement(
     RelayActorProvider,
     { createEnvironment: environment },
     createElement(
       Suspense,
       { fallback: createElement('Loading') },
-      createElement(feature.FirstProfileOnboardingRoute, null, createElement(Probe)),
+      createElement(feature.FirstProfileOnboardingRoute, null, createElement(Probe, { step })),
     ),
   );
+}
+function renderTree() {
+  return createElement(TestApp);
+}
+function displayedStep() {
+  return renderer!.root.findAll((node) => String(node.type) === 'Draft')[0]!.props.step;
 }
 function environment(_token: string | null, actor: string | null) {
   return new Environment({
     network: Network.create((request, variables) =>
       Observable.create((sink) => {
-        requests.push({ name: request.name, variables, sink, actor });
+        requests.push({
+          name: request.name,
+          variables: JSON.parse(JSON.stringify(variables)) as Record<string, unknown>,
+          sink,
+          actor,
+        });
       }),
     ),
     store: new Store(new RecordSource()),
   });
 }
+function profile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'profile-1',
+    handle: 'spring',
+    relativeHandle: '@spring',
+    displayName: 'spring',
+    bio: null,
+    followPolicy: 'OPEN',
+    tags: [],
+    avatar: null,
+    header: null,
+    private: { defaultPostVisibility: 'UNLISTED' },
+    instance: { kind: 'LOCAL' },
+    viewerState: { membership: { role: 'OWNER' } },
+    ...overrides,
+  };
+}
 function query(accountId = 'account-1', profileId: string | null = null, sessionId = 'session-1') {
   return {
     me: {
       id: accountId,
-      profiles: profileId ? [{ id: profileId, handle: 'spring', relativeHandle: '@spring' }] : [],
+      profiles: profileId ? [profile({ id: profileId })] : [],
     },
     currentSession: {
       id: sessionId,
-      selectedProfile: profileId
-        ? {
-            id: profileId,
-            instance: { kind: 'LOCAL' },
-            viewerState: { membership: { role: 'OWNER' } },
-          }
-        : null,
+      selectedProfile: profileId ? profile({ id: profileId }) : null,
     },
   };
 }
@@ -154,17 +181,26 @@ async function resolve(name: string, data: object | null, errors?: ReadonlyArray
 async function change(input: Partial<typeof flow.draft>) {
   await act(async () => flow.setDraft({ ...flow.draft, ...input }));
 }
-async function finish(step: Parameters<typeof flow.complete>[0] = 'handle') {
-  await act(async () => {
-    flow.complete(step);
-  });
+async function next(step: Exclude<FirstProfileStep, 'review'> = 'handle') {
+  const destination = {
+    handle: 'details',
+    details: 'tags',
+    tags: 'posting',
+    posting: 'review',
+  } as const;
+  await act(async () => flow.next(step, () => navigate(destination[step])));
+}
+async function finish(step: FirstProfileStep = 'handle') {
+  await act(async () => flow.complete(step, () => navigate('complete')));
+}
+async function skip(step: 'details' | 'tags' | 'posting') {
+  const destination = { details: 'tags', tags: 'posting', posting: 'review' } as const;
+  await act(async () => flow.skip(() => navigate(destination[step])));
 }
 async function createFirst() {
   await change({ handle: 'spring' });
-  await finish();
-  await resolve('FirstProfileOnboardingCreateMutation', {
-    createProfile: { profile: { id: 'profile-1', handle: 'spring', relativeHandle: '@spring' } },
-  });
+  await next();
+  await resolve('FirstProfileOnboardingCreateMutation', { createProfile: { profile: profile() } });
 }
 async function selected() {
   await resolve('FirstProfileOnboardingSelectMutation', {
@@ -173,6 +209,11 @@ async function selected() {
   if (requests.some((request) => request.name === 'FirstProfileOnboardingQuery')) {
     await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
   }
+}
+async function save(overrides: Record<string, unknown>) {
+  await resolve('FirstProfileOnboardingSaveMutation', {
+    updateProfile: { profile: profile(overrides) },
+  });
 }
 
 before(async () => {
@@ -202,208 +243,60 @@ afterEach(async () => {
   renderer = null;
 });
 
-describe('first profile Relay completion', () => {
-  it('creates only on explicit completion and ignores a repeated action while pending', async () => {
+describe('first profile step mutations', () => {
+  it('creates and selects on handle Next before advancing and ignores repeated pending actions', async () => {
     await change({ handle: 'spring' });
     assert.equal(requests.length, 0);
-    await finish();
-    await finish();
-    assert.equal(
-      requests.filter((request) => request.name === 'FirstProfileOnboardingCreateMutation').length,
-      1,
+    await next();
+    await next();
+    assert.equal(displayedStep(), 'handle');
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['FirstProfileOnboardingCreateMutation'],
     );
     await resolve('FirstProfileOnboardingCreateMutation', {
-      createProfile: { profile: { id: 'profile-1', handle: 'spring', relativeHandle: '@spring' } },
+      createProfile: { profile: profile() },
     });
+    assert.equal(displayedStep(), 'handle');
     await selected();
-    assert.equal(flow.result.kind, 'success');
+    assert.equal(displayedStep(), 'details');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(storedProfileId, 'profile-1');
     assert.equal(requests.length, 0);
   });
 
-  it('recovers a committed profile after a lost create response and retries confirmation without recreating', async () => {
-    await change({ handle: 'spring', displayName: '봄' });
-    await finish('details');
-    const creation = requests.shift()!;
-    assert.equal(creation.name, 'FirstProfileOnboardingCreateMutation');
-    await act(async () => creation.sink.error(new Error('response lost after commit')));
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingQuery'],
-    );
-    await resolve('FirstProfileOnboardingQuery', { ...query(), me: null }, [
-      { message: 'profiles unavailable', path: ['me', 'profiles'] },
-    ]);
-    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
-    const errorView = renderer!.root.findAll((node) => String(node.type) === 'StateView')[0]!;
-    await act(async () => errorView.props.onAction());
-    await resolve('FirstProfileOnboardingQuery', {
-      ...query(),
-      me: {
-        id: 'account-1',
-        profiles: [{ id: 'profile-1', handle: 'spring', relativeHandle: '@spring' }],
-      },
+  it('creates and selects on handle immediate completion without saving optional inputs', async () => {
+    await change({ handle: 'spring' });
+    await finish();
+    await resolve('FirstProfileOnboardingCreateMutation', {
+      createProfile: { profile: profile() },
     });
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-    assert.equal(flow.draft.displayName, '봄');
-    await finish('details');
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingSaveMutation'],
-    );
-    assert.equal(requests[0]!.variables.profileId, 'profile-1');
-    assert.equal((requests[0]!.variables.input as { displayName: string }).displayName, '봄');
-    await resolve('FirstProfileOnboardingSaveMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      updateProfile: {
-        profile: {
-          id: 'profile-1',
-          displayName: '봄',
-          bio: null,
-          followPolicy: 'OPEN',
-          private: { defaultPostVisibility: 'UNLISTED' },
-          tags: [],
-          avatar: null,
-          header: null,
-        },
-      },
-    });
-    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
+    await selected();
+    assert.equal(displayedStep(), 'complete');
     assert.equal(flow.result.kind, 'success');
-    assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(storedProfileId, 'profile-1');
     assert.equal(requests.length, 0);
   });
 
-  it('retains the created identity when selection fails and retries selection without creating again', async () => {
-    await createFirst();
-    await resolve('FirstProfileOnboardingSelectMutation', null, [
-      { message: 'selection unavailable' },
+  it('retains the handle after create failure and retries without a recovery query', async () => {
+    await change({ handle: 'spring' });
+    await next();
+    await resolve('FirstProfileOnboardingCreateMutation', null, [
+      { message: 'create unavailable', path: ['createProfile'] },
     ]);
+    assert.equal(displayedStep(), 'handle');
+    assert.equal(flow.createdProfile, null);
+    assert.equal(flow.draft.handle, 'spring');
     assert.equal(flow.result.kind, 'error');
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-    await finish('review');
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingSelectMutation'],
-    );
-    await selected();
-    assert.equal(flow.result.kind, 'success');
+    assert.equal(flow.busy, false);
+    assert.equal(requests.length, 0);
+    await next();
+    assert.equal(requests[0]!.name, 'FirstProfileOnboardingCreateMutation');
   });
 
-  it('binds optional updates to the created profile and preserves the entire draft after failure', async () => {
-    await change({
-      handle: 'spring',
-      displayName: '봄',
-      bio: '소개',
-      tags: ['책'],
-      defaultPostVisibility: 'FOLLOWERS',
-      followPolicy: 'APPROVAL_REQUIRED',
-    });
-    await finish('posting');
-    await resolve('FirstProfileOnboardingCreateMutation', {
-      createProfile: { profile: { id: 'profile-1', handle: 'spring', relativeHandle: '@spring' } },
-    });
-    const first = requests[0]!;
-    assert.equal(first.name, 'FirstProfileOnboardingSaveMutation');
-    assert.equal(first.variables.profileId, 'profile-1');
-    assert.deepEqual(first.variables.input, {
-      displayName: '봄',
-      bio: '소개',
-      tags: ['책'],
-      defaultPostVisibility: 'FOLLOWERS',
-      followPolicy: 'APPROVAL_REQUIRED',
-    });
-    await resolve(first.name, null, [{ message: 'save failed' }]);
-    assert.equal(flow.draft.bio, '소개');
-    assert.deepEqual(flow.draft.tags, ['책']);
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-    await finish('posting');
-    assert.equal(requests[0]!.name, 'FirstProfileOnboardingSaveMutation');
-    await resolve('FirstProfileOnboardingSaveMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      updateProfile: {
-        profile: {
-          id: 'profile-1',
-          displayName: '봄',
-          bio: '소개',
-          followPolicy: 'APPROVAL_REQUIRED',
-          tags: [{ id: 'tag-book', name: '책' }],
-          avatar: null,
-          header: null,
-          private: { defaultPostVisibility: 'FOLLOWERS' },
-        },
-      },
-    });
-    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
-    assert.equal(flow.result.kind, 'success');
-    assert.equal(flow.completedFrom, 'posting');
-    await finish('review');
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingSelectMutation'],
-    );
-  });
-
-  it('keeps a failed image and the profile, then reuses a ready image across a save retry', async () => {
+  it('shows a handle conflict at the input and retries the corrected handle', async () => {
     await change({ handle: 'spring' });
-    await act(async () => flow.pickImage('avatar'));
-    transferFailure = true;
-    await finish('details');
-    await resolve('FirstProfileOnboardingCreateMutation', {
-      createProfile: { profile: { id: 'profile-1', handle: 'spring', relativeHandle: '@spring' } },
-    });
-    await resolve('FirstProfileOnboardingIssueMediaMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      issueMediaUploadUrl: { media: { id: 'media-1' }, uploadUrl: 'https://upload.example/one' },
-    });
-    assert.equal(flow.result.kind, 'error');
-    assert.equal(flow.images.avatar.presentation.kind, 'replacement');
-    assert.equal(flow.images.avatar.asset?.uri, 'file:///avatar.png');
-    transferFailure = false;
-    await finish('details');
-    await resolve('FirstProfileOnboardingIssueMediaMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      issueMediaUploadUrl: { media: { id: 'media-2' }, uploadUrl: 'https://upload.example/two' },
-    });
-    await resolve('FirstProfileOnboardingCompleteMediaMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
-    });
-    await resolve('FirstProfileOnboardingSaveMutation', null, [{ message: 'save failed' }]);
-    await finish('details');
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingSaveMutation'],
-    );
-    assert.equal((requests[0]!.variables.input as { avatarId: string }).avatarId, 'media-2');
-    assert.equal(transferCount, 2);
-    await resolve('FirstProfileOnboardingSaveMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      updateProfile: {
-        profile: {
-          id: 'profile-1',
-          displayName: 'spring',
-          bio: null,
-          followPolicy: 'OPEN',
-          tags: [],
-          avatar: { id: 'media-2', url: 'https://media.example/avatar' },
-          header: null,
-          private: { defaultPostVisibility: 'UNLISTED' },
-        },
-      },
-    });
-    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
-    assert.equal(flow.result.kind, 'success');
-    assert.equal(flow.images.avatar.mediaId, 'media-2');
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-    assert.equal(transferCount, 2);
-  });
-
-  it('shows a handle conflict from a non-null create root on the input field', async () => {
-    await change({ handle: 'spring' });
-    await finish();
+    await next();
     await resolve('FirstProfileOnboardingCreateMutation', null, [
       {
         message: '이미 사용 중인 핸들이에요.',
@@ -411,17 +304,199 @@ describe('first profile Relay completion', () => {
         path: ['createProfile'],
       },
     ]);
-    await resolve('FirstProfileOnboardingQuery', query());
-    assert.equal(flow.createdProfile, null);
     assert.equal(flow.errors.handle, '이미 사용 중인 핸들이에요.');
     assert.equal(flow.draft.handle, 'spring');
+    assert.equal(requests.length, 0);
     await change({ handle: 'another_spring' });
-    await finish();
-    assert.equal(requests[0]!.name, 'FirstProfileOnboardingCreateMutation');
+    await next();
     assert.equal(requests[0]!.variables.handle, 'another_spring');
   });
 
-  it('treats nullable query field errors as retryable errors and retains a created draft on retry', async () => {
+  it('retains the created identity on selection failure and retries selection without recreating', async () => {
+    await createFirst();
+    await resolve('FirstProfileOnboardingSelectMutation', null, [
+      { message: 'selection unavailable' },
+    ]);
+    assert.equal(displayedStep(), 'handle');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(flow.result.kind, 'error');
+    await next();
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['FirstProfileOnboardingSelectMutation'],
+    );
+    await selected();
+    assert.equal(displayedStep(), 'details');
+    assert.equal(storedProfileId, 'profile-1');
+  });
+
+  it('saves only the current step and does not select the actor again for optional updates', async () => {
+    await createFirst();
+    await selected();
+    await change({
+      displayName: '봄',
+      bio: '소개',
+      tagInput: 'bad tag',
+      defaultPostVisibility: 'FOLLOWERS',
+      followPolicy: 'APPROVAL_REQUIRED',
+    });
+    await next('details');
+    assert.equal(displayedStep(), 'details');
+    assert.deepEqual(requests[0]!.variables, { input: { displayName: '봄', bio: '소개' } });
+    assert.equal(requests[0]!.actor, 'profile-1');
+    await save({ displayName: '봄', bio: '소개' });
+    assert.equal(displayedStep(), 'tags');
+    assert.equal(flow.summary?.draft.displayName, '봄');
+    await change({ tagInput: '#책' });
+    await next('tags');
+    assert.deepEqual(requests[0]!.variables, { input: { tags: ['책'] } });
+    await save({ displayName: '봄', bio: '소개', tags: [{ id: 'tag-book', name: '책' }] });
+    assert.equal(displayedStep(), 'posting');
+    await next('posting');
+    assert.deepEqual(requests[0]!.variables, {
+      input: { defaultPostVisibility: 'FOLLOWERS', followPolicy: 'APPROVAL_REQUIRED' },
+    });
+    await save({
+      displayName: '봄',
+      bio: '소개',
+      tags: [{ id: 'tag-book', name: '책' }],
+      followPolicy: 'APPROVAL_REQUIRED',
+      private: { defaultPostVisibility: 'FOLLOWERS' },
+    });
+    assert.equal(displayedStep(), 'review');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    await finish('review');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(requests.length, 0);
+  });
+
+  it('keeps a failed optional draft and lets skip and completion proceed without another mutation', async () => {
+    await createFirst();
+    await selected();
+    await change({ displayName: '저장되지 않은 이름', bio: '남겨 둔 소개' });
+    await next('details');
+    await resolve('FirstProfileOnboardingSaveMutation', null, [{ message: 'save unavailable' }]);
+    assert.equal(displayedStep(), 'details');
+    assert.equal(flow.result.kind, 'error');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(flow.draft.bio, '남겨 둔 소개');
+    assert.equal(flow.summary?.draft.displayName, 'spring');
+    await skip('details');
+    assert.equal(displayedStep(), 'tags');
+    assert.equal(flow.draft.displayName, '저장되지 않은 이름');
+    assert.equal(flow.summary?.draft.displayName, 'spring');
+    await finish('tags');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(flow.result.kind, 'success');
+    assert.equal(requests.length, 0);
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+  });
+
+  it('keeps the flow usable when a successful save has a nullable summary field error', async () => {
+    await createFirst();
+    await selected();
+    await change({ displayName: '저장한 이름' });
+    await next('details');
+    await resolve(
+      'FirstProfileOnboardingSaveMutation',
+      { updateProfile: { profile: profile({ displayName: '저장한 이름', private: null }) } },
+      [
+        {
+          message: 'private projection unavailable',
+          path: ['updateProfile', 'profile', 'private'],
+        },
+      ],
+    );
+    assert.equal(displayedStep(), 'tags');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(flow.summary, null);
+    await skip('tags');
+    assert.equal(displayedStep(), 'posting');
+    await finish('posting');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(flow.result.kind, 'success');
+    assert.equal(flow.summary, null);
+    assert.equal(requests.length, 0);
+  });
+
+  it('completes directly after an optional save failure without retrying the save', async () => {
+    await createFirst();
+    await selected();
+    await change({ displayName: '저장되지 않은 이름' });
+    await next('details');
+    await resolve('FirstProfileOnboardingSaveMutation', null, [{ message: 'save unavailable' }]);
+    await finish('details');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(flow.summary?.draft.displayName, 'spring');
+    assert.equal(flow.result.kind, 'success');
+    assert.equal(requests.length, 0);
+  });
+
+  it('allows skipping invalid optional fields without validation or mutation', async () => {
+    await createFirst();
+    await selected();
+    await change({ displayName: '이'.repeat(41), tagInput: 'bad tag' });
+    await next('details');
+    assert.equal(displayedStep(), 'details');
+    assert.ok(flow.errors.displayName);
+    await skip('details');
+    await skip('tags');
+    await finish('posting');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(requests.length, 0);
+  });
+
+  it('reuses a completed image upload on save retry and never recreates the Profile', async () => {
+    await createFirst();
+    await selected();
+    await act(async () => flow.pickImage('avatar'));
+    transferFailure = true;
+    await next('details');
+    await resolve('FirstProfileOnboardingIssueMediaMutation', {
+      issueMediaUploadUrl: { media: { id: 'media-1' }, uploadUrl: 'https://upload.example/one' },
+    });
+    assert.equal(displayedStep(), 'details');
+    assert.equal(flow.result.kind, 'error');
+    assert.equal(flow.images.avatar.asset?.uri, 'file:///avatar.png');
+    transferFailure = false;
+    await next('details');
+    await resolve('FirstProfileOnboardingIssueMediaMutation', {
+      issueMediaUploadUrl: { media: { id: 'media-2' }, uploadUrl: 'https://upload.example/two' },
+    });
+    await resolve('FirstProfileOnboardingCompleteMediaMutation', {
+      completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
+    });
+    await resolve('FirstProfileOnboardingSaveMutation', null, [{ message: 'save unavailable' }]);
+    await next('details');
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['FirstProfileOnboardingSaveMutation'],
+    );
+    assert.equal((requests[0]!.variables.input as { avatarId: string }).avatarId, 'media-2');
+    await save({ avatar: { id: 'media-2', url: 'https://media.example/avatar' } });
+    assert.equal(displayedStep(), 'tags');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(transferCount, 2);
+  });
+
+  it('redirects a new entry with an existing Profile instead of resuming by handle', async () => {
+    await createFirst();
+    await selected();
+    assert.equal(displayedStep(), 'details');
+    await act(async () => {
+      renderer!.unmount();
+      renderer = create(renderTree());
+    });
+    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
+    const redirects = renderer!.root.findAll((node) => String(node.type) === 'Redirect');
+    assert.equal(redirects.length, 1);
+    assert.equal(redirects[0]!.props.href, '/home');
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
+    assert.equal(requests.length, 0);
+  });
+
+  it('keeps the active Profile through a failed post-selection query and boundary retry', async () => {
     await createFirst();
     await resolve('FirstProfileOnboardingSelectMutation', {
       selectProfile: { profile: { id: 'profile-1' } },
@@ -432,52 +507,17 @@ describe('first profile Relay completion', () => {
     const errorViews = renderer!.root.findAll((node) => String(node.type) === 'StateView');
     assert.equal(errorViews.length, 1);
     assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Redirect').length, 0);
-    await act(async () => {
-      (errorViews[0]!.props as { onAction: () => void }).onAction();
-    });
+    await act(async () => errorViews[0]!.props.onAction());
     await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
+    assert.equal(displayedStep(), 'details');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(flow.draft.handle, 'spring');
-    assert.equal(flow.result.kind, 'success');
-    await finish();
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingSelectMutation'],
-    );
+    await finish('details');
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(requests.length, 0);
   });
 
-  it('confirms reverted input after an unconfirmed save instead of trusting the old baseline', async () => {
-    await createFirst();
-    await selected();
-    await change({ displayName: '봄' });
-    await finish('details');
-    await resolve('FirstProfileOnboardingSaveMutation', null, [
-      { message: 'response lost after commit', path: ['updateProfile'] },
-    ]);
-    await change({ displayName: '' });
-    await finish('details');
-    assert.equal(requests[0]?.name, 'FirstProfileOnboardingSaveMutation');
-    assert.equal((requests[0]!.variables.input as { displayName: string }).displayName, 'spring');
-    await resolve('FirstProfileOnboardingSaveMutation', {
-      selectProfile: { profile: { id: 'profile-1' } },
-      updateProfile: {
-        profile: {
-          id: 'profile-1',
-          displayName: 'spring',
-          bio: null,
-          followPolicy: 'OPEN',
-          tags: [],
-          avatar: null,
-          header: null,
-          private: { defaultPostVisibility: 'UNLISTED' },
-        },
-      },
-    });
-    assert.equal(flow.result.kind, 'success');
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-  });
-
-  it('clears a retained draft and identity when the authentication lifecycle changes', async () => {
+  it('clears the active draft and created identity after the authentication lifecycle changes', async () => {
     await createFirst();
     await selected();
     await change({ displayName: '계정별 초안' });
@@ -487,66 +527,8 @@ describe('first profile Relay completion', () => {
     assert.equal(flow.createdProfile, null);
     assert.equal(flow.draft.handle, '');
     assert.equal(flow.draft.displayName, '');
-    assert.equal(flow.result.kind, 'idle');
     await change({ handle: 'second_account' });
-    await finish();
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      ['FirstProfileOnboardingCreateMutation'],
-    );
+    await next();
     assert.equal(requests[0]!.variables.handle, 'second_account');
-  });
-
-  it('waits for a confirmed session before accepting a draft and retains it through actor refresh', async () => {
-    sessionValue = { accountId: null, sessionId: null, status: 'error' };
-    await act(async () => {
-      renderer!.update(renderTree());
-      actorControls.resetActor(null);
-    });
-    assert.equal(requests.length, 0);
-    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
-    const errorView = renderer!.root.findAll((node) => String(node.type) === 'StateView')[0]!;
-    sessionValue = { accountId: 'account-1', sessionId: 'session-1', status: 'valid' };
-    await act(async () => {
-      (errorView.props as { onAction: () => void }).onAction();
-    });
-    await resolve('FirstProfileOnboardingQuery', query());
-    await createFirst();
-    await selected();
-    assert.equal(flow.createdProfile?.id, 'profile-1');
-    assert.equal(flow.draft.handle, 'spring');
-    assert.equal(flow.result.kind, 'success');
-  });
-
-  it('starts a fresh draft when SessionProvider observes a different Account without resetSession', async () => {
-    await createFirst();
-    await selected();
-    await change({ displayName: '첫 계정의 초안' });
-    sessionValue = { accountId: 'account-2', sessionId: 'session-2', status: 'valid' };
-    await act(async () => {
-      renderer!.update(renderTree());
-      actorControls.resetActor(null);
-    });
-    await resolve('FirstProfileOnboardingQuery', query('account-2', null, 'session-2'));
-    assert.equal(flow.createdProfile, null);
-    assert.equal(flow.draft.handle, '');
-    assert.equal(flow.draft.displayName, '');
-    await change({ handle: 'new_account' });
-    await finish();
-    assert.equal(requests[0]!.variables.handle, 'new_account');
-  });
-
-  it('does not let a late completion replace a newer selected actor', async () => {
-    await createFirst();
-    const oldSelection = requests.shift()!;
-    await act(async () => actorControls.resetActor('profile-other'));
-    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-other'));
-    await act(async () => {
-      oldSelection.sink.next({ data: { selectProfile: { profile: { id: 'profile-1' } } } });
-      oldSelection.sink.complete();
-    });
-    assert.equal(storedProfileId, null);
-    assert.equal(requests.length, 0);
-    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 1);
   });
 });

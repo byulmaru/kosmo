@@ -18,19 +18,26 @@ function OnboardingStory({
   initialDraft = initialFirstProfileDraft,
   initialResult = { kind: 'idle' },
   busy = false,
+  summary,
 }: {
   initialStep?: FirstProfileStep | 'complete';
   initialDraft?: FirstProfileDraft;
   initialResult?: FirstProfileOnboardingScreenProps['result'];
   busy?: boolean;
+  summary?: FirstProfileOnboardingScreenProps['summary'];
 }) {
   const [step, setStep] = useState(initialStep);
   const [draft, setDraft] = useState(initialDraft);
   const [result, setResult] = useState(initialResult);
-  const [created, setCreated] = useState(initialResult.kind === 'success');
+  const [created, setCreated] = useState(initialStep !== 'handle');
   const [completedFrom, setCompletedFrom] = useState<FirstProfileStep>('handle');
-  const next = () =>
+  const next = () => {
+    setResult({ kind: 'idle' });
+    if (step === 'handle') {
+      setCreated(true);
+    }
     setStep(firstProfileSteps[firstProfileSteps.indexOf(step as FirstProfileStep) + 1] ?? 'review');
+  };
   return (
     <FirstProfileOnboardingScreen
       avatar={{ kind: 'current', previewUri: null }}
@@ -64,6 +71,7 @@ function OnboardingStory({
       onHeaderRemove={() => undefined}
       onHeaderRetry={() => undefined}
       result={result}
+      summary={summary}
       startAction={<Button>시작하기</Button>}
       step={step}
       webHost="kosmo.example"
@@ -79,6 +87,12 @@ const populated: FirstProfileDraft = {
 };
 const meta = {
   component: OnboardingStory,
+  excludeStories: [
+    'HandleOnlyCompletionAndReturn',
+    'DraftSurvivesStepsAndSkip',
+    'OptionalFailureCanSkip',
+    'UnavailableSummaryCanComplete',
+  ],
   globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: { layout: 'fullscreen' },
   title: 'KOSMO/Screens/First Profile Onboarding',
@@ -91,15 +105,15 @@ export const Tags: Story = { args: { initialStep: 'tags', initialDraft: populate
 export const Posting: Story = { args: { initialStep: 'posting', initialDraft: populated } };
 export const Review: Story = { args: { initialStep: 'review', initialDraft: populated } };
 export const Saving: Story = {
-  args: { initialStep: 'complete', initialDraft: populated, busy: true },
+  args: { initialStep: 'details', initialDraft: populated, busy: true },
 };
 export const Failed: Story = {
   args: {
-    initialStep: 'complete',
+    initialStep: 'details',
     initialDraft: populated,
     initialResult: {
       kind: 'error',
-      message: '프로필을 저장하지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.',
+      message: '프로필 정보를 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.',
     },
   },
 };
@@ -150,5 +164,31 @@ export const DraftSurvivesStepsAndSkip: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '이전 화면' }));
     await expect(canvas.getByRole('textbox', { name: '표시 이름' })).toHaveValue('봄');
     await expect(canvas.getByRole('textbox', { name: '소개' })).toHaveValue('보존할 소개');
+  },
+};
+
+export const OptionalFailureCanSkip: Story = {
+  args: Failed.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('textbox', { name: '표시 이름' })).toHaveValue('봄');
+    await userEvent.click(canvas.getByRole('button', { name: '지금은 건너뛰기' }));
+    await expect(canvas.getByRole('textbox', { name: '프로필 태그' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
+    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+  },
+};
+
+export const UnavailableSummaryCanComplete: Story = {
+  args: {
+    initialStep: 'review',
+    initialDraft: { ...populated, displayName: '저장되지 않은 이름' },
+    summary: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '시작하기', exact: true }));
+    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+    await expect(canvas.queryByText('저장되지 않은 이름', { exact: true })).not.toBeInTheDocument();
   },
 };
