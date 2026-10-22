@@ -108,9 +108,12 @@ for (const name of ['PostActionAuthentication', 'PostComposerCoordinator', 'Post
     [`${name}Provider`]: ({ children }: { children: ReactNode }) => children,
   });
 }
+let rowRenders = 0;
 mockModule(new URL('../post/PostListItem.tsx', import.meta.url), {
-  PostListItem: ({ post }: { post: { __id: string } }) =>
-    createElement('PostRow', { id: post.__id }),
+  PostListItem: ({ post }: { post: { __id: string } }) => (
+    rowRenders++,
+    createElement('PostRow', { id: post.__id })
+  ),
 });
 mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   usePaginationScrollContext: () => false,
@@ -281,3 +284,32 @@ describe('Timeline refresh and pagination with real Relay', () => {
     }
   }
 });
+
+for (const timeline of ['Home', 'Local'] as const) {
+  it(`${timeline}: parent updates preserve rows while Relay connection updates remain visible`, async () => {
+    const environment = new Environment({
+      network: Network.create((operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requests.push({ name: operation.name, variables, sink });
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    const render = () =>
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+      });
+    await act(async () => {
+      renderer = create(render());
+    });
+    const field = timeline === 'Home' ? 'homeTimeline' : 'localTimeline';
+    await respond(latest(`${timeline}PageQuery`), payload(field, ['a', 'b']));
+    const before = rowRenders;
+    await act(async () => renderer!.update(render()));
+    assert.equal(rowRenders, before, 'unchanged rows must not render for a parent update');
+    await act(async () => list().props.onEndReached());
+    await respond(latest(`PostList${timeline}NextPageQuery`), payload(field, ['c'], false));
+    assertConnection(environment, field, ['a', 'b', 'c'], false);
+  });
+}

@@ -65,6 +65,7 @@ let globalParams: RouteParams = {};
 let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let pathname = '/profile/';
+let currentRouteInfo: { params: RouteParams; pathname: string } | null = null;
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
@@ -128,6 +129,7 @@ mockModule('expo-router', {
         : null,
     ),
   useGlobalSearchParams: () => globalParams,
+  useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
   useRouter: () => ({
@@ -478,6 +480,7 @@ afterEach(async () => {
   layoutLocalParams = {};
   screenLocalParams = {};
   pathname = '/profile/';
+  currentRouteInfo = null;
   platform.OS = 'web';
   windowWidth = 1_280;
   windowHeight = 800;
@@ -1336,4 +1339,29 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
     assert.equal(stateActionFocus.mock.callCount(), 0);
   });
+});
+
+it('background profile retains its own header when another author post becomes the global route', async () => {
+  await renderRoute('@local', '/@local');
+  currentRouteInfo = { params: { profileHandle: '@local' }, pathname: '/@local' };
+  pathname = '/@other/post-id';
+  globalParams = { profileHandle: '@other' };
+  await act(async () =>
+    renderer!.update(
+      createElement(
+        LocalParamsContext.Provider,
+        { value: layoutLocalParams },
+        createElement(ProfileLayout),
+      ),
+    ),
+  );
+  assert.equal(requireRendered('PageHeader').props.title, 'Display local');
+  assert.equal(requireRendered('ProfileHero').props.heading, false);
+});
+
+it('Native profile layout route info still resolves its active followers child', async () => {
+  currentRouteInfo = { params: { profileHandle: '@local' }, pathname: '/@local' };
+  await renderRoute('@local', '/@local/followers');
+  assert.equal(requireRendered('PageHeader').props.title, 'Display local님의 팔로워');
+  assert.equal(rendered('ProfileHero').length, 0);
 });

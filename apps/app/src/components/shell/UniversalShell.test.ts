@@ -44,7 +44,11 @@ let sessionStatus: 'error' | 'guest' | 'valid' | null = null;
 let shellChromeProps:
   | Pick<
       ComponentProps<typeof ShellChromeProvider>,
-      'navigationDrawerOpen' | 'openNavigationDrawer' | 'registerTabReselection' | 'reselectTab'
+      | 'navigationDrawerOpen'
+      | 'openNavigationDrawer'
+      | 'openProfileSwitcher'
+      | 'registerTabReselection'
+      | 'reselectTab'
     >
   | undefined;
 let rightRailFooterCount = 0;
@@ -337,6 +341,24 @@ describe('UniversalShell screen fallback focus target', () => {
     await act(async () => renderer?.update(createElement(UniversalShell)));
     assert.equal(invitationProps?.visible, false);
     assert.equal(sidebarNavigationProps?.guestPublicContent, false);
+  });
+
+  it('Native 화면 경로가 바뀌어도 drawer와 프로필 선택 콜백 참조를 유지한다', async () => {
+    platform.OS = 'android';
+    await renderShell();
+    assert.ok(shellChromeProps);
+    const { openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
+
+    pathname = '/@other/post-id';
+    await act(async () => renderer!.update(createElement(UniversalShell)));
+
+    assert.equal(shellChromeProps.openNavigationDrawer, openNavigationDrawer);
+    assert.equal(shellChromeProps.openProfileSwitcher, openProfileSwitcher);
+    assert.equal(shellChromeProps.navigationDrawerOpen, false);
+
+    await act(async () => openNavigationDrawer());
+    assert.equal(shellChromeProps.navigationDrawerOpen, true);
+    assert.equal(renderer!.root.findByType('Drawer' as ElementType).props.open, true);
   });
 
   it('알려진 Profile 수 0과 변경값만 현재 Account의 Person 속성으로 전달한다', async () => {
