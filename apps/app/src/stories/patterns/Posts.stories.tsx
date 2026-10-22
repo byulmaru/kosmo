@@ -9065,7 +9065,7 @@ function actionBarNavigationStory(postId: string, expectedPath: string): Story {
           await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'true'));
           await userEvent.keyboard('{Escape}');
           await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'false'));
-          expect(button).toHaveFocus();
+          await waitFor(() => expect(button).toHaveFocus());
         }
         expect(actionBarNavigationObserver).toHaveBeenCalledTimes(count);
       }
