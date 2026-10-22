@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
-import { RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
+import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, fetchQuery } from 'relay-runtime';
+import { getNativeSessionConfiguration } from '../auth/nativeConfig';
+import { serializeStoredSessionToken } from '../auth/sessionToken';
 import SessionQuery from '../session/__generated__/SessionProviderQuery.graphql';
 import { NativeStartupRecovery } from './nativeStartupRecovery';
 import { NativeStartupRecoveryContext } from './NativeStartupRecoveryContext';
@@ -16,10 +18,43 @@ import type {
   useRouteBoundary as UseRouteBoundary,
 } from '../components/RouteBoundary';
 import type { SessionProviderQuery } from '../session/__generated__/SessionProviderQuery.graphql';
+import type {
+  SessionProvider as SessionProviderType,
+  useSession as UseSession,
+} from '../session/SessionProvider';
 import type { createRelayEnvironment as CreateRelayEnvironment } from './environment';
+import type { RelayActorProvider as RelayActorProviderType } from './RelayActorProvider';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const nativeAppState = appState();
+const nativeStorage = new Map<string, string>();
+const deletedNativeKeys: string[] = [];
+
+mock.module('react-native', {
+  exports: { AppState: nativeAppState, Platform: { OS: 'ios' } },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('expo-secure-store', {
+  exports: {
+    AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'after-first-unlock-this-device-only',
+    isAvailableAsync: async () => true,
+    getItemAsync: async (key: string) => nativeStorage.get(key) ?? null,
+    deleteItemAsync: async (key: string) => {
+      deletedNativeKeys.push(key);
+      nativeStorage.delete(key);
+    },
+    setItemAsync: async (key: string, value: string) => {
+      nativeStorage.set(key, value);
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('react-relay', {
+  // Node/tsx needs the artifact binding normally supplied by Relay's Babel transform.
+  exports: { ...ReactRelay, graphql: () => SessionQuery },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/Splash', {
+  exports: { Splash: () => createElement('Splash') },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/observability/sentry', {
   exports: { captureHandledMessage: () => undefined },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -30,6 +65,9 @@ mock.module('@/components/ui/StateView', {
 let createRelayEnvironment: typeof CreateRelayEnvironment;
 let RouteBoundary: typeof RouteBoundaryType;
 let useRouteBoundary: typeof UseRouteBoundary;
+let RelayActorProvider: typeof RelayActorProviderType;
+let SessionProvider: typeof SessionProviderType;
+let useSession: typeof UseSession;
 let renderer: ReactTestRenderer | null = null;
 let startupLifecycle: NativeStartupRecovery | null = null;
 let originalFetch: typeof fetch;
@@ -39,9 +77,14 @@ const startupOptions = { networkCacheConfig: { metadata: { nativeStartup: true }
 before(async () => {
   ({ createRelayEnvironment } = await import('./environment'));
   ({ RouteBoundary, useRouteBoundary } = await import('../components/RouteBoundary'));
+  ({ RelayActorProvider } = await import('./RelayActorProvider'));
+  ({ SessionProvider, useSession } = await import('../session/SessionProvider'));
 });
 beforeEach(() => {
   startupLifecycle = null;
+  nativeAppState.change('active');
+  nativeStorage.clear();
+  deletedNativeKeys.length = 0;
   originalFetch = globalThis.fetch;
   originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', {
@@ -88,11 +131,14 @@ function appState() {
     },
   };
 }
-function response(name = 'A') {
+function response(name = 'A', profileId: string | null = `profile-${name}`) {
   return new Response(
     JSON.stringify({
       data: {
-        currentSession: { id: `session-${name}`, selectedProfile: { id: `profile-${name}` } },
+        currentSession: {
+          id: `session-${name}`,
+          selectedProfile: profileId ? { id: profileId } : null,
+        },
         me: { id: `account-${name}`, name },
       },
     }),
@@ -101,18 +147,21 @@ function response(name = 'A') {
 }
 function QueryResult() {
   const { fetchKey } = useRouteBoundary();
-  const data = useLazyLoadQuery<SessionProviderQuery>(
+  const data = ReactRelay.useLazyLoadQuery<SessionProviderQuery>(
     SessionQuery,
     {},
     { fetchKey, ...startupOptions },
   );
   return createElement('QueryResult', { name: data.me?.name });
 }
+function SessionResult() {
+  return createElement('SessionResult', useSession());
+}
 function tree(environment: Environment) {
   return createElement(
     NativeStartupRecoveryContext.Provider,
     { value: startupLifecycle },
-    createElement(RelayEnvironmentProvider, {
+    createElement(ReactRelay.RelayEnvironmentProvider, {
       environment,
       children: createElement(RouteBoundary, {
         title: '조회 실패',
@@ -133,6 +182,54 @@ function resultName() {
 }
 
 describe('Native 초기 복구의 실제 Relay 경로', () => {
+  it('기본 Provider 배선에서 복원한 token의 초기 Session 조회를 복귀 후 한 번 복구한다', async () => {
+    const credential = serializeStoredSessionToken(getNativeSessionConfiguration(), 'token-A');
+    nativeStorage.set('kosmo.session-token', credential);
+    const first = deferred<Response>();
+    const sent: RequestInit[] = [];
+    globalThis.fetch = async (_url, init) => {
+      sent.push(init!);
+      return sent.length === 1 ? first.promise : response('A', null);
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(
+          RelayActorProvider,
+          null,
+          createElement(SessionProvider, null, createElement(SessionResult)),
+        ),
+      );
+    });
+    assert.equal(sent.length, 1);
+    assert.equal((sent[0].headers as Record<string, string>).authorization, 'Bearer token-A');
+    assert.equal(JSON.parse(String(sent[0].body)).operationName, 'SessionProviderQuery');
+    assert.equal(renderer!.root.findAllByType('SessionResult' as never).length, 0);
+    await act(async () => {
+      nativeAppState.change('background');
+      first.reject(new TypeError('connection lost'));
+    });
+    assert.equal(sent.length, 1);
+    assert.equal(renderer!.root.findAllByType('SessionResult' as never).length, 0);
+    await act(async () => nativeAppState.change('active'));
+    assert.equal(sent.length, 2);
+    assert.deepEqual(sent[1], sent[0]);
+    assert.deepEqual(renderer!.root.findByType('SessionResult' as never).props, {
+      accountId: 'account-A',
+      accountName: 'A',
+      selectedProfileId: null,
+      sessionId: 'session-A',
+      status: 'valid',
+    });
+    assert.equal(nativeStorage.get('kosmo.session-token'), credential);
+    assert.equal(nativeStorage.get('kosmo.selected-profile') ?? null, null);
+    assert.deepEqual(deletedNativeKeys, []);
+    await act(async () => {
+      nativeAppState.change('background');
+      nativeAppState.change('active');
+    });
+    assert.equal(sent.length, 2);
+  });
+
   it('오류 화면에 고정되지 않고 같은 Store의 query를 완료한다', async () => {
     const state = appState();
     const first = deferred<Response>();
