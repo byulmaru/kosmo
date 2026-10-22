@@ -57,6 +57,8 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   deep link는 기존 Expo Router 계약을 유지한다.
 - 검색 입력은 모든 Web breakpoint에서 `48px` 높이와 유연한 너비를 사용한다. 긴 입력이나 좁은 viewport에서도
   leading action과 지우기 action의 target을 줄이지 않는다.
+- 검색 입력의 글자 크기는 모든 Web breakpoint에서 `16 CSS px`로 유지한다. iPhone Chrome·Safari에서
+  입력 포커스에 따른 자동 확대를 방지하며, 사용자 pinch zoom과 브라우저 기본 확대는 유지한다.
 - 햄버거와 검색 뒤로가기는 각각 실제 동작에 맞는 접근 가능한 이름과 `44×44px` target을 제공한다.
 - 검색 상태에서도 셸의 왼쪽 가장자리 스와이프가 drawer를 열 수 있어야 한다.
 - Android/iOS에서는 같은 검색 상태와 입력을 Native Stack header의 단일 `PageHeader`에 렌더링한다. 별도의 menu-only shell header나 route 본문 검색 bar를 추가하지 않는다.
