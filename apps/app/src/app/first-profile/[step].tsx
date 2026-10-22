@@ -57,7 +57,7 @@ export default function FirstProfileStepRoute() {
       result={flow.result}
       summary={flow.summary}
       startAction={
-        <Link asChild href="/home" replace>
+        <Link asChild href="/first-profile/discover" replace>
           <Button>시작하기</Button>
         </Link>
       }

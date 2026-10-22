@@ -31,6 +31,14 @@ PROD-1147의 현재 계획 메모다. 제품 권위는 canonical·Linear와 실�
 - Alternatives: 과거 복귀 흐름을 다시 구현하거나 선행 PR을 복제하지 않는다.
 - Consequences: PROD-1146 병합 후 최신 main에 연결하는 것을 기본 구현 순서로 제안한다. 병합 전 구현이 필요하면 현재 owner·Stack 상태를 확인하고 실제 의존 브랜치를 기준으로 계획을 조정한다.
 
+### 미병합 선행 PR 위에서 구현
+
+- Date: 2026-10-23
+- Upstream context: Implement 대화에서 사용자가 PR #1254 위의 의존 Stack 진행을 선택했다.
+- Choice: `main → PROD-1146 → PROD-1147`으로 연결하고 부모 코드와 Ready 상태를 유지한다.
+- Alternatives: PR #1254 병합을 기다린 뒤 main에서 구현하는 순서.
+- Consequences: PROD-1147은 PR #1254에 의존하며, 부모의 후속 변경이나 병합 시 자식 Stack 상태를 다시 확인한다.
+
 ## Unresolved Questions
 
 - 없음. PR #1254의 병합·최신 head와 PROD-1148 연결부 존재 여부는 다음 세션의 상태 확인 항목이다.

@@ -1,9 +1,9 @@
 ## Current Constraints
 
-기준 main은 `20538bc901985ba516161d4d8a90e37d965c2e3b`다. PROD-1146 PR #1254는 `f171bf55f99a23704d7c01d597276c97da7bd75d`에서 조사했으며 아직 미병합이다. 아래 접근은 현재 코드에 맞춘 제안이며 함수·경로를 영구 계약으로 만들지 않는다.
+2026-10-23 사용자 선택에 따라 미병합 PROD-1146 PR #1254의 `c86e12995c8a872590955187a7847b9d041bfee0` 위에 PROD-1147을 쌓는다. 부모 commit과 Ready 상태는 유지한다. 아래 접근은 현재 코드에 맞춘 제안이며 함수·경로를 영구 계약으로 만들지 않는다.
 
 - `FirstProfileOnboardingRoute.tsx`는 첫 단계에서 Profile을 생성·선택하고 선택 단계마다 `saveStep`으로 저장한다. 완료는 추가 저장 없이 성공 상태를 만든다.
-- `app/first-profile/[step].tsx`의 완료 화면 `시작하기`는 현재 `/home`으로 이동한다. 후속 사람 찾기를 연결할 지점이다. 완료 요약의 태그는 표시 이름만 있으므로 조회에는 저장된 `Profile.tags`의 Hashtag `id`와 `name`을 함께 사용한다.
+- `app/first-profile/[step].tsx`의 완료 화면 `시작하기`는 `/first-profile/discover`로 이동한다. 진행 중인 첫 Profile의 완료 상태만 이 화면에 진입할 수 있다. 완료 요약의 태그는 표시 이름만 있으므로 조회에는 저장된 `Profile.tags`의 Hashtag `id`와 `name`을 함께 사용한다.
 - 기존 `HashtagRelatedProfileList`·`ProfileListItem`·`FollowButton`과 `Hashtag.relatedProfiles`를 재사용할 수 있다. 새 서버 API나 별도 팔로우 저장 모델은 현재 근거상 필요하지 않다.
 
 ## Practical Approach
@@ -31,3 +31,9 @@
 ## Open Questions
 
 없음. 선행 PR과 후속 안내의 최신 구현 상태는 구현 세션에서 재조회한다.
+
+## Implementation Checkpoint
+
+방문한 태그의 목록은 각 Relay query와 connection을 유지한 채 숨긴다. 아직 방문하지 않은 태그를 미리 조회하지 않는다. `FollowButtonGroup`은 목록 밖에서 표준 mutation hook을 소유해 패널 전환 중에도 중복 action을 막는다. 서버 관계 정책과 그룹 밖 기존 버튼 동작은 유지한다.
+
+행동 테스트 실행은 GitHub CI에 인계한다. 테스트 코드 작성과 정적 검사 통과를 Web·Native runtime 검증 완료로 표시하지 않는다.
