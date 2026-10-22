@@ -22,19 +22,6 @@ test.beforeEach(async () => {
 });
 
 const gotoPostDetail = async (page: Page, path: string) => {
-  page.on('console', async (message) => {
-    if (message.type() !== 'error' || !message.text().startsWith('Route error')) {
-      return;
-    }
-    const details = await Promise.all(
-      message.args().map((argument) =>
-        argument.evaluate((value: unknown) =>
-          value instanceof Error ? `${value.message}\n${value.stack}` : String(value),
-        ),
-      ),
-    );
-    console.error('E2E route render error', ...details);
-  });
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
   await page.goto(path);
 

@@ -364,7 +364,7 @@ function PresentationLink({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
-      style={[styles.presentationLink, style]}
+      style={StyleSheet.flatten([styles.presentationLink, style])}
     >
       {children}
     </Pressable>
