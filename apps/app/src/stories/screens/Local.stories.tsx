@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef } from 'react';
+import { useWindowDimensions } from 'react-native';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
@@ -242,6 +245,7 @@ function LocalPlayground({
   showActorReset = false,
   state,
 }: LocalStoryArgs) {
+  const { width } = useWindowDimensions();
   const homeReselectionRef = useRef<(() => void) | null>(null);
   const registerHomeReselection = useCallback((handler: () => void) => {
     homeReselectionRef.current = handler;
@@ -274,6 +278,7 @@ function LocalPlayground({
           reselectHome={reselectHome}
         >
           {screen}
+          {getShellLayout(true, width) === 'mobile' ? <BottomTabBar /> : null}
         </ShellChromeProvider>
       ) : (
         screen
@@ -298,7 +303,7 @@ const meta = {
     state: {
       control: 'select',
       description:
-        'refresh-partial-error: 로컬 탭 재선택 시 부분 응답을 적용하고, 다시 선택하면 성공 응답을 적용합니다. filtered: 뮤트·차단 대상을 서버에서 제외한 결과 예시이며 filtering 정책을 실행하지 않습니다.',
+        'refresh-partial-error: 홈 내비게이션 재선택 시 부분 응답을 적용하고, 다시 선택하면 성공 응답을 적용합니다. filtered: 뮤트·차단 대상을 서버에서 제외한 결과 예시이며 filtering 정책을 실행하지 않습니다.',
       options: [
         'default',
         'loading',
@@ -333,7 +338,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  args: { state: 'default' },
+  args: { shellChrome: true, state: 'default' },
   parameters: { controls: { disable: false, include: ['state'] } },
 };
 
@@ -362,7 +367,7 @@ export const Refreshing: Story = {
     docs: {
       description: {
         story:
-          '로컬 탭을 다시 선택하면 Relay 기본 조회 경로로 요청하고 2초 뒤 최신 글로 갱신됩니다.',
+          '홈 내비게이션을 다시 선택하면 Relay 기본 조회 경로로 요청하고 2초 뒤 최신 글로 갱신됩니다.',
       },
     },
   },
@@ -386,22 +391,27 @@ export const InitialErrorRetry: Story = {
 };
 
 export const RefreshHardError: Story = {
-  args: { state: 'refresh-hard-error' },
+  args: { shellChrome: true, state: 'refresh-hard-error' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  name: 'Refresh Hard Error (Reselect Local)',
+  name: 'Refresh Hard Error (Reselect Home Navigation)',
   parameters: {
     controls: { disable: true },
     docs: {
       description: {
         story:
-          '마지막 성공 목록을 유지한 상태에서 로컬 탭을 다시 선택하면 지속되는 오류 Toast가 나타납니다.',
+          '마지막 성공 목록을 유지한 상태에서 홈 내비게이션을 다시 선택하면 지속되는 오류 Toast가 나타납니다.',
       },
     },
   },
 };
 
 export const RefreshHardErrorActorCleanup: Story = {
-  args: { actorBoundary: true, showActorReset: true, state: 'refresh-hard-error-lifetime' },
+  args: {
+    actorBoundary: true,
+    shellChrome: true,
+    showActorReset: true,
+    state: 'refresh-hard-error-lifetime',
+  },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   name: 'Refresh Hard Error Actor Cleanup',
   parameters: { controls: { disable: true } },
