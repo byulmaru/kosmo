@@ -98,6 +98,17 @@ function Probe() {
     result: flow.result.kind,
   });
 }
+function renderTree() {
+  return createElement(
+    RelayActorProvider,
+    { createEnvironment: environment },
+    createElement(
+      Suspense,
+      { fallback: createElement('Loading') },
+      createElement(feature.FirstProfileOnboardingRoute, null, createElement(Probe)),
+    ),
+  );
+}
 function environment(_token: string | null, actor: string | null) {
   return new Environment({
     network: Network.create((request, variables) =>
@@ -110,7 +121,10 @@ function environment(_token: string | null, actor: string | null) {
 }
 function query(accountId = 'account-1', profileId: string | null = null, sessionId = 'session-1') {
   return {
-    me: { id: accountId, profiles: profileId ? [{ id: profileId, handle: 'spring' }] : [] },
+    me: {
+      id: accountId,
+      profiles: profileId ? [{ id: profileId, handle: 'spring', relativeHandle: '@spring' }] : [],
+    },
     currentSession: {
       id: sessionId,
       selectedProfile: profileId
@@ -176,17 +190,7 @@ beforeEach(async () => {
     assets: [{ uri: 'file:///avatar.png', width: 20, height: 20 }],
   };
   await act(async () => {
-    renderer = create(
-      createElement(
-        RelayActorProvider,
-        { createEnvironment: environment },
-        createElement(
-          Suspense,
-          { fallback: createElement('Loading') },
-          createElement(feature.FirstProfileOnboardingRoute, null, createElement(Probe)),
-        ),
-      ),
-    );
+    renderer = create(renderTree());
   });
   await resolve('FirstProfileOnboardingQuery', query());
 });
@@ -209,6 +213,60 @@ describe('first profile Relay completion', () => {
       createProfile: { profile: { id: 'profile-1', handle: 'spring', relativeHandle: '@spring' } },
     });
     await selected();
+    assert.equal(flow.result.kind, 'success');
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(storedProfileId, 'profile-1');
+    assert.equal(requests.length, 0);
+  });
+
+  it('recovers a committed profile after a lost create response and retries confirmation without recreating', async () => {
+    await change({ handle: 'spring', displayName: '봄' });
+    await finish('details');
+    const creation = requests.shift()!;
+    assert.equal(creation.name, 'FirstProfileOnboardingCreateMutation');
+    await act(async () => creation.sink.error(new Error('response lost after commit')));
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['FirstProfileOnboardingQuery'],
+    );
+    await resolve('FirstProfileOnboardingQuery', { ...query(), me: null }, [
+      { message: 'profiles unavailable', path: ['me', 'profiles'] },
+    ]);
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
+    const errorView = renderer!.root.findAll((node) => String(node.type) === 'StateView')[0]!;
+    await act(async () => errorView.props.onAction());
+    await resolve('FirstProfileOnboardingQuery', {
+      ...query(),
+      me: {
+        id: 'account-1',
+        profiles: [{ id: 'profile-1', handle: 'spring', relativeHandle: '@spring' }],
+      },
+    });
+    assert.equal(flow.createdProfile?.id, 'profile-1');
+    assert.equal(flow.draft.displayName, '봄');
+    await finish('details');
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['FirstProfileOnboardingSaveMutation'],
+    );
+    assert.equal(requests[0]!.variables.profileId, 'profile-1');
+    assert.equal((requests[0]!.variables.input as { displayName: string }).displayName, '봄');
+    await resolve('FirstProfileOnboardingSaveMutation', {
+      selectProfile: { profile: { id: 'profile-1' } },
+      updateProfile: {
+        profile: {
+          id: 'profile-1',
+          displayName: '봄',
+          bio: null,
+          followPolicy: 'OPEN',
+          private: { defaultPostVisibility: 'UNLISTED' },
+          tags: [],
+          avatar: null,
+          header: null,
+        },
+      },
+    });
+    await resolve('FirstProfileOnboardingQuery', query('account-1', 'profile-1'));
     assert.equal(flow.result.kind, 'success');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(storedProfileId, 'profile-1');
@@ -433,7 +491,10 @@ describe('first profile Relay completion', () => {
 
   it('waits for a confirmed session before accepting a draft and retains it through actor refresh', async () => {
     sessionValue = { accountId: null, sessionId: null, status: 'error' };
-    await act(async () => actorControls.resetActor(null));
+    await act(async () => {
+      renderer!.update(renderTree());
+      actorControls.resetActor(null);
+    });
     assert.equal(requests.length, 0);
     assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
     const errorView = renderer!.root.findAll((node) => String(node.type) === 'StateView')[0]!;
@@ -454,7 +515,10 @@ describe('first profile Relay completion', () => {
     await selected();
     await change({ displayName: '첫 계정의 초안' });
     sessionValue = { accountId: 'account-2', sessionId: 'session-2', status: 'valid' };
-    await act(async () => actorControls.resetActor(null));
+    await act(async () => {
+      renderer!.update(renderTree());
+      actorControls.resetActor(null);
+    });
     await resolve('FirstProfileOnboardingQuery', query('account-2', null, 'session-2'));
     assert.equal(flow.createdProfile, null);
     assert.equal(flow.draft.handle, '');
