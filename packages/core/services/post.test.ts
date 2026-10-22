@@ -226,7 +226,11 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
 test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated authored tokens', async () => {
   const author = await createProfile();
   const account = await createAccount();
-  await addAccountProfile(account.id, author.id);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: author.id,
+    role: AccountProfileRole.OWNER,
+  });
   const sourceAuthor = await createProfile();
   const source = await createPost({
     bodyText: 'quote source',
