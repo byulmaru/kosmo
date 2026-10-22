@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { getNativeDeploymentChannel, switchNativeChannel } from '@/config/nativeChannel';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { ModalSheet } from '../ui/ModalSheet';
 import { RadioGroup, RadioOption } from '../ui/RadioGroup';
 import { SettingsItem } from './SettingsItem';
+import type { ViewStyle } from 'react-native';
 import type { NativeChannel } from '@/config/nativeChannel';
 
 export function NativeChannelSettings() {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const { clearNativeSession } = useRelayActor();
   const currentChannel = getNativeDeploymentChannel() ?? 'prod';
   const [draftChannel, setDraftChannel] = useState<NativeChannel>(currentChannel);
@@ -63,13 +66,17 @@ export function NativeChannelSettings() {
         accessibilityState={{ expanded: open }}
         disabled={pending}
         onPress={openPicker}
-        style={({ pressed }) => [
-          styles.entry,
-          { backgroundColor: pressed ? theme.statePressed : 'transparent' },
-        ]}
+        style={styles.entry}
         testID="native-channel-settings"
       >
-        <SettingsItem description={currentChannel} label="채널" />
+        {({ pressed }) => (
+          <NativeChannelEntryVisual
+            currentChannel={currentChannel}
+            pressed={pressed}
+            reducedMotion={reducedMotion}
+            theme={theme}
+          />
+        )}
       </Pressable>
       <ModalSheet dismissDisabled={pending} onClose={closePicker} title="채널 선택" visible={open}>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>
@@ -108,10 +115,40 @@ export function NativeChannelSettings() {
   );
 }
 
+function NativeChannelEntryVisual({
+  currentChannel,
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  currentChannel: string;
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: pressed ? theme.statePressed : 'transparent',
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor } as unknown as ViewStyle]}
+      />
+      <SettingsItem description={currentChannel} label="채널" />
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { width: '100%' },
   entry: {
     minHeight: 64,
+    position: 'relative',
     width: '100%',
   },
   copy: textStyles.uiCopyS,

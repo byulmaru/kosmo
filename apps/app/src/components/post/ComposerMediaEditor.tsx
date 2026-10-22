@@ -1,6 +1,7 @@
 import { ArrowLeftIcon, FlagIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
+  Animated,
   Image,
   Platform,
   Pressable,
@@ -15,10 +16,14 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextArea } from '@/components/ui/TextField';
-import { useTheme } from '@/theme/ThemeProvider';
+import {
+  useAnimatedColorTransition,
+  useAnimatedOpacityTransition,
+} from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { ReactNode, RefObject } from 'react';
-import type { TextStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 export type ComposerMediaEditorTool = 'alt' | 'nightshade' | 'sensitive';
@@ -212,6 +217,7 @@ function EditorHeader({
   readonly onDone: () => void;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
 
   return (
     <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
@@ -233,9 +239,16 @@ function EditorHeader({
           accessibilityRole="button"
           hitSlop={Platform.OS === 'android' ? 2 : undefined}
           onPress={onDone}
-          style={({ pressed }) => [styles.mobileDone, pressed && styles.pressed]}
+          style={styles.mobileDone}
         >
-          <Text style={[styles.mobileDoneLabel, { color: theme.foregroundPrimary }]}>완료</Text>
+          {({ pressed }) => (
+            <ComposerMediaEditorOpacityVisual
+              opacity={pressed ? 0.7 : 1}
+              reducedMotion={reducedMotion}
+            >
+              <Text style={[styles.mobileDoneLabel, { color: theme.foregroundPrimary }]}>완료</Text>
+            </ComposerMediaEditorOpacityVisual>
+          )}
         </Pressable>
       ) : (
         <IconButton
@@ -312,6 +325,7 @@ function MediaPreview({
   readonly selectedIndex: number;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const selectedPreview = selected ? (
     <Image
       accessibilityElementsHidden={Boolean(onPreviewPress)}
@@ -338,9 +352,17 @@ function MediaPreview({
           accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
           accessibilityRole="button"
           onPress={onPreviewPress}
-          style={({ pressed }) => [styles.selectedPreview, pressed && styles.pressed]}
+          style={styles.selectedPreview}
         >
-          {selectedPreview}
+          {({ pressed }) => (
+            <ComposerMediaEditorOpacityVisual
+              opacity={pressed ? 0.7 : 1}
+              reducedMotion={reducedMotion}
+              style={styles.selectedPreview}
+            >
+              {selectedPreview}
+            </ComposerMediaEditorOpacityVisual>
+          )}
         </Pressable>
       ) : (
         selectedPreview
@@ -366,6 +388,7 @@ function MediaGallery({
   readonly selectedKey: string | undefined;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
 
   return (
     <ScrollView
@@ -389,25 +412,93 @@ function MediaGallery({
             accessibilityState={{ selected }}
             key={item.key}
             onPress={() => onSelectMedia(item.key)}
-            style={({ pressed }) => [
-              styles.thumbnailTarget,
-              mobile && styles.mobileThumbnailTarget,
-              {
-                backgroundColor: selected ? theme.actionPrimaryBase : theme.borderSubtle,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
+            style={[styles.thumbnailTarget, mobile && styles.mobileThumbnailTarget]}
           >
-            <Image
-              accessibilityIgnoresInvertColors
-              fadeDuration={0}
-              source={{ uri: item.asset.uri }}
-              style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
-            />
+            {({ pressed }) => (
+              <ComposerMediaThumbnailVisual
+                mobile={mobile}
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+                selected={selected}
+                theme={theme}
+                uri={item.asset.uri}
+              />
+            )}
           </Pressable>
         );
       })}
     </ScrollView>
+  );
+}
+
+function ComposerMediaEditorOpacityVisual({
+  children,
+  opacity,
+  reducedMotion,
+  style,
+}: {
+  children: ReactNode;
+  opacity: number;
+  reducedMotion: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const animatedOpacity = useAnimatedOpacityTransition({
+    interactionKey: opacity < 1 ? 'pressed' : 'idle',
+    opacity,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return <Animated.View style={[style, { opacity: animatedOpacity }]}>{children}</Animated.View>;
+}
+
+function ComposerMediaThumbnailVisual({
+  mobile,
+  pressed,
+  reducedMotion,
+  selected,
+  theme,
+  uri,
+}: {
+  mobile: boolean;
+  pressed: boolean;
+  reducedMotion: boolean;
+  selected: boolean;
+  theme: ReturnType<typeof useTheme>;
+  uri: string;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: selected ? theme.actionPrimaryBase : theme.borderSubtle,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: selected ? 'selection' : 'interaction',
+    selectionKey: selected,
+  });
+  const animatedOpacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.8 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.thumbnailFeedback,
+          { backgroundColor, opacity: animatedOpacity } as unknown as ViewStyle,
+        ]}
+      />
+      <Animated.View style={{ opacity: animatedOpacity }}>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={{ uri }}
+          style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
+        />
+      </Animated.View>
+    </>
   );
 }
 
@@ -739,7 +830,6 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center', ...textStyles.uiHeadingS },
   mobileDone: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   mobileDoneLabel: textStyles.uiLabelM,
-  pressed: { opacity: 0.7 },
   webBody: { flex: 1, flexDirection: 'row', minHeight: 0 },
   webWorkspace: { flex: 1, minWidth: 0 },
   previewSection: {
@@ -784,8 +874,10 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     padding: 2,
+    position: 'relative',
     width: 48,
   },
+  thumbnailFeedback: { borderRadius: radius[8] },
   thumbnail: { borderRadius: radius[4], height: 44, width: 44 },
   mobileMediaGallery: { borderTopWidth: borderWidths[1], height: 76 },
   mobileGalleryContent: { paddingVertical: 11 },

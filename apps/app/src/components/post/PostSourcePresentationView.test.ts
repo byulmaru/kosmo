@@ -22,12 +22,18 @@ function MockPressable({ children, ...props }: { children?: ReactNode; [key: str
   return createElement('Pressable', props, children);
 }
 
+function findHoverOverlay() {
+  assert.ok(renderer);
+  return renderer.root.findAll((node) => (node.type as unknown) === 'AnimatedView')[0];
+}
+
 mockModule('expo-router', {
   usePathname: () => '/home',
   Link: ({ children }: { children?: unknown }) => children,
   useRouter: () => ({ push: () => undefined }),
 });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   findNodeHandle: () => null,
   Platform: platform,
   Pressable: MockPressable,
@@ -43,8 +49,13 @@ mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: 'ProfileNameBlock',
 });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/lib/date', { formatTimelineTimestamp: () => '방금' });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     borderDefault: '#ddd',
     foregroundSecondary: '#777',
@@ -139,57 +150,57 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     await pointerEnter('mouse');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerEnter('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerLeave('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerLeave('mouse');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, 'transparent');
 
     await pointerEnter('pen');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerEnter('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerLeave('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     await pointerLeave('pen');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, 'transparent');
 
     await pointerEnter('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, 'transparent');
 
     await pointerLeave('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, 'transparent');
 
     await pointerEnter('mouse');
     preview = findRenderedPreview();
     assert.ok(preview);
-    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+    assert.equal(flattenStyle(findHoverOverlay()?.props.style).backgroundColor, '#eee');
 
     platform.OS = 'ios';
     await update(createElement(PostSourcePreview, { source: source as never }));

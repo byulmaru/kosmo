@@ -1,11 +1,12 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
 import { PostMediaImage } from '@/components/post/PostMediaImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { notificationKindPresentations } from './notificationKindPresentation';
 import { NotificationKindRail, NotificationLinkTarget } from './NotificationLinkTarget';
@@ -115,6 +116,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
   const unread = props.unread ?? false;
   const sourceUnavailable = isSourceUnavailableNotification(props);
   const [hovered, setHovered] = useState(false);
+  const reducedMotion = useReducedMotion();
   return (
     <PostContentPrivacyBoundary
       style={[styles.root, { borderBottomColor: theme.borderSubtle }]}
@@ -125,17 +127,15 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         onPointerLeave={sourceUnavailable ? undefined : () => setHovered(false)}
         style={{
           backgroundColor: unread ? theme.actionPrimarySubtle : 'transparent',
+          position: 'relative',
         }}
         testID="notification-item-surface"
       >
-        {web && hovered && !sourceUnavailable ? (
-          <View
-            aria-hidden
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: theme.stateHover }]}
-            testID="notification-hover-overlay"
-          />
-        ) : null}
+        <NotificationHoverOverlay
+          active={web && hovered && !sourceUnavailable}
+          reducedMotion={reducedMotion}
+          theme={theme}
+        />
         {sourceUnavailable ? (
           <SourceUnavailableNotificationTarget {...props} />
         ) : isPostNotificationChild(props) ? (
@@ -157,6 +157,32 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         ) : null}
       </View>
     </PostContentPrivacyBoundary>
+  );
+}
+
+function NotificationHoverOverlay({
+  active,
+  reducedMotion,
+  theme,
+}: {
+  active: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: active ? theme.stateHover : 'transparent',
+    interactionKey: active ? 'hovered' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View
+      aria-hidden
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor } as unknown as ViewStyle]}
+      testID="notification-hover-overlay"
+    />
   );
 }
 

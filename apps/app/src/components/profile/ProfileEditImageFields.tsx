@@ -1,5 +1,6 @@
 import { Camera } from 'lucide-react-native';
 import {
+  Animated,
   Image,
   Platform,
   Pressable,
@@ -13,7 +14,8 @@ import {
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedOpacityTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -96,14 +98,7 @@ function ImageStatus({
         {status.message}
       </Text>
       {status.kind === 'error' && onRetry ? (
-        <Pressable
-          accessibilityLabel={formatImageUploadRetryLabel(subject)}
-          accessibilityRole="button"
-          onPress={onRetry}
-          style={({ pressed }) => [styles.retry, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Text style={[styles.retryLabel, { color: theme.foregroundPrimary }]}>다시 시도</Text>
-        </Pressable>
+        <RetryButton label={formatImageUploadRetryLabel(subject)} onPress={onRetry} theme={theme} />
       ) : null}
     </View>
   );
@@ -171,44 +166,14 @@ function ImageEditControl({
       testID={testID}
     >
       {({ pressed }) => (
-        <>
-          {draft.previewUri ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              fadeDuration={0}
-              resizeMode="cover"
-              source={{ uri: draft.previewUri }}
-              style={StyleSheet.absoluteFill}
-              testID={`${testID}-content`}
-            />
-          ) : (
-            <View
-              style={[styles.imagePlaceholder, { backgroundColor: theme.actionPrimarySubtle }]}
-              testID={`${testID}-content`}
-            />
-          )}
-          {innerBorderColor ? (
-            <View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                styles.innerBorder,
-                { borderColor: innerBorderColor },
-              ]}
-              testID={`${testID}-inner-border`}
-            />
-          ) : null}
-          {pressed ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                styles.pressedVeil,
-                { backgroundColor: theme.overlayScrim },
-              ]}
-            />
-          ) : null}
-          <CameraAffordance disabled={disabled} />
-        </>
+        <ImageEditControlVisual
+          disabled={disabled}
+          draft={draft}
+          innerBorderColor={innerBorderColor}
+          pressed={pressed}
+          testID={testID}
+          theme={theme}
+        />
       )}
     </Pressable>
   );
@@ -228,6 +193,112 @@ function ImageEditControl({
       ]}
       renderTrigger={renderTrigger}
     />
+  );
+}
+
+function RetryButton({
+  label,
+  onPress,
+  theme,
+}: {
+  label: string;
+  onPress: () => void;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const reducedMotion = useReducedMotion();
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.retry}
+    >
+      {({ pressed }) => (
+        <RetryButtonVisual pressed={pressed} reducedMotion={reducedMotion} theme={theme} />
+      )}
+    </Pressable>
+  );
+}
+
+function RetryButtonVisual({
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const animatedOpacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.7 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View style={{ opacity: animatedOpacity }}>
+      <Text style={[styles.retryLabel, { color: theme.foregroundPrimary }]}>다시 시도</Text>
+    </Animated.View>
+  );
+}
+
+function ImageEditControlVisual({
+  disabled,
+  draft,
+  innerBorderColor,
+  pressed,
+  testID,
+  theme,
+}: {
+  disabled: boolean;
+  draft: ProfileEditImageDraft;
+  innerBorderColor?: string;
+  pressed: boolean;
+  testID: string;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const reducedMotion = useReducedMotion();
+  const animatedVeilOpacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.16 : 0,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      {draft.previewUri ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          resizeMode="cover"
+          source={{ uri: draft.previewUri }}
+          style={StyleSheet.absoluteFill}
+          testID={`${testID}-content`}
+        />
+      ) : (
+        <View
+          style={[styles.imagePlaceholder, { backgroundColor: theme.actionPrimarySubtle }]}
+          testID={`${testID}-content`}
+        />
+      )}
+      {innerBorderColor ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.innerBorder, { borderColor: innerBorderColor }]}
+          testID={`${testID}-inner-border`}
+        />
+      ) : null}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.pressedVeil,
+          { backgroundColor: theme.overlayScrim, opacity: animatedVeilOpacity },
+        ]}
+      />
+      <CameraAffordance disabled={disabled} />
+    </>
   );
 }
 
@@ -333,7 +404,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   pressedVeil: {
-    opacity: 0.16,
     pointerEvents: 'none',
   },
   avatarRow: {

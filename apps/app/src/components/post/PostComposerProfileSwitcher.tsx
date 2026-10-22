@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import type { ViewStyle } from 'react-native';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileSwitcher_profiles$key } from './__generated__/PostComposerProfileSwitcher_profiles.graphql';
@@ -201,19 +203,17 @@ export function PostComposerProfileSwitcher({
             setOpen((value) => !value);
           }}
           ref={triggerRef}
-          style={({ pressed }) => [
-            styles.avatarTrigger,
-            {
-              backgroundColor: pressed ? theme.surface : 'transparent',
-              opacity: disabled || pending ? 0.5 : 1,
-            },
-          ]}
+          style={{ opacity: disabled || pending ? 0.5 : 1 }}
         >
-          <Avatar
-            imageUri={selectedProfile?.avatar?.url}
-            label={selectedProfile?.displayName ?? '프로필'}
-            size={40}
-          />
+          {({ pressed }) => (
+            <ProfileSwitcherTriggerVisual
+              imageUri={selectedProfile?.avatar?.url}
+              label={selectedProfile?.displayName ?? '프로필'}
+              pressed={pressed}
+              size={40}
+              theme={theme}
+            />
+          )}
         </Pressable>
         <View style={styles.triggerCopy}>
           <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
@@ -246,6 +246,40 @@ export function PostComposerProfileSwitcher({
         </View>
       ) : null}
     </View>
+  );
+}
+
+function ProfileSwitcherTriggerVisual({
+  imageUri,
+  label,
+  pressed,
+  size,
+  theme,
+}: {
+  imageUri?: string | null;
+  label: string;
+  pressed: boolean;
+  size: number;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const reducedMotion = useReducedMotion();
+  const animatedBackground = useAnimatedColorTransition({
+    color: pressed ? theme.surface : 'transparent',
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: pressed ? 'interaction' : 'selection',
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.avatarTrigger,
+        { backgroundColor: animatedBackground } as unknown as ViewStyle,
+      ]}
+    >
+      <Avatar imageUri={imageUri} label={label} size={size} />
+    </Animated.View>
   );
 }
 
