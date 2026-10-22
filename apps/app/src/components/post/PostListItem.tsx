@@ -338,7 +338,7 @@ function PostListItemCard({
           }
         }}
         role={article ? 'article' : undefined}
-        style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
+        style={[style, Platform.OS === 'web' ? { cursor: 'pointer' } : undefined]}
         tabIndex={-1}
         testID="post-list-item-card"
       >
