@@ -96,6 +96,10 @@ mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => true,
   useTheme: () => theme,
 });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
   fontFamilies: { content: 'content', ui: 'ui' },

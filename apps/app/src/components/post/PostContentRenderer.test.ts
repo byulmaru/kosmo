@@ -19,13 +19,21 @@ const require = createRequire(import.meta.url);
 const openedURLs: string[] = [];
 
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Linking: {
     openURL: async (url: string) => {
       openedURLs.push(url);
     },
   },
   Platform: { OS: 'android' },
-  Pressable: 'Pressable',
+  Pressable: (props: Record<string, unknown>) => {
+    const children = props.children;
+    return createElement(
+      'Pressable',
+      props,
+      typeof children === 'function' ? children({ pressed: false, hovered: false }) : children,
+    );
+  },
   StyleSheet: {
     create: (styles: object) => styles,
     flatten: (styles: Array<Record<string, unknown>>) => Object.assign({}, ...styles),
@@ -61,6 +69,10 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     textSecondary: '#777',
   }),
   useReducedMotion: () => true,
+});
+mockModule(new URL('../ui/useAnimatedColorTransition.ts', import.meta.url), {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
 });
 mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
   PostMediaGallery: (props: Record<string, unknown>) => createElement('PostMediaGallery', props),
@@ -339,7 +351,18 @@ describe('PostContentRenderer', () => {
       rendered('Text').some((node) => node.props.children === '보기'),
       true,
     );
-    const warningStyle = toggle.props.style({ pressed: false, hovered: false })[0];
+    const warningVisual = rendered('AnimatedView').find((node) =>
+      (Array.isArray(node.props.style) ? node.props.style : [node.props.style]).some(
+        (style) => style?.minHeight === 56,
+      ),
+    );
+    assert.ok(warningVisual);
+    const warningStyle = (
+      Array.isArray(warningVisual.props.style)
+        ? warningVisual.props.style
+        : [warningVisual.props.style]
+    ).find((style) => style?.minHeight === 56);
+    assert.ok(warningStyle);
     assert.deepEqual(
       {
         borderRadius: warningStyle.borderRadius,
@@ -670,7 +693,10 @@ describe('PostContentRenderer', () => {
 
     const contentRoot = byTestId('post-content-renderer');
     assert.equal(
-      contentRoot.findAll((node) => node.props.testID === 'post-content-warning').length,
+      contentRoot.findAll(
+        (node) =>
+          (node.type as unknown) === 'Pressable' && node.props.testID === 'post-content-warning',
+      ).length,
       1,
     );
 
@@ -690,7 +716,7 @@ describe('PostContentRenderer', () => {
     assert.equal(galleries.length, 1);
     assert.equal(
       contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
-      1,
+      galleries.length,
     );
   });
 
