@@ -87,7 +87,7 @@ const createProfile = async (kind: InstanceKind) => {
 const createLocalTarget = async () => {
   const author = await createProfile(InstanceKind.LOCAL);
   const post = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: author.profile.id,
     visibility: PostVisibility.PUBLIC,

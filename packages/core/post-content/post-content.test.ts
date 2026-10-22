@@ -8,11 +8,13 @@ import {
   postContentDocumentFromTextAndMedia,
   postContentDocumentToHtml,
   postContentDocumentToText,
+  postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
 } from './server';
 
 const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
 const otherProfileId = '019f6678-86fa-709b-984e-1520766b8442';
+const hashtagId = '019f6678-86fa-709b-984e-1520766b8443';
 
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
@@ -48,6 +50,82 @@ test('keeps one empty paragraph for an empty document', () => {
     type: 'doc',
     content: [{ type: 'paragraph' }],
   });
+});
+
+test('preserves repeated Hashtag identities and exact authored tokens in text projection', () => {
+  const longToken = `#${'名'.repeat(65)}`;
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Tags: ' },
+            { type: 'hashtag', attrs: { hashtagId, token: '#MiXeD' } },
+            { type: 'text', text: ' / ' },
+            { type: 'hashtag', attrs: { hashtagId, token: '#mixed' } },
+            { type: 'text', text: ' / ' },
+            { type: 'hashtag', attrs: { hashtagId, token: longToken } },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(isPostContentDocumentV1(document), true);
+  assert.equal(postContentDocumentToText(document), `Tags: #MiXeD / #mixed / ${longToken}`);
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: 'Tags: ' },
+      { type: 'hashtag', attrs: { hashtagId, token: '#MiXeD' } },
+      { type: 'text', text: ' / ' },
+      { type: 'hashtag', attrs: { hashtagId, token: '#mixed' } },
+      { type: 'text', text: ' / ' },
+      { type: 'hashtag', attrs: { hashtagId, token: longToken } },
+    ],
+  });
+});
+
+test('validates persisted Hashtag identity and token while accepting projected IDs in the app guard', () => {
+  for (const attrs of [
+    { hashtagId: 'not-a-uuid', token: '#tag' },
+    { hashtagId, token: '' },
+  ]) {
+    assert.throws(() =>
+      canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'hashtag', attrs }] }],
+        },
+      }),
+    );
+  }
+
+  const projectedDocument = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'hashtag', attrs: { hashtagId: 'SGFzaHRhZy0x', token: '#tag' } }],
+        },
+      ],
+    },
+  } as const;
+
+  assert.equal(isPostContentDocumentV1(projectedDocument), true);
+  assert.throws(
+    () => canonicalizePostContentDocument(projectedDocument),
+    /Hashtag ID must be a UUID/u,
+  );
 });
 
 test('auto-links explicit HTTP URLs with canonical hrefs and original text', () => {
@@ -117,6 +195,72 @@ test('keeps embedded, unsupported, fuzzy, and invalid URLs as plain text', () =>
     content: [{ type: 'text', text: bodyText }],
   });
   assert.equal(postContentDocumentToHtml(document), `<p>${bodyText}</p>`);
+});
+
+test('finds normalized local hashtag candidates without URL or mention occurrences', () => {
+  const bodyText =
+    `https://example.com/path/#path?query=#query&fragment=1#fragment #ok (#wrapped) abc#embedded #${'a'.repeat(65)} ` +
+    '#Ｆｏｏ #Cafe\u0301 #１２３ #Ⓐ 😀#astral';
+
+  const candidates = postContentHashtagCandidatesFromText(bodyText);
+
+  assert.deepEqual(
+    candidates.map(({ start, end }) => bodyText.slice(start, end)),
+    ['#ok', '#wrapped', '#Ｆｏｏ', '#Cafe\u0301', '#１２３', '#Ⓐ', '#astral'],
+  );
+  assert.deepEqual(Object.keys(candidates[0]!).sort(), ['end', 'start']);
+});
+
+test('excludes hashtag fragments from FTP, mailto, protocol-relative, and HTTPS URLs', () => {
+  const bodyText =
+    'ftp://example.com/path/#ftp mailto:user@example.com?subject=#mail ' +
+    '//example.com/path/#relative https://example.com/path/#https then #outside';
+
+  const candidates = postContentHashtagCandidatesFromText(bodyText);
+
+  assert.deepEqual(
+    candidates.map(({ start, end }) => bodyText.slice(start, end)),
+    ['#outside'],
+  );
+});
+
+test('builds hashtag and Mention nodes from normalized-text offsets', () => {
+  const bodyText = 'before\r\n @alice then #Mixed123';
+  const normalizedBodyText = bodyText.replaceAll('\r\n', '\n').trim();
+  const relativeHandle = '@alice';
+  const mentionStart = normalizedBodyText.indexOf(relativeHandle);
+  const mentions = [
+    {
+      end: mentionStart + relativeHandle.length,
+      handle: relativeHandle,
+      profileId: aliceProfileId,
+      relativeHandle,
+      start: mentionStart,
+    },
+  ];
+  const candidates = postContentHashtagCandidatesFromText(normalizedBodyText, mentions);
+
+  const document = postContentDocumentFromTextAndMedia(
+    normalizedBodyText,
+    [],
+    false,
+    null,
+    mentions,
+    candidates.map((candidate) => ({ ...candidate, hashtagId })),
+  );
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: 'before' },
+      { type: 'hard_break' },
+      { type: 'text', text: ' ' },
+      { type: 'mention', attrs: { handle: relativeHandle, profileId: aliceProfileId } },
+      { type: 'text', text: ' then ' },
+      { type: 'hashtag', attrs: { hashtagId, token: '#Mixed123' } },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), normalizedBodyText);
 });
 
 test('does not link URL fragments split by a Mention and preserves media metadata', () => {

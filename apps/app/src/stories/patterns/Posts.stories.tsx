@@ -2131,9 +2131,31 @@ function ContentWarningRevealStory() {
   return (
     <Catalog>
       <PostContentRenderer
-        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        bodyText="가림 해제 뒤 표시되는 #원문 본문입니다."
         contentWarning="민감한 내용이 포함되어 있습니다."
-        document={null}
+        document={{
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '가림 해제 뒤 표시되는 ' },
+                  {
+                    type: 'hashtag',
+                    attrs: {
+                      hashtagId: '019f6678-86fa-709b-984e-1520766b8447',
+                      token: '#원문',
+                    },
+                  },
+                  { type: 'text', text: ' 본문입니다.' },
+                ],
+              },
+            ],
+          },
+        }}
         media={[
           {
             altText: '가림 해제 뒤 표시되는 이미지',

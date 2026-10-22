@@ -775,7 +775,7 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
   const localAuthor = await createProfile();
   const remoteQuoteAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
   const sourceResult = await createPost({
-    document: postContentDocumentFromText('Local Source body'),
+    bodyText: 'Local Source body',
     origin: 'LOCAL',
     profileId: localAuthor.profile.id,
     visibility: PostVisibility.PUBLIC,
@@ -902,27 +902,10 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
     .then(firstOrThrow);
   assert.equal(persistedGrantQuote.currentContentId, grantQuote.content.id);
 
-  const localQuoteDocument: PostContentDocumentV1 = {
-    version: 1,
-    summary: null,
-    body: {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'Local Quote body with link',
-              marks: [{ type: 'link', attrs: { href: 'https://example.com/quote-source' } }],
-            },
-          ],
-        },
-      ],
-    },
-  };
+  const localQuoteBodyText = 'Local Quote body with link https://example.com/quote-source';
+  const localQuoteDocument = postContentDocumentFromText(localQuoteBodyText);
   const localQuote = await createPost({
-    document: localQuoteDocument,
+    bodyText: localQuoteBodyText,
     origin: 'LOCAL',
     profileId: remoteQuoteAuthor.profile.id,
     repostSourceId: sourceResult.post.id,

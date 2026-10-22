@@ -17,6 +17,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 일반 Post Composer가 지원하는 Plain Text 본문, Content Warning, Visibility, 글자 수, Media
   선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로
   재사용한다.
+- Local Post·Reply·Quote의 Hashtag는 기존 본문에 직접 입력한다. 별도 Hashtag 입력·선택·자동완성 UI를 두지 않는다.
+  Hashtag marker와 이름은 기존 본문 글자 수에 포함하며, 인식되지 않는 긴 text도 잘라내거나 게시를 막지 않는다.
 - 일반 Post, Reply와 Quote는 같은 Plain Text editor에서 token boundary의 `@` 뒤에 한 글자 이상 입력했을
   때 Profile 제안을 표시한다. `@`만 입력하면 검색어를 입력하라는 짧은 안내를 표시하고 Profile 전체 목록은 열지
   않는다. 제안은 현재 작성 Profile을 기준으로 검색하며, 제안 조회 중에는 원격 Profile을 새로 resolve/fetch하지

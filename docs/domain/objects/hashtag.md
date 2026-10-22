@@ -2,8 +2,8 @@
 
 ## 정의
 
-Hashtag는 정규화된 이름으로 Post와 Profile을 연결하는 공통 주제 식별자다. Hashtag Name 문법·정규화·유일성은
-이 객체가 소유하는 canonical 규칙이다.
+Hashtag는 정규화된 이름으로 Post와 Profile을 연결하는 공통 주제 식별자다. 공통 identity 정규화와 유일성은 이
+객체가 소유하지만, 입력 문법과 길이 검증은 관계를 만드는 각 작성 경계가 소유한다.
 
 ## 상태
 
@@ -11,25 +11,29 @@ Hashtag는 정규화된 이름으로 Post와 Profile을 연결하는 공통 주�
 
 ## 속성
 
-| 속성                   | 타입/nullability | 검증 정책                                                                                                                                                                                                                           | 존재 조건 | 조회 조건      | 조회 권한 |
-| ---------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- | --------- |
-| Canonical Hashtag Name | 문자열, 필수     | 바깥 공백 제거 → 앞의 선택적 `#` 하나 제거 → Unicode NFKC → locale 비종속 `toLowerCase()` 순서로 정규화한다. 정규화 결과는 Unicode code point 기준 1-20자의 문자·숫자·밑줄이어야 하며, 같은 결과는 하나의 Hashtag identity만 가진다 | 항상      | 공개 검색 정책 | 없음      |
-| Display Hashtag Name   | 문자열, 필수     | 최초 유효 입력에서 바깥 공백과 선택적 앞 `#`를 제거하고 Unicode NFKC를 적용한 대소문자 표기를 보존한다. 같은 canonical identity의 후속 입력으로 갱신하지 않는다                                                                     | 항상      | 공개 검색 정책 | 없음      |
+| 속성                   | 타입/nullability | 검증 정책                                                                                                                                                                                                               | 존재 조건 | 조회 조건      | 조회 권한 |
+| ---------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- | --------- |
+| Canonical Hashtag Name | 문자열, 필수     | 바깥 공백 제거 → 앞의 선택적 `#` 하나 제거 → Unicode NFKC → locale 비종속 소문자화 순서로 identity를 정규화한다. 같은 결과는 하나의 Hashtag identity만 가진다. 이 공통 규칙은 입력 문법이나 길이 제한을 부여하지 않는다 | 항상      | 공개 검색 정책 | 없음      |
+| Display Hashtag Name   | 문자열, 필수     | identity를 처음 만들 때의 이름에서 바깥 공백과 선택적 앞 `#`를 제거하고 Unicode NFKC를 적용한 대소문자 표기를 보존한다. 같은 canonical identity의 후속 입력으로 갱신하지 않는다                                         | 항상      | 공개 검색 정책 | 없음      |
 
 ## 관계
 
-| 관계                | 대상                    | 방향               | cardinality | 존재 조건                             | 조회 조건              | 조회 권한 |
-| ------------------- | ----------------------- | ------------------ | ----------- | ------------------------------------- | ---------------------- | --------- |
-| 포함 Post           | [Post](./post.md)       | Hashtag <- Post    | 1 -> 0..N   | Post 본문에 Hashtag가 있을 때         | Post 조회 정책 통과    | 없음      |
-| Profile Tag Profile | [Profile](./profile.md) | Hashtag <- Profile | 1 -> 0..N   | Profile이 Hashtag를 Tag로 선택했을 때 | Profile 조회 정책 통과 | 없음      |
+| 관계                | 대상                              | 방향                    | cardinality | 존재 조건                                                         | 조회 조건              | 조회 권한 |
+| ------------------- | --------------------------------- | ----------------------- | ----------- | ----------------------------------------------------------------- | ---------------------- | --------- |
+| 포함 Post Content   | [Post Content](./post-content.md) | Hashtag <- Post Content | 1 -> 0..N   | Post Content 본문에 작성 경계의 규칙으로 확인된 Hashtag가 있을 때 | Post 조회 정책 통과    | 없음      |
+| Profile Tag Profile | [Profile](./profile.md)           | Hashtag <- Profile      | 1 -> 0..N   | Profile이 Hashtag를 Tag로 선택했을 때                             | Profile 조회 정책 통과 | 없음      |
 
 ## 행동
 
-Hashtag는 독립 Mutation을 소유하지 않는다. Post/Reply/Quote 작성 또는 Local Profile Owner의 Profile Tag 편집에서
-받은 각 이름을 이 문서의 Hashtag Name 규칙으로 canonical Hashtag identity에 해석한다. 같은 정규화 결과의
-identity가 없으면 생성하고, 있으면 해당 identity를 재사용한다. Post·Profile과의 관계 생성은 각 객체의 행동이
-소유한다. 새 identity를 만들 때 최초 입력의 NFKC 표기를 Display Hashtag Name으로 함께 저장하고, 이후 다른
-대소문자 표기가 들어와도 기존 Display Hashtag Name을 유지한다.
+Hashtag는 독립 Mutation을 소유하지 않는다. 관계를 만드는 경계는 입력을 검증한 뒤 이 문서의 공통 정규화로
+identity를 해석한다. 같은 identity가 없으면 생성하고, 있으면 재사용한다. Post Content와 Profile Tag 관계 생성은
+각 객체의 행동이 소유한다. 최초 identity 입력의 NFKC 표기를 Display Hashtag Name으로 저장하고, 이후 다른 표기가
+들어와도 기존 Display Hashtag Name을 유지한다.
+
+공통 identity 규칙은 로컬 Post 본문 Hashtag의 64 code point·Unicode Letter (`L`)·Number (`N`)·`_` 문법이나
+Profile Tag 입력의 20 code point·같은 문자 문법을 Hashtag 저장 전체에 적용하지 않는다. 원격 Note의 typed Hashtag 보존·연결은 별도 ActivityPub 계약이
+소유하며, 그 계약에서 허용한 원격 이름은 로컬 입력 제한과 관계없이 같은 공통 identity로 표현할 수 있다. 이
+경계만으로 원격 Note의 Hashtag 인식이나 전달이 활성화되지는 않는다.
 
 ## 권한
 
@@ -54,6 +58,8 @@ identity가 없으면 생성하고, 있으면 해당 identity를 재사용한다
 ## 제외/보류
 
 - Hashtag의 독립 운영 상태, alias, 자동완성, trend, 추천은 현재 범위에서 제외한다.
+- Post 본문 Hashtag 인식·보존·인라인 표시는 [Post Content](./post-content.md)가 소유한다. 로컬 입력 문법은
+  해당 작성 경계에만 적용한다.
 - Hashtag 관련 Profile 목록 탐색의 정확한 identity 일치, 공개 조건, pagination과 탐색 UI는
   [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)을 따른다.
 - Hashtag 자체를 찾거나 Hashtag Name 목록을 반환하는 검색은 별도 계약이며 ADR 0021의 범위가 아니다.

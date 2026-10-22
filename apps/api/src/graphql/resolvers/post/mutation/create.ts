@@ -3,7 +3,6 @@ import { AccountProfileRole, InstanceKind, PostVisibility } from '@kosmo/core/en
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
-import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
@@ -266,24 +265,18 @@ builder.mutationField('createPost', (t) =>
 
       const result = await createPost({
         accountId: ctx.session.accountId,
-        ...(mentionReferences.length > 0 ? { authoredBodyText: input.bodyText } : {}),
-        document: postContentDocumentFromTextAndMedia(
-          input.bodyText,
-          media.map(({ mediaId }) => ({
-            mediaId: mediaId.id,
-          })),
-          input.sensitiveMedia ?? false,
-          contentWarning || null,
-          mentionReferences,
-        ),
+        bodyText,
+        contentWarning: contentWarning || null,
         media: media.map(({ altText, mediaId }) => ({
           altText: altText ?? null,
           mediaId: mediaId.id,
         })),
+        mentions: mentionReferences,
         origin: 'LOCAL',
         profileId,
         replyParentId: input.replyParentId?.id,
         repostSourceId: input.repostSourceId?.id,
+        sensitiveMedia: input.sensitiveMedia ?? false,
         visibility: input.visibility,
       });
 

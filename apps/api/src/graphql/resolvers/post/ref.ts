@@ -51,7 +51,11 @@ PostContent.implement({
   fields: (t) => ({
     document: t.field({
       type: 'PostContentDocument',
-      resolve: (content) => projectPostContentDocument(content.document),
+      args: {
+        includeHashtags: t.arg.boolean({ defaultValue: false, required: false }),
+      },
+      resolve: (content, { includeHashtags }) =>
+        projectPostContentDocument(content.document, includeHashtags ?? false),
     }),
     bodyText: t.string({
       resolve: (content) => postContentDocumentToText(content.document),
@@ -92,6 +96,7 @@ PostContent.implement({
 
 function projectPostContentDocument(
   document: typeof PostContents.$inferSelect.document,
+  includeHashtags: boolean,
 ): typeof PostContents.$inferSelect.document {
   return {
     ...document,
@@ -110,17 +115,31 @@ function projectPostContentDocument(
 
         return {
           ...block,
-          content: block.content?.map((node) =>
-            node.type === 'mention'
-              ? {
-                  ...node,
-                  attrs: {
-                    ...node.attrs,
-                    profileId: encodeGlobalId('Profile', node.attrs.profileId),
-                  },
-                }
-              : node,
-          ),
+          content: block.content?.map((node) => {
+            if (node.type === 'mention') {
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  profileId: encodeGlobalId('Profile', node.attrs.profileId),
+                },
+              };
+            }
+            if (node.type === 'hashtag') {
+              if (!includeHashtags) {
+                return { text: node.attrs.token, type: 'text' };
+              }
+
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  hashtagId: encodeGlobalId('Hashtag', node.attrs.hashtagId),
+                },
+              };
+            }
+            return node;
+          }),
         };
       }),
     },

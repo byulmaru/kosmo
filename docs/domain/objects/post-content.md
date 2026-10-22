@@ -3,7 +3,7 @@
 ## 정의
 
 Post Content는 Post의 작성 내용을 한 시점에 보존하는 immutable revision이다. Content Warning, 본문,
-Sensitive Media, 저장된 Profile과 일치하는 typed Local Mention·선택된 Local Mention과 검증된 inbound typed Mention, 순서가 있는 Media 참조를 하나의 canonical Content Document로 소유한다. Post는
+Sensitive Media, 저장된 Profile과 일치하는 typed Local Mention·선택된 Local Mention과 검증된 inbound typed Mention, 순서가 있는 Media 참조와 Hashtag 관계를 소유한다. Post는
 현재 Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 바꾸지 않고 새 Post Content를 만든다.
 
 ## 속성
@@ -22,6 +22,13 @@ Media 첨부 기능이 아직 배포되지 않은 출시 전 단계에서 제거
 계약으로 보지 않으며, Media 소유로 바로잡기 위해 V2를 만들지 않는다.
 
 Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
+
+로컬 Post 본문에서 Hashtag는 본문 text를 보존한 채 해당 occurrence와 공통 Hashtag identity를 연결한다. Post·Reply·Quote 작성은
+바깥 공백 제거 → 선택적 앞 `#` 하나 제거 → Unicode NFKC → locale 비종속 소문자화한 이름이 Unicode Letter (`L`)·Number (`N`)
+또는 `_`로만 이루어지고 Unicode code point 기준 1–64자일 때 Hashtag로 인식한다. `#`는 이 이름 길이에 포함하지 않으며 숫자만 있는
+이름도 허용한다. 괄호 안의 `(#tag)`는 인식하지만 단어 중간의 `abc#tag`와 URL fragment는 인식하지 않는다. 64자를
+초과하거나 문법에 맞지 않는 occurrence는 잘라내거나 작성 전체를 거부하지 않고 원래 본문 text 그대로 남긴다.
+같은 identity가 본문에 반복되면 각 occurrence의 표기와 위치를 보존하고, revision에는 해당 identity와의 관계를 한 번만 둔다.
 
 500자 작성 제한은 Local Post의 작성 내용에만 적용한다. Remote Post는 정규화한 summary와 body Plain Text의
 UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다. 정확히 10,000자는 허용하며 초과하면
@@ -63,6 +70,7 @@ Media와 같은 순서의 Media node로 투영하고 초과분은 무시한다. 
 | Post              | [Post](./post.md)       | Post Content -> Post    | 1 -> 1      | 항상                                                                                                                                                                             | Post 조회 정책 통과 | 없음      |
 | Referenced Media  | [Media](./media.md)     | Post Content -> Media   | 1 -> 0..4   | document에 Media node가 있을 때                                                                                                                                                  | Post 조회 정책 통과 | 없음      |
 | Mentioned Profile | [Profile](./profile.md) | Post Content -> Profile | 1 -> 0..N   | Local 작성에서 본문 handle token이 저장된 eligible Profile과 일치하거나 선택 Profile이 검증될 때, 또는 inbound typed `Mention.href`가 알려진 Profile stable identity로 확인될 때 | Post 조회 정책 통과 | 없음      |
+| Hashtag           | [Hashtag](./hashtag.md) | Post Content -> Hashtag | 1 -> 0..N   | 로컬 본문에 인식된 Hashtag가 있을 때                                                                                                                                             | Post 조회 정책 통과 | 없음      |
 
 Referenced Media는 Content Document의 Media node가 소유하는 revision 관계다. 별도 관계 테이블이나 Media ID
 배열을 두 번째 source of truth로 저장하지 않는다. Post Content를 만들 때 서버는 각 Media 참조의 존재,
@@ -82,6 +90,10 @@ node의 `handle` attr, 둘 다 없으면 기존 `@알 수 없는 사용자`를 �
 `relativeHandle`만 표시하며, 관계가 없거나 Profile이 조회 정책을 통과하지 못해 반환되지 않으면 node의 `handle` attr를 사용하지 않고
 Profile 이동 없는 `@알 수 없는 사용자`를 표시한다.
 HTML projection이 node의 `handle` attr를 사용할 때는 HTML escape 처리한 plain text로 내보내며, link URL이나 ActivityPub Mention tag를 만들지 않는다.
+
+Hashtag 관계는 각 Post Content revision에 속한다. 새 로컬 작성에서는 본문의 인식된 occurrence에 해당하는 canonical identity만 연결하며,
+본문에 반복된 occurrence는 표시 시 각각 유지한다. Hashtag 관계는 Content와 함께 생성되고 Current Content pointer가 갱신되는 같은
+원자적 작성 결과에 포함된다. 일부 관계나 본문만 남는 작성은 허용하지 않는다.
 
 inbound typed `Mention.href`는 기존 `ActivityPubActor`·Profile mapping으로 stable Profile identity를 먼저 확인하며, 이 identity
 확인은 본문 HTML 변환과 독립적이다. 이미 알려진 Local/Remote Profile은 기존 mapping을 그대로 사용한다. 알려지지 않은 remote actor
@@ -109,9 +121,9 @@ rollback해 partial relation을 남기지 않는다.
 
 ## 행동
 
-| 행동              | 행동 주체 Profile | 대상 객체 | 입력값                                                                               | 권한                            | 조건                                                                                                                                                                          | 결과                                                                                                                                                                             |
-| ----------------- | ----------------- | --------- | ------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post Content 작성 | Profile           | Post      | Content Warning, 본문 내 typed handle·선택 Mention 대상, Sensitive Media, Media 목록 | `Account.Active`, `Post.Author` | Post가 Active이고 Content를 가지며 입력 document가 현재 schema와 길이·Media·typed/selected Mention 검증을 통과한다. 참조한 Local Media의 Upload Account가 요청 Account와 같다 | 기존 revision은 유지되고 새 immutable Post Content와 deduplicated Mentioned Profile relation이 생성되며 Post의 현재 Content 포인터가 같은 transaction에서 새 revision으로 바뀐다 |
+| 행동              | 행동 주체 Profile | 대상 객체 | 입력값                                                                             | 권한                            | 조건                                                                                                                                                                                                                          | 결과                                                                                                                                                                                      |
+| ----------------- | ----------------- | --------- | ---------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post Content 작성 | Profile           | Post      | Content Warning, 본문, typed handle·선택 Mention 대상, Sensitive Media, Media 목록 | `Account.Active`, `Post.Author` | Post가 Active이고 Content를 가지며 입력 document가 현재 schema와 길이·Media·typed/selected Mention 검증을 통과한다. 로컬 본문 Hashtag는 위 로컬 작성 규칙을 따른다. 참조한 Local Media의 Upload Account가 요청 Account와 같다 | 기존 revision은 유지되고 새 immutable Post Content 및 해당 revision의 Mentioned Profile·Hashtag 관계가 생성되며 Post의 현재 Content pointer가 같은 원자적 결과에서 새 revision을 가리킨다 |
 
 본문, Content Warning, Sensitive Media, Media의 추가·제거·순서 또는 Media 자체 교체 중 하나라도
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
@@ -151,6 +163,8 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 - Post의 일반 조회와 배포는 현재 Post Content만 사용한다.
 - V1 읽기에서는 알 수 없는 block·inline node와 그 자손을 생략하고, 아는 형제 node의 순서와 내용을 유지한다. 알 수 없는 node 내용은 표시하지 않는다. 이 projection에서도 Content Warning, 알려진 순서의 Media 참조와 Sensitive Media 표시는 유지한다.
+- Post의 Hashtag 집합은 Current Post Content의 revision-owned 관계에서만 투영한다. 이전 reader도 `#`를 포함한 원래
+  본문 text, Media, Content Warning과 Sensitive Media 가림 상태를 계속 유지해야 한다.
 - 현재 Post Content의 Referenced Media는 body의 Media node 순서로 제공한다.
 - Current Post의 Mentioned Profile은 현재 Post Content의 revision-owned 관계에서 투영한다. 구 reader가 지원하지
   않는 Mention을 받아도 본문 text를 보존해 읽을 수 있는 호환 경계를 먼저 검증하며, Mention 저장 활성화는 그
@@ -188,6 +202,8 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 - Post Visibility 수정은 Post Content 수정에 포함하지 않는다.
 - 현재 Post Composer 이미지 업로드는 새 Post의 첫 Post Content만 만들며 기존 Post 수정은 포함하지 않는다.
+- Hashtag 본문 작성·보존은 새 Local Post·Reply·Quote에만 적용한다. 기존 Post 수정·revision 추출·backfill과 Remote Note의
+  ActivityPub Hashtag 인식·표현은 별도 계약에서 다룬다.
 - crop, filter처럼 Media의 이미지 byte나 파생 표현 자체를 편집하는 기능은 포함하지 않는다. 새 이미지를
   업로드해 Media 참조를 교체하는 기능은 포함한다.
 - revision 번호, 과거 revision 목록·복원, 동시 편집 충돌 UX와 Media 물리 삭제 정책은 후속 계약에서 정한다.
