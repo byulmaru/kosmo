@@ -5121,7 +5121,7 @@ function staticMediaCursorStory(postId: string, testID: string): Story {
         : (bounds.top + bounds.bottom) / 2;
       const target = document.elementFromPoint(x, y)!;
       expect(target).not.toBeNull();
-      expect(background).toContainElement(target);
+      expect(background.contains(target)).toBe(true);
       expect(target.closest('a, [role="button"], [role="link"]')).toBeNull();
       await userEvent.pointer({ target, coords: { clientX: x, clientY: y } });
       expect(getComputedStyle(target).cursor).toBe('auto');
@@ -6073,19 +6073,7 @@ export const PostDetailThreadBackgroundCursors: Story = {
     for (const id of ['route-root', 'route-child']) {
       const item = canvas.getByTestId(`post-thread-item-${id}`);
       const row = within(item).getByTestId('post-list-standard-row');
-      row.scrollIntoView({ block: 'center' });
-      const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]')!;
-      await waitFor(() =>
-        expect(row.getBoundingClientRect().bottom).toBeGreaterThan(
-          avatar.getBoundingClientRect().bottom + 4,
-        ),
-      );
-      const bounds = avatar.getBoundingClientRect();
-      expect(await pointerAt((bounds.left + bounds.right) / 2, bounds.bottom + 2, 'pointer')).toBe(
-        row,
-      );
-      expect(pathname).toHaveTextContent(`/@kosmo/${id}`);
-
+      const initialPath = pathname.textContent;
       const toolbar = within(row).getByRole('toolbar', { name: '액션 바' });
       toolbar.scrollIntoView({ block: 'center' });
       const buttons = within(toolbar).getAllByRole('button');
@@ -6098,6 +6086,19 @@ export const PostDetailThreadBackgroundCursors: Story = {
         'auto',
       );
       expect(target.closest('a, [role="button"], [role="link"]')).toBeNull();
+      expect(pathname.textContent).toBe(initialPath);
+
+      row.scrollIntoView({ block: 'center' });
+      const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]')!;
+      await waitFor(() =>
+        expect(row.getBoundingClientRect().bottom).toBeGreaterThan(
+          avatar.getBoundingClientRect().bottom + 4,
+        ),
+      );
+      const bounds = avatar.getBoundingClientRect();
+      expect(await pointerAt((bounds.left + bounds.right) / 2, bounds.bottom + 2, 'pointer')).toBe(
+        row,
+      );
       expect(pathname).toHaveTextContent(`/@kosmo/${id}`);
     }
 
