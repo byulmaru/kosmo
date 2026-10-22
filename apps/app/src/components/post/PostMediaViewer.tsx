@@ -176,9 +176,12 @@ export function PostMediaViewer({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const targetInsideViewer = containsTarget(dialogRef, event.target);
-      if (event.key === 'Escape' && !targetInsideViewer) {
-        ignoreNextPlatformClose.current = true;
+      if (!['Escape', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        return;
+      }
+      const ownsKeyboard = isTopmostWebViewer(dialogRef);
+      if (event.key === 'Escape') {
+        ignoreNextPlatformClose.current = event.defaultPrevented || !ownsKeyboard;
         return;
       }
       if (
@@ -186,7 +189,7 @@ export function PostMediaViewer({
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
-        !targetInsideViewer ||
+        !ownsKeyboard ||
         isEditableTarget(event.target)
       ) {
         return;
@@ -544,9 +547,28 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-function containsTarget(dialog: RefObject<NativeView | null>, target: EventTarget | null): boolean {
-  const element = dialog.current as unknown as { contains?: (node: EventTarget | null) => boolean };
-  return element.contains?.(target) ?? false;
+function isTopmostWebViewer(dialog: RefObject<NativeView | null>): boolean {
+  const element = dialog.current as unknown as HTMLElement | null;
+  const modal = element?.closest('[aria-modal="true"]');
+  // RN Web gives only its active Modal a dialog role, even after focus moves to body.
+  if (!element || modal?.getAttribute('role') !== 'dialog') {
+    return false;
+  }
+  return !Array.from(
+    element.ownerDocument.querySelectorAll<HTMLElement>(
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [role="radiogroup"]',
+    ),
+  ).some((overlay) => {
+    const overlayModal = overlay.closest('[aria-modal="true"]');
+    return (
+      !overlay.contains(element) &&
+      !overlay.closest('[aria-hidden="true"], [hidden], [inert]') &&
+      overlay.getClientRects().length > 0 &&
+      (!overlayModal ||
+        overlayModal === modal ||
+        overlayModal.matches('[role="dialog"], [role="alertdialog"]'))
+    );
+  });
 }
 
 function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] {
