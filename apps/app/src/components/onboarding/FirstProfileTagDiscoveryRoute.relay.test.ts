@@ -5,10 +5,14 @@ import { createElement, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
-import type { ToastProvider as ToastProviderExport } from '@/components/ui/ToastProvider';
 import type { ReactNode } from 'react';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type {
+  ReactTestInstance,
+  ReactTestRenderer,
+  ReactTestRendererJSON,
+} from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
+import type { ToastProvider as ToastProviderExport } from '@/components/ui/ToastProvider';
 import type { FirstProfileTagDiscoveryRoute as RouteExport } from './FirstProfileTagDiscoveryRoute';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -144,10 +148,20 @@ function nodes(type: string, visible = true) {
   );
 }
 function button(label: string) {
-  const match = nodes('Button').find(
-    (node) => node.props.accessibilityLabel === label || node.props.children === label,
+  assert.ok(renderer);
+  // toJSON excludes committed hosts that Suspense has hidden during a retry.
+  const collect = (node: ReactTestRendererJSON | string): ReactTestRendererJSON[] => {
+    if (typeof node === 'string' || node.props.accessibilityElementsHidden) {
+      return [];
+    }
+    return [...(node.type === 'Button' ? [node] : []), ...(node.children?.flatMap(collect) ?? [])];
+  };
+  const tree = renderer.toJSON();
+  const buttons = (Array.isArray(tree) ? tree : tree ? [tree] : []).flatMap(collect);
+  const match = buttons.find(
+    (node) => node.props.accessibilityLabel === label || node.children?.includes(label),
   );
-  assert.ok(match, `missing button ${label}`);
+  assert.ok(match, `missing visible button ${label}`);
   return match;
 }
 async function press(label: string) {
@@ -337,6 +351,10 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     assert.equal(nodes('ProfileRow', false)[0], firstRow);
     await act(async () => nodes('StateView')[0]!.props.onAction());
     assert.equal(button('#Fediverse').props.disabled, true);
+    assert.equal(button('#음악').props.disabled, true);
+    await press('#Fediverse');
+    assert.equal(button('#음악').props.accessibilityState.selected, true);
+    assert.equal(requests.length, 5, 'an unavailable-node retry still prevents tag switching');
     await resolve(tagQueryName, tagResult(secondTag.id, [profile('second-target')]));
     assert.deepEqual(
       nodes('ProfileRow').map((row) => row.props.relativeHandle),

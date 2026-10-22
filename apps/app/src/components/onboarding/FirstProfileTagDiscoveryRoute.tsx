@@ -11,8 +11,8 @@ import { StateView } from '@/components/ui/StateView';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing, textStyles } from '@/theme/tokens';
-import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { ReactNode } from 'react';
+import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { FirstProfileTagDiscovery_profile$key } from './__generated__/FirstProfileTagDiscovery_profile.graphql';
 import type {
   FirstProfileTagDiscoveryList_hashtag$data,
