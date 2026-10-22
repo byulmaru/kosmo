@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode, RefObject } from 'react';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
@@ -287,7 +287,10 @@ describe('PostMediaViewer', () => {
       assert.ok(close);
 
       for (const pressed of [false, true, false]) {
-        const visual = close.props.children({ pressed });
+        const visual: ReactElement<{
+          children: [ReactElement<{ style: unknown }>, ReactNode];
+          style: unknown;
+        }> = close.props.children({ pressed });
         const visualStyle = flattenStyle(visual.props.style);
         assert.equal(visualStyle.boxShadow, undefined);
         assert.equal(
