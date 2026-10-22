@@ -344,7 +344,8 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 게시물 기본 공개 범위
               </Text>
               <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                내 작성글이 노출되는 범위를 정할 수 있어요.
+                내 작성글이 노출되는 기본 범위를 정할 수 있어요. 게시글을 작성할 때 개별적으로
+                변경할 수도 있어요.
               </Text>
               <RadioGroup
                 accessibilityLabel="게시물 기본 공개 범위"
@@ -364,12 +365,12 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                     팔로우 요청 자동 승인
                   </Text>
                   <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                    설정을 켜면 새 팔로우 요청을 자동으로 수락해요.
+                    설정을 끄면 팔로우 요청을 확인하고 원하는 사람만 수락할 수 있어요.
                   </Text>
                 </View>
                 <Switch
                   accessibilityLabel="팔로우 요청 자동 승인"
-                  accessibilityHint="설정을 켜면 새 팔로우 요청을 자동으로 수락해요."
+                  accessibilityHint="설정을 끄면 팔로우 요청을 확인하고 원하는 사람만 수락할 수 있어요."
                   disabled={busy}
                   onValueChange={(enabled) =>
                     onChange({ ...draft, followPolicy: enabled ? 'OPEN' : 'APPROVAL_REQUIRED' })
