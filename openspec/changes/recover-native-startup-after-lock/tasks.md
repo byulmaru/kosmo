@@ -5,7 +5,7 @@
 - [ ] 1.1 iOS와 Android에서 token 복원 중 / `SessionProviderQuery` / `UniversalShellQuery` / `HomePageQuery` pending을
       나눠 잠금·복귀를 재현한다. 빌드·OS·AppState·operation·실패 종류·잠금 시간·반복 횟수·복구 결과를 기록한다.
       Android에서 재현되지 않으면 그 조건과 관측 결과를 남긴다.
-- [ ] 1.2 확인한 실패 경계에서 초기 조회의 자동 복구 1회를 구현한다. 정상 성공·일반 요청·mutation·HTTP/GraphQL
+- [x] 1.2 확인한 실패 경계에서 초기 조회의 자동 복구 1회를 구현한다. 정상 성공·일반 요청·mutation·HTTP/GraphQL
       오류로 범위를 넓히지 않고, credential·프로필 선택·무관한 Store·내비게이션을 보존한다.
 - [ ] 1.3 실제 transport와 Relay 실행 경로로 성공, 잠금 중 실패, 복귀 후 늦은 실패, 지속 실패 후 수동 재시도,
       중복·연속 복귀를 회귀 검증한다. 자동 재시도 횟수, 화면 출력, 실제 요청 수와 오류 전달을 확인한다.
@@ -18,17 +18,17 @@
 
 ## Verification Evidence
 
-- Result: 앱 동작 검증은 pending. 이 세션의 문서 윤문·계약 대조·strict validation은 통과했다.
-- Checks: `openspec validate recover-native-startup-after-lock --strict`와 문서·metadata의 Prettier check 통과.
+- Result: 초기 query의 자동 1회 복구 구현과 회귀 테스트 코드 추가를 마쳤다. GitHub CI·Native 실행 검증은 pending이다.
+- Checks: 변경 코드의 ESLint와 Prettier 확인. 동작 테스트와 typecheck는 GitHub CI의 `Test (App)`·`Lint`에서 실행한다.
 - Planned automated checks: `pnpm --filter @kosmo/app check`와 변경 경계의 transport·Session·actor·root·route 실제 동작 검증.
   기존 `network.test.ts`, `SessionProvider.test.ts`, `RelayActorProvider.test.ts`, `AppProviders.test.ts`,
   `RouteBoundary.test.ts`, `RouteBoundary.relay.test.ts`를 바탕으로 필요한 검증만 추가한다.
-- Limits: 앱 테스트·CI·Native 실행은 이 Spec 세션에서 수행하지 않는다. mock AppState 테스트가 실제 잠금·네트워크
-  중단을 증명한다고 기록하지 않는다. 원 제보의 빌드·OS와 별도 조건에서의 결과도 구분한다.
+- Limits: Implement 단계에서는 로컬 동작 테스트와 Native 잠금·복귀를 실행하지 않았다. 자동 테스트 코드는 Native AppState를
+  대체하므로 실제 OS의 요청 중단 원인을 증명하지 않는다. CI에도 iOS·Android 잠금 실행 job이 없어 필수 Native 검증은 남아 있다.
 
 ## Progress
 
 - Status: Active
-- Completed: 최신 main 코드·canonical·Linear 조사, 사용자 재시도 정책 확인, 전용 Stack 브랜치 확보, 계획 작성·윤문·문서 검증.
-- Next: 다음 구현 세션에서 1.1의 Native 재현부터 시작한다. 앱 구현과 동작 검증은 아직 수행하지 않았다.
+- Completed: 최신 main 동기화, Native 초기 transport 복구 구현, Session·Profile 복원과 route 완료 경계 연결, transport·실제 Relay·token 복원 회귀 코드 추가.
+- Next: Draft PR의 최신 head를 GitHub CI로 검증한다. iOS·Android 초기 네 단계의 재현과 수정 후 검증, 원 제보의 빌드·OS 대조는 별도 실행 근거가 필요하다.
 - Last updated: 2026-10-22

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, StrictMode } from 'react';
 import { act, create } from 'react-test-renderer';
+import { NativeStartupRecovery } from '../relay/nativeStartupRecovery';
+import { NativeStartupRecoveryContext } from '../relay/NativeStartupRecoveryContext';
 import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -24,6 +26,7 @@ let nativeToken: string | null = null;
 let nativeClearCalls = 0;
 let nativeClearFails = false;
 let strictMode = false;
+let startupRecovery: NativeStartupRecovery | null = null;
 let deferActorReset = false;
 let rejectedActorResetAccepted = true;
 const resetActorCalls: Array<string | null | undefined> = [];
@@ -136,6 +139,7 @@ beforeEach(() => {
   nativeClearCalls = 0;
   nativeClearFails = false;
   strictMode = false;
+  startupRecovery = null;
   deferActorReset = false;
   rejectedActorResetAccepted = true;
   latestSessionErrorReporter = null;
@@ -186,6 +190,47 @@ describe('SessionProvider selected profile bootstrap', () => {
       sessionId: 'session-1',
       status: 'valid',
     });
+  });
+
+  it('keeps startup recovery available until a delayed selection read settles', async () => {
+    const listeners = new Set<(state: 'active' | 'background') => void>();
+    const state = {
+      currentState: 'active' as const,
+      addEventListener: (_event: 'change', listener: (state: 'active' | 'background') => void) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      },
+    };
+    startupRecovery = new NativeStartupRecovery(state);
+    serverSelectedProfileId = null;
+    let resolveRead!: (value: string | null) => void;
+    pendingProfileRead = new Promise((resolve) => {
+      resolveRead = resolve;
+    });
+    await renderProvider();
+    startupRecovery.complete();
+    const request = async () => {
+      let calls = 0;
+      await assert.rejects(
+        startupRecovery!.execute(async () => {
+          calls += 1;
+          for (const listener of listeners) {
+            listener('background');
+            listener('active');
+          }
+          throw new TypeError('offline');
+        }),
+      );
+      return calls;
+    };
+    assert.equal(await request(), 2);
+    await act(async () => {
+      resolveRead(null);
+      await pendingProfileRead;
+    });
+    assert.equal(await request(), 1);
+    assert.equal(deleteCalls, 0);
+    assert.equal(nativeClearCalls, 0);
   });
 
   it('restores the scoped client profile without rewriting it', async () => {
@@ -479,7 +524,11 @@ async function updateProvider() {
 }
 
 function providerElement() {
-  const provider = createElement(SessionProvider, null, createElement(SessionProbe));
+  const provider = createElement(
+    NativeStartupRecoveryContext.Provider,
+    { value: startupRecovery },
+    createElement(SessionProvider, null, createElement(SessionProbe)),
+  );
   return strictMode ? createElement(StrictMode, null, provider) : provider;
 }
 
