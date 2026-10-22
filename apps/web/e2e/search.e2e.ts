@@ -166,17 +166,23 @@ test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 lead
   await expect(menu).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toBeVisible();
 
-  await input.fill(handle + '-edited');
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue(handle + '-edited');
-  await expect(input).toHaveCSS('font-size', '16px');
-
   await page.mouse.move(1, 240);
   await page.mouse.down();
   await page.mouse.move(90, 240, { steps: 8 });
   await page.mouse.up();
   await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
   await page.getByRole('button', { name: '사이드바 닫기' }).click();
+  await expect(page.getByRole('dialog', { name: '메뉴' })).not.toBeVisible();
+
+  await input.blur();
+  await expect(input).not.toBeFocused();
+  await input.click();
+  await input.fill(handle + '-edited');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue(handle + '-edited');
+  await expect(input).toHaveCSS('font-size', '16px');
+  await expect(page.getByText('최근 검색', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
 
   await page.getByRole('link', { name: '뒤로' }).click();
 
