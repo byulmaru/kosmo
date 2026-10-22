@@ -97,6 +97,7 @@ stub('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
+  findNodeHandle: () => null,
   useWindowDimensions: () => ({ height: 844, width: 390 }),
 });
 stub('expo-router', {
@@ -150,10 +151,6 @@ for (const [file, name] of [
 stub(new URL('./PostMediaViewerHost.tsx', import.meta.url), {
   PostMediaViewerHostProvider: ({ children }: { children?: ReactNode }) => children,
   usePostMediaViewerHost: () => () => undefined,
-});
-stub(new URL('./PostDetailBackground.tsx', import.meta.url), {
-  PostDetailBackground: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('View', props, children),
 });
 stub(new URL('./PostActionSurface.tsx', import.meta.url), { PostActionSurface: () => null });
 stub(new URL('./PostBody.tsx', import.meta.url), {

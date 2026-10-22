@@ -6943,8 +6943,54 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     await userEvent.unhover(card);
     expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
 
-    await userEvent.click(warning);
+    const row = within(card).getByTestId('post-list-standard-row');
+    const bounds = row.getBoundingClientRect();
+    const coords = {
+      clientX: bounds.left + 2,
+      clientY: bounds.bottom - 2,
+      pageX: bounds.left + 2 + window.scrollX,
+      pageY: bounds.bottom - 2 + window.scrollY,
+    };
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: row, coords });
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: row, coords });
+    await userEvent.unhover(card);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+
+    const touch = new Touch({ identifier: 1171, target: row, ...coords });
+    const dispatchTouch = (type: string, active: boolean) => {
+      row.dispatchEvent(
+        new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          changedTouches: [touch],
+          targetTouches: active ? [touch] : [],
+          touches: active ? [touch] : [],
+        }),
+      );
+    };
+    for (const end of ['touchcancel', 'touchend']) {
+      dispatchTouch('touchstart', true);
+      await waitFor(() =>
+        expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+      );
+      dispatchTouch(end, false);
+      await waitFor(() =>
+        expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor),
+      );
+    }
+
+    warning.focus();
+    await userEvent.keyboard('{Enter}');
     expect(within(listSurface).getByText(contentWarningPost.content!.bodyText)).toBeVisible();
+    dispatchTouch('touchstart', true);
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    dispatchTouch('touchcancel', false);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
   },
 };
 
@@ -6967,6 +7013,46 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     const sourcePreviewLink = within(sourcePreview).getByRole('link', {
       name: '원문 게시글 보기',
     });
+
+    const quoteBackground = listSurface.getByTestId('post-source-presentation');
+    const cardFeedback = listSurface.getByTestId('post-list-item-feedback');
+    const restingFeedback = getComputedStyle(cardFeedback).backgroundColor;
+    const quoteBounds = quoteBackground.getBoundingClientRect();
+    const quoteCoords = (x: number) => ({
+      clientX: x,
+      clientY: quoteBounds.top + 2,
+      pageX: x + window.scrollX,
+      pageY: quoteBounds.top + 2 + window.scrollY,
+    });
+    const quotePointer = userEvent.setup();
+    await quotePointer.hover(quoteBackground);
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.stateHover }),
+    );
+    await quotePointer.pointer({
+      keys: '[MouseLeft>]',
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 2),
+    });
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await quotePointer.pointer({
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 32),
+    });
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.stateHover }),
+    );
+    await quotePointer.pointer({
+      keys: '[/MouseLeft]',
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 2),
+    });
+    await quotePointer.unhover(quoteBackground);
+    await waitFor(() =>
+      expect(getComputedStyle(cardFeedback).backgroundColor).toBe(restingFeedback),
+    );
 
     expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
     expect(listSurface.getByRole('button', { name: outerWarning })).toBeVisible();

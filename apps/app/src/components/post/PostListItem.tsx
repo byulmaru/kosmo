@@ -11,7 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { PostDetailBackground } from './PostDetailBackground';
+import { PostDetailBackground, PostDetailBackgroundFeedbackContext } from './PostDetailBackground';
 import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
@@ -318,47 +318,46 @@ function PostListItemCard({
   const [pressed, setPressed] = useState(false);
   const [pointerHovered, setPointerHovered] = useState(false);
 
-  // Keep hover across child controls and press feedback on the background responder.
+  // Only detail-background responders share card press feedback; child controls stay independent.
   return (
-    <PostDetailBackground
-      accessible={false}
-      onBackgroundPress={onBackgroundPress}
-      onResponderGrant={() => setPressed(true)}
-      onResponderRelease={() => setPressed(false)}
-      onResponderTerminate={() => setPressed(false)}
-      focusable={false}
-      onPointerEnter={(event) => {
-        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
-          setPointerHovered(true);
-        }
-      }}
-      onPointerLeave={(event) => {
-        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
-          setPointerHovered(false);
-        }
-      }}
-      role={article ? 'article' : undefined}
-      style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
-      tabIndex={-1}
-      testID="post-list-item-card"
-    >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          styles.surfaceFeedback,
-          {
-            backgroundColor: pressed
-              ? theme.statePressedSubtle
-              : Platform.OS === 'web' && pointerHovered
-                ? theme.stateHover
-                : undefined,
-          },
-        ]}
-        testID="post-list-item-feedback"
-      />
-      {children}
-    </PostDetailBackground>
+    <PostDetailBackgroundFeedbackContext.Provider value={setPressed}>
+      <PostDetailBackground
+        accessible={false}
+        onBackgroundPress={onBackgroundPress}
+        focusable={false}
+        onPointerEnter={(event) => {
+          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+            setPointerHovered(true);
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+            setPointerHovered(false);
+          }
+        }}
+        role={article ? 'article' : undefined}
+        style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
+        tabIndex={-1}
+        testID="post-list-item-card"
+      >
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[
+            styles.surfaceFeedback,
+            {
+              backgroundColor: pressed
+                ? theme.statePressedSubtle
+                : Platform.OS === 'web' && pointerHovered
+                  ? theme.stateHover
+                  : undefined,
+            },
+          ]}
+          testID="post-list-item-feedback"
+        />
+        {children}
+      </PostDetailBackground>
+    </PostDetailBackgroundFeedbackContext.Provider>
   );
 }
 

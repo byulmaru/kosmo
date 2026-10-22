@@ -102,7 +102,10 @@ const customBubblingEventTypes = Object.fromEntries(
     },
   ]),
 );
-const modalDismissEvent = { topDismiss: { registrationName: 'onDismiss' } };
+const modalDismissEvent = {
+  topDismiss: { registrationName: 'onDismiss' },
+  topLayout: { registrationName: 'onLayout' },
+};
 const fakePrivate = {
   RCTEventEmitter: {
     register(emitter) {
@@ -124,6 +127,7 @@ const fakePrivate = {
           onStartShouldSetResponder: true,
           onResponderGrant: true,
           onResponderMove: true,
+          onLayout: true,
           onResponderRelease: true,
           onResponderTerminate: true,
           onTouchStart: true,
@@ -134,7 +138,10 @@ const fakePrivate = {
           visible: true,
         },
         bubblingEventTypes: {},
-        directEventTypes: type === 'RCTModalHostView' ? modalDismissEvent : {},
+        directEventTypes:
+          type === 'RCTModalHostView'
+            ? modalDismissEvent
+            : { topLayout: { registrationName: 'onLayout' } },
       };
     },
   },
@@ -177,7 +184,7 @@ const Platform = {
   Version: 18,
   isTV: false,
   select(options) {
-    return options.ios ?? options.default;
+    return options[this.OS] ?? options.default;
   },
 };
 const StyleSheet = {
@@ -491,6 +498,9 @@ function touchStart(tag, point = { x: 20, y: 20 }) {
   };
   dispatchTouch('topTouchStart', activeTouch);
 }
+function layout(tag) {
+  nativeEmitter.receiveEvent(tag, 'topLayout', { layout: { x: 0, y: 0, width: 100, height: 100 } });
+}
 function touchMove(point) {
   if (!activeTouch) {
     throw new Error('touchMove() requires an active touch');
@@ -532,6 +542,7 @@ function cleanup() {
 module.exports = {
   cleanup,
   modalDidDismiss,
+  layout,
   nativeExports,
   PanResponder,
   render,

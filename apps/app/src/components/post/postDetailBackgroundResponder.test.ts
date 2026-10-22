@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, describe, it, mock, test } from 'node:test';
 import type { GestureResponderEvent, View } from 'react-native';
 import type { createPostDetailBackgroundResponder as CreatePostDetailBackgroundResponder } from './postDetailBackgroundResponder';
 
@@ -137,4 +137,31 @@ describe('createPostDetailBackgroundResponder', () => {
       assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
     });
   }
+});
+
+test('feedback clears immediately on movement or termination and stays cleared after returning', () => {
+  const states: boolean[] = [];
+  let presses = 0;
+  const responder = createPostDetailBackgroundResponder(
+    () => {
+      presses += 1;
+    },
+    { width: 100, height: 100 },
+    (pressed) => states.push(pressed),
+  );
+  responder.onResponderGrant?.(touch());
+  assert.deepEqual(states, [true]);
+  responder.onResponderMove?.(touch(80, 50));
+  assert.deepEqual(states, [true, false]);
+  responder.onResponderMove?.(touch());
+  responder.onResponderRelease?.(touch());
+  assert.equal(presses, 0);
+  assert.equal(states.at(-1), false);
+  responder.onResponderGrant?.(touch());
+  responder.onResponderTerminate?.(touch());
+  assert.equal(states.at(-1), false);
+  responder.onResponderGrant?.(touch());
+  responder.onResponderRelease?.(touch());
+  assert.equal(presses, 1);
+  assert.equal(states.at(-1), false);
 });

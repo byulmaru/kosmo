@@ -15,6 +15,7 @@ type PostDetailBackgroundResponderProps = Pick<
 export function createPostDetailBackgroundResponder(
   onPress: () => void,
   size: { width: number; height: number },
+  onPressedChange?: (pressed: boolean) => void,
 ): PostDetailBackgroundResponderProps {
   // Native responder negotiation does not populate currentTarget. Keep the host
   // handle only to distinguish this View's background from its child inputs.
@@ -37,6 +38,7 @@ export function createPostDetailBackgroundResponder(
       y >= size.height
     ) {
       start = null;
+      onPressedChange?.(false);
     }
   };
 
@@ -53,16 +55,19 @@ export function createPostDetailBackgroundResponder(
     },
     onResponderGrant: ({ nativeEvent: { pageX, pageY, locationX, locationY } }) => {
       start = { pageX, pageY, originX: pageX - locationX, originY: pageY - locationY };
+      onPressedChange?.(true);
     },
     onResponderMove: cancelMovedPress,
     onResponderTerminationRequest: () => true,
     onResponderTerminate: () => {
       start = null;
+      onPressedChange?.(false);
     },
     onResponderRelease: (event) => {
       cancelMovedPress(event);
       const shouldOpen = start !== null;
       start = null;
+      onPressedChange?.(false);
       if (shouldOpen) {
         onPress();
       }
