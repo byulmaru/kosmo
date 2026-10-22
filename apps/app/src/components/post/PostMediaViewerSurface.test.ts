@@ -103,6 +103,12 @@ mock.module('@/components/ui/IconButton', {
     IconButton: (props: Record<string, unknown>) => createElement('IconButton', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/ui/useAnimatedColorTransition', {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+    useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/ThemeProvider', {
   exports: {
@@ -1632,10 +1638,13 @@ describe('PostMediaViewerSurface', () => {
           width: 104,
         });
         assert.deepEqual(
-          pick(flattenStyle(action.find((node) => (node.type as unknown) === 'View').props.style), [
-            'height',
-            'width',
-          ]),
+          pick(
+            flattenStyle(
+              action.find((node) => ['AnimatedView', 'View'].includes(node.type as string)).props
+                .style,
+            ),
+            ['height', 'width'],
+          ),
           { height: 40, width: 104 },
         );
       }

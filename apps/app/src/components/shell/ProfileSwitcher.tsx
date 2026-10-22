@@ -3,6 +3,7 @@ import { usePathname } from 'expo-router';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -21,9 +22,13 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
+import {
+  useAnimatedColorTransition,
+  useAnimatedOpacityTransition,
+} from '@/components/ui/useAnimatedColorTransition';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
   iconSizes,
@@ -37,7 +42,7 @@ import {
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import { getProfileEditActionCurrentState, getProfileEditActionTargetMetrics } from './shellLayout';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -175,6 +180,89 @@ type Props = {
 
 type OperationErrorHandler = (message: string) => void;
 
+function ProfileSwitcherAddProfileVisual({
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: pressed ? theme.backgroundSurface : 'transparent',
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.addProfileFeedback,
+          { backgroundColor } as unknown as ViewStyle,
+        ]}
+      />
+      <View style={styles.addIcon}>
+        <PlusIcon color={theme.foregroundPrimary} size={18} strokeWidth={2.25} />
+      </View>
+      <Text style={[styles.addLabel, { color: theme.foregroundPrimary }]}>새 프로필 추가</Text>
+    </>
+  );
+}
+
+function ProfileSwitcherTriggerVisual({
+  children,
+  pressed,
+  reducedMotion,
+}: {
+  children: ReactNode;
+  pressed: boolean;
+  reducedMotion: boolean;
+}) {
+  const opacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.65 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.sm, opacity }}>
+      {children}
+    </Animated.View>
+  );
+}
+
+function ProfileSwitcherEditVisual({
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const opacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.7 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View
+      style={[styles.profileEditVisual, { backgroundColor: theme.actionPrimaryBase, opacity }]}
+      testID="profile-edit-action-visual"
+    >
+      <Text style={[styles.profileEditLabel, { color: theme.actionPrimaryOnBase }]}>편집</Text>
+    </Animated.View>
+  );
+}
+
 export function ProfileSwitcher({
   onNavigate,
   onOpenChange,
@@ -184,6 +272,7 @@ export function ProfileSwitcher({
   triggerRef: forwardedTriggerRef,
 }: Props) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const safeAreaStyle = useSafeAreaPadding(spacing.lg);
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
@@ -497,20 +586,15 @@ export function ProfileSwitcher({
               setFieldError(null);
               setOperationError(null);
             }}
-            style={({ pressed }) => [
-              styles.addProfile,
-              {
-                backgroundColor: pressed ? theme.backgroundSurface : 'transparent',
-                opacity: busy ? 0.5 : 1,
-              },
-            ]}
+            style={[styles.addProfile, { opacity: busy ? 0.5 : 1 }]}
           >
-            <View style={styles.addIcon}>
-              <PlusIcon color={theme.foregroundPrimary} size={18} strokeWidth={2.25} />
-            </View>
-            <Text style={[styles.addLabel, { color: theme.foregroundPrimary }]}>
-              새 프로필 추가
-            </Text>
+            {({ pressed }) => (
+              <ProfileSwitcherAddProfileVisual
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+                theme={theme}
+              />
+            )}
           </Pressable>
         ) : null
       }
@@ -547,23 +631,26 @@ export function ProfileSwitcher({
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
       onPress={() => (open ? dismissPicker() : setOpen(true))}
-      style={({ pressed }) => [
+      style={[
         styles.trigger,
         compact ? styles.compactTrigger : styles.fullTrigger,
         (fullWeb || mobileWebDrawer) && styles.webProfileTrigger,
-        { opacity: pressed ? 0.65 : 1 },
       ]}
     >
-      {compact ? (
-        <View style={styles.compactAvatar}>
-          <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
-          <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
-        </View>
-      ) : null}
-      {fullWeb || mobileWebDrawer ? (
-        <View style={styles.webTriggerContent}>{triggerCopy}</View>
-      ) : (
-        triggerCopy
+      {({ pressed }) => (
+        <ProfileSwitcherTriggerVisual pressed={pressed} reducedMotion={reducedMotion}>
+          {compact ? (
+            <View style={styles.compactAvatar}>
+              <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+              <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
+            </View>
+          ) : null}
+          {fullWeb || mobileWebDrawer ? (
+            <View style={styles.webTriggerContent}>{triggerCopy}</View>
+          ) : (
+            triggerCopy
+          )}
+        </ProfileSwitcherTriggerVisual>
       )}
     </Pressable>
   );
@@ -686,17 +773,11 @@ export function ProfileSwitcher({
             ])}
           >
             {({ pressed }) => (
-              <View
-                style={[
-                  styles.profileEditVisual,
-                  { backgroundColor: theme.actionPrimaryBase, opacity: pressed ? 0.7 : 1 },
-                ]}
-                testID="profile-edit-action-visual"
-              >
-                <Text style={[styles.profileEditLabel, { color: theme.actionPrimaryOnBase }]}>
-                  편집
-                </Text>
-              </View>
+              <ProfileSwitcherEditVisual
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+                theme={theme}
+              />
             )}
           </Pressable>
         </NavigationLink>
@@ -849,7 +930,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     padding: spacing.sm,
+    position: 'relative',
   },
+  addProfileFeedback: { borderRadius: 10 },
   addIcon: { alignItems: 'center', justifyContent: 'center', width: 32 },
   addLabel: textStyles.uiLabelM,
 });

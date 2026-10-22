@@ -163,6 +163,7 @@ function useMockMutation(mutation: unknown) {
 
 mockModule('expo-router', { usePathname: () => '/home' });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Image: 'Image',
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: MockModal,
@@ -222,6 +223,7 @@ mockModule('@/session/SessionProvider', {
   useSession: () => ({ accountId: 'account-1', sessionId: 'session-1' }),
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     actionPrimaryBase: '#ffe597',
     actionPrimaryOnBase: '#1a1a1a',
@@ -231,6 +233,10 @@ mockModule('@/theme/ThemeProvider', {
     foregroundSecondary: '#64646f',
     overlayScrim: '#00000088',
   }),
+});
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
 });
 mockModule('./NavigationGuardContext', { useNavigationGuard: () => ({ request: () => false }) });
 mockModule('./NavigationLink', { NavigationLink: MockNavigationLink });

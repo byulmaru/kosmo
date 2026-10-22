@@ -8,8 +8,9 @@ import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useSession } from '@/session/SessionProvider';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, textStyles } from '@/theme/tokens';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
@@ -154,6 +155,7 @@ function ProfileMuteActionContent({
   renderMenuItem,
 }: Props & { committedTargetRef: CommittedProfileTargetRef }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -281,21 +283,14 @@ function ProfileMuteActionContent({
               : undefined,
           ]}
         >
-          {({ pressed, ...state }) => (
-            <Text
-              style={[
-                textStyles.uiLabelM,
-                {
-                  color: pressed
-                    ? theme.actionLinkPressed
-                    : (state as { hovered?: boolean }).hovered
-                      ? theme.actionLinkHover
-                      : theme.actionLinkBase,
-                },
-              ]}
-            >
-              {label}
-            </Text>
+          {(state) => (
+            <ProfileMuteTextVisual
+              hovered={(state as { hovered?: boolean }).hovered ?? false}
+              label={label}
+              pressed={state.pressed}
+              reducedMotion={reducedMotion}
+              theme={theme}
+            />
           )}
         </Pressable>
       ) : (
@@ -344,6 +339,33 @@ function ProfileMuteActionContent({
       </ModalSheet>
     </>
   );
+}
+
+function ProfileMuteTextVisual({
+  hovered,
+  label,
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  hovered: boolean;
+  label: string;
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const color = useAnimatedColorTransition({
+    color: pressed
+      ? theme.actionLinkPressed
+      : hovered
+        ? theme.actionLinkHover
+        : theme.actionLinkBase,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return <Text style={[textStyles.uiLabelM, { color: color as unknown as string }]}>{label}</Text>;
 }
 const styles = StyleSheet.create({
   textAction: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

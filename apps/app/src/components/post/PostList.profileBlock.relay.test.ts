@@ -90,6 +90,7 @@ stub('react-relay', {
 });
 stub('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'AnimatedView' },
   FlatList: 'FlatList',
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
@@ -116,6 +117,10 @@ stub('react-native-svg', {
   Svg: 'Svg',
 });
 stub('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
+stub('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 stub('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { full: 999, md: 12, sm: 4 },

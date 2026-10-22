@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Skeleton } from '@/components/ui/StateView';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedOpacityTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { RefObject } from 'react';
 import type { GestureResponderEvent, ImageLoadEvent, View as NativeView } from 'react-native';
@@ -48,6 +49,7 @@ function PostMediaImageSource({
   readonly triggerRef: RefObject<NativeView | null>;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
@@ -96,13 +98,15 @@ function PostMediaImageSource({
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"
             onPress={() => setStatus('loading')}
-            style={({ pressed }) => [
+            style={[
               styles.retryButton,
               fill ? styles.fillRetryButton : null,
-              { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+              { borderColor: theme.border },
             ]}
           >
-            <Text style={[styles.retryButtonText, { color: theme.text }]}>다시 시도</Text>
+            {({ pressed }) => (
+              <PostMediaRetryVisual pressed={pressed} reducedMotion={reducedMotion} theme={theme} />
+            )}
           </Pressable>
         ) : (
           <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
@@ -164,6 +168,29 @@ function PostMediaImageSource({
     >
       {imageFrame}
     </Pressable>
+  );
+}
+
+function PostMediaRetryVisual({
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const opacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.7 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View style={{ opacity }}>
+      <Text style={[styles.retryButtonText, { color: theme.text }]}>다시 시도</Text>
+    </Animated.View>
   );
 }
 

@@ -1,14 +1,15 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
@@ -317,6 +318,7 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [pressed, setPressed] = useState(false);
   const [pointerHovered, setPointerHovered] = useState(false);
 
@@ -342,24 +344,46 @@ function PostListItemCard({
         tabIndex={-1}
         testID="post-list-item-card"
       >
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={[
-            styles.surfaceFeedback,
-            {
-              backgroundColor: pressed
-                ? theme.statePressedSubtle
-                : Platform.OS === 'web' && pointerHovered
-                  ? theme.stateHover
-                  : undefined,
-            },
-          ]}
-          testID="post-list-item-feedback"
+        <PostListItemFeedback
+          pointerHovered={pointerHovered}
+          pressed={pressed}
+          reducedMotion={reducedMotion}
+          theme={theme}
         />
         {children}
       </PostDetailBackground>
     </PostDetailBackgroundFeedbackContext.Provider>
+  );
+}
+
+function PostListItemFeedback({
+  pointerHovered,
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  pointerHovered: boolean;
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const activeHover = Platform.OS === 'web' && pointerHovered && !pressed;
+  const animatedBackground = useAnimatedColorTransition({
+    color: pressed ? theme.statePressedSubtle : activeHover ? theme.stateHover : 'transparent',
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : activeHover ? 'hovered' : 'idle',
+    reducedMotion,
+    role: pressed || activeHover ? 'interaction' : 'selection',
+  });
+
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={[styles.surfaceFeedback, { backgroundColor: animatedBackground } as ViewStyle]}
+      testID="post-list-item-feedback"
+    />
   );
 }
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   Platform,
   Pressable,
@@ -25,7 +26,8 @@ import { Circle, Svg } from 'react-native-svg';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useElevation, useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import {
   borderWidths,
   iconSizes,
@@ -37,6 +39,7 @@ import {
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import { PostComposerMentionInput } from './PostComposerMentionInput';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
+import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode, RefObject } from 'react';
 import type { TextStyle, ViewStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
@@ -276,6 +279,7 @@ export function PostComposer({
   visibility,
 }: PostComposerProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const copy = composerCopy[mode];
   const remainingDescriptionId = useId();
   const bodyInputRef = useRef<TextInput>(null);
@@ -412,54 +416,21 @@ export function PostComposer({
         accessibilityState={{ expanded: visibilityOpen && !submitting }}
         disabled={submitting}
         onPress={() => setVisibilityOpen((open) => !open)}
-        style={({ pressed }) =>
+        style={
           surface === 'overlay'
-            ? [
-                styles.mobileVisibility,
-                {
-                  backgroundColor: pressed ? theme.statePressed : theme.backgroundElevated,
-                  borderColor: theme.borderSubtle,
-                },
-              ]
-            : [
-                styles.visibilityTrigger,
-                {
-                  backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
-                  borderColor: theme.borderDefault,
-                },
-              ]
+            ? { borderColor: theme.borderSubtle }
+            : { borderColor: theme.borderDefault }
         }
       >
-        {surface === 'overlay' ? (
-          <>
-            <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
-              공개 범위
-            </Text>
-            <View style={styles.mobileVisibilityValue}>
-              <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-                {selectedVisibility.label}
-              </Text>
-              <ChevronDownIcon
-                color={theme.foregroundPrimary}
-                size={iconSizes[16]}
-                strokeWidth={2}
-              />
-            </View>
-          </>
-        ) : (
-          <>
-            <SelectedVisibilityIcon
-              color={theme.foregroundPrimary}
-              size={iconSizes[16]}
-              strokeWidth={2}
-            />
-            <Text
-              numberOfLines={1}
-              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
-            >
-              {selectedVisibility.label}
-            </Text>
-          </>
+        {({ pressed }) => (
+          <VisibilityTriggerVisual
+            SelectedVisibilityIcon={SelectedVisibilityIcon}
+            pressed={pressed}
+            reducedMotion={reducedMotion}
+            selectedVisibility={selectedVisibility}
+            surface={surface}
+            theme={theme}
+          />
         )}
       </Pressable>
       {visibilityOpen && !submitting ? (
@@ -733,6 +704,7 @@ export function MobileFullscreenComposerShellCandidate({
   visibility,
 }: MobileFullscreenComposerShellCandidateProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const copy = composerCopy[mode];
   const remainingDescriptionId = useId();
   const bodyInputRef = useRef<TextInput>(null);
@@ -922,23 +894,18 @@ export function MobileFullscreenComposerShellCandidate({
         accessibilityState={{ expanded: visibilityOpen && !submitting }}
         disabled={submitting}
         onPress={() => setVisibilityOpen((open) => !open)}
-        style={({ pressed }) => [
-          styles.mobileVisibility,
-          {
-            backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
-            borderColor: theme.borderSubtle,
-          },
-        ]}
+        style={{ borderColor: theme.borderSubtle }}
       >
-        <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
-          공개 범위
-        </Text>
-        <View style={styles.mobileVisibilityValue}>
-          <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-            {selectedVisibility.label}
-          </Text>
-          <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
-        </View>
+        {({ pressed }) => (
+          <VisibilityTriggerVisual
+            SelectedVisibilityIcon={ChevronDownIcon}
+            pressed={pressed}
+            reducedMotion={reducedMotion}
+            selectedVisibility={selectedVisibility}
+            surface="mobile"
+            theme={theme}
+          />
+        )}
       </Pressable>
       {visibilityOpen && !submitting ? (
         <VisibilityMenu
@@ -1225,6 +1192,7 @@ function VisibilityMenu({
   value: PostComposerVisibility;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const elevation = useElevation();
   const { height, width } = useWindowDimensions();
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
@@ -1279,26 +1247,18 @@ function VisibilityMenu({
             key={option.value}
             onPress={() => onChange(option.value)}
             role={Platform.OS === 'web' ? ('menuitemradio' as never) : undefined}
-            style={({ pressed }) => [
-              styles.visibilityOption,
-              {
-                backgroundColor: selected
-                  ? theme.stateSelectedSurface
-                  : pressed
-                    ? theme.statePressed
-                    : 'transparent',
-              },
-            ]}
+            style={undefined}
           >
-            <Icon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
-            <View style={styles.visibilityOptionCopy}>
-              <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-                {option.label}
-              </Text>
-              <Text style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}>
-                {option.description}
-              </Text>
-            </View>
+            {({ pressed }) => (
+              <VisibilityOptionVisual
+                Icon={Icon}
+                option={option}
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+                selected={selected}
+                theme={theme}
+              />
+            )}
           </Pressable>
         );
       })}
@@ -1332,6 +1292,120 @@ function VisibilityMenu({
         ) : null}
       </View>
     </Modal>
+  );
+}
+
+function VisibilityTriggerVisual({
+  SelectedVisibilityIcon,
+  pressed,
+  reducedMotion,
+  selectedVisibility,
+  surface,
+  theme,
+}: {
+  SelectedVisibilityIcon: LucideIcon;
+  pressed: boolean;
+  reducedMotion: boolean;
+  selectedVisibility: (typeof visibilityOptions)[number];
+  surface: PostComposerProps['surface'] | 'mobile';
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = pressed
+    ? theme.statePressed
+    : surface === 'overlay'
+      ? theme.backgroundElevated
+      : surface === 'mobile'
+        ? theme.backgroundCanvas
+        : theme.backgroundSurface;
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: pressed ? 'interaction' : 'selection',
+  });
+
+  return (
+    <Animated.View
+      style={[
+        surface === 'rail' ? styles.visibilityTrigger : styles.mobileVisibility,
+        { backgroundColor: animatedBackground } as ViewStyle,
+      ]}
+    >
+      {surface !== 'rail' ? (
+        <>
+          <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+            공개 범위
+          </Text>
+          <View style={styles.mobileVisibilityValue}>
+            <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+              {selectedVisibility.label}
+            </Text>
+            <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+          </View>
+        </>
+      ) : (
+        <>
+          <SelectedVisibilityIcon
+            color={theme.foregroundPrimary}
+            size={iconSizes[16]}
+            strokeWidth={2}
+          />
+          <Text
+            numberOfLines={1}
+            style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
+          >
+            {selectedVisibility.label}
+          </Text>
+        </>
+      )}
+    </Animated.View>
+  );
+}
+
+function VisibilityOptionVisual({
+  Icon,
+  option,
+  pressed,
+  reducedMotion,
+  selected,
+  theme,
+}: {
+  Icon: LucideIcon;
+  option: (typeof visibilityOptions)[number];
+  pressed: boolean;
+  reducedMotion: boolean;
+  selected: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = selected
+    ? theme.stateSelectedSurface
+    : pressed
+      ? theme.statePressed
+      : 'transparent';
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: selected ? 'selection' : pressed ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+
+  return (
+    <Animated.View
+      style={[styles.visibilityOption, { backgroundColor: animatedBackground } as ViewStyle]}
+    >
+      <Icon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
+      <View style={styles.visibilityOptionCopy}>
+        <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+          {option.label}
+        </Text>
+        <Text style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}>
+          {option.description}
+        </Text>
+      </View>
+    </Animated.View>
   );
 }
 
