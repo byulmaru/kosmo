@@ -4590,7 +4590,7 @@ describe('GraphQL remote profile boundary', () => {
       assert.equal(result.data?.homeTimeline, null);
       assert.deepEqual(result.data?.localTimeline, {
         edges: [],
-        pageInfo: { endCursor: null, hasNextPage: false, hasPreviousPage: false },
+        pageInfo: { endCursor: '', hasNextPage: false, hasPreviousPage: false },
       });
 
       const denied = await requestGraphQL(

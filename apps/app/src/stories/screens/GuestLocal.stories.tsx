@@ -1,13 +1,16 @@
-import IndexScreen from '@/app/index';
+import { UniversalShell } from '@/components/shell/UniversalShell';
+import { GuestLocalScreen } from '@/components/timeline/LocalTimelineScreen';
 import { SessionProvider } from '@/session/SessionProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const author = profile({
+  defaultPostVisibility: null,
   displayName: '로컬 기록자',
   handle: 'local-writer',
   id: 'guest-local-author',
   relativeHandle: '@local-writer',
+  viewerState: null,
 });
 const guestData = {
   ...shellQuery(),
@@ -18,11 +21,13 @@ const guestData = {
       bodyText: '로그인하지 않아도 로컬의 공개 이야기를 읽을 수 있어요.',
       id: 'guest-local-first-post',
       profile: author,
+      visibility: 'PUBLIC',
     }),
     post({
       bodyText: '긴 공개 게시글도 같은 목록에서 이어 읽어요. '.repeat(12),
       id: 'guest-local-long-post',
       profile: author,
+      visibility: 'PUBLIC',
     }),
   ),
 };
@@ -30,7 +35,9 @@ const guestData = {
 function GuestLocalStory() {
   return (
     <SessionProvider>
-      <IndexScreen />
+      <UniversalShell>
+        <GuestLocalScreen />
+      </UniversalShell>
     </SessionProvider>
   );
 }
