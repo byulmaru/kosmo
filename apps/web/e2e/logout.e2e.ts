@@ -50,8 +50,15 @@ for (const surface of logoutSurfaces) {
     expect(request.method()).toBe('POST');
     expect(response.status()).toBe(204);
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
+    await expect(
+      page
+        .getByRole('navigation', { name: '주요 메뉴' })
+        .getByRole('link', { name: '홈', exact: true }),
+    ).toHaveCount(0);
+    if (surface.name === 'mobile drawer') {
+      await expect(page.getByRole('navigation', { name: '하단 탐색' })).toBeVisible();
+    }
     expect(await sessionCookie(context)).toBeUndefined();
     expect(await readSessionState(firstViewer.session.id)).toBe(SessionState.REVOKED);
 
@@ -126,7 +133,7 @@ for (const surface of logoutSurfaces) {
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect((await retryResponse).status()).toBe(204);
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
     expect(await sessionCookie(context)).toBeUndefined();
     expect(await readSessionState(viewer.session.id)).toBe(SessionState.REVOKED);
   });
@@ -157,7 +164,7 @@ test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 �
 
   expect((await logoutResponse).status()).toBe(204);
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
   expect(await sessionCookie(context)).toBeUndefined();
   expect(await readSessionState(viewer.session.id)).toBe(SessionState.REVOKED);
 });

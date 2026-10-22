@@ -276,8 +276,8 @@ describe('UniversalShell screen fallback focus target', () => {
   it('shows the closable Web invitation and guest navigation only on public content', async () => {
     platform.OS = 'web';
     layout = 'mobile';
-    pathname = '/@writer/post-id';
-    routeSegments = ['(tabs)', '(profile)', '[profileHandle]', '[postId]'];
+    pathname = '/';
+    routeSegments = [];
     sessionStatus = 'guest';
     await renderShell();
 
@@ -304,14 +304,16 @@ describe('UniversalShell screen fallback focus target', () => {
       },
     });
     try {
-      pathname = '/@writer';
-      routeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
+      pathname = '/';
+      routeSegments = [];
       sessionStatus = 'guest';
       await renderShell();
       assert.equal(invitationProps?.visible, true);
       await act(async () => invitationProps?.onDismiss?.());
       await act(async () => renderer?.unmount());
       renderer = null;
+      pathname = '/@writer';
+      routeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
       await renderShell();
       assert.equal(invitationProps?.visible, false);
       assert.equal(sidebarNavigationProps?.guestPublicContent, true);
@@ -326,8 +328,8 @@ describe('UniversalShell screen fallback focus target', () => {
 
   it('does not show the invitation for session errors or authenticated visitors', async () => {
     platform.OS = 'web';
-    pathname = '/@writer';
-    routeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
+    pathname = '/';
+    routeSegments = [];
     sessionStatus = 'error';
     await renderShell();
     assert.equal(invitationProps?.visible, false);

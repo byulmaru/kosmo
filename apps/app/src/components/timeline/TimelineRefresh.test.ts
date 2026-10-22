@@ -138,6 +138,7 @@ mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () =>
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });

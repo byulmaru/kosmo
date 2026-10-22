@@ -188,6 +188,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
   const publicContentRoute =
+    pathname === '/' ||
     routeSegments.at(-1) === '[profileHandle]' ||
     (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]');
   const guestPublicContent = web && status === 'guest' && publicContentRoute;

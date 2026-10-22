@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BrandLogo } from '@/components/BrandLogo';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
@@ -375,15 +376,7 @@ export function SidebarNavigation({
         <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
           {!compact ? (
             <View style={styles.guestIntro}>
-              <Text
-                accessibilityRole="header"
-                style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
-              >
-                공개 콘텐츠를 보고 있어요
-              </Text>
-              <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
-                로그인하면 프로필을 선택하거나 만들고 대화에 참여할 수 있어요.
-              </Text>
+              <BrandLogo variant="full" width={160} />
             </View>
           ) : null}
           <SidebarControl
@@ -595,7 +588,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   group: { gap: space[4] },
-  guestIntro: { gap: space[8], marginBottom: space[8] },
+  guestIntro: { marginBottom: space[8], padding: space[8] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
     alignItems: 'center',

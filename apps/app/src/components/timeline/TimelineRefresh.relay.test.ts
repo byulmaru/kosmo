@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, Fragment, Suspense } from 'react';
+import { createElement, Fragment } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -23,13 +23,42 @@ const mockModule = (specifier: string | URL, exports: object) =>
 let renderer: ReactTestRenderer | null = null;
 let HomeTimelineScreen: ComponentType;
 let LocalTimelineScreen: ComponentType;
+let GuestLocalScreen: ComponentType;
+const platform = { OS: 'ios' };
+let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
+const openProfileSwitcher = mock.fn();
+const browserListeners = new Map<string, () => void>();
+const browserWindow = {
+  scrollY: 0,
+  innerHeight: 600,
+  addEventListener: (type: string, listener: () => void) => browserListeners.set(type, listener),
+  removeEventListener: (type: string) => browserListeners.delete(type),
+  requestAnimationFrame: (callback: () => void) => {
+    callback();
+    return 1;
+  },
+  cancelAnimationFrame: () => undefined,
+};
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
 type Request = {
   name: string;
   variables: Variables;
-  sink: { next(value: GraphQLResponse): void; complete(): void };
+  sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 };
 const requests: Request[] = [];
-const showToast = () => () => undefined;
+const toasts: Array<{
+  message: string;
+  options: { action?: { onPress: () => void }; persistent?: boolean };
+  visible: boolean;
+}> = [];
+const showToast = (message: string, options: (typeof toasts)[number]['options']) => {
+  const toast = { message, options, visible: true };
+  toasts.push(toast);
+  return () => {
+    toast.visible = false;
+  };
+};
 
 // Only resolve graphql tags to compiler artifacts; all Relay hooks and normalization are real.
 mockModule('react-relay', {
@@ -48,7 +77,7 @@ mockModule('expo-router', {
 mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
 mockModule('react-native', {
-  Platform: { OS: 'ios' },
+  Platform: platform,
   ActivityIndicator: 'ActivityIndicator',
   FlatList: (props: {
     data: unknown[];
@@ -79,19 +108,22 @@ mockModule('@/observability/UnexpectedErrorContext', {
 mockModule('@/relay/RelayActorProvider', {
   useRelayActorLifecycleKey: () => 'actor',
 });
-mockModule('@/components/RouteBoundary', {
-  RouteBoundary: ({ children }: { children: ReactNode }) =>
-    createElement(Suspense, { fallback: null }, children),
-  useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: sessionStatus }) });
+mockModule('@/components/shell/ShellChromeContext', {
+  useShellChrome: () => ({ openProfileSwitcher }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
-mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
-mockModule('@/components/ui/Button', { Button: () => null });
-mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () => null });
+mockModule('@/components/TimelineTabs', {
+  TimelineTabs: (props: object) => createElement('TimelineTabs', props),
+});
+mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
+mockModule('@/components/ui/StateView', {
+  Skeleton: () => null,
+  StateView: (props: object) => createElement('StateView', props),
+});
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
@@ -125,15 +157,38 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
 
 before(async () => {
   ({ default: HomeTimelineScreen } = await import('./HomeTimelineScreen'));
-  ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
+  ({ default: LocalTimelineScreen, GuestLocalScreen } = await import('./LocalTimelineScreen'));
 });
-beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
+beforeEach(() => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { documentElement: { scrollHeight: 10000 } },
+  });
+});
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   await act(async () => mock.timers.tick(300_001));
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  toasts.length = 0;
+  platform.OS = 'ios';
+  sessionStatus = 'valid';
+  browserWindow.scrollY = 0;
+  browserListeners.clear();
+  openProfileSwitcher.mock.resetCalls();
+  for (const [key, descriptor] of [
+    ['window', originalWindow],
+    ['document', originalDocument],
+  ] as const) {
+    if (descriptor) {
+      Object.defineProperty(globalThis, key, descriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, key);
+    }
+  }
 });
 
 const profile = {
@@ -316,3 +371,124 @@ for (const timeline of ['Home', 'Local'] as const) {
     assertConnection(environment, field, ['a', 'b', 'c'], false);
   });
 }
+
+function guestPayload(ids: string[], hasNextPage = true) {
+  return { ...payload('localTimeline', ids, hasNextPage), currentSession: null, me: null };
+}
+
+async function renderLocal(Screen = GuestLocalScreen, status: 'guest' | 'valid' = 'guest') {
+  platform.OS = 'web';
+  sessionStatus = status;
+  const environment = new Environment({
+    network: Network.create((operation, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        requests.push({ name: operation.name, variables, sink });
+      }),
+    ),
+    store: new Store(new RecordSource()),
+  });
+  await act(async () => {
+    renderer = create(
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: createElement(Screen),
+      }),
+    );
+  });
+  return environment;
+}
+
+async function scrollGuestNearEnd() {
+  await act(async () => {
+    browserWindow.scrollY = 9500;
+    browserListeners.get('scroll')?.();
+  });
+}
+
+function visibleToast() {
+  const toast = toasts.findLast((toast) => toast.visible);
+  assert.ok(toast, 'Expected an actionable error toast');
+  assert.ok(toast.options.action);
+  return toast;
+}
+
+describe('Guest Local with real Relay', () => {
+  it('loads and paginates public rows without a profile or protected timeline tabs', async () => {
+    const environment = await renderLocal();
+    assert.equal(
+      renderer!.root.findAllByType('StateView' as never).some((node) => node.props.loading),
+      true,
+    );
+    await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
+    assertConnection(environment, 'localTimeline', ['a', 'b']);
+    assert.equal(renderer!.root.findAllByType('TimelineTabs' as never).length, 0);
+    assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
+
+    await scrollGuestNearEnd();
+    const next = latest('PostListLocalNextPageQuery');
+    assert.equal(next.variables.cursor, 'cursor-b');
+    assert.equal(next.variables.count, 20);
+    await respond(next, guestPayload(['c'], false));
+    assertConnection(environment, 'localTimeline', ['a', 'b', 'c'], false);
+    const requestCount = requests.length;
+    await scrollGuestNearEnd();
+    assert.equal(requests.length, requestCount);
+  });
+
+  it('preserves rows and the cursor after pagination failure, then retries the same page', async () => {
+    const environment = await renderLocal();
+    await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
+    await scrollGuestNearEnd();
+    const failedPage = latest('PostListLocalNextPageQuery');
+    await act(async () => failedPage.sink.error(new Error('pagination failed')));
+    assertConnection(environment, 'localTimeline', ['a', 'b']);
+    const toast = visibleToast();
+    await scrollGuestNearEnd();
+    assert.equal(
+      latest('PostListLocalNextPageQuery'),
+      failedPage,
+      'Scroll must not retry a failed page automatically',
+    );
+    await act(async () => toast.options.action!.onPress());
+    const retry = latest('PostListLocalNextPageQuery');
+    assert.notEqual(retry, failedPage);
+    assert.equal(retry.variables.cursor, 'cursor-b');
+    await respond(retry, guestPayload(['c'], false));
+    assertConnection(environment, 'localTimeline', ['a', 'b', 'c'], false);
+    assert.equal(toast.visible, false);
+  });
+
+  it('retries an initial error through the route boundary and renders an empty result', async () => {
+    await renderLocal();
+    const failed = latest('LocalPageQuery');
+    await act(async () => failed.sink.error(new Error('initial request failed')));
+    const toast = visibleToast();
+    assert.equal(toast.options.persistent, true);
+    assert.equal(renderer!.root.findAllByType('PostRow' as never).length, 0);
+    await act(async () => toast.options.action!.onPress());
+    const retry = latest('LocalPageQuery');
+    assert.notEqual(retry, failed);
+    await respond(retry, guestPayload([], false));
+    assert.equal(
+      renderer!.root
+        .findAllByType('StateView' as never)
+        .some((node) => !node.props.loading && !node.props.alert),
+      true,
+    );
+    assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
+    assert.equal(toast.visible, false);
+  });
+
+  it('keeps valid sessions without a selected profile in profile preparation', async () => {
+    await renderLocal(LocalTimelineScreen, 'valid');
+    const data = payload('localTimeline', ['a'], false);
+    await respond(latest('LocalPageQuery'), {
+      ...data,
+      currentSession: { id: 'session', selectedProfile: null },
+    });
+    assert.equal(renderer!.root.findAllByType('PostRow' as never).length, 0);
+    const action = renderer!.root.findByType('Button' as never);
+    await act(async () => action.props.onPress());
+    assert.equal(openProfileSwitcher.mock.callCount(), 1);
+  });
+});

@@ -11,6 +11,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -4566,24 +4567,51 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
-  test('returns null Local timeline without an authenticated selected Profile', async () => {
-    const query = `query LocalTimelineWithoutProfile {
-      localTimeline(first: 1) {
-        edges { node { id } }
-      }
-    }`;
+  test('returns empty public Local pages while Home and Post creation remain protected', async () => {
     const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
 
     for (const token of [undefined, withoutProfile.token]) {
-      const result = await requestGraphQL<{ localTimeline: null }>(query, {}, token);
+      const result = await requestGraphQL<{
+        homeTimeline: null;
+        localTimeline: RemotePostConnection;
+      }>(
+        `query EmptyPublicLocalTimeline {
+          homeTimeline(first: 1) { edges { node { id } } }
+          localTimeline(first: 1) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
+          }
+        }`,
+        {},
+        token,
+      );
 
       assertNoGraphQLErrors(result);
-      assert.equal(result.data?.localTimeline, null);
+      assert.equal(result.data?.homeTimeline, null);
+      assert.deepEqual(result.data?.localTimeline, {
+        edges: [],
+        pageInfo: { endCursor: null, hasNextPage: false, hasPreviousPage: false },
+      });
+
+      const denied = await requestGraphQL(
+        `mutation PublicLocalCannotCreatePost {
+          createPost(input: { bodyText: "unauthorized post", visibility: PUBLIC }) {
+            post { id }
+          }
+        }`,
+        {},
+        token,
+      );
+
+      assertGraphQLErrorCode(denied, 'PERMISSION_DENIED');
+      assert.equal(await db.$count(Posts), 0);
+      assert.equal(await db.$count(PostContents), 0);
     }
   });
 
-  test('filters Local timeline candidates before cursor pagination', async () => {
+  test('filters public Local candidates before forward and backward pagination for every viewer', async () => {
     const auth = await createAuthenticatedSession();
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const localAuthor = await createProfile({
       handle: 'local-author',
       instanceId: localInstanceId,
@@ -4592,6 +4620,11 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'suspended-local-author',
       instanceId: localInstanceId,
       state: ProfileState.SUSPENDED,
+    });
+    const disabledLocalAuthor = await createProfile({
+      handle: 'disabled-local-author',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
     });
     const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
     const otherLocalAuthor = await createProfile({
@@ -4629,6 +4662,20 @@ describe('GraphQL remote profile boundary', () => {
       visibility: PostVisibility.UNLISTED,
     });
     await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000975',
+      profileId: auth.profile.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000965',
+      profileId: auth.profile.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000945',
+      profileId: disabledLocalAuthor.id,
+    });
+    await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000960',
       profileId: localAuthor.id,
       replyParentId: parent.id,
@@ -4662,34 +4709,167 @@ describe('GraphQL remote profile boundary', () => {
       profileId: auth.profile.id,
     });
 
-    const read = (after: string | null = null) =>
-      requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
-        `query LocalTimeline($after: String) {
-          localTimeline(first: 2, after: $after) {
-            edges { cursor node { id } }
-            pageInfo { endCursor hasNextPage }
-          }
-        }`,
-        { after },
-        auth.token,
-      );
+    for (const token of [undefined, withoutProfile.token, auth.token]) {
+      const read = (variables: {
+        first?: number;
+        after?: string | null;
+        last?: number;
+        before?: string | null;
+      }) =>
+        requestGraphQL<{ localTimeline: RemotePostConnection }>(
+          `query PublicLocalTimeline($first: Int, $after: String, $last: Int, $before: String) {
+            localTimeline(first: $first, after: $after, last: $last, before: $before) {
+              edges { cursor node { id } }
+              pageInfo { endCursor hasNextPage hasPreviousPage }
+            }
+          }`,
+          variables,
+          token,
+        );
 
-    const firstPage = await read();
-    assertNoGraphQLErrors(firstPage);
-    assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
-      globalId('Post', ordinary.id),
-      globalId('Post', quote.id),
-    ]);
-    assert.equal(firstPage.data?.localTimeline?.pageInfo.hasNextPage, true);
+      const firstPage = await read({ first: 2 });
+      assertNoGraphQLErrors(firstPage);
+      assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
+        globalId('Post', ordinary.id),
+        globalId('Post', quote.id),
+      ]);
+      assert.equal(firstPage.data?.localTimeline.pageInfo.hasNextPage, true);
 
-    const secondPage = await read(firstPage.data?.localTimeline?.pageInfo.endCursor ?? null);
-    assertNoGraphQLErrors(secondPage);
-    assert.deepEqual(connectionIds(secondPage.data?.localTimeline), [globalId('Post', older.id)]);
-    assert.equal(secondPage.data?.localTimeline?.pageInfo.hasNextPage, false);
+      const secondPage = await read({
+        first: 2,
+        after: firstPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(secondPage);
+      assert.deepEqual(connectionIds(secondPage.data?.localTimeline), [globalId('Post', older.id)]);
+      assert.equal(secondPage.data?.localTimeline.pageInfo.hasNextPage, false);
+
+      const exhausted = await read({
+        first: 2,
+        after: secondPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(exhausted);
+      assert.deepEqual(connectionIds(exhausted.data?.localTimeline), []);
+      assert.equal(exhausted.data?.localTimeline.pageInfo.hasNextPage, false);
+
+      const backward = await read({
+        last: 2,
+        before: secondPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(backward);
+      assert.deepEqual(connectionIds(backward.data?.localTimeline), [
+        globalId('Post', ordinary.id),
+        globalId('Post', quote.id),
+      ]);
+      assert.equal(backward.data?.localTimeline.pageInfo.hasPreviousPage, false);
+    }
   });
 
-  test('caps each Local timeline page at 20 Posts', async () => {
+  test('keeps public Local Quote bodies while applying Source visibility and consent', async () => {
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
+    const author = await createProfile({
+      handle: 'public-local-quotes',
+      instanceId: localInstanceId,
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'public-local-quote-source.example',
+      handle: 'source',
+    });
+    const hiddenSourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'hidden-local-quote-source.example',
+      handle: 'hidden-source',
+    });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenSourceAuthor.profile.id));
+
+    const cases = [
+      { visibility: PostVisibility.PUBLIC, visible: true },
+      { visibility: PostVisibility.UNLISTED, visible: true },
+      { visibility: PostVisibility.FOLLOWERS, visible: false },
+      { visibility: PostVisibility.DIRECT, visible: false },
+      { visibility: PostVisibility.PUBLIC, state: PostState.DELETED, visible: false },
+      { visibility: PostVisibility.PUBLIC, hiddenAuthor: true, visible: false },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.APPROVED,
+        visible: true,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.PENDING,
+        visible: false,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.REJECTED,
+        visible: false,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.REVOKED,
+        visible: false,
+      },
+    ];
+    const expected = [];
+    for (const [index, scenario] of cases.entries()) {
+      const source = await createContentfulPost({
+        profileId: scenario.hiddenAuthor ? hiddenSourceAuthor.profile.id : sourceAuthor.profile.id,
+        visibility: scenario.visibility,
+      });
+      if (scenario.state) {
+        await db.update(Posts).set({ state: scenario.state }).where(eq(Posts.id, source.id));
+      }
+      const quote = await createContentfulPost({
+        id: `019f8ed3-0000-7000-8000-${String(index + 1).padStart(12, '0')}`,
+        profileId: author.id,
+        repostSourceId: source.id,
+      });
+      if (scenario.consent) {
+        await db
+          .update(Posts)
+          .set({ quoteConsentStatus: scenario.consent })
+          .where(eq(Posts.id, quote.id));
+      }
+      expected.unshift({
+        id: globalId('Post', quote.id),
+        content: { id: globalId('PostContent', quote.currentContentId!) },
+        repostSource: scenario.visible ? { id: globalId('Post', source.id) } : null,
+      });
+    }
+
+    for (const token of [undefined, withoutProfile.token]) {
+      const result = await requestGraphQL<{
+        localTimeline: {
+          edges: Array<{
+            node: {
+              id: string;
+              content: { id: string } | null;
+              repostSource: { id: string } | null;
+            };
+          }>;
+        };
+      }>(
+        `query PublicLocalQuoteSources {
+          localTimeline(first: 20) {
+            edges { node { id content { id } repostSource { id } } }
+          }
+        }`,
+        {},
+        token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        result.data?.localTimeline.edges.map(({ node }) => node),
+        expected,
+      );
+    }
+  });
+
+  test('caps each public Local timeline page at 20 Posts for every viewer', async () => {
     const auth = await createAuthenticatedSession();
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const author = await createProfile({
       handle: 'local-page-author',
       instanceId: localInstanceId,
@@ -4699,20 +4879,22 @@ describe('GraphQL remote profile boundary', () => {
       await createContentfulPost({ profileId: author.id });
     }
 
-    const result = await requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
-      `query OversizedLocalTimeline {
-        localTimeline(first: 100) {
-          edges { node { id } }
-          pageInfo { hasNextPage }
-        }
-      }`,
-      {},
-      auth.token,
-    );
+    for (const token of [undefined, withoutProfile.token, auth.token]) {
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query OversizedPublicLocalTimeline {
+          localTimeline(first: 100) {
+            edges { node { id } }
+            pageInfo { hasNextPage }
+          }
+        }`,
+        {},
+        token,
+      );
 
-    assertNoGraphQLErrors(result);
-    assert.equal(result.data?.localTimeline?.edges.length, 20);
-    assert.equal(result.data?.localTimeline?.pageInfo.hasNextPage, true);
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.localTimeline.edges.length, 20);
+      assert.equal(result.data?.localTimeline.pageInfo.hasNextPage, true);
+    }
   });
 
   test('applies Reply candidate policy before paginating Home and excludes Replies from Profile', async () => {

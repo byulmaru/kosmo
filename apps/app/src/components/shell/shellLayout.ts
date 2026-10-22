@@ -34,6 +34,7 @@ export function getShellLayout(web: boolean, width: number) {
 export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
   title:
+    | '로컬'
     | '게시글'
     | '프로필 설정'
     | '다른 서비스에서 이전'
@@ -81,6 +82,10 @@ export function getWebMobileShellHeader(
 ): WebMobileShellHeader | null {
   if (!web || getShellLayout(web, width) !== 'mobile') {
     return null;
+  }
+
+  if (pathname === '/' && guestPublicContent) {
+    return { leading: 'menu', title: '로컬' };
   }
 
   if (pathname === '/notifications') {
