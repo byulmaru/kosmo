@@ -2,6 +2,7 @@ import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { captureHandledMessage } from '@/observability/sentry';
 import { executeGraphQLRequest } from './network';
 import type { RelayFieldLogger } from 'relay-runtime';
+import type { NativeStartupRecovery } from './nativeStartupRecovery';
 
 const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
 const RELAY_MISSING_EXPECTED_DATA_MESSAGE = 'Relay missing expected data';
@@ -10,6 +11,7 @@ type RelayFieldLoggerEvent = Parameters<RelayFieldLogger>[0];
 export function createRelayEnvironment(
   token: string | null,
   selectedProfileId: string | null = null,
+  startupRecovery?: NativeStartupRecovery | null,
 ): Environment {
   const environmentCreatedAt = Date.now();
   const reportedEvents = new Set<string>();
@@ -34,8 +36,15 @@ export function createRelayEnvironment(
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
+    network: Network.create((request, variables, cacheConfig) =>
+      executeGraphQLRequest(
+        request,
+        variables,
+        token,
+        fetch,
+        selectedProfileId,
+        cacheConfig.metadata?.nativeStartup === true ? startupRecovery : undefined,
+      ),
     ),
     relayFieldLogger,
     store: new Store(new RecordSource()),

@@ -1,6 +1,7 @@
 import { getApiOrigin, getPublicWebOrigin } from '@/config/origin';
 import { RelayTransportError } from './transportError';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type { NativeStartupRecovery } from './nativeStartupRecovery';
 
 export class GraphQLHttpError extends Error {
   readonly operationName: string;
@@ -28,6 +29,7 @@ export async function executeGraphQLRequest(
   token: string | null,
   fetchImplementation: typeof fetch = fetch,
   selectedProfileId: string | null = null,
+  startupRecovery?: NativeStartupRecovery | null,
 ): Promise<GraphQLResponse> {
   if (!request.text) {
     throw new Error(`Relay operation ${request.name} has no query text.`);
@@ -36,7 +38,7 @@ export async function executeGraphQLRequest(
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getPublicWebOrigin();
   const startedAt = Date.now();
-  const responsePromise = fetchImplementation(`${origin}/graphql`, {
+  const options: RequestInit = {
     method: 'POST',
     credentials: native ? 'omit' : 'include',
     headers: {
@@ -50,10 +52,14 @@ export async function executeGraphQLRequest(
       variables,
       ...(selectedProfileId ? { extensions: { selectedProfileId } } : {}),
     }),
-  });
-  const response = await responsePromise.catch((cause) => {
-    throw new RelayTransportError(cause);
-  });
+  };
+  const send = () =>
+    fetchImplementation(`${origin}/graphql`, options).catch((cause) => {
+      throw new RelayTransportError(cause);
+    });
+  const response = await (native && request.operationKind === 'query' && startupRecovery
+    ? startupRecovery.execute(send)
+    : send());
 
   const body = (await response.json().catch(() => null)) as GraphQLResponse | null;
 

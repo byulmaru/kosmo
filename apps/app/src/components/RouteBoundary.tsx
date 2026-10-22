@@ -4,12 +4,14 @@ import {
   Suspense,
   useCallback,
   useContext,
+  useEffect,
   useImperativeHandle,
   useState,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
+import { useNativeStartupRecovery } from '@/relay/NativeStartupRecoveryContext';
 import type { ReactNode } from 'react';
 
 export type RouteBoundaryHandle = {
@@ -90,9 +92,18 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
           }}
           resetKeys={[fetchKey]}
         >
-          <Suspense fallback={loading}>{children}</Suspense>
+          <Suspense fallback={loading}>
+            {children}
+            <NativeStartupReady />
+          </Suspense>
         </ErrorBoundary>
       </RouteBoundaryContext.Provider>
     );
   },
 );
+
+function NativeStartupReady() {
+  const startupRecovery = useNativeStartupRecovery();
+  useEffect(() => startupRecovery?.complete(), [startupRecovery]);
+  return null;
+}
