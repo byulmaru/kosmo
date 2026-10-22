@@ -299,19 +299,18 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await page.goto('/');
   await page.getByRole('link', { name: '시작하기' }).click();
 
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
   const historyPaths = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem('kosmo-e2e-history-paths') ?? '[]'),
   );
   expect(historyPaths).not.toContain('pushState:/undefined/undefined');
   expect(historyPaths).not.toContain('replaceState:/undefined/undefined');
   expect(historyPaths).not.toContain('document:/undefined/undefined');
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
-  await page.getByRole('button', { name: '프로필 만들기' }).click();
-  await expect(page.getByLabel('프로필 전환')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
 
   await page.goto('/');
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 });
 
 for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
@@ -339,9 +338,9 @@ for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
       const signupTab = await destination;
       try {
         await loginRequest;
-        await expect(signupTab).toHaveURL(/\/home$/);
+        await expect(signupTab).toHaveURL(/\/first-profile\/handle$/);
         await expect(
-          signupTab.getByRole('heading', { name: '프로필을 만들어 시작하세요' }),
+          signupTab.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ }),
         ).toBeVisible();
         if (newTab) {
           await expect(page).toHaveURL((url) => url.pathname === publicPath);
@@ -372,9 +371,9 @@ test('Deleted Account의 Web OIDC callback은 같은 Account에 새 Session을 �
   const response = await page.goto('/login');
 
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '프로필 만들기' })).toBeVisible();
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
+  await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
 
   const account = await db
     .select({ id: Accounts.id, state: Accounts.state })
@@ -571,7 +570,7 @@ test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 
 
   await setE2ESessionCookie(context, token);
   await page.goto('/home');
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 
   const response = await page.evaluate(async (profileHandle) => {
     const graphqlResponse = await fetch('/graphql', {

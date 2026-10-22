@@ -7,6 +7,7 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 
 ## 문서 목록
 
+- [첫 프로필 온보딩](first-profile-onboarding.md)
 - [figma.md](./figma.md) — Figma 파일 구조와 작업 규칙
 - [storybook.md](./storybook.md) — Figma 디자인 계약을 Production 공용 UI와 Storybook으로 이관하는 기준
 - [coachmark.md](./coachmark.md) — 온보딩 Coachmark의 배치, dismiss, focus와 Storybook 검증 계약
