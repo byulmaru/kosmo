@@ -43,20 +43,24 @@ const RouterContext = createContext<RouterContextValue>({
 export function RouterMockProvider({
   children,
   params = {},
+  onNavigate,
   pathname: initialPathname = '/home',
   segments = [],
   slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
+  onNavigate?: (href: Href) => void;
   pathname?: string;
   segments?: readonly string[];
   slot?: ReactNode;
   slotLabel?: string;
 }>) {
   const [pathname, setCurrentPathname] = useState(initialPathname);
-  const setPathname = (href: Href) =>
+  const setPathname = (href: Href) => {
+    onNavigate?.(href);
     setCurrentPathname(typeof href === 'string' ? href : href.pathname);
+  };
   const value = useMemo(
     () => ({ params, pathname, segments, setPathname, slot, slotLabel }),
     [params, pathname, segments, slot, slotLabel],

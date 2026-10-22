@@ -57,6 +57,7 @@ const preview: Preview = {
                   queryRequestObserver={relay.queryRequestObserver}
                 >
                   <RouterMockProvider
+                    onNavigate={router.onNavigate}
                     params={router.params}
                     pathname={router.pathname}
                     segments={router.segments}

@@ -73,6 +73,7 @@ const visibilityLabels: Record<string, string> = {
 export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
+  onActionBarBackgroundPress,
   onDeleted,
   onReplyPress,
   post: postKey,
@@ -82,6 +83,7 @@ export function PostLayout({
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
+  onActionBarBackgroundPress?: () => void;
   onDeleted?: () => void;
   onReplyPress?: () => void;
   post: PostLayout_post$key;
@@ -295,6 +297,7 @@ export function PostLayout({
               !compact && Platform.OS === 'web' ? styles.webActionBarFrame : null,
               { borderColor: theme.borderSubtle },
             ]}
+            onActionBarBackgroundPress={onActionBarBackgroundPress}
             onDeleted={handleDeleted}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}
