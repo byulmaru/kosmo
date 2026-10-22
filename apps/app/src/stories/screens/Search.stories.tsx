@@ -221,6 +221,12 @@ export const Result: Story = {
     expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
 
     const input = canvas.getByRole('textbox', { name: '검색어' });
+    expect(getComputedStyle(input).fontSize).toBe('16px');
+    await userEvent.clear(input);
+    await userEvent.type(input, '재입력');
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue('재입력');
+    expect(getComputedStyle(input).fontSize).toBe('16px');
     await userEvent.click(canvas.getByRole('link', { name: '뒤로' }));
     await waitFor(() =>
       expect(canvas.getByTestId('search-query-navigation-probe')).toHaveTextContent(
@@ -270,7 +276,16 @@ export const KeyboardSubmissionTracksAnalytics: Story = {
   parameters: { router: { params: {}, pathname: '/search' } },
   play: async ({ canvasElement }) => {
     const input = within(canvasElement).getByRole('textbox', { name: '검색어' });
-    expect(getComputedStyle(input).fontSize).toBe('14px');
+    expect(getComputedStyle(input).fontSize).toBe('16px');
+    expect(getComputedStyle(input).lineHeight).toBe('20px');
+    await userEvent.click(input);
+    expect(input).toHaveFocus();
+    expect(getComputedStyle(input).fontSize).toBe('16px');
+    await userEvent.tab();
+    expect(input).not.toHaveFocus();
+    await userEvent.click(input);
+    expect(input).toHaveFocus();
+    expect(getComputedStyle(input).fontSize).toBe('16px');
     await userEvent.type(input, '검색 원문{enter}');
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('search_submitted', {

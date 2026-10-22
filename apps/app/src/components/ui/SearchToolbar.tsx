@@ -2,7 +2,7 @@ import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, fontSizes, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
 import type { ReactElement, RefObject } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
@@ -249,6 +249,8 @@ const styles = StyleSheet.create({
   },
   input: {
     ...textStyles.uiCopyM,
+    // iOS Web 입력 포커스 시 자동 확대를 막는 기존 16px 계약을 유지한다.
+    fontSize: fontSizes[16],
     flex: 1,
     minWidth: 0,
     paddingHorizontal: space[8],
