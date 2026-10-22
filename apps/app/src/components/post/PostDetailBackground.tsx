@@ -34,7 +34,7 @@ export function PostDetailBackground({
     <View
       {...props}
       {...responder}
-      style={[style, Platform.OS === 'web' && onBackgroundPress ? { cursor } : undefined]}
+      style={Platform.OS === 'web' && onBackgroundPress ? [style, { cursor }] : style}
       onPointerEnter={
         Platform.OS === 'web' && onBackgroundPress
           ? (event) => {
