@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 0,
   },
-  authorText: { flex: 0, flexShrink: 1, minWidth: 0 },
+  authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
   timestamp: {

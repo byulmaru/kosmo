@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
-  authorText: { flex: 0, flexShrink: 1 },
+  authorText: { flex: -1 },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: {
     minHeight: 44,

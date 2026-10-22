@@ -889,7 +889,6 @@ const authorBoundaryPosts = [
 );
 
 const storyPosts = [
-  ...authorBoundaryPosts,
   shortPost,
   longPost,
   multilinePost,
@@ -946,6 +945,7 @@ const storyPosts = [
   loadErrorMediaPost,
   loadErrorThreeMediaPost,
   replyPost,
+  ...authorBoundaryPosts,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -9042,6 +9042,7 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
     ),
     play: async ({ canvasElement }) => {
       await canvasElement.ownerDocument.fonts.ready;
+      const user = userEvent.setup();
       const canvas = within(canvasElement);
       const card = canvas.getByTestId('post-list-item-card');
       const pathname = canvas.getByTestId('presentation-story-pathname');
@@ -9059,7 +9060,7 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
           pageX: x + window.scrollX,
           pageY: y + window.scrollY,
         };
-        await userEvent.pointer([
+        await user.pointer([
           { keys: '[MouseLeft>]', target: target!, coords },
           ...(drag
             ? [
@@ -9072,8 +9073,10 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
             : []),
           { keys: '[/MouseLeft]', target: target!, coords },
         ]);
-        expect(pathname.textContent).toBe(drag ? before : expectedPath);
-        expect(onNavigate).toHaveBeenCalledTimes(drag ? 0 : 1);
+        await waitFor(() => {
+          expect(pathname.textContent).toBe(drag ? before : expectedPath);
+          expect(onNavigate).toHaveBeenCalledTimes(drag ? 0 : 1);
+        });
       };
       for (const targetPost of targets) {
         const name = within(card).getByText(targetPost.profile.displayName);
@@ -9085,6 +9088,7 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
         const detailPath = `${profilePath}/${targetPost.id}`;
         expect(link).toHaveAttribute('href', profilePath);
         const bounds = link.getBoundingClientRect();
+        expect(bounds.width).toBeGreaterThan(0);
         const nameBounds = name.getBoundingClientRect();
         const handleBounds = handle.getBoundingClientRect();
         const renderedWidth = (text: HTMLElement) => {
@@ -9124,13 +9128,13 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
         );
         onNavigate.mockClear();
         link.focus();
-        await userEvent.keyboard('{Enter}');
+        await user.keyboard('{Enter}');
         expect(pathname.textContent).toBe(profilePath);
         expect(onNavigate).toHaveBeenCalledTimes(1);
         onNavigate.mockClear();
-        await userEvent.keyboard('{Control>}');
-        await userEvent.click(link);
-        await userEvent.keyboard('{/Control}');
+        await user.keyboard('{Control>}');
+        await user.click(link);
+        await user.keyboard('{/Control}');
         expect(pathname.textContent).toBe(profilePath);
         expect(onNavigate).not.toHaveBeenCalled();
       }
@@ -9139,7 +9143,7 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
           name: `${surfacePost.profile.displayName} 프로필 보기`,
         });
         onNavigate.mockClear();
-        await userEvent.click(attribution);
+        await user.click(attribution);
         expect(pathname.textContent).toBe(`/${surfacePost.profile.relativeHandle}`);
         expect(onNavigate).toHaveBeenCalledTimes(1);
       }
