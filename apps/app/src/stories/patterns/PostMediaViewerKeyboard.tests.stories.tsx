@@ -172,7 +172,7 @@ type Story = StoryObj<typeof meta>;
 
 async function openViewer() {
   await userEvent.click(await screen.findByRole('button', { name: '이미지 뷰어 열기' }));
-  await screen.findByRole('dialog', { name: '이미지 뷰어', exact: true });
+  await screen.findByRole('dialog', { name: '이미지 뷰어' });
   await waitFor(() => expect(screen.getByTestId('post-media-viewer-close')).toHaveFocus());
   return screen.getByTestId('post-media-viewer-dialog');
 }
@@ -254,7 +254,7 @@ export const ChildOverlayKeyboardOwnership: Story = {
   play: async () => {
     const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '메뉴 열기' }));
-    await screen.findByRole('dialog', { name: '이미지 작업', exact: true });
+    await screen.findByRole('dialog', { name: '이미지 작업' });
     const menu = await screen.findByRole('menu', { name: '이미지 작업' });
     expect(dialog.contains(menu)).toBe(false);
     within(menu).getByRole('menuitem').focus();
@@ -269,7 +269,7 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await expectPosition(dialog, '2 / 3');
 
     await userEvent.click(within(dialog).getByRole('button', { name: '반응 선택 창 열기' }));
-    const popup = await screen.findByRole('dialog', { name: '반응 선택', exact: true });
+    const popup = await screen.findByRole('dialog', { name: '반응 선택' });
     expect(dialog.contains(popup)).toBe(true);
     within(popup).getByRole('searchbox').focus();
     within(popup).getByRole('searchbox').blur();
