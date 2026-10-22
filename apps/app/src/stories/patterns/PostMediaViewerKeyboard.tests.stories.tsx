@@ -4,7 +4,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionOverlay } from '@/components/post/FullReactionOverlay';
 import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
-import { ActionMenu, ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import ogImage from '../../../public/og-default.png?url';
 import { post } from '../fixtures';
@@ -57,17 +57,15 @@ function KeyboardViewerFixture() {
 
   const controls = (
     <View style={{ gap: 8, padding: 8 }}>
-      <ActionMenuPresentationProvider presentation="sheet">
-        <ActionMenu
-          accessibilityLabel="이미지 작업"
-          items={[{ key: 'done', label: '메뉴 닫기', onSelect: () => undefined }]}
-          renderTrigger={({ onPress, ref }) => (
-            <Pressable accessibilityRole="button" onPress={onPress} ref={ref}>
-              <Text>메뉴 열기</Text>
-            </Pressable>
-          )}
-        />
-      </ActionMenuPresentationProvider>
+      <ActionMenu
+        accessibilityLabel="이미지 작업"
+        items={[{ key: 'done', label: '메뉴 닫기', onSelect: () => undefined }]}
+        renderTrigger={({ onPress, ref }) => (
+          <Pressable accessibilityRole="button" onPress={onPress} ref={ref}>
+            <Text>메뉴 열기</Text>
+          </Pressable>
+        )}
+      />
       <Pressable accessibilityRole="button" onPress={() => setPicker(true)} ref={reactionControl}>
         <Text>반응 선택 창 열기</Text>
       </Pressable>
@@ -254,12 +252,13 @@ export const ChildOverlayKeyboardOwnership: Story = {
   play: async () => {
     const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '메뉴 열기' }));
-    await screen.findByRole('dialog', { name: '이미지 작업' });
     const menu = await screen.findByRole('menu', { name: '이미지 작업' });
     expect(dialog.contains(menu)).toBe(false);
-    within(menu).getByRole('menuitem').focus();
-    within(menu).getByRole('menuitem').blur();
+    expect(menu.closest('[aria-modal="true"]')).toBeNull();
+    expect(dialog.closest('[aria-modal="true"]')).toHaveAttribute('role', 'dialog');
+    (document.activeElement as HTMLElement).blur();
     expect(document.activeElement).toBe(document.body);
+    expect(menu).toBeVisible();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
