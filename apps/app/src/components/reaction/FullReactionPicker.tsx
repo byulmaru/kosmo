@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
+  Animated,
   FlatList,
   Platform,
   Pressable,
@@ -11,11 +12,13 @@ import {
   View,
 } from 'react-native';
 import { BottomSheetSurface } from '@/components/ui/BottomSheetSurface';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useElevation, useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
+import type { ViewStyle } from 'react-native';
 
 export type FullReactionPickerOption = Readonly<{
   category: string;
@@ -298,6 +301,123 @@ type ReactionGridSection = Readonly<{
   title: string;
 }>;
 
+type ReactionGridOptionProps = {
+  error: boolean;
+  mobile: boolean;
+  onSelect: (option: FullReactionPickerOption) => void;
+  option: FullReactionPickerOption;
+  pending: boolean;
+  selected: boolean;
+  targetSize: number;
+};
+
+type ReactionGridOptionVisualProps = Pick<
+  ReactionGridOptionProps,
+  'mobile' | 'option' | 'pending' | 'selected' | 'targetSize'
+> & { hovered: boolean; pressed: boolean };
+
+function ReactionGridOptionVisual({
+  mobile,
+  option,
+  pending,
+  pressed,
+  hovered,
+  selected,
+  targetSize,
+}: ReactionGridOptionVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || hovered;
+  const backgroundColor = selected
+    ? theme.stateSelectedSurface
+    : pressed
+      ? theme.statePressed
+      : hovered
+        ? theme.stateHover
+        : 'transparent';
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: selected ? 'selection' : interaction ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+  const animatedBorder = useAnimatedColorTransition({
+    color: selected ? theme.stateSelectedBorder : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: 'selection',
+    selectionKey: selected,
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.reaction,
+        mobile ? { height: targetSize - 4, width: targetSize - 4 } : styles.webReaction,
+        {
+          backgroundColor: animatedBackground,
+          borderColor: animatedBorder,
+        } as ViewStyle,
+      ]}
+      testID={`full-reaction-option-${option.id}-visual`}
+    >
+      <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>{option.emoji}</Text>
+      {pending ? (
+        <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+          <ReactionPendingSpinner />
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+function ReactionGridOption({
+  error,
+  mobile,
+  onSelect,
+  option,
+  pending,
+  selected,
+  targetSize,
+}: ReactionGridOptionProps) {
+  const accessibilityLabel = error
+    ? `${option.label} 반응, 오류, 다시 시도 ${option.emoji}`
+    : pending
+      ? `${option.label} 반응, 처리 중 ${option.emoji}`
+      : `${option.label} ${option.emoji}`;
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ busy: pending, disabled: pending, selected }}
+      aria-busy={pending}
+      aria-pressed={selected}
+      disabled={pending}
+      onPress={() => onSelect(option)}
+      style={
+        mobile
+          ? [styles.mobileReactionTarget, { height: targetSize, width: targetSize }]
+          : styles.webReactionTarget
+      }
+    >
+      {(state) => (
+        <ReactionGridOptionVisual
+          hovered={Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)}
+          mobile={mobile}
+          option={option}
+          pending={pending}
+          pressed={Boolean(state.pressed)}
+          selected={selected}
+          targetSize={targetSize}
+        />
+      )}
+    </Pressable>
+  );
+}
+
 function createBrowseSections(
   options: ReadonlyArray<FullReactionPickerOption>,
   recentValues: ReadonlyArray<string>,
@@ -354,7 +474,6 @@ function ReactionGridRow({
   pendingValues: ReadonlyArray<string>;
   errorValues: ReadonlyArray<string>;
 }) {
-  const theme = useTheme();
   return (
     <View
       style={[
@@ -371,53 +490,17 @@ function ReactionGridRow({
         const selected = selectedValues.includes(option.id);
         const pending = pendingValues.includes(option.id);
         const error = errorValues.includes(option.id);
-        const accessibilityLabel = error
-          ? `${option.label} 반응, 오류, 다시 시도 ${option.emoji}`
-          : pending
-            ? `${option.label} 반응, 처리 중 ${option.emoji}`
-            : `${option.label} ${option.emoji}`;
         return (
-          <Pressable
-            accessibilityLabel={accessibilityLabel}
-            accessibilityRole="button"
-            accessibilityState={{ busy: pending, disabled: pending, selected }}
-            aria-busy={pending}
-            aria-pressed={selected}
-            disabled={pending}
+          <ReactionGridOption
+            error={error}
             key={option.id}
-            onPress={() => onSelect(option)}
-            style={
-              mobile
-                ? [styles.mobileReactionTarget, { height: targetSize, width: targetSize }]
-                : styles.webReactionTarget
-            }
-          >
-            {(state) => (
-              <View
-                style={[
-                  styles.reaction,
-                  mobile ? { height: targetSize - 4, width: targetSize - 4 } : styles.webReaction,
-                  {
-                    backgroundColor: selected
-                      ? theme.stateSelectedSurface
-                      : state.pressed
-                        ? theme.statePressed
-                        : Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)
-                          ? theme.stateHover
-                          : 'transparent',
-                    borderColor: selected ? theme.stateSelectedBorder : 'transparent',
-                  },
-                ]}
-              >
-                <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>{option.emoji}</Text>
-                {pending ? (
-                  <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
-                    <ReactionPendingSpinner />
-                  </View>
-                ) : null}
-              </View>
-            )}
-          </Pressable>
+            mobile={mobile}
+            onSelect={onSelect}
+            option={option}
+            pending={pending}
+            selected={selected}
+            targetSize={targetSize}
+          />
         );
       })}
       {!mobile && sectionId === 'quick'
