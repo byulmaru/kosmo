@@ -166,6 +166,27 @@ test('provider keeps one guide active and requires an explicit retry after a bus
   await act(async () => retried?.cancel());
 });
 
+test('provider keeps the presentation mounted while a visible guide exits', async () => {
+  await renderProvider();
+  let handle: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    handle =
+      requestFromProvider?.({
+        guide: 'TIMELINE',
+        mode: 'manual',
+        ready: true,
+        steps: [createStep()],
+      }) ?? null;
+  });
+  assert.ok(handle);
+
+  const coachmark = renderer?.root.findByType('Coachmark' as never);
+  await act(async () => coachmark?.props.onClose());
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+  assert.equal(renderer?.root.findByType('Coachmark' as never), coachmark);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
+});
+
 test('automatic start requires a usable profile and records only after the first step is shown', async () => {
   await renderProvider(createElement(ControllerProbe));
   const probe = () => renderer?.root.findByType('ControllerProbe' as never).props;
@@ -180,7 +201,8 @@ test('automatic start requires a usable profile and records only after the first
 
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onClose());
   await act(async () => probe()?.requestAutoStart());
-  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
 });
 
 test('manual multi-step help moves both ways and restarts from the first step', async () => {
@@ -218,7 +240,8 @@ test('manual multi-step help moves both ways and restarts from the first step', 
   coachmark = renderer?.root.findByType('Coachmark' as never);
   assert.equal(coachmark?.props.onNext, undefined);
   await act(async () => coachmark?.props.onComplete());
-  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
 
   let restarted: ReturnType<NonNullable<typeof requestFromProvider>> = null;
   await act(async () => {
@@ -260,7 +283,8 @@ test('a shown automatic guide suppresses a later retry for the same account', as
 
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onShown());
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onClose());
-  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
   assert.equal(request('TIMELINE'), null);
 });
 

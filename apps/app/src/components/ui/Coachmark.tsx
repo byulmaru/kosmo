@@ -1,4 +1,4 @@
-import { Children, useEffect, useRef, useState } from 'react';
+import { Children, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -39,13 +39,6 @@ const MAX_WIDTH = 256;
 const ARROW_SIZE = iconSizes[16];
 const ARROW_HALF = ARROW_SIZE / 2;
 
-// Web Modal focus trapping can start before measured content mounts; focus the primary action on mount.
-const focusCoachmarkAction = (node: NativeView | null) => {
-  if (Platform.OS === 'web') {
-    node?.focus();
-  }
-};
-
 export function Coachmark({
   anchorRef,
   children,
@@ -81,6 +74,17 @@ export function Coachmark({
   const [bubble, setBubble] = useState<Layout>({ height: 0, width: MAX_WIDTH });
   const [shown, setShown] = useState(false);
   const targetReady = Boolean(anchorRef.current && anchor && anchor.width > 0 && anchor.height > 0);
+  const modalVisible = overlayMotion.mounted && targetReady;
+  const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
+  // Web Modal focus trapping can start before measured content mounts; refocus once actions are ready.
+  const focusCoachmarkAction = useCallback(
+    (node: NativeView | null) => {
+      if (Platform.OS === 'web' && presentationReady) {
+        node?.focus();
+      }
+    },
+    [presentationReady],
+  );
 
   const close = () => {
     if (visible) {
@@ -153,8 +157,6 @@ export function Coachmark({
           },
         })
       : null;
-  const modalVisible = overlayMotion.mounted && targetReady;
-  const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
   const progress = Children.map(children, (child) =>
     typeof child === 'string' || typeof child === 'number' ? (
       <Text style={styles.footerLabel}>{child}</Text>
@@ -193,7 +195,7 @@ export function Coachmark({
             StyleSheet.absoluteFill,
             {
               backgroundColor: theme.overlayScrim,
-              opacity: presentationReady ? overlayMotion.progress : 0,
+              opacity: modalVisible ? overlayMotion.progress : 0,
             },
           ]}
         />

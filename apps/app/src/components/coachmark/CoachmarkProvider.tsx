@@ -29,6 +29,7 @@ type CoachmarkContextValue = Readonly<{
 type ActiveCoachmark = CoachmarkRequest & {
   token: number;
   step: number;
+  visible: boolean;
 };
 
 type AccountKey = string | null;
@@ -69,7 +70,7 @@ export function CoachmarkProvider({
     return request.mode !== 'automatic' || !key || !transientSeen.has(key);
   };
   // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
-  let occupied = Boolean(state.active);
+  let occupied = Boolean(state.active?.visible);
   const request = useCallback(
     (next: CoachmarkRequest) => {
       if (
@@ -82,10 +83,10 @@ export function CoachmarkProvider({
       }
 
       const token = ++nextCoachmarkToken;
-      const entry = { ...next, step: 0, token };
+      const entry = { ...next, step: 0, token, visible: true };
       occupied = true;
       setStoredState((current) => {
-        if (current.accountKey !== accountKey || current.active) {
+        if (current.accountKey !== accountKey || current.active?.visible) {
           return current;
         }
         return { ...current, active: entry };
@@ -130,7 +131,7 @@ export function CoachmarkProvider({
   const finish = () =>
     setStoredState((value) =>
       active && value.accountKey === accountKey && value.active?.token === active.token
-        ? { ...value, active: null }
+        ? { ...value, active: { ...value.active, visible: false } }
         : value,
     );
   const move = (step: number) =>
@@ -152,7 +153,7 @@ export function CoachmarkProvider({
         onShown={active.step === 0 ? () => markShown(active) : undefined}
         preferredFocusRef={active.preferredFocusRef}
         title={current.title}
-        visible
+        visible={active.visible}
       >
         {`${active.step + 1} / ${active.steps.length}`}
       </Coachmark>

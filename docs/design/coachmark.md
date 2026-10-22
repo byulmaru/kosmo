@@ -77,5 +77,6 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 ### 공통 제어 검증 기록 · 2026-10-23
 
-- AppProviders와 공통 제어 단위 테스트 21개, Coachmark Web Storybook 테스트 8개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 활성 안내 중 요청 거절과 종료 후 명시 재요청, 이전·다음·완료 후 첫 단계 재시작, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
+- AppProviders와 공통 제어 단위 테스트 22개, overlay motion 단위 테스트 3개, 두 Coachmark Web Storybook 파일의 테스트 19개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 활성 안내 중 요청 거절과 종료 후 명시 재요청, 이전·다음·완료 후 첫 단계 재시작, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
+- 닫기·완료 시 같은 안내 인스턴스를 `visible=false`로 유지하여 기존 퇴장 애니메이션을 사용한다. 실제 action이 활성화된 뒤 Web 진입 포커스를 받고, 단계 이동·종료 후 포커스 복귀를 확인했다. TypeScript, ESLint, Prettier와 정적 Storybook 빌드를 통과했다.
 - 화면별 대상 준비 신호와 이탈 시 취소 연결 및 Native 실기기 검증은 PROD-1201~1206의 화면 통합 범위다.
