@@ -1,11 +1,12 @@
 import { ArrowLeft, Check, ChevronRight } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileListItemRow } from '../profile/ProfileListItemRow';
 import type { ReactNode, Ref } from 'react';
@@ -13,6 +14,7 @@ import type {
   ProfileSettingsScreen_profile$data,
   ProfileSettingsScreen_profile$key,
 } from './__generated__/ProfileSettingsScreen_profile.graphql';
+import type { ViewStyle } from 'react-native';
 
 type ProfileSettingsDeletion = {
   phase: 'entry' | 'idle' | 'pending' | 'error';
@@ -52,6 +54,7 @@ function ProfileSettingsSurface({
   deletion,
 }: SurfaceProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const phase = deletion?.phase ?? 'entry';
   const confirming = deletion !== undefined && phase !== 'entry';
   const pending = phase === 'pending';
@@ -110,10 +113,9 @@ function ProfileSettingsSurface({
             accessibilityRole="button"
             ref={deleteRef}
             onPress={start}
-            style={({ pressed }) => [
+            style={[
               styles.actionRow,
               {
-                backgroundColor: pressed ? theme.statePressed : undefined,
                 borderColor: theme.borderSubtle,
               },
               Platform.OS === 'web'
@@ -121,10 +123,18 @@ function ProfileSettingsSurface({
                 : undefined,
             ]}
           >
-            <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase, flex: 1 }]}>
-              프로필 삭제
-            </Text>
-            <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
+            {({ pressed }) => (
+              <ProfileSettingsPressFeedback
+                color={theme.statePressed}
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+              >
+                <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase, flex: 1 }]}>
+                  프로필 삭제
+                </Text>
+                <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
+              </ProfileSettingsPressFeedback>
+            )}
           </Pressable>
         </>
       ) : null}
@@ -243,6 +253,7 @@ function ProfileDeleteAcknowledgement({
   onAcknowledgementChange: (checked: boolean) => void;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const label = '프로필을 복구할 수 없음을 확인했습니다.';
   return (
     <Pressable
@@ -269,40 +280,76 @@ function ProfileDeleteAcknowledgement({
           onAcknowledgementChange(!acknowledged);
         }
       }}
-      style={({ pressed }) => [
+      style={[
         styles.acknowledgement,
-        { backgroundColor: pressed ? theme.statePressed : undefined },
         Platform.OS === 'web'
           ? { outlineColor: theme.stateFocusRing, outlineOffset: 2 }
           : undefined,
       ]}
     >
-      <View aria-hidden importantForAccessibility="no-hide-descendants" style={styles.checkbox}>
-        <View
-          style={[
-            styles.indicator,
-            {
-              backgroundColor: disabled
-                ? theme.stateDisabledSurface
-                : acknowledged
-                  ? theme.actionPrimaryBase
-                  : theme.backgroundSurface,
-              borderColor: acknowledged ? 'transparent' : theme.borderStrong,
-            },
-          ]}
+      {({ pressed }) => (
+        <ProfileSettingsPressFeedback
+          color={theme.statePressed}
+          pressed={pressed}
+          reducedMotion={reducedMotion}
         >
-          {acknowledged ? (
-            <Check
-              color={disabled ? theme.stateDisabledForeground : theme.actionPrimaryOnBase}
-              size={iconSizes[20]}
-            />
-          ) : null}
-        </View>
-      </View>
-      <Text style={[styles.acknowledgementLabel, { color: theme.foregroundSecondary }]}>
-        {label}
-      </Text>
+          <View aria-hidden importantForAccessibility="no-hide-descendants" style={styles.checkbox}>
+            <View
+              style={[
+                styles.indicator,
+                {
+                  backgroundColor: disabled
+                    ? theme.stateDisabledSurface
+                    : acknowledged
+                      ? theme.actionPrimaryBase
+                      : theme.backgroundSurface,
+                  borderColor: acknowledged ? 'transparent' : theme.borderStrong,
+                },
+              ]}
+            >
+              {acknowledged ? (
+                <Check
+                  color={disabled ? theme.stateDisabledForeground : theme.actionPrimaryOnBase}
+                  size={iconSizes[20]}
+                />
+              ) : null}
+            </View>
+          </View>
+          <Text style={[styles.acknowledgementLabel, { color: theme.foregroundSecondary }]}>
+            {label}
+          </Text>
+        </ProfileSettingsPressFeedback>
+      )}
     </Pressable>
+  );
+}
+
+function ProfileSettingsPressFeedback({
+  children,
+  color,
+  pressed,
+  reducedMotion,
+}: {
+  children: ReactNode;
+  color: string;
+  pressed: boolean;
+  reducedMotion: boolean;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: pressed ? color : 'transparent',
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor } as unknown as ViewStyle]}
+      />
+      {children}
+    </>
   );
 }
 
@@ -314,12 +361,14 @@ const styles = StyleSheet.create({
     gap: space[12],
     minHeight: 64,
     padding: space[16],
+    position: 'relative',
   },
   acknowledgement: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: space[8],
     minHeight: 48,
+    position: 'relative',
   },
   acknowledgementLabel: { ...textStyles.uiCopyM, flex: 1 },
   actionButtons: { flexDirection: 'row', gap: space[8] },
