@@ -25,10 +25,21 @@ export async function pressActionBarPoint(container: HTMLElement, point: Point, 
   ]);
 }
 
-export function actionBarWhitespace(container: HTMLElement) {
+export async function actionBarWhitespace(container: HTMLElement) {
   const scope = within(container);
   const toolbar = scope.getByRole('toolbar', { name: '액션 바' });
-  toolbar.scrollIntoView({ block: 'center' });
+  await new Promise<void>((resolve) => {
+    const scrollY = window.scrollY;
+    const onScroll = () => {
+      window.removeEventListener('scroll', onScroll);
+      resolve();
+    };
+    window.addEventListener('scroll', onScroll, { once: true });
+    toolbar.scrollIntoView({ block: 'center' });
+    if (window.scrollY === scrollY) {
+      onScroll();
+    }
+  });
   const bounds = toolbar.getBoundingClientRect();
   const frame = toolbar.parentElement!.getBoundingClientRect();
   const slot = (name: string) =>
@@ -51,13 +62,23 @@ export async function checkActionBarWhitespace(
   assertNavigation: () => void,
 ) {
   for (let index = 0; index < 4; index += 1) {
-    const point = actionBarWhitespace(container)[index]!;
+    const point = (await actionBarWhitespace(container))[index]!;
     const target = container.ownerDocument.elementFromPoint(point.x, point.y)!;
     expect(container.contains(target)).toBe(true);
     expect(target.closest('[role="button"]')).toBeNull();
     expect(getComputedStyle(target).cursor).toBe('pointer');
-    await pressActionBarPoint(container, point);
-    assertNavigation();
+    const scrollOffsets: number[] = [];
+    const recordScroll = () => {
+      scrollOffsets.push(window.scrollY);
+    };
+    window.addEventListener('scroll', recordScroll, true);
+    try {
+      await pressActionBarPoint(container, point);
+      expect(scrollOffsets).toEqual([]);
+      assertNavigation();
+    } finally {
+      window.removeEventListener('scroll', recordScroll, true);
+    }
   }
 }
 
@@ -65,7 +86,7 @@ export async function checkActionBarCancelledPresses(
   container: HTMLElement,
   assertUnchanged: () => void,
 ) {
-  const point = actionBarWhitespace(container)[1]!;
+  const point = (await actionBarWhitespace(container))[1]!;
   await pressActionBarPoint(container, point, { x: point.x + 30, y: point.y });
   assertUnchanged();
   const toolbar = within(container)
@@ -81,7 +102,7 @@ export async function checkActionBarScrollCancelledPress(
   container: HTMLElement,
   assertUnchanged: () => void,
 ) {
-  const point = actionBarWhitespace(container)[1]!;
+  const point = (await actionBarWhitespace(container))[1]!;
   const target = container.ownerDocument.elementFromPoint(point.x, point.y)!;
   const scope = within(container);
   expect(target).toBe(scope.getByRole('toolbar', { name: '액션 바' }));
