@@ -10,6 +10,7 @@ import {
   Network,
   Observable,
   RecordSource,
+  ROOT_ID,
   Store,
 } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
@@ -262,7 +263,9 @@ describe('Timeline refresh and pagination with real Relay', () => {
       renderer = null;
     });
     environment.commitUpdate((store) => {
-      store.getRoot().getLinkedRecord('currentSession')?.invalidateRecord();
+      store
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+        ?.invalidateRecord();
     });
     await act(async () => {
       renderer = create(render());

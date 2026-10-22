@@ -5,14 +5,19 @@ import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
   ConnectionHandler,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
+  ROOT_ID,
   Store,
 } from 'relay-runtime';
 import MuteMutation from './__generated__/ProfileMuteControllerMuteMutation.graphql';
 import UnmuteMutation from './__generated__/ProfileMuteControllerUnmuteMutation.graphql';
+import HomeConnectionQuery from '../post/__generated__/PostListHomeNextPageQuery.graphql';
+import LocalConnectionQuery from '../post/__generated__/PostListLocalNextPageQuery.graphql';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
@@ -105,6 +110,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       loadOwnerAConnection: true,
       loadOwnerBConnection: false,
     });
+    const { homeOperation, localOperation } = loadHomeAndLocalTimelines(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    assert.equal(environment.check(localOperation).status, 'available');
     await renderController(environment);
 
     const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
@@ -118,6 +126,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     await request;
 
     assert.equal(viewerStateMuteId(environment, targetA), 'profile-mute:new');
+    assert.equal(environment.check(homeOperation).status, 'stale');
+    assert.equal(environment.check(localOperation).status, 'available');
+    assert.equal(pendingRequests.length, 1, 'mute should not start a Home request');
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), [
       'profile-mute:new',
     ]);
@@ -132,6 +143,8 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       loadOwnerAConnection: true,
       loadOwnerBConnection: false,
     });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
     await renderController(environment);
 
     const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
@@ -145,6 +158,7 @@ describe('ProfileMuteController real Relay mutation contract', () => {
 
     assert.match(String(await rejection), /mute failure/);
     assert.equal(viewerStateMuteId(environment, targetA), null);
+    assert.equal(environment.check(homeOperation).status, 'available');
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
   });
 
@@ -166,6 +180,13 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       environment.getStore().getSource().get(getProfileMuteConnectionId(ownerA)),
       undefined,
     );
+    assert.equal(
+      environment
+        .getStore()
+        .getSource()
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')),
+      undefined,
+    );
     assert.equal(viewerStateMuteId(environment, targetA), 'profile-mute:unloaded');
   });
 
@@ -178,6 +199,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       targetARelationId: 'profile-mute:a',
       targetBRelationId: 'profile-mute:b',
     });
+    const { homeOperation, localOperation } = loadHomeAndLocalTimelines(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    assert.equal(environment.check(localOperation).status, 'available');
     selectedProfileId = ownerA;
     await renderController(environment);
 
@@ -211,6 +235,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     await request;
 
     assert.equal(viewerStateMuteId(environment, targetA), null);
+    assert.equal(environment.check(homeOperation).status, 'stale');
+    assert.equal(environment.check(localOperation).status, 'available');
+    assert.equal(pendingRequests.length, 1, 'unmute should not start a Home request');
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
     assert.equal(environment.getStore().getSource().get('profile-mute:a'), null);
     assert.equal(viewerStateMuteId(environment, targetB), 'profile-mute:b');
@@ -226,6 +253,8 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       ownerARelationId: 'profile-mute:active',
       targetARelationId: 'profile-mute:active',
     });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
     await renderController(environment);
 
     const request = startChangeMuted(
@@ -246,6 +275,7 @@ describe('ProfileMuteController real Relay mutation contract', () => {
 
     assert.match(String(await rejection), /network failure/);
     assert.equal(viewerStateMuteId(environment, targetA), 'profile-mute:active');
+    assert.equal(environment.check(homeOperation).status, 'available');
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), [
       'profile-mute:active',
     ]);
@@ -260,6 +290,8 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       loadOwnerAConnection: false,
       loadOwnerBConnection: true,
     });
+    const actorBHomeOperation = loadHomeTimeline(actorB.environment);
+    assert.equal(actorB.environment.check(actorBHomeOperation).status, 'available');
     selectedProfileId = actorA.ownerA;
     await renderController(actorA.environment);
 
@@ -284,6 +316,7 @@ describe('ProfileMuteController real Relay mutation contract', () => {
 
     await respond(pending, muteResponse('profile-mute:actor-a', actorA.targetA));
     assert.match(String(await rejection), /inactive Profile/);
+    assert.equal(actorB.environment.check(actorBHomeOperation).status, 'available');
     assert.equal(viewerStateMuteId(actorB.environment, actorA.targetA), null);
     assert.deepEqual(
       connectionNodeIds(actorB.environment, getProfileMuteConnectionId(actorB.ownerB)),
@@ -393,6 +426,29 @@ function createEnvironment(options: {
 
 function getProfileMuteConnectionId(ownerProfileId: string) {
   return ConnectionHandler.getConnectionID(ownerProfileId, 'SettingsMutedProfiles_profileMutes');
+}
+
+function loadHomeTimeline(environment: Environment) {
+  const operation = createOperationDescriptor(getRequest(HomeConnectionQuery), {
+    count: 20,
+    cursor: null,
+  });
+  environment.commitPayload(operation, {
+    homeTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+  });
+  return operation;
+}
+
+function loadHomeAndLocalTimelines(environment: Environment) {
+  const homeOperation = loadHomeTimeline(environment);
+  const localOperation = createOperationDescriptor(getRequest(LocalConnectionQuery), {
+    count: 20,
+    cursor: null,
+  });
+  environment.commitPayload(localOperation, {
+    localTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+  });
+  return { homeOperation, localOperation };
 }
 
 function renderController(environment: Environment) {

@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -106,6 +107,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
+  const environment = useRelayEnvironment();
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
@@ -123,6 +125,12 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };
+  const invalidateHome = () =>
+    environment.commitUpdate((store) => {
+      store
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+        ?.invalidateRecord();
+    });
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -154,6 +162,13 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
       commitUnfollow({
         ...callbacks,
+        onCompleted: (_response, errors) => {
+          if (errors?.length) {
+            showFailureToast();
+            return;
+          }
+          invalidateHome();
+        },
         optimisticResponse: follower
           ? {
               unfollowProfile: {
@@ -197,6 +212,9 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
           if (failed) {
             showFailureToast();
             return;
+          }
+          if (response.followProfile.result.__typename === 'ProfileFollow') {
+            invalidateHome();
           }
           if (!selectedProfileId) {
             return;
