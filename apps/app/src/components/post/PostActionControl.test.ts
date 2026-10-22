@@ -69,6 +69,11 @@ function MockPressable({ children, ...props }: PressableProps) {
 
 mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  Animated: {
+    Text: 'Text',
+    View: 'AnimatedView',
+    createAnimatedComponent: (component: unknown) => component,
+  },
   Platform: platform,
   Pressable: MockPressable,
   StyleSheet: { create: <T>(styles: T) => styles },
@@ -93,6 +98,10 @@ mockModule(require.resolve('lucide-react-native'), {
   Pin: StubIcon,
 });
 mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   breakpoints: { compact: 768, full: 1_280 },
@@ -296,6 +305,32 @@ test('Native More targets expand and preserve expanded state', async () => {
   }
 });
 
+test('Web keeps hover feedback for selected actions and Native keeps it hidden', async () => {
+  platform.OS = 'web';
+  mockPressableState = { hovered: false, pressed: false };
+  const webRoot = await renderControl({
+    accessibilityLabel: '북마크',
+    active: true,
+    icon: StubIcon,
+    onPress: () => undefined,
+    testID: 'bookmark',
+  });
+  await act(async () => {
+    findByTestID(webRoot, 'post-action-bookmark').props.onHoverIn();
+  });
+  assert.ok(findByTestID(webRoot, 'post-action-bookmark-hover'));
+
+  platform.OS = 'ios';
+  mockPressableState = { hovered: false, pressed: true };
+  const nativeRoot = await renderControl({
+    accessibilityLabel: '북마크',
+    icon: StubIcon,
+    onPress: () => undefined,
+    testID: 'bookmark',
+  });
+  assert.equal(nativeRoot.findAllByProps({ testID: 'post-action-bookmark-hover' }).length, 0);
+});
+
 test('Native count actions keep the compact 16px icon slot inside the social target', async () => {
   platform.OS = 'android';
   const root = await renderControl({
@@ -419,7 +454,7 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
   assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
   assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
   assert.equal(card.props.onPress, undefined);
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
 
   const sendPress = async (pressed: boolean) => {
     await act(async () => {
@@ -471,24 +506,24 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
     await sendPointer('leave', pointerType);
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
   }
 
   await sendPointer('enter', 'touch');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
   await sendPointer('leave', 'touch');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
 
   platform.OS = 'ios';
   root = await renderListItem(props);
   feedback = findByTestID(root, 'post-list-item-feedback');
 
   await sendPointer('enter', 'mouse');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
 
   root = await sendPress(false);
   feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
 
   root = await sendPress(true);
   feedback = findByTestID(root, 'post-list-item-feedback');
@@ -496,7 +531,7 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
 
   root = await sendPress(false);
   feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
 });
 
 test('PostThreadLayout uses the supplied list presentation', async () => {
@@ -543,12 +578,13 @@ test('Native pending and disabled controls expose blocking state to the host', a
     testID: 'repost',
   });
   const pendingButton = findByTestID(pending, 'post-action-repost');
+  const spinner = findByTestID(pending, 'post-action-repost-spinner');
   assert.equal(pendingButton.props.disabled, true);
   assert.deepEqual(pendingButton.props.accessibilityState, {
     busy: true,
     disabled: true,
   });
-  assert.ok(findByTestID(pending, 'post-action-repost-spinner'));
+  assert.equal(spinner.props.color, 'secondary');
 
   const disabled = await renderControl({
     accessibilityLabel: '반응',
