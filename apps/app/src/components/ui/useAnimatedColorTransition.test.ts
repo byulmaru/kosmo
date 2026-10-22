@@ -32,6 +32,20 @@ class AnimatedColorMock implements AnimatedColorValue {
   }
 }
 
+class AnimatedValueMock {
+  stopCalls = 0;
+
+  constructor(public value: number) {}
+
+  setValue(value: number) {
+    this.value = value;
+  }
+
+  stopAnimation() {
+    this.stopCalls += 1;
+  }
+}
+
 type TimingCall = {
   duration: number;
   handle: AnimatedColorMock;
@@ -39,16 +53,36 @@ type TimingCall = {
   useNativeDriver: boolean;
 };
 
+type OpacityTimingCall = {
+  duration: number;
+  handle: AnimatedValueMock;
+  toValue: number;
+  useNativeDriver: boolean;
+};
+
 const timingCalls: TimingCall[] = [];
+const opacityTimingCalls: OpacityTimingCall[] = [];
 const themeKey = {};
 
 mockModule('react-native', {
   processColor: (color: string) => (color === '#4080c080' ? 0x804080c0 : undefined),
   Animated: {
     Color: AnimatedColorMock,
-    timing: (handle: AnimatedColorMock, config: Omit<TimingCall, 'handle'>) => {
-      const call = { handle, ...config };
-      timingCalls.push(call);
+    Value: AnimatedValueMock,
+    timing: (
+      handle: AnimatedColorMock | AnimatedValueMock,
+      config: { duration: number; toValue: unknown; useNativeDriver: boolean },
+    ) => {
+      if (handle instanceof AnimatedValueMock) {
+        opacityTimingCalls.push({
+          duration: config.duration,
+          handle,
+          toValue: config.toValue as number,
+          useNativeDriver: config.useNativeDriver,
+        });
+      } else {
+        timingCalls.push({ handle, ...config } as TimingCall);
+      }
       return {
         start: () => undefined,
         stop: () => undefined,
@@ -77,11 +111,14 @@ type HarnessProps = {
 };
 
 let useAnimatedColorTransition: typeof AnimatedColorTransitionModule.useAnimatedColorTransition;
+let useAnimatedOpacityTransition: typeof AnimatedColorTransitionModule.useAnimatedOpacityTransition;
 
 beforeEach(async () => {
   timingCalls.length = 0;
+  opacityTimingCalls.length = 0;
   if (!useAnimatedColorTransition) {
-    ({ useAnimatedColorTransition } = await import('./useAnimatedColorTransition'));
+    ({ useAnimatedColorTransition, useAnimatedOpacityTransition } =
+      await import('./useAnimatedColorTransition'));
   }
 });
 
@@ -390,4 +427,116 @@ test('passes numeric RGBA endpoints without allocating tracking color channels',
   const renderer = renderHarness({ color: 'base', role: 'selection' });
   act(() => renderer.update(createElement(Harness, { color: '#4080c080', role: 'selection' })));
   assert.deepEqual(timingCalls.at(-1)?.toValue, { r: 64, g: 128, b: 192, a: 128 / 255 });
+});
+
+type OpacityHarnessProps = {
+  instantKey?: unknown;
+  interactionKey?: unknown;
+  opacity: number;
+  reducedMotion?: boolean;
+  role: 'instant' | 'interaction' | 'selection';
+  selectionKey?: unknown;
+};
+
+function OpacityHarness({
+  instantKey = themeKey,
+  interactionKey,
+  opacity,
+  reducedMotion = false,
+  role,
+  selectionKey,
+}: OpacityHarnessProps) {
+  const value = useAnimatedOpacityTransition({
+    instantKey,
+    interactionKey,
+    opacity,
+    reducedMotion,
+    role,
+    selectionKey,
+  });
+  return createElement(Probe, { value });
+}
+
+function renderOpacityHarness(props: OpacityHarnessProps): ReactTestRenderer {
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(createElement(OpacityHarness, props));
+  });
+  return renderer;
+}
+
+test('animates opacity in both press directions and retargets the active handle', () => {
+  const renderer = renderOpacityHarness({
+    interactionKey: 'idle',
+    opacity: 1,
+    role: 'interaction',
+  });
+
+  act(() => {
+    renderer.update(
+      createElement(OpacityHarness, {
+        interactionKey: 'pressed',
+        opacity: 0.7,
+        role: 'interaction',
+      }),
+    );
+  });
+  const press = opacityTimingCalls.at(-1);
+  assert.ok(press);
+  assert.equal(press.duration, 120);
+  assert.equal(press.useNativeDriver, true);
+  press.handle.setValue(0.82);
+
+  act(() => {
+    renderer.update(
+      createElement(OpacityHarness, { interactionKey: 'idle', opacity: 1, role: 'interaction' }),
+    );
+  });
+  const release = opacityTimingCalls.at(-1);
+  assert.ok(release);
+  assert.equal(release.duration, 120);
+  assert.equal(release.handle, press.handle);
+  assert.equal(release.toValue, 1);
+  assert.ok(press.handle.stopCalls >= 2);
+});
+
+test('uses selected timing and commits the endpoint immediately for reduced motion', () => {
+  const renderer = renderOpacityHarness({
+    interactionKey: 'idle',
+    opacity: 1,
+    role: 'selection',
+    selectionKey: false,
+  });
+
+  act(() => {
+    renderer.update(
+      createElement(OpacityHarness, {
+        interactionKey: 'idle',
+        opacity: 0.8,
+        role: 'selection',
+        selectionKey: true,
+      }),
+    );
+  });
+  const selected = opacityTimingCalls.at(-1);
+  assert.ok(selected);
+  assert.equal(selected.duration, 200);
+  assert.equal(selected.useNativeDriver, true);
+  selected.handle.setValue(0.9);
+  const callCount = opacityTimingCalls.length;
+
+  act(() => {
+    renderer.update(
+      createElement(OpacityHarness, {
+        interactionKey: 'idle',
+        opacity: 1,
+        reducedMotion: true,
+        role: 'selection',
+        selectionKey: false,
+      }),
+    );
+  });
+  assert.equal(opacityTimingCalls.length, callCount);
+  assert.equal(selected.handle.value, 1);
+  assert.equal(renderer.root.findByType(probeHost).props.value, 1);
 });
