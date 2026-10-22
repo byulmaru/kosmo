@@ -347,7 +347,7 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
-    const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
+    const dialog = renderer?.root.findByProps({ role: 'dialog', accessibilityLabel: '글쓰기' });
     assert.ok(dialog);
     await act(async () => dialog.props.onAccessibilityEscape());
     assert.equal(editorBackCount, 1);
