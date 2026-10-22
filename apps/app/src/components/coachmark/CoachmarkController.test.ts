@@ -103,6 +103,7 @@ before(async () => {
 
 beforeEach(() => {
   account.seenCoachmarks = [];
+  account.profiles = [{ id: 'profile-1' }];
   session.status = 'valid';
   commitCalls.length = 0;
   reportCalls.length = 0;
@@ -116,7 +117,7 @@ afterEach(async () => {
   }
 });
 
-test('provider keeps one guide active and leaves an unready request available for retry', async () => {
+test('provider keeps one guide active and requires an explicit retry after a busy rejection', async () => {
   await renderProvider();
 
   assert.equal(
@@ -130,6 +131,7 @@ test('provider keeps one guide active and leaves an unready request available fo
   );
 
   let first: { cancel: () => void } | null | undefined;
+  let competing: { cancel: () => void } | null | undefined;
   await act(async () => {
     first = requestFromProvider?.({
       guide: 'TIMELINE',
@@ -137,10 +139,6 @@ test('provider keeps one guide active and leaves an unready request available fo
       ready: true,
       steps: [createStep()],
     });
-  });
-  assert.ok(first);
-  let competing: { cancel: () => void } | null | undefined;
-  await act(async () => {
     competing = requestFromProvider?.({
       guide: 'SEARCH',
       mode: 'manual',
@@ -148,11 +146,24 @@ test('provider keeps one guide active and leaves an unready request available fo
       steps: [createStep('다른 안내')],
     });
   });
-  assert.ok(competing);
+  assert.ok(first);
+  assert.equal(competing, null);
 
   await act(async () => first?.cancel());
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+
+  let retried: { cancel: () => void } | null | undefined;
+  await act(async () => {
+    retried = requestFromProvider?.({
+      guide: 'SEARCH',
+      mode: 'manual',
+      ready: true,
+      steps: [createStep('다른 안내')],
+    });
+  });
+  assert.ok(retried);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '다른 안내');
-  await act(async () => competing?.cancel());
+  await act(async () => retried?.cancel());
 });
 
 test('automatic start requires a usable profile and records only after the first step is shown', async () => {
@@ -172,7 +183,59 @@ test('automatic start requires a usable profile and records only after the first
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
 });
 
-test('a shown automatic guide removes a queued duplicate for the same account', async () => {
+test('manual multi-step help moves both ways and restarts from the first step', async () => {
+  await renderProvider();
+  const steps = [createStep('첫 단계'), createStep('두 번째 단계')];
+  let handle: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+
+  await act(async () => {
+    handle =
+      requestFromProvider?.({
+        guide: 'TIMELINE',
+        mode: 'manual',
+        ready: true,
+        steps,
+      }) ?? null;
+  });
+  assert.ok(handle);
+
+  let coachmark = renderer?.root.findByType('Coachmark' as never);
+  assert.equal(coachmark?.props.children, '1 / 2');
+  assert.equal(coachmark?.props.onPrevious, undefined);
+  assert.ok(coachmark?.props.onNext);
+
+  await act(async () => coachmark?.props.onNext());
+  coachmark = renderer?.root.findByType('Coachmark' as never);
+  assert.equal(coachmark?.props.children, '2 / 2');
+  assert.ok(coachmark?.props.onPrevious);
+  assert.equal(coachmark?.props.onNext, undefined);
+
+  await act(async () => coachmark?.props.onPrevious());
+  coachmark = renderer?.root.findByType('Coachmark' as never);
+  assert.equal(coachmark?.props.children, '1 / 2');
+
+  await act(async () => coachmark?.props.onNext());
+  coachmark = renderer?.root.findByType('Coachmark' as never);
+  assert.equal(coachmark?.props.onNext, undefined);
+  await act(async () => coachmark?.props.onComplete());
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+
+  let restarted: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    restarted =
+      requestFromProvider?.({
+        guide: 'TIMELINE',
+        mode: 'manual',
+        ready: true,
+        steps,
+      }) ?? null;
+  });
+  assert.ok(restarted);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.children, '1 / 2');
+  await act(async () => restarted?.cancel());
+});
+
+test('a shown automatic guide suppresses a later retry for the same account', async () => {
   await renderProvider();
   const request = (guide: CoachmarkRequest['guide']) =>
     requestFromProvider?.({
@@ -184,18 +247,21 @@ test('a shown automatic guide removes a queued duplicate for the same account', 
     });
 
   let active: ReturnType<typeof request>;
-  let queued: ReturnType<typeof request>;
+  let duplicate: ReturnType<typeof request>;
   await act(async () => {
     active = request('TIMELINE');
-    queued = request('TIMELINE');
   });
   assert.ok(active);
-  assert.ok(queued);
+  await act(async () => {
+    duplicate = request('TIMELINE');
+  });
+  assert.equal(duplicate, null);
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
 
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onShown());
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onClose());
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+  assert.equal(request('TIMELINE'), null);
 });
 
 test('automatic transient history stays scoped to the account', async () => {

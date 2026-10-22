@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useSession } from '@/session/SessionProvider';
@@ -57,7 +57,6 @@ export function useCoachmarkController({
   const [commitRecord] = useMutation<CoachmarkControllerRecordMutation>(
     recordCoachmarkShownMutation,
   );
-  const [automaticStarted, setAutomaticStarted] = useState(false);
 
   const onShown = useCallback(() => {
     if (!account) {
@@ -77,7 +76,7 @@ export function useCoachmarkController({
 
   const requestCoachmark = useCallback(
     (mode: 'automatic' | 'manual') => {
-      const handle = request({
+      return request({
         accountId: account?.id,
         guide,
         mode,
@@ -86,26 +85,14 @@ export function useCoachmarkController({
         ready,
         steps,
       });
-      if (!handle || mode !== 'automatic') {
-        return handle;
-      }
-
-      setAutomaticStarted(true);
-      return {
-        cancel: () => {
-          handle.cancel();
-          setAutomaticStarted(false);
-        },
-      };
     },
-    [guide, onShown, preferredFocusRef, ready, request, steps],
+    [account, guide, onShown, preferredFocusRef, ready, request, steps],
   );
 
   return {
     open: useCallback(() => requestCoachmark('manual'), [requestCoachmark]),
     requestAutoStart: useCallback(() => {
       if (
-        automaticStarted ||
         session.status !== 'valid' ||
         !account ||
         account.profiles.length === 0 ||
@@ -114,7 +101,7 @@ export function useCoachmarkController({
         return null;
       }
       return requestCoachmark('automatic');
-    }, [account, automaticStarted, guide, requestCoachmark, session.status]),
+    }, [account, guide, requestCoachmark, session.status]),
   };
 }
 

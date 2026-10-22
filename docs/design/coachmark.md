@@ -38,7 +38,7 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 
 단계 상태·진행 번호·최초 노출 저장은 caller가 소유한다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
 
-페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 준비 전 거절된 요청은 준비 완료 시 다시 요청할 수 있으며, 수락된 대기 요청은 이력 소비를 의미하지 않는다.
+페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 대상이 준비되지 않았거나 다른 안내가 활성화되어 있으면 요청을 거절하고 예약하지 않는다. 이후 조건이 충족되면 caller가 다시 요청할 수 있다. 요청 수락 자체는 이력 소비를 의미하지 않는다.
 
 ## 배치와 동작
 
@@ -77,5 +77,5 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 ### 공통 제어 검증 기록 · 2026-10-23
 
-- AppProviders와 공통 제어 단위 테스트 20개, Coachmark Web Storybook 테스트 8개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 대기 안내와 중복 억제, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
+- AppProviders와 공통 제어 단위 테스트 21개, Coachmark Web Storybook 테스트 8개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 활성 안내 중 요청 거절과 종료 후 명시 재요청, 이전·다음·완료 후 첫 단계 재시작, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
 - 화면별 대상 준비 신호와 이탈 시 취소 연결 및 Native 실기기 검증은 PROD-1201~1206의 화면 통합 범위다.

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import { Coachmark } from '@/components/ui/Coachmark';
 import type { CoachmarkGuide } from '@kosmo/core/enums';
-import type { Dispatch, ReactNode, RefObject, SetStateAction } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
 export type CoachmarkStep = Readonly<{
@@ -35,7 +35,6 @@ type AccountKey = string | null;
 
 type CoachmarkState = Readonly<{
   active: ActiveCoachmark | null;
-  queued: ActiveCoachmark | null;
   accountKey: AccountKey;
   transientSeen: ReadonlySet<string>;
 }>;
@@ -46,7 +45,6 @@ let nextCoachmarkToken = 0;
 const createState = (accountKey: AccountKey): CoachmarkState => ({
   accountKey,
   active: null,
-  queued: null,
   transientSeen: new Set(),
 });
 
@@ -63,19 +61,6 @@ export function CoachmarkProvider({
     setStoredState(createState(accountKey));
   }
   const state = storedState.accountKey === accountKey ? storedState : createState(accountKey);
-  const scopedState = (current: CoachmarkState) =>
-    current.accountKey === accountKey ? current : null;
-  const setCurrentState = useCallback(
-    (action: SetStateAction<CoachmarkState>) =>
-      setStoredState((current) => {
-        const scoped = scopedState(current);
-        if (!scoped) {
-          return current;
-        }
-        return typeof action === 'function' ? action(scoped) : action;
-      }),
-    [accountKey],
-  );
 
   const transientKey = (request: CoachmarkRequest) =>
     request.accountId ? `${request.accountId}:${request.guide}` : null;
@@ -83,56 +68,39 @@ export function CoachmarkProvider({
     const key = transientKey(request);
     return request.mode !== 'automatic' || !key || !transientSeen.has(key);
   };
-  const closeState = (current: CoachmarkState): CoachmarkState => {
-    const queued = current.queued;
-    if (!queued || canStart(queued, current.transientSeen)) {
-      return queued
-        ? { ...current, active: queued, queued: null }
-        : { ...current, active: null, queued: null };
-    }
-    return { ...current, active: null, queued: null };
-  };
-
+  // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
+  let occupied = Boolean(state.active);
   const request = useCallback(
     (next: CoachmarkRequest) => {
       if (
         !next.ready ||
         next.steps.length === 0 ||
         !canStart(next, state.transientSeen) ||
-        (state.active && state.queued)
+        occupied
       ) {
         return null;
       }
 
       const token = ++nextCoachmarkToken;
       const entry = { ...next, step: 0, token };
+      occupied = true;
       setStoredState((current) => {
-        const scoped = scopedState(current);
-        if (!scoped) {
+        if (current.accountKey !== accountKey || current.active) {
           return current;
         }
-        return scoped.active
-          ? { ...scoped, queued: scoped.queued ?? entry }
-          : { ...scoped, active: entry };
+        return { ...current, active: entry };
       });
       return {
         cancel: () =>
           setStoredState((current) => {
-            const scoped = scopedState(current);
-            if (!scoped) {
+            if (current.accountKey !== accountKey || current.active?.token !== token) {
               return current;
             }
-            if (scoped.queued?.token === token) {
-              return { ...scoped, queued: null };
-            }
-            if (scoped.active?.token !== token) {
-              return scoped;
-            }
-            return closeState(scoped);
+            return { ...current, active: null };
           }),
       };
     },
-    [accountKey, state.active, state.queued, state.transientSeen],
+    [accountKey, state.active, state.transientSeen],
   );
 
   const markShown = useCallback(
@@ -143,16 +111,12 @@ export function CoachmarkProvider({
       }
       if (key) {
         setStoredState((current) => {
-          const scoped = scopedState(current);
-          if (!scoped) {
+          if (current.accountKey !== accountKey) {
             return current;
           }
-          const queued = scoped.queued;
           return {
-            ...scoped,
-            queued:
-              queued && queued.mode === 'automatic' && transientKey(queued) === key ? null : queued,
-            transientSeen: new Set(scoped.transientSeen).add(key),
+            ...current,
+            transientSeen: new Set(current.transientSeen).add(key),
           };
         });
       }
@@ -161,30 +125,45 @@ export function CoachmarkProvider({
     [accountKey, state.transientSeen],
   );
 
+  const active = state.active;
+  const current = active?.steps[active.step];
+  const finish = () =>
+    setStoredState((value) =>
+      active && value.accountKey === accountKey && value.active?.token === active.token
+        ? { ...value, active: null }
+        : value,
+    );
+  const move = (step: number) =>
+    setStoredState((value) =>
+      active && value.accountKey === accountKey && value.active?.token === active.token
+        ? { ...value, active: { ...value.active, step } }
+        : value,
+    );
+  const presentation =
+    active && current ? (
+      <Coachmark
+        key={active.token}
+        anchorRef={current.anchorRef}
+        description={current.description}
+        onClose={finish}
+        onComplete={finish}
+        onNext={active.step === active.steps.length - 1 ? undefined : () => move(active.step + 1)}
+        onPrevious={active.step === 0 ? undefined : () => move(active.step - 1)}
+        onShown={active.step === 0 ? () => markShown(active) : undefined}
+        preferredFocusRef={active.preferredFocusRef}
+        title={current.title}
+        visible
+      >
+        {`${active.step + 1} / ${active.steps.length}`}
+      </Coachmark>
+    ) : null;
+
   const contextValue = { request };
 
   return (
     <CoachmarkContext.Provider value={contextValue}>
       {children}
-      {state.active ? (
-        <CoachmarkPresentation
-          active={state.active}
-          finish={(token) =>
-            setStoredState((current) => {
-              const scoped = scopedState(current);
-              if (!scoped) {
-                return current;
-              }
-              if (scoped.active?.token !== token) {
-                return scoped;
-              }
-              return closeState(scoped);
-            })
-          }
-          markShown={markShown}
-          setState={setCurrentState}
-        />
-      ) : null}
+      {presentation}
     </CoachmarkContext.Provider>
   );
 }
@@ -195,52 +174,4 @@ export function useCoachmark(): CoachmarkContextValue {
     throw new Error('useCoachmark must be used inside CoachmarkProvider.');
   }
   return value;
-}
-
-function CoachmarkPresentation({
-  active,
-  finish,
-  markShown,
-  setState,
-}: {
-  active: ActiveCoachmark;
-  finish: (token: number) => void;
-  markShown: (active: ActiveCoachmark) => void;
-  setState: Dispatch<SetStateAction<CoachmarkState>>;
-}) {
-  const current = active.steps[active.step];
-  if (!current) {
-    return null;
-  }
-
-  const isFirst = active.step === 0;
-  const isLast = active.step === active.steps.length - 1;
-  const update = (change: (current: ActiveCoachmark) => ActiveCoachmark | null) =>
-    setState((state) => {
-      if (state.active?.token !== active.token) {
-        return state;
-      }
-      const next = change(state.active);
-      return next ? { ...state, active: next } : { ...state, active: null, queued: null };
-    });
-
-  return (
-    <Coachmark
-      key={active.token}
-      anchorRef={current.anchorRef}
-      description={current.description}
-      onClose={() => finish(active.token)}
-      onComplete={() => finish(active.token)}
-      onNext={isLast ? undefined : () => update((value) => ({ ...value, step: value.step + 1 }))}
-      onPrevious={
-        isFirst ? undefined : () => update((value) => ({ ...value, step: value.step - 1 }))
-      }
-      onShown={isFirst ? () => markShown(active) : undefined}
-      preferredFocusRef={active.preferredFocusRef}
-      title={current.title}
-      visible
-    >
-      {`${active.step + 1} / ${active.steps.length}`}
-    </Coachmark>
-  );
 }
