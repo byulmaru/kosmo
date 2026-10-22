@@ -1,3 +1,4 @@
+import { localProfileHandleSchema } from '@kosmo/core/validation';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -54,7 +55,10 @@ type Result = { kind: 'idle' } | { kind: 'success' } | { kind: 'error'; message:
 type FlowValue = {
   busy: boolean;
   completedFrom: FirstProfileStep;
-  complete: (step: FirstProfileStep) => boolean;
+  complete: (
+    step: FirstProfileStep,
+    recovery?: { profile: Identity | null; refetch: () => void },
+  ) => boolean;
   createdProfile: Identity | null;
   draft: FirstProfileDraft;
   errors: FirstProfileErrors;
@@ -89,6 +93,7 @@ const query = graphql`
       profiles {
         id
         handle
+        relativeHandle
       }
     }
   }
@@ -209,7 +214,7 @@ function SessionConfirmationError() {
 }
 
 function FirstProfileQuery({ children }: PropsWithChildren) {
-  const { fetchKey } = useRouteBoundary();
+  const { fetchKey, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileOnboardingQuery>(
     query,
     {},
@@ -224,11 +229,18 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
   if (data.me.id !== accountId || data.currentSession.id !== sessionId) {
     return <SessionConfirmationError />;
   }
+  const handle = localProfileHandleSchema.safeParse(flow.draft.handle);
+  // A failed create response can hide a committed profile. The fresh account query owns recovery.
+  const createdProfile =
+    flow.createdProfile ??
+    (handle.success
+      ? (data.me.profiles.find((profile) => profile.handle === handle.data) ?? null)
+      : null);
   const selected = data.currentSession.selectedProfile;
   if (
-    flow.createdProfile &&
-    ((selectedProfileId && selectedProfileId !== flow.createdProfile.id) ||
-      (selected?.id === flow.createdProfile.id &&
+    createdProfile &&
+    ((selectedProfileId && selectedProfileId !== createdProfile.id) ||
+      (selected?.id === createdProfile.id &&
         (selected.instance.kind !== 'LOCAL' || selected.viewerState?.membership?.role !== 'OWNER')))
   ) {
     return (
@@ -238,10 +250,23 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
       />
     );
   }
-  if (!flow.createdProfile && data.me.profiles.length > 0) {
+  if (!createdProfile && data.me.profiles.length > 0) {
     return <Redirect href="/home" />;
   }
-  return children;
+  return (
+    <FlowContext.Provider
+      value={{
+        ...flow,
+        createdProfile,
+        draft: createdProfile ? { ...flow.draft, handle: createdProfile.handle } : flow.draft,
+        complete: (step) => flow.complete(step, { profile: createdProfile, refetch }),
+        setDraft: (value) =>
+          flow.setDraft({ ...value, handle: createdProfile?.handle ?? value.handle }),
+      }}
+    >
+      {children}
+    </FlowContext.Provider>
+  );
 }
 
 function FirstProfileFlow({ children }: PropsWithChildren) {
@@ -490,7 +515,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     fail('프로필을 만들지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.');
   };
 
-  const complete = (step: FirstProfileStep) => {
+  const complete: FlowValue['complete'] = (step, recovery) => {
     if (busy) {
       return false;
     }
@@ -505,16 +530,24 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     setCompletedFrom(step);
     const { handle, ...values } = prepared.value;
     const value = { ...values, avatarId: images.avatar.mediaId, headerId: images.header.mediaId };
-    if (createdProfile && savedValues) {
-      persist(createdProfile, savedValues, value, images);
+    const identity = createdProfile ?? recovery?.profile;
+    if (identity) {
+      const baseline = savedValues ?? defaultFirstProfileValues(identity.handle);
+      setCreatedProfile(identity);
+      setSavedValues(baseline);
+      persist(identity, baseline, value, images);
       return true;
     }
+    const failed = (cause: unknown) => {
+      creationFailed(cause);
+      recovery?.refetch();
+    };
     commitCreate({
       variables: { handle },
       onCompleted: (response, responseErrors) => {
         const identity = response?.createProfile?.profile;
         if (!identity) {
-          creationFailed(responseErrors);
+          failed(responseErrors);
           return;
         }
         const baseline = defaultFirstProfileValues(identity.handle);
@@ -522,7 +555,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         setSavedValues(baseline);
         persist(identity, baseline, value, images);
       },
-      onError: creationFailed,
+      onError: failed,
     });
     return true;
   };

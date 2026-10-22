@@ -180,6 +180,7 @@ before(async () => {
   ({ RelayActorProvider, useRelayActor } = await import('@/relay/RelayActorProvider'));
 });
 beforeEach(async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
   requests = [];
   storedProfileId = null;
   transferFailure = false;
@@ -196,6 +197,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
+  await act(async () => mock.timers.tick(300_001));
+  mock.timers.reset();
   renderer = null;
 });
 
@@ -408,9 +411,14 @@ describe('first profile Relay completion', () => {
         path: ['createProfile'],
       },
     ]);
+    await resolve('FirstProfileOnboardingQuery', query());
     assert.equal(flow.createdProfile, null);
     assert.equal(flow.errors.handle, '이미 사용 중인 핸들이에요.');
     assert.equal(flow.draft.handle, 'spring');
+    await change({ handle: 'another_spring' });
+    await finish();
+    assert.equal(requests[0]!.name, 'FirstProfileOnboardingCreateMutation');
+    assert.equal(requests[0]!.variables.handle, 'another_spring');
   });
 
   it('treats nullable query field errors as retryable errors and retains a created draft on retry', async () => {
