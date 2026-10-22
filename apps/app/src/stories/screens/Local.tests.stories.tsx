@@ -45,11 +45,11 @@ export const RefreshPartialResponse: Story = {
     await expect(
       canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
     ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('link', { name: '홈', exact: true }));
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await expect(canvas.findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     expect(canvas.queryByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).not.toBeInTheDocument();
     expect(body.queryByRole('alert')).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('link', { name: '홈', exact: true }));
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await expect(
       canvas.findByText('새로고침에 성공한 뒤 다시 표시된 로컬 게시글입니다.'),
     ).resolves.toBeVisible();
@@ -70,7 +70,7 @@ export const RefreshHardError: Story = {
     ).toBeGreaterThanOrEqual(localTab.getBoundingClientRect().bottom);
     const retainedPost = canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.');
 
-    await userEvent.click(canvas.getByRole('link', { name: '홈', exact: true }));
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
 
     expect(canvas.getByText('같은 인스턴스의 소식을 한곳에서 확인해요.')).toBeVisible();
     const firstAlert = await body.findByRole('alert');
@@ -109,7 +109,7 @@ export const RefreshHardErrorActorCleanup: Story = {
     await expect(
       canvas.findByText('같은 인스턴스의 소식을 한곳에서 확인해요.'),
     ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('link', { name: '홈', exact: true }));
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await expect(body.findByRole('alert')).resolves.toHaveTextContent(
       '로컬 타임라인을 불러오지 못했어요',
     );
@@ -121,7 +121,7 @@ export const RefreshHardErrorActorCleanup: Story = {
     await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument());
     expect(canvas.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole('link', { name: '홈', exact: true }));
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     await expect(body.findByRole('alert')).resolves.toHaveTextContent(
       '로컬 타임라인을 불러오지 못했어요',
     );
@@ -173,7 +173,7 @@ export const RefreshQuery: Story = {
     const canvas = within(canvasElement);
     const retainedPost = '같은 인스턴스의 소식을 한곳에서 확인해요.';
     await expect(canvas.findByText(retainedPost)).resolves.toBeVisible();
-    const home = canvas.getByRole('link', { name: '홈', exact: true });
+    const home = canvas.getByRole('link', { name: '홈' });
     const tab = canvas.getByRole('tab', { name: '로컬' });
     const storyWindow = canvasElement.ownerDocument.defaultView!;
     const requestCountBeforeRefresh = queryRequestObserver.mock.calls.length;
