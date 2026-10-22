@@ -2,7 +2,15 @@ import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { History, X } from 'lucide-react-native';
 import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
@@ -23,12 +31,14 @@ import { RouteTabList } from '@/components/ui/RouteTabList';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { StateView } from '@/components/ui/StateView';
 import { Tab } from '@/components/ui/Tabs';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { TextInput } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/SearchToolbar';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
@@ -219,6 +229,7 @@ function isPrimarySearchLinkActivation(event: unknown) {
 
 export default function SearchScreen() {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
@@ -463,25 +474,24 @@ export default function SearchScreen() {
                         trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });
                       }}
                       onPressIn={keepSearchFocused}
-                      style={(state) => {
-                        const hovered = (state as { hovered?: boolean }).hovered;
-                        return [
-                          styles.recentTerm,
-                          state.pressed || (Platform.OS === 'web' && hovered)
-                            ? {
-                                backgroundColor:
-                                  state.pressed || Platform.OS !== 'web'
-                                    ? theme.statePressed
-                                    : theme.stateHover,
-                              }
-                            : null,
-                        ];
-                      }}
+                      style={styles.recentTerm}
                     >
-                      <History color={theme.textSecondary} size={16} strokeWidth={2} />
-                      <Text numberOfLines={1} style={[styles.recentText, { color: theme.text }]}>
-                        {term}
-                      </Text>
+                      {(state) => (
+                        <RecentSearchTermVisual
+                          hovered={(state as { hovered?: boolean }).hovered ?? false}
+                          pressed={state.pressed}
+                          reducedMotion={reducedMotion}
+                          theme={theme}
+                        >
+                          <History color={theme.textSecondary} size={16} strokeWidth={2} />
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.recentText, { color: theme.text }]}
+                          >
+                            {term}
+                          </Text>
+                        </RecentSearchTermVisual>
+                      )}
                     </Pressable>
                   </NavigationLink>
                   <IconButton
@@ -553,6 +563,41 @@ export default function SearchScreen() {
   );
 }
 
+function RecentSearchTermVisual({
+  children,
+  hovered,
+  pressed,
+  reducedMotion,
+  theme,
+}: {
+  children: ReactNode;
+  hovered: boolean;
+  pressed: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: pressed
+      ? theme.statePressed
+      : Platform.OS === 'web' && hovered
+        ? theme.stateHover
+        : 'transparent',
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor } as unknown as ViewStyle]}
+      />
+      {children}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flexGrow: 1,
@@ -590,6 +635,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 48,
     paddingHorizontal: spacing.lg,
+    position: 'relative',
   },
   recentText: { fontFamily: fontFamilies.ui, ...typography.sm },
   deleteButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },

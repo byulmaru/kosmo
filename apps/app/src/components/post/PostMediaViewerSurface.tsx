@@ -14,6 +14,7 @@ import {
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
 import { IconButton } from '@/components/ui/IconButton';
 import { Toast } from '@/components/ui/Toast';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
@@ -553,6 +554,7 @@ function StatusAction({
   onActivate,
 }: Readonly<{ accessibleName: string; label: string; onActivate: () => void }>) {
   const targetHeight = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 40;
+  const reducedMotion = useReducedMotion();
 
   return (
     <Pressable
@@ -577,26 +579,40 @@ function StatusAction({
         ];
       }}
     >
-      {(state) => {
-        const webState = state as PressableStateCallbackType & { hovered?: boolean };
-        return (
-          <View
-            style={[
-              styles.statusActionVisual,
-              {
-                backgroundColor: state.pressed
-                  ? '#e4e4e7'
-                  : webState.hovered
-                    ? '#f4f4f5'
-                    : '#ffffff',
-              },
-            ]}
-          >
-            <Text style={styles.statusActionLabel}>{label}</Text>
-          </View>
-        );
-      }}
+      {(state) => (
+        <StatusActionVisual
+          hovered={(state as PressableStateCallbackType & { hovered?: boolean }).hovered ?? false}
+          label={label}
+          pressed={state.pressed}
+          reducedMotion={reducedMotion}
+        />
+      )}
     </Pressable>
+  );
+}
+
+function StatusActionVisual({
+  hovered,
+  label,
+  pressed,
+  reducedMotion,
+}: {
+  hovered: boolean;
+  label: string;
+  pressed: boolean;
+  reducedMotion: boolean;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    color: pressed ? '#e4e4e7' : hovered ? '#f4f4f5' : '#ffffff',
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View style={[styles.statusActionVisual, { backgroundColor } as unknown as ViewStyle]}>
+      <Text style={styles.statusActionLabel}>{label}</Text>
+    </Animated.View>
   );
 }
 

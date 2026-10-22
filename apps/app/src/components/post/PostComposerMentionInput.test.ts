@@ -22,6 +22,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const platform = { OS: 'web' };
 
 mockModule(require.resolve('react-native'), {
+  Animated: { View: 'AnimatedView' },
   Modal: 'Modal',
   Platform: platform,
   Pressable: 'Pressable',
@@ -50,12 +51,17 @@ mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/IconButton', { IconButton: 'IconButton' });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule(new URL('../ui/TextField.tsx', import.meta.url), {
   TextArea: 'TextArea',
   TextField: 'TextField',
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({}),
+  useReducedMotion: () => false,
   useTheme: () => ({
     backgroundElevated: '#fff',
     backgroundCanvas: '#fff',

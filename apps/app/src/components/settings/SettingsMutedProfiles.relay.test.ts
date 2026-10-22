@@ -133,6 +133,7 @@ mockModule('@/relay/RelayEnvironmentBoundary', {
   useRelayEnvironmentGeneration: () => generation,
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     actionLinkBase: 'action-link',
     actionLinkHover: 'action-link-hover',
@@ -140,6 +141,10 @@ mockModule('@/theme/ThemeProvider', {
     foregroundSecondary: 'secondary',
     stateFocusRing: 'focus-ring',
   }),
+});
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
 });
 
 before(async () => {
