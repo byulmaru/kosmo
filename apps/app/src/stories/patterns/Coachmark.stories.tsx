@@ -281,6 +281,7 @@ const meta = {
     'PlacementContract',
     'StepsInteraction',
     'ViewportContract',
+    'Tests',
   ],
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Patterns/Coachmark',
@@ -494,7 +495,8 @@ export const SharedAnchorContract: Story = {
         Math.abs(arrowRect.top + arrowRect.height / 2 - (targetRect.bottom + 12)),
       ).toBeLessThanOrEqual(2);
     });
-    await waitFor(() => expect(within(surface).getByText('1 / 2')).toBeVisible());
+    const nextSurface = await findReadySurface('완료');
+    await waitFor(() => expect(within(nextSurface).getByText('1 / 2')).toBeVisible());
     await userEvent.click(
       within(await findReadySurface('완료')).getByRole('button', { name: '완료' }),
     );

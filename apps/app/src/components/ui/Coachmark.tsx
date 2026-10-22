@@ -94,7 +94,7 @@ export function Coachmark({
 
   useOverlayLifecycle({
     focusScopeRef: dialogRef,
-    open: overlayMotion.mounted && targetReady,
+    open: modalVisible,
     onRequestClose: close,
     preferredFocusRef,
   });
@@ -106,15 +106,7 @@ export function Coachmark({
       return;
     }
 
-    if (
-      !shown &&
-      overlayMotion.entered &&
-      targetReady &&
-      anchor &&
-      anchor.width > 0 &&
-      anchor.height > 0 &&
-      bubble.height > 0
-    ) {
+    if (!shown && overlayMotion.entered && targetReady && anchor && bubble.height > 0) {
       setShown(true);
       onShown?.();
     }
