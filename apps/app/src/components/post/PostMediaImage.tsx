@@ -126,6 +126,7 @@ function PostMediaImageSource({
         accessible={!onOpen || !interactive}
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ busy: status === 'loading' }}
+        fadeDuration={0}
         onError={() => setStatus('error')}
         onLoad={handleLoad}
         resizeMode="cover"

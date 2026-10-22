@@ -75,6 +75,10 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 
 motion을 제거해도 focus, loading, success, error, selected와 announcement 의미는 제거하지 않는다.
 
+## PROD-1041 이미지 표시 범위
+
+PROD-1041의 범위는 Android의 `Avatar`, `ProfileHero`, `ProfileEditImageFields`, `PostMediaImage`, `ViewerImage`, `PostComposerMediaItemsTarget`, `ComposerMediaEditor`, `PostComposerMediaControls` 이미지 surface다. 이 범위에서는 일반·reduced-motion 모두 이미지 로딩 완료 후 이미지를 즉시 표시하고 별도 fade를 사용하지 않는다. 기존 loading placeholder와 error/retry 상태는 유지한다. iOS·Web의 기존 이미지 표시, `Skeleton`의 2000ms wave·2000ms 대기와 reduced-motion 정적 placeholder, Viewer의 reduced-motion paging 동작은 유지한다.
+
 ## 플랫폼과 예외
 
 - Web과 KOSMO가 직접 소유한 Native primitive는 위 semantic 역할을 사용한다.

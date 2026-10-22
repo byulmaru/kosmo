@@ -414,6 +414,7 @@ export function PostComposerMediaItems({
               accessibilityIgnoresInvertColors
               accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
               accessibilityRole="image"
+              fadeDuration={0}
               source={{ uri: item.asset.uri }}
               style={styles.mediaPreview}
             />
