@@ -28,15 +28,15 @@ export async function pressActionBarPoint(container: HTMLElement, point: Point, 
 export async function actionBarWhitespace(container: HTMLElement) {
   const scope = within(container);
   const toolbar = scope.getByRole('toolbar', { name: '액션 바' });
+  const beforeScrollY = window.scrollY;
   await new Promise<void>((resolve) => {
-    const scrollY = window.scrollY;
     const onScroll = () => {
       window.removeEventListener('scroll', onScroll);
       resolve();
     };
     window.addEventListener('scroll', onScroll, { once: true });
     toolbar.scrollIntoView({ block: 'center' });
-    if (window.scrollY === scrollY) {
+    if (window.scrollY === beforeScrollY) {
       onScroll();
     }
   });
@@ -49,12 +49,28 @@ export async function actionBarWhitespace(container: HTMLElement) {
   const bookmark = slot('bookmark');
   const more = slot('more');
   const y = (bounds.top + bounds.bottom) / 2;
-  return [
+  const points = [
     { x: (repost.right + reaction.left) / 2, y: frame.top + 2 },
     { x: (repost.right + reaction.left) / 2, y },
     { x: reaction.left + 1, y },
     { x: (bookmark.right + more.left) / 2, y },
   ];
+  const outside = points.find(
+    ({ x, y }) => x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight,
+  );
+  if (outside) {
+    throw new Error(
+      `Action Bar point outside viewport: ${JSON.stringify({
+        point: outside,
+        toolbar: bounds.toJSON(),
+        frame: frame.toJSON(),
+        beforeScrollY,
+        scrollY: window.scrollY,
+        innerHeight: window.innerHeight,
+      })}`,
+    );
+  }
+  return points;
 }
 
 export async function checkActionBarWhitespace(

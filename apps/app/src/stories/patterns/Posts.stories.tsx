@@ -9149,6 +9149,10 @@ export const ActionBarThreadNavigation: Story = {
         Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
       ).toBeLessThanOrEqual(1),
     );
+    // Ancestor navigation starts with user scrolling, which releases the initial current-row anchor.
+    canvas
+      .getByTestId('post-thread')
+      .dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
     actionBarNavigationObserver.mockClear();
     await checkActionBarScrollCancelledPress(
       canvas.getByTestId('post-thread-item-route-root'),
