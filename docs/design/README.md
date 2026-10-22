@@ -42,6 +42,8 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 
 - [public-content-onboarding.md](./public-content-onboarding.md) — 공개 방문자 안내의 Web 배치·닫기·접근성
 
+- [first-profile-tag-discovery.md](./first-profile-tag-discovery.md) — 첫 Profile 저장 태그 선택·사람 찾기·팔로우 상태와 진행 표현
+
 ## 갱신 규칙
 
 - 디자인 결정이 바뀌면 그 변경을 담는 PR에서 관련 문서도 함께 갱신한다.
