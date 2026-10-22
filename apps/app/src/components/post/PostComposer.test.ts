@@ -378,7 +378,19 @@ describe('PostComposer initial body', () => {
 
     assert.equal(targetProps?.body, seed);
     assert.deepEqual(targetProps?.selection, { start: seed.length, end: seed.length });
+    const textInput = () => renderer?.root.findByType('TextInput' as never);
+    assert.deepEqual(textInput()?.props.selection, { start: seed.length, end: seed.length });
     assert.equal(requests.length, 0);
+
+    const movedSelection = { start: 4, end: 4 };
+    await act(async () =>
+      (textInput()?.props.onSelectionChange as (event: unknown) => void)({
+        nativeEvent: { selection: movedSelection },
+      }),
+    );
+    assert.equal(targetProps?.body, seed);
+    assert.deepEqual(targetProps?.selection, movedSelection);
+    assert.equal(Object.hasOwn(textInput()?.props ?? {}, 'selection'), false);
 
     await act(async () => targetProps?.onBodyChange('@parent '));
     assert.equal(targetProps?.body, '@parent ');

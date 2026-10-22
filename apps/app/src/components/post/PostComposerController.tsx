@@ -269,6 +269,7 @@ function PostComposerContents({
       mentionRanges: [],
       previousSelection: { start: end, end },
       selection: { start: end, end },
+      selectionToApply: { start: end, end },
     };
   });
   const { body, mentionRanges, selection } = draft;
