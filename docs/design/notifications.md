@@ -6,6 +6,17 @@ PROD-811이 실제 목록 연결, Relay projection, 읽음 처리, 권한과 nav
 PROD-930은 production Notification runtime에서 플랫폼별로 나뉘었던 `모두 읽음` action과 Read/Unread
 표시를 Web·iOS·Android에서 같은 계약으로 제공하며, 현재 로드된 ID와 기존 API/Relay 수렴 경계를 유지한다.
 
+## Native pull-to-refresh 읽음 동기화 · PROD-682
+
+Native pull-to-refresh는 현재 목록에 로드된 미확인 알림만 먼저
+읽음 처리한 뒤, 성공하면 새 알림을 조회해 목록에 반영한다. 조회 결과의 새 Notification이 unread이면
+그 상태를 그대로 표시하며 서버가 계산한 미확인 수에 따라 indicator도 유지할 수 있다.
+
+현재 로드된 unread가 없으면 읽음 mutation 없이 목록 refetch를 바로 실행한다. 읽음 mutation이 실패하면
+오류와 다시 시도 action을 표시하고 목록을 refetch하지 않는다. 이후 조회가 실패해도 완료된 읽음 처리는
+유지한다. 이 계약은 Native pull-to-refresh에만 적용하며 Web 새로고침, `NotificationReadAllContext`와
+`모두 읽음` action의 동작은 변경하지 않는다.
+
 ## Canonical source
 
 - [NotificationListItem 조합](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4048-10559)
