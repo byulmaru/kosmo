@@ -620,6 +620,7 @@ export function ProfileSwitcher({
         {active?.header?.url ? (
           <Image
             accessible={false}
+            fadeDuration={0}
             resizeMode="cover"
             source={{ uri: active.header.url }}
             style={styles.coverImage}
