@@ -26,6 +26,9 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - Web에서 비활성 탭을 선택하면 해당 canonical route로 전환한다. Android/iOS에서는 현재 타임라인
   부모 route의 `timeline` 파라미터와 자식 콘텐츠만 바꾸며 새 Stack 화면이나 전환 animation을 만들지 않는다.
   `/home`과 `/local`은 Native 직접 진입의 canonical route로도 계속 동작한다.
+- 같은 Profile actor에서 Home route로 재진입하면 유효한 Relay cache 데이터를 바로 표시하고, cache hit만으로
+  네트워크 요청을 강제하지 않는다. 데이터가 없거나 stale이면 기존 `store-or-network` query 경로를 사용한다.
+  당겨서 새로고침과 Home 재선택은 명시적 새로고침으로 기존 동작을 유지한다.
 - 이미 선택된 Local 탭을 다시 선택하면 현재 목록의 최신 데이터를 다시 요청한다.
 - Web의 sidebar·mobile drawer·하단 탭 바에서 `/local`의 active 홈 항목을 다시 실행하면 `/home`으로 이동하지
   않고 document scroll을 최상단으로 이동한 뒤 같은 Local 새로고침 경로를 실행한다.

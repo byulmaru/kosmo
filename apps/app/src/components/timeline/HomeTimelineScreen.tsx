@@ -47,11 +47,6 @@ export default function HomeScreen() {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const [revalidateCachedHome] = useState(
-    () =>
-      environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
-      'available',
-  );
   const homeRefreshRef = useRef<(() => void) | null>(null);
   const registerHomeRefresh = useCallback((refresh: (() => void) | null) => {
     homeRefreshRef.current = refresh;
@@ -92,7 +87,6 @@ export default function HomeScreen() {
         <HomeRouteContent
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
-          revalidateCachedHome={revalidateCachedHome}
         />
       </RouteBoundary>
     </HomeFrame>
@@ -134,11 +128,9 @@ function HomeFrame({
 function HomeRouteContent({
   onRefresh,
   registerHomeRefresh,
-  revalidateCachedHome,
 }: {
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
-  revalidateCachedHome: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -147,7 +139,6 @@ function HomeRouteContent({
       fetchKey={fetchKey}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
-      revalidateCachedHome={revalidateCachedHome}
     />
   );
 }
@@ -156,12 +147,10 @@ function HomeContent({
   fetchKey,
   onRefresh,
   registerHomeRefresh,
-  revalidateCachedHome,
 }: {
   fetchKey: string;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
-  revalidateCachedHome: boolean;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -208,15 +197,12 @@ function HomeContent({
     };
 
     registerHomeRefresh(refresh);
-    if (revalidateCachedHome) {
-      refresh();
-    }
     return () => {
       registerHomeRefresh(null);
       subscription?.unsubscribe();
       refreshToastCleanup?.();
     };
-  }, [environment, registerHomeRefresh, revalidateCachedHome, showToast]);
+  }, [environment, registerHomeRefresh, showToast]);
 
   return <HomeContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />;
 }
