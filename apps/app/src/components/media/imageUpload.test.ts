@@ -966,6 +966,32 @@ test('preserves the original upload failure when capture throws', async () => {
   assert.equal(captureCount, 1);
 });
 
+test('uses the active operation when an existing upload error has no observation', async (t) => {
+  const normalizedError = new ImageUploadError({ reason: 'transient', stage: 'transfer' });
+  const manipulator = installManipulator({ height: 100, width: 100 });
+  t.mock.method(manipulator.context, 'renderAsync', async () => {
+    throw normalizedError;
+  });
+
+  await assert.rejects(
+    uploadImage({
+      asset: createAsset(),
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+    }),
+    (error: unknown) => error === normalizedError,
+  );
+  assert.equal(captureCalls.length, 1);
+  assert.notEqual(captureCalls[0]?.error, normalizedError);
+  assert.equal(captureCalls[0]?.error.cause, undefined);
+  assert.deepEqual(captureCalls[0]?.context, {
+    operation: 'normalize',
+    reason: 'transient',
+    stage: 'transfer',
+  });
+});
+
 for (const boundary of [
   'issue',
   'normalize',

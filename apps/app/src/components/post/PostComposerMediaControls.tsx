@@ -3,7 +3,11 @@ import { ImagePlusIcon, RefreshCwIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
-import { releaseImagePreview, uploadImage } from '@/components/media/imageUpload';
+import {
+  releaseImagePreview,
+  reportImageUploadError,
+  uploadImage,
+} from '@/components/media/imageUpload';
 import {
   asImageUploadError,
   formatImageUploadFailureMessage,
@@ -320,7 +324,9 @@ export function PostComposerMediaControls({
           });
         } catch (error) {
           if (mounted.current && mediaRef.current === media) {
-            const failure = asImageUploadError(error, 'complete', 'complete').failure;
+            const uploadError = asImageUploadError(error, 'complete', 'complete');
+            reportImageUploadError(uploadError, 'complete');
+            const failure = uploadError.failure;
             const itemNumber = index + 1;
             const next = media.map((current) =>
               current.key === item.key

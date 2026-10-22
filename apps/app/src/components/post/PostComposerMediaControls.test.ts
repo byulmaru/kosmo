@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { reportImageUploadError as ReportImageUploadErrorFn } from '../media/imageUpload';
 import type {
   PostComposerMediaControls as PostComposerMediaControlsComponent,
   PostComposerMediaControlsRenderProps,
@@ -34,6 +35,9 @@ type UploadOptions = {
   readonly isActive: () => boolean;
   readonly issue: () => Promise<{ readonly mediaId: string; readonly uploadUrl: string }>;
 };
+type CaptureContext = Record<string, string | number>;
+type CaptureCall = { readonly context?: CaptureContext; readonly error: Error };
+type ReportImageUploadError = typeof ReportImageUploadErrorFn;
 
 const platform = { OS: 'web' };
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -52,12 +56,24 @@ let mediaRenderProps: PostComposerMediaControlsRenderProps | undefined;
 let issueCalls: MediaMutationConfig[] = [];
 let completeCalls: MediaMutationConfig[] = [];
 let toastCalls: Array<[string, { tone: string }]> = [];
+let captureCalls: CaptureCall[] = [];
+let captureThrows = false;
 let renderer: ReactTestRenderer | null = null;
 let nextIssuedId = 0;
 let PostComposerMediaControls: typeof PostComposerMediaControlsComponent;
+let reportImageUploadError: ReportImageUploadError;
 
 const asset = (): ImagePickerAsset =>
   ({ height: 100, uri: 'file:///local/image.jpg', width: 100 }) as ImagePickerAsset;
+
+mockModule('@/observability/sentry', {
+  captureHandledError: (error: Error, context?: CaptureContext) => {
+    captureCalls.push({ context, error });
+    if (captureThrows) {
+      throw new Error('Sentry unavailable');
+    }
+  },
+});
 
 mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => pickerResult,
@@ -92,15 +108,6 @@ mockModule('react-relay', {
       }
     },
   ],
-});
-mockModule('@/components/media/imageUpload', {
-  releaseImagePreview: () => undefined,
-  uploadImage: (options: UploadOptions) => uploadImageImpl(options),
-});
-mockModule('@/components/media/imageUploadErrors', {
-  asImageUploadError: () => ({ failure: { reason: 'transient', stage: 'complete' } }),
-  formatImageUploadFailureMessage: (label: string) => `${label} failed`,
-  formatImageUploadRetryLabel: (label: string) => `${label} retry`,
 });
 mockModule('@/components/ui/IconButton', {
   getIconButtonHitSlop: () => 0,
@@ -140,6 +147,14 @@ const renderMedia = (props: PostComposerMediaControlsRenderProps) => {
 };
 
 before(async () => {
+  ({ reportImageUploadError } = await import(
+    new URL('../media/imageUpload.ts', import.meta.url).href
+  ));
+  mockModule('@/components/media/imageUpload', {
+    reportImageUploadError,
+    releaseImagePreview: () => undefined,
+    uploadImage: (options: UploadOptions) => uploadImageImpl(options),
+  });
   ({ PostComposerMediaControls } = await import('./PostComposerMediaControls'));
 });
 
@@ -164,6 +179,8 @@ beforeEach(() => {
   issueCalls = [];
   completeCalls = [];
   toastCalls = [];
+  captureCalls = [];
+  captureThrows = false;
   nextIssuedId = 0;
 });
 
@@ -222,6 +239,10 @@ describe('PostComposerMediaControls deferred completion', () => {
   });
 
   it('marks a completion failure retryable and retries with a new upload session', async () => {
+    const privateDetail =
+      'completion failed for file:///private/photo.jpg at https://upload.example/private?token=secret';
+    const completionFailure = new Error(privateDetail);
+    captureThrows = true;
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
     await flush();
@@ -233,12 +254,27 @@ describe('PostComposerMediaControls deferred completion', () => {
     assert.equal(completeCalls.length, 1);
 
     await act(async () => {
-      completeCalls[0]?.onError(new Error('completion failed'));
-      await assert.rejects(completion);
+      completeCalls[0]?.onError(completionFailure);
+      await assert.rejects(completion, (error: unknown) => error === completionFailure);
     });
 
+    assert.equal(captureCalls.length, 1);
+    assert.deepEqual(captureCalls[0]?.context, {
+      operation: 'complete',
+      reason: 'transient',
+      stage: 'complete',
+    });
+    const capturedError = captureCalls[0]?.error;
+    assert.ok(capturedError);
+    assert.notEqual(capturedError, completionFailure);
+    assert.equal(capturedError.name, 'ImageUploadError');
+    assert.equal(capturedError.message, 'Image upload failed');
+    assert.equal((capturedError as Error & { cause?: unknown }).cause, undefined);
+    assert.equal(capturedError.stack?.includes(privateDetail), false);
     assert.equal(mediaRenderProps?.items[0]?.state, 'failed');
-    assert.equal(toastCalls.length, 1);
+    assert.deepEqual(toastCalls, [
+      ['1번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
+    ]);
     await act(async () => {
       const failedItem = mediaRenderProps?.items[0];
       assert.ok(failedItem);
@@ -262,6 +298,7 @@ describe('PostComposerMediaControls deferred completion', () => {
       });
       await completion;
     });
+    assert.equal(captureCalls.length, 1);
   });
 
   it('completes retained images sequentially and fails only the image that is not READY', async () => {
@@ -315,7 +352,10 @@ describe('PostComposerMediaControls deferred completion', () => {
       ['ready', 'failed'],
     );
     assert.equal(toastCalls.length, 1);
-    assert.deepEqual(toastCalls[0], ['2번째 이미지 failed', { tone: 'danger' }]);
+    assert.deepEqual(toastCalls[0], [
+      '2번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
   });
 
   it('rejects an outdated item snapshot and never completes a removed image', async () => {
