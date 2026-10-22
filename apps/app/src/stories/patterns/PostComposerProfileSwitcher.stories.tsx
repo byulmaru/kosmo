@@ -580,7 +580,7 @@ const hostLongListPlay: NonNullable<Story['play']> = async ({ canvasElement }) =
   expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
   const list = within(picker).getByRole('group', { name: '전환할 프로필 목록' });
   expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
-  list.scrollTo({ top: list.scrollHeight });
+  list.scrollTop = list.scrollHeight;
   const last = within(picker).getByRole('button', { name: '작성자 16, @writer16' });
   await waitFor(() => {
     const rect = last.getBoundingClientRect();

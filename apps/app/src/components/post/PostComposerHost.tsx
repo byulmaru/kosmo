@@ -136,7 +136,12 @@ export function PostComposerHost({
             style={[
               styles.focusScope,
               mode === 'mobile' ? styles.mobileFocusScope : null,
-              mode === 'overlay' ? { maxWidth: mediaEditorOpen ? 920 : 640 } : null,
+              mode === 'overlay'
+                ? {
+                    marginTop: spacing.xxl,
+                    maxWidth: mediaEditorOpen && web ? styles.mediaEditorDialog.maxWidth : 640,
+                  }
+                : null,
             ]}
           >
             <OverlayPortalProvider hostRef={focusScopeRef}>
@@ -266,7 +271,6 @@ const styles = StyleSheet.create({
   overlayDialog: {
     borderRadius: radii.lg,
     borderWidth: 1,
-    marginTop: spacing.xxl,
     maxWidth: 640,
     maxHeight: 'calc(100dvh - 96px)' as never,
     width: '100%',
