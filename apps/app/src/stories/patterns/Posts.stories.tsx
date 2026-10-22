@@ -4512,6 +4512,22 @@ export const PureRepost: Story = {
     expect(article.querySelector('a a')).toBeNull();
     expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
 
+    const disabledReply = within(article).getByTestId('post-action-reply');
+    expect(disabledReply).toHaveAttribute('aria-disabled', 'true');
+    const initialPath = canvas.getByTestId('presentation-story-pathname').textContent;
+    disabledReply.scrollIntoView({ block: 'center' });
+    const disabledBounds = disabledReply.getBoundingClientRect();
+    const disabledTarget = document.elementFromPoint(
+      (disabledBounds.left + disabledBounds.right) / 2,
+      (disabledBounds.top + disabledBounds.bottom) / 2,
+    )!;
+    expect(disabledTarget).not.toBeNull();
+    await userEvent.hover(disabledTarget);
+    expect(getComputedStyle(disabledReply).cursor).toBe('auto');
+    expect(getComputedStyle(disabledTarget).cursor).toBe('auto');
+    await userEvent.click(disabledTarget);
+    expect(canvas.getByTestId('presentation-story-pathname').textContent).toBe(initialPath);
+
     const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
     await userEvent.click(repostAuthorLink);
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@reposter');
@@ -5010,6 +5026,60 @@ export const OrdinaryPost: Story = {
   },
   render: () => <ProductionPostListItemStory postId="short" presentation="wide" />,
 };
+
+function staticMediaCursorStory(postId: string, testID: string): Story {
+  return {
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const background = await canvas.findByTestId(testID);
+      const pathname = canvas.getByTestId('presentation-story-pathname');
+      const initialPath = pathname.textContent;
+      background.scrollIntoView({ block: 'center' });
+      const bounds = background.getBoundingClientRect();
+      const firstTile = canvas.queryByTestId('post-media-tile-3-0');
+      const secondTile = canvas.queryByTestId('post-media-tile-3-1');
+      const x =
+        firstTile && secondTile
+          ? (firstTile.getBoundingClientRect().right + secondTile.getBoundingClientRect().left) / 2
+          : (bounds.left + bounds.right) / 2;
+      const y = firstTile
+        ? firstTile.getBoundingClientRect().top + 2
+        : (bounds.top + bounds.bottom) / 2;
+      const target = document.elementFromPoint(x, y)!;
+      expect(target).not.toBeNull();
+      expect(background).toContainElement(target);
+      expect(target.closest('a, [role="button"], [role="link"]')).toBeNull();
+      await userEvent.pointer({ target, coords: { clientX: x, clientY: y } });
+      expect(getComputedStyle(target).cursor).toBe('auto');
+      const coords = {
+        clientX: x,
+        clientY: y,
+        pageX: x + window.scrollX,
+        pageY: y + window.scrollY,
+      };
+      await userEvent.pointer([
+        { keys: '[MouseLeft>]', target, coords },
+        { keys: '[/MouseLeft]', target, coords },
+      ]);
+      expect(pathname.textContent).toBe(initialPath);
+      expect(screen.queryByRole('dialog', { name: '이미지 뷰어' })).not.toBeInTheDocument();
+    },
+    render: () => <ProductionPostListItemStory postId={postId} presentation="wide" />,
+  };
+}
+
+export const UnavailableMediaBackgroundCursor = staticMediaCursorStory(
+  unavailableMediaPost.id,
+  'post-media-unavailable',
+);
+export const SensitiveMediaBackgroundCursor = staticMediaCursorStory(
+  mediaOnlyPost.id,
+  'post-media-sensitive',
+);
+export const MediaGalleryGapCursor = staticMediaCursorStory(
+  threeMediaPost.id,
+  'post-media-gallery',
+);
 
 export const PostMediaViewerCompact: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -5900,6 +5970,87 @@ export const PostDetailThreadRoute: Story = {
       <PostDetailScreen />
     </>
   ),
+};
+
+export const PostDetailThreadBackgroundCursors: Story = {
+  ...PostDetailThreadRoute,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId('post-thread');
+    const pathname = canvas.getByTestId('current-story-pathname');
+    const pointerAt = async (x: number, y: number, cursor: 'auto' | 'pointer') => {
+      const target = document.elementFromPoint(x, y)!;
+      expect(target).not.toBeNull();
+      await userEvent.pointer({ target, coords: { clientX: x, clientY: y } });
+      expect(getComputedStyle(target).cursor).toBe(cursor);
+      const coords = {
+        clientX: x,
+        clientY: y,
+        pageX: x + window.scrollX,
+        pageY: y + window.scrollY,
+      };
+      await userEvent.pointer([
+        { keys: '[MouseLeft>]', target, coords },
+        { keys: '[/MouseLeft]', target, coords },
+      ]);
+      return target;
+    };
+
+    for (const id of ['route-root', 'route-child']) {
+      const item = canvas.getByTestId(`post-thread-item-${id}`);
+      const row = within(item).getByTestId('post-list-standard-row');
+      row.scrollIntoView({ block: 'center' });
+      const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]')!;
+      await waitFor(() =>
+        expect(row.getBoundingClientRect().bottom).toBeGreaterThan(
+          avatar.getBoundingClientRect().bottom + 4,
+        ),
+      );
+      const bounds = avatar.getBoundingClientRect();
+      expect(await pointerAt((bounds.left + bounds.right) / 2, bounds.bottom + 2, 'pointer')).toBe(
+        row,
+      );
+      expect(pathname).toHaveTextContent(`/@kosmo/${id}`);
+
+      const toolbar = within(row).getByRole('toolbar', { name: '액션 바' });
+      toolbar.scrollIntoView({ block: 'center' });
+      const buttons = within(toolbar).getAllByRole('button');
+      const first = buttons[0]!.getBoundingClientRect();
+      const second = buttons[1]!.getBoundingClientRect();
+      expect(second.left).toBeGreaterThan(first.right);
+      const target = await pointerAt(
+        (first.right + second.left) / 2,
+        (first.top + first.bottom) / 2,
+        'auto',
+      );
+      expect(target.closest('a, [role="button"], [role="link"]')).toBeNull();
+      expect(pathname).toHaveTextContent(`/@kosmo/${id}`);
+    }
+
+    const current = canvas.getByTestId('post-thread-current-route-current');
+    const layout =
+      within(current).getByTestId('post-layout-engagement').parentElement!.parentElement!;
+    layout.scrollIntoView({ block: 'center' });
+    const header = layout.firstElementChild!;
+    const body = header.nextElementSibling!;
+    const currentBounds = layout.getBoundingClientRect();
+    const headerBottom = header.getBoundingClientRect().bottom;
+    const bodyTop = body.getBoundingClientRect().top;
+    expect(bodyTop).toBeGreaterThan(headerBottom);
+    const initialPath = pathname.textContent;
+    expect(await pointerAt(currentBounds.left + 2, (headerBottom + bodyTop) / 2, 'auto')).toBe(
+      layout,
+    );
+    expect(pathname.textContent).toBe(initialPath);
+
+    const preview = within(canvas.getByTestId('post-thread-item-route-parent')).getByTestId(
+      'source-post-preview',
+    );
+    preview.scrollIntoView({ block: 'center' });
+    const previewBounds = preview.getBoundingClientRect();
+    expect(await pointerAt(previewBounds.left + 2, previewBounds.top + 2, 'auto')).toBe(preview);
+    expect(pathname.textContent).toBe(initialPath);
+  },
 };
 
 export const MobilePostDetailThreadRoute: Story = {
