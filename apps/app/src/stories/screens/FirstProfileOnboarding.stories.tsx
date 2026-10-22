@@ -187,7 +187,7 @@ export const UnavailableSummaryCanComplete: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '시작하기', exact: true }));
+    await userEvent.click(canvas.getByRole('button', { name: '시작하기' }));
     await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
     await expect(canvas.queryByText('저장되지 않은 이름', { exact: true })).not.toBeInTheDocument();
   },
