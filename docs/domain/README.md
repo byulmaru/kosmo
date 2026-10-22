@@ -131,6 +131,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0030: Post Content Mention Identity and Body Conversion Boundary](./decisions/0030-post-content-mention-identity.md)
 - [ADR 0030: Content Report Submission](./decisions/0030-content-report-submission.md)
 - [ADR 0031: Profile Block의 ActivityPub 연합](./decisions/0031-profile-block-federation.md)
+- [ADR 0032: Native 초기 로딩 중 잠금·복귀 복구](./decisions/0032-native-startup-recovery.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)
