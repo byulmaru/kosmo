@@ -9158,6 +9158,9 @@ export const ActionBarThreadNavigation: Story = {
       canvas.getByTestId('post-thread-item-route-root'),
       () => expect(actionBarNavigationObserver).not.toHaveBeenCalled(),
     );
+    const routeFocus = canvas
+      .getByTestId('post-detail-scroll')
+      .closest<HTMLElement>('[tabindex="-1"]')!;
     let count = 0;
     for (const [rowId, postId] of [
       ['post-thread-item-route-root', 'route-root'],
@@ -9167,10 +9170,21 @@ export const ActionBarThreadNavigation: Story = {
       ['post-thread-item-route-reply-quote', 'route-reply-quote'],
     ]) {
       const row = canvas.getByTestId(rowId!);
+      // A pointer click must survive focus moving from the screen ancestor to its background host.
+      routeFocus.focus({ preventScroll: true });
+      expect(routeFocus).toHaveFocus();
       await checkActionBarWhitespace(row, () => {
         expect(actionBarNavigationObserver).toHaveBeenCalledTimes(++count);
         expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(`/@kosmo/${postId}`);
       });
     }
+    const toolbar = within(current).getByRole('toolbar', { name: '액션 바' });
+    toolbar.parentElement!.focus({ preventScroll: true });
+    // Background hosts stay outside the sequential Tab order between existing actions.
+    for (const action of ['reply', 'repost', 'reaction', 'bookmark', 'more']) {
+      await userEvent.tab();
+      expect(within(current).getByTestId(`post-action-${action}`)).toHaveFocus();
+    }
+    expect(actionBarNavigationObserver).toHaveBeenCalledTimes(count);
   },
 };
