@@ -1,18 +1,11 @@
 import { XIcon } from 'lucide-react-native';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { ConfirmationContent } from './ConfirmationContent';
 import { IconButton } from './IconButton';
+import { ModalOverlay } from './ModalOverlay';
 import { useSafeAreaPadding } from './useSafeAreaPadding';
 import type { ReactNode, RefObject } from 'react';
 import type { StyleProp, View as NativeView, ViewStyle } from 'react-native';
@@ -38,6 +31,7 @@ type Props = {
   fallbackFocusRef?: RefObject<NativeView | null>;
   fallbackFocusSelector?: string;
   limitNativeHeight?: boolean;
+  onDismiss?: () => void;
   onRequestClose: () => void;
   renderForm: (props: RenderFormProps) => ReactNode;
   testIDPrefix: string;
@@ -58,6 +52,7 @@ export function FormOverlay({
   fallbackFocusRef,
   fallbackFocusSelector,
   limitNativeHeight = false,
+  onDismiss,
   onRequestClose,
   renderForm,
   testIDPrefix,
@@ -115,10 +110,14 @@ export function FormOverlay({
 
   const closeAndRestoreFocus = useCallback(() => {
     onRequestClose();
-    if (Platform.OS === 'web') {
-      requestAnimationFrame(restoreFocus);
+  }, [onRequestClose]);
+
+  const handleDismiss = useCallback(() => {
+    if (!visible) {
+      restoreFocus();
+      onDismiss?.();
     }
-  }, [onRequestClose, restoreFocus]);
+  }, [onDismiss, restoreFocus, visible]);
 
   const requestClose = useCallback(() => {
     const currentFormState = formStateRef.current;
@@ -269,119 +268,112 @@ export function FormOverlay({
   }, [discardConfirmOpen]);
 
   return (
-    <Modal
+    <ModalOverlay
       accessibilityLabel={title}
-      accessibilityViewIsModal
-      animationType="fade"
-      onDismiss={restoreFocus}
-      onRequestClose={discardConfirmOpen ? continueEditing : requestClose}
+      dismissDisabled={formState.submitting}
       navigationBarTranslucent
+      onDismiss={handleDismiss}
+      onRequestClose={discardConfirmOpen ? continueEditing : requestClose}
       role="dialog"
+      rootStyle={[
+        styles.backdrop,
+        Platform.OS === 'web' ? styles.webBackdrop : null,
+        mobile ? styles.mobileBackdrop : null,
+        safeAreaStyle,
+        topAligned ? styles.topBackdrop : null,
+      ]}
+      surfaceStyle={[
+        styles.surface,
+        elevation.overlay,
+        nativeMaxHeight === null ? null : { maxHeight: nativeMaxHeight },
+        mobile ? styles.mobileSurface : null,
+        topAligned ? styles.topSurface : null,
+        mobile && nativeMaxHeight !== null ? { height: nativeMaxHeight } : null,
+        { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+      ]}
       statusBarTranslucent
-      transparent
       visible={visible}
     >
       <View
-        onResponderRelease={() => requestClose()}
-        onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-        style={[
-          styles.backdrop,
-          Platform.OS === 'web' ? styles.webBackdrop : null,
-          mobile ? styles.mobileBackdrop : null,
-          safeAreaStyle,
-          topAligned ? styles.topBackdrop : null,
-          { backgroundColor: theme.overlayScrim },
-        ]}
+        {...(Platform.OS === 'web' ? { onKeyDown: trapFocus } : {})}
+        ref={surfaceRef}
+        style={styles.surfaceContent}
+        testID={`${testIDPrefix}-overlay-surface`}
       >
         <View
-          {...(Platform.OS === 'web' ? { onKeyDown: trapFocus } : {})}
-          ref={surfaceRef}
-          style={[
-            styles.surface,
-            elevation.overlay,
-            nativeMaxHeight === null ? null : { maxHeight: nativeMaxHeight },
-            mobile ? styles.mobileSurface : null,
-            topAligned ? styles.topSurface : null,
-            mobile && nativeMaxHeight !== null ? { height: nativeMaxHeight } : null,
-            { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
-          ]}
-          testID={`${testIDPrefix}-overlay-surface`}
+          accessibilityElementsHidden={discardConfirmOpen}
+          aria-hidden={discardConfirmOpen || undefined}
+          importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
+          ref={mainRef}
+          style={styles.main}
         >
-          <View
-            accessibilityElementsHidden={discardConfirmOpen}
-            aria-hidden={discardConfirmOpen || undefined}
-            importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
-            ref={mainRef}
-            style={styles.main}
+          <View style={[styles.header, { borderColor: theme.borderDefault }]}>
+            <Text
+              accessibilityRole="header"
+              style={[styles.title, { color: theme.foregroundPrimary }]}
+            >
+              {title}
+            </Text>
+            <IconButton
+              accessibilityLabel={resolvedCloseAccessibilityLabel}
+              controlRef={closeRef}
+              disabled={formState.submitting}
+              onPress={requestClose}
+              style={styles.close}
+              targetSize={36}
+            >
+              <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
+            </IconButton>
+          </View>
+          <ScrollView
+            automaticallyAdjustKeyboardInsets
+            contentContainerStyle={[{ padding: bodyPadding }, bodyContentContainerStyle]}
+            style={styles.scroll}
+            testID={`${testIDPrefix}-overlay-body`}
           >
-            <View style={[styles.header, { borderColor: theme.borderDefault }]}>
+            <Fragment key={formRevision}>
+              {renderForm({ close: closeAndRestoreFocus, onStateChange: handleFormStateChange })}
+            </Fragment>
+          </ScrollView>
+        </View>
+        {discardConfirmOpen ? (
+          <View
+            onResponderRelease={continueEditing}
+            onStartShouldSetResponder={(event) => event.target === event.currentTarget}
+            style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}
+          >
+            <View
+              {...(Platform.OS === 'web' ? { onKeyDown: trapConfirmationFocus } : {})}
+              accessibilityLabel={discardTitle}
+              accessibilityViewIsModal
+              onStartShouldSetResponder={() => true}
+              ref={confirmRef}
+              role="alertdialog"
+              style={[
+                styles.confirm,
+                elevation.overlay,
+                { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+              ]}
+            >
               <Text
                 accessibilityRole="header"
-                style={[styles.title, { color: theme.foregroundPrimary }]}
+                style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
               >
-                {title}
+                {discardTitle}
               </Text>
-              <IconButton
-                accessibilityLabel={resolvedCloseAccessibilityLabel}
-                controlRef={closeRef}
-                disabled={formState.submitting}
-                onPress={requestClose}
-                style={styles.close}
-                targetSize={36}
-              >
-                <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
-              </IconButton>
+              <ConfirmationContent
+                cancelLabel="계속 작성"
+                confirmLabel={discardConfirmLabel}
+                message="작성 중인 내용은 저장되지 않습니다."
+                onCancel={continueEditing}
+                onConfirm={discardAndClose}
+                tone="danger"
+              />
             </View>
-            <ScrollView
-              automaticallyAdjustKeyboardInsets
-              contentContainerStyle={[{ padding: bodyPadding }, bodyContentContainerStyle]}
-              style={styles.scroll}
-              testID={`${testIDPrefix}-overlay-body`}
-            >
-              <Fragment key={formRevision}>
-                {renderForm({ close: closeAndRestoreFocus, onStateChange: handleFormStateChange })}
-              </Fragment>
-            </ScrollView>
           </View>
-          {discardConfirmOpen ? (
-            <View
-              onResponderRelease={continueEditing}
-              onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-              style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}
-            >
-              <View
-                {...(Platform.OS === 'web' ? { onKeyDown: trapConfirmationFocus } : {})}
-                accessibilityLabel={discardTitle}
-                accessibilityViewIsModal
-                onStartShouldSetResponder={() => true}
-                ref={confirmRef}
-                role="alertdialog"
-                style={[
-                  styles.confirm,
-                  elevation.overlay,
-                  { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
-                ]}
-              >
-                <Text
-                  accessibilityRole="header"
-                  style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
-                >
-                  {discardTitle}
-                </Text>
-                <ConfirmationContent
-                  cancelLabel="계속 작성"
-                  confirmLabel={discardConfirmLabel}
-                  message="작성 중인 내용은 저장되지 않습니다."
-                  onCancel={continueEditing}
-                  onConfirm={discardAndClose}
-                  tone="danger"
-                />
-              </View>
-            </View>
-          ) : null}
-        </View>
+        ) : null}
       </View>
-    </Modal>
+    </ModalOverlay>
   );
 }
 
@@ -401,11 +393,13 @@ const styles = StyleSheet.create({
   surface: {
     borderRadius: radii.lg,
     borderWidth: 1,
+    maxWidth: 600,
     maxHeight: '85dvh' as never,
     overflow: 'hidden',
     position: 'relative',
     width: 600,
   },
+  surfaceContent: { flex: 1, minHeight: 0 },
   mobileBackdrop: {
     alignItems: 'stretch',
     justifyContent: 'flex-end',

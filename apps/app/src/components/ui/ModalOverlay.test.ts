@@ -197,3 +197,58 @@ test('ModalOverlay forwards the native dismissal lifecycle on iOS', async () => 
   assert.equal(dismissed, 1);
   await act(async () => renderer.unmount());
 });
+
+test('ModalOverlay keeps custom geometry while preserving its shared presence boundary', async () => {
+  let closeRequests = 0;
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(modalOverlayModule.ModalOverlay, {
+        accessibilityLabel: '폼',
+        onRequestClose: () => {
+          closeRequests += 1;
+        },
+        rootStyle: { padding: 0 },
+        surfaceStyle: { maxWidth: 600, width: 600 },
+        visible: true,
+      }),
+    );
+  });
+
+  const root = renderer.root.findByType('View' as never);
+  const surface = renderer.root.findAllByType('AnimatedView' as never)[1];
+  assert.equal(root.props.style.at(-1).padding, 0);
+  assert.equal(surface.props.style[1].maxWidth, 600);
+  assert.equal(surface.props.style[1].width, 600);
+
+  exitMounted = true;
+  await act(async () =>
+    renderer.update(
+      createElement(modalOverlayModule.ModalOverlay, {
+        accessibilityLabel: '폼',
+        onRequestClose: () => {
+          closeRequests += 1;
+        },
+        rootStyle: { padding: 0 },
+        surfaceStyle: { maxWidth: 600, width: 600 },
+        visible: false,
+      }),
+    ),
+  );
+  await act(async () =>
+    renderer.update(
+      createElement(modalOverlayModule.ModalOverlay, {
+        accessibilityLabel: '폼',
+        onRequestClose: () => {
+          closeRequests += 1;
+        },
+        rootStyle: { padding: 0 },
+        surfaceStyle: { maxWidth: 600, width: 600 },
+        visible: true,
+      }),
+    ),
+  );
+  await act(async () => renderer.root.findByType('Modal' as never).props.onRequestClose());
+  assert.equal(closeRequests, 1);
+  await act(async () => renderer.unmount());
+});

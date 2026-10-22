@@ -5,6 +5,7 @@ import { space } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { ModalSheetHost } from './ModalSheetHost';
 import type { PropsWithChildren } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 export type ModalOverlayProps = PropsWithChildren<{
   accessibilityLabel: string;
@@ -14,8 +15,12 @@ export type ModalOverlayProps = PropsWithChildren<{
   onDismiss?: () => void;
   onRequestClose: () => void;
   onShow?: () => void;
+  navigationBarTranslucent?: boolean;
   presentation?: 'sheet' | 'dialog';
+  rootStyle?: StyleProp<ViewStyle>;
   role?: 'dialog' | 'alertdialog';
+  surfaceStyle?: StyleProp<ViewStyle>;
+  statusBarTranslucent?: boolean;
   testID?: string;
   visible: boolean;
 }>;
@@ -29,8 +34,12 @@ export function ModalOverlay({
   onDismiss,
   onRequestClose,
   onShow,
+  navigationBarTranslucent,
   presentation = 'dialog',
+  rootStyle,
   role = 'dialog',
+  surfaceStyle,
+  statusBarTranslucent,
   testID,
   visible,
 }: ModalOverlayProps) {
@@ -59,10 +68,12 @@ export function ModalOverlay({
       animationType="none"
       closeRequestDisabled={!visible || dismissDisabled}
       interactionDisabled={!visible}
+      navigationBarTranslucent={navigationBarTranslucent}
       onRequestClose={requestClose}
       onShow={onShow}
       onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
       role={role}
+      statusBarTranslucent={statusBarTranslucent}
       transparent
       visible={overlayMotion.mounted}
     >
@@ -70,7 +81,7 @@ export function ModalOverlay({
         accessibilityElementsHidden={!visible}
         importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
         pointerEvents={visible ? 'auto' : 'none'}
-        style={presentation === 'sheet' ? styles.sheetRoot : styles.dialogRoot}
+        style={[presentation === 'sheet' ? styles.sheetRoot : styles.dialogRoot, rootStyle]}
         testID={testID}
       >
         <Animated.View
@@ -95,6 +106,7 @@ export function ModalOverlay({
         <Animated.View
           style={[
             presentation === 'sheet' ? styles.sheetSurface : styles.dialogSurface,
+            surfaceStyle,
             {
               opacity: overlayMotion.progress,
               transform:
