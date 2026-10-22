@@ -2084,7 +2084,7 @@ export const UniversalMobile: Story = {
     const page = within(ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
-    const drawerBackdrop = drawerSurface?.parentElement;
+    const drawerBackdrop = drawerSurface?.parentElement?.firstElementChild;
     const drawerNavigationSurface = page.getByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
@@ -2834,7 +2834,7 @@ export const UniversalCompactFeedbackOverlay: Story = {
     feedbackButton.focus();
     await userEvent.keyboard('{Enter}');
     const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = page.getByTestId('feedback-overlay-surface');
+    const surface = page.getByTestId('feedback-overlay-surface').parentElement!;
     const shellRoot = canvasElement.querySelector('[data-testid="universal-shell-root"]');
     const bounds = surface.getBoundingClientRect();
 
@@ -2888,7 +2888,7 @@ export const UniversalMobileFeedbackOverlay: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     await userEvent.click(page.getByRole('button', { name: '피드백 보내기' }));
     await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = await page.findByTestId('feedback-overlay-surface');
+    const surface = (await page.findByTestId('feedback-overlay-surface')).parentElement!;
     const bounds = surface.getBoundingClientRect();
 
     expect(bounds.width).toBeCloseTo(view?.innerWidth ?? 0, 0);

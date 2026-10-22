@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
+import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { SidebarNavigation } from './SidebarNavigation';
@@ -55,47 +56,38 @@ export function WebNavigationDrawer({
   };
 
   return (
-    <Modal
+    <ModalOverlay
       accessibilityLabel="메뉴"
-      animationType="none"
+      backdropAccessibilityLabel="사이드바 닫기"
       navigationBarTranslucent
+      onBackdropPress={onClose}
       onRequestClose={handleRequestClose}
       role="dialog"
+      presentation="drawer"
+      rootStyle={[styles.drawerBackdrop, drawerSafeAreaStyle]}
       statusBarTranslucent
-      transparent
+      surfaceNativeID="mobile-sidebar"
+      surfaceStyle={[
+        styles.drawer,
+        elevation.overlay,
+        { backgroundColor: theme.backgroundElevated },
+      ]}
       visible={drawerOpen}
     >
-      <View
-        style={[
-          styles.drawerBackdrop,
-          drawerSafeAreaStyle,
-          { backgroundColor: theme.overlayScrim },
-        ]}
-      >
-        <View
-          nativeID="mobile-sidebar"
-          style={[styles.drawer, elevation.overlay, { backgroundColor: theme.backgroundElevated }]}
-        >
-          <SidebarNavigation
-            guestPublicContent={guestPublicContent}
-            onFeedbackOpen={onFeedbackOpen}
-            onHomeReselect={onHomeReselect}
-            onNavigate={onClose}
-            onSwitcherOpenChange={onSwitcherOpenChange}
-            profileTriggerRef={profileTriggerRef}
-            query={query}
-            surface="drawer"
-            switcherOpen={switcherOpen}
-          />
-        </View>
-        <Pressable
-          accessibilityLabel="사이드바 닫기"
-          accessibilityRole="button"
-          onPress={onClose}
-          style={styles.drawerClose}
+      <View style={styles.drawerContent}>
+        <SidebarNavigation
+          guestPublicContent={guestPublicContent}
+          onFeedbackOpen={onFeedbackOpen}
+          onHomeReselect={onHomeReselect}
+          onNavigate={onClose}
+          onSwitcherOpenChange={onSwitcherOpenChange}
+          profileTriggerRef={profileTriggerRef}
+          query={query}
+          surface="drawer"
+          switcherOpen={switcherOpen}
         />
       </View>
-    </Modal>
+    </ModalOverlay>
   );
 }
 
@@ -169,5 +161,4 @@ const styles = StyleSheet.create({
     width: MOBILE_DRAWER_WIDTH,
   },
   drawerContent: { flex: 1, minHeight: 0 },
-  drawerClose: { flex: 1 },
 });

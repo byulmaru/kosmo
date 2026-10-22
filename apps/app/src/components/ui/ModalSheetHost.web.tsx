@@ -19,7 +19,7 @@ export function ModalSheetHost({
     </AlertDialog>
   ) : (
     <Modal {...props}>
-      <div inert={interactionDisabled} style={{ display: 'flex', flex: 1 }}>
+      <div inert={interactionDisabled} style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {children}
       </div>
     </Modal>
