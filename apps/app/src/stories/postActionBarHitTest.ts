@@ -52,6 +52,7 @@ export async function checkActionBarWhitespace(
   for (let index = 0; index < 4; index += 1) {
     const point = actionBarWhitespace(container)[index]!;
     const target = container.ownerDocument.elementFromPoint(point.x, point.y)!;
+    expect(container).toContainElement(target);
     expect(target.closest('[role="button"]')).toBeNull();
     expect(getComputedStyle(target).cursor).toBe('pointer');
     await pressActionBarPoint(container, point);

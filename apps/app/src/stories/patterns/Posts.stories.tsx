@@ -9064,6 +9064,15 @@ function actionBarNavigationStory(postId: string, expectedPath: string): Story {
         if (!blocked) {
           await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'true'));
           await userEvent.keyboard('{Escape}');
+          if (name === 'reply') {
+            const confirm = await screen.findByRole('alertdialog', {
+              name: '답글 작성을 취소할까요?',
+            });
+            await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+            await waitFor(() =>
+              expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull(),
+            );
+          }
           await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'false'));
           await waitFor(() => expect(button).toHaveFocus());
         }
@@ -9132,6 +9141,13 @@ export const ActionBarThreadNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByTestId('post-thread');
+    const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
+    const current = canvas.getByTestId('post-thread-current-route-current');
+    await waitFor(() =>
+      expect(
+        Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
+      ).toBeLessThanOrEqual(1),
+    );
     actionBarNavigationObserver.mockClear();
     let count = 0;
     for (const [rowId, postId] of [
