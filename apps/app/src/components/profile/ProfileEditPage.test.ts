@@ -136,9 +136,11 @@ test('error fallback keeps retry behavior and refetches the route after retry', 
     routeState = 'ready';
     await act(async () => error.props.onAction());
 
-    assert.equal(findByType('ProfileEditRoute').props.fetchKey, '1');
-    assert.equal(fetchKeys[0], '0');
-    assert.equal(fetchKeys.at(-1), '1');
+    const initialFetchKey = fetchKeys[0];
+    const retriedFetchKey = fetchKeys.at(-1);
+    assert.ok(initialFetchKey && retriedFetchKey);
+    assert.equal(findByType('ProfileEditRoute').props.fetchKey, retriedFetchKey);
+    assert.notEqual(retriedFetchKey, initialFetchKey);
   } finally {
     console.error = originalConsoleError;
   }

@@ -286,7 +286,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.waitForLoadState('networkidle');
 
-  let homeQueryCount = 0;
+  let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName !== 'HomePageQuery') {
@@ -294,8 +294,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
       return;
     }
 
-    homeQueryCount += 1;
-    if (homeQueryCount === 1) {
+    if (failHomeQueries) {
       await route.abort('failed');
       return;
     }
@@ -319,6 +318,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
         requestBody.extensions?.selectedProfileId === betaProfileId
       );
     });
+    failHomeQueries = false;
     const selectProfileResponse = await selectProfileFromSwitcher(page, 'revisionbeta');
     const selectedProfileId = selectProfileResponse.data?.selectProfile?.profile?.id;
     expect(selectedProfileId).toBe(betaProfileId);

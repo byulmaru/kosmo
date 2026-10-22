@@ -61,7 +61,7 @@ let RouteBoundary: ComponentType<{
   loading: ReactNode;
   title: string;
 }>;
-let useRouteBoundary: () => { fetchKey: number };
+let useRouteBoundary: () => { fetchKey: string };
 let useRelayActor: () => Pick<
   MockRelayActorValue,
   'clearNativeSession' | 'nativeToken' | 'resetActor' | 'setNativeSession'

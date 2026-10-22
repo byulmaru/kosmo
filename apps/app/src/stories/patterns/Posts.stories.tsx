@@ -3031,6 +3031,10 @@ const postMediaViewerThreadResponseData = {
     },
   },
 };
+const postMediaViewerThreadRetryErrorResponse = { error: 'Viewer thread fixture failure' };
+const postMediaViewerThreadRetryResponse = fn(
+  (): { data?: unknown; error?: string } => postMediaViewerThreadRetryErrorResponse,
+);
 const postMediaViewerHostResponseData = {
   surface: mediaViewerThreadCurrentPost,
 };
@@ -5209,16 +5213,16 @@ export const PostMediaViewerWideThreadLoading: Story = {
 
 export const PostMediaViewerWideThreadErrorRetry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  beforeEach: () => {
+    postMediaViewerThreadRetryResponse
+      .mockReset()
+      .mockReturnValue(postMediaViewerThreadRetryErrorResponse);
+  },
   parameters: {
     relay: {
       operationResponses: {
         PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
-        PostMediaViewerThreadQuery: {
-          sequence: [
-            { error: 'Viewer thread fixture failure' },
-            { data: postMediaViewerThreadResponseData },
-          ],
-        },
+        PostMediaViewerThreadQuery: () => postMediaViewerThreadRetryResponse(),
       },
     },
   },
@@ -5235,6 +5239,9 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
     expect(wideDetail).toBeDefined();
     expect(errorState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    postMediaViewerThreadRetryResponse.mockReturnValue({
+      data: postMediaViewerThreadResponseData,
+    });
     await userEvent.click(viewer.getByRole('button', { name: '답글 다시 불러오기' }));
     await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
