@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
   blocked: { opacity: 0.45 },
   // RN Web disables Pressable with box-none; retain its full target instead of hitting the slot.
-  blockedWeb: { cursor: 'default', pointerEvents: 'auto' },
+  blockedWeb: { cursor: 'auto', pointerEvents: 'auto' },
   count: {
     flexShrink: 0,
     fontFamily: fontFamilies.ui,

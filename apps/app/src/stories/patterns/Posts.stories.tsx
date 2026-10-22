@@ -9114,7 +9114,8 @@ export const ActionBarPendingNavigation: Story = {
     }
     const slot = canvas.getByTestId('post-action-bookmark-slot').getBoundingClientRect();
     await pressActionBarPoint(canvasElement, { x: slot.left + 1, y: (slot.top + slot.bottom) / 2 });
-    expect(actionBarNavigationObserver).toHaveBeenCalledExactlyOnceWith('/@kosmo/short');
+    expect(actionBarNavigationObserver).toHaveBeenCalledTimes(1);
+    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith('/@kosmo/short');
     expect(bookmark).toHaveAttribute('aria-busy', 'true');
   },
 };
