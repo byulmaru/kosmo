@@ -1,5 +1,5 @@
 import { useFrameSize, useHeaderHeight } from 'expo-router/react-navigation';
-import { View } from 'react-native';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import type { ReactNode } from 'react';
 
 export function ProfileEditViewport({ children }: { children: ReactNode }) {
@@ -7,5 +7,13 @@ export function ProfileEditViewport({ children }: { children: ReactNode }) {
   const headerHeight = useHeaderHeight();
 
   // The navigator frame already excludes shell chrome; its custom header is still inside it.
-  return <View style={{ height: Math.max(0, frameHeight - headerHeight) }}>{children}</View>;
+  const style = { height: Math.max(0, frameHeight - headerHeight) };
+
+  return Platform.OS === 'android' ? (
+    <KeyboardAvoidingView behavior="padding" style={style}>
+      {children}
+    </KeyboardAvoidingView>
+  ) : (
+    <View style={style}>{children}</View>
+  );
 }
