@@ -30,6 +30,7 @@ const router = {
 };
 type RightRailProps = {
   mode?: string;
+  onDismiss?: () => void;
   onExpand?: () => void;
   onRequestClose?: (reason?: 'created' | 'dismiss') => void;
   open?: boolean;
@@ -104,10 +105,11 @@ mockModule('react-native', {
     },
   },
   Modal: 'Modal',
+  Animated: { View: 'AnimatedView' },
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Platform: platform,
   Pressable: 'Pressable',
-  StyleSheet: { create: (styles: unknown) => styles },
+  StyleSheet: { absoluteFill: {}, create: (styles: unknown) => styles },
   Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
@@ -170,6 +172,7 @@ mockModule('@/session/SessionProvider', {
   }),
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({
     backgroundCanvas: '#ffffff',
@@ -181,8 +184,17 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   breakpoints: { compact: 768, full: 1280 },
+  space: { 12: 12, 16: 16 },
   spacing: { lg: 24, xl: 32 },
   textStyles: { uiLabelL: {} },
+});
+
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean) => ({
+    entered: visible,
+    mounted: visible,
+    progress: { interpolate: () => 1 },
+  }),
 });
 
 mockModule('./BottomTabBar', {
@@ -576,9 +588,15 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(rightRailProps?.mode, 'rail');
 
     await act(async () => rightRailProps?.onExpand?.());
-
     assert.equal(rightRailProps?.mode, 'overlay');
     assert.equal(rightRailProps?.open, true);
+
+    await act(async () => rightRailProps?.onRequestClose?.());
+    assert.equal(rightRailProps?.mode, 'overlay');
+    assert.equal(rightRailProps?.open, false);
+
+    await act(async () => rightRailProps?.onDismiss?.());
+    assert.equal(rightRailProps?.mode, 'rail');
   });
 
   it('셸에서 연 Composer를 닫아도 route history fallback을 실행하지 않는다', async () => {
