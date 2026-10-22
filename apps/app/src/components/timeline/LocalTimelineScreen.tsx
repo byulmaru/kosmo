@@ -94,7 +94,7 @@ export default function LocalScreen() {
   }, [registerHomeReselection, reselectFromShell]);
 
   return (
-    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChrome?.reselectHome}>
+    <LocalFrame onBrandCurrentNavigate={shellChrome?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         error={(resetErrorBoundary) =>
@@ -128,11 +128,7 @@ export default function LocalScreen() {
 function LocalFrame({
   children,
   onBrandCurrentNavigate,
-  onReselect,
-}: PropsWithChildren<{
-  onBrandCurrentNavigate?: () => void;
-  onReselect: () => void;
-}>) {
+}: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
   const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
   const routeOwnsHeader =
@@ -160,7 +156,7 @@ function LocalFrame({
             : undefined
         }
       >
-        <TimelineTabs onReselect={onReselect} value="local" />
+        <TimelineTabs value="local" />
       </View>
       <View style={styles.body}>{children}</View>
     </View>
