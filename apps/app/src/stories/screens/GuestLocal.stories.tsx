@@ -17,20 +17,17 @@ const guestData = {
   currentSession: null,
   me: null,
   localTimeline: timeline(
-    post({
-      bodyText: '로그인하지 않아도 로컬의 공개 이야기를 읽을 수 있어요.',
-      id: 'guest-local-first-post',
-      profile: author,
-      visibility: 'PUBLIC',
-    }),
-    post({
-      bodyText: '긴 공개 게시글도 같은 목록에서 이어 읽어요. '.repeat(12),
-      id: 'guest-local-long-post',
-      profile: author,
-      visibility: 'PUBLIC',
-    }),
+    guestPost('guest-local-first-post', '로그인하지 않아도 로컬의 공개 이야기를 읽을 수 있어요.'),
+    guestPost('guest-local-long-post', '긴 공개 게시글도 같은 목록에서 이어 읽어요. '.repeat(12)),
   ),
 };
+
+function guestPost(id: string, bodyText: string) {
+  return {
+    ...post({ bodyText, id, profile: author, visibility: 'PUBLIC' }),
+    viewerReactions: [],
+  };
+}
 
 function GuestLocalStory() {
   return (

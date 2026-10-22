@@ -39,7 +39,7 @@ export const MobileMenuAfterDismissal: Story = {
     menu.focus();
     await userEvent.keyboard('{Enter}');
     const drawer = within(await body.findByRole('dialog', { name: '메뉴' }));
-    expect(drawer.getByRole('img', { name: 'KOSMO 로고' })).toBeVisible();
+    expect(drawer.getByLabelText('KOSMO 로고')).toBeVisible();
     const signup = drawer.getByRole('link', { name: '가입하기' });
     expect(signup).toHaveAttribute('href', '/login');
     signup.focus();
