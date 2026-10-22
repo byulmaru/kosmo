@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { fn } from 'storybook/test';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { PageHeader } from '@/components/PageHeader';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -246,6 +247,7 @@ function LocalPlayground({
   state,
 }: LocalStoryArgs) {
   const { width } = useWindowDimensions();
+  const mobile = getShellLayout(true, width) === 'mobile';
   const homeReselectionRef = useRef<(() => void) | null>(null);
   const registerHomeReselection = useCallback((handler: () => void) => {
     homeReselectionRef.current = handler;
@@ -277,8 +279,9 @@ function LocalPlayground({
           registerHomeReselection={registerHomeReselection}
           reselectHome={reselectHome}
         >
+          {mobile ? <PageHeader accessibilityLabel="로컬" variant="brand" /> : null}
           {screen}
-          {getShellLayout(true, width) === 'mobile' ? <BottomTabBar /> : null}
+          {mobile ? <BottomTabBar /> : null}
         </ShellChromeProvider>
       ) : (
         screen
