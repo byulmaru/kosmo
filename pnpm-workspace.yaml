@@ -22,8 +22,19 @@ allowBuilds:
   protobufjs: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
-  # fast-uri 3.1.7 fixes CVE-2026-75899 and its follow-up advisories.
-  - fast-uri@3.1.7
+  # fast-uri 3.1.8 fixes GHSA-hrr3-gc8f-f4qj within Ajv's accepted 3.x range.
+  - fast-uri@3.1.8
+  # Allow only the patched Vitest 4.1.12 release set past the seven-day age gate.
+  - vitest@4.1.12
+  - '@vitest/browser@4.1.12'
+  - '@vitest/browser-playwright@4.1.12'
+  - '@vitest/expect@4.1.12'
+  - '@vitest/mocker@4.1.12'
+  - '@vitest/pretty-format@4.1.12'
+  - '@vitest/runner@4.1.12'
+  - '@vitest/snapshot@4.1.12'
+  - '@vitest/spy@4.1.12'
+  - '@vitest/utils@4.1.12'
   # Temporal 1.22.0 clears GHSA-4w2j-m93h-cj5j from the bundled Rust lockfile.
   - '@temporalio/activity@1.22.0'
   - '@temporalio/client@1.22.0'
@@ -47,7 +58,9 @@ overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   'undici@': 6.28.1
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
-  'ajv@8.20.0>fast-uri': 3.1.7
+  'ajv@8.20.0>fast-uri': 3.1.8
+  # minimatch 10 accepts brace-expansion 5.x; keep older minimatch lines unchanged.
+  'brace-expansion@^5.0.0': 5.0.12
   # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
   '@react-native/metro-config': 0.85.3
   # eslint-react 5.11.3 accepts 8.62.1; avoid newer incomplete registry dependency graphs.
@@ -68,8 +81,10 @@ overrides:
   'xcode@3.0.1>uuid': 11.1.1
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
-  # Compatible Temporal consumers: CVE-2026-101916; preserve Firebase's exact 1.9.16 pin.
-  '@grpc/grpc-js@': 1.14.5
+  # Replace only grpc-js ranges below the first patched release with 1.14.5.
+  '@grpc/grpc-js@<1.13.6': 1.14.5
+  # react-devtools-core accepts shell-quote 1.x; use its patched 1.12.0 release.
+  'react-devtools-core@6.1.5>shell-quote': 1.12.0
   # SvelteKit/Svelte accept 5.x; 5.9.3 fixes shared-memory disclosure and three DoS advisories.
   'devalue@': 5.9.3
   # jsdom accepts ^7.25.0; fix CVE-2026-19534 / CVE-2026-84961 without replacing 6.x.
