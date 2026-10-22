@@ -11,6 +11,7 @@ const createEnumRef = (name: EnumName) => {
 
 createEnumRef('AccountState');
 createEnumRef('AccountProfileRole');
+createEnumRef('CoachmarkGuide');
 createEnumRef('ContentReportDeliveryStatus');
 createEnumRef('ContentReportReason');
 createEnumRef('ContentReportTargetType');

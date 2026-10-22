@@ -3,6 +3,7 @@ type Account implements Node {
   id: ID!
   name: String!
   profiles: [Profile!]!
+  seenCoachmarks: [CoachmarkGuide!]!
 }
 
 type AccountProfile implements Node {
@@ -75,6 +76,15 @@ input CancelProfileFollowRequestInput {
 type CancelProfileFollowRequestPayload {
   followerProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+enum CoachmarkGuide {
+  COMPOSER
+  POST
+  PROFILE
+  SEARCH
+  TAG
+  TIMELINE
 }
 
 input CompleteMediaUploadInput {
@@ -360,6 +370,7 @@ type Mutation {
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
   pinProfilePost(input: PinProfilePostInput!): PinProfilePostPayload!
+  recordCoachmarkShown(input: RecordCoachmarkShownInput!): RecordCoachmarkShownPayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
   registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
@@ -699,6 +710,14 @@ type ReactionNotification implements Node & Notification {
   profile: Profile
   readAt: DateTime
   type: String
+}
+
+input RecordCoachmarkShownInput {
+  guide: CoachmarkGuide!
+}
+
+type RecordCoachmarkShownPayload {
+  account: Account!
 }
 
 input RegisterProfileMigrationSourceInput {
