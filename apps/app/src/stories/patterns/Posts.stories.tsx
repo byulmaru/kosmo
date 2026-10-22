@@ -63,6 +63,10 @@ import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
+import {
+  checkReactionSummaryExcludedTouches,
+  tapReactionSummaryWhitespace,
+} from '../reactionSummaryHitTest';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -3105,6 +3109,9 @@ const meta = {
     'ContentWarningSourcePreviewRevealInteraction',
     'LinkedSourceQuoteInteraction',
     'ProductionMoreShareReferences',
+    'ReactionSummaryPostNavigation',
+    'ReactionSummaryQuoteNavigation',
+    'ReactionSummaryRepostNavigation',
   ],
   decorators: [
     (Story) => (
@@ -8959,4 +8966,34 @@ export const ReplySensitiveMediaParentPresentation: Story = {
     expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
   },
   render: () => <ReplyModalPresentationStory parentId={mediaOnlyPost.id} />,
+};
+
+function reactionSummaryNavigationStory(postId: string, expectedPath: string): Story {
+  return {
+    render: () => <ProductionPostListItemStory postId={postId} presentation="wide" />,
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const pathname = canvas.getByTestId('presentation-story-pathname');
+      const initialPath = pathname.textContent;
+      await checkReactionSummaryExcludedTouches(canvasElement, () => {
+        expect(pathname.textContent).toBe(initialPath);
+      });
+      for (const fraction of [0, 0.5, 1]) {
+        await tapReactionSummaryWhitespace(canvasElement, fraction);
+        expect(pathname.textContent).toBe(expectedPath);
+      }
+      await userEvent.click(canvas.getByRole('link', { name: /반응한 프로필 보기/ }));
+      expect(pathname.textContent).toBe(`${expectedPath}/reactions`);
+    },
+  };
+}
+
+export const ReactionSummaryPostNavigation: Story = {
+  ...reactionSummaryNavigationStory('short', '/@kosmo/short'),
+};
+export const ReactionSummaryQuoteNavigation: Story = {
+  ...reactionSummaryNavigationStory('post-quote', '/@reposter/post-quote'),
+};
+export const ReactionSummaryRepostNavigation: Story = {
+  ...reactionSummaryNavigationStory('post-repost', '/@source@remote.example/post-source'),
 };

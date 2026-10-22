@@ -89,6 +89,9 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
 - 양수 count Type이 하나라도 있으면 token 뒤에 Reaction People 진입 control을 항상 한 개 표시한다. 모든 Type token과 `Ellipsis`가 한 줄에 완전히 들어가면 canonical `Ellipsis` icon을 사용하고 접근성 이름은 `반응한 프로필 보기`로 제공한다. 이 control의 hover·pressed surface는 바깥 둥근 사각형과 같은 radius를 사용한다. 이 control은 selected Profile이 없어도 사용할 수 있다.
 - 모든 Type token과 `Ellipsis`가 들어가지 않으면 같은 item geometry의 `+N` control로 trailing control을 교체한다. `N`은 숨겨진 Reaction Type 수이며 숨겨진 Reaction count의 합이 아니다. 접근성 이름은 `숨겨진 반응 유형 N개, 반응한 프로필 보기`로 제공한다.
+- 타임라인과 알림의 요약 row에서는 마지막 People control(`Ellipsis` 또는 `+N`) 오른쪽에 기존 칩 사이와 같은 4px의 비대화형 간격을 두고, 그다음부터 줄 오른쪽 끝까지 남는 넓은 여백을 누르면 해당 Post 상세로 한 번 이동한다.
+- 반응 칩 사이, 마지막 칩·People control 사이와 People control 오른쪽 4px 간격은 상세 진입 영역에서 제외한다. 이 간격을 눌러도 상세 이동이나 알림 읽음 처리를 시작하지 않는다. 반응 칩과 People control은 기존 독립 동작을 유지한다.
+- 위 입력 범위는 [PROD-1165](https://linear.app/byulmaru/issue/PROD-1165)에서 확정한 표시 계약이며, 제품 반영이나 Web·Native runtime 검증 완료를 뜻하지 않는다.
 - width-fit은 trailing People control의 폭을 항상 먼저 예약한다. 모든 Type과 `Ellipsis`가 들어가면 전체 token을 표시한다. 그렇지 않으면 Product 순서의 마지막 token부터 하나씩 제외하고, 제외할 때마다 새 `N`의 실제 렌더링 폭으로 다시 계산해 표시 token과 `+N`이 모두 완전히 들어갈 때까지 반복한다. token이나 trailing control을 축소·클리핑하지 않고 wrap이나 horizontal scroll도 사용하지 않는다.
 - 한 줄에 표시할 최대 Type 수와 viewer-selected Type의 우선 배치는 Product 정책이다. Figma의 viewer-priority 표본은 선택 반응을 overflow 앞에 보존할 수 있다는 후보만 보여 주며 정렬 규칙을 확정하지 않는다. `16`을 포함한 외부 서비스의 표시 수는 참고값일 뿐 KOSMO 상한이 아니다.
 - 향후 Product가 2~3줄 요약을 명시적으로 확정하면 위 한 줄 계약을 그때 교체한다. multi-line variant는 pill끼리 겹치지 않는 범위에서 세로 간격을 최소화해 조밀하게 배치하고, 큰 row gap이나 카드처럼 분리된 행 표현은 사용하지 않는다. 정확한 줄 수, 세로 gap과 전체 높이 상한은 해당 Product 계약과 함께 확정한다.

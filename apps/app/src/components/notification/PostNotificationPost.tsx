@@ -64,6 +64,10 @@ export function PostNotificationPost({
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const openDetail = useCallback(() => {
+    onActivate?.();
+    router.push(detailHref);
+  }, [detailHref, onActivate, router]);
   const { Icon, label } = notificationKindPresentations[kind];
   const reason = kind === 'quote' ? '회원님의 게시글을 인용했습니다' : null;
   const onMediaOpen = useCallback<PostMediaOpenHandler>(
@@ -138,19 +142,13 @@ export function PostNotificationPost({
             </Text>
           ) : null}
           <View style={styles.bodyLink}>
-            <PostBody
-              onBodyPress={() => {
-                onActivate?.();
-                router.push(detailHref);
-              }}
-              onMediaOpen={onMediaOpen}
-              post={post}
-            />
+            <PostBody onBodyPress={openDetail} onMediaOpen={onMediaOpen} post={post} />
           </View>
           {post.repostSource ? <PostSourcePreview source={post.repostSource} /> : null}
           <PostComposerCoordinatorContext.Provider value={undefined}>
             <PostActionSurface
               actionBarStyle={styles.actionBar}
+              onReactionSummaryBackgroundPress={openDetail}
               reactionSummaryStyle={styles.reactionSummary}
               reply={reply}
               socialActionTarget={post.actionSurface!}
