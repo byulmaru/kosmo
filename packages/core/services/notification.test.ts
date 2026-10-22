@@ -33,10 +33,6 @@ import {
   PostVisibility,
   ProfileFollowPolicy,
 } from '../enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '../post-content/server';
 import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
 import {

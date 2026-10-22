@@ -32,7 +32,6 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { postContentDocumentFromText } from '../post-content/server';
 import { createPost } from './post';
 import { createQuoteNotification } from './quote-notification';
 

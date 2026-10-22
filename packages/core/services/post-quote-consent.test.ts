@@ -28,7 +28,6 @@ import { applyPostQuoteConsent } from './post-quote-consent';
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 import type { InstanceKind as InstanceKindType } from '../enums';
-import type { PostContentDocumentV1 } from '../post-content';
 
 const publicOrigin = 'https://quote-consent.local.example';
 process.env.PUBLIC_ORIGIN = publicOrigin;

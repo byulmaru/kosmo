@@ -33,10 +33,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentToText,
-} from '@kosmo/core/post-content/server';
+import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
   remoteProfileLookupWorkflow,
