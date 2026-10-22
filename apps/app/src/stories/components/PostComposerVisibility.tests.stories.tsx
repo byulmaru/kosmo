@@ -180,6 +180,11 @@ export const OverlayDirectLabel: Story = {
     await canvasElement.ownerDocument.fonts.ready;
     const trigger = canvas.getByRole('button', { name: '공개 범위: 언급한 프로필만' });
     const labelBounds = expectFullLabel(trigger, '언급한 프로필만');
+    const triggerBounds = trigger.getBoundingClientRect();
+    expect(triggerBounds.left).toBeGreaterThanOrEqual(0);
+    expect(triggerBounds.right).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientWidth,
+    );
     const caption = within(trigger).getByText('공개 범위');
     expect(caption.getBoundingClientRect().right).toBeLessThanOrEqual(labelBounds.left);
     const chevron = trigger.querySelector('svg');
@@ -190,6 +195,7 @@ export const OverlayDirectLabel: Story = {
 
 export const MobileDirectLabel: Story = {
   ...OverlayDirectLabel,
+  parameters: { layout: 'fullscreen' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   render: (args) => (
     <MobileFullscreenComposerShellCandidate {...args} onOverlayClose={() => undefined} />
