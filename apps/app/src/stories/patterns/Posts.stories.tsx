@@ -195,13 +195,23 @@ const linkedPost = post({
   bodyText: '일반 텍스트와 안전한 외부 링크\n강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
   id: 'linked',
 });
-const unsupportedDocumentPost = post({
+const unknownNodesPost = post({
   bodyDocument: {
     type: 'doc',
-    content: [{ type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] }],
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 첫 문단입니다.' }],
+      },
+      { type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 다음 문단입니다.' }],
+      },
+    ],
   } as never,
-  bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
-  id: 'unsupported-document',
+  bodyText: '지원되는 첫 문단입니다.\n\n실행하면 안 되는 구조\n\n지원되는 다음 문단입니다.',
+  id: 'unknown-nodes',
 });
 const mediaTextPost = post({
   bodyDocument: {
@@ -883,7 +893,7 @@ const storyPosts = [
   ...visibilityPosts,
   remoteAuthorPost,
   linkedPost,
-  unsupportedDocumentPost,
+  unknownNodesPost,
   ...threadStoryPosts,
   sourcePost,
   pureRepost,
@@ -3158,8 +3168,9 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(canvasElement.textContent).toContain(
       '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
     );
-    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
-    expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    expect(canvas.getByText('지원되는 첫 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvas.getByText('지원되는 다음 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvasElement.textContent).not.toContain('실행하면 안 되는 구조');
     const mediaText = within(canvas.getByTestId('media-text'));
     expect(mediaText.getByText('document text')).toBeVisible();
     const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');

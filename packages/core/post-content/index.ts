@@ -179,19 +179,50 @@ export function normalizePostContentMentionHandle(value: unknown): string | unde
   return result.data;
 }
 
+export function readPostContentDocumentV1(value: unknown): PostContentDocumentV1 | null {
+  if (!isPostContentDocumentEnvelopeV1(value)) {
+    return null;
+  }
+
+  const body = readPostContentBodyDocumentV1(value.body);
+  return body === null ? null : ({ ...value, body } as PostContentDocumentV1);
+}
+
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
+  return isPostContentDocumentEnvelopeV1(value) && isPostContentBodyDocumentV1(value.body);
+}
+
+export function isPostContentBodyDocumentV1(value: unknown): value is PostContentBodyDocumentV1 {
+  if (!isPostContentBodyDocumentEnvelopeV1(value)) {
+    return false;
+  }
+
+  return (
+    value.content.every((node) => isParagraph(node) || isMedia(node)) &&
+    value.content.filter((node) => isRecord(node) && node.type === 'media').length <= 4
+  );
+}
+
+function isPostContentDocumentEnvelopeV1(value: unknown): value is Record<string, unknown> & {
+  readonly version: PostContentSchemaVersion;
+  readonly summary: string | null;
+  readonly body: unknown;
+} {
   return (
     isRecordWithKeys(value, ['version', 'summary', 'body']) &&
     value.version === postContentSchemaVersion &&
     (value.summary === null ||
       (typeof value.summary === 'string' &&
         value.summary.length > 0 &&
-        normalizePostContentPlainText(value.summary) === value.summary)) &&
-    isPostContentBodyDocumentV1(value.body)
+        normalizePostContentPlainText(value.summary) === value.summary))
   );
 }
 
-export function isPostContentBodyDocumentV1(value: unknown): value is PostContentBodyDocumentV1 {
+function isPostContentBodyDocumentEnvelopeV1(value: unknown): value is Record<string, unknown> & {
+  readonly type: 'doc';
+  readonly attrs?: (Record<string, unknown> & { readonly sensitiveMedia?: boolean }) | undefined;
+  readonly content: unknown[];
+} {
   if (!isRecord(value) || value.type !== 'doc' || !('content' in value)) {
     return false;
   }
@@ -203,13 +234,77 @@ export function isPostContentBodyDocumentV1(value: unknown): value is PostConten
       return false;
     }
   }
-  if (!Array.isArray(value.content) || value.content.length === 0) {
-    return false;
+
+  return Array.isArray(value.content) && value.content.length > 0;
+}
+
+function readPostContentBodyDocumentV1(value: unknown): PostContentBodyDocumentV1 | null {
+  if (!isPostContentBodyDocumentEnvelopeV1(value)) {
+    return null;
   }
 
+  const content: PostContentBlockNode[] = [];
+  for (const node of value.content) {
+    if (!isRecord(node) || typeof node.type !== 'string' || node.type.length === 0) {
+      return null;
+    }
+    if (node.type === 'paragraph') {
+      const paragraph = readPostContentParagraphNode(node);
+      if (paragraph === null) {
+        return null;
+      }
+      content.push(paragraph);
+    } else if (node.type === 'media') {
+      if (!isMedia(node)) {
+        return null;
+      }
+      content.push(node);
+    } else if (isPostContentNodeType(node.type)) {
+      return null;
+    }
+  }
+
+  if (content.filter((node) => node.type === 'media').length > 4) {
+    return null;
+  }
+
+  return { ...value, content };
+}
+
+function readPostContentParagraphNode(value: unknown): PostContentParagraphNode | null {
+  if (!isRecord(value) || value.type !== 'paragraph') {
+    return null;
+  }
+  if (value.content === undefined) {
+    return { ...value, type: 'paragraph' };
+  }
+  if (!Array.isArray(value.content)) {
+    return null;
+  }
+
+  const content: PostContentInlineNode[] = [];
+  for (const node of value.content) {
+    if (!isRecord(node) || typeof node.type !== 'string' || node.type.length === 0) {
+      return null;
+    }
+    if (isInlineNode(node)) {
+      content.push(node);
+    } else if (isPostContentNodeType(node.type)) {
+      return null;
+    }
+  }
+
+  return { ...value, type: 'paragraph', content };
+}
+
+function isPostContentNodeType(type: string): boolean {
   return (
-    value.content.every((node) => isParagraph(node) || isMedia(node)) &&
-    value.content.filter((node) => isRecord(node) && node.type === 'media').length <= 4
+    type === 'doc' ||
+    type === 'paragraph' ||
+    type === 'text' ||
+    type === 'hard_break' ||
+    type === 'mention' ||
+    type === 'media'
   );
 }
 
