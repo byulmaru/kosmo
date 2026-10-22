@@ -264,10 +264,11 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Author Profile과 현재 Content를 사용하고 Parent나 Quote Source로 대체하지 않는다. 순수 Repost는 조회
   가능한 직접 Source를 사용하며, Source가 Quote이면 그 Quote 자체를 대표한다.
 - guest에게 조회 가능한 Post는 Author Profile의 닉네임과 표시용 핸들, 현재 Content의 Plain Text와 공개
-  가능한 첨부 이미지를 제공한다. 닉네임이 없으면 핸들로 식별하며 Remote 핸들은 domain 구분을 유지한다.
+  가능한 첨부 이미지를 제공한다. 제목은 `닉네임(@핸들) on KOSMO` 형식으로 표시한다.
+  닉네임이 없으면 핸들로 식별하며 Remote 핸들은 domain 구분을 유지한다.
   본문의 한글·이모지·줄바꿈·link·Mention의 읽을 수 있는 표현을 보존하고 내부 식별자나 과거 revision은
   노출하지 않는다. 복수 이미지는 현재 Content의 순서를 유지하고 첫 이미지를 대표 후보로 제공한다.
-- Content Warning이 있으면 설명에는 경고문만 제공하고 가려진 본문·첨부 이미지·Alt Text는 노출하지 않는다.
+- Content Warning이 있으면 설명에는 `열람 주의 문구:` 접두어와 경고문만 제공하고 가려진 본문·첨부 이미지·Alt Text는 노출하지 않는다.
   Content Warning 없이 Sensitive Media가 있으면 본문은 제공하되 이미지와 Alt Text를 사이트 기본 자산으로
   대체한다. 이미지가 없거나 사용할 수 없으면 기본 이미지를 쓰고 본문도 없으면 중립적인 안내를 제공한다.
 - 비공개·삭제·조회 불가·없는 Post는 개별 작성자·본문·Content Warning·Media 정보를 포함하지 않는 일반
