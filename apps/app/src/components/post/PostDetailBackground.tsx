@@ -10,8 +10,9 @@ export const PostDetailBackgroundFeedbackContext = createContext<
 export function PostDetailBackground({
   onBackgroundPress,
   onLayout,
+  onPointerEnter,
   onPointerLeave,
-  onPointerOver,
+  onPointerMove,
   onResponderGrant,
   onResponderRelease,
   onResponderTerminate,
@@ -33,15 +34,23 @@ export function PostDetailBackground({
     <View
       {...props}
       {...responder}
-      style={[Platform.OS === 'web' && onBackgroundPress ? { cursor } : undefined, style]}
-      onPointerOver={
+      style={[style, Platform.OS === 'web' && onBackgroundPress ? { cursor } : undefined]}
+      onPointerEnter={
         Platform.OS === 'web' && onBackgroundPress
           ? (event) => {
               // Background presses only claim this host; children own their input and cursor.
               setCursor(event.target === event.currentTarget ? 'pointer' : 'auto');
-              onPointerOver?.(event);
+              onPointerEnter?.(event);
             }
-          : onPointerOver
+          : onPointerEnter
+      }
+      onPointerMove={
+        Platform.OS === 'web' && onBackgroundPress
+          ? (event) => {
+              setCursor(event.target === event.currentTarget ? 'pointer' : 'auto');
+              onPointerMove?.(event);
+            }
+          : onPointerMove
       }
       onPointerLeave={
         Platform.OS === 'web' && onBackgroundPress
