@@ -6123,7 +6123,10 @@ export const PostDetailThreadBackgroundCursors: Story = {
     );
     preview.scrollIntoView({ block: 'center' });
     const previewBounds = preview.getBoundingClientRect();
-    expect(await pointerAt(previewBounds.left + 2, previewBounds.top + 2, 'auto')).toBe(preview);
+    const previewX = (previewBounds.left + previewBounds.right) / 2;
+    const previewY = previewBounds.top + 2;
+    expect(document.elementFromPoint(previewX, previewY)).toBe(preview);
+    await pointerAt(previewX, previewY, 'auto');
     expect(pathname.textContent).toBe(initialPath);
   },
 };
