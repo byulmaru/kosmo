@@ -94,7 +94,11 @@ stub('react-native', {
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: (styles: object) => styles },
+  StyleSheet: {
+    create: (styles: object) => styles,
+    flatten: (styles: unknown) =>
+      Array.isArray(styles) ? Object.assign({}, ...styles.flat(Infinity).filter(Boolean)) : styles,
+  },
   Text: 'Text',
   View: 'View',
   findNodeHandle: () => null,
