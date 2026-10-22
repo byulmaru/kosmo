@@ -75,3 +75,33 @@ export async function checkActionBarCancelledPresses(
   await pressActionBarPoint(container, edge, { x: edge.x, y: toolbar.top - 1 });
   assertUnchanged();
 }
+
+export async function checkActionBarScrollCancelledPress(
+  container: HTMLElement,
+  assertUnchanged: () => void,
+) {
+  const point = actionBarWhitespace(container)[1]!;
+  const target = container.ownerDocument.elementFromPoint(point.x, point.y)!;
+  const scrollY = window.scrollY;
+  expect(document.documentElement.scrollHeight - window.innerHeight).toBeGreaterThan(scrollY + 30);
+  const coords = {
+    clientX: point.x,
+    clientY: point.y,
+    pageX: point.x + window.scrollX,
+    pageY: point.y + scrollY,
+  };
+  await userEvent.pointer({ keys: '[MouseLeft>]', target, coords });
+  const scrolled = new Promise<void>((resolve) =>
+    window.addEventListener('scroll', () => resolve(), { once: true }),
+  );
+  window.scrollBy(0, 30);
+  await scrolled;
+  expect(window.scrollY).toBeGreaterThan(scrollY);
+  // Preserve the host and page position so only the scroll can cancel this press.
+  await userEvent.pointer({
+    keys: '[/MouseLeft]',
+    target,
+    coords: { ...coords, clientY: point.y - (window.scrollY - scrollY) },
+  });
+  assertUnchanged();
+}

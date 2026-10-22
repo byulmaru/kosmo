@@ -65,6 +65,7 @@ import ogDefaultUrl from '../../../public/og-default.png?url';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
 import {
   checkActionBarCancelledPresses,
+  checkActionBarScrollCancelledPress,
   checkActionBarWhitespace,
   pressActionBarPoint,
 } from '../postActionBarHitTest';
@@ -9149,6 +9150,10 @@ export const ActionBarThreadNavigation: Story = {
       ).toBeLessThanOrEqual(1),
     );
     actionBarNavigationObserver.mockClear();
+    await checkActionBarScrollCancelledPress(
+      canvas.getByTestId('post-thread-item-route-root'),
+      () => expect(actionBarNavigationObserver).not.toHaveBeenCalled(),
+    );
     let count = 0;
     for (const [rowId, postId] of [
       ['post-thread-item-route-root', 'route-root'],
