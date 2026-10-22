@@ -275,6 +275,33 @@ describe('PostContentRenderer', () => {
     assert.equal(rendered('PostMediaGallery')[0]?.props.sensitive, true);
   });
 
+  it('falls back to Plain Text when the document schema version is unsupported', async () => {
+    await render({
+      bodyText: '지원되지 않는 버전은 Plain Text로 표시합니다.',
+      contentWarning: null,
+      document: {
+        version: 2,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '실행하면 안 되는 새 형식' }],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-unsupported-version',
+    });
+
+    const bodyText = rendered('Text').map(renderedText).join('');
+    assert.match(bodyText, /지원되지 않는 버전은 Plain Text로 표시합니다\./);
+    assert.doesNotMatch(bodyText, /실행하면 안 되는 새 형식/);
+  });
+
   it('content warning metadata counts only the canonical post media passed to the renderer', async () => {
     await render({
       bodyText: '원문 본문',
