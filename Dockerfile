@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=26.5.1
+ARG NODE_VERSION=26.12.1
 # 11.27.1 bundles undici 6.28.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.27.1
 ARG SENTRY_RELEASE
