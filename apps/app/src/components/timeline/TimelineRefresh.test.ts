@@ -39,7 +39,6 @@ const toasts: Array<{
 let toastCleanupCount = 0;
 
 const environment = {
-  check: () => ({ status: 'missing' }),
   retain: () => ({ dispose: () => undefined }),
 };
 
