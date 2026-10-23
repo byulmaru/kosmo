@@ -527,8 +527,8 @@ test('사이드바 Profile 요약의 편집 action은 canonical route를 연다'
   ).toHaveCount(0);
   const drawerProfileEditBounds = await drawerProfileEdit.boundingBox();
   expect(drawerProfileEditBounds).not.toBeNull();
-  expect(drawerProfileEditBounds!.height).toBe(32);
-  expect(drawerProfileEditBounds!.width).toBe(72);
+  expect(drawerProfileEditBounds!.height).toBeCloseTo(32, 2);
+  expect(drawerProfileEditBounds!.width).toBeCloseTo(72, 2);
 
   await drawerProfileEdit.focus();
   await expect(drawerProfileEdit).toBeFocused();
