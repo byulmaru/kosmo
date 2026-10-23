@@ -3,6 +3,8 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { getNativeSessionConfiguration } from '../auth/nativeConfig';
+import { serializeStoredSessionToken } from '../auth/sessionToken';
 import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -38,6 +40,7 @@ let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
+let pendingTokenRead: Promise<string | null> | null = null;
 let storedSelectedProfile: string | null = null;
 const environmentInputs: Array<{ selectedProfileId: string | null; token: string | null }> = [];
 const platform = { OS: 'native' };
@@ -49,6 +52,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   Platform: platform,
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
 });
 mockModule('@/observability/sentry', {
   captureHandledMessage: () => undefined,
@@ -68,7 +72,7 @@ mockModule('expo-secure-store', {
     storedToken = null;
   },
   getItemAsync: async (key: string) =>
-    key === 'kosmo.selected-profile' ? storedSelectedProfile : storedToken,
+    key === 'kosmo.selected-profile' ? storedSelectedProfile : (pendingTokenRead ?? storedToken),
   isAvailableAsync: async () => true,
   setItemAsync: async (key: string, value: string) => {
     if (writeFailure) {
@@ -116,6 +120,7 @@ beforeEach(() => {
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
+  pendingTokenRead = null;
   storedSelectedProfile = null;
   environmentInputs.length = 0;
 });
@@ -176,6 +181,36 @@ async function renderProvider() {
 }
 
 describe('RelayActorProvider session cleanup', () => {
+  it('최초 token 읽기가 pending이면 guest 화면을 진행시키지 않고 원래 credential을 복원한다', async () => {
+    let resolveRead!: (value: string | null) => void;
+    pendingTokenRead = new Promise((resolve) => {
+      resolveRead = resolve;
+    });
+    const credential = serializeStoredSessionToken(
+      getNativeSessionConfiguration(),
+      'restored-token',
+    );
+    storedToken = credential;
+    storedSelectedProfile = 'profile-retained';
+    await act(async () => {
+      renderer = create(
+        createElement(RelayActorProvider, { createEnvironment }, createElement(StableProbe)),
+      );
+    });
+    assert.equal(Boolean(snapshot), false);
+    assert.equal(actorSubtreeMountCount, 0);
+    assert.equal(deleteItemCallCount, 0);
+    await act(async () => {
+      resolveRead(credential);
+      await pendingTokenRead;
+    });
+    assert.equal(snapshot?.nativeToken, 'restored-token');
+    assert.equal(environmentInputs.at(-1)?.token, 'restored-token');
+    assert.equal(storedToken, credential);
+    assert.equal(storedSelectedProfile, 'profile-retained');
+    assert.equal(deleteItemCallCount, 0);
+  });
+
   it('각 actor Environment는 immutable selected profile ID를 캡처한다', async () => {
     await renderProvider();
 
