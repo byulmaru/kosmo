@@ -342,11 +342,13 @@ const createFollowFixture = async ({
   readonly followeeKind?: InstanceKind;
 } = {}) => {
   const suffix = crypto.randomUUID();
+  const followerDomain = `${suffix}.follower.${followerKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`;
+  const followeeDomain = `${suffix}.followee.${followeeKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`;
   const followerInstance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${suffix}.${followerKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`,
-      domain: `${suffix}.${followerKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`,
+      canonicalOrigin: `https://${followerDomain}`,
+      domain: followerDomain,
       kind: followerKind,
       state: InstanceState.ACTIVE,
     })
@@ -367,8 +369,8 @@ const createFollowFixture = async ({
   const followeeInstance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${suffix}.remote.example`,
-      domain: `${suffix}.${followeeKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`,
+      canonicalOrigin: `https://${followeeDomain}`,
+      domain: followeeDomain,
       kind: followeeKind,
       state: InstanceState.ACTIVE,
     })
@@ -386,10 +388,11 @@ const createFollowFixture = async ({
     })
     .returning()
     .then(firstOrThrow);
+  const remoteDomain = followeeKind === InstanceKind.ACTIVITYPUB ? followeeDomain : followerDomain;
   const actor = {
-    inboxUri: `https://${suffix}.remote.example/inbox`,
-    sharedInboxUri: `https://${suffix}.remote.example/shared-inbox`,
-    uri: `https://${suffix}.remote.example/users/${followeeKind === InstanceKind.ACTIVITYPUB ? 'followee' : 'follower'}`,
+    inboxUri: `https://${remoteDomain}/inbox`,
+    sharedInboxUri: `https://${remoteDomain}/shared-inbox`,
+    uri: `https://${remoteDomain}/users/${followeeKind === InstanceKind.ACTIVITYPUB ? 'followee' : 'follower'}`,
   };
   const remoteProfile = followeeKind === InstanceKind.ACTIVITYPUB ? followee : follower;
   await db.insert(ActivityPubActors).values({
