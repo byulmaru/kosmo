@@ -1217,8 +1217,9 @@ for (const action of ['답글', '북마크']) {
     await post.getByRole('button', { name: action, exact: true }).click();
     await loginRequest;
 
-    await expect(page).toHaveURL(/\/home$/);
-    await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
+    await expect(page).toHaveURL(/\/first-profile\/handle$/);
+    await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: '가입 안내', exact: true })).toHaveCount(0);
     expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(true);
   });
