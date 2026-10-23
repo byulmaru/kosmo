@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { createContext, useCallback, useContext, useMemo } from 'react';
 import { Platform } from 'react-native';
 import { startWebLogin } from '@/auth/webLogin';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { useShellChromeActions } from '@/components/shell/ShellChromeContext';
 import { useSession } from '@/session/SessionProvider';
 import { resolvePostActionExecution } from './postActionAvailability';
 import type { PropsWithChildren } from 'react';
@@ -21,12 +21,12 @@ const PostActionAuthenticationContext = createContext<PostActionAuthenticationVa
 export function PostActionAuthenticationProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const session = useSession();
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const resolve = useCallback(
     (reason: PostActionResolutionReason) => {
       if (reason === 'profile') {
-        if (shellChrome) {
-          shellChrome.openProfileSwitcher();
+        if (shellChromeActions) {
+          shellChromeActions.openProfileSwitcher();
         } else {
           throw new Error('Profile resolution에는 ShellChromeProvider가 필요합니다.');
         }
@@ -38,7 +38,7 @@ export function PostActionAuthenticationProvider({ children }: PropsWithChildren
         router.push('/');
       }
     },
-    [router, shellChrome],
+    [router, shellChromeActions],
   );
   const value = useMemo<PostActionAuthenticationValue>(
     () => ({

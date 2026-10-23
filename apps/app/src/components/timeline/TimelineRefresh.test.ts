@@ -126,7 +126,7 @@ mockModule('@/components/RouteBoundary', {
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
 mockModule('@/components/shell/ShellChromeContext', {
-  useShellChrome: () => ({ registerHomeReselection, openProfileSwitcher: () => undefined }),
+  useShellChromeActions: () => ({ registerHomeReselection, openProfileSwitcher: () => undefined }),
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',

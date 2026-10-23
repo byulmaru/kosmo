@@ -16,7 +16,7 @@ import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagi
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { useShellChromeActions } from '@/components/shell/ShellChromeContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -85,17 +85,17 @@ const notificationListFragment = graphql`
 export function NotificationList({ profile }: NotificationListProps) {
   const theme = useTheme();
   const scrollRef = useRef<ScrollView>(null);
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const scrollToTop = useCallback(() => {
     scrollRef.current?.scrollTo({ animated: true, y: 0 });
   }, []);
   useEffect(() => {
-    if (Platform.OS === 'web' || !shellChrome?.registerTabReselection) {
+    if (Platform.OS === 'web' || !shellChromeActions?.registerTabReselection) {
       return;
     }
 
-    return shellChrome.registerTabReselection('notifications', scrollToTop);
-  }, [scrollToTop, shellChrome]);
+    return shellChromeActions.registerTabReselection('notifications', scrollToTop);
+  }, [scrollToTop, shellChromeActions]);
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,
     NotificationList_profile$key

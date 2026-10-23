@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { useShellChromeActions } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
   getWebMobileShellHeaderStickyOffset,
@@ -56,8 +56,8 @@ const LocalFragment = graphql`
 `;
 
 export default function LocalScreen() {
-  const shellChrome = useShellChrome();
-  const registerHomeReselection = shellChrome?.registerHomeReselection;
+  const shellChromeActions = useShellChromeActions();
+  const registerHomeReselection = shellChromeActions?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const [refreshState, setRefreshState] = useState({ refreshVersion: 0, refreshing: false });
@@ -94,7 +94,7 @@ export default function LocalScreen() {
   }, [registerHomeReselection, reselectFromShell]);
 
   return (
-    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChrome?.reselectHome}>
+    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChromeActions?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
         error={(resetErrorBoundary) =>
@@ -133,7 +133,7 @@ function LocalFrame({
   onBrandCurrentNavigate?: () => void;
   onReselect: () => void;
 }>) {
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const { width } = useWindowDimensions();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
@@ -155,7 +155,9 @@ function LocalFrame({
           Platform.OS === 'web'
             ? [
                 styles.webTimelineTabs,
-                { top: shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0 },
+                {
+                  top: shellChromeActions ? getWebMobileShellHeaderStickyOffset(width) : 0,
+                },
               ]
             : undefined
         }
@@ -275,7 +277,7 @@ function LocalContentView({
   refreshing: boolean;
 }) {
   const theme = useTheme();
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -292,7 +294,7 @@ function LocalContentView({
               ? '로컬 타임라인을 보려면 사용할 프로필을 먼저 선택해야 해요.'
               : '프로필을 만들면 로컬 게시물을 둘러볼 수 있어요.'}
           </Text>
-          <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
+          <Button onPress={() => shellChromeActions?.openProfileSwitcher()} style={styles.action}>
             {hasProfiles ? '프로필 선택' : '프로필 만들기'}
           </Button>
         </View>

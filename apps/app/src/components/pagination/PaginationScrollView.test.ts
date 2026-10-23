@@ -43,7 +43,7 @@ let reselect: (() => void) | undefined;
 let scrollCalls: unknown[] = [];
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
   exports: {
-    useShellChrome: () => ({
+    useShellChromeActions: () => ({
       registerTabReselection: (_destination: string, handler: () => void) => {
         reselect = handler;
         return () => {

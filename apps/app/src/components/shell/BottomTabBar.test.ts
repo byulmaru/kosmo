@@ -57,7 +57,7 @@ mockModule(new URL('./NavigationLink.tsx', import.meta.url), {
     createElement('NavigationLink', props, props.children),
 });
 mockModule(new URL('./ShellChromeContext.tsx', import.meta.url), {
-  useShellChrome: () => ({
+  useShellChromeActions: () => ({
     reselectHome: () => calls.push('refresh-home'),
     reselectTab: (destination: string) => calls.push(`scroll-${destination}`),
   }),
