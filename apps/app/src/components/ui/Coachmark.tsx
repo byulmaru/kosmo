@@ -164,6 +164,7 @@ export function Coachmark({
 
   return (
     <ModalSheetHost
+      aria-hidden={!presentationReady || undefined}
       accessibilityLabel={label}
       animationType="none"
       closeRequestDisabled={!visible}
