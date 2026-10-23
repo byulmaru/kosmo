@@ -30,6 +30,7 @@ import {
 import { settleEffects } from './workflows/settle-effects';
 import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
+  ProfileFollowAcceptEffectInput,
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
@@ -1509,6 +1510,238 @@ test(
 );
 
 test(
+  'Inbound Follow Accept는 같은 request generation의 최신 envelope를 쓰고 누락 시 fallback에 넘긴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-accept-envelope-' + process.pid;
+    const pairs = [
+      {
+        followerProfileId: '00000000-0000-8000-8000-000000000701',
+        followeeProfileId: '00000000-0000-8000-8000-000000000702',
+      },
+      {
+        followerProfileId: '00000000-0000-8000-8000-000000000703',
+        followeeProfileId: '00000000-0000-8000-8000-000000000704',
+      },
+    ] as const;
+    const requestIds = [
+      '00000000-0000-8000-8000-000000000705',
+      '00000000-0000-8000-8000-000000000706',
+      '00000000-0000-8000-8000-000000000707',
+    ] as const;
+    const profileFollowIds = [
+      '00000000-0000-8000-8000-000000000708',
+      '00000000-0000-8000-8000-000000000709',
+    ] as const;
+    const followCounts = new Map<string, number>();
+    const acceptInputs: ProfileFollowAcceptEffectInput[] = [];
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async (
+          input: ProfileFollowPairTransitionInput,
+        ) => {
+          if (input.command.kind === 'FOLLOW') {
+            const followCount = (followCounts.get(input.pair.followerProfileId) ?? 0) + 1;
+            followCounts.set(input.pair.followerProfileId, followCount);
+            const pairIndex: 0 | 1 =
+              input.pair.followerProfileId === pairs[0].followerProfileId ? 0 : 1;
+            const requestId =
+              pairIndex === 0 ? requestIds[0] : followCount === 1 ? requestIds[1] : requestIds[2];
+            return {
+              ok: true as const,
+              nextState: 'PENDING' as const,
+              result: {
+                commandKind: 'FOLLOW' as const,
+                created: followCount === 1,
+                kind: 'PENDING' as const,
+                ...input.pair,
+                profileFollowRequestId: requestId,
+              },
+              effectPlan: [],
+              pendingRequestId: requestId,
+            };
+          }
+
+          if (input.command.kind !== 'APPROVE') {
+            throw new Error('Unexpected profile follow command');
+          }
+          assert.equal(input.acceptInboundFollow, true);
+          const pairIndex: 0 | 1 =
+            input.pair.followerProfileId === pairs[0].followerProfileId ? 0 : 1;
+          const requestId = input.command.expectedRowId;
+          const profileFollowId = profileFollowIds[pairIndex];
+          return {
+            ok: true as const,
+            nextState: 'ESTABLISHED' as const,
+            result: {
+              commandKind: 'APPROVE' as const,
+              kind: 'ACCEPTED' as const,
+              ...input.pair,
+              profileFollowId,
+              profileFollowRequestId: requestId,
+            },
+            effectPlan: [
+              {
+                kind: 'ACCEPT_INBOUND_FOLLOW' as const,
+                input: { ...input.pair, pendingRequestId: requestId, profileFollowId },
+              },
+            ],
+          };
+        },
+        loadPendingFollowRequestIdActivity: async () => undefined,
+        sendProfileFollowAcceptActivity: async (input: ProfileFollowAcceptEffectInput) => {
+          acceptInputs.push(input);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const firstPair = pairs[0];
+      const firstStart = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [firstPair],
+        taskQueue,
+        workflowId: `profile-follow-accept-envelope:first:${process.pid}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const firstStartHandle = firstStart.workflowHandle();
+      const firstResult = (await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [
+            {
+              kind: 'FOLLOW',
+              origin: 'ACTIVITYPUB',
+            },
+            {
+              actorUri: 'https://remote.example/users/actor',
+              objectUri: 'https://local.example/ap/actor/first',
+              activityUri: 'https://remote.example/activities/first',
+              published: '2026-09-29T00:03:00Z',
+            },
+          ],
+          startWorkflowOperation: firstStart,
+        },
+      )) as ProfileFollowPairTransitionOutcome;
+      assert.equal(firstResult.ok, true);
+      if (!firstResult.ok) {
+        return;
+      }
+      if (firstResult.result.commandKind !== 'FOLLOW') {
+        throw new Error('Unexpected first Follow result');
+      }
+      assert.equal(firstResult.result.kind, 'PENDING');
+      const firstHandle = await firstStartHandle;
+      await firstHandle.executeUpdate('profileFollowPairUpdate', {
+        args: [
+          {
+            kind: 'FOLLOW',
+            origin: 'ACTIVITYPUB',
+          },
+          {
+            actorUri: 'https://remote.example/users/actor',
+            objectUri: 'https://local.example/ap/actor/first',
+            activityUri: 'https://remote.example/activities/latest',
+            published: '2026-09-29T00:04:00Z',
+          },
+        ],
+      });
+      assert.deepEqual(
+        await firstHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'APPROVE',
+              actorProfileId: firstPair.followeeProfileId,
+              expectedRowId: requestIds[0],
+              origin: 'LOCAL',
+            },
+          ],
+        }),
+        {
+          ok: true,
+          result: {
+            commandKind: 'APPROVE',
+            kind: 'ACCEPTED',
+            ...firstPair,
+            profileFollowId: profileFollowIds[0],
+            profileFollowRequestId: requestIds[0],
+          },
+        },
+      );
+      await firstHandle.result();
+      assert.equal(
+        acceptInputs[0]?.inboundFollow?.activityUri,
+        'https://remote.example/activities/latest',
+      );
+      assert.equal(acceptInputs[0]?.inboundFollow?.published, '2026-09-29T00:04:00Z');
+
+      const secondPair = pairs[1];
+      const secondStart = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [secondPair],
+        taskQueue,
+        workflowId: `profile-follow-accept-envelope:changed-generation:${process.pid}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const secondStartHandle = secondStart.workflowHandle();
+      await environment.client.workflow.executeUpdateWithStart('profileFollowPairUpdate', {
+        args: [
+          {
+            kind: 'FOLLOW',
+            origin: 'ACTIVITYPUB',
+          },
+          {
+            actorUri: 'https://remote.example/users/actor',
+            objectUri: 'https://local.example/ap/actor/second',
+            activityUri: 'https://remote.example/activities/old-generation',
+          },
+        ],
+        startWorkflowOperation: secondStart,
+      });
+      const secondHandle = await secondStartHandle;
+      await secondHandle.executeUpdate('profileFollowPairUpdate', {
+        args: [{ kind: 'FOLLOW', origin: 'ACTIVITYPUB' }],
+      });
+      assert.deepEqual(
+        await secondHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'APPROVE',
+              actorProfileId: secondPair.followeeProfileId,
+              expectedRowId: requestIds[2],
+              origin: 'LOCAL',
+            },
+          ],
+        }),
+        {
+          ok: true,
+          result: {
+            commandKind: 'APPROVE',
+            kind: 'ACCEPTED',
+            ...secondPair,
+            profileFollowId: profileFollowIds[1],
+            profileFollowRequestId: requestIds[2],
+          },
+        },
+      );
+      await secondHandle.result();
+      assert.equal(acceptInputs[1]?.pendingRequestId, requestIds[2]);
+      assert.equal(acceptInputs[1]?.inboundFollow, undefined);
+    });
+  },
+);
+
+test(
   'Open/Pending/Approve 이전 Profile Follow history를 현재 Workflow bundle로 replay한다',
   { timeout: 120_000 },
   async (t) => {
@@ -1561,7 +1794,7 @@ test(
         pair: pendingPair,
         updates: [
           {
-            command: { kind: 'FOLLOW', origin: 'LOCAL' },
+            command: { kind: 'FOLLOW', origin: 'ACTIVITYPUB' },
             execution: {
               ok: true,
               nextState: 'PENDING',
@@ -1687,10 +1920,19 @@ test(
         });
         const [firstUpdate, ...remainingUpdates] = scenario.updates;
         assert.ok(firstUpdate);
+        const legacyInboundFollow = {
+          actorUri: 'https://remote.example/users/legacy-actor',
+          objectUri: 'https://local.example/ap/actor/legacy-followee',
+          activityUri: 'https://remote.example/activities/legacy-follow',
+          published: '2026-09-29T00:05:00Z',
+        };
         const firstResult = await environment.client.workflow.executeUpdateWithStart(
           'profileFollowPairUpdate',
           {
-            args: [firstUpdate.command],
+            args:
+              scenario.name === 'pending'
+                ? [firstUpdate.command, legacyInboundFollow]
+                : [firstUpdate.command],
             updateId: `legacy-replay-${scenario.name}-${scenarioIndex}-0`,
             startWorkflowOperation,
           },
@@ -1698,6 +1940,24 @@ test(
         assert.deepEqual(firstResult, { ok: true, result: firstUpdate.execution.result });
 
         const handle = await startWorkflowOperation.workflowHandle();
+        if (scenario.name === 'pending') {
+          const acceptedUpdate = (await handle.fetchHistory()).events?.find(
+            (event) =>
+              event.workflowExecutionUpdateAcceptedEventAttributes?.acceptedRequest?.input?.name ===
+              'profileFollowPairUpdate',
+          );
+          assert.ok(acceptedUpdate);
+          const acceptedArgs =
+            acceptedUpdate.workflowExecutionUpdateAcceptedEventAttributes?.acceptedRequest?.input
+              ?.args?.payloads;
+          assert.equal(acceptedArgs?.length, 2);
+          assert.deepEqual(
+            acceptedArgs?.map((payload) =>
+              JSON.parse(new TextDecoder().decode(payload.data ?? new Uint8Array())),
+            ),
+            [firstUpdate.command, legacyInboundFollow],
+          );
+        }
         for (const [updateIndex, update] of remainingUpdates.entries()) {
           const result = await handle.executeUpdate('profileFollowPairUpdate', {
             args: [update.command],
@@ -2157,6 +2417,31 @@ test(
                 origin: 'LOCAL',
               },
             } as never,
+          ],
+        }),
+      );
+      await assert.rejects(
+        pairHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'FOLLOW',
+              origin: 'ACTIVITYPUB',
+            },
+            {
+              actorUri: 'not-a-url',
+              objectUri: 'https://local.example/ap/actor/profile',
+            },
+          ],
+        }),
+      );
+      await assert.rejects(
+        pairHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            { kind: 'FOLLOW', origin: 'LOCAL' },
+            {
+              actorUri: 'https://remote.example/users/actor',
+              objectUri: 'https://local.example/ap/actor/profile',
+            },
           ],
         }),
       );

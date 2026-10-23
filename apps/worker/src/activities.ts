@@ -41,6 +41,7 @@ export {
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
+  sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
 } from './profile-follow-activities';
