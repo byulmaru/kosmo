@@ -93,9 +93,9 @@ const profileEditSafeAreaMetrics = {
   insets: { bottom: 16, left: 0, right: 0, top: 24 },
 };
 const publicQuery = { ...query, currentSession: null, me: null };
-const firstProfileQuery = {
+const unselectedProfileQuery = {
   ...query,
-  ...shellQuery({ profiles: [], selectedProfile: null }),
+  ...shellQuery({ profiles: [selectedProfile], selectedProfile: null }),
 };
 const ineligibleSelectedProfile = {
   ...selectedProfile,
@@ -1565,12 +1565,12 @@ export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
 export const ProfileSwitcherCreateTracksAnalytics: Story = {
   parameters: {
     relay: {
-      data: firstProfileQuery,
+      data: unselectedProfileQuery,
       operationResponses: {
         ProfileSwitcherCreateProfileMutation: {
           data: {
             createProfile: {
-              account: { ...firstProfileQuery.me, profiles: [secondProfile] },
+              account: { ...unselectedProfileQuery.me, profiles: [selectedProfile, secondProfile] },
               profile: secondProfile,
             },
           },
@@ -3155,5 +3155,19 @@ export const UniversalFullComposerHeightTransition: Story = {
     await waitFor(() =>
       expect(overlayBody.getBoundingClientRect().height).toBeLessThan(railHeight),
     );
+  },
+};
+
+export const ProfileSwitcherFirstProfileEntry: Story = {
+  parameters: {
+    relay: { data: { ...query, ...shellQuery({ profiles: [], selectedProfile: null }) } },
+  },
+  render: () => <FirstProfileSwitcherStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const entry = await canvas.findByRole('link', { name: '첫 프로필 만들기' });
+    expect(entry).toHaveAttribute('href', '/first-profile/handle');
+    expect(canvas.queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
   },
 };

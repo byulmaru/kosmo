@@ -12,6 +12,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  Redirect: () => null,
   useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
 });
