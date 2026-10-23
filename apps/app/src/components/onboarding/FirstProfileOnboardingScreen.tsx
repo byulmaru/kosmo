@@ -243,7 +243,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                     editable={!busy && !created}
                     error={handleError || undefined}
                     onChangeText={(handle) => onChange({ ...draft, handle })}
-                    placeholder="예: bom"
+                    placeholder="예: kosmo"
                     value={draft.handle}
                   />
                 </View>
