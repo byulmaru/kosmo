@@ -1,4 +1,3 @@
-import { createContext, useContext } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
@@ -6,7 +5,6 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { ProfileBlockAction } from './ProfileBlockAction';
-import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
@@ -107,7 +105,7 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-function useFollowButtonMutations() {
+export function FollowButton({ profile, style }: FollowButtonProps) {
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
   const [commitCancel, cancelling] = useMutation<FollowButtonCancelProfileFollowRequestMutation>(
@@ -115,64 +113,10 @@ function useFollowButtonMutations() {
   );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
-  return {
-    commitFollow,
-    commitCancel,
-    commitUnfollow,
-    loading: following || cancelling || unfollowing,
-  };
-}
-
-type FollowButtonMutations = ReturnType<typeof useFollowButtonMutations>;
-
-const FollowButtonGroupContext = createContext<
-  (FollowButtonMutations & { disabled: boolean }) | null
->(null);
-
-export function FollowButtonGroup({
-  children,
-  disabled = false,
-}: {
-  children: ReactNode | ((loading: boolean) => ReactNode);
-  disabled?: boolean;
-}) {
-  const mutations = useFollowButtonMutations();
-  return (
-    <FollowButtonGroupContext.Provider value={{ ...mutations, disabled }}>
-      {typeof children === 'function' ? children(mutations.loading) : children}
-    </FollowButtonGroupContext.Provider>
-  );
-}
-
-export function FollowButton(props: FollowButtonProps) {
-  const mutations = useContext(FollowButtonGroupContext);
-  return mutations ? (
-    <FollowButtonAction {...props} mutations={mutations} />
-  ) : (
-    <StandaloneFollowButton {...props} />
-  );
-}
-
-function StandaloneFollowButton(props: FollowButtonProps) {
-  const mutations = useFollowButtonMutations();
-  return <FollowButtonAction {...props} mutations={mutations} />;
-}
-
-function FollowButtonAction({
-  profile,
-  style,
-  mutations: {
-    commitFollow,
-    commitCancel,
-    commitUnfollow,
-    disabled: groupDisabled = false,
-    loading,
-  },
-}: FollowButtonProps & { mutations: FollowButtonMutations & { disabled?: boolean } }) {
+  const loading = following || cancelling || unfollowing;
   const { selectedProfileId } = useSession();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
-  const disabled = groupDisabled || loading;
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
@@ -195,7 +139,7 @@ function FollowButtonAction({
   }
 
   const toggleFollow = () => {
-    if (disabled) {
+    if (loading) {
       return;
     }
 
@@ -306,10 +250,10 @@ function FollowButtonAction({
         aria-pressed={isFollowing || isPending}
         accessibilityState={{
           busy: loading,
-          disabled,
+          disabled: loading,
           selected: isFollowing || isPending,
         }}
-        disabled={disabled}
+        disabled={loading}
         onPress={toggleFollow}
         style={styles.relationButton}
         tone={isFollowing || isPending ? 'secondary' : 'primary'}

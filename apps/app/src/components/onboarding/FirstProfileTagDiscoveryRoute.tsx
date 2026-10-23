@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
-import { FollowButtonGroup } from '@/components/profile/FollowButton';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
@@ -13,12 +12,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, textStyles } from '@/theme/tokens';
 import { FirstProfileOnboardingFrame } from './FirstProfileOnboardingFrame';
 import type { ComponentProps, ReactNode } from 'react';
-import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { FirstProfileTagDiscovery_profile$key } from './__generated__/FirstProfileTagDiscovery_profile.graphql';
-import type {
-  FirstProfileTagDiscoveryList_hashtag$data,
-  FirstProfileTagDiscoveryList_hashtag$key,
-} from './__generated__/FirstProfileTagDiscoveryList_hashtag.graphql';
+import type { FirstProfileTagDiscoveryList_hashtag$key } from './__generated__/FirstProfileTagDiscoveryList_hashtag.graphql';
 import type { FirstProfileTagDiscoveryNextPageQuery } from './__generated__/FirstProfileTagDiscoveryNextPageQuery.graphql';
 import type { FirstProfileTagDiscoveryQuery } from './__generated__/FirstProfileTagDiscoveryQuery.graphql';
 import type { FirstProfileTagDiscoveryTagQuery } from './__generated__/FirstProfileTagDiscoveryTagQuery.graphql';
@@ -76,48 +71,39 @@ type Props = {
   profileId: string;
 };
 
-type RenderFrame = (content: ReactNode) => ReactNode;
-
 export function FirstProfileTagDiscoveryRoute({ empty, onContinue, profileId }: Props) {
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
-  const renderFrame: RenderFrame = (content) => (
-    <FirstProfileOnboardingFrame
-      title={'관심사가 같은 사람을\n만나보세요'}
-      description="나와 취향이 같은 사람들을 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
-      style={styles.frame}
-      actions={<Button onPress={onContinue}>계속하기</Button>}
-    >
-      <View style={styles.content}>{content}</View>
-    </FirstProfileOnboardingFrame>
-  );
   return (
     <View style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}>
-      <RouteBoundary
-        error={(retry) =>
-          renderFrame(
-            <DiscoveryState
-              actionLabel="다시 시도"
-              alert
-              onAction={retry}
-              title="저장한 태그를 불러오지 못했어요"
-            />,
-          )
-        }
-        loading={renderFrame(<DiscoveryState loading title="저장한 태그를 불러오는 중이에요" />)}
-        title="저장한 태그를 불러오지 못했어요"
+      <FirstProfileOnboardingFrame
+        title={'관심사가 같은 사람을\n만나보세요'}
+        description="나와 취향이 같은 사람들을 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
+        style={styles.frame}
+        actions={<Button onPress={onContinue}>계속하기</Button>}
       >
-        <SavedTagQuery empty={empty} profileId={profileId} renderFrame={renderFrame} />
-      </RouteBoundary>
+        <View style={styles.content}>
+          <RouteBoundary
+            error={(retry) => (
+              <DiscoveryState
+                actionLabel="다시 시도"
+                alert
+                onAction={retry}
+                title="저장한 태그를 불러오지 못했어요"
+              />
+            )}
+            loading={<DiscoveryState loading title="저장한 태그를 불러오는 중이에요" />}
+            title="저장한 태그를 불러오지 못했어요"
+          >
+            <SavedTagQuery empty={empty} profileId={profileId} />
+          </RouteBoundary>
+        </View>
+      </FirstProfileOnboardingFrame>
     </View>
   );
 }
 
-function SavedTagQuery({
-  empty,
-  profileId,
-  renderFrame,
-}: Pick<Props, 'empty' | 'profileId'> & { renderFrame: RenderFrame }) {
+function SavedTagQuery({ empty, profileId }: Pick<Props, 'empty' | 'profileId'>) {
   const { fetchKey, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileTagDiscoveryQuery>(
     query,
@@ -125,30 +111,27 @@ function SavedTagQuery({
     { fetchKey, fetchPolicy: 'network-only' },
   );
   if (data.node?.__typename !== 'Profile' || !data.node.profile) {
-    return renderFrame(
+    return (
       <DiscoveryState
         actionLabel="다시 시도"
         alert
         onAction={refetch}
         title="저장한 태그를 확인할 수 없어요"
-      />,
+      />
     );
   }
-  return <SavedTags empty={empty} profile={data.node.profile} renderFrame={renderFrame} />;
+  return <SavedTags empty={empty} profile={data.node.profile} />;
 }
 
 function SavedTags({
   empty,
   profile,
-  renderFrame,
 }: {
   empty: ReactNode;
   profile: FirstProfileTagDiscovery_profile$key;
-  renderFrame: RenderFrame;
 }) {
   const { tags } = useFragment(profileFragment, profile);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [visitedIds, setVisitedIds] = useState<readonly string[]>([]);
   const selected = tags.find((tag) => tag.id === selectedId) ?? tags[0];
   const theme = useTheme();
 
@@ -156,25 +139,16 @@ function SavedTags({
     return empty;
   }
 
-  const renderControls = (disabled: boolean) => (
-    <>
+  return (
+    <View style={styles.content}>
       <ScrollView contentContainerStyle={styles.tags} style={styles.tagSelector}>
         {tags.map((tag) => (
           <Button
             accessibilityLabel={`#${tag.name}`}
             aria-pressed={tag.id === selected.id}
-            accessibilityState={{ disabled, selected: tag.id === selected.id }}
-            disabled={disabled}
+            accessibilityState={{ selected: tag.id === selected.id }}
             key={tag.id}
-            onPress={() => {
-              if (disabled) {
-                return;
-              }
-              setVisitedIds((current) =>
-                current.includes(selected.id) ? current : [...current, selected.id],
-              );
-              setSelectedId(tag.id);
-            }}
+            onPress={() => setSelectedId(tag.id)}
             size="compact"
             style={styles.tag}
             tone={tag.id === selected.id ? 'primary' : 'secondary'}
@@ -189,153 +163,56 @@ function SavedTags({
       >
         #{selected.name} 관련 프로필
       </Text>
-    </>
-  );
-
-  return (
-    <View style={styles.content}>
-      {tags
-        .filter((tag) => tag.id === selected.id || visitedIds.includes(tag.id))
-        .map((tag) => {
-          const active = tag.id === selected.id;
-          return (
-            <View
-              accessibilityElementsHidden={!active}
-              importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
-              key={tag.id}
-              style={[styles.content, !active && styles.hidden]}
-            >
-              <RouteBoundary
-                error={(retry) =>
-                  renderFrame(
-                    <>
-                      {renderControls(!active)}
-                      <DiscoveryState
-                        actionLabel="다시 시도"
-                        alert
-                        description="잠시 후 다시 시도해주세요."
-                        onAction={retry}
-                        title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
-                      />
-                    </>,
-                  )
-                }
-                loading={renderFrame(
-                  <>
-                    {renderControls(true)}
-                    <DiscoveryState
-                      loading
-                      title={`#${tag.name} 관련 프로필을 불러오는 중이에요`}
-                    />
-                  </>,
-                )}
-                title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
-              >
-                <TagQuery
-                  active={active}
-                  hashtagId={tag.id}
-                  renderControls={renderControls}
-                  renderFrame={renderFrame}
-                />
-              </RouteBoundary>
-            </View>
-          );
-        })}
+      <RouteBoundary
+        key={selected.id}
+        error={(retry) => (
+          <DiscoveryState
+            actionLabel="다시 시도"
+            alert
+            description="잠시 후 다시 시도해주세요."
+            onAction={retry}
+            title={`#${selected.name} 관련 프로필을 불러오지 못했어요`}
+          />
+        )}
+        loading={
+          <DiscoveryState loading title={`#${selected.name} 관련 프로필을 불러오는 중이에요`} />
+        }
+        title={`#${selected.name} 관련 프로필을 불러오지 못했어요`}
+      >
+        <TagQuery hashtagId={selected.id} />
+      </RouteBoundary>
     </View>
   );
 }
 
-function TagQuery({
-  active,
-  hashtagId,
-  renderControls,
-  renderFrame,
-}: {
-  active: boolean;
-  hashtagId: string;
-  renderControls: (disabled: boolean) => ReactNode;
-  renderFrame: RenderFrame;
-}) {
-  const { fetchKey, refetch } = useRouteBoundary();
+function TagQuery({ hashtagId }: { hashtagId: string }) {
+  const { fetchKey, fetchPolicy, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileTagDiscoveryTagQuery>(
     tagQuery,
     { hashtagId },
-    { fetchKey, fetchPolicy: 'network-only' },
+    { fetchKey, fetchPolicy },
   );
   if (data.node?.__typename !== 'Hashtag' || !data.node.relatedProfiles) {
-    return renderFrame(
-      <>
-        {renderControls(!active)}
-        <DiscoveryState
-          actionLabel="다시 시도"
-          alert
-          onAction={refetch}
-          title="이 태그의 관련 프로필을 확인할 수 없어요"
-        />
-      </>,
+    return (
+      <DiscoveryState
+        actionLabel="다시 시도"
+        alert
+        onAction={refetch}
+        title="이 태그의 관련 프로필을 확인할 수 없어요"
+      />
     );
   }
-  return (
-    <RelatedProfiles
-      active={active}
-      hashtag={data.node.relatedProfiles}
-      renderControls={renderControls}
-      renderFrame={renderFrame}
-    />
-  );
+  return <RelatedProfiles hashtag={data.node.relatedProfiles} />;
 }
 
-function RelatedProfiles({
-  active,
-  hashtag,
-  renderControls,
-  renderFrame,
-}: {
-  active: boolean;
-  hashtag: FirstProfileTagDiscoveryList_hashtag$key;
-  renderControls: (disabled: boolean) => ReactNode;
-  renderFrame: RenderFrame;
-}) {
+function RelatedProfiles({ hashtag }: { hashtag: FirstProfileTagDiscoveryList_hashtag$key }) {
   const pagination = usePaginationFragment<
     FirstProfileTagDiscoveryNextPageQuery,
     FirstProfileTagDiscoveryList_hashtag$key
   >(listFragment, hashtag);
-  return (
-    <FollowButtonGroup disabled={!active || pagination.isLoadingNext}>
-      {(mutationLoading) => (
-        <RelatedProfilesContent
-          active={active}
-          mutationLoading={mutationLoading}
-          pagination={pagination}
-          renderControls={renderControls}
-          renderFrame={renderFrame}
-        />
-      )}
-    </FollowButtonGroup>
-  );
-}
-
-function RelatedProfilesContent({
-  active,
-  mutationLoading,
-  pagination,
-  renderControls,
-  renderFrame,
-}: {
-  active: boolean;
-  mutationLoading: boolean;
-  pagination: {
-    data: FirstProfileTagDiscoveryList_hashtag$data;
-    hasNext: boolean;
-    isLoadingNext: boolean;
-    loadNext: LoadNext;
-  };
-  renderControls: (disabled: boolean) => ReactNode;
-  renderFrame: RenderFrame;
-}) {
   const profiles = pagination.data.relatedProfiles.edges;
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
-    hasNext: active && !mutationLoading && pagination.hasNext,
+    hasNext: pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
     itemCount: profiles.length,
     loadNext: pagination.loadNext,
@@ -343,32 +220,29 @@ function RelatedProfilesContent({
     webScrollTarget: 'container',
   });
 
-  return renderFrame(
-    <View style={styles.content}>
-      {renderControls(!active || mutationLoading || pagination.isLoadingNext)}
-      <ScrollView {...nativeScrollProps} contentContainerStyle={styles.list}>
-        {profiles.length ? (
-          profiles.map((edge) => (
-            <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
-          ))
-        ) : (
-          <StateView
-            description="다른 태그를 골라 보거나 지금은 넘어갈 수 있어요."
-            title="관련 프로필이 없어요"
-          />
-        )}
-        <PaginationSurface
-          endRef={endRef}
-          error={active && loadError}
-          errorMessage="관련 프로필을 더 불러오지 못했어요"
-          hasNext={active && pagination.hasNext}
-          isLoading={pagination.isLoadingNext}
-          loadingLabel="관련 프로필을 더 불러오는 중"
-          onRetry={active && !mutationLoading ? loadNextPage : undefined}
-          style={styles.pagination}
+  return (
+    <ScrollView {...nativeScrollProps} contentContainerStyle={styles.list} style={styles.content}>
+      {profiles.length ? (
+        profiles.map((edge) => (
+          <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
+        ))
+      ) : (
+        <StateView
+          description="다른 태그를 골라 보거나 지금은 넘어갈 수 있어요."
+          title="관련 프로필이 없어요"
         />
-      </ScrollView>
-    </View>,
+      )}
+      <PaginationSurface
+        endRef={endRef}
+        error={loadError}
+        errorMessage="관련 프로필을 더 불러오지 못했어요"
+        hasNext={pagination.hasNext}
+        isLoading={pagination.isLoadingNext}
+        loadingLabel="관련 프로필을 더 불러오는 중"
+        onRetry={loadNextPage}
+        style={styles.pagination}
+      />
+    </ScrollView>
   );
 }
 
@@ -391,7 +265,6 @@ const styles = StyleSheet.create({
     ...textStyles.uiHeadingS,
     paddingVertical: spacing.sm,
   },
-  hidden: { display: 'none' },
   list: { flexGrow: 1 },
   pagination: { alignItems: 'center', padding: spacing.lg },
 });

@@ -9,8 +9,8 @@
 ## Practical Approach
 
 1. 선행 PR의 최신 완료 연결부를 확인하고 첫 Profile 흐름의 마지막 진입에 저장 Profile ID와 태그 조회를 연결한다. 온보딩 초안이나 `tagInput`을 조회 조건으로 넘기지 않는다. 태그가 없으면 기존 후속 이동을 유지한다.
-2. 태그 선택 영역과 선택 태그의 관련 Profile 목록을 조합한다. Hashtag Node별 pagination을 유지하고 이미 읽은 목록을 보존한다. 기존 초기 fallback은 generic 제목만 보여 주므로 태그 맥락과 retry 상태를 목록 바깥에서 유지하는 구성을 검토한다.
-3. 같은 Relay actor Environment의 normalized Profile 상태와 공용 FollowButton을 사용한다. 태그를 바꿔도 같은 Profile의 결과를 읽고, 진행 중 중복 요청·실패 시 rollback·늦은 응답을 실제 조합에서 검증한다.
+2. 선택 태그의 관련 Profile 목록은 on-demand로 조회하고 기존 Hashtag Node pagination과 Relay의 표준 `store-or-network` 캐시 동작을 사용한다. 방문한 태그의 목록을 숨겨 둔 채 계속 마운트하지 않는다. 태그 맥락과 실패한 조회의 retry 상태는 목록과 함께 표시한다.
+3. 같은 Relay actor Environment의 normalized Profile 상태와 공용 FollowButton을 사용한다. 태그를 바꿔도 같은 Profile의 결과를 읽고, 개별 버튼의 중복 실행 방지·실패 rollback·늦은 응답을 실제 조합에서 검증한다. 태그 선택·목록 조회·pagination과 관계 변경은 전역으로 순차 처리하지 않는다.
 4. 진행 action은 팔로우 여부와 무관하게 홈의 후속 흐름으로 연결한다. PROD-1148이 없으면 기존 홈 이동을 유지하면서 그 이슈가 연결할 경계를 남긴다. Coachmark·앱 알림 구현을 포함하지 않는다.
 
 ## Alternatives and Traps
@@ -24,16 +24,10 @@
 ## Risks / Limits
 
 - 소스 조사는 API 재사용 가능성을 보여 주지만 다중 태그 UI의 상태 일치를 실행으로 증명하지 않는다.
-- 2026-10-23 사용자 선택에 따라 목록 조회와 관계 변경을 순차 처리한다. 초기·페이지 조회와 관계 변경 동안의 태그 선택 제한, 처리 후 복구, 계속하기를 검증한다.
+- 최신 사용자 선택에 따라 태그 선택·목록 조회·pagination과 관계 변경은 전역으로 직렬화하지 않는다. 조회 오류의 targeted retry, 페이지 오류 뒤 기존 행 유지, 개별 관계 action의 pending·rollback, 요청 중 `계속하기`를 검증한다.
 - 새 DB·서버 정책·migration은 계획하지 않는다. 구현 중 실제 필요가 발견되면 근거와 범위를 다시 확인한다.
-- 로컬·CI·Web E2E·iOS·Android runtime·운영 결과는 구분한다. 이 세션은 구현과 runtime 테스트를 수행하지 않았다.
+- Web CI·E2E 결과와 iOS·Android runtime·접근성 증거는 별도로 판정한다.
 
 ## Open Questions
 
 없음. 선행 PR과 후속 안내의 최신 구현 상태는 구현 세션에서 재조회한다.
-
-## Implementation Checkpoint
-
-방문한 태그의 목록은 각 Relay query와 connection을 유지한 채 숨긴다. 아직 방문하지 않은 태그를 미리 조회하지 않는다. 각 로드된 목록의 `FollowButtonGroup`이 표준 mutation hook을 소유한다. 초기 조회 중에는 태그를 전환하지 않고, 페이지 조회와 관계 변경은 기존 Relay loading 상태로 서로 겹치지 않게 한다. 서버 관계 정책과 그룹 밖 기존 버튼 동작은 유지한다.
-
-기존 head `35b305c6`의 GitHub CI는 통과했다. 순차 처리 수정 뒤 새 head의 CI를 다시 확인한다. 테스트 코드 작성이나 Web CI를 Native runtime 검증 완료로 표시하지 않는다.

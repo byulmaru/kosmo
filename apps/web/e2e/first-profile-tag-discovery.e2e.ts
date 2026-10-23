@@ -48,7 +48,7 @@ async function createdProfileId(accountId: string) {
   return rows[0]!.id;
 }
 
-test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상태와 홈을 이어 본다', async ({
+test('태그별 조회와 팔로우가 독립적으로 진행되고 두 태그 상태와 홈을 이어 본다', async ({
   context,
   page,
 }) => {
@@ -149,37 +149,63 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
     await openDiscovery(page);
     await expect(page).toHaveURL(/\/first-profile\/discover$/);
     await tagQueryFetched;
-    await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
+    const bookTagId = toGlobalId('Hashtag', books.id);
+    const musicTagId = toGlobalId('Hashtag', music.id);
+    const bookTagButton = page.getByRole('button', { name: '#책', exact: true });
+    const musicTagButton = page.getByRole('button', { name: '#음악', exact: true });
+    const initialTagId = tagQueries[0];
+    expect([bookTagId, musicTagId]).toContain(initialTagId);
+    const initialTagIsBooks = initialTagId === bookTagId;
+    const initialTagButton = initialTagIsBooks ? bookTagButton : musicTagButton;
+    const otherTagButton = initialTagIsBooks ? musicTagButton : bookTagButton;
+    const otherTagId = initialTagIsBooks ? musicTagId : bookTagId;
+    await expect(initialTagButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(otherTagButton).toBeEnabled();
     await expect(page.getByRole('button', { name: '계속하기', exact: true })).toBeEnabled();
-    expect(tagQueries).toHaveLength(1);
+    expect(tagQueries).toEqual([initialTagId]);
     expect(followMutations).toEqual([]);
+
+    await otherTagButton.click();
+    await expect(otherTagButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(initialTagButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(profileRow(page, open.handle)).toBeVisible();
+    expect(tagQueries).toEqual([initialTagId, otherTagId]);
+    expect(followMutations).toEqual([]);
+
+    const initialTagQueryResponse = page.waitForResponse((response) => {
+      const operation = readGraphQLOperation(response.request().postData());
+      return (
+        operation?.operationName === 'FirstProfileTagDiscoveryTagQuery' &&
+        operation.variables?.hashtagId === initialTagId
+      );
+    });
     releaseTagQuery();
+    await initialTagQueryResponse;
+
+    await initialTagButton.click();
+    await expect(initialTagButton).toHaveAttribute('aria-pressed', 'true');
     await expect(
       profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }),
     ).toBeEnabled();
-    await page.getByRole('button', { name: '#책', exact: true }).click();
-    await expect(
-      profileRow(page, open.handle).getByRole('button', { name: '팔로우', exact: true }),
-    ).toBeEnabled();
+    expect(tagQueries).toEqual([initialTagId, otherTagId]);
     expect(followMutations).toEqual([]);
-    const tagQueriesBeforeFollow = tagQueries.length;
+
+    await bookTagButton.click();
+    await expect(bookTagButton).toHaveAttribute('aria-pressed', 'true');
+    expect(tagQueries).toEqual([initialTagId, otherTagId]);
     await profileRow(page, open.handle)
       .getByRole('button', { name: '팔로우', exact: true })
       .click();
     await followMutationFetched;
-    await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
+    await expect(bookTagButton).toBeEnabled();
+    await expect(musicTagButton).toBeEnabled();
     await expect(
       profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
     ).toBeDisabled();
     await expect(
       profileRow(page, approval.handle).getByRole('button', { name: '팔로우', exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await expect(page.getByRole('button', { name: '계속하기', exact: true })).toBeEnabled();
-    expect(tagQueries).toHaveLength(tagQueriesBeforeFollow);
     expect(followMutations).toEqual(['FollowButtonFollowProfileMutation']);
     expect(
       await db
@@ -192,11 +218,20 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
           ),
         ),
     ).toHaveLength(1);
+
+    await musicTagButton.click();
+    await expect(musicTagButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(profileRow(page, open.handle)).toBeVisible();
+    expect(tagQueries).toEqual([initialTagId, otherTagId]);
+
+    const followMutationResponse = page.waitForResponse((response) => {
+      return (
+        readGraphQLOperation(response.request().postData())?.operationName ===
+        'FollowButtonFollowProfileMutation'
+      );
+    });
     releaseFollowMutation();
-    await expect(
-      profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
-    ).toBeEnabled();
-    await page.getByRole('button', { name: '#음악', exact: true }).click();
+    await followMutationResponse;
     await expect(
       profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
     ).toBeEnabled();
@@ -206,13 +241,11 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
     await expect(
       profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
     ).toBeEnabled();
-    await page.getByRole('button', { name: '#책', exact: true }).click();
+    await bookTagButton.click();
     await expect(
       profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
     ).toBeEnabled();
-    expect(new Set(tagQueries)).toEqual(
-      new Set([toGlobalId('Hashtag', books.id), toGlobalId('Hashtag', music.id)]),
-    );
+    expect(tagQueries).toEqual([initialTagId, otherTagId]);
     expect(followMutations).toEqual([
       'FollowButtonFollowProfileMutation',
       'FollowButtonFollowProfileMutation',

@@ -120,8 +120,8 @@ async function mount(env = environment(), profileId = 'owner') {
   });
   return env;
 }
-function take(name: string) {
-  const index = pending.findIndex((request) => request.name === name);
+function take(name: string, matches: (request: Request) => boolean = () => true) {
+  const index = pending.findIndex((request) => request.name === name && matches(request));
   assert.notEqual(
     index,
     -1,
@@ -129,16 +129,21 @@ function take(name: string) {
   );
   return pending.splice(index, 1)[0]!;
 }
-async function resolve(name: string, data: object | null, errors?: readonly object[]) {
-  const request = take(name);
+async function resolve(
+  name: string,
+  data: object | null,
+  errors?: readonly object[],
+  matches?: (request: Request) => boolean,
+) {
+  const request = take(name, matches);
   await act(async () => {
     request.sink.next({ data, ...(errors ? { errors } : {}) } as GraphQLResponse);
     request.sink.complete();
   });
   return request;
 }
-async function reject(name: string) {
-  const request = take(name);
+async function reject(name: string, matches?: (request: Request) => boolean) {
+  const request = take(name, matches);
   await act(async () => request.sink.error(new Error('request failed')));
 }
 function isVisible(node: ReactTestInstance): boolean {
@@ -220,7 +225,10 @@ async function loadTags(tags = [firstTag, secondTag]) {
 }
 async function loadFirst(profiles = [profile('target')], hasNext = false) {
   await loadTags();
-  await resolve(tagQueryName, tagResult(firstTag.id, profiles, hasNext));
+  await resolveTag(firstTag.id, tagResult(firstTag.id, profiles, hasNext));
+}
+async function resolveTag(id: string, data: object | null) {
+  return resolve(tagQueryName, data, undefined, (request) => request.variables.hashtagId === id);
 }
 
 before(async () => {
@@ -241,171 +249,154 @@ afterEach(async () => {
   pending.length = 0;
 });
 
+function followPayload(followPolicy: 'OPEN' | 'APPROVAL_REQUIRED') {
+  const approvalRequired = followPolicy === 'APPROVAL_REQUIRED';
+  return {
+    followProfile: {
+      result: {
+        __typename: approvalRequired ? 'ProfileFollowRequest' : 'ProfileFollow',
+        id: approvalRequired ? 'request-target' : 'follow-target',
+      },
+      followerProfile: { id: 'owner', followingCount: approvalRequired ? 0 : 1 },
+      followeeProfile: profile('target', {
+        followPolicy,
+        followersCount: approvalRequired ? 0 : 1,
+        viewerState: {
+          isSelf: false,
+          follow: approvalRequired
+            ? null
+            : { id: 'follow-target', follower: { id: 'owner', followingCount: 1 } },
+          followRequest: approvalRequired ? { id: 'request-target' } : null,
+          profileBlock: null,
+        },
+      }),
+    },
+  };
+}
+
+function unfollowPayload() {
+  return {
+    unfollowProfile: {
+      followerProfile: { id: 'owner', followingCount: 0 },
+      followeeProfile: profile('target', {
+        followPolicy: 'OPEN',
+        followersCount: 0,
+        viewerState: {
+          isSelf: false,
+          follow: null,
+          followRequest: null,
+          profileBlock: null,
+        },
+      }),
+    },
+  };
+}
+
 describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
-  it('저장된 canonical identity만 조회하고 방문하지 않은 태그를 미리 요청하지 않는다', async () => {
+  it('선택한 태그 목록만 렌더하고 완료된 목록은 Relay 캐시에서 다시 읽는다', async () => {
     await mount();
-    assert.deepEqual(
-      requests.map((request) => request.variables),
-      [{ profileId: 'owner' }],
-    );
     await loadTags();
+
     assert.deepEqual(
       requests.map((request) => request.name),
       [queryName, tagQueryName],
     );
     assert.deepEqual(requests[1]?.variables, { hashtagId: firstTag.id });
     assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
-    assert.equal(button('#음악').props.accessibilityState.selected, false);
-    assert.equal(button('#Fediverse').props.disabled, true);
-    assert.equal(button('#음악').props.disabled, true);
-    assert.notEqual(button('계속하기').props.disabled, true);
+    assert.notEqual(button('#음악').props.disabled, true);
+
+    // The initial selected-tag query is still suspended; another tag remains selectable.
     await press('#음악');
-    assert.equal(requests.length, 2, 'initial loading prevents a second tag query');
-    assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
-    await resolve(tagQueryName, tagResult(firstTag.id, [profile('target'), profile('owner')]));
-    assert.deepEqual(
-      nodes('ProfileRow').map((row) => row.props.relativeHandle),
-      ['@target', '@owner'],
-    );
-    assert.equal(button('#음악').props.disabled, false);
-    assert.equal(nodes('ProfileRow')[0]?.props.href, '/@target');
-    assert.equal(nodes('ProfileRow')[0]?.props.bio, 'target 소개');
-    assert.equal(nodes('Button').filter((node) => node.props.children === '팔로우').length, 1);
-    await press('#음악');
+    assert.equal(button('#음악').props.accessibilityState.selected, true);
+    assert.notEqual(button('#Fediverse').props.disabled, true);
     assert.deepEqual(requests.at(-1)?.variables, { hashtagId: secondTag.id });
-    assert.equal(
-      nodes('ProfileRow').length,
-      0,
-      'the old list is hidden while the selected tag loads',
-    );
-    assert.equal(nodes('ProfileRow', false).length, 2, 'visited lists remain mounted');
-    await press('#Fediverse');
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
-    assert.equal(requests.length, 3, 'loading prevents returning to the previous list');
-    await resolve(tagQueryName, tagResult(secondTag.id, []));
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    assert.equal(
-      requests.some((request) => request.name.includes('Mutation')),
-      false,
-    );
-  });
-
-  it('성공한 빈 태그는 선언적인 후속 화면을 렌더하고 관련 목록을 조회하지 않는다', async () => {
-    await mount();
-    await loadTags([]);
-    assert.equal(nodes('NoTagsDestination').length, 1);
-    assert.equal(nodes('Home').length, 0);
-    assert.deepEqual(
-      requests.map((request) => request.name),
-      [queryName],
-    );
-  });
-
-  it('태그 조회 실패는 빈 목록으로 바꾸지 않고 재시도 뒤에도 진행할 수 있다', async () => {
-    await mount();
-    await reject(queryName);
-    assert.equal(nodes('NoTagsDestination').length, 0);
-    assert.equal(nodes('StateView')[0]?.props.alert, true);
-    await act(async () => nodes('StateView')[0]!.props.onAction());
-    assert.equal(requests.length, 2);
-    await resolve(queryName, { node: null });
-    assert.equal(nodes('NoTagsDestination').length, 0);
-    await act(async () => nodes('StateView')[0]!.props.onAction());
-    assert.equal(requests.length, 3, 'a retry also refreshes an unavailable cached node');
-    await reject(queryName);
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    assert.equal(
-      requests.some((request) => request.name.includes('Mutation')),
-      false,
-    );
-  });
-
-  it('저장 태그가 로딩 중이어도 팔로우 없이 계속할 수 있다', async () => {
-    await mount();
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    assert.equal(requests.length, 1);
-  });
-
-  it('다른 태그 초기 실패와 재시도 중 선택과 이미 본 목록을 유지한다', async () => {
-    await mount();
-    await loadFirst();
-    const firstRow = nodes('ProfileRow')[0];
-    await press('#음악');
-    await reject(tagQueryName);
-    assert.equal(button('#음악').props.disabled, false);
-    assert.equal(button('#Fediverse').props.disabled, false);
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
     assert.equal(nodes('ProfileRow').length, 0);
-    assert.equal(nodes('ProfileRow', false)[0], firstRow);
-    await press('#Fediverse');
-    assert.equal(nodes('ProfileRow')[0], firstRow);
-    assert.equal(requests.length, 3);
-    await press('#음악');
-    await act(async () => nodes('StateView')[0]!.props.onAction());
-    assert.deepEqual(requests.at(-1)?.variables, { hashtagId: secondTag.id });
-    assert.equal(button('#Fediverse').props.disabled, true);
-    await press('#Fediverse');
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
-    assert.equal(requests.length, 4);
-    await resolve(tagQueryName, { node: null });
-    assert.equal(button('#Fediverse').props.disabled, false);
-    assert.equal(nodes('ProfileRow', false)[0], firstRow);
-    await act(async () => nodes('StateView')[0]!.props.onAction());
-    assert.equal(button('#Fediverse').props.disabled, true);
-    assert.equal(button('#음악').props.disabled, true);
-    await press('#Fediverse');
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
-    assert.equal(requests.length, 5, 'an unavailable-node retry still prevents tag switching');
-    await resolve(tagQueryName, tagResult(secondTag.id, [profile('second-target')]));
+    assert.equal(nodes('ProfileRow', false).length, 0, 'the previous tag subtree is unmounted');
+    assert.notEqual(button('계속하기').props.disabled, true);
+
+    await resolveTag(secondTag.id, tagResult(secondTag.id, [profile('second-target')]));
     assert.deepEqual(
       nodes('ProfileRow').map((row) => row.props.relativeHandle),
       ['@second-target'],
     );
-    assert.equal(requests.filter((request) => request.name === queryName).length, 1);
+
+    await resolveTag(firstTag.id, tagResult(firstTag.id, [profile('first-target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@second-target'],
+      'a late result updates only the store while its tag is unselected',
+    );
+
     await press('#Fediverse');
-    assert.equal(nodes('ProfileRow')[0], firstRow);
-    assert.equal(requests.length, 5);
+    assert.equal(requests.length, 3, 'the completed first list is read from Relay cache');
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@first-target'],
+    );
+    await press('계속하기');
+    assert.equal(nodes('Home').length, 1);
   });
 
-  it('추가 페이지 조회는 태그 전환과 팔로우를 막고 실패 뒤 같은 cursor로 재시도한다', async () => {
+  it('저장 태그가 로딩 중이어도 계속할 수 있다', async () => {
     await mount();
-    await loadFirst([profile('target')], true);
-    const firstRow = nodes('ProfileRow')[0];
+    await press('계속하기');
+
+    assert.equal(nodes('Home').length, 1);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.name, queryName);
+  });
+
+  it('완료된 저장 태그 null 응답은 인라인 재시도로 실제 네트워크 요청을 시작한다', async () => {
+    await mount();
+    await resolve(queryName, { node: null });
+    assert.equal(nodes('StateView')[0]?.props.title, '저장한 태그를 확인할 수 없어요');
+
+    await act(async () => nodes('StateView')[0]!.props.onAction());
+    assert.equal(requests.length, 2, 'retry bypasses the cached null result');
+    assert.deepEqual(requests.at(-1)?.variables, { profileId: 'owner' });
+
+    await resolve(queryName, savedTags());
+    assert.equal(requests.at(-1)?.name, tagQueryName);
+  });
+
+  it('완료된 관련 프로필 null 응답은 인라인 재시도로 실제 네트워크 요청을 시작한다', async () => {
+    await mount();
+    await loadTags();
+    await resolveTag(firstTag.id, { node: null });
+    assert.equal(nodes('StateView')[0]?.props.title, '이 태그의 관련 프로필을 확인할 수 없어요');
+    assert.equal(requests.length, 2);
+
+    await act(async () => nodes('StateView')[0]!.props.onAction());
+    assert.equal(requests.length, 3, 'retry bypasses the cached null result');
+    assert.deepEqual(requests.at(-1)?.variables, { hashtagId: firstTag.id });
+
+    await resolveTag(firstTag.id, tagResult(firstTag.id, [profile('target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@target'],
+    );
+  });
+
+  it('다음 페이지 오류 뒤 기존 행을 유지하고 같은 cursor로 재시도한다', async () => {
+    await mount();
+    await loadFirst([profile('target', { followPolicy: 'OPEN' })], true);
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@target'],
+    );
+
     await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
-    assert.equal(nodes('ProfileRow')[0], firstRow);
-    assert.equal(button('#음악').props.disabled, true);
-    assert.equal(button('팔로우').props.disabled, true);
-    assert.equal(button('팔로우').props.accessibilityState.busy, false);
+    assert.equal(requests.at(-1)?.name, nextPageName);
+    assert.notEqual(button('팔로우').props.disabled, true);
     assert.notEqual(button('계속하기').props.disabled, true);
-    await press('#음악');
-    await press('팔로우');
-    await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
-    assert.equal(requests.length, 3, 'pagination excludes another query or relationship action');
-    assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
-    assert.deepEqual(requests.at(-1)?.variables, {
-      count: 20,
-      cursor: 'cursor-1',
-      id: firstTag.id,
-    });
+
     await reject(nextPageName);
-    assert.equal(button('#음악').props.disabled, false);
-    assert.equal(button('팔로우').props.disabled, false);
     assert.equal(nodes('PaginationSurface')[0]?.props.error, true);
     assert.deepEqual(
       nodes('ProfileRow').map((row) => row.props.relativeHandle),
       ['@target'],
     );
-    assert.equal(nodes('Toast')[0]?.props.action.label, '다시 시도');
-    await press('#음악');
-    assert.equal(nodes('Toast').length, 0, 'the hidden panel does not retain an active retry');
-    await resolve(tagQueryName, tagResult(secondTag.id, []));
-    await press('#Fediverse');
-    assert.equal(nodes('PaginationSurface')[0]?.props.error, true);
-    assert.equal(nodes('Toast')[0]?.props.action.label, '다시 시도');
+
     await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
     assert.deepEqual(requests.at(-1)?.variables, {
       count: 20,
@@ -416,220 +407,95 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
       nextPageName,
       tagResult(firstTag.id, [profile('next-target')], false, 'cursor-2'),
     );
+
     assert.deepEqual(
       nodes('ProfileRow').map((row) => row.props.relativeHandle),
       ['@target', '@next-target'],
     );
-    assert.equal(nodes('PaginationSurface')[0]?.props.error, false);
     assert.equal(nodes('PaginationSurface')[0]?.props.hasNext, false);
-    assert.equal(button('#음악').props.disabled, false);
-    assert.equal(button('팔로우').props.disabled, false);
-  });
-
-  it('팔로우 중 태그 전환과 조회를 막고 실패 뒤 재시도한 관계를 다른 태그에도 공유한다', async () => {
-    const env = await mount();
-    await loadFirst([profile('target')], true);
-    await press('#음악');
-    await resolve(tagQueryName, tagResult(secondTag.id, [profile('target')], true));
-    await press('#Fediverse');
-    const retryFirstPage = nodes('PaginationSurface')[0]!.props.onRetry;
-    await press('팔로우');
-    assert.equal(button('요청됨').props.accessibilityState.busy, true);
-    assert.equal(button('요청됨').props.disabled, true);
-    assert.equal(button('#음악').props.disabled, true);
-    assert.notEqual(button('계속하기').props.disabled, true);
-    await press('#음악');
-    await act(async () => {
-      nodes('ScrollView')
-        .find((node) => typeof node.props.onScroll === 'function')!
-        .props.onScroll({
-          nativeEvent: {
-            contentOffset: { y: 500 },
-            contentSize: { height: 1_000 },
-            layoutMeasurement: { height: 500 },
-          },
-        });
-      retryFirstPage();
-    });
-    assert.equal(nodes('PaginationSurface')[0]!.props.onRetry, undefined);
-    assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
-    assert.equal(requests.length, 4, 'a follow excludes pagination and changing the selected tag');
-    assert.equal(button('요청됨').props.accessibilityState.busy, true);
-    assert.equal(button('요청됨').props.disabled, true);
-    assert.equal(requests.filter((request) => request.name.includes('Mutation')).length, 1);
-    await reject('FollowButtonFollowProfileMutation');
-    assert.equal(button('팔로우').props.accessibilityState.busy, false);
-    assert.equal(button('팔로우').props.disabled, false);
-    assert.equal(button('#음악').props.disabled, false);
-    assert.equal(nodes('Toast')[0]?.props.message, '팔로우 상태를 변경하지 못했습니다.');
-    const target = env.getStore().getSource().get('target');
-    assert.ok(target);
-    const viewer = env
-      .getStore()
-      .getSource()
-      .get((target.viewerState as { __ref: string }).__ref);
-    assert.equal(viewer?.followRequest, null);
-    await press('#음악');
-    assert.equal(button('#음악').props.accessibilityState.selected, true);
-    const retrySecondPage = nodes('PaginationSurface')[0]!.props.onRetry;
-    await press('팔로우');
-    await act(async () => retrySecondPage());
-    assert.equal(requests.length, 5, 'retrying a follow keeps pagination serialized');
-    await resolve('FollowButtonFollowProfileMutation', {
-      followProfile: {
-        result: { __typename: 'ProfileFollowRequest', id: 'request-target' },
-        followerProfile: { id: 'owner', followingCount: 0 },
-        followeeProfile: profile('target', {
-          viewerState: {
-            isSelf: false,
-            follow: null,
-            followRequest: { id: 'request-target' },
-            profileBlock: null,
-          },
-        }),
-      },
-    });
-    assert.equal(button('요청됨').props.accessibilityState.busy, false);
-    assert.equal(button('요청됨').props.disabled, false);
-    assert.equal(button('#Fediverse').props.disabled, false);
-    await press('#Fediverse');
-    assert.equal(button('요청됨').props.accessibilityState.busy, false);
-    assert.equal(button('요청됨').props.disabled, false);
-    const updatedViewer = env
-      .getStore()
-      .getSource()
-      .get((target.viewerState as { __ref: string }).__ref);
-    assert.deepEqual(updatedViewer?.followRequest, { __ref: 'request-target' });
-    assert.equal(updatedViewer?.follow, null, 'pending approval does not establish a Follow');
   });
 
   for (const followPolicy of ['OPEN', 'APPROVAL_REQUIRED'] as const) {
     const relationshipLabel = followPolicy === 'OPEN' ? '팔로잉' : '요청됨';
-    const mutationName =
+    const removeMutationName =
       followPolicy === 'OPEN'
         ? 'FollowButtonUnfollowProfileMutation'
         : 'FollowButtonCancelProfileFollowRequestMutation';
-    it(`${relationshipLabel} 해제 중 태그 전환과 페이지 재시도를 막고 성공·실패 뒤 다시 허용한다`, async () => {
-      await mount();
-      await loadFirst(
-        [
-          profile('target', {
-            followPolicy,
-            viewerState: {
-              isSelf: false,
-              follow:
-                followPolicy === 'OPEN'
-                  ? { id: 'follow-target', follower: { id: 'owner', followingCount: 1 } }
-                  : null,
-              followRequest: followPolicy === 'APPROVAL_REQUIRED' ? { id: 'request-target' } : null,
-              profileBlock: null,
-            },
-          }),
-        ],
-        true,
-      );
-      await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
-      await reject(nextPageName);
-      assert.equal(nodes('PaginationSurface')[0]?.props.error, true);
-      const retryToastAction = nodes('Toast')[0]!.props.action.onPress;
-      assert.equal(nodes('Toast')[0]?.props.action.label, '다시 시도');
-      await press(relationshipLabel);
-      assert.equal(nodes('Toast').length, 0, 'a pending mutation removes the page retry toast');
-      assert.equal(nodes('PaginationSurface')[0]?.props.onRetry, undefined);
-      assert.equal(button('#음악').props.disabled, true);
-      assert.equal(button('팔로우').props.accessibilityState.busy, true);
-      await press('#음악');
-      await act(async () => retryToastAction());
-      assert.equal(
-        requests.length,
-        4,
-        'retrying a failed page cannot overlap relationship removal',
-      );
-      assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
-      assert.equal(nodes('PaginationSurface')[0]?.props.error, true);
-      await reject(mutationName);
-      assert.equal(button(relationshipLabel).props.disabled, false);
-      assert.equal(button('#음악').props.disabled, false);
-      assert.equal(nodes('Toast')[0]?.props.message, '팔로우 상태를 변경하지 못했습니다.');
-      await act(async () => mock.timers.tick(2999));
-      assert.equal(nodes('Toast')[0]?.props.message, '팔로우 상태를 변경하지 못했습니다.');
-      await act(async () => mock.timers.tick(1));
-      assert.equal(
-        nodes('Toast')[0]?.props.action.label,
-        '다시 시도',
-        'the page retry returns after the mutation failure has been shown',
-      );
-      await press(relationshipLabel);
-      assert.equal(nodes('Toast').length, 0);
-      await resolve(
-        mutationName,
-        followPolicy === 'OPEN'
-          ? {
-              unfollowProfile: {
-                followerProfile: { id: 'owner', followingCount: 0 },
-                followeeProfile: profile('target', { followPolicy }),
-              },
-            }
-          : { cancelProfileFollowRequest: { profileFollowRequestId: 'request-target' } },
-      );
-      assert.equal(button('팔로우').props.disabled, false);
-      assert.equal(button('#음악').props.disabled, false);
-      assert.equal(nodes('Toast')[0]?.props.action.label, '다시 시도');
-      await act(async () => nodes('Toast')[0]!.props.action.onPress());
-      assert.equal(nodes('Toast').length, 0, 'the real toast action dismisses before retrying');
-      assert.equal(
-        requests.length,
-        6,
-        'the failed page is available again after mutation settlement',
-      );
-      assert.deepEqual(requests.at(-1)?.variables, {
-        count: 20,
-        cursor: 'cursor-1',
-        id: firstTag.id,
-      });
-      await resolve(nextPageName, tagResult(firstTag.id, [profile('next')], false, 'cursor-2'));
-      assert.deepEqual(
-        nodes('ProfileRow').map((row) => row.props.relativeHandle),
-        ['@target', '@next'],
-      );
-      await press('#음악');
-      assert.deepEqual(requests.at(-1)?.variables, { hashtagId: secondTag.id });
-    });
+
+    it(
+      relationshipLabel + ' 관계를 다른 태그에서도 공유하고 오류 뒤 낙관적 상태를 되돌린다',
+      async () => {
+        await mount();
+        await loadFirst([profile('target', { followPolicy })]);
+
+        await press('팔로우');
+        assert.equal(button(relationshipLabel).props.accessibilityState.busy, true);
+        assert.equal(button(relationshipLabel).props.disabled, true);
+        await act(async () => button(relationshipLabel).props.onPress());
+        assert.equal(
+          requests.filter((request) => request.name === 'FollowButtonFollowProfileMutation').length,
+          1,
+        );
+
+        await press('#음악');
+        assert.equal(requests.at(-1)?.name, tagQueryName);
+        await resolveTag(
+          secondTag.id,
+          tagResult(secondTag.id, [profile('target', { followPolicy })]),
+        );
+        assert.equal(button(relationshipLabel).props.accessibilityState.selected, true);
+
+        await reject('FollowButtonFollowProfileMutation');
+        assert.equal(button('팔로우').props.accessibilityState.selected, false);
+        assert.equal(nodes('Toast')[0]?.props.message, '팔로우 상태를 변경하지 못했습니다.');
+
+        await press('팔로우');
+        await resolve('FollowButtonFollowProfileMutation', followPayload(followPolicy));
+        assert.equal(button(relationshipLabel).props.accessibilityState.selected, true);
+
+        const completedRequests = requests.length;
+        await press('#Fediverse');
+        assert.equal(
+          requests.length,
+          completedRequests,
+          'the first tag uses its completed cache entry',
+        );
+        assert.equal(button(relationshipLabel).props.accessibilityState.selected, true);
+
+        await press(relationshipLabel);
+        assert.equal(requests.at(-1)?.name, removeMutationName);
+        assert.equal(button('팔로우').props.disabled, true);
+        if (followPolicy === 'OPEN') {
+          await resolve(removeMutationName, unfollowPayload());
+        } else {
+          assert.deepEqual(requests.at(-1)?.variables, { id: 'request-target' });
+          await resolve(removeMutationName, {
+            cancelProfileFollowRequest: { profileFollowRequestId: 'request-target' },
+          });
+        }
+        assert.equal(button('팔로우').props.accessibilityState.selected, false);
+
+        const settledRequests = requests.length;
+        await press('#음악');
+        assert.equal(
+          requests.length,
+          settledRequests,
+          'the second tag sees normalized relationship state',
+        );
+        assert.equal(button('팔로우').props.accessibilityState.selected, false);
+      },
+    );
   }
 
-  it('관련 목록 초기 로딩 중에도 계속할 수 있다', async () => {
+  it('태그가 없어도 완료 화면으로 이동하지 않고 기존 후속 화면을 렌더한다', async () => {
     await mount();
-    await loadTags();
-    assert.equal(button('#음악').props.disabled, true);
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    assert.equal(requests.length, 2);
-  });
+    await loadTags([]);
 
-  it('페이지 조회 중에도 계속할 수 있다', async () => {
-    await mount();
-    await loadFirst([profile('target')], true);
-    await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
-    assert.equal(button('팔로우').props.disabled, true);
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    assert.equal(requests.length, 3);
-  });
-
-  it('팔로우 응답을 기다리는 중에도 계속할 수 있다', async () => {
-    const env = await mount();
-    await loadFirst();
-    await press('팔로우');
-    assert.equal(button('#음악').props.disabled, true);
-    await press('계속하기');
-    assert.equal(nodes('Home').length, 1);
-    await reject('FollowButtonFollowProfileMutation');
-    assert.equal(nodes('Home').length, 1);
-    const target = env.getStore().getSource().get('target');
-    const viewer = env
-      .getStore()
-      .getSource()
-      .get((target?.viewerState as { __ref: string }).__ref);
-    assert.equal(viewer?.followRequest, null);
+    assert.equal(nodes('NoTagsDestination').length, 1);
+    assert.equal(nodes('Home').length, 0);
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      [queryName],
+    );
   });
 });
