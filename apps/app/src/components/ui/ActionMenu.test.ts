@@ -18,7 +18,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const PressableHost = 'Pressable' as unknown as ElementType;
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
+const ActivityIndicatorHost = 'ActivityIndicator' as unknown as ElementType;
 let exitMounted = false;
+let reducedMotion = false;
 let platformOS: 'android' | 'ios' | 'web' = 'ios';
 let dismissAnimationTarget: number | undefined;
 let stretchAnimationDuration = 0;
@@ -40,6 +42,7 @@ class AnimatedValueMock {
 }
 
 mockModule('react-native', {
+  ActivityIndicator: ActivityIndicatorHost,
   Animated: {
     Value: AnimatedValueMock,
     View: 'AnimatedView',
@@ -91,7 +94,7 @@ mockModule('@/components/ui/ActionMenuPortal', {
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
-  useReducedMotion: () => false,
+  useReducedMotion: () => reducedMotion,
   useTheme: () => ({
     backgroundElevated: 'elevated',
     borderDefault: 'border',
@@ -132,7 +135,7 @@ mockModule('@/theme/tokens', {
   },
   radius: { 16: 16, full: 999 },
   space: { 4: 4, 8: 8, 12: 12 },
-  textStyles: { uiLabelL: {} },
+  textStyles: { uiLabelL: {}, uiLabelS: {} },
 });
 mockModule('@/theme/useOverlayMotion', {
   useOverlayMotion: (visible: boolean) => ({
@@ -152,6 +155,7 @@ before(async () => {
 afterEach(() => {
   platformOS = 'ios';
   exitMounted = false;
+  reducedMotion = false;
   dismissAnimationTarget = undefined;
   stretchAnimationDuration = 0;
   delete (globalThis as { window?: unknown }).window;
@@ -290,6 +294,70 @@ test('Native ActionMenu keeps a non-dismissible busy action and its error visibl
   );
   await act(async () => renderer?.unmount());
 });
+
+for (const platform of ['web', 'ios', 'android'] as const) {
+  test(`${platform} ActionMenu preserves busy item semantics when reduced motion changes`, async () => {
+    assert.ok(actionMenuModule);
+    platformOS = platform;
+    if (platform === 'web') {
+      for (const name of ['window', 'document']) {
+        Object.defineProperty(globalThis, name, {
+          configurable: true,
+          value: { addEventListener() {}, removeEventListener() {} },
+        });
+      }
+    }
+    const props = {
+      accessibilityLabel: '메뉴',
+      items: [{ key: 'logout', label: '로그아웃', busy: true, disabled: true, onSelect() {} }],
+      renderTrigger: ({ onPress }: { onPress: () => void }) =>
+        createElement(PressableHost, { onPress, testID: 'trigger' }),
+    };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+    });
+    try {
+      await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+      assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 1);
+      if (platform !== 'web') {
+        const spinner = renderer.root.findByType(ActivityIndicatorHost);
+        assert.equal(spinner.props.accessible, false);
+        assert.equal(spinner.props['aria-hidden'], true);
+      }
+
+      reducedMotion = true;
+      await act(async () => renderer.update(createElement(actionMenuModule!.ActionMenu, props)));
+      assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 0);
+      const dots = renderer.root
+        .findAllByType(TextHost)
+        .find((node) => node.props.children === '···');
+      assert.ok(dots);
+      assert.equal(dots.props.accessible, false);
+      assert.equal(dots.props['aria-hidden'], true);
+      assert.equal(flattenStyle(dots.props.style).color, 'foreground');
+      const item = renderer.root
+        .findAllByType(PressableHost)
+        .find((node) => (node.props.role ?? node.props.accessibilityRole) === 'menuitem');
+      assert.ok(item);
+      assert.equal(item.props.accessibilityLabel, '로그아웃');
+      assert.equal(item.props['aria-busy'], true);
+      assert.deepEqual(item.props.accessibilityState, { busy: true, disabled: true });
+      assert.equal(item.props.disabled, true);
+      assert.equal(
+        renderer.root.findAllByType(TextHost).filter((node) => node.props.children === '로그아웃')
+          .length,
+        1,
+      );
+
+      reducedMotion = false;
+      await act(async () => renderer.update(createElement(actionMenuModule!.ActionMenu, props)));
+      assert.equal(renderer.root.findAllByType(ActivityIndicatorHost).length, 1);
+    } finally {
+      await act(async () => renderer.unmount());
+    }
+  });
+}
 
 test('ActionMenu cannot be dismissed while disabled', async () => {
   assert.ok(actionMenuModule);

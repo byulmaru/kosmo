@@ -115,7 +115,7 @@ stub('react-native-svg', {
   Stop: 'Stop',
   Svg: 'Svg',
 });
-stub('@/theme/ThemeProvider', { useTheme: () => theme });
+stub('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
 stub('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { full: 999, md: 12, sm: 4 },

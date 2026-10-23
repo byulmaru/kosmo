@@ -8,17 +8,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
@@ -462,7 +455,7 @@ export function ActionMenu({
                         ) : null}
                         {item.busy ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
-                            <ActivityIndicator color={itemColor} />
+                            <LoadingIndicator color={itemColor} />
                           </View>
                         ) : Icon ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
@@ -548,7 +541,7 @@ export function ActionMenu({
                   style={[styles.item, styles.nativeItem]}
                 >
                   {item.busy ? (
-                    <ActivityIndicator color={itemColor} />
+                    <LoadingIndicator accessible={false} aria-hidden color={itemColor} />
                   ) : Icon ? (
                     <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
                   ) : null}

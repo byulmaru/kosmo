@@ -17,7 +17,8 @@ import {
   UsersRound,
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import { ActionMenu } from './ActionMenu';
@@ -226,7 +227,12 @@ function SidebarControl({
               style={styles.iconFrame}
             >
               {busy ? (
-                <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={color} />
+                <LoadingIndicator
+                  accessibilityLabel="로그아웃 처리 중"
+                  accessible={false}
+                  aria-hidden
+                  color={color}
+                />
               ) : profile ? (
                 <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
               ) : (

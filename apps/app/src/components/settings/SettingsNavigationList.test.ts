@@ -87,6 +87,9 @@ mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
       createElement('SettingsItem', props, createElement('Text', null, props.label as string)),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/LoadingIndicator.tsx', import.meta.url), {
+  exports: { LoadingIndicator: 'ActivityIndicator' },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => false,
@@ -99,6 +102,7 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
       statePressed: '#e8e8e8',
       text: '#111111',
       textSecondary: '#666666',
+      foregroundSecondary: 'foreground-secondary',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -356,11 +360,10 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'native-notification-settings',
     );
     assert.equal(notification?.props.disabled, true);
-    assert.equal(
-      rendered('SettingsItem').find((node) => node.props.label === '알림 설정')?.props.trailing
-        .type,
-      'ActivityIndicator',
-    );
+    const trailing = rendered('SettingsItem').find((node) => node.props.label === '알림 설정')
+      ?.props.trailing;
+    assert.equal(trailing?.type, 'ActivityIndicator');
+    assert.equal(trailing?.props.color, 'foreground-secondary');
     await act(async () => notification?.props.onPress());
     assert.equal(requestPermissionAndSyncCalls, 1);
 

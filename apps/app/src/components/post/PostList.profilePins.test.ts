@@ -30,6 +30,7 @@ let renderer: ReactTestRenderer | undefined;
 let PostList: typeof PostListType;
 let useProfilePinAction: typeof UseProfilePinAction;
 let activeActionPostId: string | null = null;
+let reducedMotion = false;
 const requests: Array<{
   name: string;
   variables: Record<string, unknown>;
@@ -59,7 +60,7 @@ stub('react-native-svg', {
 });
 stub('lucide-react-native', { Pin: 'Pin' });
 stub('@/session/SessionProvider', { useSession: () => ({ selectedProfileId: 'owner' }) });
-stub('@/theme/ThemeProvider', { useTheme: () => ({}) });
+stub('@/theme/ThemeProvider', { useReducedMotion: () => reducedMotion, useTheme: () => ({}) });
 stub('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => () => undefined }) });
 stub('@/components/ui/ConfirmationContent', {
   ConfirmationContent: (props: object) => createElement('ConfirmationContent', props),
@@ -75,11 +76,13 @@ stub('@/components/pagination/InfiniteList', {
     data,
     renderItem,
     empty,
+    footer,
     ...props
   }: {
     data: Array<{ node: { id: string } }>;
     renderItem: (input: { item: unknown }) => ReactNode;
     empty?: ReactNode;
+    footer?: ReactNode;
   }) =>
     createElement(
       'InfiniteList',
@@ -87,6 +90,7 @@ stub('@/components/pagination/InfiniteList', {
       data.length
         ? data.map((item) => createElement('Row', { key: item.node.id }, renderItem({ item })))
         : empty,
+      footer,
     ),
 });
 for (const [file, name] of [
@@ -105,6 +109,7 @@ before(async () => {
 });
 beforeEach(() => {
   activeActionPostId = null;
+  reducedMotion = false;
   mock.timers.enable({ apis: ['setTimeout'] });
 });
 afterEach(async () => {
@@ -333,30 +338,59 @@ it('ActivityPub displays the returned pin list without a pinned pagination contr
   assert.equal(all('Button').length, 0);
 });
 
-it('keeps the complete pin list when profile chronology loads another page', async () => {
-  await start();
-  const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
-  await respond({
-    currentSession: null,
-    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology-0'], true),
-  });
+for (const reduced of [false, true]) {
+  it(`keeps pins and loading feedback while paginating with reduced motion ${reduced}`, async () => {
+    reducedMotion = reduced;
+    await start();
+    const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+    await respond({
+      currentSession: null,
+      profileByHandle: profile('ACTIVITYPUB', pins, ['chronology-0'], true),
+    });
 
-  assert.equal(all('Button').length, 0);
-  const list = all('InfiniteList')[0]!;
-  await act(async () => list.props.loadNext(20));
-  assert.equal(requests.at(-1)!.name, 'PostListProfileNextPageQuery');
-  assert.equal(requests.at(-1)!.variables.cursor, 'chronology-0');
-  await respond({
-    node: {
-      __typename: 'Profile',
-      id: 'owner',
-      instance: { kind: 'ACTIVITYPUB' },
-      posts: connection(['chronology-1']),
-    },
-  });
+    assert.equal(all('Button').length, 0);
+    const list = all('InfiniteList')[0]!;
+    await act(async () => list.props.loadNext(20));
+    assert.equal(requests.at(-1)!.name, 'PostListProfileNextPageQuery');
+    assert.equal(requests.at(-1)!.variables.cursor, 'chronology-0');
+    assert.equal(all('InfiniteList')[0]!.props.isLoadingNext, true);
+    assert.deepEqual(
+      cards(),
+      [...pins, 'chronology-0'].map((id, index) => [id, index < pins.length]),
+    );
+    assert.equal(all('ActivityIndicator').length, reduced ? 0 : 1);
+    const indicator = all(reduced ? 'Text' : 'ActivityIndicator').find(
+      (node) => node.props.accessibilityLabel === '게시글을 더 불러오는 중',
+    );
+    assert.ok(indicator);
+    if (reduced) {
+      assert.equal(indicator.props.children, '···');
+      assert.equal(indicator.props.accessible, true);
+    }
+    const announcement = all('Text').find(
+      (node) => node.props.accessibilityLiveRegion === 'polite',
+    );
+    assert.ok(announcement);
+    assert.equal(announcement.props.children, '게시글을 더 불러오는 중입니다.');
 
-  assert.deepEqual(
-    cards(),
-    [...pins, 'chronology-0', 'chronology-1'].map((id, index) => [id, index < pins.length]),
-  );
-});
+    await respond({
+      node: {
+        __typename: 'Profile',
+        id: 'owner',
+        instance: { kind: 'ACTIVITYPUB' },
+        posts: connection(['chronology-1']),
+      },
+    });
+
+    assert.deepEqual(
+      cards(),
+      [...pins, 'chronology-0', 'chronology-1'].map((id, index) => [id, index < pins.length]),
+    );
+    assert.equal(all('InfiniteList')[0]!.props.isLoadingNext, false);
+    assert.equal(all('ActivityIndicator').length, 0);
+    assert.equal(
+      all('Text').some((node) => node.props.accessibilityLabel === '게시글을 더 불러오는 중'),
+      false,
+    );
+  });
+}

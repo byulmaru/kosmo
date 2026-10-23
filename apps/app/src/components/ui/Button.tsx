@@ -1,6 +1,7 @@
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
+import { LoadingIndicator } from './LoadingIndicator';
 import type { PropsWithChildren, Ref } from 'react';
 import type { PressableProps, ViewStyle } from 'react-native';
 
@@ -114,7 +115,7 @@ export function Button({
     >
       {loading ? (
         <View style={styles.loadingContent}>
-          <ActivityIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
+          <LoadingIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
           {loadingText ? <Text style={[styles.label, { color }]}>{loadingText}</Text> : null}
         </View>
       ) : (

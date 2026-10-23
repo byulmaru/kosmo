@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { getNativeNotificationPermissionStatus } from '@/components/native-push/nativePushClient';
 import { useRequestNativePushPermissionAndSync } from '@/components/native-push/nativePushPermissionContext';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getThemePreferenceLabel } from '@/theme/themePreference';
 import { useThemePreference } from '@/theme/ThemePreferenceProvider';
+import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
@@ -103,6 +105,7 @@ export function SettingsNavigationList({
 }
 
 function NativeNotificationSettingsAction() {
+  const theme = useTheme();
   const { showToast } = useToast();
   const requestPermissionAndSync = useRequestNativePushPermissionAndSync();
   const [pending, setPending] = useState(false);
@@ -145,7 +148,11 @@ function NativeNotificationSettingsAction() {
       <SettingsItem
         description="기기의 알림 설정에서 Push 알림을 관리할 수 있어요."
         label="알림 설정"
-        trailing={pending ? <ActivityIndicator accessibilityLabel="알림 설정 중" /> : null}
+        trailing={
+          pending ? (
+            <LoadingIndicator accessibilityLabel="알림 설정 중" color={theme.foregroundSecondary} />
+          ) : null
+        }
       />
     </Pressable>
   );
