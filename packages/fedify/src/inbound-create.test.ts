@@ -473,8 +473,8 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.currentContentId, content.id);
     assert.equal(
       postContentDocumentToText(content.document),
-      `First ${remoteSharedToken} and #shared${suffix}\n` +
-        `Again ${remoteSharedToken} / ${longToken} / ${emojiToken}\n` +
+      `First ${remoteSharedToken} and #shared${suffix}\n\n` +
+        `Again ${remoteSharedToken} / ${longToken} / ${emojiToken}\n\n` +
         `${spaceToken} ${bodyOnlyToken} ${unconfirmedToken} ${localToken}Extra abc${localToken} ` +
         `https://example.com/#shared${suffix}`,
     );
