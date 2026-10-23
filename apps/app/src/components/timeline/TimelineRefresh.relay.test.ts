@@ -128,6 +128,7 @@ mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });
 mockModule('@/theme/tokens', {
