@@ -12,6 +12,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse, Variables } from 'relay-runtime';
@@ -30,6 +31,27 @@ type Request = {
 };
 const requests: Request[] = [];
 const showToast = () => () => undefined;
+const platform = { OS: 'ios' };
+const navigations: unknown[] = [];
+const tabRegistry = createTabReselectionRegistry();
+const shellChrome = {
+  registerHomeReselection: () => () => undefined,
+  registerTabReselection: tabRegistry.register,
+  reselectTab: tabRegistry.reselect,
+};
+class AnimatedValueMock {
+  constructor(public value: number) {}
+  setValue(value: number) {
+    this.value = value;
+  }
+  stopAnimation() {}
+}
+mockModule('expo-router', {
+  useRouter: () => ({
+    replace: (href: string) => navigations.push(href),
+    setParams: (params: object) => navigations.push(params),
+  }),
+});
 
 // Only resolve graphql tags to compiler artifacts; all Relay hooks and normalization are real.
 mockModule('react-relay', {
@@ -48,7 +70,16 @@ mockModule('expo-router', {
 mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
 mockModule('react-native', {
-  Platform: { OS: 'ios' },
+  Platform: platform,
+  Animated: {
+    Value: AnimatedValueMock,
+    View: 'View',
+    subtract: (a: AnimatedValueMock, b: AnimatedValueMock) => a.value - b.value,
+  },
+  Easing: {},
+  Pressable: ({ children, ...props }: { children: (state: { pressed: boolean }) => ReactNode }) =>
+    createElement('Pressable', props, children({ pressed: false })),
+  ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   FlatList: (props: {
     data: unknown[];
@@ -84,12 +115,11 @@ mockModule('@/components/RouteBoundary', {
     createElement(Suspense, { fallback: null }, children),
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
-mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
 mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () => null });
 mockModule('@/components/ui/ToastProvider', {
@@ -97,12 +127,7 @@ mockModule('@/components/ui/ToastProvider', {
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
-});
-mockModule('@/theme/tokens', {
-  fontFamilies: { ui: 'ui' },
-  space: { 8: 8, 16: 16 },
-  spacing: { lg: 16, sm: 8, xl: 24 },
-  typography: { md: {}, sm: {} },
+  useReducedMotion: () => true,
 });
 
 // Mock unrelated row UI/providers, retaining PostList, InfiniteList and loadNext behavior.
@@ -134,6 +159,8 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  navigations.length = 0;
+  platform.OS = 'ios';
 });
 
 const profile = {
@@ -315,4 +342,78 @@ for (const timeline of ['Home', 'Local'] as const) {
     await respond(latest(`PostList${timeline}NextPageQuery`), payload(field, ['c'], false));
     assertConnection(environment, field, ['a', 'b', 'c'], false);
   });
+}
+
+for (const os of ['ios', 'android']) {
+  for (const timeline of ['Home', 'Local'] as const) {
+    it(`${os} ${timeline}: 실제 상단 탭 재선택은 새로고침 중에도 스크롤만 한다`, async () => {
+      platform.OS = os;
+      const environment = new Environment({
+        network: Network.create((operation, variables) =>
+          Observable.create<GraphQLResponse>((sink) => {
+            requests.push({ name: operation.name, variables, sink });
+          }),
+        ),
+        store: new Store(new RecordSource()),
+      });
+      let offset = 480;
+      await act(async () => {
+        renderer = create(
+          createElement(ReactRelay.RelayEnvironmentProvider, {
+            environment,
+            children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+          }),
+          {
+            createNodeMock: ({ type }) =>
+              type === 'FlatList'
+                ? {
+                    scrollToOffset: (options: { animated: boolean; offset: number }) => {
+                      assert.deepEqual(options, { animated: true, offset: 0 });
+                      offset = options.offset;
+                    },
+                  }
+                : null,
+          },
+        );
+      });
+      const field = timeline === 'Home' ? 'homeTimeline' : 'localTimeline';
+      await respond(latest(`${timeline}PageQuery`), payload(field, ['a', 'b']));
+      const tab = () =>
+        renderer!.root.find(
+          (node) =>
+            (node.type as unknown) === 'Pressable' &&
+            node.props.accessibilityLabel === (timeline === 'Home' ? '홈' : '로컬'),
+        );
+      const initialRequests = requests.length;
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        offset = 480;
+        await act(async () => tab().props.onPress());
+        assert.equal(offset, 0);
+        assert.equal(requests.length, initialRequests);
+        assert.deepEqual(navigations, []);
+        assert.equal(tab().props.accessibilityState.selected, true);
+      }
+      assertConnection(environment, field, ['a', 'b']);
+
+      await act(async () => list().props.onRefresh());
+      const refresh = latest(timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery');
+      assert.equal(requests.length, initialRequests + 1);
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        offset = 640;
+        await act(async () => tab().props.onPress());
+        assert.equal(offset, 0);
+        assert.equal(requests.length, initialRequests + 1);
+        assert.equal(list().props.refreshing, true);
+        assert.deepEqual(navigations, []);
+      }
+      await respond(refresh, payload(field, ['new', 'a']));
+      assert.equal(list().props.refreshing, false);
+      assertConnection(environment, field, ['new', 'a']);
+      await act(async () => list().props.onEndReached());
+      const next = latest(`PostList${timeline}NextPageQuery`);
+      assert.equal(next.variables.cursor, 'cursor-a');
+      await respond(next, payload(field, ['b'], false));
+      assertConnection(environment, field, ['new', 'a', 'b'], false);
+    });
+  }
 }
