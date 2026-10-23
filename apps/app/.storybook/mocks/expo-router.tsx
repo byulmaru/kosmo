@@ -69,13 +69,16 @@ export function RouterMockProvider({
       params,
       pathname,
       replacePathname: (href: Href) =>
-        setHistory((paths) => [
-          ...paths.slice(0, -1),
-          typeof href === 'string' ? href : href.pathname,
-        ]),
+        setHistory((paths) => {
+          const next = typeof href === 'string' ? href : href.pathname;
+          return paths.at(-1) === next ? paths : [...paths.slice(0, -1), next];
+        }),
       segments,
       setPathname: (href: Href) =>
-        setHistory((paths) => [...paths, typeof href === 'string' ? href : href.pathname]),
+        setHistory((paths) => {
+          const next = typeof href === 'string' ? href : href.pathname;
+          return paths.at(-1) === next ? paths : [...paths, next];
+        }),
       slot,
       slotLabel,
     }),

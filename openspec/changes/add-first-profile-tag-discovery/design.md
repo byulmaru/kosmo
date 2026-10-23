@@ -3,7 +3,7 @@
 2026-10-23 사용자 선택에 따라 미병합 PROD-1146 PR #1254의 `c86e12995c8a872590955187a7847b9d041bfee0` 위에 PROD-1147을 쌓는다. 부모 commit과 Ready 상태는 유지한다. 아래 접근은 현재 코드에 맞춘 제안이며 함수·경로를 영구 계약으로 만들지 않는다.
 
 - `FirstProfileOnboardingRoute.tsx`는 첫 단계에서 Profile을 생성·선택하고 선택 단계마다 `saveStep`으로 저장한다. 완료는 추가 저장 없이 성공 상태를 만든다.
-- `app/first-profile/[step].tsx`의 완료 화면 `시작하기`는 `/first-profile/discover`로 이동한다. 진행 중인 첫 Profile의 완료 상태만 이 화면에 진입할 수 있다. 완료 요약의 태그는 표시 이름만 있으므로 조회에는 저장된 `Profile.tags`의 Hashtag `id`와 `name`을 함께 사용한다.
+- `app/first-profile/[step].tsx`에서 입력을 마치면 `/first-profile/discover`로 이동한다. 사람 찾기 뒤 최종 완료 화면에서만 `시작하기`로 `/home`에 진입한다. 진행 중인 첫 Profile의 완료 상태만 이 화면에 진입할 수 있다. 완료 요약의 태그는 표시 이름만 있으므로 조회에는 저장된 `Profile.tags`의 Hashtag `id`와 `name`을 함께 사용한다.
 - 기존 `HashtagRelatedProfileList`·`ProfileListItem`·`FollowButton`과 `Hashtag.relatedProfiles`를 재사용할 수 있다. 새 서버 API나 별도 팔로우 저장 모델은 현재 근거상 필요하지 않다.
 
 ## Practical Approach
