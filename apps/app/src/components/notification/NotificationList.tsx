@@ -204,8 +204,8 @@ export function NotificationList({ profile }: NotificationListProps) {
     }
 
     commitMarkRead({
-      onCompleted: (response, errors) => {
-        if (errors?.length || response.markNotificationRead == null) {
+      onCompleted: (response) => {
+        if (response.markNotificationRead == null) {
           handleReadFailure();
           return;
         }

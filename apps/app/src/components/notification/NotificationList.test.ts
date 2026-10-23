@@ -256,6 +256,35 @@ describe('NotificationList native refresh', () => {
     });
   });
 
+  it('nullable readAt projection error가 있어도 payload가 있으면 refetch한다', async () => {
+    resetPagination();
+    await act(async () => {
+      renderer = create(createElement(NotificationList, { profile }));
+    });
+
+    await act(async () => refreshControl()?.props.onRefresh());
+    await act(async () => {
+      currentMutation?.onCompleted?.(
+        {
+          markNotificationRead: {
+            notifications: [{ id: 'notification-unread-a', readAt: null }],
+            recipientProfiles: [{ id: profileId, unreadNotificationCount: 1 }],
+          },
+        },
+        [
+          {
+            message: 'DateTime serialization failed',
+            path: ['markNotificationRead', 'notifications', 0, 'readAt'],
+          },
+        ],
+      );
+      settleMutation?.();
+    });
+
+    assert.deepEqual(events, ['mark', 'refetch']);
+    assert.equal(toasts.length, 0);
+  });
+
   it('현재 unread가 없으면 읽음 mutation 없이 바로 refetch한다', async () => {
     resetPagination();
     paginationData.notifications.edges = paginationData.notifications.edges.map(({ node }) => ({
