@@ -238,17 +238,19 @@ test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated auth
     profileId: sourceAuthor.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const displayName = `Tag${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+  const nameSuffix = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+  const displayName = 'Foo' + nameSuffix;
+  const fullwidthDisplayName = 'Ｆｏｏ' + nameSuffix;
   const name = displayName.toLowerCase();
 
   await updateProfile({
     accountId: account.id,
     profileId: author.id,
-    tags: [`#${displayName}`],
+    tags: ['#' + fullwidthDisplayName],
   });
 
   const post = await createPost({
-    bodyText: `#${name} #${displayName.toUpperCase()} #${displayName}`,
+    bodyText: '#' + name + ' #' + fullwidthDisplayName.toUpperCase() + ' #' + displayName,
     origin: 'LOCAL',
     profileId: author.id,
     visibility: PostVisibility.PUBLIC,
@@ -285,7 +287,7 @@ test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated auth
   const repeatedNodes = postContentHashtagNodes(post.content.document);
   assert.deepEqual(
     repeatedNodes.map(({ attrs }) => attrs.token),
-    [`#${name}`, `#${displayName.toUpperCase()}`, `#${displayName}`],
+    ['#' + name, '#' + fullwidthDisplayName.toUpperCase(), '#' + displayName],
   );
   assert.deepEqual(
     repeatedNodes.map(({ attrs }) => attrs.hashtagId),

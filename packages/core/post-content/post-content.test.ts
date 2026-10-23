@@ -106,6 +106,16 @@ test('validates persisted Hashtag identity and token while accepting projected I
       }),
     );
   }
+  assert.throws(() =>
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [{ type: 'hashtag', attrs: { hashtagId, token: '#tag' } }],
+      },
+    }),
+  );
 
   const projectedDocument = {
     version: 1,
@@ -199,7 +209,7 @@ test('keeps embedded, unsupported, fuzzy, and invalid URLs as plain text', () =>
 
 test('finds normalized local hashtag candidates without URL or mention occurrences', () => {
   const bodyText =
-    `https://example.com/path/#path?query=#query&fragment=1#fragment #ok (#wrapped) abc#embedded #${'a'.repeat(65)} ` +
+    `https://example.com/path/#path?query=#query&fragment=1#fragment #ok (#wrapped) abc#embedded ` +
     '#Ｆｏｏ #Cafe\u0301 #１２３ #Ⓐ 😀#astral';
 
   const candidates = postContentHashtagCandidatesFromText(bodyText);
@@ -208,7 +218,36 @@ test('finds normalized local hashtag candidates without URL or mention occurrenc
     candidates.map(({ start, end }) => bodyText.slice(start, end)),
     ['#ok', '#wrapped', '#Ｆｏｏ', '#Cafe\u0301', '#１２３', '#Ⓐ', '#astral'],
   );
-  assert.deepEqual(Object.keys(candidates[0]!).sort(), ['end', 'start']);
+});
+
+test('keeps 64-codepoint hashtags and preserves longer tokens as Plain Text', () => {
+  const acceptedToken = '#' + '𐐀'.repeat(64);
+  const longerToken = '#' + '𐐀'.repeat(65);
+  const bodyText = acceptedToken + ' ' + longerToken;
+  const candidates = postContentHashtagCandidatesFromText(bodyText);
+
+  assert.deepEqual(
+    candidates.map(({ start, end }) => bodyText.slice(start, end)),
+    [acceptedToken],
+  );
+
+  const document = postContentDocumentFromTextAndMedia(
+    bodyText,
+    [],
+    false,
+    null,
+    [],
+    candidates.map((candidate) => ({ ...candidate, hashtagId })),
+  );
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'hashtag', attrs: { hashtagId, token: acceptedToken } },
+      { type: 'text', text: ' ' + longerToken },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), bodyText);
 });
 
 test('excludes hashtag fragments from FTP, mailto, protocol-relative, and HTTPS URLs', () => {
@@ -222,6 +261,38 @@ test('excludes hashtag fragments from FTP, mailto, protocol-relative, and HTTPS 
     candidates.map(({ start, end }) => bodyText.slice(start, end)),
     ['#outside'],
   );
+});
+
+test('excludes fragments from hierarchical URLs and keeps an adjacent hashtag', () => {
+  const bodyText =
+    'file:///tmp/#inside ipfs://example.test/path/#inside file:///tmp/a_(b)/#inside ' +
+    '(file:///tmp/#inside).#outside';
+  const candidates = postContentHashtagCandidatesFromText(bodyText);
+
+  assert.deepEqual(
+    candidates.map(({ start, end }) => bodyText.slice(start, end)),
+    ['#outside'],
+  );
+
+  const document = postContentDocumentFromTextAndMedia(
+    bodyText,
+    [],
+    false,
+    null,
+    [],
+    candidates.map((candidate) => ({ ...candidate, hashtagId })),
+  );
+  const hashtagNodes = document.body.content.flatMap((block) =>
+    block.type === 'paragraph'
+      ? (block.content ?? []).filter((node) => node.type === 'hashtag')
+      : [],
+  );
+
+  assert.deepEqual(
+    hashtagNodes.map(({ attrs }) => attrs.token),
+    ['#outside'],
+  );
+  assert.equal(postContentDocumentToText(document), bodyText);
 });
 
 test('builds hashtag and Mention nodes from normalized-text offsets', () => {
@@ -808,6 +879,7 @@ test('projects supported V1 nodes around unknown nodes without weakening strict 
           content: [
             { type: 'text', text: 'before ' },
             { type: 'future_inline', content: [{ type: 'text', text: 'hidden inline' }] },
+            { type: 'hashtag', attrs: { hashtagId, token: '#Topic' } },
             {
               type: 'text',
               text: 'linked',
@@ -840,6 +912,7 @@ test('projects supported V1 nodes around unknown nodes without weakening strict 
           type: 'paragraph',
           content: [
             { type: 'text', text: 'before ' },
+            { type: 'hashtag', attrs: { hashtagId, token: '#Topic' } },
             {
               type: 'text',
               text: 'linked',
@@ -884,6 +957,27 @@ test('read projection rejects malformed known nodes and unsupported document ver
       version: 1,
       summary: null,
       body: { type: 'doc', content: [{ type: 'paragraph', content: { type: 'text' } }] },
+    },
+    {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'hashtag', attrs: { hashtagId, token: '' } }],
+          },
+        ],
+      },
+    },
+    {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [{ type: 'hashtag', attrs: { hashtagId, token: '#tag' } }],
+      },
     },
     {
       version: 1,

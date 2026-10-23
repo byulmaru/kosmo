@@ -97,10 +97,31 @@ export function postContentHashtagCandidatesFromText(
   bodyText: string,
   mentions: readonly PostContentMentionReference[] = [],
 ): PostContentHashtagCandidate[] {
-  const linkRanges = [
-    ...(postContentLinkify.match(bodyText) ?? []),
-    ...(postContentHashtagUrlLinkify.match(bodyText) ?? []),
-  ].map(({ index, lastIndex }) => ({ end: lastIndex, start: index }));
+  const linkRanges = (postContentHashtagUrlLinkify.match(bodyText) ?? []).map(
+    ({ index, lastIndex }) => ({ end: lastIndex, start: index }),
+  );
+  const explicitUrlPattern = /(^|(?!_)[><\uFF5C\p{Z}\p{P}\p{C}])([A-Za-z][A-Za-z0-9+.-]*:\/\/)/gu;
+  for (const match of bodyText.matchAll(explicitUrlPattern)) {
+    const start = match.index + match[0].length - match[2]!.length;
+    let end = match.index + match[0].length;
+    const openBrackets: string[] = [];
+    for (const codePoint of bodyText.slice(end)) {
+      if (/[\s<>"'|]/u.test(codePoint)) {
+        break;
+      }
+      const matchingOpen =
+        codePoint === ')' ? '(' : codePoint === ']' ? '[' : codePoint === '}' ? '{' : null;
+      if (matchingOpen !== null) {
+        if (openBrackets.pop() !== matchingOpen) {
+          break;
+        }
+      } else if (codePoint === '(' || codePoint === '[' || codePoint === '{') {
+        openBrackets.push(codePoint);
+      }
+      end += codePoint.length;
+    }
+    linkRanges.push({ end, start });
+  }
   for (const match of bodyText.matchAll(/\bmailto:[^\s<>"']+/giu)) {
     linkRanges.push({ end: match.index + match[0].length, start: match.index });
   }

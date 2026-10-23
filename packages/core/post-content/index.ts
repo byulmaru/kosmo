@@ -333,6 +333,7 @@ function isPostContentNodeType(type: string): boolean {
     type === 'text' ||
     type === 'hard_break' ||
     type === 'mention' ||
+    type === 'hashtag' ||
     type === 'media'
   );
 }

@@ -140,7 +140,7 @@ const resolveLocalPostHashtags = async (
     .values(
       [...namesAndDisplayNames]
         .map(([name, displayName]) => ({ displayName, name }))
-        .sort((first, second) => first.name.localeCompare(second.name)),
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
     )
     .onConflictDoNothing({ target: Hashtags.name });
 
