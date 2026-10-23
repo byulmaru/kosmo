@@ -184,6 +184,7 @@ function PostDetailContent({
     <PostDetailThread
       header={header}
       identity={postId}
+      onCurrentPostBackgroundPress={() => router.push(`/${post.profile.relativeHandle}/${post.id}`)}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
       post={post.thread}

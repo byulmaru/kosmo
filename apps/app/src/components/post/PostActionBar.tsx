@@ -1,9 +1,10 @@
 import { Bookmark, HeartPlus, MessageCircle, MoreHorizontal } from 'lucide-react-native';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { PostActionBackground } from './PostActionBackground';
 import { PostActionControl } from './PostActionControl';
 import { formatPostActionCount } from './postActionCount';
 import { usePostBookmarkAction } from './PostBookmarkAction';
@@ -11,7 +12,7 @@ import { PostDeletionAction } from './PostDeletionAction';
 import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
 import type { Ref } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { StyleProp, View, ViewStyle } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
@@ -91,7 +92,7 @@ export function PostActionBar({
   const replyCountLabel = formatPostActionCount(reply?.count);
 
   return (
-    <View
+    <PostActionBackground
       accessibilityLabel="액션 바"
       accessibilityRole="toolbar"
       style={[
@@ -152,7 +153,9 @@ export function PostActionBar({
         />
       ) : null}
       {resolvedBookmark || more || data?.deletion ? (
-        <View style={[styles.trailing, Platform.OS !== 'web' ? styles.nativeTrailing : undefined]}>
+        <PostActionBackground
+          style={[styles.trailing, Platform.OS !== 'web' ? styles.nativeTrailing : undefined]}
+        >
           {resolvedBookmark ? (
             <PostActionControl
               accessibilityLabel={resolvedBookmark.accessibilityLabel}
@@ -212,9 +215,9 @@ export function PostActionBar({
               )}
             />
           ) : null}
-        </View>
+        </PostActionBackground>
       ) : null}
-    </View>
+    </PostActionBackground>
   );
 }
 
