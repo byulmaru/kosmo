@@ -383,6 +383,7 @@ function PostSourcePreviewFeedback({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: hovered ? theme.stateHover : 'transparent',
     interactionKey: hovered ? 'hovered' : 'idle',
     reducedMotion,
