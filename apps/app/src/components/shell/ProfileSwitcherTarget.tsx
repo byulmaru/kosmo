@@ -295,6 +295,7 @@ function ProfileSwitcherTargetOptionVisual({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: selected ? theme.stateSelectedSurface : pressed ? theme.statePressed : 'transparent',
     interactionKey: pressed ? 'pressed' : 'idle',
     reducedMotion,

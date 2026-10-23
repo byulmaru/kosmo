@@ -190,6 +190,7 @@ function ProfileSwitcherAddProfileVisual({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: pressed ? theme.backgroundSurface : 'transparent',
     interactionKey: pressed ? 'pressed' : 'idle',
     reducedMotion,
@@ -231,7 +232,17 @@ function ProfileSwitcherTriggerVisual({
   });
 
   return (
-    <Animated.View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.sm, opacity }}>
+    <Animated.View
+      style={{
+        alignItems: 'center',
+        flexDirection: 'row',
+        flexShrink: 1,
+        minWidth: 0,
+        maxWidth: '100%',
+        gap: spacing.sm,
+        opacity,
+      }}
+    >
       {children}
     </Animated.View>
   );

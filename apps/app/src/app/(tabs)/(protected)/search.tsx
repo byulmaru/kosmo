@@ -659,6 +659,7 @@ function RecentSearchTermVisual({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: pressed
       ? theme.statePressed
       : Platform.OS === 'web' && hovered
