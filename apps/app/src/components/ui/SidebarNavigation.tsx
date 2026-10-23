@@ -270,7 +270,12 @@ function SidebarVisual({
         style={styles.iconFrame}
       >
         {busy ? (
-          <LoadingIndicator accessibilityLabel="로그아웃 처리 중" color={color} />
+          <LoadingIndicator
+            accessibilityLabel="로그아웃 처리 중"
+            accessible={false}
+            aria-hidden
+            color={color}
+          />
         ) : profile ? (
           <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
         ) : (

@@ -1,13 +1,5 @@
 import { useEffect, useRef } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import { LoadingIndicator } from './LoadingIndicator';
