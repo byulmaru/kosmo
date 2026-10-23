@@ -10,6 +10,7 @@ import type * as MuteModule from './ProfileMuteAction';
 const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 mockModule('react-native', {
+  Animated: { Text: 'AnimatedText' },
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   Text: 'Text',

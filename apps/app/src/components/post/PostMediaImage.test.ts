@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
@@ -35,10 +35,26 @@ const ImageMock = Object.assign((props: Record<string, unknown>) => createElemen
 const getSizeAttempts = new Map<string, number>();
 const pendingGetSizes = new Map<string, Array<(width: number, height: number) => void>>();
 
+let retryPressed = false;
+mock.module('@/components/ui/useAnimatedColorTransition', {
+  exports: { useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('react-native', {
   exports: {
     Image: ImageMock,
-    Pressable: 'Pressable',
+    Animated: { View: 'AnimatedView' },
+    Pressable: ({
+      children,
+      ...props
+    }: {
+      children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
+    }) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ pressed: retryPressed }) : children,
+      ),
     StyleSheet: {
       absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
       create: <T>(styles: T) => styles,
@@ -253,6 +269,28 @@ describe('PostMediaImage', () => {
     assert.equal(textContents().includes('가로 이미지을 불러오지 못했습니다.'), true);
   });
 
+  it('재시도 press는 테두리와 라벨을 함께 흐리게 하고 release 뒤 복원한다', async () => {
+    await render(0, media('landscape', '가로 이미지'));
+    await act(async () => image('landscape').props.onError());
+    const retry = pressable('가로 이미지 다시 시도');
+    const props = { index: 0, item: media('landscape', '가로 이미지') };
+    try {
+      for (const pressed of [true, false]) {
+        retryPressed = pressed;
+        await act(async () => renderer!.update(createElement(PostMediaImage, props)));
+        const visual = renderer!.root.findByType('AnimatedView' as never);
+        const style = flattenStyle(visual.props.style);
+        assert.equal(style.opacity, pressed ? 0.7 : 1);
+        assert.equal(style.borderWidth, 1);
+        assert.equal(visual.findAllByType('Text' as never).length, 1);
+      }
+      await act(async () => retry.props.onPress());
+      assert.equal(rendered('Skeleton').length, 1);
+    } finally {
+      retryPressed = false;
+    }
+  });
+
   it('tile 경계에서는 measured aspect ratio 대신 frame을 채우고 fallback도 같은 경계를 채운다', async () => {
     await render(0, media('landscape', '가로 이미지'), true, true);
 
@@ -265,7 +303,7 @@ describe('PostMediaImage', () => {
     const fallbackStyle = flattenStyle(byTestId('post-media-error-landscape').props.style);
     assert.equal(fallbackStyle.height, '100%');
     assert.equal(fallbackStyle.minHeight, 0);
-    const retryStyle = flattenPressableStyle(pressable('가로 이미지 다시 시도').props.style);
+    const retryStyle = flattenStyle(renderer!.root.findByType('AnimatedView' as never).props.style);
     assert.equal(retryStyle.minHeight, 48);
     assert.equal(retryStyle.minWidth, 0);
     assert.equal(retryStyle.width, '100%');
@@ -336,8 +374,4 @@ function flattenStyle(style: unknown): Record<string, unknown> {
     );
   }
   return (style ?? {}) as Record<string, unknown>;
-}
-
-function flattenPressableStyle(style: unknown): Record<string, unknown> {
-  return flattenStyle(typeof style === 'function' ? style({ pressed: false }) : style);
 }

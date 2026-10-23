@@ -170,6 +170,7 @@ function NotificationHoverOverlay({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: active ? theme.stateHover : 'transparent',
     interactionKey: active ? 'hovered' : 'idle',
     reducedMotion,
