@@ -185,6 +185,30 @@ test('provider keeps the presentation mounted while a visible guide exits', asyn
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
   assert.equal(renderer?.root.findByType('Coachmark' as never), coachmark);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
+
+  assert.equal(
+    requestFromProvider?.({
+      guide: 'SEARCH',
+      mode: 'manual',
+      ready: true,
+      steps: [createStep('다음 안내')],
+    }),
+    null,
+  );
+  await act(async () => coachmark?.props.onExited?.());
+
+  let next: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    next =
+      requestFromProvider?.({
+        guide: 'SEARCH',
+        mode: 'manual',
+        ready: true,
+        steps: [createStep('다음 안내')],
+      }) ?? null;
+  });
+  assert.ok(next);
+  await act(async () => next?.cancel());
 });
 
 test('automatic start requires a usable profile and records only after the first step is shown', async () => {
@@ -242,6 +266,17 @@ test('manual multi-step help moves both ways and restarts from the first step', 
   await act(async () => coachmark?.props.onComplete());
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
+
+  assert.equal(
+    requestFromProvider?.({
+      guide: 'TIMELINE',
+      mode: 'manual',
+      ready: true,
+      steps,
+    }),
+    null,
+  );
+  await act(async () => coachmark?.props.onExited?.());
 
   let restarted: ReturnType<NonNullable<typeof requestFromProvider>> = null;
   await act(async () => {
@@ -308,6 +343,7 @@ test('automatic transient history stays scoped to the account', async () => {
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onClose());
 
   assert.equal(request('account-1'), null);
+  await act(async () => renderer?.root.findByType('Coachmark' as never).props.onExited?.());
   let otherAccount: ReturnType<typeof request>;
   await act(async () => {
     otherAccount = request('account-2');
@@ -369,6 +405,46 @@ test('account changes clear requests and stale handles cannot affect the new acc
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
 
   await act(async () => newAccountRequest?.cancel());
+});
+
+test('controller callbacks from the previous account reject synchronously', async () => {
+  const nextAccount: AccountFixture = {
+    id: 'account-2',
+    profiles: [{ id: 'profile-2' }],
+    seenCoachmarks: [],
+  };
+  await renderProvider(createElement(ControllerProbe), account.id);
+  const previous = renderer?.root.findByType('ControllerProbe' as never).props;
+
+  await act(async () => {
+    renderer?.update(
+      createElement(CoachmarkProvider, {
+        accountId: nextAccount.id,
+        children: createElement(ControllerProbe, { accountKey: nextAccount }),
+      }),
+    );
+  });
+
+  assert.equal(previous?.open(), null);
+  assert.equal(previous?.requestAutoStart(), null);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(CoachmarkProvider, {
+        accountId: account.id,
+        children: createElement(ControllerProbe, { accountKey: account }),
+      }),
+    );
+  });
+  assert.equal(previous?.open(), null);
+  assert.equal(previous?.requestAutoStart(), null);
+
+  let current: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    current = renderer?.root.findByType('ControllerProbe' as never).props.open() ?? null;
+  });
+  assert.ok(current);
+  await act(async () => current?.cancel());
 });
 
 test('manual help starts for guests and accounts without profiles', async () => {

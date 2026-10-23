@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Coachmark } from '@/components/ui/Coachmark';
 import type { CoachmarkGuide } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
@@ -57,6 +57,11 @@ export function CoachmarkProvider({
   children: ReactNode;
 }) {
   const accountKey = accountId ?? null;
+  const accountGenerationRef = useRef<{ accountKey: AccountKey }>({ accountKey });
+  if (accountGenerationRef.current.accountKey !== accountKey) {
+    accountGenerationRef.current = { accountKey };
+  }
+  const accountGeneration = accountGenerationRef.current;
   const [storedState, setStoredState] = useState(() => createState(accountKey));
   if (storedState.accountKey !== accountKey) {
     setStoredState(createState(accountKey));
@@ -70,9 +75,12 @@ export function CoachmarkProvider({
     return request.mode !== 'automatic' || !key || !transientSeen.has(key);
   };
   // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
-  let occupied = Boolean(state.active?.visible);
+  let occupied = Boolean(state.active);
   const request = useCallback(
     (next: CoachmarkRequest) => {
+      if (accountGenerationRef.current !== accountGeneration) {
+        return null;
+      }
       if (
         !next.ready ||
         next.steps.length === 0 ||
@@ -86,7 +94,7 @@ export function CoachmarkProvider({
       const entry = { ...next, step: 0, token, visible: true };
       occupied = true;
       setStoredState((current) => {
-        if (current.accountKey !== accountKey || current.active?.visible) {
+        if (current.accountKey !== accountKey || current.active) {
           return current;
         }
         return { ...current, active: entry };
@@ -101,7 +109,7 @@ export function CoachmarkProvider({
           }),
       };
     },
-    [accountKey, state.active, state.transientSeen],
+    [accountGeneration, accountKey, state.active, state.transientSeen],
   );
 
   const markShown = useCallback(
@@ -134,6 +142,15 @@ export function CoachmarkProvider({
         ? { ...value, active: { ...value.active, visible: false } }
         : value,
     );
+  const release = () =>
+    setStoredState((value) =>
+      active &&
+      value.accountKey === accountKey &&
+      value.active?.token === active.token &&
+      !value.active.visible
+        ? { ...value, active: null }
+        : value,
+    );
   const move = (step: number) =>
     setStoredState((value) =>
       active && value.accountKey === accountKey && value.active?.token === active.token
@@ -148,6 +165,7 @@ export function CoachmarkProvider({
         description={current.description}
         onClose={finish}
         onComplete={finish}
+        onExited={release}
         onNext={active.step === active.steps.length - 1 ? undefined : () => move(active.step + 1)}
         onPrevious={active.step === 0 ? undefined : () => move(active.step - 1)}
         onShown={active.step === 0 ? () => markShown(active) : undefined}

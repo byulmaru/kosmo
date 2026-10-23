@@ -15,16 +15,6 @@ export const AccountState = {
 } as const;
 export type AccountState = keyof typeof AccountState;
 
-export const CoachmarkGuide = {
-  TIMELINE: 'TIMELINE',
-  SEARCH: 'SEARCH',
-  TAG: 'TAG',
-  PROFILE: 'PROFILE',
-  POST: 'POST',
-  COMPOSER: 'COMPOSER',
-} as const;
-export type CoachmarkGuide = keyof typeof CoachmarkGuide;
-
 export const ActivityPubActorType = {
   APPLICATION: 'APPLICATION',
   GROUP: 'GROUP',
@@ -51,6 +41,16 @@ export const ApplicationType = {
   PUBLIC: 'PUBLIC',
 } as const;
 export type ApplicationType = keyof typeof ApplicationType;
+
+export const CoachmarkGuide = {
+  TIMELINE: 'TIMELINE',
+  SEARCH: 'SEARCH',
+  TAG: 'TAG',
+  PROFILE: 'PROFILE',
+  POST: 'POST',
+  COMPOSER: 'COMPOSER',
+} as const;
+export type CoachmarkGuide = keyof typeof CoachmarkGuide;
 
 export const FeedbackKind = {
   BUG_REPORT: 'BUG_REPORT',

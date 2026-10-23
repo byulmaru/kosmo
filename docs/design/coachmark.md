@@ -32,13 +32,14 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 | `onComplete`        | 예   | `() => void`                             | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                                          |
 | `onPrevious`        | 선택 | `() => void`                             | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                                          |
 | `onNext`            | 선택 | `() => void`                             | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                                           |
+| `onExited`          | 선택 | `() => void`                             | 퇴장 모션이 끝나 표시가 해제되었을 때 호출한다. 공통 제어가 다음 안내 요청을 받을 수 있게 한다.                        |
 | `onShown`           | 선택 | `() => void`                             | 대상과 말풍선의 배치 및 진입이 완료되어 실제 표시되었을 때 호출한다.                                                   |
 | `preferredFocusRef` | 선택 | `RefObject<View \| HTMLElement \| null>` | 종료 후 Web 포커스를 돌려줄 대상을 지정한다.                                                                           |
 | `children`          | 선택 | `ReactNode`                              | 하단 action 행에서 건너뛰기 왼쪽에 단계 번호 등 보조 내용을 합성한다. 문자열·숫자(0 포함)는 공용 Text로 감싸 표시한다. |
 
 단계 상태·진행 번호·최초 노출 저장은 caller가 소유한다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
 
-페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 대상이 준비되지 않았거나 다른 안내가 활성화되어 있으면 요청을 거절하고 예약하지 않는다. 이후 조건이 충족되면 caller가 다시 요청할 수 있다. 요청 수락 자체는 이력 소비를 의미하지 않는다.
+페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 대상이 준비되지 않았거나 다른 안내가 표시·퇴장 중이면 요청을 거절하고 예약하지 않는다. 계정 전환 전에 보관한 요청 함수도 거절한다. 이후 조건이 충족되면 caller가 다시 요청할 수 있다. 요청 수락 자체는 이력 소비를 의미하지 않는다.
 
 ## 배치와 동작
 
@@ -53,7 +54,7 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 - 본문은 기본 두세 줄 이내로 작성하되, 확대·번역·좁은 화면에서 줄 수를 강제로 잘라내지 않는다. 긴 소개·동의·설정은 별도 sheet나 화면으로 구성한다.
 - 배경과 표면은 theme semantic color를 사용하고 표면 elevation은 `elevation.overlay`를 따른다.
 - 배경에는 `theme.overlayScrim`을 칠해 조작을 막고 target에는 spotlight 구멍을 만들지 않는다. 건너뛰기, Escape, Native back, backdrop dismiss는 `onClose`로 수렴한다. 대상도 backdrop 뒤에서 차단되므로 대상 터치로 투어를 진행하지 않는다.
-- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지한다. 종료 후 포커스 처리는 공용 overlay에 맡긴다. caller가 `preferredFocusRef`로 도움말 trigger 등 복귀 대상을 지정할 수 있으며, 지정하지 않으면 기존 활성 요소로의 복귀 규칙을 따른다.
+- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. 대상의 측정 가능한 영역이 준비된 뒤 진입 모션을 시작한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지한다. 종료 후 포커스 처리는 공용 overlay에 맡긴다. caller가 `preferredFocusRef`로 도움말 trigger 등 복귀 대상을 지정할 수 있으며, 지정하지 않으면 기존 활성 요소로의 복귀 규칙을 따른다.
 
 ## Storybook 검증
 
@@ -77,6 +78,6 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 ### 공통 제어 검증 기록 · 2026-10-23
 
-- AppProviders와 공통 제어 단위 테스트 22개, overlay motion 단위 테스트 3개, 두 Coachmark Web Storybook 파일의 테스트 19개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 활성 안내 중 요청 거절과 종료 후 명시 재요청, 이전·다음·완료 후 첫 단계 재시작, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
-- 닫기·완료 시 같은 안내 인스턴스를 `visible=false`로 유지하여 기존 퇴장 애니메이션을 사용한다. 실제 action이 활성화된 뒤 Web 진입 포커스를 받고, 단계 이동·종료 후 포커스 복귀를 확인했다. TypeScript, ESLint, Prettier와 정적 Storybook 빌드를 통과했다.
+- AppProviders·공통 제어·Coachmark 단위 테스트 24개, overlay motion 단위 테스트 3개, 두 Coachmark Web Storybook 파일의 테스트 19개를 통과했다. 계정 전환 시 화면 유지·안내 초기화, 이전 계정 취소 핸들의 격리, 활성 안내 중 요청 거절과 종료 후 명시 재요청, 이전·다음·완료 후 첫 단계 재시작, 대상 미준비 시 표시·기록 보류, 실제 표시 callback과 종료 후 지정 대상 포커스 복귀를 확인했다.
+- 닫기·완료 시 같은 안내 인스턴스를 `visible=false`로 유지하여 기존 퇴장 애니메이션을 사용하며, 퇴장 완료 후 다음 명시 요청을 받는다. 대상 측정 전에는 진입 모션을 시작하지 않는지 단위 테스트로 확인했다. 실제 action이 활성화된 뒤 Web 진입 포커스를 받고, 단계 이동·종료 후 포커스 복귀를 확인했다. TypeScript, ESLint, Prettier와 정적 Storybook 빌드를 통과했다.
 - 화면별 대상 준비 신호와 이탈 시 취소 연결 및 Native 실기기 검증은 PROD-1201~1206의 화면 통합 범위다.

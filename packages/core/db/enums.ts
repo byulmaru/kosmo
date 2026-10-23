@@ -6,7 +6,6 @@ const createPgEnum = <T extends string>(enumName: string, values: Record<T, T>) 
 
 export const accountProfileRole = createPgEnum('account_profile_role', Enum.AccountProfileRole);
 export const accountState = createPgEnum('account_state', Enum.AccountState);
-export const coachmarkGuide = createPgEnum('coachmark_guide', Enum.CoachmarkGuide);
 export const activityPubActorType = createPgEnum(
   'activitypub_actor_type',
   Enum.ActivityPubActorType,
@@ -17,6 +16,7 @@ export const activityPubActorKeyKind = createPgEnum(
 );
 export const applicationState = createPgEnum('application_state', Enum.ApplicationState);
 export const applicationType = createPgEnum('application_type', Enum.ApplicationType);
+export const coachmarkGuide = createPgEnum('coachmark_guide', Enum.CoachmarkGuide);
 export const hashtagMuteDecision = createPgEnum('hashtag_mute_decision', Enum.HashtagMuteDecision);
 export const hashtagMuteScope = createPgEnum('hashtag_mute_scope', Enum.HashtagMuteScope);
 export const instanceKind = createPgEnum('instance_kind', Enum.InstanceKind);

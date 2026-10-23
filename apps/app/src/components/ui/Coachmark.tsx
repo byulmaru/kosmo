@@ -25,6 +25,7 @@ export type CoachmarkProps = PropsWithChildren<{
   description: string;
   onClose: () => void;
   onComplete: () => void;
+  onExited?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
   onShown?: () => void;
@@ -45,6 +46,7 @@ export function Coachmark({
   description,
   onClose,
   onComplete,
+  onExited,
   onNext,
   onPrevious,
   onShown,
@@ -63,7 +65,6 @@ export function Coachmark({
       : undefined;
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const overlayMotion = useOverlayMotion(visible);
   const dialogRef = useRef<NativeView>(null);
   const [anchor, setAnchor] = useState<{
     height: number;
@@ -74,6 +75,7 @@ export function Coachmark({
   const [bubble, setBubble] = useState<Layout>({ height: 0, width: MAX_WIDTH });
   const [shown, setShown] = useState(false);
   const targetReady = Boolean(anchorRef.current && anchor && anchor.width > 0 && anchor.height > 0);
+  const overlayMotion = useOverlayMotion(visible && targetReady);
   const modalVisible = overlayMotion.mounted && targetReady;
   const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
   // Web Modal focus trapping can start before measured content mounts; refocus once actions are ready.
@@ -111,6 +113,12 @@ export function Coachmark({
       onShown?.();
     }
   }, [anchor, bubble.height, onShown, overlayMotion.entered, shown, targetReady, visible]);
+
+  useEffect(() => {
+    if (!visible && !overlayMotion.mounted) {
+      onExited?.();
+    }
+  }, [onExited, overlayMotion.mounted, visible]);
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {
