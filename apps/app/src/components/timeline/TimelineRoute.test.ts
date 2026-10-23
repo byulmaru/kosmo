@@ -66,6 +66,7 @@ mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
 mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () => null });
 mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });

@@ -50,6 +50,9 @@ mockModule(require.resolve('lucide-react-native'), {
   UserRound: 'UserRound',
   UserRoundPlus: 'UserRoundPlus',
 });
+mockModule('@/components/BrandLogo', {
+  BrandLogo: (props: object) => createElement('BrandLogo', props),
+});
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => false,
   useTheme: () => ({
@@ -73,7 +76,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
-  iconSizes: { 20: 20, 24: 24 },
+  iconSizes: { 20: 20, 24: 24, 48: 48 },
   motion: { duration: { fast: 100, instant: 0 }, easing: { standard: 'linear' } },
   radius: { 8: 8, full: 999 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24 },
@@ -124,6 +127,7 @@ describe('guest public-content sidebar', () => {
       .map((node) => node.props.accessibilityLabel);
 
     assert.equal(guestActions.length, 2);
+    assert.equal(view.root.findByType('BrandLogo' as never).props.variant, 'full');
     assert.ok(labels.includes('가입하기'));
     assert.ok(labels.includes('로그인'));
     assert.ok(!labels.includes('홈'));
@@ -140,5 +144,8 @@ describe('guest public-content sidebar', () => {
     assert.ok(labels.includes('가입하기'));
     assert.ok(labels.includes('로그인'));
     assert.equal(view.root.findAllByType('GuestActionLink' as never).length, 2);
+    const logo = view.root.findByType('BrandLogo' as never);
+    assert.equal(logo.props.variant, 'mark');
+    assert.equal(logo.props.width, 48);
   });
 });

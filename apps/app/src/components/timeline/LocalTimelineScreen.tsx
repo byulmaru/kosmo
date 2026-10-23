@@ -16,9 +16,10 @@ import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
-import type { MutableRefObject, PropsWithChildren } from 'react';
+import type { MutableRefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type {
@@ -55,7 +56,8 @@ const LocalFragment = graphql`
   }
 `;
 
-export default function LocalScreen() {
+export default function LocalTimelineScreen({ publicEntry = false }: { publicEntry?: boolean }) {
+  const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
@@ -94,59 +96,60 @@ export default function LocalScreen() {
   }, [registerHomeReselection, reselectFromShell]);
 
   return (
-    <LocalFrame onReselect={refresh} onBrandCurrentNavigate={shellChrome?.reselectHome}>
-      <RouteBoundary
-        loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
-        error={(resetErrorBoundary) =>
-          hasSuccessfulLocalRef.current ? (
-            <StateView
-              actionLabel="다시 시도"
-              alert
-              description="잠시 후 다시 시도해주세요."
-              onAction={resetErrorBoundary}
-              title="로컬 타임라인을 불러오지 못했어요"
-            />
-          ) : (
-            <LocalInitialError onRetry={resetErrorBoundary} />
-          )
-        }
-        ref={routeBoundaryRef}
-        title="로컬 타임라인을 불러오지 못했어요"
-      >
-        <LocalContent
-          hasSuccessfulLocalRef={hasSuccessfulLocalRef}
-          onRefresh={refresh}
-          onRefreshComplete={completeRefresh}
-          refreshVersion={refreshState.refreshVersion}
-          refreshing={refreshState.refreshing}
-        />
-      </RouteBoundary>
-    </LocalFrame>
+    <View style={styles.root}>
+      {publicEntry ? (
+        getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
+          <PageHeader title="타임라인 둘러보기" />
+        ) : null
+      ) : (
+        <LocalHeader onReselect={refresh} width={width} />
+      )}
+      <View style={styles.body}>
+        <RouteBoundary
+          loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
+          error={(resetErrorBoundary) =>
+            hasSuccessfulLocalRef.current ? (
+              <StateView
+                actionLabel="다시 시도"
+                alert
+                description="잠시 후 다시 시도해주세요."
+                onAction={resetErrorBoundary}
+                title="로컬 타임라인을 불러오지 못했어요"
+              />
+            ) : (
+              <LocalInitialError onRetry={resetErrorBoundary} />
+            )
+          }
+          ref={routeBoundaryRef}
+          title="로컬 타임라인을 불러오지 못했어요"
+        >
+          <LocalContent
+            hasSuccessfulLocalRef={hasSuccessfulLocalRef}
+            onRefresh={refresh}
+            onRefreshComplete={completeRefresh}
+            refreshVersion={refreshState.refreshVersion}
+            refreshing={refreshState.refreshing}
+          />
+        </RouteBoundary>
+      </View>
+    </View>
   );
 }
 
-function LocalFrame({
-  children,
-  onBrandCurrentNavigate,
-  onReselect,
-}: PropsWithChildren<{
-  onBrandCurrentNavigate?: () => void;
-  onReselect: () => void;
-}>) {
+function LocalHeader({ onReselect, width }: { onReselect: () => void; width: number }) {
   const shellChrome = useShellChrome();
-  const { width } = useWindowDimensions();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
-    <View style={styles.root}>
+    <>
       {routeOwnsHeader ? (
         <PageHeader
           accessibilityLabel="로컬"
           brandAccessibilityLabel="홈"
           brandCurrent
           brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          onBrandCurrentNavigate={Platform.OS === 'web' ? shellChrome?.reselectHome : undefined}
           variant="brand"
         />
       ) : null}
@@ -162,8 +165,7 @@ function LocalFrame({
       >
         <TimelineTabs onReselect={onReselect} value="local" />
       </View>
-      <View style={styles.body}>{children}</View>
-    </View>
+    </>
   );
 }
 
@@ -278,8 +280,10 @@ function LocalContentView({
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+  const { status } = useSession();
+  const guest = Platform.OS === 'web' && status === 'guest' && !data.currentSession && !data.me;
 
-  if (!selectedProfile) {
+  if (!selectedProfile && !guest) {
     return (
       <View style={styles.onboardingRoot}>
         <View style={styles.onboarding}>
@@ -303,7 +307,7 @@ function LocalContentView({
   return (
     <View style={styles.timeline}>
       <PostList
-        identityKey={`local:${selectedProfile.id}`}
+        identityKey={`local:${selectedProfile?.id ?? 'guest'}`}
         local={data}
         onRefresh={onRefresh}
         replyProfile={selectedProfile}

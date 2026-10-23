@@ -502,3 +502,33 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => profilePostsRequestCount).toBeGreaterThan(previousCount);
 });
+
+test('쿠키 없는 루트는 Local 다음 페이지를 최신순으로 누적한다', async ({ context, page }) => {
+  const author = await createE2EProfile({ handle: 'e2e-guest-page-writer' });
+  for (let index = 0; index < 21; index += 1) {
+    await createE2EPost({
+      body: `E2E guest page ${index.toString().padStart(2, '0')}`,
+      profileId: author.id,
+    });
+  }
+
+  await page.goto('/');
+  const posts = page.getByText(/^E2E guest page/, { exact: true });
+  await expect(posts).toHaveCount(20);
+  await expect(posts.first()).toHaveText('E2E guest page 20');
+  await expect(posts.last()).toHaveText('E2E guest page 01');
+
+  const nextPageResponse = waitForGraphQLOperation(page, 'PostListLocalNextPageQuery');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const response = await nextPageResponse;
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).errors).toBeUndefined();
+  await expect(posts).toHaveText(
+    Array.from(
+      { length: 21 },
+      (_, index) => `E2E guest page ${(20 - index).toString().padStart(2, '0')}`,
+    ),
+  );
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
+  await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
+});

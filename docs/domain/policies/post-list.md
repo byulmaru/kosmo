@@ -54,6 +54,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Local Post List
 
+- Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
+- 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
 - configured Local Instance에 속한 Active/Normal Local Profile이 작성한 Public Post 중 Content가 있고 Reply
   Parent가 없는 eligible Post를 포함한다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
