@@ -34,9 +34,11 @@ mockModule('react-native-safe-area-context', {
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({
+    actionPrimaryBase: 'primary-base',
     backgroundElevated: 'background',
     borderDefault: 'border',
     foregroundPrimary: 'foreground',
+    foregroundSecondary: 'foreground-secondary',
     overlayScrim: 'scrim',
     stateFocusRing: 'focus',
   }),
@@ -185,5 +187,49 @@ test('onExited only fires after an actual exit, including an unready target exit
 
   await act(async () => renderer.update(renderCoachmark(false, () => (exited += 10))));
   assert.equal(exited, 2);
+  await act(async () => renderer.unmount());
+});
+
+test('renders validated multi-step progress with one accessible progressbar', async () => {
+  dimensions = { height: 40, width: 120 };
+  let renderer!: ReactTestRenderer;
+  const renderCoachmark = (progress?: { current: number; total: number }) =>
+    createElement(coachmarkModule.Coachmark, {
+      anchorRef,
+      description: '다음 안내를 확인하세요.',
+      onClose: () => {},
+      onComplete: () => {},
+      progress,
+      visible: true,
+    });
+
+  await act(async () => {
+    renderer = create(renderCoachmark({ current: 2, total: 4 }));
+  });
+  let progressbar = renderer.root.findByProps({ accessibilityRole: 'progressbar' });
+  assert.deepEqual(progressbar.props.accessibilityValue, { max: 4, min: 1, now: 2 });
+  assert.equal(progressbar.props['aria-valuemax'], 4);
+  assert.equal(progressbar.props['aria-valuemin'], 1);
+  assert.equal(progressbar.props['aria-valuenow'], 2);
+  let segments = renderer.root.findAllByProps({ testID: 'coachmark-progress-segment' });
+  assert.equal(segments.length, 4);
+  assert.equal(segments[0]?.props.style[1].backgroundColor, 'primary-base');
+  assert.equal(segments[1]?.props.style[1].backgroundColor, 'primary-base');
+  assert.equal(segments[2]?.props.style[1].backgroundColor, 'border');
+  assert.equal(segments[3]?.props.style[1].backgroundColor, 'border');
+
+  await act(async () => renderer.update(renderCoachmark({ current: 3, total: 4 })));
+  progressbar = renderer.root.findByProps({ accessibilityRole: 'progressbar' });
+  assert.deepEqual(progressbar.props.accessibilityValue, { max: 4, min: 1, now: 3 });
+  assert.equal(progressbar.props['aria-valuenow'], 3);
+  segments = renderer.root.findAllByProps({ testID: 'coachmark-progress-segment' });
+  assert.equal(segments[2]?.props.style[1].backgroundColor, 'primary-base');
+
+  await act(async () => renderer.update(renderCoachmark({ current: 1, total: 1 })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'progressbar' }).length, 0);
+  await act(async () => renderer.update(renderCoachmark({ current: 0, total: 4 })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'progressbar' }).length, 0);
+  await act(async () => renderer.update(renderCoachmark({ current: 1.5, total: 4 })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'progressbar' }).length, 0);
   await act(async () => renderer.unmount());
 });

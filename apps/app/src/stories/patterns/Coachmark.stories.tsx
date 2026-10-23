@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useArgs } from 'storybook/preview-api';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
 import { Coachmark } from '@/components/ui/Coachmark';
-import { space, textStyles } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { View as NativeView } from 'react-native';
 import type { CoachmarkProps } from '@/components/ui/Coachmark';
@@ -124,6 +124,7 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
     useRef<NativeView>(null),
     useRef<NativeView>(null),
     useRef<NativeView>(null),
+    useRef<NativeView>(null),
   ] as const;
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -131,6 +132,7 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
     { description: '프로필을 열어 공개 범위를 확인하세요.', title: '프로필 확인' },
     { description: '표시할 항목을 고르고 순서를 바꿀 수 있어요.', title: '항목 선택' },
     { description: '설정을 저장해 안내를 마치세요.', title: '저장 완료' },
+    { description: '변경 사항을 확인하고 안내를 마칩니다.', title: '확인 완료' },
   ];
   const current = steps[step]!;
   const anchorRef = anchorRefs[step];
@@ -161,15 +163,9 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
           onComplete();
           setVisible(false);
         }}
+        progress={{ current: step + 1, total: steps.length }}
         visible={visible}
-      >
-        <Text
-          accessibilityLabel={`${step + 1} / ${steps.length}단계`}
-          style={[textStyles.uiCopyS, { lineHeight: textStyles.uiCopyM.lineHeight }]}
-        >
-          {`${step + 1} / ${steps.length}`}
-        </Text>
-      </Coachmark>
+      />
     </View>
   );
 }
@@ -246,9 +242,8 @@ function SharedAnchorFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' 
           setVisible(false);
         }}
         onNext={step === 0 ? () => setStep(1) : undefined}
-      >
-        {step === 0 ? 0 : '1 / 2'}
-      </Coachmark>
+        progress={{ current: step + 1, total: 2 }}
+      />
     </View>
   );
 }
@@ -468,6 +463,10 @@ export const StepsInteraction: Story = {
       within(await findReadySurface('다음')).getByRole('button', { name: '다음' }),
     );
     await assertArrowMatchesTarget(2);
+    await userEvent.click(
+      within(await findReadySurface('다음')).getByRole('button', { name: '다음' }),
+    );
+    await assertArrowMatchesTarget(3);
     const shortBody = await screen.findByTestId('coachmark-body');
     await waitFor(() => expect(shortBody.scrollHeight).toBeLessThanOrEqual(shortBody.clientHeight));
     await userEvent.click(
@@ -484,7 +483,7 @@ export const SharedAnchorContract: Story = {
   render: (args) => <SharedAnchorFixture onClose={args.onClose} onComplete={args.onComplete} />,
   play: async ({ canvasElement }) => {
     const surface = await findReadySurface('다음');
-    expect(within(surface).getByText('0')).toBeVisible();
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
     await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
     const target = within(canvasElement).getByTestId('shared-anchor-target');
     const arrow = await screen.findByTestId('coachmark-arrow');
@@ -496,7 +495,9 @@ export const SharedAnchorContract: Story = {
       ).toBeLessThanOrEqual(2);
     });
     const nextSurface = await findReadySurface('완료');
-    await waitFor(() => expect(within(nextSurface).getByText('1 / 2')).toBeVisible());
+    await waitFor(() =>
+      expect(within(nextSurface).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '2'),
+    );
     await userEvent.click(
       within(await findReadySurface('완료')).getByRole('button', { name: '완료' }),
     );

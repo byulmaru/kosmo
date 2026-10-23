@@ -310,19 +310,19 @@ test('manual multi-step help moves both ways and restarts from the first step', 
   assert.ok(handle);
 
   let coachmark = renderer?.root.findByType('Coachmark' as never);
-  assert.equal(coachmark?.props.children, '1 / 2');
+  assert.deepEqual(coachmark?.props.progress, { current: 1, total: 2 });
   assert.equal(coachmark?.props.onPrevious, undefined);
   assert.ok(coachmark?.props.onNext);
 
   await act(async () => coachmark?.props.onNext());
   coachmark = renderer?.root.findByType('Coachmark' as never);
-  assert.equal(coachmark?.props.children, '2 / 2');
+  assert.deepEqual(coachmark?.props.progress, { current: 2, total: 2 });
   assert.ok(coachmark?.props.onPrevious);
   assert.equal(coachmark?.props.onNext, undefined);
 
   await act(async () => coachmark?.props.onPrevious());
   coachmark = renderer?.root.findByType('Coachmark' as never);
-  assert.equal(coachmark?.props.children, '1 / 2');
+  assert.deepEqual(coachmark?.props.progress, { current: 1, total: 2 });
 
   await act(async () => coachmark?.props.onNext());
   coachmark = renderer?.root.findByType('Coachmark' as never);
@@ -353,7 +353,10 @@ test('manual multi-step help moves both ways and restarts from the first step', 
       }) ?? null;
   });
   assert.ok(restarted);
-  assert.equal(renderer?.root.findByType('Coachmark' as never).props.children, '1 / 2');
+  assert.deepEqual(renderer?.root.findByType('Coachmark' as never).props.progress, {
+    current: 1,
+    total: 2,
+  });
   await act(async () => restarted?.cancel());
 });
 

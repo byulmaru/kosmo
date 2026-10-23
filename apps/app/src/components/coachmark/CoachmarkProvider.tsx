@@ -197,11 +197,10 @@ export function CoachmarkProvider({
         onPrevious={active.step === 0 ? undefined : () => move(active.step - 1)}
         onShown={active.step === 0 ? () => markShown(active) : undefined}
         preferredFocusRef={active.preferredFocusRef}
+        progress={{ current: active.step + 1, total: active.steps.length }}
         title={current.title}
         visible={active.visible}
-      >
-        {`${active.step + 1} / ${active.steps.length}`}
-      </Coachmark>
+      />
     ) : null;
 
   const contextValue = { request };

@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -17,10 +17,15 @@ import { Button } from './Button';
 import { getCoachmarkPosition } from './coachmarkPosition';
 import { ModalSheetHost } from './ModalSheetHost';
 import { useOverlayLifecycle } from './Overlay';
-import type { PropsWithChildren, RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
-export type CoachmarkProps = PropsWithChildren<{
+export type CoachmarkProgress = Readonly<{
+  current: number;
+  total: number;
+}>;
+
+export type CoachmarkProps = {
   anchorRef: RefObject<NativeView | null>;
   description: string;
   onClose: () => void;
@@ -30,19 +35,40 @@ export type CoachmarkProps = PropsWithChildren<{
   onPrevious?: () => void;
   onShown?: () => void;
   preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
+  progress?: CoachmarkProgress;
   title?: string;
   visible: boolean;
-}>;
+};
 
 type Layout = Readonly<{ height: number; width: number }>;
+
+type WebProgressProps = {
+  'aria-valuemax': number;
+  'aria-valuemin': number;
+  'aria-valuenow': number;
+};
 
 const MAX_WIDTH = 256;
 const ARROW_SIZE = iconSizes[16];
 const ARROW_HALF = ARROW_SIZE / 2;
 
+function isValidProgress(
+  progress: CoachmarkProgress | undefined,
+): progress is CoachmarkProgress & { current: number; total: number } {
+  return Boolean(
+    progress &&
+    progress.total > 1 &&
+    Number.isFinite(progress.current) &&
+    Number.isFinite(progress.total) &&
+    Number.isInteger(progress.current) &&
+    Number.isInteger(progress.total) &&
+    progress.current >= 1 &&
+    progress.current <= progress.total,
+  );
+}
+
 export function Coachmark({
   anchorRef,
-  children,
   description,
   onClose,
   onComplete,
@@ -51,6 +77,7 @@ export function Coachmark({
   onPrevious,
   onShown,
   preferredFocusRef,
+  progress,
   title,
   visible,
 }: CoachmarkProps) {
@@ -162,14 +189,8 @@ export function Coachmark({
           },
         })
       : null;
-  const progress = Children.map(children, (child) =>
-    typeof child === 'string' || typeof child === 'number' ? (
-      <Text style={styles.footerLabel}>{child}</Text>
-    ) : (
-      child
-    ),
-  );
   const label = title?.trim() || description;
+  const visibleProgress = isValidProgress(progress) ? progress : null;
   const maxWidth = Math.min(
     MAX_WIDTH,
     Math.max(0, width - insets.left - insets.right - space[16] * 2),
@@ -279,6 +300,53 @@ export function Coachmark({
                 testID="coachmark-body"
               >
                 <View style={styles.copy}>
+                  {visibleProgress ? (
+                    <View
+                      accessible
+                      accessibilityLabel="진행률"
+                      accessibilityRole="progressbar"
+                      accessibilityValue={{
+                        max: visibleProgress.total,
+                        min: 1,
+                        now: visibleProgress.current,
+                      }}
+                      style={styles.progressRow}
+                      {...(Platform.OS === 'web'
+                        ? ({
+                            'aria-valuemax': visibleProgress.total,
+                            'aria-valuemin': 1,
+                            'aria-valuenow': visibleProgress.current,
+                          } as WebProgressProps)
+                        : undefined)}
+                    >
+                      <Text
+                        accessible={false}
+                        style={[styles.progressLabel, { color: theme.foregroundSecondary }]}
+                      >
+                        {`${visibleProgress.current}/${visibleProgress.total}`}
+                      </Text>
+                      <View accessible={false} style={styles.progressTrack}>
+                        {Array.from({ length: visibleProgress.total }, (_, index) => {
+                          const filled = index < visibleProgress.current;
+                          return (
+                            <View
+                              accessible={false}
+                              key={index}
+                              style={[
+                                styles.progressSegment,
+                                {
+                                  backgroundColor: filled
+                                    ? theme.actionPrimaryBase
+                                    : theme.borderDefault,
+                                },
+                              ]}
+                              testID="coachmark-progress-segment"
+                            />
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
                   {title?.trim() ? (
                     <Text
                       accessibilityRole="header"
@@ -292,7 +360,6 @@ export function Coachmark({
                   </Text>
                 </View>
                 <View style={styles.footer}>
-                  {progress?.length ? <View style={styles.progress}>{progress}</View> : null}
                   <View style={styles.actions}>
                     <Button
                       accessibilityLabel="건너뛰기"
@@ -386,7 +453,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
   },
-  progress: { justifyContent: 'center', minWidth: 0 },
+  progressRow: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8], minWidth: 0 },
+  progressLabel: { ...textStyles.uiCopyS },
+  progressTrack: { flexDirection: 'row', flex: 1, gap: space[4], marginTop: space[4], minWidth: 0 },
+  progressSegment: {
+    borderRadius: radius[8],
+    flex: 1,
+    height: space[4],
+    minWidth: 0,
+  },
   actions: { ...layoutRecipes.dialogActions, alignItems: 'center', marginLeft: 'auto' },
   footerLabel: { ...textStyles.uiCopyS, lineHeight: textStyles.uiCopyM.lineHeight },
   divider: { alignSelf: 'stretch', width: borderWidths[1] },
