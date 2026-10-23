@@ -1,6 +1,6 @@
 import { Volume2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useProfileMuteMutations } from '@/components/profile/ProfileMuteController';
 import { Button } from '@/components/ui/Button';
@@ -363,6 +363,7 @@ function ProfileMuteTextVisual({
   theme: ReturnType<typeof useTheme>;
 }) {
   const color = useAnimatedColorTransition({
+    instantKey: theme,
     color: pressed
       ? theme.actionLinkPressed
       : hovered
@@ -373,7 +374,11 @@ function ProfileMuteTextVisual({
     role: 'interaction',
   });
 
-  return <Text style={[textStyles.uiLabelM, { color: color as unknown as string }]}>{label}</Text>;
+  return (
+    <Animated.Text style={[textStyles.uiLabelM, { color: color as unknown as string }]}>
+      {label}
+    </Animated.Text>
+  );
 }
 const styles = StyleSheet.create({
   textAction: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

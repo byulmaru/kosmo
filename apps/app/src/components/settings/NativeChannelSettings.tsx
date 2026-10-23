@@ -127,6 +127,7 @@ function NativeChannelEntryVisual({
   theme: ReturnType<typeof useTheme>;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: pressed ? theme.statePressed : 'transparent',
     interactionKey: pressed ? 'pressed' : 'idle',
     reducedMotion,

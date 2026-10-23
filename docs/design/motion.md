@@ -157,7 +157,7 @@ Loading 변경은 위 navigation·scroll 소유권과 timing을 바꾸지 않는
 | modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※                               |
 | toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지                               |
 | reaction scale·ripple    | 즉시 color·count·selected 상태로 대체; 별도 유한 확인 전이는 추가하지 않음 |
-| spinner rotation loop    | spinner를 숨기고 정적 `···`를 표시하며 기존 consumer 문구는 유지                          |
+| spinner rotation loop    | spinner를 숨기고 정적 `···`를 표시하며 기존 consumer 문구는 유지           |
 | skeleton                 | 정적 placeholder 유지                                                      |
 
 ※ 현재 Native shell drawer의 built-in spring 예외는 아래 PROD-952 Native drawer 규칙을 따른다.

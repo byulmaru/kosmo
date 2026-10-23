@@ -517,6 +517,7 @@ function ComposerMediaThumbnailVisual({
   uri: string;
 }) {
   const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
     color: selected ? theme.actionPrimaryBase : theme.borderSubtle,
     interactionKey: pressed ? 'pressed' : 'idle',
     reducedMotion,
