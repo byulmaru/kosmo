@@ -382,7 +382,6 @@ export const InteractionContract: Story = {
       await waitFor(() =>
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
       );
-      expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
       expectRect(
         notifications,
         presentation === 'compact' ? 44 : 288,

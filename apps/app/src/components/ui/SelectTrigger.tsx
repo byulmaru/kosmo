@@ -1,9 +1,11 @@
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { useId, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { Ref } from 'react';
+import type { ViewStyle } from 'react-native';
 
 export type SelectTriggerProps = {
   accessibilityLabel: string;
@@ -17,6 +19,101 @@ export type SelectTriggerProps = {
   | { controls?: string; disabled?: boolean; open?: false }
 );
 
+type SelectTriggerVisualProps = {
+  disabled: boolean;
+  displayedValue: string;
+  error?: string;
+  expanded: boolean;
+  focusVisible: boolean;
+  hovered: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+  value?: string;
+};
+
+function SelectTriggerVisual({
+  disabled,
+  displayedValue,
+  error,
+  expanded,
+  focusVisible,
+  hovered,
+  reducedMotion,
+  theme,
+  value,
+}: SelectTriggerVisualProps) {
+  const Chevron = expanded ? ChevronUp : ChevronDown;
+  const feedbackColor = !disabled && !focusVisible && hovered ? theme.stateHover : 'transparent';
+  const animatedFeedback = useAnimatedColorTransition({
+    color: feedbackColor,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled || focusVisible ? 'instant' : 'interaction',
+  });
+
+  return (
+    <>
+      {!disabled && focusVisible ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.focusRing,
+            { borderColor: error ? theme.feedbackDangerBorder : theme.stateFocusRing },
+          ]}
+        />
+      ) : null}
+      <View
+        style={[
+          styles.surface,
+          {
+            backgroundColor: disabled ? theme.stateDisabledSurface : theme.backgroundSurface,
+            borderColor: disabled
+              ? theme.borderDisabled
+              : error
+                ? theme.feedbackDangerBorder
+                : theme.borderDefault,
+          },
+        ]}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: animatedFeedback } as unknown as ViewStyle,
+          ]}
+        />
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={[
+            styles.value,
+            {
+              color: disabled
+                ? theme.stateDisabledForeground
+                : value
+                  ? theme.foregroundPrimary
+                  : theme.foregroundMuted,
+            },
+          ]}
+        >
+          {displayedValue}
+        </Text>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          aria-hidden
+          style={styles.chevron}
+        >
+          <Chevron
+            size={24}
+            color={disabled ? theme.stateDisabledForeground : theme.foregroundPrimary}
+          />
+        </View>
+      </View>
+    </>
+  );
+}
+
 export function SelectTrigger({
   accessibilityLabel,
   controlRef,
@@ -29,11 +126,11 @@ export function SelectTrigger({
   value,
 }: SelectTriggerProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const errorId = useId();
   const [focusVisible, setFocusVisible] = useState(false);
   const expanded = !disabled && open && Boolean(controls);
   const displayedValue = value || placeholder;
-  const Chevron = expanded ? ChevronUp : ChevronDown;
 
   return (
     <View style={styles.wrapper}>
@@ -68,64 +165,17 @@ export function SelectTrigger({
           : {})}
       >
         {(state) => (
-          <>
-            {!disabled && focusVisible ? (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.focusRing,
-                  { borderColor: error ? theme.feedbackDangerBorder : theme.stateFocusRing },
-                ]}
-              />
-            ) : null}
-            <View
-              style={[
-                styles.surface,
-                {
-                  backgroundColor: disabled ? theme.stateDisabledSurface : theme.backgroundSurface,
-                  borderColor: disabled
-                    ? theme.borderDisabled
-                    : error
-                      ? theme.feedbackDangerBorder
-                      : theme.borderDefault,
-                },
-              ]}
-            >
-              {!disabled && !focusVisible && (state as { hovered?: boolean }).hovered ? (
-                <View
-                  pointerEvents="none"
-                  style={[StyleSheet.absoluteFill, { backgroundColor: theme.stateHover }]}
-                />
-              ) : null}
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={[
-                  styles.value,
-                  {
-                    color: disabled
-                      ? theme.stateDisabledForeground
-                      : value
-                        ? theme.foregroundPrimary
-                        : theme.foregroundMuted,
-                  },
-                ]}
-              >
-                {displayedValue}
-              </Text>
-              <View
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                aria-hidden
-                style={styles.chevron}
-              >
-                <Chevron
-                  size={24}
-                  color={disabled ? theme.stateDisabledForeground : theme.foregroundPrimary}
-                />
-              </View>
-            </View>
-          </>
+          <SelectTriggerVisual
+            disabled={disabled}
+            displayedValue={displayedValue}
+            error={error}
+            expanded={expanded}
+            focusVisible={focusVisible}
+            hovered={Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)}
+            reducedMotion={reducedMotion}
+            theme={theme}
+            value={value}
+          />
         )}
       </Pressable>
       {error ? (

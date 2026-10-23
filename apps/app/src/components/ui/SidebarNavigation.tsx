@@ -16,8 +16,8 @@ import {
   UserRoundPlus,
   UsersRound,
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
@@ -26,6 +26,7 @@ import { Avatar } from './Avatar';
 import { getIconButtonHitSlop } from './IconButton';
 import { getInteractionTargetSize } from './interactionTarget';
 import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactElement, Ref } from 'react';
@@ -97,6 +98,244 @@ type SidebarControlProps = {
   unreadCount?: number | null;
 };
 
+type SidebarFeedbackProps = {
+  active: boolean;
+  destination?: NavigationDestination;
+  compact: boolean;
+  disabled: boolean;
+  hovered: boolean;
+  nested: boolean;
+  pressed: boolean;
+  tone: 'default' | 'primary';
+};
+
+function SidebarFeedback({
+  active,
+  destination,
+  compact,
+  disabled,
+  hovered,
+  nested,
+  pressed,
+  tone,
+}: SidebarFeedbackProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const controlDisabled = disabled;
+  const interaction = pressed || hovered;
+  const backgroundColor = controlDisabled
+    ? theme.stateDisabledSurface
+    : tone === 'primary'
+      ? pressed
+        ? theme.actionPrimaryPressed
+        : hovered
+          ? theme.actionPrimaryHover
+          : theme.actionPrimaryBase
+      : pressed
+        ? theme.statePressed
+        : hovered
+          ? theme.stateHover
+          : active
+            ? theme.stateSelectedSurface
+            : 'transparent';
+  const role = controlDisabled
+    ? 'instant'
+    : tone === 'primary' || interaction
+      ? 'interaction'
+      : 'selection';
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    reducedMotion,
+    role,
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        compact ? styles.compactVisual : styles.wideVisual,
+        !compact && nested ? styles.nestedVisual : undefined,
+        destination === 'compose' ? styles.composeControl : undefined,
+        {
+          backgroundColor: animatedBackground,
+          borderRadius: destination === 'compose' ? radius.full : radius[8],
+        } as unknown as ViewStyle,
+      ]}
+      testID="sidebar-control-feedback"
+    />
+  );
+}
+
+type SidebarVisualProps = {
+  active: boolean;
+  destination?: NavigationDestination;
+  busy: boolean;
+  compact: boolean;
+  disabled: boolean;
+  Icon: LucideIcon;
+  label: string;
+  nested: boolean;
+  profile?: NavigationProfile;
+  state: PressableStateCallbackType & { hovered?: boolean };
+  tone: 'default' | 'primary';
+  trailingIcon?: LucideIcon;
+  unreadCount: number | null;
+};
+
+function SidebarVisual({
+  active,
+  destination,
+  busy,
+  compact,
+  disabled,
+  Icon,
+  label,
+  nested,
+  profile,
+  state,
+  tone,
+  trailingIcon: TrailingIcon,
+  unreadCount,
+}: SidebarVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const controlDisabled = disabled || busy;
+  const unread = unreadCount !== null && unreadCount > 0;
+  const color = controlDisabled
+    ? theme.stateDisabledForeground
+    : tone === 'primary'
+      ? theme.actionPrimaryOnBase
+      : active
+        ? theme.foregroundPrimary
+        : theme.foregroundSecondary;
+  const animatedForeground = useAnimatedColorTransition({
+    color,
+    instantKey: theme,
+    reducedMotion,
+    role: controlDisabled ? 'instant' : 'selection',
+  });
+  const scale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    scale.stopAnimation();
+    if (reducedMotion || controlDisabled) {
+      scale.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(scale, {
+      duration: motion.duration.fast,
+      easing: Easing.bezier(...motion.easingPoints.standard),
+      toValue: state.pressed ? 0.98 : 1,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [controlDisabled, reducedMotion, scale, state.pressed]);
+
+  const AnimatedIcon = useMemo(() => Animated.createAnimatedComponent(Icon), [Icon]);
+  const AnimatedTrailingIcon = useMemo(
+    () => (TrailingIcon ? Animated.createAnimatedComponent(TrailingIcon) : null),
+    [TrailingIcon],
+  );
+  const hovered = Platform.OS === 'web' && Boolean(state.hovered);
+
+  return (
+    <Animated.View
+      style={[
+        styles.visual,
+        compact ? styles.compactVisual : styles.wideVisual,
+        !compact && nested ? styles.nestedVisual : undefined,
+        destination === 'compose' ? styles.composeControl : undefined,
+        reducedMotion || controlDisabled ? undefined : { transform: [{ scale }] },
+      ]}
+      testID="sidebar-control-visual"
+    >
+      <SidebarFeedback
+        active={active}
+        destination={destination}
+        compact={compact}
+        disabled={controlDisabled}
+        hovered={hovered}
+        nested={nested}
+        pressed={state.pressed}
+        tone={tone}
+      />
+      <View
+        accessible={false}
+        accessibilityElementsHidden
+        aria-hidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.iconFrame}
+      >
+        {busy ? (
+          <LoadingIndicator
+            accessibilityLabel="로그아웃 처리 중"
+            accessible={false}
+            aria-hidden
+            color={color}
+          />
+        ) : profile ? (
+          <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
+        ) : (
+          <AnimatedIcon
+            color={animatedForeground as unknown as string}
+            size={iconSizes[20]}
+            strokeWidth={2}
+          />
+        )}
+        {unread && compact ? (
+          <View
+            style={[styles.unread, { backgroundColor: theme.accent }]}
+            testID="sidebar-unread-indicator"
+          />
+        ) : null}
+      </View>
+      {compact ? null : (
+        <>
+          <Animated.Text
+            style={[
+              active ? textStyles.uiLabelL : textStyles.uiCopyL,
+              { color: animatedForeground } as never,
+            ]}
+          >
+            {label}
+          </Animated.Text>
+          {unread ? (
+            <View
+              accessible={false}
+              accessibilityElementsHidden
+              aria-hidden
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
+              testID="sidebar-unread-count"
+            >
+              <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          ) : null}
+        </>
+      )}
+      {AnimatedTrailingIcon ? (
+        <View
+          accessible={false}
+          accessibilityElementsHidden
+          aria-hidden
+          importantForAccessibility="no-hide-descendants"
+          style={styles.trailingIcon}
+        >
+          <AnimatedTrailingIcon
+            color={animatedForeground as unknown as string}
+            size={iconSizes[24]}
+            strokeWidth={2}
+          />
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
 function SidebarControl({
   accessibilityLabel,
   busy = false,
@@ -120,19 +359,10 @@ function SidebarControl({
   unreadCount = null,
 }: SidebarControlProps) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const active = selected && !disabled;
   const controlDisabled = disabled || busy;
   const linkAttrs = href ? { hrefAttrs: { rel: 'noopener noreferrer', target: '_blank' } } : {};
-  const unread = unreadCount !== null && unreadCount > 0;
-  const color = controlDisabled
-    ? theme.stateDisabledForeground
-    : tone === 'primary'
-      ? theme.actionPrimaryOnBase
-      : active
-        ? theme.foregroundPrimary
-        : theme.foregroundSecondary;
 
   const control = (
     <Pressable
@@ -178,106 +408,22 @@ function SidebarControl({
       ])}
     >
       {(state) => {
-        const webState = state as PressableStateCallbackType & {
-          hovered?: boolean;
-        };
-        const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
-        const backgroundColor = controlDisabled
-          ? theme.stateDisabledSurface
-          : tone === 'primary'
-            ? state.pressed
-              ? theme.actionPrimaryPressed
-              : hovered
-                ? theme.actionPrimaryHover
-                : theme.actionPrimaryBase
-            : state.pressed
-              ? theme.statePressed
-              : hovered
-                ? theme.stateHover
-                : active
-                  ? theme.stateSelectedSurface
-                  : 'transparent';
-
         return (
-          <View
-            style={[
-              styles.visual,
-              compact ? styles.compactVisual : styles.wideVisual,
-              !compact && nested ? styles.nestedVisual : undefined,
-              destination === 'compose' ? styles.composeControl : undefined,
-              Platform.OS === 'web'
-                ? ({
-                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-                    transitionProperty: 'background-color, transform',
-                    transitionTimingFunction: motion.easing.standard,
-                  } as unknown as ViewStyle)
-                : undefined,
-              {
-                backgroundColor,
-                transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
-              },
-            ]}
-            testID="sidebar-control-visual"
-          >
-            <View
-              accessible={false}
-              accessibilityElementsHidden
-              aria-hidden
-              importantForAccessibility="no-hide-descendants"
-              style={styles.iconFrame}
-            >
-              {busy ? (
-                <LoadingIndicator
-                  accessibilityLabel="로그아웃 처리 중"
-                  accessible={false}
-                  aria-hidden
-                  color={color}
-                />
-              ) : profile ? (
-                <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
-              ) : (
-                <Icon color={color} size={iconSizes[20]} strokeWidth={2} />
-              )}
-              {unread && compact ? (
-                <View
-                  style={[styles.unread, { backgroundColor: theme.accent }]}
-                  testID="sidebar-unread-indicator"
-                />
-              ) : null}
-            </View>
-            {compact ? null : (
-              <>
-                <Text style={[active ? textStyles.uiLabelL : textStyles.uiCopyL, { color }]}>
-                  {label}
-                </Text>
-                {unread ? (
-                  <View
-                    accessible={false}
-                    accessibilityElementsHidden
-                    aria-hidden
-                    importantForAccessibility="no-hide-descendants"
-                    style={[styles.unreadCount, { backgroundColor: theme.actionPrimaryBase }]}
-                    testID="sidebar-unread-count"
-                  >
-                    <Text style={[textStyles.uiLabelS, { color: theme.actionPrimaryOnBase }]}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </Text>
-                  </View>
-                ) : null}
-              </>
-            )}
-            {TrailingIcon ? (
-              <View
-                accessible={false}
-                accessibilityElementsHidden
-                aria-hidden
-                importantForAccessibility="no-hide-descendants"
-                style={styles.trailingIcon}
-              >
-                <TrailingIcon color={color} size={iconSizes[24]} strokeWidth={2} />
-              </View>
-            ) : null}
-          </View>
+          <SidebarVisual
+            active={active}
+            destination={destination}
+            busy={busy}
+            compact={compact}
+            disabled={disabled}
+            Icon={Icon}
+            label={label}
+            nested={nested}
+            profile={profile}
+            state={state as PressableStateCallbackType & { hovered?: boolean }}
+            tone={tone}
+            trailingIcon={TrailingIcon}
+            unreadCount={unreadCount}
+          />
         );
       }}
     </Pressable>
