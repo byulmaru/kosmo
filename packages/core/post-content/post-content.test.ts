@@ -1194,6 +1194,62 @@ test('escapes captured Mention fallback text in unlinked HTML', () => {
   assert.equal(postContentDocumentToHtml(document), '<p><span>&lt;img src=x&gt;</span></p>');
 });
 
+test('links mapped Hashtags while preserving Mention and unmapped Hashtag fallbacks', () => {
+  const firstHashtagId = hashtagId;
+  const secondHashtagId = '019f6678-86fa-709b-984e-1520766b8444';
+  const unmappedHashtagId = '019f6678-86fa-709b-984e-1520766b8445';
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Before ' },
+            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'text', text: ' ' },
+            { type: 'hashtag', attrs: { hashtagId: firstHashtagId, token: '#MiXeD' } },
+            { type: 'text', text: ' / ' },
+            { type: 'hashtag', attrs: { hashtagId: secondHashtagId, token: '#second<&>' } },
+            { type: 'text', text: ' / ' },
+            { type: 'hashtag', attrs: { hashtagId: firstHashtagId, token: '#mixed' } },
+            { type: 'text', text: ' / ' },
+            { type: 'hashtag', attrs: { hashtagId: unmappedHashtagId, token: '#unmapped<&>' } },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(
+    postContentDocumentToHtml(
+      document,
+      undefined,
+      new Map([
+        [firstHashtagId, 'https://local.example/hashtags/first/posts'],
+        [secondHashtagId, 'https://local.example/hashtags/second/posts'],
+      ]),
+    ),
+    '<p>Before <span>@알 수 없는 사용자</span> ' +
+      '<a href="https://local.example/hashtags/first/posts" rel="tag">#MiXeD</a> / ' +
+      '<a href="https://local.example/hashtags/second/posts" rel="tag">#second&lt;&amp;&gt;</a> / ' +
+      '<a href="https://local.example/hashtags/first/posts" rel="tag">#mixed</a> / ' +
+      '<span>#unmapped&lt;&amp;&gt;</span></p>',
+  );
+
+  assert.throws(
+    () =>
+      postContentDocumentToHtml(
+        document,
+        undefined,
+        new Map([[firstHashtagId, 'javascript:alert(1)']]),
+      ),
+    /Link href must use http or https/u,
+  );
+});
+
 test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
   assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
   assert.equal(

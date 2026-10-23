@@ -167,6 +167,7 @@ export function postContentHashtagCandidatesFromText(
 export function postContentDocumentToHtml(
   document: PostContentDocumentV1,
   mentionLinks?: ReadonlyMap<string, { readonly href: string; readonly label: string }>,
+  hashtagLinks?: ReadonlyMap<string, string>,
 ): string {
   const { body } = canonicalizePostContentDocument(document);
   const node = postContentSchema.nodeFromJSON({
@@ -177,28 +178,35 @@ export function postContentDocumentToHtml(
   const domDocument = new JSDOM().window.document;
   const container = domDocument.createElement('div');
   const baseSerializer = DOMSerializer.fromSchema(postContentSchema);
-  const serializer = mentionLinks?.size
-    ? new DOMSerializer(
-        {
-          ...baseSerializer.nodes,
-          mention: (mentionNode) => {
-            const mention = mentionLinks.get(mentionNode.attrs.profileId);
-            return mention
-              ? [
-                  'span',
-                  { class: 'h-card' },
-                  [
-                    'a',
-                    { href: normalizeLinkHref(mention.href), class: 'u-url mention' },
-                    mention.label,
-                  ],
-                ]
-              : ['span', mentionNode.attrs.handle ?? postContentMentionFallbackText];
+  const serializer =
+    mentionLinks?.size || hashtagLinks?.size
+      ? new DOMSerializer(
+          {
+            ...baseSerializer.nodes,
+            mention: (mentionNode) => {
+              const mention = mentionLinks?.get(mentionNode.attrs.profileId);
+              return mention
+                ? [
+                    'span',
+                    { class: 'h-card' },
+                    [
+                      'a',
+                      { href: normalizeLinkHref(mention.href), class: 'u-url mention' },
+                      mention.label,
+                    ],
+                  ]
+                : ['span', mentionNode.attrs.handle ?? postContentMentionFallbackText];
+            },
+            hashtag: (hashtagNode) => {
+              const href = hashtagLinks?.get(hashtagNode.attrs.hashtagId);
+              return href
+                ? ['a', { href: normalizeLinkHref(href), rel: 'tag' }, hashtagNode.attrs.token]
+                : ['span', hashtagNode.attrs.token];
+            },
           },
-        },
-        baseSerializer.marks,
-      )
-    : baseSerializer;
+          baseSerializer.marks,
+        )
+      : baseSerializer;
   container.append(
     serializer.serializeFragment(node.content, {
       document: domDocument,
