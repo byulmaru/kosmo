@@ -6,11 +6,13 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 import type { RightRail_query$key } from './__generated__/RightRail_query.graphql';
 
 type RightRailProps = {
+  anchorRef?: RefObject<NativeView | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open?: boolean;
@@ -38,6 +40,7 @@ const RightRailQueryFragment = graphql`
 `;
 
 export function RightRail({
+  anchorRef,
   fallbackFocusRef,
   mode,
   onExpand,
@@ -51,6 +54,7 @@ export function RightRail({
   const query = useFragment(RightRailQueryFragment, queryKey);
   return (
     <PostComposerHost
+      anchorRef={anchorRef}
       fallbackFocusRef={fallbackFocusRef}
       onRequestClose={onRequestClose}
       open={open}

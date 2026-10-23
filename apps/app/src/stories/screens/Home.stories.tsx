@@ -21,9 +21,17 @@ const emptyHomeTimeline = {
   pageInfo: { endCursor: null, hasNextPage: false },
 };
 const selectedProfileData = {
-  currentSession: { id: 'home-session', selectedProfile: { id: 'home-profile' } },
+  currentSession: {
+    id: 'home-session',
+    selectedProfile: { displayName: '홈 프로필', id: 'home-profile' },
+  },
   homeTimeline: emptyHomeTimeline,
-  me: { id: 'home-account', name: 'home-account', profiles: [{ id: 'home-profile' }] },
+  me: {
+    id: 'home-account',
+    name: 'home-account',
+    profiles: [{ id: 'home-profile' }],
+    seenCoachmarks: [],
+  },
 };
 const cachedHomeProfile = profile({
   displayName: 'Home Profile',
@@ -171,7 +179,7 @@ export const OnboardingCompact: Story = {
           data: {
             currentSession: { id: 'home-session', selectedProfile: null },
             homeTimeline: emptyHomeTimeline,
-            me: { id: 'home-account', name: 'home-account', profiles: [] },
+            me: { id: 'home-account', name: 'home-account', profiles: [], seenCoachmarks: [] },
           },
         },
       },

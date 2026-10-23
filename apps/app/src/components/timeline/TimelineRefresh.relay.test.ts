@@ -69,6 +69,10 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -145,7 +149,12 @@ const profile = {
 function payload(field: string, ids: string[], hasNextPage = true) {
   return {
     currentSession: { id: 'session', selectedProfile: profile },
-    me: { id: 'account', name: 'Author', profiles: [{ id: profile.id }] },
+    me: {
+      id: 'account',
+      name: 'Author',
+      profiles: [{ id: profile.id }],
+      seenCoachmarks: [],
+    },
     [field]: {
       edges: ids.map((id) => ({
         cursor: `cursor-${id}`,

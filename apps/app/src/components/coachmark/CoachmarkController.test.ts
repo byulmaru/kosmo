@@ -57,10 +57,11 @@ mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => reportUnexpectedError,
 });
 
-function createStep(description = '설명을 확인하세요.'): CoachmarkStep {
+function createStep(description = '설명을 확인하세요.', onEnter?: () => void): CoachmarkStep {
   return {
     anchorRef: { current: null },
     description,
+    onEnter,
     title: '안내',
   };
 }
@@ -295,7 +296,12 @@ test('automatic start effect keeps its request callback stable while the guide o
 
 test('manual multi-step help moves both ways and restarts from the first step', async () => {
   await renderProvider();
-  const steps = [createStep('첫 단계'), createStep('두 번째 단계')];
+  const entered: string[] = [];
+  const exited: string[] = [];
+  const steps = [
+    createStep('첫 단계', () => entered.push('first')),
+    createStep('두 번째 단계', () => entered.push('second')),
+  ];
   let handle: ReturnType<NonNullable<typeof requestFromProvider>> = null;
 
   await act(async () => {
@@ -303,11 +309,13 @@ test('manual multi-step help moves both ways and restarts from the first step', 
       requestFromProvider?.({
         guide: 'TIMELINE',
         mode: 'manual',
+        onExit: () => exited.push('exit'),
         ready: true,
         steps,
       }) ?? null;
   });
   assert.ok(handle);
+  assert.deepEqual(entered, ['first']);
 
   let coachmark = renderer?.root.findByType('Coachmark' as never);
   assert.deepEqual(coachmark?.props.progress, { current: 1, total: 2 });
@@ -315,12 +323,14 @@ test('manual multi-step help moves both ways and restarts from the first step', 
   assert.ok(coachmark?.props.onNext);
 
   await act(async () => coachmark?.props.onNext());
+  assert.deepEqual(entered, ['first', 'second']);
   coachmark = renderer?.root.findByType('Coachmark' as never);
   assert.deepEqual(coachmark?.props.progress, { current: 2, total: 2 });
   assert.ok(coachmark?.props.onPrevious);
   assert.equal(coachmark?.props.onNext, undefined);
 
   await act(async () => coachmark?.props.onPrevious());
+  assert.deepEqual(entered, ['first', 'second', 'first']);
   coachmark = renderer?.root.findByType('Coachmark' as never);
   assert.deepEqual(coachmark?.props.progress, { current: 1, total: 2 });
 
@@ -328,6 +338,7 @@ test('manual multi-step help moves both ways and restarts from the first step', 
   coachmark = renderer?.root.findByType('Coachmark' as never);
   assert.equal(coachmark?.props.onNext, undefined);
   await act(async () => coachmark?.props.onComplete());
+  assert.deepEqual(exited, ['exit']);
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
 
@@ -353,6 +364,7 @@ test('manual multi-step help moves both ways and restarts from the first step', 
       }) ?? null;
   });
   assert.ok(restarted);
+  assert.deepEqual(entered, ['first', 'second', 'first', 'second', 'first']);
   assert.deepEqual(renderer?.root.findByType('Coachmark' as never).props.progress, {
     current: 1,
     total: 2,
@@ -482,7 +494,6 @@ test('controller callbacks from the previous account reject synchronously', asyn
   };
   await renderProvider(createElement(ControllerProbe), account.id);
   const previous = renderer?.root.findByType('ControllerProbe' as never).props;
-
   await act(async () => {
     renderer?.update(
       createElement(CoachmarkProvider, {
@@ -512,6 +523,44 @@ test('controller callbacks from the previous account reject synchronously', asyn
   });
   assert.ok(current);
   await act(async () => current?.cancel());
+});
+
+test('step and exit callbacks run in the event before React processes state updates', async () => {
+  await renderProvider();
+  let handlingEvent = false;
+  const events: string[] = [];
+  const observe = (name: string) => () => {
+    assert.equal(handlingEvent, true, `${name} must run outside a React updater`);
+    events.push(name);
+  };
+  let handle: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    handlingEvent = true;
+    handle =
+      requestFromProvider?.({
+        guide: 'TIMELINE',
+        mode: 'manual',
+        onExit: observe('exit'),
+        ready: true,
+        steps: [
+          createStep('첫 단계', observe('first')),
+          createStep('두 번째 단계', observe('second')),
+        ],
+      }) ?? null;
+    handlingEvent = false;
+  });
+  await act(async () => {
+    handlingEvent = true;
+    renderer?.root.findByType('Coachmark' as never).props.onNext();
+    handlingEvent = false;
+  });
+  await act(async () => {
+    handlingEvent = true;
+    renderer?.root.findByType('Coachmark' as never).props.onComplete();
+    handle?.cancel();
+    handlingEvent = false;
+  });
+  assert.deepEqual(events, ['first', 'second', 'exit']);
 });
 
 test('manual help starts for guests and accounts without profiles', async () => {
