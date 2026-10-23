@@ -247,6 +247,7 @@ export function ProfileHero({
         {data.header?.url ? (
           <Image
             accessible={false}
+            fadeDuration={0}
             resizeMode="cover"
             source={{ uri: data.header.url }}
             style={styles.coverImage}
