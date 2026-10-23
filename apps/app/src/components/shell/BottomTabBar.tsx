@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/BottomTabBar';
 import { NavigationLink } from './NavigationLink';
-import { useShellChrome } from './ShellChromeContext';
+import { useShellChromeActions } from './ShellChromeContext';
 import { isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement } from 'react';
@@ -47,7 +47,7 @@ export function isBottomTabDestination(href: Href) {
 export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
@@ -84,9 +84,9 @@ export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
     );
 
     const onCurrentNavigate = () => {
-      shellChrome?.reselectTab?.(destination);
+      shellChromeActions?.reselectTab?.(destination);
       if (destination === 'home') {
-        shellChrome?.reselectHome();
+        shellChromeActions?.reselectHome();
       }
     };
 

@@ -33,7 +33,12 @@ const queryHistory: Array<{
   handle: string;
   query: QueryName;
 }> = [];
-const pending = new Promise<never>(() => undefined);
+let resolvePending: (() => void) | null = null;
+const createPending = () =>
+  new Promise<never>((resolve) => {
+    resolvePending = () => resolve(undefined as never);
+  });
+let pending = createPending();
 
 type RouteParams = { profileHandle?: string | string[] };
 type ReportMenuInput = {
@@ -57,6 +62,7 @@ const reportMenuItem: ReportMenuItem = {
 };
 
 const LocalParamsContext = createContext<RouteParams>({});
+const ProfileQueryRevisionContext = createContext(0);
 const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
 let windowWidth = 1_280;
 let windowHeight = 800;
@@ -68,6 +74,9 @@ let pathname = '/profile/';
 let currentRouteInfo: { params: RouteParams; pathname: string } | null = null;
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
+let postListRenders = 0;
+let profileQueryRevision = 0;
+let lastProfileSnapshot = '';
 let profileAvailable = true;
 let profileDisplayName: string | null = null;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
@@ -224,6 +233,7 @@ mockModule('react-relay', {
     variables: { handle: string },
     options: { fetchKey: string },
   ) => {
+    useContext(ProfileQueryRevisionContext);
     queryHistory.push({
       fetchKey: options.fetchKey,
       handle: variables.handle,
@@ -422,6 +432,7 @@ mockModule(new URL('../post/PostList.tsx', import.meta.url), {
     onRetry?: () => void;
     profile?: { handle: string };
   }) => {
+    postListRenders += 1;
     const postList = createElement(
       'PostList',
       {
@@ -492,6 +503,11 @@ afterEach(async () => {
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
+  postListRenders = 0;
+  profileQueryRevision = 0;
+  lastProfileSnapshot = '';
+  resolvePending = null;
+  pending = createPending();
   profileAvailable = true;
   profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
@@ -515,6 +531,23 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
   globalParams = { profileHandle };
   screenLocalParams = { profileHandle };
   pathname = routePath;
+  const profileSnapshot = JSON.stringify({
+    profileAvailable,
+    profileBlockStatus,
+    profileDisplayName,
+    profileHandle,
+    profileInstanceKind,
+    profileViewerState,
+    postListProfileBlockId,
+    queryModes,
+    routePath,
+    selectedProfileId,
+    sessionId,
+  });
+  if (profileSnapshot !== lastProfileSnapshot) {
+    profileQueryRevision += 1;
+    lastProfileSnapshot = profileSnapshot;
+  }
   SlotContent = routePath.endsWith('/followers')
     ? ProfileFollowersPage
     : routePath.endsWith('/following')
@@ -527,17 +560,25 @@ async function renderRoute(profileHandle: string, routePath = `/profile/${profil
     if (renderer) {
       renderer.update(
         createElement(
-          LocalParamsContext.Provider,
-          { value: layoutLocalParams },
-          createElement(ProfileLayout),
+          ProfileQueryRevisionContext.Provider,
+          { value: profileQueryRevision },
+          createElement(
+            LocalParamsContext.Provider,
+            { value: layoutLocalParams },
+            createElement(ProfileLayout),
+          ),
         ),
       );
     } else {
       renderer = create(
         createElement(
-          LocalParamsContext.Provider,
-          { value: layoutLocalParams },
-          createElement(ProfileLayout),
+          ProfileQueryRevisionContext.Provider,
+          { value: profileQueryRevision },
+          createElement(
+            LocalParamsContext.Provider,
+            { value: layoutLocalParams },
+            createElement(ProfileLayout),
+          ),
         ),
       );
     }
@@ -848,6 +889,8 @@ describe('profile route parameter lifecycle', () => {
 
     queryModes.ProfileLayoutQuery = 'success';
     queryModes.ProfilePostListPageQuery = 'loading';
+    resolvePending?.();
+    pending = createPending();
     await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
     assert.equal(requireRendered('PageHeader').props.title, 'Display remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
@@ -1352,20 +1395,26 @@ describe('profile route parameter lifecycle', () => {
 
 it('background profile retains its own header when another author post becomes the global route', async () => {
   await renderRoute('@local', '/@local');
+  const rendersBeforeGlobalRouteChange = postListRenders;
   currentRouteInfo = { params: { profileHandle: '@local' }, pathname: '/@local' };
   pathname = '/@other/post-id';
   globalParams = { profileHandle: '@other' };
   await act(async () =>
     renderer!.update(
       createElement(
-        LocalParamsContext.Provider,
-        { value: layoutLocalParams },
-        createElement(ProfileLayout),
+        ProfileQueryRevisionContext.Provider,
+        { value: profileQueryRevision },
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
       ),
     ),
   );
   assert.equal(requireRendered('PageHeader').props.title, 'Display local');
   assert.equal(requireRendered('ProfileHero').props.heading, false);
+  assert.equal(postListRenders, rendersBeforeGlobalRouteChange);
 });
 
 it('Native profile layout route info still resolves its active followers child', async () => {

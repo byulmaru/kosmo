@@ -69,7 +69,10 @@ mockModule('@/components/shell/PrimaryNavigationScrollContext', {
     recordQueryNavigation: () => undefined,
   }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/ShellChromeContext', {
+  useShellChrome: () => null,
+  useShellChromeActions: () => null,
+});
 mockModule('@/components/shell/shellLayout', { getShellLayout: () => 'mobile' });
 mockModule('@/components/ui/Button', { Button: () => null });
 mockModule('@/components/ui/IconButton', {

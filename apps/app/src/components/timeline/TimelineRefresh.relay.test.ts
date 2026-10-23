@@ -84,7 +84,7 @@ mockModule('@/components/RouteBoundary', {
     createElement(Suspense, { fallback: null }, children),
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/ShellChromeContext', { useShellChromeActions: () => null });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,

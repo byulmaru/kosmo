@@ -7,7 +7,7 @@ import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { useShellChromeActions } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
   getWebMobileShellHeaderStickyOffset,
@@ -45,8 +45,8 @@ const HomeQuery = graphql`
 
 export default function HomeScreen() {
   const environment = useRelayEnvironment();
-  const shellChrome = useShellChrome();
-  const registerHomeReselection = shellChrome?.registerHomeReselection;
+  const shellChromeActions = useShellChromeActions();
+  const registerHomeReselection = shellChromeActions?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const [revalidateCachedHome] = useState(
     () =>
@@ -84,7 +84,7 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome}>
+    <HomeFrame onBrandCurrentNavigate={shellChromeActions?.reselectHome}>
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -232,7 +232,7 @@ function HomeContentView({
   refreshing: boolean;
 }) {
   const theme = useTheme();
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -253,7 +253,7 @@ function HomeContentView({
               ? '홈을 보려면 사용할 프로필을 먼저 선택해야 해요.'
               : '프로필을 만들면 글을 쓰고 피드를 볼 수 있어요.'}
           </Text>
-          <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
+          <Button onPress={() => shellChromeActions?.openProfileSwitcher()} style={styles.action}>
             {hasProfiles ? '프로필 선택' : '프로필 만들기'}
           </Button>
         </View>

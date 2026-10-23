@@ -57,7 +57,7 @@ mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({ children }: { children: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: 0 }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/ShellChromeContext', { useShellChromeActions: () => null });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,

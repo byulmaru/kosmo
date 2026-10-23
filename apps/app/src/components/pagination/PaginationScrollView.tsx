@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Platform, ScrollView } from 'react-native';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { useShellChromeActions } from '@/components/shell/ShellChromeContext';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import type { ScrollViewProps } from 'react-native';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
@@ -66,19 +66,23 @@ export function PaginationScrollView({
   webStyle,
 }: PaginationScrollViewProps) {
   const scrollRef = useRef<ScrollView>(null);
-  const shellChrome = useShellChrome();
+  const shellChromeActions = useShellChromeActions();
   const registrationRef = useRef<Registration | null>(null);
   const latestEventsRef = useRef<LatestEvent[]>([]);
   const scrollToTop = useCallback(() => {
     scrollRef.current?.scrollTo({ animated: true, y: 0 });
   }, []);
   useEffect(() => {
-    if (Platform.OS === 'web' || !reselectDestination || !shellChrome?.registerTabReselection) {
+    if (
+      Platform.OS === 'web' ||
+      !reselectDestination ||
+      !shellChromeActions?.registerTabReselection
+    ) {
       return;
     }
 
-    return shellChrome.registerTabReselection(reselectDestination, scrollToTop);
-  }, [reselectDestination, scrollToTop, shellChrome]);
+    return shellChromeActions.registerTabReselection(reselectDestination, scrollToTop);
+  }, [reselectDestination, scrollToTop, shellChromeActions]);
   const onContentSizeChange = useCallback(
     (...args: Parameters<NativeScrollProps['onContentSizeChange']>) => {
       recordLatestEvent(latestEventsRef.current, { args, type: 'contentSize' });

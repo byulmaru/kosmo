@@ -23,7 +23,18 @@ type ShellChromeActions = {
 
 type ShellChromeProviderProps = PropsWithChildren<ShellChromeActions>;
 
+type ShellChromeActionContextValue = Pick<
+  ShellChromeActions,
+  | 'openNavigationDrawer'
+  | 'openProfileSwitcher'
+  | 'registerHomeReselection'
+  | 'registerTabReselection'
+  | 'reselectTab'
+  | 'reselectHome'
+>;
+
 const ShellChromeContext = createContext<ShellChromeActions | null>(null);
+const ShellChromeActionContext = createContext<ShellChromeActionContextValue | null>(null);
 
 export function ShellChromeProvider({
   children,
@@ -36,7 +47,7 @@ export function ShellChromeProvider({
   reselectTab,
   reselectHome,
 }: ShellChromeProviderProps) {
-  const value = useMemo(
+  const value = useMemo<ShellChromeActions>(
     () => ({
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
@@ -58,7 +69,35 @@ export function ShellChromeProvider({
       reselectHome,
     ],
   );
-  return <ShellChromeContext.Provider value={value}>{children}</ShellChromeContext.Provider>;
+  const actionValue = useMemo<ShellChromeActionContextValue>(
+    () => ({
+      openNavigationDrawer,
+      openProfileSwitcher,
+      registerHomeReselection,
+      registerTabReselection,
+      reselectTab,
+      reselectHome,
+    }),
+    [
+      openNavigationDrawer,
+      openProfileSwitcher,
+      registerHomeReselection,
+      registerTabReselection,
+      reselectTab,
+      reselectHome,
+    ],
+  );
+  return (
+    <ShellChromeContext.Provider value={value}>
+      <ShellChromeActionContext.Provider value={actionValue}>
+        {children}
+      </ShellChromeActionContext.Provider>
+    </ShellChromeContext.Provider>
+  );
+}
+
+export function useShellChromeActions(): ShellChromeActionContextValue | null {
+  return useContext(ShellChromeActionContext);
 }
 
 export function useShellChrome() {
