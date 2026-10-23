@@ -77,7 +77,7 @@ export function PostContentRenderer({
   const mentionedProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
-    <Text numberOfLines={numberOfLines} style={bodyStyle}>
+    <Text selectable numberOfLines={numberOfLines} style={bodyStyle}>
       {bodyText}
     </Text>
   ) : (
@@ -140,7 +140,7 @@ type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostCo
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text key={key} numberOfLines={context.numberOfLines} style={context.bodyStyle}>
+      <Text key={key} numberOfLines={context.numberOfLines} selectable style={context.bodyStyle}>
         {document.content
           .filter((child) => child.type === 'paragraph')
           .map((child, index) => (
