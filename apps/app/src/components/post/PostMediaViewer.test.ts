@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode, RefObject } from 'react';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
@@ -278,6 +278,42 @@ describe('PostMediaViewer', () => {
         },
       ],
     );
+  });
+
+  it('닫기 버튼은 Native 그림자 없이 눌림 피드백과 Web 그림자를 유지한다', async () => {
+    for (const os of ['web', 'ios', 'android']) {
+      platform.OS = os;
+      await render();
+
+      const close = renderer?.root
+        .findAllByType(Pressable)
+        .find((node) => node.props.accessibilityLabel === '이미지 뷰어 닫기');
+      assert.ok(close);
+
+      for (const pressed of [false, true, false]) {
+        const visual: ReactElement<{
+          children: [ReactElement<{ style: unknown }>, ReactNode];
+          style: unknown;
+        }> = close.props.children({ pressed });
+        const visualStyle = flattenStyle(visual.props.style);
+        assert.equal(visualStyle.boxShadow, undefined);
+        assert.equal(
+          visualStyle.filter,
+          os === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
+        );
+        assert.equal(visualStyle.width, 48);
+        assert.equal(visualStyle.height, 48);
+        assert.equal(
+          flattenStyle(visual.props.children[0].props.style).backgroundColor,
+          pressed ? 'rgba(255, 255, 255, 0.24)' : 'transparent',
+        );
+      }
+
+      const focusedStyle = flattenStyle(
+        close.props.children({ focused: true, pressed: false }).props.style,
+      );
+      assert.equal(focusedStyle.outlineWidth, os === 'web' ? 2 : undefined);
+    }
   });
 
   it('같은 Post fragment의 Content·Media·Profile 데이터를 canonical body renderer에 전달한다', async () => {
