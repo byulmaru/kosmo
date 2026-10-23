@@ -85,6 +85,10 @@ mock.module('react-relay', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/components/shell/NavigationLink', {
+  exports: { NavigationLink: 'NavigationLink' },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('./PostContentWarningRevealContext', {
   exports: {
     usePostContentWarningReveal: () => ({ revealed: false, toggle: () => undefined }),

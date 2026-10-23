@@ -32,7 +32,9 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
-    return require(`./__generated__/${name}.graphql.ts`).default;
+    return require(
+      `../../app/(tabs)/(profile)/hashtags/[hashtagId]/__generated__/${name}.graphql.ts`,
+    ).default;
   },
 });
 mockModule('expo-router', {
@@ -66,7 +68,8 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', { spacing: { sm: 8 } });
 
 before(async () => {
-  ({ default: HashtagPostsScreen } = await import('./posts'));
+  ({ default: HashtagPostsScreen } =
+    await import('../../app/(tabs)/(profile)/hashtags/[hashtagId]/posts'));
 });
 
 beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
