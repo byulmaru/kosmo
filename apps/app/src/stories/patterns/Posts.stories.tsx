@@ -6772,7 +6772,7 @@ export const ContentWarningRevealInteraction: Story = {
   ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.queryByText('가림 해제 뒤 표시되는')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
@@ -6790,17 +6790,18 @@ export const ContentWarningRevealInteraction: Story = {
     toggle.focus();
     expect(toggle).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(canvas.getByText('가림 해제 뒤 표시되는')).toBeVisible();
+    const body = canvas.getByText(/가림 해제 뒤 표시되는/);
+    expect(body).toBeVisible();
+    expect(body).toHaveTextContent('가림 해제 뒤 표시되는 #원문 본문입니다.');
     expect(canvas.getByRole('link', { name: '#원문, 게시글 보기' })).toHaveAttribute(
       'href',
       '/hashtags/[hashtagId]/posts',
     );
-    expect(canvas.getByText('본문입니다.')).toBeVisible();
     const gallery = canvas.getByTestId('post-media-gallery');
     expect(gallery).toBeVisible();
 
     await userEvent.keyboard('{Enter}');
-    expect(canvas.queryByText('가림 해제 뒤 표시되는')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
