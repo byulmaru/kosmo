@@ -39,6 +39,7 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
+let NotificationFeedSnapshots: typeof CoreDb.NotificationFeedSnapshots;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let PostMentions: typeof CoreDb.PostMentions;
@@ -68,6 +69,7 @@ describe('Notification GraphQL Node boundary', () => {
       firstOrThrow,
       Instances,
       Notifications,
+      NotificationFeedSnapshots,
       pg,
       PostContents,
       PostMentions,
@@ -2295,6 +2297,548 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(await notificationReadAt(follow.id), null);
   });
 
+  test('groups Reaction Notifications into a mixed feed and reads the member snapshot', async () => {
+    const auth = await createAuthenticatedSession();
+    const authorA = await createProfile('reaction-feed-author-a');
+    const authorB = await createProfile('reaction-feed-author-b');
+    const authorC = await createProfile('reaction-feed-author-c');
+    const post = await createContentPost(auth.profile.id);
+    const firstAt = Temporal.Instant.from('2026-10-01T00:00:00.123456Z');
+    const firstReactions = await Promise.all([
+      createReactionNotificationForPost(post.id, authorA.id, '❤️', firstAt),
+      createReactionNotificationForPost(post.id, authorA.id, '🎉', firstAt.add({ hours: 1 })),
+      createReactionNotificationForPost(post.id, authorB.id, '❤️', firstAt.add({ hours: 1 })),
+      createReactionNotificationForPost(post.id, authorC.id, '🔥', firstAt.add({ hours: 1 })),
+    ]);
+    await createReactionNotificationForPost(post.id, authorA.id, '👏', firstAt.add({ hours: 48 }));
+    const follow = await createFollowNotification(
+      auth.profile.id,
+      await createProfile('reaction-feed-follow-author').then(({ id }) => id),
+      '00000000-0000-8006-8000-00000000feed',
+      auth.account.id,
+      firstAt.add({ hours: 48 }),
+    );
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(firstPage);
+    const firstEdge = firstPage.data?.node?.notificationFeed.edges[0];
+    assert.ok(firstEdge);
+    assert.equal(firstPage.data?.node?.notificationFeed.pageInfo.hasNextPage, true);
+
+    const pages = [firstEdge.node];
+    let after = firstEdge.cursor;
+    while (true) {
+      const page = await loadNotificationFeed(profileId, auth.token, { first: 1, after });
+      assertNoGraphQLErrors(page);
+      const edge = page.data?.node?.notificationFeed.edges[0];
+      if (!edge) {
+        break;
+      }
+      pages.push(edge.node);
+      after = edge.cursor;
+      if (!page.data?.node?.notificationFeed.pageInfo.hasNextPage) {
+        break;
+      }
+    }
+
+    assert.deepEqual(
+      pages.map(({ __typename }) => __typename),
+      ['ReactionNotificationGroup', 'FollowNotification', 'ReactionNotificationGroup'],
+    );
+    const firstGroup = pages.find(
+      (node) =>
+        node.__typename === 'ReactionNotificationGroup' && node.notificationIds.length === 4,
+    );
+    assert.ok(firstGroup);
+    assert.equal(firstGroup.participantCount, 3);
+    assert.deepEqual(
+      new Set(firstGroup.reactionCounts?.map(({ type, count }) => `${type}:${count}`)),
+      new Set(['❤️:2', '🎉:1', '🔥:1']),
+    );
+    assert.equal(firstGroup.recentProfiles.length, 3);
+    assert.equal(firstGroup.unread, true);
+    assert.deepEqual(
+      new Set(firstGroup.notificationIds),
+      new Set(
+        firstReactions.map(({ notification }) =>
+          encodeGlobalId('ReactionNotification', notification.id),
+        ),
+      ),
+    );
+    assert.equal(pages.filter((node) => node.__typename === 'ReactionNotificationGroup').length, 2);
+    assert.equal(
+      pages.some((node) => node.id === encodeGlobalId('FollowNotification', follow.id)),
+      true,
+    );
+    assert.equal(firstPage.data?.node?.unreadNotificationFeedCount, 3);
+
+    const memberIds = firstGroup.notificationIds;
+    const late = await createReactionNotificationForPost(
+      post.id,
+      authorB.id,
+      '🥳',
+      firstAt.add({ hours: 2 }),
+    );
+    const read = await markNotificationRead(memberIds, auth.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notifications.length, memberIds.length);
+    assert.equal(
+      read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationFeedCount,
+      3,
+    );
+    assert.ok(
+      (
+        await Promise.all(
+          firstReactions.map(({ notification }) => notificationReadAt(notification.id)),
+        )
+      ).every(Boolean),
+    );
+    assert.equal(await notificationReadAt(late.notification.id), null);
+    const latePage = await loadNotificationFeed(profileId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(latePage);
+    const lateGroup = latePage.data?.node?.notificationFeed.edges.find(
+      ({ node }) =>
+        node.__typename === 'ReactionNotificationGroup' &&
+        node.notificationIds.includes(encodeGlobalId('ReactionNotification', late.notification.id)),
+    )?.node;
+    assert.equal(lateGroup?.__typename, 'ReactionNotificationGroup');
+    assert.equal(lateGroup?.notificationIds.length, 5);
+    assert.equal(lateGroup?.unread, true);
+    assert.equal(latePage.data?.node?.unreadNotificationFeedCount, 3);
+  });
+
+  test('keeps a continuation complete when a later group moves before its cursor', async () => {
+    const auth = await createAuthenticatedSession();
+    const authors = await Promise.all([
+      createProfile('reaction-feed-snapshot-order-a'),
+      createProfile('reaction-feed-snapshot-order-b'),
+      createProfile('reaction-feed-snapshot-order-c'),
+    ]);
+    const posts = await Promise.all(authors.map(() => createContentPost(auth.profile.id)));
+    const at = (seconds: number) =>
+      Temporal.Instant.from('2026-10-10T00:00:00.000000Z').add({ seconds });
+    const groups = await Promise.all(
+      posts.map((post, index) =>
+        createReactionNotificationForPost(post.id, authors[index]!.id, '❤️', at(100 - index * 10)),
+      ),
+    );
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    const firstEdges = firstPage.data?.node?.notificationFeed.edges ?? [];
+    assert.deepEqual(
+      firstEdges.map(({ node }) => node.post?.id),
+      [posts[0]!, posts[1]!].map(({ id }) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(firstPage.data?.node?.notificationFeed.pageInfo.endCursor);
+
+    const late = await createReactionNotificationForPost(
+      posts[2]!.id,
+      authors[2]!.id,
+      '🎉',
+      at(110),
+    );
+    const secondPage = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    const secondEdges = secondPage.data?.node?.notificationFeed.edges ?? [];
+    assert.equal(secondEdges.length, 1);
+    assert.equal(secondEdges[0]?.node.__typename, 'ReactionNotificationGroup');
+    assert.equal(secondEdges[0]?.node.post?.id, encodeGlobalId('Post', posts[2]!.id));
+    assert.deepEqual(
+      new Set(secondEdges[0]?.node.notificationIds),
+      new Set([
+        encodeGlobalId('ReactionNotification', groups[2]!.notification.id),
+        encodeGlobalId('ReactionNotification', late.notification.id),
+      ]),
+    );
+
+    const [freshOnly] = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: auth.account.id,
+        recipientProfileId: null,
+        sourceId: crypto.randomUUID(),
+        createdAt: at(120),
+      })
+      .returning();
+    const continuedAfterFreshInsert = await loadNotificationFeed(profileId, auth.token, {
+      first: 10,
+      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(continuedAfterFreshInsert);
+    assert.equal(
+      continuedAfterFreshInsert.data?.node?.notificationFeed.edges.some(
+        ({ node }) => node.id === encodeGlobalId('OperationalNotification', freshOnly!.id),
+      ),
+      false,
+    );
+    const freshPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(freshPage);
+    assert.equal(
+      freshPage.data?.node?.notificationFeed.edges[0]?.node.id,
+      encodeGlobalId('OperationalNotification', freshOnly!.id),
+    );
+  });
+
+  test('does not duplicate a group when an earlier member is deleted between pages', async () => {
+    const auth = await createAuthenticatedSession();
+    const authors = await Promise.all([
+      createProfile('reaction-feed-snapshot-delete-a'),
+      createProfile('reaction-feed-snapshot-delete-b'),
+      createProfile('reaction-feed-snapshot-delete-c'),
+    ]);
+    const posts = await Promise.all(authors.map(() => createContentPost(auth.profile.id)));
+    const at = (seconds: number) =>
+      Temporal.Instant.from('2026-10-11T00:00:00.000000Z').add({ seconds });
+    const aFirst = await createReactionNotificationForPost(
+      posts[0]!.id,
+      authors[0]!.id,
+      '❤️',
+      at(70),
+    );
+    const aLatest = await createReactionNotificationForPost(
+      posts[0]!.id,
+      authors[0]!.id,
+      '🎉',
+      at(100),
+    );
+    await createReactionNotificationForPost(posts[1]!.id, authors[1]!.id, '❤️', at(90));
+    await createReactionNotificationForPost(posts[2]!.id, authors[2]!.id, '🔥', at(80));
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.notificationFeed.edges.map(({ node }) => node.post?.id),
+      [posts[0]!, posts[1]!].map(({ id }) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(firstPage.data?.node?.notificationFeed.pageInfo.endCursor);
+
+    await db.delete(Notifications).where(eq(Notifications.id, aLatest.notification.id));
+    await db.delete(Reactions).where(eq(Reactions.id, aLatest.reaction.id));
+
+    const secondPage = await loadNotificationFeed(profileId, auth.token, {
+      first: 10,
+      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    const secondEdges = secondPage.data?.node?.notificationFeed.edges ?? [];
+    assert.deepEqual(
+      secondEdges.map(({ node }) => node.post?.id),
+      [encodeGlobalId('Post', posts[2]!.id)],
+    );
+    assert.equal(
+      secondEdges.some(({ node }) =>
+        node.notificationIds.includes(
+          encodeGlobalId('ReactionNotification', aFirst.notification.id),
+        ),
+      ),
+      false,
+    );
+  });
+
+  test('fills a continuation after more than one empty snapshot batch', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const base = Temporal.Instant.from('2026-10-12T00:00:00.000000Z');
+    const [first, ...remainingNotifications] = await db
+      .insert(Notifications)
+      .values([
+        {
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base.add({ seconds: 300 }),
+        },
+        ...Array.from({ length: 201 }, (_, index) => ({
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base.add({ seconds: 299 - index }),
+        })),
+        {
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base,
+        },
+      ])
+      .returning();
+    const emptyNotifications = remainingNotifications.slice(0, 201);
+    const last = remainingNotifications[201]!;
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(firstPage);
+    assert.equal(
+      firstPage.data?.node?.notificationFeed.edges[0]?.node.id,
+      encodeGlobalId('OperationalNotification', first.id),
+    );
+    assert.ok(firstPage.data?.node?.notificationFeed.pageInfo.endCursor);
+
+    await db.delete(Notifications).where(
+      inArray(
+        Notifications.id,
+        emptyNotifications.map(({ id }) => id),
+      ),
+    );
+
+    const secondPage = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    assert.equal(
+      secondPage.data?.node?.notificationFeed.edges[0]?.node.id,
+      encodeGlobalId('OperationalNotification', last.id),
+    );
+  });
+
+  test('rejects an expired snapshot and allows a fresh feed request', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    await db.insert(Notifications).values({
+      kind: NotificationKind.OPERATIONAL,
+      recipientAccountId: auth.account.id,
+      recipientProfileId: null,
+      sourceId: crypto.randomUUID(),
+    });
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(firstPage);
+    const cursor = firstPage.data?.node?.notificationFeed.pageInfo.endCursor;
+    assert.ok(cursor);
+    const [snapshotId] = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as [string];
+    await db
+      .update(NotificationFeedSnapshots)
+      .set({ expiresAt: Temporal.Instant.from('2020-01-01T00:00:00Z') })
+      .where(eq(NotificationFeedSnapshots.id, snapshotId));
+
+    const expired = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: cursor,
+    });
+    assert.equal(expired.errors?.[0]?.extensions?.code, 'NOTIFICATION_FEED_SNAPSHOT_EXPIRED');
+
+    const fresh = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(fresh);
+    assert.equal(fresh.data?.node?.notificationFeed.edges.length, 1);
+    const freshCursor = fresh.data?.node?.notificationFeed.pageInfo.endCursor;
+    assert.ok(freshCursor);
+    const [freshSnapshotId] = JSON.parse(
+      Buffer.from(freshCursor, 'base64url').toString('utf8'),
+    ) as [string];
+    assert.equal(
+      await db
+        .select({ id: NotificationFeedSnapshots.id })
+        .from(NotificationFeedSnapshots)
+        .where(eq(NotificationFeedSnapshots.id, snapshotId))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal(
+      await db
+        .select({ id: NotificationFeedSnapshots.id })
+        .from(NotificationFeedSnapshots)
+        .where(eq(NotificationFeedSnapshots.id, freshSnapshotId))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
+  test('preserves snapshot order for reverse before and last pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const base = Temporal.Instant.from('2026-10-13T00:00:00.000000Z');
+    const [latest, middle] = await db
+      .insert(Notifications)
+      .values([
+        {
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base.add({ seconds: 3 }),
+        },
+        {
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base.add({ seconds: 2 }),
+        },
+        {
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: auth.account.id,
+          recipientProfileId: null,
+          sourceId: crypto.randomUUID(),
+          createdAt: base.add({ seconds: 1 }),
+        },
+      ])
+      .returning();
+
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.notificationFeed.edges.map(({ node }) => node.id),
+      [latest!, middle!].map(({ id }) => encodeGlobalId('OperationalNotification', id)),
+    );
+
+    const read = await markNotificationRead(
+      [encodeGlobalId('OperationalNotification', latest!.id)],
+      auth.token,
+    );
+    assertNoGraphQLErrors(read);
+    assert.ok(read.data?.markNotificationRead.notifications[0]?.readAt);
+
+    const reversePage = await loadNotificationFeed(profileId, auth.token, {
+      last: 1,
+      before: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(reversePage);
+    assert.deepEqual(
+      reversePage.data?.node?.notificationFeed.edges.map(({ node }) => node.id),
+      [encodeGlobalId('OperationalNotification', latest!.id)],
+    );
+    assert.equal(
+      reversePage.data?.node?.notificationFeed.edges[0]?.node.readAt,
+      read.data?.markNotificationRead.notifications[0]?.readAt,
+    );
+    assert.equal(reversePage.data?.node?.notificationFeed.pageInfo.hasNextPage, true);
+  });
+
+  test('rejects foreign, membership-lost, cross-snapshot, and out-of-range cursors', async () => {
+    const auth = await createAuthenticatedSession();
+    const foreign = await createAuthenticatedSession();
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    await db.insert(Notifications).values({
+      kind: NotificationKind.OPERATIONAL,
+      recipientAccountId: auth.account.id,
+      recipientProfileId: null,
+      sourceId: crypto.randomUUID(),
+    });
+
+    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(firstPage);
+    const firstCursor = firstPage.data?.node?.notificationFeed.pageInfo.endCursor;
+    assert.ok(firstCursor);
+    const firstSnapshot = JSON.parse(Buffer.from(firstCursor, 'base64url').toString('utf8')) as [
+      string,
+      number,
+    ];
+
+    const foreignResult = await loadNotificationFeed(profileId, foreign.token, {
+      first: 1,
+      after: firstCursor,
+    });
+    assert.equal(foreignResult.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const foreignSnapshotScope = await loadNotificationFeed(
+      encodeGlobalId('Profile', foreign.profile.id),
+      foreign.token,
+      { first: 1, after: firstCursor },
+    );
+    assert.equal(foreignSnapshotScope.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const freshPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
+    assertNoGraphQLErrors(freshPage);
+    const freshCursor = freshPage.data?.node?.notificationFeed.pageInfo.endCursor;
+    assert.ok(freshCursor);
+    const freshSnapshot = JSON.parse(Buffer.from(freshCursor, 'base64url').toString('utf8')) as [
+      string,
+      number,
+    ];
+    assert.notEqual(firstSnapshot[0], freshSnapshot[0]);
+
+    const mixed = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: firstCursor,
+      before: freshCursor,
+    });
+    assert.equal(mixed.errors?.[0]?.message, 'Invalid Notification Feed cursor');
+
+    const outOfRange = Buffer.from(
+      JSON.stringify([firstSnapshot[0], Number.MAX_SAFE_INTEGER]),
+      'utf8',
+    ).toString('base64url');
+    const invalidPosition = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: outOfRange,
+    });
+    assert.equal(invalidPosition.errors?.[0]?.message, 'Invalid Notification Feed cursor');
+
+    await db
+      .delete(AccountProfiles)
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+    const membershipLost = await loadNotificationFeed(profileId, auth.token, {
+      first: 1,
+      after: firstCursor,
+    });
+    assert.equal(membershipLost.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+  });
+
+  test('validates feed cursors and protects group membership and source details', async () => {
+    const auth = await createAuthenticatedSession();
+    const foreign = await createAuthenticatedSession();
+    const visibleAuthor = await createProfile('reaction-feed-visible-author');
+    const visiblePost = await createContentPost(auth.profile.id);
+    await createReactionNotificationForPost(
+      visiblePost.id,
+      visibleAuthor.id,
+      '❤️',
+      Temporal.Instant.from('2026-10-05T00:00:00Z'),
+    );
+
+    const invalid = await loadNotificationFeed(
+      encodeGlobalId('Profile', auth.profile.id),
+      auth.token,
+      { first: 1, after: 'not-a-cursor' },
+    );
+    assert.equal(invalid.errors?.[0]?.message, 'Invalid Notification Feed cursor');
+
+    const hiddenOwner = await createProfile('reaction-feed-hidden-owner');
+    const hiddenAuthor = await createProfile('reaction-feed-hidden-author');
+    const hiddenPost = await createContentPost(hiddenOwner.id, PostVisibility.FOLLOWERS);
+    await createReactionNotificationForPost(
+      hiddenPost.id,
+      hiddenAuthor.id,
+      '🎉',
+      Temporal.Instant.from('2026-10-05T01:00:00Z'),
+      auth.profile.id,
+    );
+
+    const feed = await loadNotificationFeed(
+      encodeGlobalId('Profile', auth.profile.id),
+      auth.token,
+      { first: 10 },
+    );
+    assertNoGraphQLErrors(feed);
+    const visibleGroup = feed.data?.node?.notificationFeed.edges.find(
+      ({ node }) => node.__typename === 'ReactionNotificationGroup' && node.participantCount === 1,
+    )?.node;
+    assert.equal(visibleGroup?.__typename, 'ReactionNotificationGroup');
+    const hiddenGroup = feed.data?.node?.notificationFeed.edges.find(
+      ({ node }) =>
+        node.__typename === 'ReactionNotificationGroup' && node.participantCount === null,
+    )?.node;
+    assert.equal(hiddenGroup?.__typename, 'ReactionNotificationGroup');
+    assert.equal(hiddenGroup?.reactionCounts, null);
+    assert.deepEqual(hiddenGroup?.recentProfiles, []);
+    assert.equal(hiddenGroup?.post, null);
+
+    const foreignNode = await loadReactionNotificationGroupNode(visibleGroup!.id, foreign.token);
+    assert.equal(foreignNode.data?.node, null);
+  });
+
   test('integrates Repost rows into concrete Node, mixed list, unread count and Read', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('repost-recipient');
@@ -3578,6 +4122,24 @@ type NotificationConnection = {
   pageInfo: { endCursor: string | null; hasNextPage: boolean };
 };
 
+type NotificationFeedNode = {
+  __typename: string;
+  id: string;
+  latestAt?: string;
+  readAt?: string | null;
+  notificationIds: string[];
+  participantCount?: number | null;
+  post?: { id: string } | null;
+  reactionCounts?: Array<{ count: number; type: string }> | null;
+  recentProfiles: Array<{ id: string }>;
+  unread?: boolean;
+};
+
+type NotificationFeedConnection = {
+  edges: Array<{ cursor: string; node: NotificationFeedNode }>;
+  pageInfo: { endCursor: string | null; hasNextPage: boolean; startCursor: string | null };
+};
+
 type ProfileNode = { __typename: 'Profile'; id: string };
 
 type GraphQLResult<TData> = {
@@ -3687,11 +4249,83 @@ const loadNotificationConnection = (
     token,
   );
 
+const loadNotificationFeed = (
+  id: string,
+  token: string | undefined,
+  variables: {
+    after?: string | null;
+    before?: string | null;
+    first?: number;
+    last?: number;
+  },
+) =>
+  requestGraphQL<{
+    node: {
+      notificationFeed: NotificationFeedConnection;
+      unreadNotificationFeedCount: number | null;
+    } | null;
+  }>(
+    `query ProfileNotificationFeed(
+      $id: ID!
+      $first: Int
+      $last: Int
+      $after: String
+      $before: String
+    ) {
+      node(id: $id) {
+        ... on Profile {
+          unreadNotificationFeedCount
+          notificationFeed(first: $first, last: $last, after: $after, before: $before) {
+            edges {
+              cursor
+              node {
+                __typename
+                ... on Notification { id createdAt readAt }
+                ... on ReactionNotificationGroup {
+                  id
+                  latestAt
+                  unread
+                  notificationIds
+                  participantCount
+                  reactionCounts { type count }
+                  recentProfiles { id }
+                  post { id }
+                }
+              }
+            }
+            pageInfo { startCursor endCursor hasNextPage }
+          }
+        }
+      }
+    }`,
+    { id, ...variables },
+    token,
+  );
+
+const loadReactionNotificationGroupNode = (id: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      id: string;
+    } | null;
+  }>(
+    `query ReactionNotificationGroupNode($id: ID!) {
+      node(id: $id) {
+        ... on ReactionNotificationGroup { id }
+      }
+    }`,
+    { id },
+    token,
+  );
+
 const markNotificationRead = (ids: string[], token?: string) =>
   requestGraphQL<{
     markNotificationRead: {
       notifications: NotificationNode[];
-      recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
+      recipientProfiles: Array<{
+        id: string;
+        unreadNotificationCount: number;
+        unreadNotificationFeedCount: number | null;
+      }>;
     };
   }>(
     `mutation MarkNotificationRead($ids: [ID!]!) {
@@ -3707,7 +4341,7 @@ const markNotificationRead = (ids: string[], token?: string) =>
           ... on ReplyNotification { profile { id } post { id } }
           ... on MentionNotification { profile { id } post { id } }
         }
-        recipientProfiles { id unreadNotificationCount }
+        recipientProfiles { id unreadNotificationCount unreadNotificationFeedCount }
       }
     }`,
     { ids },
@@ -3918,6 +4552,39 @@ const createReactionNotification = async (
     .then(firstOrThrow);
 
   return { notification, post, reaction };
+};
+
+const createReactionNotificationForPost = async (
+  postId: string,
+  authorProfileId: string,
+  type: string,
+  createdAt: Temporal.Instant,
+  recipientProfileId?: string,
+) => {
+  const { profileId: postProfileId } = await db
+    .select({ profileId: Posts.profileId })
+    .from(Posts)
+    .where(eq(Posts.id, postId))
+    .then(firstOrThrow);
+  const notificationRecipientProfileId = recipientProfileId ?? postProfileId;
+  const reaction = await db
+    .insert(Reactions)
+    .values({ postId, profileId: authorProfileId, type })
+    .returning()
+    .then(firstOrThrow);
+  const notification = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.REACTION,
+      recipientAccountId: await notificationRecipientAccountId(notificationRecipientProfileId),
+      recipientProfileId: notificationRecipientProfileId,
+      sourceId: reaction.id,
+      createdAt,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  return { notification, reaction };
 };
 
 const createContentPost = async (

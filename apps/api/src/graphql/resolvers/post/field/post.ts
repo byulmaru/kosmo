@@ -7,7 +7,7 @@ import { replyCountLoader } from '../loader/reply-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
 import { Post, PostContent } from '../ref';
 
-const ReactionCount = builder.simpleObject('ReactionCount', {
+export const ReactionCount = builder.simpleObject('ReactionCount', {
   fields: (t) => ({
     type: t.string(),
     count: t.int(),
