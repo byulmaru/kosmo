@@ -59,7 +59,10 @@
   callback을 한 plain object로 묶고, 해당 Workflow가 정의한 input-to-ID 규칙을 함께 참조하게 한다. 이 interface는
   기존 `packages/core/temporal/client.ts`에 둔다.
 - `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 ID 문자열을 얻고, 공통 task queue와
-  bounded deadline을 적용해 native `start` 또는 `execute`를 호출한다. Caller는 task queue·deadline·native client
+  bounded deadline을 적용해 native `start` 또는 `execute`를 호출한다. `WorkflowDefinition.timeoutMs`로 특정
+  capability의 caller 대기 deadline을 좁게 조정할 수 있고, 생략하면 30초 기본값을 유지한다. 이는 caller wait만
+  제한하며 이미 시작된 Workflow나 원격 처리를 취소하거나 그 최대 실행 시간을 보장하지 않는다. Caller는
+  task queue·deadline·native client
   호출을 조합하지 않는다. Callback 오류는 native 호출 전에 원본 그대로 전파한다. Native rejection은
   `Error.cause` chain에서 첫 `ApplicationFailure`를 동일 객체로 전파하고, 없으면 최초 rejection 객체를 그대로
   전파한다. Remote profile lookup caller는 `ApplicationFailure.type`을 분류하지 않고 모든 native rejection을

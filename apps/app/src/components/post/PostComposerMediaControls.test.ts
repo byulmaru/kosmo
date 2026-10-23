@@ -21,7 +21,11 @@ type CompleteMediaResponse = {
 };
 type MediaMutationConfig = {
   readonly variables: {
-    readonly input: { readonly actorProfileId?: string; readonly id?: string };
+    readonly input: {
+      readonly actorProfileId?: string;
+      readonly applyNightshade?: boolean;
+      readonly id?: string;
+    };
   };
   readonly onCompleted: (
     response: IssueMediaResponse | CompleteMediaResponse,
@@ -228,11 +232,58 @@ describe('PostComposerMediaControls deferred completion', () => {
       completion = mediaValues.at(-1)!.completeUploads();
     });
     assert.equal(completeCalls.length, 1);
-    assert.deepEqual(completeCalls[0]?.variables.input, { id: 'media-1' });
+    assert.deepEqual(completeCalls[0]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-1',
+    });
 
     await act(async () => {
       completeCalls[0]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
+      });
+      await completion;
+    });
+  });
+
+  it('completes each attachment with only its selected Nightshade setting', async () => {
+    pickerResult = { assets: [asset(), asset()], canceled: false };
+    await renderControls();
+    await act(async () => mediaRenderProps?.onMediaAction());
+    await flush();
+
+    const [first, second] = mediaRenderProps?.items ?? [];
+    assert.ok(first);
+    assert.ok(second);
+    assert.equal(first.applyNightshade, false);
+    assert.equal(second.applyNightshade, false);
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(second.key, true));
+    await flush();
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
+    assert.equal(mediaRenderProps?.items[1]?.applyNightshade, true);
+    assert.deepEqual(mediaValues.at(-1)?.items, [
+      { altText: null, mediaId: 'media-1' },
+      { altText: null, mediaId: 'media-2' },
+    ]);
+
+    let completion!: Promise<void>;
+    await act(async () => {
+      completion = mediaValues.at(-1)!.completeUploads();
+    });
+    assert.equal(completeCalls.length, 2);
+    assert.deepEqual(completeCalls[0]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-1',
+    });
+    assert.deepEqual(completeCalls[1]?.variables.input, {
+      applyNightshade: true,
+      id: 'media-2',
+    });
+    await act(async () => {
+      completeCalls[0]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
+      });
+      completeCalls[1]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
       });
       await completion;
     });
@@ -245,6 +296,10 @@ describe('PostComposerMediaControls deferred completion', () => {
     captureThrows = true;
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
+    await flush();
+    const selectedItem = mediaRenderProps?.items[0];
+    assert.ok(selectedItem);
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(selectedItem.key, true));
     await flush();
 
     let completion!: Promise<void>;
@@ -272,6 +327,7 @@ describe('PostComposerMediaControls deferred completion', () => {
     assert.equal((capturedError as Error & { cause?: unknown }).cause, undefined);
     assert.equal(capturedError.stack?.includes(privateDetail), false);
     assert.equal(mediaRenderProps?.items[0]?.state, 'failed');
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
     assert.deepEqual(toastCalls, [
       ['1번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
     ]);
@@ -285,13 +341,14 @@ describe('PostComposerMediaControls deferred completion', () => {
     assert.equal(issueCalls.length, 2);
     assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
     assert.equal(mediaRenderProps?.items[0]?.mediaId, 'media-2');
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
     assert.equal(completeCalls.length, 1);
 
     await act(async () => {
       completion = mediaValues.at(-1)!.completeUploads();
     });
     assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[1]?.variables.input, { id: 'media-2' });
+    assert.deepEqual(completeCalls[1]?.variables.input, { applyNightshade: true, id: 'media-2' });
     await act(async () => {
       completeCalls[1]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
@@ -327,8 +384,14 @@ describe('PostComposerMediaControls deferred completion', () => {
       },
     );
     assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[0]?.variables.input, { id: 'media-1' });
-    assert.deepEqual(completeCalls[1]?.variables.input, { id: 'media-2' });
+    assert.deepEqual(completeCalls[0]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-1',
+    });
+    assert.deepEqual(completeCalls[1]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-2',
+    });
 
     await act(async () => {
       completeCalls[0]?.onCompleted({

@@ -20,13 +20,19 @@ import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
-export type ComposerMediaEditorTool = 'alt' | 'sensitive';
-export type ComposerMediaEditorMobileState = 'alt' | 'altKeyboard' | 'default' | 'sensitive';
+export type ComposerMediaEditorTool = 'alt' | 'nightshade' | 'sensitive';
+export type ComposerMediaEditorMobileState =
+  | 'alt'
+  | 'altKeyboard'
+  | 'default'
+  | 'nightshade'
+  | 'sensitive';
 
 export type ComposerMediaEditorProps = {
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
@@ -56,13 +62,13 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   );
   const selected = props.media[selectedIndex];
   const mobile = props.presentation === 'mobile';
-  const mobileState = props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'alt');
+  const mobileState = props.mobileState ?? props.tool;
   const mobileTool =
     mobileState === 'default'
       ? null
       : mobileState === 'alt' || mobileState === 'altKeyboard'
         ? 'alt'
-        : 'sensitive';
+        : mobileState;
 
   useEffect(() => {
     backRef.current?.focus();
@@ -124,6 +130,14 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                 label="민감도 편집"
                 onPress={() => props.onToolChange('sensitive')}
                 selected={mobileTool === 'sensitive'}
+              />
+              <MobileToolButton
+                icon={
+                  <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>AI</Text>
+                }
+                label="AI 학습 방지"
+                onPress={() => props.onToolChange('nightshade')}
+                selected={mobileTool === 'nightshade'}
               />
             </View>
             {mobileTool ? (
@@ -254,6 +268,7 @@ function EditorTabs({
       : []),
     <Tab key="alt" option={{ label: '대체 텍스트', value: 'alt' }} />,
     <Tab key="sensitive" option={{ label: '민감도', value: 'sensitive' }} />,
+    <Tab key="nightshade" option={{ label: 'AI 학습 방지', value: 'nightshade' }} />,
   ];
 
   return (
@@ -402,11 +417,21 @@ function WebToolPanel(
             }
           }}
         />
-      ) : (
+      ) : props.tool === 'sensitive' ? (
         <SensitiveToolContent
           itemNumber={props.selectedIndex + 1}
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
+        />
+      ) : (
+        <NightshadeToolContent
+          applyNightshade={props.selected?.applyNightshade ?? false}
+          itemNumber={props.selectedIndex + 1}
+          onApplyNightshadeChange={(value) => {
+            if (props.selected) {
+              props.onApplyNightshadeChange(props.selected.key, value);
+            }
+          }}
         />
       )}
     </ScrollView>
@@ -441,12 +466,23 @@ function MobileToolSheet(
             }
           }}
         />
-      ) : (
+      ) : props.tool === 'sensitive' ? (
         <SensitiveToolContent
           compact
           itemNumber={props.selectedIndex + 1}
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
+        />
+      ) : (
+        <NightshadeToolContent
+          applyNightshade={props.selected?.applyNightshade ?? false}
+          compact
+          itemNumber={props.selectedIndex + 1}
+          onApplyNightshadeChange={(value) => {
+            if (props.selected) {
+              props.onApplyNightshadeChange(props.selected.key, value);
+            }
+          }}
         />
       )}
     </View>
@@ -586,6 +622,51 @@ function SensitiveToolContent({
           </Text>
         </>
       ) : null}
+    </>
+  );
+}
+
+function NightshadeToolContent({
+  applyNightshade,
+  compact = false,
+  itemNumber,
+  onApplyNightshadeChange,
+}: {
+  readonly applyNightshade: boolean;
+  readonly compact?: boolean;
+  readonly itemNumber: number;
+  readonly onApplyNightshadeChange: (value: boolean) => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <>
+      {!compact ? (
+        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>
+          이미지 {itemNumber}
+        </Text>
+      ) : null}
+      <Text style={[styles.toolTitle, { color: theme.foregroundPrimary }]}>AI 학습 방지</Text>
+      <View
+        style={[
+          styles.sensitiveSetting,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
+      >
+        <View style={styles.sensitiveCopy}>
+          <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
+            AI 학습 방지
+          </Text>
+          <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
+            켜면 이미지의 긴 변을 최대 1024px로 줄입니다.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel={`첨부 이미지 ${itemNumber} AI 학습 방지`}
+          onValueChange={onApplyNightshadeChange}
+          value={applyNightshade}
+        />
+      </View>
     </>
   );
 }

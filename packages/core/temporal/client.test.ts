@@ -607,6 +607,45 @@ test('공용 task queue를 적용한다', async () => {
   }
 });
 
+test('WorkflowDefinition은 caller deadline만 capability별로 조정하고 기본 30초를 유지한다', async () => {
+  type TimeoutWorkflow = () => Promise<string>;
+  const deadlines: number[] = [];
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => 'ok' as never);
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value instanceof Date ? value.getTime() : value);
+      return callback();
+    },
+  );
+  const now = mock.method(Date, 'now', () => 1_000_000);
+
+  try {
+    await runWorkflow(
+      {
+        workflow: 'mediaUploadWorkflow',
+        workflowIdFromArgs: () => 'media-upload',
+        timeoutMs: 60_000,
+      } satisfies WorkflowDefinition<TimeoutWorkflow>,
+      { mode: 'execute' },
+    );
+    await runWorkflow(
+      {
+        workflow: 'defaultWorkflow',
+        workflowIdFromArgs: () => 'default',
+      } satisfies WorkflowDefinition<TimeoutWorkflow>,
+      { mode: 'execute' },
+    );
+
+    assert.deepEqual(deadlines, [1_060_000, 1_030_000]);
+  } finally {
+    now.mock.restore();
+    deadline.mock.restore();
+    execute.mock.restore();
+  }
+});
+
 for (const mode of ['start', 'execute'] as const) {
   test(`${mode} mode는 ApplicationFailure를 해석하고 그 외 native 오류는 원본으로 전파한다`, async () => {
     type FailureWorkflow = () => Promise<string>;

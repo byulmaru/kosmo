@@ -1,6 +1,6 @@
 import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
-import { NotFoundError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
@@ -16,6 +16,17 @@ const representationResponseSchema = z.object({
 });
 
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
+const nightshadeChoiceConflict = () =>
+  new ConflictError({ message: '이미지를 다시 첨부해 주세요' });
+
+const assertNightshadeChoice = (
+  media: Pick<typeof MediaTable.$inferSelect, 'nightshadeApplied'>,
+  applyNightshade: boolean,
+) => {
+  if (media.nightshadeApplied !== applyNightshade) {
+    throw nightshadeChoiceConflict();
+  }
+};
 
 builder.mutationField('completeMediaUpload', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -26,8 +37,10 @@ builder.mutationField('completeMediaUpload', (t) =>
     }),
     input: {
       id: t.input.globalID({ for: Media }),
+      applyNightshade: t.input.boolean({ required: false, defaultValue: false }),
     },
     resolve: async (_, { input }, ctx) => {
+      const applyNightshade = input.applyNightshade ?? false;
       const media = await db
         .select()
         .from(MediaTable)
@@ -42,6 +55,7 @@ builder.mutationField('completeMediaUpload', (t) =>
         .then(firstOrThrowWith(() => new NotFoundError('Media not found')));
 
       if (media.state === MediaState.READY) {
+        assertNightshadeChoice(media, applyNightshade);
         return { media };
       }
       if (media.storageReference === null) {
@@ -66,7 +80,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (isNexusMediaUpload(media.storageReference)) {
         try {
           await runWorkflow(mediaUploadWorkflow, {
-            args: [{ mediaId: media.id, accountId: ctx.session.accountId }],
+            args: [{ mediaId: media.id, accountId: ctx.session.accountId, applyNightshade }],
             mode: 'execute',
             workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
             workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
@@ -74,6 +88,7 @@ builder.mutationField('completeMediaUpload', (t) =>
         } catch (error) {
           const readyMedia = await findReadyMedia().catch(() => undefined);
           if (readyMedia) {
+            assertNightshadeChoice(readyMedia, applyNightshade);
             return { media: readyMedia };
           }
           throw error;
@@ -83,9 +98,14 @@ builder.mutationField('completeMediaUpload', (t) =>
         if (!readyMedia) {
           throw new Error('Failed to complete Media upload');
         }
+        assertNightshadeChoice(readyMedia, applyNightshade);
         return {
           media: readyMedia,
         };
+      }
+
+      if (applyNightshade) {
+        throw nightshadeChoiceConflict();
       }
 
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
@@ -146,6 +166,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (!readyMedia) {
         throw new Error('Failed to complete Media upload');
       }
+      assertNightshadeChoice(readyMedia, applyNightshade);
       return { media: readyMedia };
     },
   }),

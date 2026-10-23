@@ -42,6 +42,7 @@ export type ComposerMediaItem = {
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
+  readonly applyNightshade?: boolean;
 };
 
 export type PostComposerMediaValue = {
@@ -57,6 +58,7 @@ export type PostComposerMediaValue = {
 export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -189,6 +191,7 @@ export function PostComposerMediaControls({
     }
 
     const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
+      applyNightshade: false,
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
@@ -304,10 +307,12 @@ export function PostComposerMediaControls({
 
       const completions = await Promise.allSettled(
         items.map(
-          ({ mediaId }) =>
+          ({ mediaId }, index) =>
             new Promise<void>((resolve, reject) => {
               commitCompleteMediaUpload({
-                variables: { input: { id: mediaId } },
+                variables: {
+                  input: { id: mediaId, applyNightshade: media[index]?.applyNightshade ?? false },
+                },
                 onCompleted: (response, errors) => {
                   if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
                     reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
@@ -374,6 +379,10 @@ export function PostComposerMediaControls({
       onAltTextChange: (key, altText) =>
         updateMedia((items) =>
           items.map((item) => (item.key === key ? { ...item, altText } : item)),
+        ),
+      onApplyNightshadeChange: (key, applyNightshade) =>
+        updateMedia((items) =>
+          items.map((item) => (item.key === key ? { ...item, applyNightshade } : item)),
         ),
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,

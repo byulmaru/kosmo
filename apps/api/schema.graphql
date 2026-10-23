@@ -78,6 +78,7 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
+  applyNightshade: Boolean = false
   id: ID!
 }
 

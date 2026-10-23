@@ -6,6 +6,7 @@ import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
+import type { ComposerMediaEditorTool } from '@/components/post/ComposerMediaEditor';
 import type { PostComposerUploadedMediaItemsTargetProps } from '@/components/post/PostComposerMediaItemsTarget';
 
 const mediaAsset = { height: 156, uri: ogImage, width: 156 };
@@ -87,7 +88,7 @@ function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps)
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
   const [editorOpen, setEditorOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(props.media[0]?.key ?? '');
-  const [tool, setTool] = useState<'alt' | 'sensitive'>('alt');
+  const [tool, setTool] = useState<ComposerMediaEditorTool>('alt');
 
   useEffect(() => setMedia(props.media), [props.media]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
@@ -120,6 +121,13 @@ function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps)
         {editorOpen ? (
           <ComposerMediaEditor
             media={media.filter((item) => item.state === 'ready')}
+            onApplyNightshadeChange={(key, value) => {
+              setMedia((current) =>
+                current.map((item) =>
+                  item.key === key ? { ...item, applyNightshade: value } : item,
+                ),
+              );
+            }}
             onAltTextChange={(key, altText) => {
               setMedia((current) =>
                 current.map((item) => (item.key === key ? { ...item, altText } : item)),
