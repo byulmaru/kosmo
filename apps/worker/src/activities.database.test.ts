@@ -2667,7 +2667,6 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
       .select({
-        nightshadeApplied: Media.nightshadeApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2676,13 +2675,11 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .limit(1)
       .then(firstOrThrow);
     assert.equal(firstReady.state, MediaState.READY);
-    assert.equal(firstReady.nightshadeApplied, false);
     assert.ok(firstReady.readyAt);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const retriedReady = await db
       .select({
-        nightshadeApplied: Media.nightshadeApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2691,19 +2688,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .limit(1)
       .then(firstOrThrow);
     assert.equal(retriedReady.state, MediaState.READY);
-    assert.equal(retriedReady.nightshadeApplied, false);
     assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
-    await assert.rejects(
-      finalizeMediaUploadActivity({ ...input, applyNightshade: true }),
-      expectNonRetryableFailure,
-    );
-    const unchangedChoice = await db
-      .select({ nightshadeApplied: Media.nightshadeApplied })
-      .from(Media)
-      .where(eq(Media.id, mediaId))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(unchangedChoice.nightshadeApplied, false);
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
@@ -2724,17 +2709,15 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     };
     assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
     const nightshadeReady = await db
-      .select({ nightshadeApplied: Media.nightshadeApplied, state: Media.state })
+      .select({ state: Media.state })
       .from(Media)
       .where(eq(Media.id, nightshade.mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(nightshadeReady.state, MediaState.READY);
-    assert.equal(nightshadeReady.nightshadeApplied, true);
-    assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
-    await assert.rejects(
-      finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
-      expectNonRetryableFailure,
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
+      nightshadeResult,
     );
 
     const concurrent = await createUploadingMedia();

@@ -236,7 +236,6 @@ export const Media = pgTable(
     mediaType: text('media_type'),
     url: text('url'),
     altText: text('alt_text'),
-    nightshadeApplied: boolean('nightshade_applied').notNull().default(false),
     storageReference: text('storage_reference').unique(),
     uploadExpiresAt: datetime('upload_expires_at'),
     readyAt: datetime('ready_at'),

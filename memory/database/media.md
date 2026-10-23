@@ -12,9 +12,6 @@ Current media direction:
 - After Kosmo confirms storage through Media Storage Service, the same row stores its URL and media type and transitions
   atomically to `READY`; later read projections use these columns without calling the storage service. Only `READY`
   Media can be attached to a Post or used as a Profile representation.
-- `nightshade_applied` is an internal Local Media completion marker used to enforce exact-choice idempotency; its
-  `false` default preserves older uploads and completions. A terminal Nightshade failure or a retry whose requested
-  choice differs from the persisted marker requires reattachment; KOSMO does not restart inference for the same upload ID.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
 - All new Local Media uploads use the existing Media server path without requiring a client-reported size. The server

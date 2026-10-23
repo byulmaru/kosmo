@@ -96,9 +96,6 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
 
   if (media.state === MediaState.READY) {
     if (media.url === result.data.url && media.mediaType === result.data.mediaType) {
-      if (media.nightshadeApplied !== (input.applyNightshade ?? false)) {
-        throw invalidSession();
-      }
       return result.data;
     }
     throw invalidSession();
@@ -112,7 +109,6 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
     .update(MediaTable)
     .set({
       mediaType: result.data.mediaType,
-      nightshadeApplied: input.applyNightshade ?? false,
       url: result.data.url,
       readyAt: Temporal.Now.instant(),
       state: MediaState.READY,
@@ -145,11 +141,7 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
     )
     .limit(1)
     .then(first);
-  if (
-    current?.url === result.data.url &&
-    current.mediaType === result.data.mediaType &&
-    current.nightshadeApplied === (input.applyNightshade ?? false)
-  ) {
+  if (current?.url === result.data.url && current.mediaType === result.data.mediaType) {
     return result.data;
   }
 

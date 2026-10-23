@@ -299,7 +299,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(stored.mediaType, 'image/webp');
   });
 
-  test('선택한 Nightshade를 workflow에 전달하고 같은 선택만 Ready Media에서 재사용한다', async (t) => {
+  test('선택한 Nightshade를 workflow에 전달하고 Ready Media를 선택과 무관하게 재사용한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
@@ -308,7 +308,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.ok(session);
     const execution = mockCompletingWorkflow(t, async ({ mediaId, applyNightshade }) => {
       assert.equal(applyNightshade, true);
-      await markMediaReady(mediaId, applyNightshade);
+      await markMediaReady(mediaId);
       return workflowResult(session.id);
     });
 
@@ -321,8 +321,6 @@ describe('Local Media upload GraphQL 경계', () => {
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
     assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, media.id, auth.account.id, true);
-    const stored = await db.select().from(Media).then(firstOrThrow);
-    assert.equal(stored.nightshadeApplied, true);
 
     const repeated = await requestCompleteMediaUpload(
       issued.data!.issueMediaUploadUrl.media.id,
@@ -333,23 +331,22 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.deepEqual(repeated.data, completed.data);
     assert.equal(execution.mock.callCount(), 1);
 
-    const mismatched = await requestCompleteMediaUpload(
+    const differentChoice = await requestCompleteMediaUpload(
       issued.data!.issueMediaUploadUrl.media.id,
       auth.token,
     );
-    assert.equal(mismatched.errors?.[0]?.extensions?.code, 'CONFLICT');
-    assert.equal(mismatched.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
-    assert.equal(mismatched.data, null);
+    assertNoGraphQLErrors(differentChoice);
+    assert.deepEqual(differentChoice.data, completed.data);
     assert.equal(execution.mock.callCount(), 1);
   });
 
-  test('workflow 오류 뒤 발견한 READY row도 Nightshade 선택이 다르면 거부한다', async (t) => {
+  test('workflow 오류 뒤 발견한 READY row를 요청 선택과 무관하게 반환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
     const media = await db.select().from(Media).then(firstOrThrow);
     const execution = t.mock.method(temporalClient.workflow, 'execute', async () => {
-      await markMediaReady(media.id, false);
+      await markMediaReady(media.id);
       throw new Error('workflow response was lost');
     });
 
@@ -359,9 +356,12 @@ describe('Local Media upload GraphQL 경계', () => {
       true,
     );
 
-    assert.equal(result.errors?.[0]?.extensions?.code, 'CONFLICT');
-    assert.equal(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
-    assert.equal(result.data, null);
+    assertNoGraphQLErrors(result);
+    assert.equal(
+      result.data?.completeMediaUpload.media.id,
+      issued.data!.issueMediaUploadUrl.media.id,
+    );
+    assert.equal(result.data?.completeMediaUpload.media.state, MediaState.READY);
     assert.equal(execution.mock.callCount(), 1);
   });
 
@@ -389,10 +389,9 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(execution.mock.callCount(), 1);
     const stored = await db.select().from(Media).then(firstOrThrow);
     assert.equal(stored.state, MediaState.UPLOADING);
-    assert.equal(stored.nightshadeApplied, false);
   });
 
-  test('workflow wait errors remain retryable and do not claim Nightshade failed', async (t) => {
+  test('caller wait errors do not claim Nightshade processing failed', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
@@ -1075,13 +1074,12 @@ const workflowResult = (id: string) => ({
   url: 'https://media.example/media.webp',
 });
 
-const markMediaReady = async (mediaId: string, nightshadeApplied = false) => {
+const markMediaReady = async (mediaId: string) => {
   const readyAt = Temporal.Now.instant();
   return db
     .update(Media)
     .set({
       mediaType: 'image/webp',
-      nightshadeApplied,
       readyAt,
       state: MediaState.READY,
       url: 'https://media.example/media.webp',
