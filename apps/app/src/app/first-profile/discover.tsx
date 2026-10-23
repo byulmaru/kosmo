@@ -10,8 +10,9 @@ export default function FirstProfileDiscoveryRoute() {
   }
   return (
     <FirstProfileTagDiscoveryRoute
-      empty={<Redirect href="/home" />}
-      onContinue={() => router.replace('/home')}
+      empty={<Redirect href="/first-profile/complete" />}
+      onBack={() => router.back()}
+      onContinue={() => router.push('/first-profile/complete')}
       profileId={flow.createdProfile.id}
     />
   );

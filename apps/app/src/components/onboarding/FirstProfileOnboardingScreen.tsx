@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { BrandLogo } from '@/components/BrandLogo';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileTagChip } from '@/components/profile/ProfileTagChip';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
@@ -19,7 +18,8 @@ import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { radius, space, textStyles } from '@/theme/tokens';
+import { FirstProfileOnboardingFrame } from './FirstProfileOnboardingFrame';
 import { firstProfileSteps } from './firstProfileOnboardingState';
 import type { ReactNode } from 'react';
 import type { ProfileEditImageDraft } from '@/components/profile/profileEditState';
@@ -172,58 +172,68 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
       style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <BrandLogo width={38} />
-            <View style={styles.spacer} />
-            {inputStep && step !== 'review' ? (
+        <FirstProfileOnboardingFrame
+          title={title}
+          description={description}
+          headerAction={
+            inputStep && step !== 'review' ? (
               <Button
                 disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
                 onPress={onComplete}
                 size="compact"
                 tone="secondary"
               >
-                바로 시작
+                나중에 설정
               </Button>
-            ) : null}
-          </View>
-          {inputStep ? (
-            <View
-              accessibilityLabel={`${firstProfileSteps.indexOf(step) + 1} / 5단계`}
-              style={styles.progress}
-            >
-              {firstProfileSteps.map((item, index) => (
-                <View
-                  key={item}
-                  style={[
-                    styles.progressPart,
-                    {
-                      backgroundColor:
-                        index <= firstProfileSteps.indexOf(step)
-                          ? theme.actionPrimaryBase
-                          : theme.borderDefault,
-                    },
-                  ]}
-                />
-              ))}
-              <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
-                {firstProfileSteps.indexOf(step) + 1} / 5
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.heading}>
-            <Text
-              accessibilityRole="header"
-              style={[textStyles.uiHeadingM, { color: theme.foregroundPrimary }]}
-            >
-              {title}
-            </Text>
-            {description ? (
-              <Text style={[textStyles.uiCopyL, { color: theme.foregroundSecondary }]}>
-                {description}
-              </Text>
-            ) : null}
-          </View>
+            ) : null
+          }
+          progress={
+            inputStep ? (
+              <View
+                accessibilityLabel={`${firstProfileSteps.indexOf(step) + 1} / 5단계`}
+                style={styles.progress}
+              >
+                {firstProfileSteps.map((item, index) => (
+                  <View
+                    key={item}
+                    style={[
+                      styles.progressPart,
+                      {
+                        backgroundColor:
+                          index <= firstProfileSteps.indexOf(step)
+                            ? theme.actionPrimaryBase
+                            : theme.borderDefault,
+                      },
+                    ]}
+                  />
+                ))}
+                <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
+                  {firstProfileSteps.indexOf(step) + 1} / 5
+                </Text>
+              </View>
+            ) : null
+          }
+          actions={
+            <>
+              {inputStep ? (
+                <Button
+                  disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
+                  loading={busy}
+                  onPress={step === 'review' ? onComplete : onNext}
+                >
+                  다음
+                </Button>
+              ) : (
+                startAction
+              )}
+              {inputStep && step !== 'handle' && step !== 'review' ? (
+                <Button disabled={busy} onPress={onSkip} tone="secondary">
+                  지금은 건너뛰기
+                </Button>
+              ) : null}
+            </>
+          }
+        >
           {step === 'handle' ? (
             <View style={styles.fields}>
               <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>핸들</Text>
@@ -260,7 +270,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               <ProfileEditImageFields
                 avatar={avatar}
                 header={header}
-                disabled={busy}
                 onAvatarEdit={props.onAvatarEdit}
                 onAvatarRemove={props.onAvatarRemove}
                 onAvatarRetry={props.onAvatarRetry}
@@ -305,7 +314,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               <ProfileTagEditor
                 addLabel="추가"
                 description="태그를 달면 내 프로필에 표시돼요. 취향이 맞는 사람들과 교류할 기회를 늘려 보세요."
-                disabled={busy}
                 draftInput={{
                   value: draft.tagInput,
                   onChange: (tagInput) => onChange({ ...draft, tagInput }),
@@ -336,7 +344,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               </Text>
               <RadioGroup
                 accessibilityLabel="게시물 기본 공개 범위"
-                disabled={busy}
                 onChange={(defaultPostVisibility: FirstProfileDraft['defaultPostVisibility']) =>
                   onChange({ ...draft, defaultPostVisibility })
                 }
@@ -358,7 +365,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 <Switch
                   accessibilityLabel="팔로우 요청 자동 승인"
                   accessibilityHint="설정을 끄면 팔로우 요청을 확인하고 원하는 사람만 수락할 수 있어요."
-                  disabled={busy}
                   onValueChange={(enabled) =>
                     onChange({ ...draft, followPolicy: enabled ? 'OPEN' : 'APPROVAL_REQUIRED' })
                   }
@@ -389,25 +395,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               ))}
             </View>
           ) : null}
-          <View style={styles.actions}>
-            {inputStep ? (
-              <Button
-                disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
-                loading={busy}
-                onPress={step === 'review' ? onComplete : onNext}
-              >
-                {step === 'review' ? '시작하기' : '다음'}
-              </Button>
-            ) : (
-              startAction
-            )}
-            {inputStep && step !== 'handle' && step !== 'review' ? (
-              <Button disabled={busy} onPress={onSkip} tone="secondary">
-                지금은 건너뛰기
-              </Button>
-            ) : null}
-          </View>
-        </View>
+        </FirstProfileOnboardingFrame>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -416,18 +404,9 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrollContent: { alignItems: 'center', flexGrow: 1 },
-  content: {
-    gap: space[24],
-    maxWidth: breakpoints.compact,
-    padding: space[24],
-    paddingBottom: space[48],
-    width: '100%',
-  },
-  header: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
-  spacer: { flex: 1, minWidth: 0 },
   progress: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   progressPart: { borderRadius: radius.full, flex: 1, height: space[4] },
-  heading: { gap: space[12] },
+  spacer: { flex: 1, minWidth: 0 },
   fields: { gap: space[12] },
   handleField: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   counter: { alignSelf: 'flex-end', ...textStyles.uiCopyS },
@@ -435,5 +414,4 @@ const styles = StyleSheet.create({
   summary: { borderRadius: radius[16], borderWidth: 1, gap: space[12], padding: space[16] },
   summaryHeader: { aspectRatio: 3, borderRadius: radius[12], width: '100%' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },
-  actions: { gap: space[12] },
 });

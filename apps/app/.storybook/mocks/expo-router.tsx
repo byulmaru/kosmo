@@ -13,6 +13,9 @@ import type { PropsWithChildren, ReactNode } from 'react';
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
 type RouterContextValue = {
+  back: () => void;
+  canGoBack: () => boolean;
+  replacePathname: (href: Href) => void;
   params: Record<string, string | undefined>;
   pathname: string;
   segments: readonly string[];
@@ -33,6 +36,9 @@ type LinkPressEvent = {
 };
 
 const RouterContext = createContext<RouterContextValue>({
+  back: () => undefined,
+  canGoBack: () => false,
+  replacePathname: () => undefined,
   params: {},
   pathname: '/home',
   segments: [],
@@ -54,12 +60,26 @@ export function RouterMockProvider({
   slot?: ReactNode;
   slotLabel?: string;
 }>) {
-  const [pathname, setCurrentPathname] = useState(initialPathname);
-  const setPathname = (href: Href) =>
-    setCurrentPathname(typeof href === 'string' ? href : href.pathname);
+  const [history, setHistory] = useState([initialPathname]);
+  const pathname = history.at(-1)!;
   const value = useMemo(
-    () => ({ params, pathname, segments, setPathname, slot, slotLabel }),
-    [params, pathname, segments, slot, slotLabel],
+    () => ({
+      back: () => setHistory((paths) => (paths.length > 1 ? paths.slice(0, -1) : paths)),
+      canGoBack: () => history.length > 1,
+      params,
+      pathname,
+      replacePathname: (href: Href) =>
+        setHistory((paths) => [
+          ...paths.slice(0, -1),
+          typeof href === 'string' ? href : href.pathname,
+        ]),
+      segments,
+      setPathname: (href: Href) =>
+        setHistory((paths) => [...paths, typeof href === 'string' ? href : href.pathname]),
+      slot,
+      slotLabel,
+    }),
+    [history, params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -87,15 +107,16 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
 }
 
 export function useRouter() {
-  const { setPathname } = useContext(RouterContext);
+  const { back, canGoBack, replacePathname, setPathname } = useContext(RouterContext);
   return useMemo(
     () => ({
-      back: () => undefined,
+      back,
+      canGoBack,
       dismissTo: setPathname,
       push: setPathname,
-      replace: setPathname,
+      replace: replacePathname,
     }),
-    [setPathname],
+    [back, canGoBack, replacePathname, setPathname],
   );
 }
 
@@ -106,12 +127,14 @@ export function Link({
   children,
   href,
   onPress,
+  replace = false,
 }: PropsWithChildren<{
   asChild?: boolean;
   href: Href;
+  replace?: boolean;
   onPress?: (event: LinkPressEvent) => void;
 }>) {
-  const { setPathname } = useContext(RouterContext);
+  const { replacePathname, setPathname } = useContext(RouterContext);
   if (
     !asChild ||
     !isValidElement<{
@@ -126,7 +149,7 @@ export function Link({
     const shouldNavigate = shouldHandleNavigation(event);
     event.preventDefault?.();
     if (shouldNavigate) {
-      setPathname(href);
+      (replace ? replacePathname : setPathname)(href);
     }
   };
   const handlePress = (event: LinkPressEvent) => {

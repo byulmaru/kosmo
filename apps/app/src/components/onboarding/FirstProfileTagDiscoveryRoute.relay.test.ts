@@ -39,6 +39,9 @@ mockModule('react-native', {
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
 mockModule('@/components/ui/Button', { Button: 'Button' });
+mockModule('@/components/ui/IconButton', { IconButton: 'Button' });
+mockModule('@/components/BrandLogo', { BrandLogo: 'BrandLogo' });
+mockModule('lucide-react-native', { ArrowLeft: 'ArrowLeft' });
 mockModule('@/components/ui/StateView', { StateView: 'StateView' });
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule(new URL('../ui/Toast.tsx', import.meta.url), { Toast: 'Toast' });
@@ -100,7 +103,12 @@ function App({ profileId, empty }: { profileId: string; empty: ReactNode }) {
   const [continued, setContinued] = useState(false);
   return continued
     ? createElement('Home')
-    : createElement(Route, { profileId, empty, onContinue: () => setContinued(true) });
+    : createElement(Route, {
+        profileId,
+        empty,
+        onBack: () => undefined,
+        onContinue: () => setContinued(true),
+      });
 }
 async function mount(env = environment(), profileId = 'owner') {
   await act(async () => {
@@ -252,6 +260,7 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     assert.equal(button('#Fediverse').props.accessibilityState.selected, true);
     assert.equal(button('#음악').props.accessibilityState.selected, false);
     assert.equal(button('#Fediverse').props.disabled, true);
+    assert.equal(button('이전 화면').props.disabled, true);
     assert.equal(button('#음악').props.disabled, true);
     assert.notEqual(button('계속하기').props.disabled, true);
     await press('#음악');
@@ -343,6 +352,7 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     await act(async () => nodes('StateView')[0]!.props.onAction());
     assert.deepEqual(requests.at(-1)?.variables, { hashtagId: secondTag.id });
     assert.equal(button('#Fediverse').props.disabled, true);
+    assert.equal(button('이전 화면').props.disabled, true);
     await press('#Fediverse');
     assert.equal(button('#음악').props.accessibilityState.selected, true);
     assert.equal(requests.length, 4);
@@ -351,6 +361,7 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     assert.equal(nodes('ProfileRow', false)[0], firstRow);
     await act(async () => nodes('StateView')[0]!.props.onAction());
     assert.equal(button('#Fediverse').props.disabled, true);
+    assert.equal(button('이전 화면').props.disabled, true);
     assert.equal(button('#음악').props.disabled, true);
     await press('#Fediverse');
     assert.equal(button('#음악').props.accessibilityState.selected, true);

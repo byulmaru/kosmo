@@ -89,7 +89,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
       .where(eq(ProfileHashtags.profileId, created[0]!.id)),
   ).toHaveLength(0);
   const savedMutations = [...mutations];
-  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  await page.getByRole('button', { name: '다음', exact: true }).click();
   await expectCompleted(page);
   expect(mutations).toEqual(savedMutations);
   expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
@@ -104,7 +104,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
   expect(completed[0]).toMatchObject({ id: created[0]!.id, displayName: '저장한 이름' });
 });
 
-test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
+test('첫 화면의 나중에 설정은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
   context,
   page,
 }) => {
@@ -112,9 +112,9 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
   await setE2ESessionCookie(context, session.token);
   const mutations = trackMutations(page);
   await page.goto('/first-profile/handle');
-  await expect(page.getByRole('button', { name: '바로 시작' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '나중에 설정' })).toBeDisabled();
   await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_quick');
-  await page.getByRole('button', { name: '바로 시작' }).click();
+  await page.getByRole('button', { name: '나중에 설정' }).click();
   await expectCompleted(page);
   expect(await ownedProfiles(session.account.id)).toMatchObject([
     {
@@ -162,7 +162,7 @@ test('선택 단계의 저장 실패 후에도 같은 Profile로 건너뛰고 �
   await expect(page).toHaveURL(/\/first-profile\/details$/);
   await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
   await expect(page).toHaveURL(/\/first-profile\/tags$/);
-  await page.getByRole('button', { name: '바로 시작' }).click();
+  await page.getByRole('button', { name: '나중에 설정' }).click();
   await expectCompleted(page);
   await expect(page.getByText('저장되지 않은 이름', { exact: true })).toHaveCount(0);
   expect(await ownedProfiles(session.account.id)).toEqual(created);
@@ -215,7 +215,7 @@ test('생성 후 흐름을 나갔다가 다시 진입하면 기존 Profile로 �
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await expect(page).toHaveURL(/\/first-profile\/details$/);
   const created = await ownedProfiles(session.account.id);
-  await page.getByRole('button', { name: '바로 시작' }).click();
+  await page.getByRole('button', { name: '나중에 설정' }).click();
   await expectCompleted(page);
   await page.getByRole('link', { name: '시작하기', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/);

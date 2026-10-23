@@ -35,7 +35,7 @@ export default function FirstProfileStepRoute() {
       onChange={flow.setDraft}
       onComplete={() => {
         flow.complete(() => {
-          router.push('/first-profile/complete');
+          router.push('/first-profile/discover');
         });
       }}
       onNext={() => {
@@ -57,7 +57,7 @@ export default function FirstProfileStepRoute() {
       result={flow.result}
       summary={flow.summary}
       startAction={
-        <Link asChild href="/first-profile/discover" replace>
+        <Link asChild href="/home" replace>
           <Button>시작하기</Button>
         </Link>
       }

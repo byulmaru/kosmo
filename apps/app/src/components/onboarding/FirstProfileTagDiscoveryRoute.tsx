@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, spacing, textStyles } from '@/theme/tokens';
-import type { ReactNode } from 'react';
+import { spacing, textStyles } from '@/theme/tokens';
+import { FirstProfileOnboardingFrame } from './FirstProfileOnboardingFrame';
+import type { ComponentProps, ReactNode } from 'react';
 import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { FirstProfileTagDiscovery_profile$key } from './__generated__/FirstProfileTagDiscovery_profile.graphql';
 import type {
@@ -72,46 +73,58 @@ const listFragment = graphql`
 type Props = {
   empty: ReactNode;
   onContinue: () => void;
+  onBack: () => void;
   profileId: string;
 };
 
-export function FirstProfileTagDiscoveryRoute({ empty, onContinue, profileId }: Props) {
+type RenderFrame = (content: ReactNode, disabled: boolean) => ReactNode;
+
+export function FirstProfileTagDiscoveryRoute({ empty, onBack, onContinue, profileId }: Props) {
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
+  const renderFrame: RenderFrame = (content, disabled) => (
+    <FirstProfileOnboardingFrame
+      title={'관심사가 같은 사람을\n만나보세요'}
+      description="프로필에 저장한 태그를 골라 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
+      onBack={onBack}
+      disabled={disabled}
+      style={styles.frame}
+      actions={<Button onPress={onContinue}>계속하기</Button>}
+    >
+      <View style={styles.content}>{content}</View>
+    </FirstProfileOnboardingFrame>
+  );
   return (
     <View style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}>
-      <View style={styles.screen}>
-        <View style={styles.intro}>
-          <Text
-            accessibilityRole="header"
-            style={[styles.title, { color: theme.foregroundPrimary }]}
-          >
-            관심사가 같은 사람을 만나보세요
-          </Text>
-          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-            프로필에 저장한 태그를 골라 둘러보고, 마음에 드는 사람을 팔로우해 보세요.
-          </Text>
-        </View>
-        <View style={styles.content}>
-          <RouteBoundary
-            loading={<StateView loading title="저장한 태그를 불러오는 중이에요" />}
-            title="저장한 태그를 불러오지 못했어요"
-          >
-            <SavedTagQuery empty={empty} profileId={profileId} />
-          </RouteBoundary>
-        </View>
-        <View style={[styles.actions, { borderColor: theme.border }]}>
-          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-            팔로우하지 않아도 지금은 넘어갈 수 있어요.
-          </Text>
-          <Button onPress={onContinue}>계속하기</Button>
-        </View>
-      </View>
+      <RouteBoundary
+        error={(retry) =>
+          renderFrame(
+            <DiscoveryState
+              actionLabel="다시 시도"
+              alert
+              onAction={retry}
+              title="저장한 태그를 불러오지 못했어요"
+            />,
+            false,
+          )
+        }
+        loading={renderFrame(
+          <DiscoveryState loading title="저장한 태그를 불러오는 중이에요" />,
+          true,
+        )}
+        title="저장한 태그를 불러오지 못했어요"
+      >
+        <SavedTagQuery empty={empty} profileId={profileId} renderFrame={renderFrame} />
+      </RouteBoundary>
     </View>
   );
 }
 
-function SavedTagQuery({ empty, profileId }: Pick<Props, 'empty' | 'profileId'>) {
+function SavedTagQuery({
+  empty,
+  profileId,
+  renderFrame,
+}: Pick<Props, 'empty' | 'profileId'> & { renderFrame: RenderFrame }) {
   const { fetchKey, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileTagDiscoveryQuery>(
     query,
@@ -119,24 +132,27 @@ function SavedTagQuery({ empty, profileId }: Pick<Props, 'empty' | 'profileId'>)
     { fetchKey, fetchPolicy: 'network-only' },
   );
   if (data.node?.__typename !== 'Profile' || !data.node.profile) {
-    return (
-      <StateView
+    return renderFrame(
+      <DiscoveryState
         actionLabel="다시 시도"
         alert
         onAction={refetch}
         title="저장한 태그를 확인할 수 없어요"
-      />
+      />,
+      false,
     );
   }
-  return <SavedTags empty={empty} profile={data.node.profile} />;
+  return <SavedTags empty={empty} profile={data.node.profile} renderFrame={renderFrame} />;
 }
 
 function SavedTags({
   empty,
   profile,
+  renderFrame,
 }: {
   empty: ReactNode;
   profile: FirstProfileTagDiscovery_profile$key;
+  renderFrame: RenderFrame;
 }) {
   const { tags } = useFragment(profileFragment, profile);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -198,27 +214,39 @@ function SavedTags({
               style={[styles.content, !active && styles.hidden]}
             >
               <RouteBoundary
-                error={(retry) => (
-                  <>
-                    {renderControls(!active)}
-                    <StateView
-                      actionLabel="다시 시도"
-                      alert
-                      description="잠시 후 다시 시도해주세요."
-                      onAction={retry}
-                      title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
-                    />
-                  </>
-                )}
-                loading={
+                error={(retry) =>
+                  renderFrame(
+                    <>
+                      {renderControls(!active)}
+                      <DiscoveryState
+                        actionLabel="다시 시도"
+                        alert
+                        description="잠시 후 다시 시도해주세요."
+                        onAction={retry}
+                        title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
+                      />
+                    </>,
+                    !active,
+                  )
+                }
+                loading={renderFrame(
                   <>
                     {renderControls(true)}
-                    <StateView loading title={`#${tag.name} 관련 프로필을 불러오는 중이에요`} />
-                  </>
-                }
+                    <DiscoveryState
+                      loading
+                      title={`#${tag.name} 관련 프로필을 불러오는 중이에요`}
+                    />
+                  </>,
+                  true,
+                )}
                 title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
               >
-                <TagQuery active={active} hashtagId={tag.id} renderControls={renderControls} />
+                <TagQuery
+                  active={active}
+                  hashtagId={tag.id}
+                  renderControls={renderControls}
+                  renderFrame={renderFrame}
+                />
               </RouteBoundary>
             </View>
           );
@@ -231,10 +259,12 @@ function TagQuery({
   active,
   hashtagId,
   renderControls,
+  renderFrame,
 }: {
   active: boolean;
   hashtagId: string;
   renderControls: (disabled: boolean) => ReactNode;
+  renderFrame: RenderFrame;
 }) {
   const { fetchKey, refetch } = useRouteBoundary();
   const data = useLazyLoadQuery<FirstProfileTagDiscoveryTagQuery>(
@@ -243,16 +273,17 @@ function TagQuery({
     { fetchKey, fetchPolicy: 'network-only' },
   );
   if (data.node?.__typename !== 'Hashtag' || !data.node.relatedProfiles) {
-    return (
+    return renderFrame(
       <>
         {renderControls(!active)}
-        <StateView
+        <DiscoveryState
           actionLabel="다시 시도"
           alert
           onAction={refetch}
           title="이 태그의 관련 프로필을 확인할 수 없어요"
         />
-      </>
+      </>,
+      !active,
     );
   }
   return (
@@ -260,6 +291,7 @@ function TagQuery({
       active={active}
       hashtag={data.node.relatedProfiles}
       renderControls={renderControls}
+      renderFrame={renderFrame}
     />
   );
 }
@@ -268,10 +300,12 @@ function RelatedProfiles({
   active,
   hashtag,
   renderControls,
+  renderFrame,
 }: {
   active: boolean;
   hashtag: FirstProfileTagDiscoveryList_hashtag$key;
   renderControls: (disabled: boolean) => ReactNode;
+  renderFrame: RenderFrame;
 }) {
   const pagination = usePaginationFragment<
     FirstProfileTagDiscoveryNextPageQuery,
@@ -285,6 +319,7 @@ function RelatedProfiles({
           mutationLoading={mutationLoading}
           pagination={pagination}
           renderControls={renderControls}
+          renderFrame={renderFrame}
         />
       )}
     </FollowButtonGroup>
@@ -296,6 +331,7 @@ function RelatedProfilesContent({
   mutationLoading,
   pagination,
   renderControls,
+  renderFrame,
 }: {
   active: boolean;
   mutationLoading: boolean;
@@ -306,6 +342,7 @@ function RelatedProfilesContent({
     loadNext: LoadNext;
   };
   renderControls: (disabled: boolean) => ReactNode;
+  renderFrame: RenderFrame;
 }) {
   const profiles = pagination.data.relatedProfiles.edges;
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
@@ -317,8 +354,8 @@ function RelatedProfilesContent({
     webScrollTarget: 'container',
   });
 
-  return (
-    <>
+  return renderFrame(
+    <View style={styles.content}>
       {renderControls(!active || mutationLoading || pagination.isLoadingNext)}
       <ScrollView {...nativeScrollProps} contentContainerStyle={styles.list}>
         {profiles.length ? (
@@ -342,27 +379,31 @@ function RelatedProfilesContent({
           style={styles.pagination}
         />
       </ScrollView>
-    </>
+    </View>,
+    !active || mutationLoading || pagination.isLoadingNext,
+  );
+}
+
+function DiscoveryState(props: ComponentProps<typeof StateView>) {
+  return (
+    <ScrollView style={styles.content}>
+      <StateView {...props} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', flex: 1 },
-  screen: { flex: 1, maxWidth: breakpoints.compact, width: '100%' },
-  intro: { gap: spacing.sm, padding: spacing.lg },
-  title: textStyles.uiHeadingM,
-  description: textStyles.uiCopyM,
-  content: { flex: 1, minHeight: 0 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.lg },
+  frame: { alignSelf: 'center', flex: 1, minHeight: 0 },
+  content: { flex: 1, minHeight: 0, width: '100%' },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tagSelector: { flexGrow: 0, flexShrink: 1, maxHeight: '40%' },
   tag: { maxWidth: '100%' },
   listTitle: {
     ...textStyles.uiHeadingS,
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
   hidden: { display: 'none' },
   list: { flexGrow: 1 },
   pagination: { alignItems: 'center', padding: spacing.lg },
-  actions: { borderTopWidth: 1, gap: spacing.sm, padding: spacing.lg },
 });
