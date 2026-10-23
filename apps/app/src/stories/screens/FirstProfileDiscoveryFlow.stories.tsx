@@ -1,5 +1,5 @@
 import { usePathname, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import HomeRoute from '@/app/(tabs)/(protected)/home';
 import FirstProfileDiscoveryRoute from '@/app/first-profile/discover';
@@ -10,6 +10,7 @@ import {
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { Splash } from '@/components/Splash';
 import { SessionProvider } from '@/session/SessionProvider';
 import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
@@ -56,11 +57,13 @@ function FirstProfileDiscoveryFlow() {
         followersCount: 12,
       }),
     ];
+    let created = false;
+    let selected = false;
     let target = people[0]!;
     let hashtagId = '';
-    const session = (selected: string | null) => ({
+    const session = () => ({
       data: shellQuery({
-        profiles: selected ? [owner] : [],
+        profiles: created ? [owner] : [],
         selectedProfile: selected ? owner : null,
       }),
     });
@@ -79,12 +82,16 @@ function FirstProfileDiscoveryFlow() {
       },
       mutationRequestObserver: (request: { name: string }, variables: Record<string, unknown>) => {
         if (request.name === 'FirstProfileOnboardingCreateMutation') {
+          created = true;
           owner = {
             ...owner,
             handle: String(variables.handle),
             relativeHandle: `@${variables.handle}`,
             displayName: String(variables.handle),
           };
+        }
+        if (request.name === 'FirstProfileOnboardingSelectMutation') {
+          selected = true;
         }
         if (request.name === 'FirstProfileOnboardingSaveMutation') {
           const input = variables.input as Omit<Partial<StoryProfile>, 'tags'> & {
@@ -171,10 +178,10 @@ function FirstProfileDiscoveryFlow() {
           data: { cancelProfileFollowRequest: { profileFollowRequestId: `request-${target.id}` } },
           delayMs: 500,
         }),
-        UniversalShellQuery: () => session(owner.id),
+        UniversalShellQuery: session,
         HomePageQuery: () => ({
           data: {
-            ...session(owner.id).data,
+            ...session().data,
             homeTimeline: timeline(
               ...people
                 .filter((person) => person.viewerState?.follow)
@@ -199,9 +206,11 @@ function FirstProfileDiscoveryFlow() {
       mutationRequestObserver={server.mutationRequestObserver}
       queryRequestObserver={server.queryRequestObserver}
     >
-      <SessionProvider>
-        <Walkthrough savedTags={() => server.savedTags.length} />
-      </SessionProvider>
+      <Suspense fallback={<Splash label="프로필을 불러오는 중이에요." />}>
+        <SessionProvider>
+          <Walkthrough savedTags={() => server.savedTags.length} />
+        </SessionProvider>
+      </Suspense>
     </RelayStoryProvider>
   );
 }
