@@ -74,6 +74,10 @@ export function Coachmark({
   } | null>(null);
   const [bubble, setBubble] = useState<Layout>({ height: 0, width: MAX_WIDTH });
   const [shown, setShown] = useState(false);
+  const [exitPending, setExitPending] = useState(false);
+  if (visible && !exitPending) {
+    setExitPending(true);
+  }
   const targetReady = Boolean(anchorRef.current && anchor && anchor.width > 0 && anchor.height > 0);
   const overlayMotion = useOverlayMotion(visible && targetReady);
   const modalVisible = overlayMotion.mounted && targetReady;
@@ -115,10 +119,11 @@ export function Coachmark({
   }, [anchor, bubble.height, onShown, overlayMotion.entered, shown, targetReady, visible]);
 
   useEffect(() => {
-    if (!visible && !overlayMotion.mounted) {
+    if (!visible && !overlayMotion.mounted && exitPending) {
+      setExitPending(false);
       onExited?.();
     }
-  }, [onExited, overlayMotion.mounted, visible]);
+  }, [exitPending, onExited, overlayMotion.mounted, visible]);
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {

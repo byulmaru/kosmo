@@ -26,9 +26,15 @@ const account: AccountFixture = {
 const session = { status: 'valid' as 'guest' | 'valid' };
 const commitCalls: Array<{ options: Record<string, unknown> }> = [];
 const reportCalls: unknown[] = [];
+const commitRecord = (options: Record<string, unknown>) => {
+  commitCalls.push({ options });
+};
+const reportUnexpectedError = (error: unknown) => reportCalls.push(error);
 let requestFromProvider: ((request: CoachmarkRequest) => { cancel: () => void } | null) | null =
   null;
 let renderer: ReactTestRenderer | null = null;
+let autoStartEffectRuns = 0;
+let autoStartEffectCancellations = 0;
 let CoachmarkProvider: typeof CoachmarkProviderModule.CoachmarkProvider;
 let useCoachmark: typeof CoachmarkProviderModule.useCoachmark;
 let useCoachmarkController: typeof CoachmarkControllerModule.useCoachmarkController;
@@ -42,17 +48,13 @@ mockModule('../ui/Coachmark.tsx', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useFragment: (_fragment: unknown, key: AccountFixture | null | undefined) => key ?? null,
-  useMutation: () => [
-    (options: Record<string, unknown>) => {
-      commitCalls.push({ options });
-    },
-  ],
+  useMutation: () => [commitRecord],
 });
 mockModule('@/session/SessionProvider', {
   useSession: () => session,
 });
 mockModule('@/observability/UnexpectedErrorContext', {
-  useUnexpectedErrorReporter: () => (error: unknown) => reportCalls.push(error),
+  useUnexpectedErrorReporter: () => reportUnexpectedError,
 });
 
 function createStep(description = '설명을 확인하세요.'): CoachmarkStep {
@@ -62,6 +64,8 @@ function createStep(description = '설명을 확인하세요.'): CoachmarkStep {
     title: '안내',
   };
 }
+
+const stableAutoStartSteps = [createStep()];
 
 function ProviderProbe() {
   const { request } = useCoachmark();
@@ -87,6 +91,25 @@ function ControllerProbe({ accountKey = account }: { accountKey?: AccountFixture
   });
 }
 
+function AutoStartEffectProbe() {
+  const controller = useCoachmarkController({
+    account: account as never,
+    guide: 'TIMELINE',
+    ready: true,
+    steps: stableAutoStartSteps,
+  });
+  useEffect(() => {
+    autoStartEffectRuns += 1;
+    // Later runs do not request again, so an identity regression cannot create an unbounded loop.
+    const handle = autoStartEffectRuns === 1 ? controller.requestAutoStart() : null;
+    return () => {
+      autoStartEffectCancellations += 1;
+      handle?.cancel();
+    };
+  }, [controller.requestAutoStart]);
+  return null;
+}
+
 async function renderProvider(
   children: ReactNode = createElement(ProviderProbe),
   accountId: string | null = null,
@@ -107,6 +130,8 @@ beforeEach(() => {
   session.status = 'valid';
   commitCalls.length = 0;
   reportCalls.length = 0;
+  autoStartEffectRuns = 0;
+  autoStartEffectCancellations = 0;
   requestFromProvider = null;
 });
 
@@ -164,6 +189,35 @@ test('provider keeps one guide active and requires an explicit retry after a bus
   assert.ok(retried);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '다른 안내');
   await act(async () => retried?.cancel());
+});
+
+test('a request can be cancelled before its state commit without cancelling its replacement', async () => {
+  await renderProvider();
+
+  let first: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  let replacement: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    first =
+      requestFromProvider?.({
+        guide: 'TIMELINE',
+        mode: 'manual',
+        ready: true,
+        steps: [createStep('첫 안내')],
+      }) ?? null;
+    first?.cancel();
+    replacement =
+      requestFromProvider?.({
+        guide: 'SEARCH',
+        mode: 'manual',
+        ready: true,
+        steps: [createStep('대체 안내')],
+      }) ?? null;
+  });
+
+  assert.ok(replacement);
+  await act(async () => first?.cancel());
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '대체 안내');
+  await act(async () => replacement?.cancel());
 });
 
 test('provider keeps the presentation mounted while a visible guide exits', async () => {
@@ -227,6 +281,16 @@ test('automatic start requires a usable profile and records only after the first
   await act(async () => probe()?.requestAutoStart());
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.visible, false);
+});
+
+test('automatic start effect keeps its request callback stable while the guide opens', async () => {
+  await renderProvider(createElement(AutoStartEffectProbe));
+
+  await act(async () => renderer?.root.findByType('Coachmark' as never).props.onShown());
+  assert.equal(commitCalls.length, 1);
+  assert.equal(autoStartEffectRuns, 1);
+  assert.equal(autoStartEffectCancellations, 0);
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
 });
 
 test('manual multi-step help moves both ways and restarts from the first step', async () => {

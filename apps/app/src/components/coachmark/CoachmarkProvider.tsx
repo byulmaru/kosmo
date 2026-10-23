@@ -37,8 +37,13 @@ type AccountKey = string | null;
 type CoachmarkState = Readonly<{
   active: ActiveCoachmark | null;
   accountKey: AccountKey;
-  transientSeen: ReadonlySet<string>;
 }>;
+
+type AccountGeneration = {
+  accountKey: AccountKey;
+  token: number | null;
+  transientSeen: Set<string>;
+};
 
 const CoachmarkContext = createContext<CoachmarkContextValue | null>(null);
 let nextCoachmarkToken = 0;
@@ -46,7 +51,6 @@ let nextCoachmarkToken = 0;
 const createState = (accountKey: AccountKey): CoachmarkState => ({
   accountKey,
   active: null,
-  transientSeen: new Set(),
 });
 
 export function CoachmarkProvider({
@@ -57,16 +61,25 @@ export function CoachmarkProvider({
   children: ReactNode;
 }) {
   const accountKey = accountId ?? null;
-  const accountGenerationRef = useRef<{ accountKey: AccountKey }>({ accountKey });
-  if (accountGenerationRef.current.accountKey !== accountKey) {
-    accountGenerationRef.current = { accountKey };
-  }
-  const accountGeneration = accountGenerationRef.current;
   const [storedState, setStoredState] = useState(() => createState(accountKey));
   if (storedState.accountKey !== accountKey) {
     setStoredState(createState(accountKey));
   }
   const state = storedState.accountKey === accountKey ? storedState : createState(accountKey);
+  // Keep synchronous reservation and account isolation on the existing generation boundary.
+  const accountGenerationRef = useRef<AccountGeneration>({
+    accountKey,
+    token: null,
+    transientSeen: new Set(),
+  });
+  if (accountGenerationRef.current.accountKey !== accountKey) {
+    accountGenerationRef.current = {
+      accountKey,
+      token: null,
+      transientSeen: new Set(),
+    };
+  }
+  const accountGeneration = accountGenerationRef.current;
 
   const transientKey = (request: CoachmarkRequest) =>
     request.accountId ? `${request.accountId}:${request.guide}` : null;
@@ -74,8 +87,6 @@ export function CoachmarkProvider({
     const key = transientKey(request);
     return request.mode !== 'automatic' || !key || !transientSeen.has(key);
   };
-  // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
-  let occupied = Boolean(state.active);
   const request = useCallback(
     (next: CoachmarkRequest) => {
       if (accountGenerationRef.current !== accountGeneration) {
@@ -84,54 +95,61 @@ export function CoachmarkProvider({
       if (
         !next.ready ||
         next.steps.length === 0 ||
-        !canStart(next, state.transientSeen) ||
-        occupied
+        !canStart(next, accountGeneration.transientSeen) ||
+        accountGeneration.token !== null
       ) {
         return null;
       }
 
       const token = ++nextCoachmarkToken;
       const entry = { ...next, step: 0, token, visible: true };
-      occupied = true;
+      // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
+      accountGeneration.token = token;
       setStoredState((current) => {
-        if (current.accountKey !== accountKey || current.active) {
+        if (current.accountKey !== accountGeneration.accountKey || current.active) {
           return current;
         }
         return { ...current, active: entry };
       });
       return {
-        cancel: () =>
+        cancel: () => {
+          if (
+            accountGenerationRef.current !== accountGeneration ||
+            accountGeneration.token !== token
+          ) {
+            return;
+          }
+          accountGeneration.token = null;
           setStoredState((current) => {
-            if (current.accountKey !== accountKey || current.active?.token !== token) {
+            if (
+              current.accountKey !== accountGeneration.accountKey ||
+              current.active?.token !== token
+            ) {
               return current;
             }
             return { ...current, active: null };
-          }),
+          });
+        },
       };
     },
-    [accountGeneration, accountKey, state.active, state.transientSeen],
+    [accountGeneration],
   );
 
   const markShown = useCallback(
     (active: ActiveCoachmark) => {
+      if (accountGenerationRef.current !== accountGeneration) {
+        return;
+      }
       const key = transientKey(active);
-      if (key && state.transientSeen.has(key)) {
+      if (key && accountGeneration.transientSeen.has(key)) {
         return;
       }
       if (key) {
-        setStoredState((current) => {
-          if (current.accountKey !== accountKey) {
-            return current;
-          }
-          return {
-            ...current,
-            transientSeen: new Set(current.transientSeen).add(key),
-          };
-        });
+        accountGeneration.transientSeen.add(key);
       }
       active.onShown?.();
     },
-    [accountKey, state.transientSeen],
+    [accountGeneration],
   );
 
   const active = state.active;
@@ -142,18 +160,27 @@ export function CoachmarkProvider({
         ? { ...value, active: { ...value.active, visible: false } }
         : value,
     );
-  const release = () =>
+  const release = () => {
+    if (
+      !active ||
+      accountGenerationRef.current !== accountGeneration ||
+      accountGeneration.token !== active.token ||
+      active.visible
+    ) {
+      return;
+    }
+    accountGeneration.token = null;
     setStoredState((value) =>
-      active &&
-      value.accountKey === accountKey &&
-      value.active?.token === active.token &&
-      !value.active.visible
+      value.accountKey === accountGeneration.accountKey && value.active?.token === active.token
         ? { ...value, active: null }
         : value,
     );
+  };
   const move = (step: number) =>
     setStoredState((value) =>
-      active && value.accountKey === accountKey && value.active?.token === active.token
+      active &&
+      value.accountKey === accountGeneration.accountKey &&
+      value.active?.token === active.token
         ? { ...value, active: { ...value.active, step } }
         : value,
     );

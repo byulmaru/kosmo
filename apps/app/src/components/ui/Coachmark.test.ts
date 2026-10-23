@@ -147,3 +147,43 @@ test('delayed target starts motion only after measurement and exits after visibi
   assert.equal(exited, 1);
   await act(async () => renderer.unmount());
 });
+
+test('onExited only fires after an actual exit, including an unready target exit', async () => {
+  let exited = 0;
+  let renderer!: ReactTestRenderer;
+  const onExited = () => {
+    exited += 1;
+  };
+  const renderCoachmark = (visible: boolean, callback = onExited) =>
+    createElement(coachmarkModule.Coachmark, {
+      anchorRef,
+      description: '대상을 확인하세요.',
+      onClose: () => {},
+      onComplete: () => {},
+      onExited: callback,
+      visible,
+    });
+
+  await act(async () => {
+    renderer = create(renderCoachmark(false));
+  });
+  assert.equal(exited, 0);
+
+  await act(async () => renderer.update(renderCoachmark(false, () => (exited += 10))));
+  assert.equal(exited, 0);
+
+  await act(async () => renderer.update(renderCoachmark(true)));
+  assert.equal(renderer.root.findByType('Modal' as never).props.visible, false);
+  await act(async () => renderer.update(renderCoachmark(false)));
+  assert.equal(exited, 1);
+
+  dimensions = { height: 40, width: 120 };
+  await act(async () => renderer.update(renderCoachmark(true)));
+  assert.equal(renderer.root.findByType('Modal' as never).props.visible, true);
+  await act(async () => renderer.update(renderCoachmark(false)));
+  assert.equal(exited, 2);
+
+  await act(async () => renderer.update(renderCoachmark(false, () => (exited += 10))));
+  assert.equal(exited, 2);
+  await act(async () => renderer.unmount());
+});
