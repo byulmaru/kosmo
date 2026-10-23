@@ -10,9 +10,9 @@ import type { View as NativeView } from 'react-native';
 import type { CoachmarkController_account$key } from './CoachmarkController';
 import type { CoachmarkRequestHandle } from './CoachmarkProvider';
 
-const homeDescription = '내 글과 팔로우한 프로필의 글을 모아 봐요.';
+const homeDescription = '내가 쓴 글과 팔로우한 프로필의 글을 모아 볼 수 있어요.';
 const localDescription =
-  '아직 누구를 팔로우할지 모르겠다면 로컬을 둘러보세요. 팔로우하지 않은 사람을 포함해, 코스모 사람들이 전체 공개로 올린 글을 볼 수 있어요.';
+  '코스모 사람들이 전체 공개로 올린 글을 볼 수 있어요. 관심 가는 사람을 찾아 팔로우해 보세요.';
 
 type TimelineHelpButtonProps = Readonly<{
   controlRef?: RefObject<NativeView | null>;
@@ -125,32 +125,31 @@ function TimelineCoachmarkConnected({
       anchorRef: homeTabAnchorRef,
       description: homeDescription,
       onEnter: releaseGuideDrawer,
-      title: '내가 팔로우한 사람들의 글',
+      title: '팔로우한 사람들의 소식',
     },
     {
       anchorRef: localTabAnchorRef,
       description: localDescription,
       onEnter: releaseGuideDrawer,
-      title: '코스모 사람들의 글을 둘러보세요',
+      title: '새로운 사람들을 만나보세요',
     },
     {
       anchorRef: profileAnchorRef,
       description: hasSelectedProfile
-        ? `지금은 ‘${profileName ?? '현재 프로필'}’로 활동하고 있어요. 여기에서 다른 프로필로 바꿀 수 있어요.`
+        ? `지금은 ‘${profileName ?? '현재 프로필'}’으로 활동하고 있어요. 다른 프로필로 바꾸고 싶을 때 여기를 눌러 주세요.`
         : hasProfiles
           ? '활동할 프로필을 선택할 수 있어요.'
           : '여기에서 활동할 프로필을 만들 수 있어요.',
       onEnter: openGuideDrawer,
-      title: '지금 활동하는 프로필',
+      title: '지금 활동 중인 프로필',
     },
     ...(hasSelectedProfile
       ? [
           {
             anchorRef: composerAnchorRef!,
-            description:
-              '여기에서 새 글을 쓸 수 있어요. 공개 범위와 첨부 방법은 작성 화면에서 안내해 드릴게요.',
+            description: '떠오른 생각이나 나누고 싶은 이야기를 새 글로 남겨 보세요.',
             onEnter: releaseGuideDrawer,
-            title: '내 이야기도 남겨보세요',
+            title: '내 이야기를 들려주세요',
           },
         ]
       : []),
