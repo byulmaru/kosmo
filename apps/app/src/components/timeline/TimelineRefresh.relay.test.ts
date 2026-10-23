@@ -249,6 +249,10 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 
 function MockPostRequestListSummary() {
   if (postRequestSummaryMode === 'pending') {
@@ -399,7 +403,12 @@ function payload(
 ) {
   return {
     currentSession: { id: 'session', selectedProfile: profile },
-    me: { id: 'account', name: 'Author', profiles: [{ id: profile.id }] },
+    me: {
+      id: 'account',
+      name: 'Author',
+      profiles: [{ id: profile.id }],
+      seenCoachmarks: [],
+    },
     [field]: {
       edges: ids.map((id) => ({
         cursor: `cursor-${id}`,

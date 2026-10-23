@@ -4,7 +4,8 @@ import { Drawer } from 'react-native-drawer-layout';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { SidebarNavigation } from './SidebarNavigation';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
 
 const MOBILE_DRAWER_MAX_WIDTH_RATIO = 0.85;
@@ -15,6 +16,7 @@ type SharedProps = {
   onFeedbackOpen: () => void;
   onClose: () => void;
   onSwitcherOpenChange: (open: boolean) => void;
+  profileTriggerRef?: RefObject<NativeView | null>;
   query: SidebarNavigation_query$key;
   switcherOpen: boolean;
 };
@@ -37,6 +39,7 @@ export function WebNavigationDrawer({
   onClose,
   onHomeReselect,
   onSwitcherOpenChange,
+  profileTriggerRef,
   query,
   switcherOpen,
 }: WebProps) {
@@ -44,11 +47,12 @@ export function WebNavigationDrawer({
   const drawerSafeAreaStyle = useSafeAreaPadding();
   const theme = useTheme();
   // The drawer owns this ref so nested picker dismissal can restore trigger focus.
-  const profileTriggerRef = useRef<View>(null);
+  const internalProfileTriggerRef = useRef<View>(null);
+  const drawerProfileTriggerRef = profileTriggerRef ?? internalProfileTriggerRef;
   const handleRequestClose = () => {
     if (switcherOpen) {
       onSwitcherOpenChange(false);
-      profileTriggerRef.current?.focus();
+      drawerProfileTriggerRef.current?.focus();
       return;
     }
     onClose();
@@ -82,7 +86,7 @@ export function WebNavigationDrawer({
             onHomeReselect={onHomeReselect}
             onNavigate={onClose}
             onSwitcherOpenChange={onSwitcherOpenChange}
-            profileTriggerRef={profileTriggerRef}
+            profileTriggerRef={drawerProfileTriggerRef}
             query={query}
             surface="drawer"
             switcherOpen={switcherOpen}
@@ -106,6 +110,7 @@ export function NativeNavigationDrawer({
   onClose,
   onOpen,
   onSwitcherOpenChange,
+  profileTriggerRef,
   query,
   switcherOpen,
   swipeEnabled,
@@ -141,6 +146,7 @@ export function NativeNavigationDrawer({
             onFeedbackOpen={onFeedbackOpen}
             onNavigate={onClose}
             onSwitcherOpenChange={onSwitcherOpenChange}
+            profileTriggerRef={profileTriggerRef}
             query={query}
             surface="drawer"
             switcherOpen={switcherOpen}

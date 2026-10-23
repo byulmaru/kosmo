@@ -9,12 +9,18 @@ export type { TabReselectionDestination, TabReselectionHandler } from './tabRese
 export type HomeReselectionHandler = () => void;
 
 type ShellChromeActions = {
+  closeNavigationDrawer?: () => void;
   navigationDrawerOpen: boolean;
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
   openComposer?: () => void;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
   selectedProfile?: SettingsNavigationList_profile$key | null;
+  registerTimelineHelp?: (handler: (() => void) | null) => () => void;
+  timelineComposerRef?: RefObject<NativeView | null>;
+  timelineHelp?: () => void;
+  timelineHelpTriggerRef?: RefObject<NativeView | null>;
+  timelineProfileRef?: RefObject<NativeView | null>;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
   registerTabReselection?: (
     destination: TabReselectionDestination,
@@ -30,12 +36,18 @@ const ShellChromeContext = createContext<ShellChromeActions | null>(null);
 
 export function ShellChromeProvider({
   children,
+  closeNavigationDrawer,
   navigationDrawerOpen,
   navigationDrawerTriggerRef,
   openComposer,
   openNavigationDrawer,
   openProfileSwitcher,
   selectedProfile = null,
+  registerTimelineHelp,
+  timelineComposerRef,
+  timelineHelp,
+  timelineHelpTriggerRef,
+  timelineProfileRef,
   registerHomeReselection,
   registerTabReselection,
   reselectTab,
@@ -43,24 +55,36 @@ export function ShellChromeProvider({
 }: ShellChromeProviderProps) {
   const value = useMemo(
     () => ({
+      closeNavigationDrawer,
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
       openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
       selectedProfile,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,
       reselectHome,
     }),
     [
+      closeNavigationDrawer,
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
       openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
       selectedProfile,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,

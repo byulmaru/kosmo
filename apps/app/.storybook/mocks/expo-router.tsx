@@ -11,6 +11,10 @@ import {
 import { Platform, Text } from 'react-native';
 import type { EffectCallback, PropsWithChildren, ReactNode } from 'react';
 
+export function useFocusEffect(effect: EffectCallback) {
+  useEffect(effect, [effect]);
+}
+
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
 type RouterContextValue = {

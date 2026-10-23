@@ -1,4 +1,5 @@
 import { usePathname, useRouter, useSegments } from 'expo-router';
+import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -11,16 +12,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
+import { TimelineHelpButton } from '@/components/coachmark/TimelineCoachmark';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
-import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
+import {
+  NotificationReadAllAction,
+  NotificationReadAllProvider,
+} from '@/components/notification/NotificationReadAllContext';
 import { NotificationStreamUpdates } from '@/components/notification/NotificationStreamUpdates';
+import { PageHeader } from '@/components/PageHeader';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
+import { IconButton } from '@/components/ui/IconButton';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing } from '@/theme/tokens';
+import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -31,7 +39,15 @@ import { PublicContentInvitation } from './PublicContentInvitation';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import { RightRail, RightRailFooter } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import { getShellRoutePresentation, isNativeDrawerSwipeEnabled } from './shellLayout';
+import {
+  getShellRoutePresentation,
+  getWebMobileShellHeader,
+  isNativeDrawerSwipeEnabled,
+  isSettingsRoute,
+  isTimelineRoute,
+  isWebMobileRouteOwnedHeader,
+  webMobileShellHeaderHeight,
+} from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
 import { createTabReselectionRegistry } from './tabReselection';
@@ -80,6 +96,13 @@ const webRightRailOverflow = {
   overflowY: 'auto',
 } as unknown as ViewStyle;
 
+const webStickyHeader = {
+  minHeight: webMobileShellHeaderHeight,
+  position: 'sticky',
+  top: 0,
+  zIndex: 20,
+} as unknown as ViewStyle;
+
 const webFixedBottomBar = {
   bottom: 0,
   left: 'env(safe-area-inset-left)',
@@ -115,6 +138,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [timelineHelp, setTimelineHelp] = useState<(() => void) | null>(null);
   const [invitationDismissed, setInvitationDismissed] = useState(() => {
     try {
       return (
@@ -127,6 +151,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const [invitationHeight, setInvitationHeight] = useState(0);
   const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
+  const timelineProfileRef = useRef<NativeView>(null);
+  const timelineComposerRef = useRef<NativeView>(null);
+  const timelineHelpTriggerRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const tabReselectionRegistryRef = useRef(createTabReselectionRegistry());
@@ -138,6 +165,10 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         homeReselectionHandlerRef.current = null;
       }
     };
+  }, []);
+  const registerTimelineHelp = useCallback((handler: (() => void) | null) => {
+    setTimelineHelp(() => handler);
+    return () => setTimelineHelp((current) => (current === handler ? null : current));
   }, []);
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
@@ -203,6 +234,15 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
+  const timeline = isTimelineRoute(pathname);
+  const mobileShellHeader = getWebMobileShellHeader(
+    web,
+    width,
+    pathname,
+    routeSegments,
+    guestPublicContent,
+  );
+  const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
     ? { paddingBottom: insets.bottom, paddingTop: insets.top }
@@ -342,6 +382,33 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     setSwitcherOpen(false);
     setFeedbackOpen(true);
   };
+  const menuButton = (
+    <IconButton
+      aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
+      accessibilityLabel="메뉴 열기"
+      accessibilityState={{ expanded: drawerOpen }}
+      controlRef={menuButtonRef}
+      onPress={openNavigationDrawer}
+      style={styles.menuButton}
+      targetSize={44}
+      visualSize={44}
+    >
+      <Menu color={theme.foregroundPrimary} size={24} strokeWidth={2} />
+    </IconButton>
+  );
+  const backButton = (
+    <IconButton
+      accessibilityLabel="뒤로 가기"
+      onPress={() =>
+        isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
+      }
+      style={styles.menuButton}
+      targetSize={44}
+      visualSize={44}
+    >
+      <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
+    </IconButton>
+  );
   const shellContent = (
     <View
       ref={screenFallbackRef}
@@ -374,9 +441,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             feedbackActive={feedbackOverlayVisible}
             guestPublicContent={guestPublicContent}
             onComposeOpen={layout === 'compact' ? openComposer : undefined}
+            composeTriggerRef={timelineComposerRef}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
+            profileTriggerRef={timelineProfileRef}
             query={data}
             switcherOpen={switcherOpen}
           />
@@ -394,6 +463,50 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           { borderColor: theme.borderSubtle },
         ]}
       >
+        {mobile && web && !routeOwnsMobileHeader ? (
+          <View
+            style={[
+              styles.mobileChrome,
+              web && webStickyHeader,
+              {
+                backgroundColor: theme.backgroundCanvas,
+                paddingTop: insets.top,
+              },
+            ]}
+          >
+            {timeline ? (
+              <PageHeader
+                accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
+                leading={menuButton}
+                trailing={
+                  timelineHelp ? (
+                    <TimelineHelpButton
+                      controlRef={timelineHelpTriggerRef}
+                      onPress={timelineHelp}
+                    />
+                  ) : undefined
+                }
+                variant="brand"
+              />
+            ) : mobileShellHeader ? (
+              <PageHeader
+                leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
+                title={mobileShellHeader.title}
+                trailing={
+                  mobileShellHeader.title === '알림' ? (
+                    <RelayActorBoundary>
+                      <NotificationReadAllAction />
+                    </RelayActorBoundary>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
+                {menuButton}
+              </View>
+            )}
+          </View>
+        ) : null}
         <View
           style={[
             styles.route,
@@ -401,7 +514,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             web ? { paddingBottom: invitationReservedHeight } : null,
             mobile && web
               ? {
-                  paddingTop: insets.top,
+                  ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
                   paddingBottom:
                     invitationReservedHeight +
                     (guestMobileRoot
@@ -439,7 +552,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         </View>
         {mobile && !guestMobileRoot ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-            <BottomTabBar onComposeOpen={openComposer} profile={profile} />
+            <BottomTabBar
+              composeTriggerRef={timelineComposerRef}
+              onComposeOpen={openComposer}
+              profile={profile}
+            />
           </View>
         ) : null}
       </View>
@@ -456,6 +573,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
+              anchorRef={composerMode === 'rail' ? timelineComposerRef : undefined}
               fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
               onRequestClose={closeComposer}
               open={composerVisible}
@@ -482,6 +600,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           onClose={closeDrawer}
           onHomeReselect={queueDrawerHomeReselection}
           onSwitcherOpenChange={setSwitcherOpen}
+          profileTriggerRef={timelineProfileRef}
           query={data}
           switcherOpen={switcherOpen}
           guestPublicContent={guestPublicContent}
@@ -498,6 +617,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         onClose={closeDrawer}
         onOpen={openNavigationDrawer}
         onSwitcherOpenChange={setSwitcherOpen}
+        profileTriggerRef={timelineProfileRef}
         query={data}
         switcherOpen={switcherOpen}
         swipeEnabled={nativeDrawerSwipeEnabled}
@@ -510,12 +630,18 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
 
   return (
     <ShellChromeProvider
+      closeNavigationDrawer={closeDrawer}
       navigationDrawerOpen={drawerOpen}
       navigationDrawerTriggerRef={menuButtonRef}
       openComposer={openComposer}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       selectedProfile={profile}
+      registerTimelineHelp={registerTimelineHelp}
+      timelineComposerRef={timelineComposerRef}
+      timelineHelp={timelineHelp ?? undefined}
+      timelineHelpTriggerRef={timelineHelpTriggerRef}
+      timelineProfileRef={timelineProfileRef}
       registerHomeReselection={registerHomeReselection}
       registerTabReselection={registerTabReselection}
       reselectTab={reselectTab}
@@ -562,5 +688,20 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     position: 'absolute',
     width: 0,
+  },
+  mobileChrome: { width: '100%' },
+  mobileHeader: {
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    minHeight: 64,
+    paddingHorizontal: spacing.lg,
+  },
+  menuButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    minHeight: 44,
+    width: 44,
   },
 });
