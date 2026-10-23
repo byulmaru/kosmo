@@ -22,7 +22,7 @@ export default function FirstProfileStepRoute() {
   const current = step as FirstProfileStep | 'complete';
   const next = () =>
     router.push(
-      `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(current as FirstProfileStep) + 1] ?? 'review'}` as Href,
+      `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(current as FirstProfileStep) + 1]}` as Href,
     );
   return (
     <FirstProfileOnboardingScreen
@@ -32,25 +32,14 @@ export default function FirstProfileStepRoute() {
       created={flow.createdProfile !== null}
       draft={flow.draft}
       errors={flow.errors}
-      onBack={() =>
-        router.canGoBack()
-          ? router.back()
-          : router.replace(
-              (current === 'complete'
-                ? '/home'
-                : firstProfileSteps.indexOf(current) > 0
-                  ? `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(current) - 1]}`
-                  : '/local') as Href,
-            )
-      }
       onChange={flow.setDraft}
       onComplete={() => {
-        flow.complete(current === 'complete' ? 'review' : current, () => {
+        flow.complete(() => {
           router.push('/first-profile/complete');
         });
       }}
       onNext={() => {
-        if (current !== 'complete') {
+        if (current !== 'complete' && current !== 'review') {
           flow.next(current, next);
         }
       }}

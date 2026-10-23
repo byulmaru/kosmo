@@ -51,8 +51,8 @@ type Identity = { id: string; handle: string };
 type Result = { kind: 'idle' } | { kind: 'success' } | { kind: 'error'; message: string };
 type FlowValue = {
   busy: boolean;
-  complete: (step: FirstProfileStep, onComplete: () => void) => void;
-  next: (step: FirstProfileStep, onSaved: () => void) => void;
+  complete: (onComplete: () => void) => void;
+  next: (step: Exclude<FirstProfileStep, 'review'>, onSaved: () => void) => void;
   skip: (onSkipped: () => void) => void;
   summary?: FirstProfileOnboardingScreenProps['summary'];
   createdProfile: Identity | null;
@@ -500,7 +500,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     <FlowContext.Provider
       value={{
         busy,
-        complete: (step, onComplete) => {
+        complete: (onComplete) => {
           if (busy) {
             return;
           }
@@ -510,10 +510,10 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
             setResult({ kind: 'success' });
             onComplete();
           };
-          if (step === 'handle') {
-            createAndSelect(finish);
-          } else if (createdProfile && selectedProfileId === createdProfile.id) {
+          if (createdProfile && selectedProfileId === createdProfile.id) {
             finish();
+          } else {
+            createAndSelect(finish);
           }
         },
         next: (step, onSaved) => {
@@ -524,7 +524,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
           setResult({ kind: 'idle' });
           if (step === 'handle') {
             createAndSelect(onSaved);
-          } else if (step !== 'review') {
+          } else {
             saveStep(step, onSaved);
           }
         },

@@ -99,24 +99,9 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
     1,
   );
 
-  await page.getByRole('button', { name: '이전 화면' }).click();
-  await expect(page).toHaveURL(/\/first-profile\/review$/);
-  for (const step of ['posting', 'tags', 'details']) {
-    await page.getByRole('button', { name: '이전 화면' }).click();
-    await expect(page).toHaveURL(new RegExp(`/first-profile/${step}$`));
-  }
-  await page.getByRole('textbox', { name: '표시 이름' }).fill('수정한 이름');
-  await page.getByRole('button', { name: '다음', exact: true }).click();
-  await expect(page).toHaveURL(/\/first-profile\/tags$/);
-  await expect(page.getByText('#책', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '바로 시작' }).click();
-  await expectCompleted(page);
-  const edited = await ownedProfiles(session.account.id);
-  expect(edited).toHaveLength(1);
-  expect(edited[0]).toMatchObject({ id: created[0]!.id, displayName: '수정한 이름' });
-  expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
-    1,
-  );
+  const completed = await ownedProfiles(session.account.id);
+  expect(completed).toHaveLength(1);
+  expect(completed[0]).toMatchObject({ id: created[0]!.id, displayName: '저장한 이름' });
 });
 
 test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
@@ -143,13 +128,6 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
     'FirstProfileOnboardingCreateMutation',
     'FirstProfileOnboardingSelectMutation',
   ]);
-  await page.getByRole('button', { name: '이전 화면' }).click();
-  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toHaveAttribute(
-    'readonly',
-  );
-  await page.getByRole('button', { name: '다음', exact: true }).click();
-  await expect(page).toHaveURL(/\/first-profile\/details$/);
-  expect(mutations).toHaveLength(2);
 });
 
 test('선택 단계의 저장 실패 후에도 같은 Profile로 건너뛰고 완료할 수 있다', async ({

@@ -190,8 +190,8 @@ async function next(step: Exclude<FirstProfileStep, 'review'> = 'handle') {
   } as const;
   await act(async () => flow.next(step, () => navigate(destination[step])));
 }
-async function finish(step: FirstProfileStep = 'handle') {
-  await act(async () => flow.complete(step, () => navigate('complete')));
+async function finish() {
+  await act(async () => flow.complete(() => navigate('complete')));
 }
 async function skip(step: 'details' | 'tags' | 'posting') {
   const destination = { details: 'tags', tags: 'posting', posting: 'review' } as const;
@@ -365,7 +365,7 @@ describe('first profile step mutations', () => {
     });
     assert.equal(displayedStep(), 'review');
     assert.equal(flow.createdProfile?.id, 'profile-1');
-    await finish('review');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(requests.length, 0);
   });
@@ -385,7 +385,7 @@ describe('first profile step mutations', () => {
     assert.equal(displayedStep(), 'tags');
     assert.equal(flow.draft.displayName, '저장되지 않은 이름');
     assert.equal(flow.summary?.draft.displayName, 'spring');
-    await finish('tags');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(flow.result.kind, 'success');
     assert.equal(requests.length, 0);
@@ -412,7 +412,7 @@ describe('first profile step mutations', () => {
     assert.equal(flow.summary, null);
     await skip('tags');
     assert.equal(displayedStep(), 'posting');
-    await finish('posting');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(flow.result.kind, 'success');
     assert.equal(flow.summary, null);
@@ -425,7 +425,7 @@ describe('first profile step mutations', () => {
     await change({ displayName: '저장되지 않은 이름' });
     await next('details');
     await resolve('FirstProfileOnboardingSaveMutation', null, [{ message: 'save unavailable' }]);
-    await finish('details');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(flow.summary?.draft.displayName, 'spring');
@@ -442,7 +442,7 @@ describe('first profile step mutations', () => {
     assert.ok(flow.errors.displayName);
     await skip('details');
     await skip('tags');
-    await finish('posting');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(requests.length, 0);
   });
@@ -512,7 +512,7 @@ describe('first profile step mutations', () => {
     assert.equal(displayedStep(), 'details');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(flow.draft.handle, 'spring');
-    await finish('details');
+    await finish();
     assert.equal(displayedStep(), 'complete');
     assert.equal(requests.length, 0);
   });

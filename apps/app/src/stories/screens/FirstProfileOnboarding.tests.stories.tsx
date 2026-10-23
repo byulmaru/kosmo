@@ -1,7 +1,7 @@
 import meta, {
-  DraftSurvivesStepsAndSkip as DraftSurvivesStepsAndSkipStory,
-  HandleOnlyCompletionAndReturn as HandleOnlyCompletionAndReturnStory,
+  HandleOnlyCompletion as HandleOnlyCompletionStory,
   OptionalFailureCanSkip as OptionalFailureCanSkipStory,
+  OptionalStepsAndSkip as OptionalStepsAndSkipStory,
   UnavailableSummaryCanComplete as UnavailableSummaryCanCompleteStory,
 } from './FirstProfileOnboarding.stories';
 
@@ -12,8 +12,8 @@ export default {
   title: 'KOSMO/Screens/First Profile Onboarding/Tests',
 };
 
-export const DraftSurvivesStepsAndSkip = DraftSurvivesStepsAndSkipStory;
-export const HandleOnlyCompletionAndReturn = HandleOnlyCompletionAndReturnStory;
+export const OptionalStepsAndSkip = OptionalStepsAndSkipStory;
+export const HandleOnlyCompletion = HandleOnlyCompletionStory;
 export const OptionalFailureCanSkip = OptionalFailureCanSkipStory;
 
 export const UnavailableSummaryCanComplete = UnavailableSummaryCanCompleteStory;

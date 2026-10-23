@@ -30,7 +30,6 @@ function OnboardingStory({
   const [draft, setDraft] = useState(initialDraft);
   const [result, setResult] = useState(initialResult);
   const [created, setCreated] = useState(initialStep !== 'handle');
-  const [completedFrom, setCompletedFrom] = useState<FirstProfileStep>('handle');
   const next = () => {
     setResult({ kind: 'idle' });
     if (step === 'handle') {
@@ -46,18 +45,8 @@ function OnboardingStory({
       created={created}
       draft={draft}
       errors={{}}
-      onBack={() => {
-        setStep(
-          step === 'complete'
-            ? completedFrom
-            : firstProfileSteps[Math.max(0, firstProfileSteps.indexOf(step) - 1)]!,
-        );
-      }}
       onChange={setDraft}
       onComplete={() => {
-        if (step !== 'complete') {
-          setCompletedFrom(step);
-        }
         setCreated(true);
         setResult({ kind: 'success' });
         setStep('complete');
@@ -88,8 +77,8 @@ const populated: FirstProfileDraft = {
 const meta = {
   component: OnboardingStory,
   excludeStories: [
-    'HandleOnlyCompletionAndReturn',
-    'DraftSurvivesStepsAndSkip',
+    'HandleOnlyCompletion',
+    'OptionalStepsAndSkip',
     'OptionalFailureCanSkip',
     'UnavailableSummaryCanComplete',
   ],
@@ -129,19 +118,16 @@ export const LongDark: Story = {
   },
   globals: { theme: 'dark' },
 };
-export const HandleOnlyCompletionAndReturn: Story = {
+export const HandleOnlyCompletion: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: '바로 시작' })).toBeDisabled();
     await userEvent.type(canvas.getByRole('textbox', { name: '핸들' }), 'spring');
     await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
     await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '이전 화면' }));
-    await expect(canvas.getByRole('textbox', { name: '핸들' })).toHaveValue('spring');
-    await expect(canvas.getByRole('textbox', { name: '핸들' })).toHaveProperty('readOnly', true);
   },
 };
-export const DraftSurvivesStepsAndSkip: Story = {
+export const OptionalStepsAndSkip: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByRole('textbox', { name: '핸들' }), 'spring');
@@ -155,15 +141,10 @@ export const DraftSurvivesStepsAndSkip: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '지금은 건너뛰기' }));
     await userEvent.click(canvas.getByRole('radio', { name: /팔로워만:/ }));
     await userEvent.click(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' }));
-    await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
-    await userEvent.click(canvas.getByRole('button', { name: '이전 화면' }));
     await expect(canvas.getByRole('radio', { name: /팔로워만:/ })).toBeChecked();
     await expect(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' })).not.toBeChecked();
-    await userEvent.click(canvas.getByRole('button', { name: '이전 화면' }));
-    await expect(canvas.getByText('#책', { exact: true })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '이전 화면' }));
-    await expect(canvas.getByRole('textbox', { name: '표시 이름' })).toHaveValue('봄');
-    await expect(canvas.getByRole('textbox', { name: '소개' })).toHaveValue('보존할 소개');
+    await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
+    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
   },
 };
 

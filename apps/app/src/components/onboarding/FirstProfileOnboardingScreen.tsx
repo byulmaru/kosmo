@@ -1,5 +1,4 @@
 import { localProfileHandleSchema } from '@kosmo/core/validation';
-import { ArrowLeft } from 'lucide-react-native';
 import {
   Image,
   KeyboardAvoidingView,
@@ -16,12 +15,11 @@ import { ProfileTagChip } from '@/components/profile/ProfileTagChip';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 import { firstProfileSteps } from './firstProfileOnboardingState';
 import type { ReactNode } from 'react';
 import type { ProfileEditImageDraft } from '@/components/profile/profileEditState';
@@ -63,7 +61,6 @@ export type FirstProfileOnboardingScreenProps = {
   created: boolean;
   draft: FirstProfileDraft;
   errors: FirstProfileErrors;
-  onBack: () => void;
   onChange: (value: FirstProfileDraft) => void;
   onComplete: () => void;
   onNext: () => void;
@@ -93,7 +90,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
     created,
     draft,
     errors,
-    onBack,
     onChange,
     onComplete,
     onNext,
@@ -178,15 +174,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <View style={styles.header}>
-            <IconButton
-              accessibilityLabel="이전 화면"
-              disabled={busy}
-              onPress={onBack}
-              style={styles.back}
-              targetSize={48}
-            >
-              <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} />
-            </IconButton>
             <BrandLogo width={38} />
             <View style={styles.spacer} />
             {inputStep && step !== 'review' ? (
@@ -437,7 +424,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   header: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
-  back: { alignItems: 'center', justifyContent: 'center', height: 48, width: 48 },
   spacer: { flex: 1, minWidth: 0 },
   progress: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   progressPart: { borderRadius: radius.full, flex: 1, height: space[4] },
