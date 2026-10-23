@@ -69,11 +69,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
       <View style={styles.content}>
         <View style={styles.header}>
           <Text
-            style={[
-              mobile ? textStyles.uiCopyS : textStyles.uiCopyL,
-              styles.invitationText,
-              { color: theme.foregroundPrimary },
-            ]}
+            style={[textStyles.uiCopyL, styles.invitationText, { color: theme.foregroundPrimary }]}
           >
             {mobile ? null : '지금 가입하고 '}
             <Text style={styles.emphasis}>취향이 통하는 사람들</Text>
@@ -110,7 +106,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
             </Link>
             <NavigationLink href="/privacy">
               <Pressable accessibilityRole="link" style={styles.textLink}>
-                <Text style={[textStyles.uiCopyS, { color: theme.textSecondary }]}>
+                <Text style={[textStyles.uiCopyS, styles.emphasis, { color: theme.textSecondary }]}>
                   개인정보처리방침
                 </Text>
               </Pressable>

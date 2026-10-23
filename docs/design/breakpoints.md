@@ -60,7 +60,7 @@ landing은 기존 개인정보 처리방침 링크만 제공하며, 인증 후 �
 `/settings/info`에 둔다. 기존 full Web 우측 레일의 개인정보 처리방침 footer도 유지하고, Sidebar·mobile
 drawer에는 정책 링크를 추가하지 않는다.
 
-- `≥ full`: 우측 레일 최하단에 `textSecondary` 색의 개인정보 처리방침 footer를 둔다. Production branch
+- `≥ full`: 우측 레일 최하단에 `textSecondary` 색과 bold 글씨의 개인정보 처리방침 footer를 둔다. Production branch
   전환 중에는 표시 tag 공급 방식이 정해지지 않았으므로 기존 `· 버전: <Git tag>` 정적 텍스트를 렌더링하지
   않는다. 선택한 Profile이 없어 컴포저가 표시되지 않아도 개인정보 처리방침 링크는 유지하며, 기존 위치보다
   viewport 하단에 가깝게 배치한다. 표시 tag 공급과 version label 재활성화는 후속 변경에서 결정한다.
@@ -70,7 +70,7 @@ drawer에는 정책 링크를 추가하지 않는다.
   one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다. Native channel
   row/selector는 [settings.md](./settings.md)의 Native channel 계약을 따른다.
   Web `정보` detail은 세 policy link만 유지한다.
-- PROD-836의 비로그인 공개 Profile·Post에서는 모든 Web 폭에서 닫을 수 있는 하단 가입 안내를 표시하고 full 우측 레일의 중복 가입하기·로그인 버튼과 별도의 가입·소개 안내 카드는 표시하지 않는다. 하단 가입 안내의 `KOSMO에서 계속하기` 버튼 아래에 `팀 별마루 소개`와 `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다. 팀 소개는 `https://byulmaru.co/about-us`, 개인정보처리방침은 기존 `/privacy`로 연결하며, sidebar·mobile drawer에는 정책 링크를 추가하지 않는다.
+- PROD-836의 비로그인 공개 Profile·Post에서는 모든 Web 폭에서 닫을 수 있는 하단 가입 안내를 표시하고 full 우측 레일의 중복 가입하기·로그인 버튼과 별도의 가입·소개 안내 카드는 표시하지 않는다. 하단 가입 안내의 `KOSMO에서 계속하기` 버튼 아래에 `팀 별마루 소개`와 bold `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다. 팀 소개는 `https://byulmaru.co/about-us`, 개인정보처리방침은 기존 `/privacy`로 연결하며, sidebar·mobile drawer에는 정책 링크를 추가하지 않는다.
 - 그 밖의 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지하며 Native channel selector나 복구 진입점은
   추가하지 않는다. 준비되지 않은 Account form,
   자동 삭제, 공통 신고 navigation은 추가하지 않는다.
