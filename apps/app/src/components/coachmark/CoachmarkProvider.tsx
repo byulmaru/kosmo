@@ -7,6 +7,7 @@ import type { View as NativeView } from 'react-native';
 export type CoachmarkStep = Readonly<{
   anchorRef: RefObject<NativeView | null>;
   description: string;
+  onEnter?: () => void;
   title?: string;
 }>;
 
@@ -14,6 +15,7 @@ export type CoachmarkRequest = Readonly<{
   accountId?: string;
   guide: CoachmarkGuide;
   mode: 'automatic' | 'manual';
+  onExit?: () => void;
   onShown?: () => void;
   preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
   ready: boolean;
@@ -102,17 +104,33 @@ export function CoachmarkProvider({
       }
 
       const token = ++nextCoachmarkToken;
-      const entry = { ...next, step: 0, token, visible: true };
+      let exited = false;
+      const exit = () => {
+        if (exited) {
+          return;
+        }
+        exited = true;
+        next.onExit?.();
+      };
+      const entry = { ...next, onExit: exit, step: 0, token, visible: true };
       // Keep same-render requests synchronous so a batch cannot reserve a later presentation.
       accountGeneration.token = token;
+      next.steps[0]?.onEnter?.();
       setStoredState((current) => {
         if (current.accountKey !== accountGeneration.accountKey || current.active) {
           return current;
         }
         return { ...current, active: entry };
       });
+      let cancelled = false;
       return {
         cancel: () => {
+          if (cancelled) {
+            return;
+          }
+          cancelled = true;
+          // Route-owned cleanup still runs when this request belongs to a stale account.
+          exit();
           if (
             accountGenerationRef.current !== accountGeneration ||
             accountGeneration.token !== token
@@ -154,12 +172,45 @@ export function CoachmarkProvider({
 
   const active = state.active;
   const current = active?.steps[active.step];
-  const finish = () =>
+  const finish = () => {
+    if (
+      !active?.visible ||
+      state.accountKey !== accountKey ||
+      state.active?.token !== active.token
+    ) {
+      return;
+    }
+    active.onExit?.();
+    setStoredState((value) => {
+      if (
+        !active ||
+        value.accountKey !== accountKey ||
+        value.active?.token !== active.token ||
+        !value.active.visible
+      ) {
+        return value;
+      }
+      return { ...value, active: { ...value.active, visible: false } };
+    });
+  };
+  const move = (step: number) => {
+    if (
+      !active?.visible ||
+      state.accountKey !== accountKey ||
+      state.active?.token !== active.token
+    ) {
+      return;
+    }
+    active.steps[step]?.onEnter?.();
     setStoredState((value) =>
-      active && value.accountKey === accountKey && value.active?.token === active.token
-        ? { ...value, active: { ...value.active, visible: false } }
+      active &&
+      value.accountKey === accountGeneration.accountKey &&
+      value.active?.token === active.token &&
+      value.active.visible
+        ? { ...value, active: { ...value.active, step } }
         : value,
     );
+  };
   const release = () => {
     if (
       !active ||
@@ -176,18 +227,10 @@ export function CoachmarkProvider({
         : value,
     );
   };
-  const move = (step: number) =>
-    setStoredState((value) =>
-      active &&
-      value.accountKey === accountGeneration.accountKey &&
-      value.active?.token === active.token
-        ? { ...value, active: { ...value.active, step } }
-        : value,
-    );
   const presentation =
     active && current ? (
       <Coachmark
-        key={active.token}
+        key={`${active.token}:${active.step}`}
         anchorRef={current.anchorRef}
         description={current.description}
         onClose={finish}

@@ -113,6 +113,10 @@ mockModule('relay-runtime', {
   }),
   getRequest: () => ({}),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/observability/UnexpectedErrorContext', {
@@ -130,6 +134,7 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
+  getTimelineGuideViewportWidth: (_web: boolean, width: number) => width,
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sessionName } from '@kosmo/core';
 import {
+  AccountCoachmarks,
   AccountProfiles,
   Accounts,
   ActivityPubActors,
@@ -24,6 +25,7 @@ import {
   AccountProfileRole,
   AccountState,
   ActivityPubActorType,
+  CoachmarkGuide,
   InstanceKind,
   InstanceState,
   MediaSource,
@@ -66,6 +68,7 @@ type CreateE2ESessionOptions = {
   handle?: string;
   oidcSubject?: string;
   profile?: boolean;
+  seenCoachmarks?: readonly CoachmarkGuide[];
   sessionState?: SessionState;
   token?: string;
 };
@@ -255,6 +258,14 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
     })
     .returning()
     .then(firstOrThrow);
+
+  // General feature tests use a returning account; onboarding tests explicitly start unseen.
+  const seenCoachmarks = options.seenCoachmarks ?? [CoachmarkGuide.TIMELINE];
+  if (seenCoachmarks.length > 0) {
+    await db
+      .insert(AccountCoachmarks)
+      .values(seenCoachmarks.map((guide) => ({ accountId: account.id, guide })));
+  }
 
   let profile: typeof Profiles.$inferSelect | null = null;
 

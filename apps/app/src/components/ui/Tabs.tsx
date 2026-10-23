@@ -43,6 +43,7 @@ export type TabListProps<Value extends string> = {
 };
 
 export type TabProps<Value extends string> = {
+  anchorRef?: RefObject<View | null>;
   option: TabOption<Value>;
 };
 
@@ -246,7 +247,7 @@ export function TabList<Value extends string>({
   return <TabContext.Provider value={contextValue}>{content}</TabContext.Provider>;
 }
 
-export function Tab<Value extends string>({ option }: TabProps<Value>) {
+export function Tab<Value extends string>({ anchorRef, option }: TabProps<Value>) {
   const context = useContext(TabContext);
   if (!context) {
     throw new Error('Tab은 TabList 안에서 사용해야 합니다.');
@@ -257,6 +258,17 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
   const optionRef = useRef<View>(null);
   const [focusVisible, setFocusVisible] = useState(false);
   context.optionRefs.set(option.value, optionRef);
+
+  useLayoutEffect(() => {
+    if (anchorRef) {
+      anchorRef.current = optionRef.current;
+    }
+    return () => {
+      if (anchorRef) {
+        anchorRef.current = null;
+      }
+    };
+  }, [anchorRef]);
 
   const disabled = Boolean(option.disabled);
   const selected = context.value === option.value;

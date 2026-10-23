@@ -42,6 +42,7 @@ const SidebarNavigationFragment = graphql`
 
 type Props = {
   compact?: boolean;
+  composeTriggerRef?: RefObject<View | null>;
   guestPublicContent?: boolean;
   onComposeOpen?: () => void;
   feedbackActive?: boolean;
@@ -67,6 +68,7 @@ const hrefs: Partial<Record<NavigationDestination, Href>> = {
 
 export function SidebarNavigation({
   compact = false,
+  composeTriggerRef,
   guestPublicContent = false,
   onComposeOpen,
   feedbackActive = false,
@@ -213,6 +215,7 @@ export function SidebarNavigation({
       >
         <SidebarNavigationPresentation
           currentDestination={currentDestination}
+          composeControlRef={composeTriggerRef}
           guestPublicContent={guestPublicContent}
           logoutError={logoutError}
           logoutPending={logoutPending}

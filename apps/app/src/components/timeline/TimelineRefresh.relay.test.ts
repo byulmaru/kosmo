@@ -72,6 +72,10 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -87,6 +91,7 @@ mockModule('@/components/RouteBoundary', {
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
+  getTimelineGuideViewportWidth: (_web: boolean, width: number) => width,
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
@@ -148,7 +153,12 @@ const profile = {
 function payload(field: string, ids: string[], hasNextPage = true) {
   return {
     currentSession: { id: 'session', selectedProfile: profile },
-    me: { id: 'account', name: 'Author', profiles: [{ id: profile.id }] },
+    me: {
+      id: 'account',
+      name: 'Author',
+      profiles: [{ id: profile.id }],
+      seenCoachmarks: [],
+    },
     [field]: {
       edges: ids.map((id) => ({
         cursor: `cursor-${id}`,

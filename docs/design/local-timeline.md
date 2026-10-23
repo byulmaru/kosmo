@@ -36,6 +36,12 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - 선택된 Profile이 바뀌면 Local 목록은 이전 Relay actor/store의 connection data, edge와 cursor를 재사용하지
   않는다.
 
+## 타임라인 안내
+
+Home과 Local은 공용 `TIMELINE` coachmark를 사용한다. 자동 안내와 수동 도움말의 단계 문구, 실제 shell anchor,
+모바일 drawer 소유권은 [Coachmark 설계](./coachmark.md)의 `홈·로컬 타임라인 안내`를 따른다. 게시글 목록은
+안내 anchor가 아니며, 로딩·빈 목록·오류에서도 실제 탭과 shell control이 준비된 경우에만 안내를 표시한다.
+
 ## 상태
 
 | 상태                    | 표시                                                                                                                                                                                                         |

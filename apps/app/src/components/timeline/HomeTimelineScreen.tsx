@@ -4,12 +4,14 @@ import { startTransition, useCallback, useEffect, useRef, useState } from 'react
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
+import { TimelineCoachmark, TimelineHelpButton } from '@/components/coachmark/TimelineCoachmark';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
+  getTimelineGuideViewportWidth,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
@@ -18,7 +20,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
@@ -29,6 +31,7 @@ const HomeQuery = graphql`
       id
       selectedProfile {
         id
+        displayName
         ...ReplyComposerSurface_profile
       }
     }
@@ -38,6 +41,7 @@ const HomeQuery = graphql`
       profiles {
         id
       }
+      ...CoachmarkController_account
     }
     ...PostList_home @arguments(count: 20)
   }
@@ -48,6 +52,8 @@ export default function HomeScreen() {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
+  const homeTabAnchorRef = useRef<View>(null);
+  const localTabAnchorRef = useRef<View>(null);
   const [revalidateCachedHome] = useState(
     () =>
       environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
@@ -84,7 +90,11 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome}>
+    <HomeFrame
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      onBrandCurrentNavigate={shellChrome?.reselectHome}
+    >
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -94,6 +104,8 @@ export default function HomeScreen() {
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
           revalidateCachedHome={revalidateCachedHome}
+          homeTabAnchorRef={homeTabAnchorRef}
+          localTabAnchorRef={localTabAnchorRef}
         />
       </RouteBoundary>
     </HomeFrame>
@@ -102,8 +114,14 @@ export default function HomeScreen() {
 
 function HomeFrame({
   children,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onBrandCurrentNavigate,
-}: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
+}: PropsWithChildren<{
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+  onBrandCurrentNavigate?: () => void;
+}>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
@@ -115,6 +133,7 @@ function HomeFrame({
           accessibilityLabel="홈"
           brandHref={Platform.OS === 'web' ? '/home' : undefined}
           onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          trailing={<TimelineHelpButton />}
           variant="brand"
         />
       ) : null}
@@ -125,7 +144,11 @@ function HomeFrame({
             : undefined
         }
       >
-        <TimelineTabs value="home" />
+        <TimelineTabs
+          homeAnchorRef={homeTabAnchorRef}
+          localAnchorRef={localTabAnchorRef}
+          value="home"
+        />
       </View>
       <View style={styles.body}>{children}</View>
     </View>
@@ -133,10 +156,14 @@ function HomeFrame({
 }
 
 function HomeRouteContent({
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   registerHomeRefresh,
   revalidateCachedHome,
 }: {
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
   revalidateCachedHome: boolean;
@@ -149,17 +176,23 @@ function HomeRouteContent({
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
       revalidateCachedHome={revalidateCachedHome}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
     />
   );
 }
 
 function HomeContent({
   fetchKey,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   registerHomeRefresh,
   revalidateCachedHome,
 }: {
   fetchKey: string;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
   revalidateCachedHome: boolean;
@@ -219,22 +252,52 @@ function HomeContent({
     };
   }, [environment, registerHomeRefresh, revalidateCachedHome, showToast]);
 
-  return <HomeContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />;
+  return (
+    <HomeContentView
+      data={data}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+    />
+  );
 }
 
 function HomeContentView({
   data,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   refreshing,
 }: {
   data: HomePageQuery$data;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+  const shellLayout = getShellLayout(Platform.OS === 'web', width);
+  const timelineLayout = getShellLayout(
+    Platform.OS === 'web',
+    getTimelineGuideViewportWidth(Platform.OS === 'web', width),
+  );
+  const coachmark = (
+    <TimelineCoachmark
+      account={data.me}
+      hasProfiles={hasProfiles}
+      hasSelectedProfile={Boolean(selectedProfile)}
+      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${timelineLayout}`}
+      mobile={Platform.OS !== 'web' || shellLayout === 'mobile'}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      profileName={selectedProfile?.displayName}
+    />
+  );
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {
     return <Redirect href="/first-profile/handle" />;
@@ -242,35 +305,44 @@ function HomeContentView({
 
   if (!selectedProfile) {
     return (
-      <View style={styles.onboardingRoot}>
-        <View style={styles.onboarding}>
-          <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
-          <Text accessibilityRole="header" style={[styles.onboardingTitle, { color: theme.text }]}>
-            {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
-          </Text>
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
-            {hasProfiles
-              ? '홈을 보려면 사용할 프로필을 먼저 선택해야 해요.'
-              : '프로필을 만들면 글을 쓰고 피드를 볼 수 있어요.'}
-          </Text>
-          <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
-            {hasProfiles ? '프로필 선택' : '프로필 만들기'}
-          </Button>
+      <>
+        {coachmark}
+        <View style={styles.onboardingRoot}>
+          <View style={styles.onboarding}>
+            <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
+            <Text
+              accessibilityRole="header"
+              style={[styles.onboardingTitle, { color: theme.text }]}
+            >
+              {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
+            </Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              {hasProfiles
+                ? '홈을 보려면 사용할 프로필을 먼저 선택해야 해요.'
+                : '프로필을 만들면 글을 쓰고 피드를 볼 수 있어요.'}
+            </Text>
+            <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
+              {hasProfiles ? '프로필 선택' : '프로필 만들기'}
+            </Button>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.timeline}>
-      <PostList
-        home={data}
-        identityKey={`home:${selectedProfile.id}`}
-        onRefresh={onRefresh}
-        replyProfile={selectedProfile}
-        refreshing={refreshing}
-      />
-    </View>
+    <>
+      {coachmark}
+      <View style={styles.timeline}>
+        <PostList
+          home={data}
+          identityKey={`home:${selectedProfile.id}`}
+          onRefresh={onRefresh}
+          replyProfile={selectedProfile}
+          refreshing={refreshing}
+        />
+      </View>
+    </>
   );
 }
 
