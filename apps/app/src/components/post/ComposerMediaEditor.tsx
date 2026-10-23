@@ -654,6 +654,9 @@ function NightshadeToolContent({
           <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
             Nightshade 적용
           </Text>
+          <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
+            실험적인 기능입니다.
+          </Text>
         </View>
         <Switch
           accessibilityLabel={`첨부 이미지 ${itemNumber} Nightshade 적용`}
