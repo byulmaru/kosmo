@@ -4,6 +4,7 @@ import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
+import type { NotificationKind } from '@kosmo/core/enums';
 
 builder.mutationField('markNotificationRead', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
@@ -17,12 +18,17 @@ builder.mutationField('markNotificationRead', (t) =>
       ids: t.input.globalIDList(),
     },
     resolve: async (_, { input }, ctx) => {
-      const candidates = input.ids.flatMap((id) => {
+      const candidatesByKind = new Map<NotificationKind, string[]>();
+      for (const id of input.ids) {
         const kind = notificationKindForNodeType(id.typename);
-        return kind ? [{ id: id.id, kind }] : [];
-      });
+        if (kind) {
+          const ids = candidatesByKind.get(kind) ?? [];
+          ids.push(id.id);
+          candidatesByKind.set(kind, ids);
+        }
+      }
 
-      if (candidates.length === 0) {
+      if (candidatesByKind.size === 0) {
         return {
           notifications: [],
           recipientProfiles: [],
@@ -35,8 +41,11 @@ builder.mutationField('markNotificationRead', (t) =>
         .where(
           and(
             or(
-              ...candidates.map(({ id, kind }) =>
-                and(eq(Notifications.id, id), eq(Notifications.kind, kind)),
+              ...[...candidatesByKind].map(([kind, ids]) =>
+                and(
+                  eq(Notifications.kind, kind),
+                  sql`${Notifications.id} = ANY(${sql.param(ids)}::uuid[])`,
+                ),
               ),
             ),
             visibleViewerNotificationWhere({ ctx }),

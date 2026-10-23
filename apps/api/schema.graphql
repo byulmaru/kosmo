@@ -406,6 +406,18 @@ type NotificationConnectionEdge {
   node: Notification!
 }
 
+type NotificationFeedConnection {
+  edges: [NotificationFeedConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NotificationFeedConnectionEdge {
+  cursor: String!
+  node: NotificationFeedItem!
+}
+
+union NotificationFeedItem = FollowNotification | FollowRequestNotification | MentionNotification | OperationalNotification | QuoteNotification | ReactionNotification | ReactionNotificationGroup | ReplyNotification | RepostNotification
+
 type OperationalNotification implements Node & Notification {
   body: String
   createdAt: DateTime!
@@ -506,6 +518,7 @@ type Profile implements Node {
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
   instance: ProfileInstance!
   migrationSource: Profile
+  notificationFeed(after: String, before: String, first: Int, last: Int): NotificationFeedConnection!
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   pinnedPosts: [Post!]!
@@ -516,6 +529,7 @@ type Profile implements Node {
   relativeHandle: String!
   tags: [Hashtag!]!
   unreadNotificationCount: Int
+  unreadNotificationFeedCount: Int
   viewerState: ProfileViewerState
 }
 
@@ -699,6 +713,17 @@ type ReactionNotification implements Node & Notification {
   profile: Profile
   readAt: DateTime
   type: String
+}
+
+type ReactionNotificationGroup implements Node {
+  id: ID!
+  latestAt: DateTime!
+  notificationIds: [ID!]!
+  participantCount: Int
+  post: Post
+  reactionCounts: [ReactionCount!]
+  recentProfiles: [Profile!]!
+  unread: Boolean!
 }
 
 input RegisterProfileMigrationSourceInput {
