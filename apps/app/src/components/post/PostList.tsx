@@ -12,10 +12,12 @@ import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from './PostComposerCoordinator';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
+import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
 import type { PostList_profile_pinned$key } from './__generated__/PostList_profile_pinned.graphql';
+import type { PostListHashtagNextPageQuery } from './__generated__/PostListHashtagNextPageQuery.graphql';
 import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNextPageQuery.graphql';
 import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { PostListProfileNextPageQuery } from './__generated__/PostListProfileNextPageQuery.graphql';
@@ -157,8 +159,45 @@ const PostListLocalFragment = graphql`
   }
 `;
 
+const PostListHashtagFragment = graphql`
+  fragment PostList_hashtag on Hashtag
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
+  @refetchable(queryName: "PostListHashtagNextPageQuery") {
+    id
+    posts(first: $count, after: $cursor) @connection(key: "PostList_hashtag__posts") {
+      edges {
+        cursor
+        node {
+          id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
+          ...PostListItem_post
+        }
+      }
+    }
+  }
+`;
+
 type Props = {
   error?: boolean;
+  hashtag?: PostList_hashtag$key | null;
   home?: PostList_home$key | null;
   ignoreBlock?: boolean;
   identityKey?: string;
@@ -173,6 +212,7 @@ type Props = {
 
 export const PostList = memo(function PostList({
   error = false,
+  hashtag: hashtagKey,
   home: homeKey,
   ignoreBlock = false,
   identityKey,
@@ -204,10 +244,16 @@ export const PostList = memo(function PostList({
     PostListLocalFragment,
     localKey ?? null,
   );
+  const hashtagPagination = usePaginationFragment<
+    PostListHashtagNextPageQuery,
+    PostList_hashtag$key
+  >(PostListHashtagFragment, hashtagKey ?? null);
   const isHome = homeKey != null;
   const isLocal = localKey != null;
+  const isHashtag = hashtagKey != null;
   const home = homePagination.data;
   const local = localPagination.data;
+  const hashtag = hashtagPagination.data;
   const profile = profilePagination.data;
   const pinnedPosts = (pinnedProfile?.pinnedPosts ?? [])
     .filter((post) => post != null)
@@ -217,7 +263,13 @@ export const PostList = memo(function PostList({
         (!post.profile.viewerState?.profileBlock &&
           (post.content != null || !post.repostSource?.profile.viewerState?.profileBlock)),
     );
-  const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
+  const connection = isHome
+    ? home?.homeTimeline
+    : isLocal
+      ? local?.localTimeline
+      : isHashtag
+        ? hashtag?.posts
+        : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
   // unhandled connection edge. Treat that stale edge as empty until the next
@@ -231,22 +283,17 @@ export const PostList = memo(function PostList({
           (edge.node.content != null ||
             !edge.node.repostSource?.profile.viewerState?.profileBlock)),
     );
-  const hasData = Boolean(home || local || profile);
-  const hasNext = isHome
-    ? homePagination.hasNext
+  const hasData = Boolean(home || local || hashtag || profile);
+  const pagination = isHome
+    ? homePagination
     : isLocal
-      ? localPagination.hasNext
-      : profilePagination.hasNext;
-  const isLoadingNext = isHome
-    ? homePagination.isLoadingNext
-    : isLocal
-      ? localPagination.isLoadingNext
-      : profilePagination.isLoadingNext;
-  const loadNext = isHome
-    ? homePagination.loadNext
-    : isLocal
-      ? localPagination.loadNext
-      : profilePagination.loadNext;
+      ? localPagination
+      : isHashtag
+        ? hashtagPagination
+        : profilePagination;
+  const hasNext = pagination.hasNext;
+  const isLoadingNext = pagination.isLoadingNext;
+  const loadNext = pagination.loadNext;
   const { showToast } = useToast();
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
   const handleLoadErrorChange = useCallback(
@@ -271,7 +318,8 @@ export const PostList = memo(function PostList({
     [],
   );
 
-  const listIdentityKey = identityKey ?? (isHome ? 'home' : isLocal ? 'local' : 'profile');
+  const listIdentityKey =
+    identityKey ?? (isHome ? 'home' : isLocal ? 'local' : isHashtag ? 'hashtag' : 'profile');
   const listContainerStyle = profileKey || Platform.OS === 'web' ? styles.root : styles.flexRoot;
 
   if (loading && !hasData) {
@@ -292,8 +340,8 @@ export const PostList = memo(function PostList({
 
   const emptyState = (
     <PostListState
-      description="첫 게시글이 올라오면 여기에 표시돼요."
-      title="아직 게시글이 없어요"
+      description={isHashtag ? undefined : '첫 게시글이 올라오면 여기에 표시돼요.'}
+      title={isHashtag ? '게시글이 없어요' : '아직 게시글이 없어요'}
     />
   );
 
@@ -398,7 +446,7 @@ function PostListState({
   title,
 }: {
   alert?: boolean;
-  description: string;
+  description?: string;
   onRetry?: () => void;
   title: string;
 }) {
