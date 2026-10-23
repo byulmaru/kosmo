@@ -4,9 +4,11 @@ import {
   db,
   first,
   firstOrThrow,
+  Hashtags,
   Instances,
   isUniqueViolation,
   Media,
+  PostContentHashtags,
   PostContents,
   PostMentions,
   Posts,
@@ -25,35 +27,41 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { normalizePostContentPlainText } from '../post-content';
 import {
   canonicalizePostContentDocument,
+  postContentDocumentFromTextAndMedia,
+  postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
+import { normalizeHashtag } from '../validation/hashtag';
 import { postVisibilityCondition } from '../visibility/post';
 import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
+import type {
+  PostContentHashtagReference,
+  PostContentMentionReference,
+} from '../post-content/server';
 
 type LocalPostInput = {
   accountId?: string;
-  /**
-   * Normalized authored body paired with `document`, supplied by the API after validating the
-   * selected mention ranges. GraphQL clients send body text and ranges, never this value or a doc.
-   */
-  authoredBodyText?: string;
-  document: PostContentDocumentV1;
+  bodyText: string;
+  contentWarning?: string | null;
   media?: readonly {
     altText: string | null;
     mediaId: string;
   }[];
+  mentions?: readonly PostContentMentionReference[];
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  sensitiveMedia?: boolean;
   visibility: PostVisibility;
 };
 
@@ -108,6 +116,49 @@ type CreatedPost = {
 };
 
 type DuplicatePost = { created: false };
+
+const resolveLocalPostHashtags = async (
+  tx: Transaction,
+  bodyText: string,
+  mentions: readonly PostContentMentionReference[],
+) => {
+  const candidates = postContentHashtagCandidatesFromText(bodyText, mentions);
+  if (candidates.length === 0) {
+    return { hashtagIds: [], references: [] as PostContentHashtagReference[] };
+  }
+
+  const namesAndDisplayNames = new Map<string, string>();
+  for (const { end, start } of candidates) {
+    const { displayName, name } = normalizeHashtag(bodyText.slice(start, end));
+    if (!namesAndDisplayNames.has(name)) {
+      namesAndDisplayNames.set(name, displayName);
+    }
+  }
+  const names = [...namesAndDisplayNames.keys()];
+  await tx
+    .insert(Hashtags)
+    .values(
+      [...namesAndDisplayNames]
+        .map(([name, displayName]) => ({ displayName, name }))
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+    )
+    .onConflictDoNothing({ target: Hashtags.name });
+
+  const hashtagRows = await tx
+    .select({ id: Hashtags.id, name: Hashtags.name })
+    .from(Hashtags)
+    .where(inArray(Hashtags.name, names));
+  const hashtagIdsByName = new Map(hashtagRows.map(({ id, name }) => [name, id]));
+  const references = candidates.map(({ end, start }) => {
+    const { name } = normalizeHashtag(bodyText.slice(start, end));
+    return { end, hashtagId: hashtagIdsByName.get(name)!, start };
+  });
+
+  return {
+    hashtagIds: [...new Set(references.map(({ hashtagId }) => hashtagId))],
+    references,
+  };
+};
 
 const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
@@ -599,20 +650,31 @@ export async function createPost(
   let result: CreatedPost;
   try {
     result = await db.transaction(async (tx) => {
-      let document =
-        input.origin === 'LOCAL'
-          ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
-          : input.document;
+      let document: PostContentDocumentV1;
+      let localHashtagIds: string[] = [];
+      if (input.origin === 'LOCAL') {
+        const bodyText = normalizePostContentPlainText(input.bodyText);
+        const mentions = input.mentions ?? [];
+        const { hashtagIds, references } = await resolveLocalPostHashtags(tx, bodyText, mentions);
+        localHashtagIds = hashtagIds;
+        document = validateLocalPostContentDocument(
+          postContentDocumentFromTextAndMedia(
+            bodyText,
+            (input.media ?? []).map(({ mediaId }) => ({ mediaId })),
+            input.sensitiveMedia ?? false,
+            input.contentWarning ?? null,
+            mentions,
+            references,
+          ),
+          bodyText,
+        );
+      } else {
+        document = input.document;
+      }
       const mentionProfileIds = new Set(
         input.origin === 'ACTIVITYPUB'
           ? input.mentionProfileIds
-          : document.body.content.flatMap((block) =>
-              block.type === 'paragraph'
-                ? (block.content ?? []).flatMap((node) =>
-                    node.type === 'mention' ? [node.attrs.profileId] : [],
-                  )
-                : [],
-            ),
+          : (input.mentions ?? []).map(({ profileId }) => profileId),
       );
       if (
         input.origin === 'LOCAL' &&
@@ -625,16 +687,8 @@ export async function createPost(
       }
 
       if (input.origin === 'LOCAL') {
-        const mediaIds = document.body.content.flatMap((block) =>
-          block.type === 'media' ? [block.attrs.mediaId] : [],
-        );
         const media = input.media ?? [];
-        if (
-          media.length !== mediaIds.length ||
-          media.some(({ mediaId }, index) => mediaId !== mediaIds[index])
-        ) {
-          throw new ValidationError('Media cannot be attached', { field: 'media' });
-        }
+        const mediaIds = media.map(({ mediaId }) => mediaId);
         if (new Set(mediaIds).size !== mediaIds.length) {
           throw new ValidationError('Media cannot be attached', { field: 'media' });
         }
@@ -740,6 +794,15 @@ export async function createPost(
         })
         .returning()
         .then(firstOrThrow);
+
+      if (localHashtagIds.length > 0) {
+        await tx.insert(PostContentHashtags).values(
+          localHashtagIds.map((hashtagId) => ({
+            hashtagId,
+            postContentId: content.id,
+          })),
+        );
+      }
 
       const post = await tx
         .insert(Posts)

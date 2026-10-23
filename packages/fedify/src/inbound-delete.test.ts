@@ -276,7 +276,7 @@ describe('inbound Delete dispatch', () => {
     await materializeRemotePost(remote.id, mappedUri);
     const localProfile = await createProfile(localInstanceId, 'local');
     const localPost = await createPost({
-      document: postContentDocumentFromText('local'),
+      bodyText: 'local',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,

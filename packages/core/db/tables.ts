@@ -437,6 +437,19 @@ export const PostContents = pgTable(
   (table) => [index().on(table.postId)],
 );
 
+export const PostContentHashtags = pgTable(
+  'post_content_hashtag',
+  {
+    postContentId: uuid('post_content_id')
+      .notNull()
+      .references(() => PostContents.id, { onDelete: 'cascade' }),
+    hashtagId: uuid('hashtag_id')
+      .notNull()
+      .references(() => Hashtags.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.postContentId, table.hashtagId] })],
+);
+
 export const PostMentions = pgTable(
   'post_mentions',
   {

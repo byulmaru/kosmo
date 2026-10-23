@@ -21,10 +21,7 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '@kosmo/core/enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '@kosmo/core/post-content/server';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
   ApplicationFailure,
@@ -902,13 +899,13 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -929,13 +926,13 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Combined source'),
+    bodyText: 'Combined source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Combined quote'),
+    bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -960,14 +957,14 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   const replyRecipient = await createProfile();
   const author = await createProfile();
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote and reply'),
+    bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: quoteSource.id,
@@ -1181,7 +1178,7 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1215,11 +1212,11 @@ test('Post deletion Notification Activity removes exact related rows and is idem
   const actor = await createProfile();
   const mentionContent = (profile: { handle: string; id: string }) => {
     const relativeHandle = `@${profile.handle}`;
-    const authoredBodyText = `Mention ${relativeHandle}`;
-    const start = authoredBodyText.indexOf(relativeHandle);
+    const bodyText = `Mention ${relativeHandle}`;
+    const start = bodyText.indexOf(relativeHandle);
     return {
-      authoredBodyText,
-      document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+      bodyText,
+      mentions: [
         {
           end: start + relativeHandle.length,
           handle: relativeHandle,
@@ -1227,7 +1224,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
           relativeHandle,
           start,
         },
-      ]),
+      ],
     };
   };
   const { post } = await createCorePost({
@@ -1249,7 +1246,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: post.id,
@@ -1356,33 +1353,33 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
   const repostRecipient = await createProfile();
   const actor = await createProfile();
   const { post: replyParent } = await createCorePost({
-    document: postContentDocumentFromText('Reply parent'),
+    bodyText: 'Reply parent',
     origin: 'LOCAL',
     profileId: replyRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: reply } = await createCorePost({
-    document: postContentDocumentFromText('Reply body'),
+    bodyText: 'Reply body',
     origin: 'LOCAL',
     profileId: actor.id,
     replyParentId: replyParent.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: quoteSource.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: repostSource } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: repostRecipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1440,7 +1437,7 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Deleted Repost source'),
+    bodyText: 'Deleted Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1705,6 +1702,12 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(Profiles)
       .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
       .where(eq(Profiles.id, actor.id));
+    const { post } = await createCorePost({
+      bodyText: 'Read the article',
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
     const document = {
       version: 1,
       summary: null,
@@ -1725,12 +1728,6 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         ],
       },
     } as const;
-    const { post } = await createCorePost({
-      document,
-      origin: 'LOCAL',
-      profileId: recipient.id,
-      visibility: PostVisibility.PUBLIC,
-    });
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
@@ -1888,14 +1885,14 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       .where(eq(Profiles.id, actor.id));
 
     const { post: target } = await createCorePost({
-      document: postContentDocumentFromText('target'),
+      bodyText: 'target',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
     postIds.push(target.id);
     const { post: reply } = await createCorePost({
-      document: postContentDocumentFromText('reply'),
+      bodyText: 'reply',
       origin: 'LOCAL',
       profileId: actor.id,
       replyParentId: target.id,
@@ -1903,7 +1900,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
-      document: postContentDocumentFromText('quote'),
+      bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
       repostSourceId: target.id,
@@ -2369,7 +2366,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
     const { post } = await createCorePost({
-      document: postContentDocumentFromText('Token cleanup'),
+      bodyText: 'Token cleanup',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,

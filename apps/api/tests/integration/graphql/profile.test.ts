@@ -4750,7 +4750,7 @@ describe('GraphQL remote profile boundary', () => {
       visibility?: typeof PostVisibility.PUBLIC | typeof PostVisibility.FOLLOWERS;
     }) =>
       createPost({
-        document: postContentDocumentFromText('Reply policy fixture'),
+        bodyText: 'Reply policy fixture',
         origin: 'LOCAL',
         profileId,
         replyParentId,

@@ -3,9 +3,13 @@ import { JSDOM } from 'jsdom';
 import { LinkifyIt } from 'linkify-it';
 import { DOMSerializer } from 'prosemirror-model';
 import { ValidationError } from '../error';
+import { normalizeHashtag } from '../validation/hashtag';
 import {
   hasPostContentMentionTokenBoundaries,
+  normalizePostContentHashtagId,
+  normalizePostContentHashtagToken,
   normalizePostContentPlainText,
+  postContentCodePointBefore,
   postContentMentionFallbackText,
   postContentSchemaVersion,
 } from './index';
@@ -25,6 +29,7 @@ const postContentLinkify = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false }
   .add('ftp:', null)
   .add('mailto:', null)
   .add('//', null);
+const postContentHashtagUrlLinkify = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false });
 
 export interface PostContentMediaReference {
   readonly mediaId: string;
@@ -36,6 +41,15 @@ export interface PostContentMentionReference {
   readonly profileId: string;
   readonly relativeHandle: string;
   readonly start: number;
+}
+
+export interface PostContentHashtagCandidate {
+  readonly end: number;
+  readonly start: number;
+}
+
+export interface PostContentHashtagReference extends PostContentHashtagCandidate {
+  readonly hashtagId: string;
 }
 
 export function postContentDocumentFromText(
@@ -51,9 +65,10 @@ export function postContentDocumentFromTextAndMedia(
   sensitiveMedia = false,
   summary: string | null = null,
   mentions: readonly PostContentMentionReference[] = [],
+  hashtagReferences: readonly PostContentHashtagReference[] = [],
 ): PostContentDocumentV1 {
   const normalized = normalizePostContentPlainText(bodyText);
-  const inline = postContentInlineFromText(normalized, mentions);
+  const inline = postContentInlineFromText(normalized, mentions, hashtagReferences);
 
   return canonicalizePostContentDocument({
     version: postContentSchemaVersion,
@@ -75,6 +90,78 @@ export function postContentDocumentFromTextAndMedia(
       ],
     },
   });
+}
+
+/** Finds valid local hashtag occurrences in already-normalized authored text. */
+export function postContentHashtagCandidatesFromText(
+  bodyText: string,
+  mentions: readonly PostContentMentionReference[] = [],
+): PostContentHashtagCandidate[] {
+  const linkRanges = (postContentHashtagUrlLinkify.match(bodyText) ?? []).map(
+    ({ index, lastIndex }) => ({ end: lastIndex, start: index }),
+  );
+  const explicitUrlPattern = /(^|(?!_)[><\uFF5C\p{Z}\p{P}\p{C}])([A-Za-z][A-Za-z0-9+.-]*:\/\/)/gu;
+  for (const match of bodyText.matchAll(explicitUrlPattern)) {
+    const start = match.index + match[0].length - match[2]!.length;
+    let end = match.index + match[0].length;
+    const openBrackets: string[] = [];
+    for (const codePoint of bodyText.slice(end)) {
+      if (/[\s<>"'|]/u.test(codePoint)) {
+        break;
+      }
+      const matchingOpen =
+        codePoint === ')' ? '(' : codePoint === ']' ? '[' : codePoint === '}' ? '{' : null;
+      if (matchingOpen !== null) {
+        if (openBrackets.pop() !== matchingOpen) {
+          break;
+        }
+      } else if (codePoint === '(' || codePoint === '[' || codePoint === '{') {
+        openBrackets.push(codePoint);
+      }
+      end += codePoint.length;
+    }
+    linkRanges.push({ end, start });
+  }
+  for (const match of bodyText.matchAll(/\bmailto:[^\s<>"']+/giu)) {
+    linkRanges.push({ end: match.index + match[0].length, start: match.index });
+  }
+  const candidates: PostContentHashtagCandidate[] = [];
+  const pattern = /#/gu;
+
+  for (const match of bodyText.matchAll(pattern)) {
+    const start = match.index;
+    let end = start + match[0].length;
+    const previous = postContentCodePointBefore(bodyText, start);
+    if (previous && /[\p{L}\p{M}\p{N}_#]/u.test(previous)) {
+      continue;
+    }
+
+    for (const codePoint of bodyText.slice(end)) {
+      if (!isPostContentHashtagNameCodePoint(codePoint)) {
+        break;
+      }
+      end += codePoint.length;
+    }
+    if (end === start + 1) {
+      continue;
+    }
+
+    const { name } = normalizeHashtag(bodyText.slice(start, end));
+    const nameLength = Array.from(name).length;
+    if (
+      nameLength < 1 ||
+      nameLength > 64 ||
+      !/^[\p{L}\p{N}_]+$/u.test(name) ||
+      linkRanges.some((range) => rangesOverlap(start, end, range.start, range.end)) ||
+      mentions.some((mention) => rangesOverlap(start, end, mention.start, mention.end))
+    ) {
+      continue;
+    }
+
+    candidates.push({ start, end });
+  }
+
+  return candidates;
 }
 
 export function postContentDocumentToHtml(
@@ -123,24 +210,50 @@ export function postContentDocumentToHtml(
 function postContentInlineFromText(
   bodyText: string,
   mentions: readonly PostContentMentionReference[],
+  hashtagReferences: readonly PostContentHashtagReference[],
 ): PostContentInlineNode[] {
   const inline: PostContentInlineNode[] = [];
-  const orderedMentions = [...mentions].sort((left, right) => left.start - right.start);
+  const orderedReferences = [
+    ...mentions.map((mention) => ({ ...mention, type: 'mention' as const })),
+    ...hashtagReferences.map((hashtag) => ({ ...hashtag, type: 'hashtag' as const })),
+  ].sort((left, right) => left.start - right.start);
   const links = postContentLinkify.match(bodyText) ?? [];
+  const candidates =
+    hashtagReferences.length > 0 ? postContentHashtagCandidatesFromText(bodyText, mentions) : [];
   let previousEnd = 0;
-  for (const mention of orderedMentions) {
-    const { end, handle, profileId, relativeHandle, start } = mention;
-    if (
-      start < previousEnd ||
-      !hasPostContentMentionTokenBoundaries(bodyText, start, end, relativeHandle)
-    ) {
-      throw new ValidationError('Mention selection is invalid', { field: 'mentions' });
+  for (const reference of orderedReferences) {
+    const { end, start } = reference;
+    if (start < previousEnd) {
+      throw reference.type === 'mention'
+        ? new ValidationError('Mention selection is invalid', { field: 'mentions' })
+        : new ValidationError('Hashtag selection is invalid', { field: 'hashtags' });
     }
 
     if (start > previousEnd) {
       appendTextWithLinks(inline, bodyText, previousEnd, start, links);
     }
-    inline.push({ type: 'mention', attrs: { handle, profileId } });
+    if (reference.type === 'mention') {
+      const { handle, profileId, relativeHandle } = reference;
+      if (!hasPostContentMentionTokenBoundaries(bodyText, start, end, relativeHandle)) {
+        throw new ValidationError('Mention selection is invalid', { field: 'mentions' });
+      }
+      inline.push({ type: 'mention', attrs: { handle, profileId } });
+    } else {
+      const token = bodyText.slice(start, end);
+      const isCandidate = candidates.some(
+        (candidate) => candidate.start === start && candidate.end === end,
+      );
+      if (!isCandidate) {
+        throw new ValidationError('Hashtag selection is invalid', { field: 'hashtags' });
+      }
+      inline.push({
+        type: 'hashtag',
+        attrs: {
+          hashtagId: normalizePostContentHashtagId(reference.hashtagId),
+          token: normalizePostContentHashtagToken(token),
+        },
+      });
+    }
     previousEnd = end;
   }
 
@@ -149,6 +262,23 @@ function postContentInlineFromText(
   }
 
   return inline;
+}
+
+function rangesOverlap(
+  leftStart: number,
+  leftEnd: number,
+  rightStart: number,
+  rightEnd: number,
+): boolean {
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+function isPostContentHashtagNameCodePoint(value: string): boolean {
+  if (/[\p{L}\p{M}\p{N}_]/u.test(value)) {
+    return true;
+  }
+  const normalized = value.normalize('NFKC');
+  return normalized.length > 0 && /^[\p{L}\p{N}_]+$/u.test(normalized);
 }
 
 function appendTextWithLinks(

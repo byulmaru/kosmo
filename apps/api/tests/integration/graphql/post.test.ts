@@ -54,6 +54,7 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
@@ -88,6 +89,7 @@ describe('Post Reply GraphQL 경계', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
@@ -132,10 +134,12 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('replyParentId 생략은 기존 일반 Post 계약을 유지한다', async () => {
     const auth = await createAuthenticatedSession();
+    const hashtagName = `tag${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const bodyText = `일반 게시글 #${hashtagName}`;
 
     const result = await requestCreatePost(
       {
-        bodyText: '일반 게시글',
+        bodyText,
         contentWarning: '통합 검증 경고',
         visibility: PostVisibility.UNLISTED,
       },
@@ -159,6 +163,49 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
     assert.equal(content.document.summary, '통합 검증 경고');
+
+    const hashtag = await db
+      .select({ id: Hashtags.id })
+      .from(Hashtags)
+      .where(eq(Hashtags.name, hashtagName))
+      .then(firstOrThrow);
+    const projected = await requestGraphQL<{
+      node: { content: { bodyText: string; document: unknown } } | null;
+    }>(
+      `query CreatedHashtagPost($postId: ID!) {
+        node(id: $postId) {
+          ... on Post {
+            content { bodyText document }
+          }
+        }
+      }`,
+      { postId: encodeGlobalId('Post', stored.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(projected);
+    assert.equal(projected.data?.node?.content.bodyText, bodyText);
+    assert.deepEqual(projected.data?.node?.content.document, {
+      body: {
+        content: [
+          {
+            content: [
+              { text: '일반 게시글 ', type: 'text' },
+              {
+                attrs: {
+                  hashtagId: encodeGlobalId('Hashtag', hashtag.id),
+                  token: `#${hashtagName}`,
+                },
+                type: 'hashtag',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'doc',
+      },
+      summary: '통합 검증 경고',
+      version: 1,
+    });
   });
 
   test('createPost combines selected and typed Mentions into Profile relations', async () => {

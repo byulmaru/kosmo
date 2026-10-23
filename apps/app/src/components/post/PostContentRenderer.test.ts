@@ -658,6 +658,58 @@ describe('PostContentRenderer', () => {
     );
     assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
   });
+
+  it('renders Hashtag occurrences as plain inline text in post bodies and noninteractive previews', async () => {
+    const bodyText = 'Topic #MiXeD and #mixed';
+    const document = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Topic ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId: 'hashtag-1', token: '#MiXeD' },
+              },
+              { type: 'text', text: ' and ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId: 'hashtag-1', token: '#mixed' },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    for (const interactive of [true, false]) {
+      await render({
+        bodyText,
+        contentWarning: null,
+        document,
+        interactive,
+        media: [],
+        mentionedProfiles: [],
+        ...(interactive ? { onBodyPress: () => undefined } : {}),
+        postId: `post-hashtag-${interactive}`,
+      });
+
+      assert.equal(
+        rendered('Text').some((node) => renderedText(node) === bodyText),
+        true,
+      );
+      assert.equal(
+        rendered('Text').some((node) => node.props.accessibilityRole === 'link'),
+        false,
+      );
+      assert.deepEqual(rendered('NavigationLink'), []);
+      assert.equal(rendered('Pressable').length, interactive ? 1 : 0);
+    }
+  });
 });
 
 async function render(props: RendererProps) {

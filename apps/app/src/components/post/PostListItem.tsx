@@ -31,13 +31,6 @@ const PostListRowFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      media {
-        id
-        altText
-        url
-      }
-      contentWarning
     }
     repostSource {
       ...PostSourcePreview_source
@@ -64,14 +57,6 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      contentWarning
-      document
-      media {
-        id
-        altText
-        url
-      }
     }
     profile {
       avatar {

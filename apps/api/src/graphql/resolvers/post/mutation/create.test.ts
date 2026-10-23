@@ -4,7 +4,14 @@ import { db } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
-import { graphql, isInputObjectType, isObjectType } from 'graphql';
+import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
+import {
+  graphql,
+  GraphQLObjectType,
+  GraphQLSchema,
+  isInputObjectType,
+  isObjectType,
+} from 'graphql';
 import { schema } from '@/graphql/schema';
 
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
@@ -38,6 +45,80 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isObjectType(createPostPayload));
   assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
   assert.deepEqual(Object.keys(createPostPayload.getFields()), ['post']);
+});
+
+test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
+  const postContent = schema.getType('PostContent');
+  assert.ok(isObjectType(postContent));
+
+  const bodyText = 'before @alice #Tag after';
+  const hashtagId = '019f6678-86fa-709b-984e-1520766b8447';
+  const mediaId = '019f6678-86fa-709b-984e-1520766b8448';
+  const profileId = '019f6678-86fa-709b-984e-1520766b8449';
+  const mentionStart = bodyText.indexOf('@alice');
+  const hashtagStart = bodyText.indexOf('#Tag');
+  const document = postContentDocumentFromTextAndMedia(
+    bodyText,
+    [{ mediaId }],
+    true,
+    'Content warning',
+    [
+      {
+        end: mentionStart + '@alice'.length,
+        handle: '@alice',
+        profileId,
+        relativeHandle: '@alice',
+        start: mentionStart,
+      },
+    ],
+    [{ end: hashtagStart + '#Tag'.length, hashtagId, start: hashtagStart }],
+  );
+  const executableSchema = new GraphQLSchema({
+    query: new GraphQLObjectType({
+      name: 'PostContentDocumentQuery',
+      fields: {
+        content: {
+          type: postContent,
+          resolve: () => ({ document }),
+        },
+      },
+    }),
+  });
+
+  const projected = await graphql({
+    schema: executableSchema,
+    source: '{ content { document bodyText contentWarning } }',
+  });
+  assert.deepEqual(projected.errors, undefined);
+  const content = projected.data?.content as {
+    bodyText: string;
+    contentWarning: string;
+    document: typeof document;
+  };
+  assert.equal(content.bodyText, bodyText);
+  assert.equal(content.contentWarning, 'Content warning');
+  assert.equal(content.document.summary, 'Content warning');
+  assert.deepEqual(content.document.body.attrs, { sensitiveMedia: true });
+  assert.deepEqual(content.document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: 'before ' },
+      {
+        attrs: { handle: '@alice', profileId: encodeGlobalId('Profile', profileId) },
+        type: 'mention',
+      },
+      { type: 'text', text: ' ' },
+      {
+        attrs: { hashtagId: encodeGlobalId('Hashtag', hashtagId), token: '#Tag' },
+        type: 'hashtag',
+      },
+      { type: 'text', text: ' after' },
+    ],
+  });
+  assert.deepEqual(content.document.body.content[1], {
+    attrs: { mediaId: encodeGlobalId('Media', mediaId) },
+    type: 'media',
+  });
 });
 
 test('validates createPost input before running the resolver', async () => {

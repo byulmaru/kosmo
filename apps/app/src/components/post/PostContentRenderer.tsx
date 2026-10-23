@@ -171,6 +171,7 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
         />
       );
     })
+    .with({ type: 'hashtag' }, (hashtag) => hashtag.attrs.token)
     .otherwise(() => null);
 }
 

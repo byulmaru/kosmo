@@ -33,10 +33,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentToText,
-} from '@kosmo/core/post-content/server';
+import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
   remoteProfileLookupWorkflow,
@@ -2057,7 +2054,7 @@ describe('inbound Create dispatch', () => {
     await createStoredRemoteActor();
     const localAuthor = await createLocalFollowerProfile('local-parent-author');
     const localParent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localAuthor.id,
       visibility: PostVisibility.FOLLOWERS,
@@ -3122,7 +3119,7 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const localParent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3167,13 +3164,13 @@ describe('inbound Create dispatch', () => {
     const firstParentProfile = await createLocalFollowerProfile('blocked-parent-owner');
     const secondParentProfile = await createLocalFollowerProfile('blocked-parent-target');
     const firstParent = await createPost({
-      document: postContentDocumentFromText('first blocked parent'),
+      bodyText: 'first blocked parent',
       origin: 'LOCAL',
       profileId: firstParentProfile.id,
       visibility: PostVisibility.PUBLIC,
     });
     const secondParent = await createPost({
-      document: postContentDocumentFromText('second blocked parent'),
+      bodyText: 'second blocked parent',
       origin: 'LOCAL',
       profileId: secondParentProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3280,7 +3277,7 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const previousPost = await createPost({
-      document: postContentDocumentFromText('Previous local Post'),
+      bodyText: 'Previous local Post',
       origin: 'LOCAL',
       profileId: previousProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3323,7 +3320,7 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const parent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,
