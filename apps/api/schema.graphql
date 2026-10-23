@@ -252,6 +252,7 @@ type FollowRequestNotification implements Node & Notification {
 type Hashtag implements Node {
   id: ID!
   name: String!
+  posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relatedProfiles(after: String, first: Int): ProfileConnection!
   viewerMuteRule: HashtagMuteRule
 }

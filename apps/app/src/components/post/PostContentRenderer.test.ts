@@ -659,8 +659,9 @@ describe('PostContentRenderer', () => {
     assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
   });
 
-  it('renders Hashtag occurrences as plain inline text in post bodies and noninteractive previews', async () => {
+  it('links Hashtag occurrences by Global ID and keeps noninteractive previews static', async () => {
     const bodyText = 'Topic #MiXeD and #mixed';
+    const hashtagId = 'SGFzaHRhZy0x';
     const document = {
       version: 1,
       summary: null,
@@ -673,12 +674,12 @@ describe('PostContentRenderer', () => {
               { type: 'text', text: 'Topic ' },
               {
                 type: 'hashtag',
-                attrs: { hashtagId: 'hashtag-1', token: '#MiXeD' },
+                attrs: { hashtagId, token: '#MiXeD' },
               },
               { type: 'text', text: ' and ' },
               {
                 type: 'hashtag',
-                attrs: { hashtagId: 'hashtag-1', token: '#mixed' },
+                attrs: { hashtagId, token: '#mixed' },
               },
             ],
           },
@@ -687,6 +688,7 @@ describe('PostContentRenderer', () => {
     };
 
     for (const interactive of [true, false]) {
+      let stoppedEvents = 0;
       await render({
         bodyText,
         contentWarning: null,
@@ -694,7 +696,7 @@ describe('PostContentRenderer', () => {
         interactive,
         media: [],
         mentionedProfiles: [],
-        ...(interactive ? { onBodyPress: () => undefined } : {}),
+        ...(interactive ? { onBodyPress: () => assert.fail('post press must not run') } : {}),
         postId: `post-hashtag-${interactive}`,
       });
 
@@ -702,11 +704,27 @@ describe('PostContentRenderer', () => {
         rendered('Text').some((node) => renderedText(node) === bodyText),
         true,
       );
-      assert.equal(
-        rendered('Text').some((node) => node.props.accessibilityRole === 'link'),
-        false,
-      );
-      assert.deepEqual(rendered('NavigationLink'), []);
+      const links = rendered('Text').filter((node) => node.props.accessibilityRole === 'link');
+      if (interactive) {
+        assert.deepEqual(
+          rendered('NavigationLink').map(({ props }) => props.href),
+          [
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+          ],
+        );
+        assert.deepEqual(
+          links.map(({ props }) => props.accessibilityLabel),
+          ['#MiXeD, 게시글 보기', '#mixed, 게시글 보기'],
+        );
+        for (const link of links) {
+          link.props.onPress({ stopPropagation: () => stoppedEvents++ });
+        }
+        assert.equal(stoppedEvents, 2);
+      } else {
+        assert.equal(links.length, 0);
+        assert.deepEqual(rendered('NavigationLink'), []);
+      }
       assert.equal(rendered('Pressable').length, interactive ? 1 : 0);
     }
   });

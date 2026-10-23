@@ -2,6 +2,7 @@ import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { PostContentMention } from './PostContentMention';
@@ -171,7 +172,32 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
         />
       );
     })
-    .with({ type: 'hashtag' }, (hashtag) => hashtag.attrs.token)
+    .with({ type: 'hashtag' }, (hashtag) => {
+      if (!context.interactive) {
+        return hashtag.attrs.token;
+      }
+
+      return (
+        <NavigationLink
+          key={key}
+          href={
+            {
+              pathname: '/hashtags/[hashtagId]/posts',
+              params: { hashtagId: hashtag.attrs.hashtagId },
+            } as const
+          }
+        >
+          <Text
+            accessibilityLabel={`${hashtag.attrs.token}, 게시글 보기`}
+            accessibilityRole="link"
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.link, { color: context.linkColor }]}
+          >
+            {hashtag.attrs.token}
+          </Text>
+        </NavigationLink>
+      );
+    })
     .otherwise(() => null);
 }
 

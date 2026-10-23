@@ -189,7 +189,10 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const publicContentRoute =
     routeSegments.at(-1) === '[profileHandle]' ||
-    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]');
+    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') ||
+    (routeSegments.at(-3) === 'hashtags' &&
+      routeSegments.at(-2) === '[hashtagId]' &&
+      routeSegments.at(-1) === 'posts');
   const guestPublicContent = web && status === 'guest' && publicContentRoute;
   const invitationVisible = guestPublicContent && !invitationDismissed;
   const invitationPlacement = getPublicContentInvitationPlacement({
