@@ -15,6 +15,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
@@ -31,12 +32,14 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let localOutboundFederation: typeof LocalOutboundFederation;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -45,6 +48,7 @@ let sendLocalPostCreate: typeof LocalPostDelivery.sendLocalPostCreate;
 let sendLocalPostDelete: typeof LocalPostDelivery.sendLocalPostDelete;
 let testAccountIds: string[] = [];
 let testInstanceIds: string[] = [];
+let testHashtagIds: string[] = [];
 let testProfileIds: string[] = [];
 
 describe('ActivityPub Local Post delivery', () => {
@@ -57,10 +61,12 @@ describe('ActivityPub Local Post delivery', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
       PostContents,
+      PostContentHashtags,
       PostMentions,
       Posts,
       ProfileFollows,
@@ -141,7 +147,7 @@ describe('ActivityPub Local Post delivery', () => {
     }
   });
 
-  test('Create(Note) delivery reuses the resolved Mention projection without adding recipients', async () => {
+  test('Create(Note) delivery serializes Hashtag links without adding recipients', async () => {
     const author = await createProfile({ instanceId: localInstanceId });
     const follower = await createRemoteActor({ handle: 'mention-delivery-follower' });
     const mentionTarget = await createRemoteActor({ handle: 'mention-delivery-target' });
@@ -151,6 +157,12 @@ describe('ActivityPub Local Post delivery', () => {
     });
     const post = await createPost(author.id);
     assert.ok(post.currentContentId);
+    const hashtag = await db
+      .insert(Hashtags)
+      .values({ displayName: 'DeliveryTag', name: 'deliverytag' })
+      .returning()
+      .then(firstOrThrow);
+    testHashtagIds.push(hashtag.id);
     await db
       .update(PostContents)
       .set({
@@ -161,6 +173,8 @@ describe('ActivityPub Local Post delivery', () => {
                 content: [
                   { text: 'Hello ', type: 'text' },
                   { attrs: { profileId: mentionTarget.profile.id }, type: 'mention' },
+                  { text: ' ', type: 'text' },
+                  { attrs: { hashtagId: hashtag.id, token: '#dELiveryTag' }, type: 'hashtag' },
                 ],
                 type: 'paragraph',
               },
@@ -176,6 +190,10 @@ describe('ActivityPub Local Post delivery', () => {
       postContentId: post.currentContentId,
       profileId: mentionTarget.profile.id,
     });
+    await db.insert(PostContentHashtags).values({
+      postContentId: post.currentContentId,
+      hashtagId: hashtag.id,
+    });
     const fixture = createContextFixture();
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
@@ -186,24 +204,51 @@ describe('ActivityPub Local Post delivery', () => {
     assert.ok(call?.activity instanceof Create);
     const note = await call.activity.getObject();
     assert.ok(note instanceof Note);
-    assert.equal(
-      note.content?.toString(),
-      `<p>Hello <span class="h-card"><a href="${mentionTarget.actorUri}" class="u-url mention">@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}</a></span></p>`,
-    );
-    const serializedNote = (await note.toJsonLd()) as {
-      readonly tag?: { readonly href?: string; readonly name?: string; readonly type?: string };
+    const hashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', hashtag.id)}/posts`;
+    const noteHtml =
+      `<p>Hello <span class="h-card"><a href="${mentionTarget.actorUri}" class="u-url mention">` +
+      `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}</a></span> ` +
+      `<a href="${hashtagUrl}" rel="tag">#dELiveryTag</a></p>`;
+    assert.equal(note.content?.toString(), noteHtml);
+
+    const createJsonLd = (await call.activity.toJsonLd()) as {
+      readonly object?: unknown;
+      readonly type?: string;
     };
+    assert.equal(createJsonLd.type, 'Create');
+    const serializedObject = Array.isArray(createJsonLd.object)
+      ? createJsonLd.object[0]
+      : createJsonLd.object;
+    assert.ok(serializedObject && typeof serializedObject === 'object');
+    const serializedNote = serializedObject as {
+      readonly content?: string;
+      readonly tag?: unknown;
+      readonly type?: string;
+    };
+    assert.equal(serializedNote.type, 'Note');
+    assert.equal(serializedNote.content, noteHtml);
+    const serializedTags = Array.isArray(serializedNote.tag)
+      ? serializedNote.tag
+      : [serializedNote.tag];
     assert.deepEqual(
-      {
-        href: serializedNote.tag?.href,
-        name: serializedNote.tag?.name,
-        type: serializedNote.tag?.type,
-      },
-      {
-        href: mentionTarget.actorUri,
-        name: `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}`,
-        type: 'Mention',
-      },
+      serializedTags
+        .map((tag) => {
+          const value = tag as {
+            readonly href?: string;
+            readonly name?: string;
+            readonly type?: string;
+          };
+          return { href: value.href, name: value.name, type: value.type };
+        })
+        .sort((left, right) => (left.href ?? '').localeCompare(right.href ?? '')),
+      [
+        {
+          href: mentionTarget.actorUri,
+          name: `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}`,
+          type: 'Mention',
+        },
+        { href: hashtagUrl, name: '#DeliveryTag', type: 'Hashtag' },
+      ].sort((left, right) => left.href.localeCompare(right.href)),
     );
     assert.deepEqual(
       call.recipients.map((recipient) => recipient.id?.href),
@@ -1040,6 +1085,9 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  if (testHashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, testHashtagIds));
+  }
   await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
   if (testAccountIds.length > 0) {
@@ -1049,6 +1097,7 @@ const cleanTestRows = async () => {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testHashtagIds = [];
   testAccountIds = [];
   testProfileIds = [];
 };

@@ -31,6 +31,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { eq, inArray } from 'drizzle-orm';
 import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -55,6 +56,7 @@ let db: typeof CoreDb.db;
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let dispatchLocalProfileFeatured: typeof LocalProfileFeaturedModule.dispatchLocalProfileFeatured;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
@@ -62,6 +64,7 @@ let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let projectLocalPostNote: typeof LocalPostNoteModule.projectLocalPostNote;
 let PostContents: typeof CoreDb.PostContents;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
@@ -77,6 +80,7 @@ let countLocalProfileFeatured: typeof LocalProfileFeaturedModule.countLocalProfi
 let firstLocalProfileFeaturedCursor: typeof LocalProfileFeaturedModule.firstLocalProfileFeaturedCursor;
 let productionFederation: typeof FederationModule.federation;
 let testInstanceIds: string[] = [];
+let testHashtagIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
 
@@ -91,10 +95,12 @@ describe('ActivityPub Local Post Note', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
       PostContents,
+      PostContentHashtags,
       PostMentions,
       Posts,
       ProfileFollowRequests,
@@ -549,6 +555,175 @@ describe('ActivityPub Local Post Note', () => {
           name: `@unsafe-url-target@${unsafeUrlDomain}`,
           type: 'Mention',
         },
+      ].sort((left, right) => left.href.localeCompare(right.href)),
+    );
+  });
+
+  test('serializes only current body Hashtags as linked Hashtag tags for a Reply+Quote', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const createHashtag = async (name: string, displayName: string) => {
+      const hashtag = await db
+        .insert(Hashtags)
+        .values({ displayName, name })
+        .returning()
+        .then(firstOrThrow);
+      testHashtagIds.push(hashtag.id);
+      return hashtag;
+    };
+    const hashtagNode = (id: string, token: string) => ({
+      attrs: { hashtagId: id, token },
+      type: 'hashtag' as const,
+    });
+    const textNode = (text: string) => ({ text, type: 'text' as const });
+    const documentFor = (
+      content: Array<ReturnType<typeof hashtagNode> | ReturnType<typeof textNode>>,
+    ) => ({
+      body: { content: [{ content, type: 'paragraph' as const }], type: 'doc' as const },
+      summary: null,
+      version: 1 as const,
+    });
+
+    const currentHashtag = await createHashtag('mixed', 'MiXeD');
+    const secondHashtag = await createHashtag('second', 'Second');
+    const oldRevisionHashtag = await createHashtag('oldrevision', 'OldRevision');
+    const relationOnlyHashtag = await createHashtag('relationonly', 'RelationOnly');
+    const sourceHashtag = await createHashtag('quotedsource', 'QuotedSource');
+    const source = await createPost(author.id);
+    assert.ok(source.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: documentFor([hashtagNode(sourceHashtag.id, '#QuotedSource')]) })
+      .where(eq(PostContents.id, source.currentContentId));
+    await db.insert(PostContentHashtags).values({
+      postContentId: source.currentContentId,
+      hashtagId: sourceHashtag.id,
+    });
+
+    const firstMedia = await createMedia(author.id, {
+      mediaType: 'image/avif',
+      storageReference: 'hashtag-note-first-media',
+      url: 'https://cdn.example/media/hashtag-note-first',
+    });
+    const secondMedia = await createMedia(author.id, {
+      mediaType: 'image/webp',
+      storageReference: 'hashtag-note-second-media',
+      url: 'https://cdn.example/media/hashtag-note-second',
+    });
+    const quote = await createPost(author.id, {
+      media: [
+        { altText: 'Second & caption', mediaId: secondMedia.id },
+        { altText: 'First caption', mediaId: firstMedia.id },
+      ],
+      replyParentId: source.id,
+      sensitiveMedia: true,
+      summary: '<script>alert(1)</script> & spoiler',
+    });
+    assert.ok(quote.currentContentId);
+    await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, quote.id));
+    await db
+      .update(PostContents)
+      .set({ document: documentFor([hashtagNode(oldRevisionHashtag.id, '#OldRevision')]) })
+      .where(eq(PostContents.id, quote.currentContentId));
+    await db.insert(PostContentHashtags).values({
+      postContentId: quote.currentContentId,
+      hashtagId: oldRevisionHashtag.id,
+    });
+
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: {
+          body: {
+            attrs: { sensitiveMedia: true },
+            content: [
+              {
+                content: [
+                  textNode('Before <&> '),
+                  hashtagNode(currentHashtag.id, '#MiXeD'),
+                  { type: 'hard_break' as const },
+                  textNode('then '),
+                  hashtagNode(secondHashtag.id, '#Second'),
+                  textNode(' again '),
+                  hashtagNode(currentHashtag.id, '#mixed'),
+                ],
+                type: 'paragraph' as const,
+              },
+              { attrs: { mediaId: secondMedia.id }, type: 'media' as const },
+              { attrs: { mediaId: firstMedia.id }, type: 'media' as const },
+            ],
+            type: 'doc' as const,
+          },
+          summary: '<script>alert(1)</script> & spoiler',
+          version: 1 as const,
+        },
+        postId: quote.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, quote.id));
+    await db.insert(PostContentHashtags).values(
+      [currentHashtag.id, secondHashtag.id, relationOnlyHashtag.id].map((hashtagId) => ({
+        postContentId: currentContent.id,
+        hashtagId,
+      })),
+    );
+
+    const note = await dispatchLocalPostNote(createContext(), { id: quote.id });
+    assert.ok(note);
+    assert.equal(note.replyTargetId?.href, `${publicOrigin}/ap/note/${source.id}`);
+    const currentHashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', currentHashtag.id)}/posts`;
+    const secondHashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', secondHashtag.id)}/posts`;
+    assert.equal(
+      note.content?.toString(),
+      `<p>Before &lt;&amp;&gt; <a href="${currentHashtagUrl}" rel="tag">#MiXeD</a><br>then ` +
+        `<a href="${secondHashtagUrl}" rel="tag">#Second</a> again ` +
+        `<a href="${currentHashtagUrl}" rel="tag">#mixed</a></p>`,
+    );
+    assert.equal(note.summary?.toString(), '&lt;script&gt;alert(1)&lt;/script&gt; &amp; spoiler');
+    assert.equal(note.sensitive, true);
+    const attachments: Image[] = [];
+    for await (const attachment of note.getAttachments()) {
+      assert.ok(attachment instanceof Image);
+      attachments.push(attachment);
+    }
+    assert.deepEqual(
+      attachments.map(({ name, url }) => [url?.toString(), name?.toString()]),
+      [
+        ['https://cdn.example/media/hashtag-note-second', 'Second & caption'],
+        ['https://cdn.example/media/hashtag-note-first', 'First caption'],
+      ],
+    );
+
+    const sourceNote = await dispatchLocalPostNote(createContext(), { id: source.id });
+    assert.ok(sourceNote);
+    const sourceHashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', sourceHashtag.id)}/posts`;
+    const sourceJsonLd = (await sourceNote.toJsonLd()) as { readonly tag?: unknown };
+    assert.deepEqual(sourceJsonLd.tag, {
+      href: sourceHashtagUrl,
+      name: '#QuotedSource',
+      type: 'Hashtag',
+    });
+
+    const jsonLd = await note.toJsonLd();
+    const serializedTags = (jsonLd as { readonly tag?: unknown }).tag;
+    const tagValues = Array.isArray(serializedTags) ? serializedTags : [serializedTags];
+    assert.deepEqual(
+      tagValues
+        .map((tag) => {
+          const value = tag as {
+            readonly href?: string;
+            readonly name?: string;
+            readonly type?: string;
+          };
+          return { href: value.href, name: value.name, type: value.type };
+        })
+        .sort((left, right) => (left.href ?? '').localeCompare(right.href ?? '')),
+      [
+        { href: currentHashtagUrl, name: '#MiXeD', type: 'Hashtag' },
+        { href: secondHashtagUrl, name: '#Second', type: 'Hashtag' },
       ].sort((left, right) => left.href.localeCompare(right.href)),
     );
   });
@@ -1722,6 +1897,9 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  if (testHashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, testHashtagIds));
+  }
   await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
   if (testAccountIds.length > 0) {
@@ -1731,6 +1909,7 @@ const cleanTestRows = async () => {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testHashtagIds = [];
   testAccountIds = [];
   testProfileIds = [];
 };
