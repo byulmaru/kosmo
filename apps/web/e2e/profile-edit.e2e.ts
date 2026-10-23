@@ -234,8 +234,9 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
   await profileRoutePromise;
 
   // Relay cache만이 아니라 저장된 서버 상태를 다시 조회한다.
+  await page.goto('about:blank');
   const reloadedProfileRoutePromise = waitForProfileRoute(page);
-  await page.reload();
+  await page.goto('/@prod527-tags');
   await reloadedProfileRoutePromise;
   await expect(page.getByText('#FirstWrite', { exact: true })).toBeVisible();
   await expect(page.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
