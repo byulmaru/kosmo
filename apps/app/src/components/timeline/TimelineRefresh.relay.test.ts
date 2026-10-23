@@ -10,6 +10,7 @@ import {
   Network,
   Observable,
   RecordSource,
+  ROOT_ID,
   Store,
 } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
@@ -142,8 +143,9 @@ const profile = {
   handle: 'author',
   relativeHandle: '@author',
   avatar: null,
+  instance: null,
   private: { defaultPostVisibility: 'PUBLIC' },
-  viewerState: { profileBlock: null, profileMute: null },
+  viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
 };
 function payload(field: string, ids: string[], hasNextPage = true) {
   return {
@@ -167,6 +169,8 @@ function payload(field: string, ids: string[], hasNextPage = true) {
           },
           replyParent: null,
           repostSource: null,
+          replyCount: 0,
+          isPinned: false,
           visibility: 'PUBLIC',
           state: 'ACTIVE',
           viewerBookmark: null,
@@ -228,6 +232,52 @@ function assertConnection(
 }
 
 describe('Timeline refresh and pagination with real Relay', () => {
+  it('Home: re-entry reuses complete cache while stale cache still fetches', async () => {
+    const environment = new Environment({
+      network: Network.create((operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requests.push({ name: operation.name, variables, sink });
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    const render = () =>
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: createElement(HomeTimelineScreen),
+      });
+
+    await act(async () => {
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 1);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 1, 'complete cached data should not trigger revalidation');
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = null;
+    });
+    environment.commitUpdate((store) => {
+      store
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+        ?.invalidateRecord();
+    });
+    await act(async () => {
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 2, 'stale cached data should still trigger a request');
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh']));
+    assertConnection(environment, 'homeTimeline', ['fresh']);
+  });
+
   for (const timeline of ['Home', 'Local'] as const) {
     for (const first of ['pagination', 'refresh'] as const) {
       it(`${timeline}: ${first} completes first without stale connection edges or cursor`, async () => {
