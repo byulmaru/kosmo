@@ -270,6 +270,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               <ProfileEditImageFields
                 avatar={avatar}
                 header={header}
+                disabled={busy}
                 onAvatarEdit={props.onAvatarEdit}
                 onAvatarRemove={props.onAvatarRemove}
                 onAvatarRetry={props.onAvatarRetry}
@@ -314,6 +315,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               <ProfileTagEditor
                 addLabel="추가"
                 description="태그를 달면 내 프로필에 표시돼요. 취향이 맞는 사람들과 교류할 기회를 늘려 보세요."
+                disabled={busy}
                 draftInput={{
                   value: draft.tagInput,
                   onChange: (tagInput) => onChange({ ...draft, tagInput }),
@@ -344,6 +346,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               </Text>
               <RadioGroup
                 accessibilityLabel="게시물 기본 공개 범위"
+                disabled={busy}
                 onChange={(defaultPostVisibility: FirstProfileDraft['defaultPostVisibility']) =>
                   onChange({ ...draft, defaultPostVisibility })
                 }
@@ -365,6 +368,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 <Switch
                   accessibilityLabel="팔로우 요청 자동 승인"
                   accessibilityHint="설정을 끄면 팔로우 요청을 확인하고 원하는 사람만 수락할 수 있어요."
+                  disabled={busy}
                   onValueChange={(enabled) =>
                     onChange({ ...draft, followPolicy: enabled ? 'OPEN' : 'APPROVAL_REQUIRED' })
                   }

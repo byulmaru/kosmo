@@ -73,21 +73,18 @@ const listFragment = graphql`
 type Props = {
   empty: ReactNode;
   onContinue: () => void;
-  onBack: () => void;
   profileId: string;
 };
 
-type RenderFrame = (content: ReactNode, disabled: boolean) => ReactNode;
+type RenderFrame = (content: ReactNode) => ReactNode;
 
-export function FirstProfileTagDiscoveryRoute({ empty, onBack, onContinue, profileId }: Props) {
+export function FirstProfileTagDiscoveryRoute({ empty, onContinue, profileId }: Props) {
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
-  const renderFrame: RenderFrame = (content, disabled) => (
+  const renderFrame: RenderFrame = (content) => (
     <FirstProfileOnboardingFrame
       title={'관심사가 같은 사람을\n만나보세요'}
       description="나와 취향이 같은 사람들을 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
-      onBack={onBack}
-      disabled={disabled}
       style={styles.frame}
       actions={<Button onPress={onContinue}>계속하기</Button>}
     >
@@ -105,13 +102,9 @@ export function FirstProfileTagDiscoveryRoute({ empty, onBack, onContinue, profi
               onAction={retry}
               title="저장한 태그를 불러오지 못했어요"
             />,
-            false,
           )
         }
-        loading={renderFrame(
-          <DiscoveryState loading title="저장한 태그를 불러오는 중이에요" />,
-          true,
-        )}
+        loading={renderFrame(<DiscoveryState loading title="저장한 태그를 불러오는 중이에요" />)}
         title="저장한 태그를 불러오지 못했어요"
       >
         <SavedTagQuery empty={empty} profileId={profileId} renderFrame={renderFrame} />
@@ -139,7 +132,6 @@ function SavedTagQuery({
         onAction={refetch}
         title="저장한 태그를 확인할 수 없어요"
       />,
-      false,
     );
   }
   return <SavedTags empty={empty} profile={data.node.profile} renderFrame={renderFrame} />;
@@ -226,7 +218,6 @@ function SavedTags({
                         title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
                       />
                     </>,
-                    !active,
                   )
                 }
                 loading={renderFrame(
@@ -237,7 +228,6 @@ function SavedTags({
                       title={`#${tag.name} 관련 프로필을 불러오는 중이에요`}
                     />
                   </>,
-                  true,
                 )}
                 title={`#${tag.name} 관련 프로필을 불러오지 못했어요`}
               >
@@ -283,7 +273,6 @@ function TagQuery({
           title="이 태그의 관련 프로필을 확인할 수 없어요"
         />
       </>,
-      !active,
     );
   }
   return (
@@ -380,7 +369,6 @@ function RelatedProfilesContent({
         />
       </ScrollView>
     </View>,
-    !active || mutationLoading || pagination.isLoadingNext,
   );
 }
 

@@ -155,7 +155,7 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
     await expect(page).toHaveURL(/\/first-profile\/discover$/);
     await tagQueryFetched;
     await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: '계속하기', exact: true })).toBeEnabled();
     expect(tagQueries).toHaveLength(1);
@@ -175,7 +175,7 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
       .click();
     await followMutationFetched;
     await expect(page.getByRole('button', { name: '#책', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '이전 화면', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '#음악', exact: true })).toBeDisabled();
     await expect(
       profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
@@ -249,18 +249,6 @@ test('태그 조회와 팔로우를 순차 처리하고 두 태그의 관계 상
     ).toHaveCount(0);
     await page.getByRole('button', { name: '계속하기', exact: true }).click();
     await expect(page).toHaveURL(/\/first-profile\/complete$/);
-    await page.getByRole('button', { name: '이전 화면', exact: true }).click();
-    await expect(page).toHaveURL(/\/first-profile\/discover$/);
-    await expect(
-      profileRow(page, open.handle).getByRole('button', { name: '팔로잉', exact: true }),
-    ).toBeEnabled();
-    await page.getByRole('button', { name: '이전 화면', exact: true }).click();
-    await expect(page).toHaveURL(/\/first-profile\/posting$/);
-    await openDiscovery(page);
-    await expect(
-      profileRow(page, approval.handle).getByRole('button', { name: '요청됨', exact: true }),
-    ).toBeEnabled();
-    await page.getByRole('button', { name: '계속하기', exact: true }).click();
     await startApp(page);
     await expect(page).toHaveURL(/\/home$/);
     await expect(page.getByText('팔로우한 사람의 이어 읽을 글', { exact: true })).toBeVisible();
@@ -288,7 +276,7 @@ test('태그 저장 실패 초안은 사용하지 않고 이전 저장값으로 
   await addTag(page, '책');
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await expect(page).toHaveURL(/\/first-profile\/posting$/);
-  await page.getByRole('button', { name: '이전 화면' }).click();
+  await page.goBack();
   await expect(page).toHaveURL(/\/first-profile\/tags$/);
   await addTag(page, '게임');
   let failTagQuery = true;

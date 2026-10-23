@@ -243,7 +243,7 @@ function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
   const step = stepOverride ?? (pathname.split('/').at(-1) as FirstProfileStep | 'complete');
   const next = () =>
     router.push(
-      `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(step as FirstProfileStep) + 1] ?? 'review'}`,
+      `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(step as FirstProfileStep) + 1]}`,
     );
   return (
     <FirstProfileOnboardingScreen
@@ -253,15 +253,12 @@ function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
       created={flow.createdProfile !== null}
       draft={flow.draft}
       errors={flow.errors}
-      onBack={() => router.back()}
       onChange={flow.setDraft}
       onComplete={() => {
-        flow.complete(step === 'complete' ? 'review' : step, () =>
-          router.push('/first-profile/discover'),
-        );
+        flow.complete(() => router.push('/first-profile/discover'));
       }}
       onNext={() => {
-        if (step !== 'complete') {
+        if (step !== 'complete' && step !== 'review') {
           flow.next(step, next);
         }
       }}

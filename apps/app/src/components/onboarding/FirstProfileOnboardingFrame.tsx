@@ -1,9 +1,7 @@
-import { ArrowLeft } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
-import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, iconSizes, space, textStyles } from '@/theme/tokens';
+import { breakpoints, space, textStyles } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -11,9 +9,7 @@ export function FirstProfileOnboardingFrame({
   actions,
   children,
   description,
-  disabled = false,
   headerAction,
-  onBack,
   progress,
   style,
   title,
@@ -21,9 +17,7 @@ export function FirstProfileOnboardingFrame({
   actions: ReactNode;
   children: ReactNode;
   description?: string;
-  disabled?: boolean;
   headerAction?: ReactNode;
-  onBack: () => void;
   progress?: ReactNode;
   style?: StyleProp<ViewStyle>;
   title: string;
@@ -32,15 +26,6 @@ export function FirstProfileOnboardingFrame({
   return (
     <View style={[styles.content, style]}>
       <View style={styles.header}>
-        <IconButton
-          accessibilityLabel="이전 화면"
-          disabled={disabled}
-          onPress={onBack}
-          style={styles.back}
-          targetSize={48}
-        >
-          <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} />
-        </IconButton>
         <BrandLogo width={38} />
         <View style={styles.spacer} />
         {headerAction}
@@ -74,7 +59,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   header: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
-  back: { alignItems: 'center', justifyContent: 'center', height: 48, width: 48 },
   spacer: { flex: 1, minWidth: 0 },
   heading: { gap: space[12] },
   actions: { gap: space[12] },

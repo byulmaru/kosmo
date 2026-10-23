@@ -112,7 +112,6 @@ function DiscoveryStory({ state = 'ready' }: { state?: State }) {
           ) : (
             <FirstProfileTagDiscoveryRoute
               empty={<StateView title="저장한 태그가 없어 다음 단계로 이동해요" />}
-              onBack={() => undefined}
               onContinue={() => setContinued(true)}
               profileId="discovery-owner"
             />
