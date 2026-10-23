@@ -934,8 +934,9 @@ export const KeyboardFocusableProfileLink: Story = {
 
 export const ReadSuccessNormalizesAndNavigates: Story = {
   parameters: { relay: { mutationResponse: readMutationResponse } },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
     const canvas = within(canvasElement);
+    const theme = storyColors(globals.theme);
     await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
     await expect(
@@ -948,11 +949,13 @@ export const ReadSuccessNormalizesAndNavigates: Story = {
 
     expect(readRow).not.toBeNull();
     expect(getComputedStyle(readRow).backgroundColor).toBe('rgba(0, 0, 0, 0)');
-    expect(readRow.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
+    expect(readRow.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: theme.stateHover,
+    });
     await userEvent.unhover(readCopyLink);
-    expect(
-      readRow.querySelector('[data-testid="notification-hover-overlay"]'),
-    ).not.toBeInTheDocument();
+    expect(readRow.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+    });
   },
   render: () => <ReadNavigationList />,
 };
@@ -1000,13 +1003,13 @@ export const ReadPendingDoesNotBlockAvatarNavigation: Story = {
 
     expect(unreadRow).not.toBeNull();
     expect(unreadRow).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
-    expect(
-      unreadRow.querySelector('[data-testid="notification-hover-overlay"]'),
-    ).toBeInTheDocument();
+    expect(unreadRow.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: theme.stateHover,
+    });
     await userEvent.unhover(unreadCopyLink);
-    expect(
-      unreadRow.querySelector('[data-testid="notification-hover-overlay"]'),
-    ).not.toBeInTheDocument();
+    expect(unreadRow.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+    });
   },
   render: () => <ReadNavigationList />,
 };
@@ -1220,14 +1223,22 @@ export const HoverBackgroundFeedback: Story = {
 
     expect(row).not.toBeNull();
     expect(row).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
-    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).not.toBeInTheDocument();
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+    });
     await userEvent.hover(row!);
     expect(row).toHaveStyle({ backgroundColor: theme.actionPrimarySubtle });
-    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: theme.stateHover,
+    });
     await userEvent.hover(copyLink);
-    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toBeInTheDocument();
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: theme.stateHover,
+    });
     await userEvent.unhover(copyLink);
-    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).not.toBeInTheDocument();
+    expect(row.querySelector('[data-testid="notification-hover-overlay"]')).toHaveStyle({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+    });
   },
   render: () => <RefreshList />,
 };
