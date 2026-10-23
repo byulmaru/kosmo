@@ -98,14 +98,15 @@ function PostMediaImageSource({
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"
             onPress={() => setStatus('loading')}
-            style={[
-              styles.retryButton,
-              fill ? styles.fillRetryButton : null,
-              { borderColor: theme.border },
-            ]}
+            style={fill ? { width: '100%' } : undefined}
           >
             {({ pressed }) => (
-              <PostMediaRetryVisual pressed={pressed} reducedMotion={reducedMotion} theme={theme} />
+              <PostMediaRetryVisual
+                fill={fill}
+                pressed={pressed}
+                reducedMotion={reducedMotion}
+                theme={theme}
+              />
             )}
           </Pressable>
         ) : (
@@ -173,10 +174,12 @@ function PostMediaImageSource({
 }
 
 function PostMediaRetryVisual({
+  fill,
   pressed,
   reducedMotion,
   theme,
 }: {
+  fill: boolean;
   pressed: boolean;
   reducedMotion: boolean;
   theme: ReturnType<typeof useTheme>;
@@ -189,7 +192,13 @@ function PostMediaRetryVisual({
   });
 
   return (
-    <Animated.View style={{ opacity }}>
+    <Animated.View
+      style={[
+        styles.retryButton,
+        fill ? styles.fillRetryButton : null,
+        { borderColor: theme.border, opacity },
+      ]}
+    >
       <Text style={[styles.retryButtonText, { color: theme.text }]}>다시 시도</Text>
     </Animated.View>
   );
@@ -214,9 +223,9 @@ const styles = StyleSheet.create({
   fillFrame: { height: '100%', minHeight: 0, width: '100%' },
   fillRetryButton: { minWidth: 0, paddingHorizontal: spacing.xs, width: '100%' },
   retryButton: {
+    borderWidth: 1,
     alignItems: 'center',
     borderRadius: radii.full,
-    borderWidth: 1,
     justifyContent: 'center',
     minHeight: 48,
     minWidth: 112,
