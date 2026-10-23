@@ -432,7 +432,7 @@ function PostComposerContents({
     };
   }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
 
-  const submit = () => {
+  const submit = async () => {
     if (disabled) {
       return;
     }
@@ -442,6 +442,24 @@ function PostComposerContents({
     const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
+    const isCurrentSubmission = () =>
+      mountedRef.current &&
+      contextGenerationRef.current === submissionGeneration &&
+      environmentGenerationRef?.current === submissionEnvironmentGeneration &&
+      contextGuard?.current === submissionGuardGeneration;
+
+    try {
+      await media.completeUploads();
+    } catch {
+      if (isCurrentSubmission()) {
+        setSubmitting(false);
+      }
+      return;
+    }
+    if (!isCurrentSubmission()) {
+      return;
+    }
+
     commit({
       variables: {
         prependToHome: profile.id === globalProfileId,
@@ -464,12 +482,7 @@ function PostComposerContents({
         },
       },
       onCompleted: (response) => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+        if (!isCurrentSubmission()) {
           return;
         }
         setSubmitting(false);
@@ -501,12 +514,7 @@ function PostComposerContents({
         submittedCallback?.(createdPost);
       },
       onError: () => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+        if (!isCurrentSubmission()) {
           return;
         }
         setSubmitting(false);

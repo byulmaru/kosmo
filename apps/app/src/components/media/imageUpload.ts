@@ -198,11 +198,17 @@ export async function transferImage(asset: ImagePickerAsset, uploadUrl: string):
   }
 }
 
-export function reportImageUploadError(error: ImageUploadError): void {
+export function reportImageUploadError(
+  error: ImageUploadError,
+  fallbackOperation?: ImageUploadOperation,
+): void {
   try {
     const { failure, observation } = error;
     const context: Record<string, string | number> = {
-      operation: observation?.operation ?? (failure.stage === 'transfer' ? 'put' : failure.stage),
+      operation:
+        observation?.operation ??
+        fallbackOperation ??
+        (failure.stage === 'transfer' ? 'put' : failure.stage),
       reason: failure.reason,
       stage: failure.stage,
     };
@@ -225,7 +231,7 @@ export async function uploadImage({
   issue,
 }: {
   readonly asset: ImagePickerAsset;
-  readonly complete: (mediaId: string) => Promise<void>;
+  readonly complete?: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
   readonly issue: () => Promise<IssuedImageUpload>;
 }): Promise<string | null> {
@@ -247,14 +253,20 @@ export async function uploadImage({
       return null;
     }
 
-    operation = 'complete';
-    await complete(issued.mediaId);
+    if (complete) {
+      operation = 'complete';
+      await complete(issued.mediaId);
+    }
   } catch (error) {
     const stage: ImageUploadStage =
       operation === 'issue' ? 'issue' : operation === 'complete' ? 'complete' : 'transfer';
     const uploadError = asImageUploadError(error, stage, operation);
-    if (isActive()) {
-      reportImageUploadError(uploadError);
+    try {
+      if (isActive()) {
+        reportImageUploadError(uploadError, operation);
+      }
+    } catch {
+      // Observability must not change the upload result.
     }
     throw uploadError;
   }
