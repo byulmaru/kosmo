@@ -416,11 +416,6 @@ export function PostComposer({
         accessibilityState={{ expanded: visibilityOpen && !submitting }}
         disabled={submitting}
         onPress={() => setVisibilityOpen((open) => !open)}
-        style={
-          surface === 'overlay'
-            ? { borderColor: theme.borderSubtle }
-            : { borderColor: theme.borderDefault }
-        }
       >
         {({ pressed }) => (
           <VisibilityTriggerVisual
@@ -894,7 +889,6 @@ export function MobileFullscreenComposerShellCandidate({
         accessibilityState={{ expanded: visibilityOpen && !submitting }}
         disabled={submitting}
         onPress={() => setVisibilityOpen((open) => !open)}
-        style={{ borderColor: theme.borderSubtle }}
       >
         {({ pressed }) => (
           <VisibilityTriggerVisual
@@ -1329,7 +1323,10 @@ function VisibilityTriggerVisual({
     <Animated.View
       style={[
         surface === 'rail' ? styles.visibilityTrigger : styles.mobileVisibility,
-        { backgroundColor: animatedBackground } as ViewStyle,
+        {
+          backgroundColor: animatedBackground,
+          borderColor: surface === 'rail' ? theme.borderDefault : theme.borderSubtle,
+        } as ViewStyle,
       ]}
     >
       {surface !== 'rail' ? (
