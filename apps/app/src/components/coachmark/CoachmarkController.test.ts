@@ -503,6 +503,58 @@ test('account changes clear requests and stale handles cannot affect the new acc
   await act(async () => newAccountRequest?.cancel());
 });
 
+test('old account cleanup exits its own request once without affecting the new guide', async () => {
+  await renderProvider(createElement(ProviderProbe), 'account-1');
+  const exits: string[] = [];
+
+  let oldAccountRequest: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    oldAccountRequest =
+      requestFromProvider?.({
+        accountId: 'account-1',
+        guide: 'TIMELINE',
+        mode: 'manual',
+        onExit: () => exits.push('old'),
+        ready: true,
+        steps: [createStep('이전 계정 안내')],
+      }) ?? null;
+  });
+  assert.ok(oldAccountRequest);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(CoachmarkProvider, {
+        accountId: 'account-2',
+        children: createElement(ProviderProbe),
+      }),
+    );
+  });
+
+  let currentRequest: ReturnType<NonNullable<typeof requestFromProvider>> = null;
+  await act(async () => {
+    currentRequest =
+      requestFromProvider?.({
+        accountId: 'account-2',
+        guide: 'TIMELINE',
+        mode: 'manual',
+        onExit: () => exits.push('current'),
+        ready: true,
+        steps: [createStep('현재 계정 안내')],
+      }) ?? null;
+  });
+  assert.ok(currentRequest);
+
+  await act(async () => oldAccountRequest?.cancel());
+  assert.deepEqual(exits, ['old']);
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '현재 계정 안내');
+
+  await act(async () => {
+    currentRequest?.cancel();
+    currentRequest?.cancel();
+  });
+  assert.deepEqual(exits, ['old', 'current']);
+});
+
 test('controller callbacks from the previous account reject synchronously', async () => {
   const nextAccount: AccountFixture = {
     id: 'account-2',

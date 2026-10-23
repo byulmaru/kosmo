@@ -3,6 +3,8 @@ import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { RouteTabList } from '@/components/ui/RouteTabList';
 import { Tab } from '@/components/ui/Tabs';
+import type { RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { TabOption } from '@/components/ui/Tabs';
 
 export type TimelineTab = 'home' | 'local' | 'federated';
@@ -13,7 +15,15 @@ const options: readonly TabOption<TimelineTab>[] = [
   { label: '연합', value: 'federated' },
 ];
 
-export function TimelineTabs({ value }: { value: TimelineTab }) {
+export function TimelineTabs({
+  homeAnchorRef,
+  localAnchorRef,
+  value,
+}: {
+  homeAnchorRef?: RefObject<NativeView | null>;
+  localAnchorRef?: RefObject<NativeView | null>;
+  value: TimelineTab;
+}) {
   const federatedTimelineEnabled = useFeatureFlag('federated-timeline');
   const shellChrome = useShellChrome();
   return (
@@ -38,7 +48,11 @@ export function TimelineTabs({ value }: { value: TimelineTab }) {
       {options
         .filter((option) => option.value !== 'federated' || federatedTimelineEnabled)
         .map((option) => (
-          <Tab key={option.value} option={option} />
+          <Tab
+            anchorRef={option.value === 'home' ? homeAnchorRef : localAnchorRef}
+            key={option.value}
+            option={option}
+          />
         ))}
     </RouteTabList>
   );

@@ -122,8 +122,15 @@ export function CoachmarkProvider({
         }
         return { ...current, active: entry };
       });
+      let cancelled = false;
       return {
         cancel: () => {
+          if (cancelled) {
+            return;
+          }
+          cancelled = true;
+          // Route-owned cleanup still runs when this request belongs to a stale account.
+          exit();
           if (
             accountGenerationRef.current !== accountGeneration ||
             accountGeneration.token !== token
@@ -131,7 +138,6 @@ export function CoachmarkProvider({
             return;
           }
           accountGeneration.token = null;
-          exit();
           setStoredState((current) => {
             if (
               current.accountKey !== accountGeneration.accountKey ||

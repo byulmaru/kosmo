@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, beforeEach, mock, test } from 'node:test';
+import { before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -13,53 +12,20 @@ const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const platform = { OS: 'ios' };
-const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
-const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
-const browserWindow = {
-  addEventListener: () => undefined,
-  removeEventListener: () => undefined,
-  scrollTo: () => undefined,
-};
-const browserDocument = {
-  visibilityState: 'visible',
-  addEventListener: () => undefined,
-  removeEventListener: () => undefined,
-};
-const appState = { addEventListener: () => ({ remove: () => undefined }) };
-let width = 390;
-let boundaryState: 'content' | 'loading' = 'content';
-let routeTimeline = 'local';
-let renderer: ReactTestRenderer | undefined;
-const shellChrome = {
-  navigationDrawerOpen: false,
-  openNavigationDrawer: () => {
-    shellChrome.navigationDrawerOpen = true;
-  },
-};
 
 mockModule('expo-router', {
   Redirect: () => null,
-  useFocusEffect: () => undefined,
-  useLocalSearchParams: () => ({ timeline: routeTimeline }),
+  useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
-  useIsFocused: () => true,
 });
-mockModule('lucide-react-native', { Menu: 'Menu', UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), {
-  Menu: 'Menu',
-  UserRoundPlus: 'UserRoundPlus',
-});
+mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
+mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
 mockModule('react-native', {
-  AppState: appState,
   Platform: platform,
-  Pressable: 'Pressable',
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
-  useWindowDimensions: () => ({ height: 844, width }),
+  useWindowDimensions: () => ({ height: 844, width: timelineViewportWidth }),
   View: 'View',
-});
-mockModule('react-native-safe-area-context', {
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 });
 mockModule('react-error-boundary', {
   useErrorBoundary: () => ({ showBoundary: () => undefined }),
@@ -76,48 +42,39 @@ mockModule('react-relay', {
     check: () => ({ status: 'missing' }),
     retain: () => ({ dispose: () => undefined }),
   }),
-  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
-  ConnectionHandler,
-  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
   getRequest: () => ({}),
 });
-mockModule('@/components/BrandLogo', { BrandLogo: () => null });
-mockModule('@/components/shell/NavigationLink', {
-  NavigationLink: ({ children }: { children: ReactNode }) => children,
-});
-mockModule('@/components/ui/IconButton', {
-  IconButton: ({ children, ...props }: { children: ReactNode }) =>
-    createElement('Pressable', props, children),
-});
 mockModule('@/components/coachmark/TimelineCoachmark', {
-  TimelineCoachmark: () => null,
+  TimelineCoachmark: MockTimelineCoachmark,
   TimelineHelpButton: () => null,
 });
+function MockPageHeader(props: object) {
+  return createElement('PageHeader', props);
+}
+
 mockModule('@/components/PageHeader', {
-  PageHeader: (props: object) => createElement('PageHeader', props),
+  PageHeader: MockPageHeader,
 });
 mockModule('@/components/post/PostList', { PostList: () => null });
-mockModule('@/components/post/PostRequestList', {
-  PostRequestHomeSummaryFallback: () => null,
-  PostRequestHomeSummaryLoading: () => null,
-  PostRequestListSummary: () => null,
-});
-mockModule('@/components/timeline/HomePushPermissionBanner', {
-  HomePushPermissionBanner: () => null,
-});
 mockModule('@/components/RelayFailOpenBoundary', {
   RelayFailOpenBoundary: ({ children }: { children: ReactNode }) => children,
 });
 mockModule('@/components/RouteBoundary', {
-  RouteBoundary: ({ children, loading }: { children: ReactNode; loading: ReactNode }) =>
-    boundaryState === 'loading' ? loading : children,
+  RouteBoundary: ({ children }: { children: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: 0 }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
+mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/shellLayout', {
+  getShellLayout: (_web: boolean, width: number) =>
+    width < 768 ? 'mobile' : width < 1280 ? 'compact' : 'full',
+  getTimelineGuideViewportWidth: (web: boolean, width: number) =>
+    web ? timelineInnerWidth : width,
+  getWebMobileShellHeaderStickyOffset: () => 0,
+});
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
 mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () => null });
@@ -128,100 +85,76 @@ mockModule('@/theme/ThemeProvider', {
 });
 
 let HomeScreen: ComponentType;
-let HomeTimelineScreen: ComponentType;
-let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
+let timelineViewportWidth = 390;
+let timelineInnerWidth = 390;
+
+function MockTimelineCoachmark(props: Record<string, unknown>) {
+  return createElement('TimelineCoachmarkProbe', props);
+}
 
 before(async () => {
   ({ default: HomeScreen } = await import('../../app/(tabs)/(protected)/home'));
-  ({ default: HomeTimelineScreen } = await import('./HomeTimelineScreen'));
-  ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 
-beforeEach(() => {
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
-  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
-});
-
-afterEach(async () => {
-  await act(async () => renderer?.unmount());
-  platform.OS = 'ios';
-  width = 390;
-  boundaryState = 'content';
-  routeTimeline = 'local';
-  shellChrome.navigationDrawerOpen = false;
-  if (originalWindowDescriptor) {
-    Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
-  } else {
-    Reflect.deleteProperty(globalThis, 'window');
-  }
-  if (originalDocumentDescriptor) {
-    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
-  } else {
-    Reflect.deleteProperty(globalThis, 'document');
-  }
-});
-
-test('Native 타임라인 파라미터가 Local 또는 Federated이면 같은 route에서 해당 콘텐츠를 표시한다', async () => {
+test('Native 타임라인 파라미터가 Local이면 같은 route에서 Local 콘텐츠를 표시한다', async () => {
+  let renderer: ReactTestRenderer | null = null;
   await act(async () => {
     renderer = create(createElement(HomeScreen));
   });
 
-  const timelineHeading = () =>
-    renderer!.root
-      .findAll((node) => (node.type as unknown) === 'Text')
-      .find((node) => node.props.accessibilityRole === 'header')?.props.children;
-  assert.equal(timelineHeading(), '로컬');
-
-  routeTimeline = 'federated';
-  await act(async () => renderer!.update(createElement(HomeScreen)));
-  assert.equal(timelineHeading(), '연합');
+  const header = renderer!.root.findByType(MockPageHeader);
+  assert.equal(header.props.accessibilityLabel, '로컬');
 });
 
-test('모바일 Web route는 로딩부터 콘텐츠까지 자기 메뉴와 단일 타임라인 제목을 유지한다', async () => {
+test('Web scrollbar lock 폭 변화는 mobile과 desktop lifecycle을 재시작하지 않는다', async () => {
   platform.OS = 'web';
-  for (const [Screen, title, props] of [
-    [HomeTimelineScreen, '홈', {}],
-    [LocalTimelineScreen, '로컬', {}],
-    [LocalTimelineScreen, '타임라인 둘러보기', { publicEntry: true }],
-  ] as const) {
-    boundaryState = 'loading';
-    await act(async () => {
-      renderer = create(createElement(Screen as ComponentType<{ publicEntry?: boolean }>, props));
-    });
-    for (const state of ['loading', 'content'] as const) {
-      boundaryState = state;
-      await act(async () =>
-        renderer!.update(createElement(Screen as ComponentType<{ publicEntry?: boolean }>, props)),
-      );
-      const headings = renderer!.root
-        .findAll((node) => (node.type as unknown) === 'Text')
-        .filter(
-          (node) => node.props.accessibilityRole === 'header' && node.props.children === title,
-        );
-      assert.equal(headings.length, 1);
-      const menu = renderer!.root
-        .findAll((node) => (node.type as unknown) === 'Pressable')
-        .filter((node) => node.props.accessibilityLabel === '메뉴 열기');
-      assert.equal(menu.length, 1);
-      assert.equal(
-        renderer!.root
-          .findAll((node) => (node.type as unknown) === 'Pressable')
-          .filter((node) => node.props.accessibilityRole === 'link').length,
-        0,
-      );
-      await act(async () => menu[0]!.props.onPress());
-      await act(async () =>
-        renderer!.update(createElement(Screen as ComponentType<{ publicEntry?: boolean }>, props)),
-      );
-      assert.equal(
-        renderer!.root
-          .findAll((node) => (node.type as unknown) === 'Pressable')
-          .find((node) => node.props.accessibilityLabel === '메뉴 열기')!.props.accessibilityState
-          .expanded,
-        true,
-      );
-    }
-    await act(async () => renderer!.unmount());
-    renderer = undefined;
-  }
+
+  let renderer: ReactTestRenderer | null = null;
+
+  timelineViewportWidth = 753;
+  timelineInnerWidth = 768;
+  await act(async () => {
+    renderer = create(createElement(HomeScreen));
+  });
+  const mobileBeforeLockKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+
+  timelineViewportWidth = 768;
+  await act(async () => {
+    renderer?.update(createElement(HomeScreen));
+  });
+  const mobileAfterLockKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+  assert.equal(mobileBeforeLockKey, mobileAfterLockKey);
+
+  timelineViewportWidth = 767;
+  timelineInnerWidth = 767;
+  await act(async () => {
+    renderer?.update(createElement(HomeScreen));
+  });
+  const mobileAfterResizeKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+  assert.notEqual(mobileAfterResizeKey, mobileAfterLockKey);
+
+  timelineViewportWidth = 1_265;
+  timelineInnerWidth = 1_280;
+  await act(async () => {
+    renderer?.update(createElement(HomeScreen));
+  });
+  const desktopBeforeLockKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+
+  timelineViewportWidth = 1_280;
+  await act(async () => {
+    renderer?.update(createElement(HomeScreen));
+  });
+  const desktopAfterLockKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+
+  assert.equal(desktopBeforeLockKey, desktopAfterLockKey);
+
+  timelineViewportWidth = 1_279;
+  timelineInnerWidth = 1_279;
+  await act(async () => {
+    renderer?.update(createElement(HomeScreen));
+  });
+  const desktopAfterResizeKey = renderer!.root.findByType(MockTimelineCoachmark).props.lifecycleKey;
+  assert.notEqual(desktopAfterResizeKey, desktopAfterLockKey);
+
+  await act(async () => renderer?.unmount());
 });

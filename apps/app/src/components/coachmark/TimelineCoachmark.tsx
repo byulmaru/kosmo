@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { CircleHelp } from 'lucide-react-native';
-import { useCallback, useEffectEvent, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useShellChrome } from '../shell/ShellChromeContext';
@@ -10,8 +10,9 @@ import type { View as NativeView } from 'react-native';
 import type { CoachmarkController_account$key } from './CoachmarkController';
 import type { CoachmarkRequestHandle } from './CoachmarkProvider';
 
-const tabsDescription =
-  '홈에서는 내 글과 팔로우한 프로필의 글을 모아 봐요. 로컬에서는 KOSMO의 공개 글을 둘러봐요. 위 탭에서 전환할 수 있어요.';
+const homeDescription = '내 글과 팔로우한 프로필의 글을 모아 봐요.';
+const localDescription =
+  '아직 누구를 팔로우할지 모르겠다면 로컬을 둘러보세요. 팔로우하지 않은 사람을 포함해, 코스모 사람들이 전체 공개로 올린 글을 볼 수 있어요.';
 
 type TimelineHelpButtonProps = Readonly<{
   controlRef?: RefObject<NativeView | null>;
@@ -45,10 +46,11 @@ type TimelineCoachmarkProps = Readonly<{
   account: CoachmarkController_account$key | null | undefined;
   hasProfiles: boolean;
   hasSelectedProfile: boolean;
+  homeTabAnchorRef: RefObject<NativeView | null>;
   lifecycleKey: string;
+  localTabAnchorRef: RefObject<NativeView | null>;
   mobile: boolean;
   profileName?: string | null;
-  tabsAnchorRef: RefObject<NativeView | null>;
 }>;
 
 type TimelineShellChrome = NonNullable<ReturnType<typeof useShellChrome>>;
@@ -77,10 +79,11 @@ function TimelineCoachmarkConnected({
   account,
   hasProfiles,
   hasSelectedProfile,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   mobile,
   profileName,
   shellChrome,
-  tabsAnchorRef,
   composerAnchorRef,
   profileAnchorRef,
 }: TimelineCoachmarkProps & {
@@ -96,40 +99,44 @@ function TimelineCoachmarkConnected({
     timelineHelpTriggerRef,
   } = shellChrome;
   const [targetReady, setTargetReady] = useState(false);
-  let guideOpenedDrawer = false;
+  const guideOwnsDrawerRef = useRef(false);
 
-  const openGuideDrawer = () => {
-    if (mobile && !navigationDrawerOpen) {
-      guideOpenedDrawer = true;
+  const openGuideDrawer = useEffectEvent(() => {
+    if (mobile && !navigationDrawerOpen && !guideOwnsDrawerRef.current) {
+      guideOwnsDrawerRef.current = true;
       openNavigationDrawer();
     }
-  };
-  const releaseGuideDrawer = () => {
-    if (!guideOpenedDrawer) {
+  });
+  const releaseGuideDrawer = useEffectEvent(() => {
+    if (!guideOwnsDrawerRef.current) {
       return;
     }
 
-    guideOpenedDrawer = false;
+    guideOwnsDrawerRef.current = false;
     closeNavigationDrawer?.();
-  };
-  const onGuideExit = () => {
-    releaseGuideDrawer();
-  };
+  });
+  const onGuideExit = useEffectEvent(() => releaseGuideDrawer());
 
   useLayoutEffect(() => {
-    setTargetReady(Boolean(tabsAnchorRef.current));
-  }, [tabsAnchorRef]);
+    setTargetReady(Boolean(homeTabAnchorRef.current && localTabAnchorRef.current));
+  }, [homeTabAnchorRef, localTabAnchorRef]);
   const steps = [
     {
-      anchorRef: tabsAnchorRef,
-      description: tabsDescription,
+      anchorRef: homeTabAnchorRef,
+      description: homeDescription,
       onEnter: releaseGuideDrawer,
-      title: '홈과 로컬 둘러보기',
+      title: '내가 팔로우한 사람들의 글',
+    },
+    {
+      anchorRef: localTabAnchorRef,
+      description: localDescription,
+      onEnter: releaseGuideDrawer,
+      title: '코스모 사람들의 글을 둘러보세요',
     },
     {
       anchorRef: profileAnchorRef,
       description: hasSelectedProfile
-        ? `지금은 ‘${profileName ?? '현재 프로필'}’ 프로필로 활동하고 있어요. 여기를 눌러 다른 프로필로 바꿀 수 있어요.`
+        ? `지금은 ‘${profileName ?? '현재 프로필'}’로 활동하고 있어요. 여기에서 다른 프로필로 바꿀 수 있어요.`
         : hasProfiles
           ? '활동할 프로필을 선택할 수 있어요.'
           : '여기에서 활동할 프로필을 만들 수 있어요.',
@@ -141,9 +148,9 @@ function TimelineCoachmarkConnected({
           {
             anchorRef: composerAnchorRef!,
             description:
-              '여기에서 지금 떠오른 생각을 적어 보세요. 글을 쓰지 않아도 안내를 마칠 수 있어요.',
+              '여기에서 새 글을 쓸 수 있어요. 공개 범위와 첨부 방법은 작성 화면에서 안내해 드릴게요.',
             onEnter: releaseGuideDrawer,
-            title: '새 글 쓰기',
+            title: '내 이야기도 남겨보세요',
           },
         ]
       : []),
@@ -164,7 +171,10 @@ function TimelineCoachmarkConnected({
     useCallback(() => {
       let manualHandle: CoachmarkRequestHandle | null = null;
       const unregister = registerTimelineHelp?.(() => {
-        manualHandle = openCoachmark();
+        const nextHandle = openCoachmark();
+        if (nextHandle) {
+          manualHandle = nextHandle;
+        }
       });
       const automaticHandle = targetReady ? requestAutoStart() : null;
 

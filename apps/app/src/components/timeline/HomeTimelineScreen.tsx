@@ -27,6 +27,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
+  getTimelineGuideViewportWidth,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
 import { HomePushPermissionBanner } from '@/components/timeline/HomePushPermissionBanner';
@@ -124,7 +125,13 @@ export default function HomeScreen() {
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const homeRefreshRef = useRef<HomeRefresh | null>(null);
   const registerHomeRefresh = useCallback((refresh: HomeRefresh | null) => {
-  const timelineTabsRef = useRef<View>(null);
+  const homeTabAnchorRef = useRef<View>(null);
+  const localTabAnchorRef = useRef<View>(null);
+  const [revalidateCachedHome] = useState(
+    () =>
+      environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
+      'available',
+  );
     homeRefreshRef.current = refresh;
   }, []);
   const handleHomeReselection = useCallback(() => {
@@ -157,7 +164,11 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome} timelineTabsRef={timelineTabsRef}>
+    <HomeFrame
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      onBrandCurrentNavigate={shellChrome?.reselectHome}
+    >
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -168,7 +179,9 @@ export default function HomeScreen() {
           onAutomaticRefresh={requestAutomaticRefresh}
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
-          timelineTabsRef={timelineTabsRef}
+          revalidateCachedHome={revalidateCachedHome}
+          homeTabAnchorRef={homeTabAnchorRef}
+          localTabAnchorRef={localTabAnchorRef}
         />
       </RouteBoundary>
     </HomeFrame>
@@ -177,11 +190,13 @@ export default function HomeScreen() {
 
 function HomeFrame({
   children,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onBrandCurrentNavigate,
-  timelineTabsRef,
 }: PropsWithChildren<{
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onBrandCurrentNavigate?: () => void;
-  timelineTabsRef: RefObject<View | null>;
 }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader =
@@ -199,14 +214,17 @@ function HomeFrame({
         />
       ) : null}
       <View
-        ref={timelineTabsRef}
         style={
           Platform.OS === 'web'
             ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
             : undefined
         }
       >
-        <TimelineTabs value="home" />
+        <TimelineTabs
+          homeAnchorRef={homeTabAnchorRef}
+          localAnchorRef={localTabAnchorRef}
+          value="home"
+        />
       </View>
       <View style={styles.body}>{children}</View>
     </View>
@@ -218,13 +236,17 @@ function HomeRouteContent({
   onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
-  timelineTabsRef,
+  homeTabAnchorRef,
+  localTabAnchorRef,
+  revalidateCachedHome,
 }: {
   active: boolean;
   onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
-  timelineTabsRef: RefObject<View | null>;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+  revalidateCachedHome: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -235,7 +257,9 @@ function HomeRouteContent({
       onAutomaticRefresh={onAutomaticRefresh}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
-      timelineTabsRef={timelineTabsRef}
+      revalidateCachedHome={revalidateCachedHome}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
     />
   );
 }
@@ -246,14 +270,18 @@ function HomeContent({
   onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
-  timelineTabsRef,
+  homeTabAnchorRef,
+  localTabAnchorRef,
+  revalidateCachedHome,
 }: {
   active: boolean;
   fetchKey: string;
   onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
-  timelineTabsRef: RefObject<View | null>;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+  revalidateCachedHome: boolean;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -398,11 +426,14 @@ function HomeContent({
 
   useEffect(() => {
     registerHomeRefresh(refreshResource.refresh);
+    if (revalidateCachedHome) {
+      refreshResource.refresh('automatic');
+    }
     return () => {
       registerHomeRefresh(null);
       refreshResource.dispose();
     };
-  }, [refreshResource, registerHomeRefresh]);
+  }, [refreshResource, registerHomeRefresh, revalidateCachedHome]);
 
   useEffect(() => {
     if (!hasSelectedProfile || !timelineState.atTop || !timelineState.revalidationPending) {
@@ -432,6 +463,8 @@ function HomeContent({
         onRefresh={onRefresh}
         postRequestRefreshKey={postRequestRefreshKey}
         refreshing={refreshing}
+        homeTabAnchorRef={homeTabAnchorRef}
+        localTabAnchorRef={localTabAnchorRef}
       />
     </>
   );
@@ -491,19 +524,21 @@ function HomeContentView({
   data,
   fetchKey,
   onAtTopChange,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   postRequestRefreshKey,
   refreshing,
-  timelineTabsRef,
 }: {
   active: boolean;
   data: HomePageQuery$data;
   fetchKey: string;
   onAtTopChange: (atTop: boolean) => void;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   postRequestRefreshKey: number;
   refreshing: boolean;
-  timelineTabsRef: RefObject<View | null>;
 }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -536,15 +571,21 @@ function HomeContentView({
       ) : null,
     [accountId, openComposer, postRequestFetchKey, postRequestFetchPolicy, selectedProfileId],
   );
+  const shellLayout = getShellLayout(Platform.OS === 'web', width);
+  const timelineLayout = getShellLayout(
+    Platform.OS === 'web',
+    getTimelineGuideViewportWidth(Platform.OS === 'web', width),
+  );
   const coachmark = (
     <TimelineCoachmark
       account={data.me}
       hasProfiles={hasProfiles}
       hasSelectedProfile={Boolean(selectedProfile)}
-      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${getShellLayout(Platform.OS === 'web', width)}`}
-      mobile={Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) === 'mobile'}
+      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${timelineLayout}`}
+      mobile={Platform.OS !== 'web' || shellLayout === 'mobile'}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
       profileName={selectedProfile?.displayName}
-      tabsAnchorRef={timelineTabsRef}
     />
   );
 

@@ -20,20 +20,30 @@ for (const width of [390, 1440]) {
       db.select().from(AccountCoachmarks).where(eq(AccountCoachmarks.accountId, viewer.account.id));
 
     await page.goto('/home');
-    const tabsGuide = page.getByRole('dialog', { name: '홈과 로컬 둘러보기' });
-    await expect(tabsGuide).toBeVisible();
+    const homeGuide = page.getByRole('dialog', { name: '내가 팔로우한 사람들의 글' });
+    await expect(homeGuide).toBeVisible();
     await expect
       .poll(async () => (await shownRows()).map(({ guide }) => guide))
       .toEqual([CoachmarkGuide.TIMELINE]);
     const [firstShown] = await shownRows();
-    await tabsGuide.getByRole('button', { name: '다음', exact: true }).click();
+    await homeGuide.getByRole('button', { name: '다음', exact: true }).click();
+    const localGuide = page.getByRole('dialog', {
+      name: '코스모 사람들의 글을 둘러보세요',
+    });
+    await expect(localGuide).toBeVisible();
+    await expect(page).toHaveURL(/\/home(?:\?.*)?$/);
+    await localGuide.getByRole('button', { name: '다음', exact: true }).click();
     const profileGuide = page.getByRole('dialog', { name: '지금 활동하는 프로필' });
     await expect(profileGuide).toBeVisible();
     if (width === 390) {
       await expect(page.locator('#mobile-sidebar')).toBeVisible();
     }
-    await profileGuide.getByRole('button', { name: '건너뛰기' }).click();
-    await expect(profileGuide).toBeHidden();
+    await profileGuide.getByRole('button', { name: '다음', exact: true }).click();
+    const composerGuide = page.getByRole('dialog', { name: '내 이야기도 남겨보세요' });
+    await expect(composerGuide).toBeVisible();
+    await expect(page).toHaveURL(/\/home(?:\?.*)?$/);
+    await composerGuide.getByRole('button', { name: '건너뛰기' }).click();
+    await expect(composerGuide).toBeHidden();
     await expect(page.getByRole('button', { name: '타임라인 도움말' })).toBeFocused();
     if (width === 390) {
       await expect(page.locator('#mobile-sidebar')).toHaveCount(0);
@@ -42,10 +52,11 @@ for (const width of [390, 1440]) {
     await page.goto('/local');
     const help = page.getByRole('button', { name: '타임라인 도움말' });
     await expect(help).toBeVisible();
-    await expect(tabsGuide).toBeHidden();
+    await expect(homeGuide).toBeHidden();
     await help.click();
-    await expect(tabsGuide).toBeVisible();
-    await tabsGuide.getByRole('button', { name: '건너뛰기' }).click();
+    await expect(homeGuide).toBeVisible();
+    await expect(page).toHaveURL(/\/local(?:\?.*)?$/);
+    await homeGuide.getByRole('button', { name: '건너뛰기' }).click();
     await expect(help).toBeFocused();
     expect(await shownRows()).toEqual([firstShown]);
   });

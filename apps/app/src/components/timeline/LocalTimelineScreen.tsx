@@ -14,6 +14,7 @@ import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrig
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
+  getTimelineGuideViewportWidth,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
@@ -69,7 +70,8 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const timelineTabsRef = useRef<View>(null);
+  const homeTabAnchorRef = useRef<View>(null);
+  const localTabAnchorRef = useRef<View>(null);
   const [refreshState, setRefreshState] = useState({ refreshVersion: 0, refreshing: false });
   const completeRefresh = useCallback(() => {
     setRefreshState((state) => ({ ...state, refreshing: false }));
@@ -117,7 +119,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           />
         </MobileWebRouteChrome>
       ) : (
-        <LocalHeader width={width} timelineTabsRef={timelineTabsRef} />
+        <LocalHeader width={width} homeTabAnchorRef={homeTabAnchorRef} localTabAnchorRef={localTabAnchorRef} />
       )}
       <View style={styles.body}>
         <RouteBoundary
@@ -145,7 +147,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
             onRefreshComplete={completeRefresh}
             refreshVersion={refreshState.refreshVersion}
             refreshing={refreshState.refreshing}
-            timelineTabsRef={timelineTabsRef}
+            homeTabAnchorRef={homeTabAnchorRef} localTabAnchorRef={localTabAnchorRef}
           />
         </RouteBoundary>
       </View>
@@ -153,7 +155,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   );
 }
 
-function LocalHeader({ width, timelineTabsRef }: { width: number; timelineTabsRef: RefObject<View | null> }) {
+function LocalHeader({ width, homeTabAnchorRef, localTabAnchorRef }: { width: number; homeTabAnchorRef: RefObject<View | null>; localTabAnchorRef: RefObject<View | null> }) {
   const shellChrome = useShellChrome();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
@@ -172,14 +174,17 @@ function LocalHeader({ width, timelineTabsRef }: { width: number; timelineTabsRe
         />
       ) : null}
       <View
-        ref={timelineTabsRef}
         style={
           Platform.OS === 'web'
             ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
             : undefined
         }
       >
-        <TimelineTabs value="local" />
+        <TimelineTabs
+          homeAnchorRef={homeTabAnchorRef}
+          localAnchorRef={localTabAnchorRef}
+          value="local"
+        />
       </View>
     </>
   );
@@ -188,19 +193,21 @@ function LocalHeader({ width, timelineTabsRef }: { width: number; timelineTabsRe
 function LocalContent({
   active,
   hasSuccessfulLocalRef,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   onRefreshComplete,
   refreshVersion,
   refreshing,
-  timelineTabsRef,
 }: {
   active: boolean;
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   onRefreshComplete: () => void;
   refreshVersion: number;
   refreshing: boolean;
-  timelineTabsRef: RefObject<View | null>;
 }) {
   const { fetchKey } = useRouteBoundary();
   const queryData = useLazyLoadQuery<LocalPageQuery>(
@@ -221,7 +228,8 @@ function LocalContent({
         data={data}
         onRefresh={onRefresh}
         refreshing={refreshing}
-        timelineTabsRef={timelineTabsRef}
+        homeTabAnchorRef={homeTabAnchorRef}
+        localTabAnchorRef={localTabAnchorRef}
       />
       <RelayFailOpenBoundary
         fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
@@ -296,15 +304,17 @@ function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
 function LocalContentView({
   active,
   data,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   refreshing,
-  timelineTabsRef,
 }: {
   active: boolean;
   data: LocalContent_query$data;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   refreshing: boolean;
-  timelineTabsRef: RefObject<View | null>;
 }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -313,15 +323,21 @@ function LocalContentView({
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
   const { status } = useSession();
   const guest = Platform.OS === 'web' && status === 'guest' && !data.currentSession && !data.me;
+  const shellLayout = getShellLayout(Platform.OS === 'web', width);
+  const timelineLayout = getShellLayout(
+    Platform.OS === 'web',
+    getTimelineGuideViewportWidth(Platform.OS === 'web', width),
+  );
   const coachmark = (
     <TimelineCoachmark
       account={data.me}
       hasProfiles={hasProfiles}
       hasSelectedProfile={Boolean(selectedProfile)}
-      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${getShellLayout(Platform.OS === 'web', width)}`}
-      mobile={Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) === 'mobile'}
+      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${timelineLayout}`}
+      mobile={Platform.OS !== 'web' || shellLayout === 'mobile'}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
       profileName={selectedProfile?.displayName}
-      tabsAnchorRef={timelineTabsRef}
     />
   );
 
