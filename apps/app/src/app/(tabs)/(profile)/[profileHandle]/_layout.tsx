@@ -1,7 +1,7 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { Slot, Stack, useCurrentRouteInfo, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
@@ -88,6 +88,39 @@ export default function ProfileLayout() {
     (pathSegments[0]?.length ?? 0) > 1 &&
     pathSegments[0]?.startsWith('@');
   const fallbackRelativeHandle = `@${handle}`;
+  const guestMobileWebProfileHome =
+    Platform.OS === 'web' &&
+    getShellLayout(Platform.OS === 'web', width) === 'mobile' &&
+    status === 'guest' &&
+    isProfileHome;
+
+  return (
+    <MemoizedProfileRouteBoundary
+      connectionKind={connectionKind}
+      fallbackRelativeHandle={fallbackRelativeHandle}
+      guestMobileWebProfileHome={guestMobileWebProfileHome}
+      handle={handle}
+      isProfileHome={isProfileHome}
+      scrollKey={scrollKey}
+    />
+  );
+}
+
+function ProfileRouteBoundary({
+  connectionKind,
+  fallbackRelativeHandle,
+  guestMobileWebProfileHome,
+  handle,
+  isProfileHome,
+  scrollKey,
+}: {
+  connectionKind: ProfileConnectionKind | null;
+  fallbackRelativeHandle: string;
+  guestMobileWebProfileHome: boolean;
+  handle: string;
+  isProfileHome: boolean;
+  scrollKey: string;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const backButton = (
@@ -101,11 +134,6 @@ export default function ProfileLayout() {
       <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
     </IconButton>
   );
-  const guestMobileWebProfileHome =
-    Platform.OS === 'web' &&
-    getShellLayout(Platform.OS === 'web', width) === 'mobile' &&
-    status === 'guest' &&
-    isProfileHome;
   const headerLeading = guestMobileWebProfileHome ? <NavigationDrawerTrigger /> : backButton;
 
   return (
@@ -160,9 +188,9 @@ export default function ProfileLayout() {
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent
-        headerLeading={headerLeading}
         connectionKind={connectionKind}
         handle={handle}
+        headerLeading={headerLeading}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
       />
@@ -170,16 +198,18 @@ export default function ProfileLayout() {
   );
 }
 
+const MemoizedProfileRouteBoundary = memo(ProfileRouteBoundary);
+
 function ProfileLayoutContent({
-  headerLeading,
   connectionKind,
   handle,
+  headerLeading,
   scrollKey,
   showPageHeader,
 }: {
-  headerLeading: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
+  headerLeading: ReactNode;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
