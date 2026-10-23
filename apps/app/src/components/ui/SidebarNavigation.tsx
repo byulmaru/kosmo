@@ -30,13 +30,14 @@ import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
 import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
-import type { ReactElement, Ref } from 'react';
-import type { PressableStateCallbackType, ViewStyle } from 'react-native';
+import type { ReactElement, Ref, RefObject } from 'react';
+import type { PressableStateCallbackType, View as NativeView, ViewStyle } from 'react-native';
 import type { NavigationDestination, NavigationProfile } from './navigationChrome';
 
 export type SidebarPresentation = 'compact' | 'drawer' | 'full';
 
 export type SidebarNavigationProps = {
+  composeControlRef?: RefObject<NativeView | null>;
   currentDestination?: NavigationDestination | null;
   guestPublicContent?: boolean;
   logoutError?: string | null;
@@ -452,6 +453,7 @@ function SidebarControl({
 }
 
 export function SidebarNavigation({
+  composeControlRef,
   currentDestination = null,
   guestPublicContent = false,
   logoutError = null,
@@ -569,6 +571,7 @@ export function SidebarNavigation({
             {compact ? (
               <SidebarControl
                 compact
+                controlRef={composeControlRef}
                 destination="compose"
                 Icon={SquarePen}
                 label="글쓰기"

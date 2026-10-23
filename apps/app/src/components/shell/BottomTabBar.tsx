@@ -8,7 +8,8 @@ import { NavigationLink } from './NavigationLink';
 import { useShellChrome } from './ShellChromeContext';
 import { isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, RefObject } from 'react';
+import type { View } from 'react-native';
 import type {
   BottomTabBarRenderControlProps,
   BottomTabDestination,
@@ -28,6 +29,7 @@ const BottomTabBarFragment = graphql`
 `;
 
 type Props = {
+  composeTriggerRef?: RefObject<View | null>;
   onComposeOpen?: () => void;
   profile?: BottomTabBar_profile$key | null;
 };
@@ -44,7 +46,7 @@ export function isBottomTabDestination(href: Href) {
   return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
 }
 
-export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
+export function BottomTabBar({ composeTriggerRef, onComposeOpen, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const shellChrome = useShellChrome();
@@ -105,6 +107,7 @@ export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
 
   return (
     <BottomTabBarPresentation
+      composeControlRef={composeTriggerRef}
       currentDestination={currentDestination}
       onNavigate={() => undefined}
       platform={Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android'}

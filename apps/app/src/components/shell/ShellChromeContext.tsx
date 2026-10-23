@@ -8,10 +8,16 @@ export type { TabReselectionDestination, TabReselectionHandler } from './tabRese
 export type HomeReselectionHandler = () => void;
 
 type ShellChromeActions = {
+  closeNavigationDrawer?: () => void;
   navigationDrawerOpen: boolean;
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
+  registerTimelineHelp?: (handler: (() => void) | null) => () => void;
+  timelineComposerRef?: RefObject<NativeView | null>;
+  timelineHelp?: () => void;
+  timelineHelpTriggerRef?: RefObject<NativeView | null>;
+  timelineProfileRef?: RefObject<NativeView | null>;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
   registerTabReselection?: (
     destination: TabReselectionDestination,
@@ -27,10 +33,16 @@ const ShellChromeContext = createContext<ShellChromeActions | null>(null);
 
 export function ShellChromeProvider({
   children,
+  closeNavigationDrawer,
   navigationDrawerOpen,
   navigationDrawerTriggerRef,
   openNavigationDrawer,
   openProfileSwitcher,
+  registerTimelineHelp,
+  timelineComposerRef,
+  timelineHelp,
+  timelineHelpTriggerRef,
+  timelineProfileRef,
   registerHomeReselection,
   registerTabReselection,
   reselectTab,
@@ -38,10 +50,16 @@ export function ShellChromeProvider({
 }: ShellChromeProviderProps) {
   const value = useMemo(
     () => ({
+      closeNavigationDrawer,
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
       openNavigationDrawer,
       openProfileSwitcher,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,
@@ -50,8 +68,14 @@ export function ShellChromeProvider({
     [
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
+      closeNavigationDrawer,
       openNavigationDrawer,
       openProfileSwitcher,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,

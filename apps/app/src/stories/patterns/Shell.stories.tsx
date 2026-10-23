@@ -7,6 +7,9 @@ import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import HomeScreen from '@/app/(tabs)/(protected)/home';
+import LocalScreen from '@/app/(tabs)/(protected)/local';
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
@@ -30,7 +33,7 @@ import {
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
-import { profile, shellQuery } from '../fixtures';
+import { post, profile, shellQuery, timeline } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactNode } from 'react';
@@ -1881,6 +1884,53 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
+const timelineStoryQuery = {
+  ...query,
+  me: { ...query.me, seenCoachmarks: ['TIMELINE'] },
+};
+const timelineStoryPost = {
+  ...post({
+    bodyText: '홈과 로컬 타임라인의 실제 셸 통합을 확인하는 게시글입니다.',
+    id: 'shell-timeline-coachmark-post',
+    profile: selectedProfile,
+    visibility: 'PUBLIC',
+  }),
+  viewerReactions: [],
+};
+const timelineHomeQuery = {
+  ...timelineStoryQuery,
+  homeTimeline: timeline(timelineStoryPost),
+};
+const timelineLocalQuery = {
+  ...timelineStoryQuery,
+  localTimeline: timeline(timelineStoryPost),
+};
+
+function timelineStoryParameters(
+  operationName: 'HomePageQuery' | 'LocalPageQuery',
+  data: unknown,
+  pathname: '/home' | '/local',
+) {
+  return {
+    ...universalParameters,
+    relay: {
+      data: timelineStoryQuery,
+      operationResponses: {
+        SessionProviderQuery: { data: timelineStoryQuery },
+        UniversalShellQuery: { data: timelineStoryQuery },
+        CoachmarkControllerRecordMutation: {
+          data: { recordCoachmarkShown: { account: timelineStoryQuery.me } },
+        },
+        [operationName]: { data },
+      },
+    },
+    router: {
+      pathname,
+      slotLabel: pathname === '/home' ? '홈 타임라인' : '로컬 타임라인',
+    },
+  };
+}
+
 const composerMediaAsset = {
   height: 96,
   uri: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%236b7280"/%3E%3C/svg%3E',
@@ -1943,6 +1993,32 @@ function UniversalShellStory({ children }: { children?: ReactNode } = {}) {
     <SessionProvider>
       <UniversalShell>{children ?? <Slot />}</UniversalShell>
     </SessionProvider>
+  );
+}
+
+function UniversalTimelineStory({ children }: { children: ReactNode }) {
+  return (
+    <SessionProvider>
+      <CoachmarkProvider accountId={timelineStoryQuery.me.id}>
+        <UniversalShell>{children}</UniversalShell>
+      </CoachmarkProvider>
+    </SessionProvider>
+  );
+}
+
+function UniversalTimelineHomeStory() {
+  return (
+    <UniversalTimelineStory>
+      <HomeScreen />
+    </UniversalTimelineStory>
+  );
+}
+
+function UniversalTimelineLocalStory() {
+  return (
+    <UniversalTimelineStory>
+      <LocalScreen />
+    </UniversalTimelineStory>
   );
 }
 
@@ -2219,6 +2295,45 @@ export const UniversalMobileGuardedProfilePicker: Story = {
       <GuardedUniversalShellStory />
     </View>
   ),
+};
+
+export const UniversalMobileTimelineHome: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: timelineStoryParameters('HomePageQuery', timelineHomeQuery, '/home'),
+  render: () => (
+    <View style={{ height: 844 }}>
+      <UniversalTimelineHomeStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileTimelineLocal: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: timelineStoryParameters('LocalPageQuery', timelineLocalQuery, '/local'),
+  render: () => (
+    <View style={{ height: 844 }}>
+      <UniversalTimelineLocalStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileTimelineNoSelectedProfile: Story = {
+  ...UniversalMobileTimelineLocal,
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: {
+        ...timelineLocalQuery,
+        currentSession: { ...timelineLocalQuery.currentSession, selectedProfile: null },
+      },
+      operationResponses: {
+        CoachmarkControllerRecordMutation: {
+          data: { recordCoachmarkShown: { account: timelineStoryQuery.me } },
+        },
+      },
+    },
+    router: { pathname: '/local' },
+  },
 };
 
 export const UniversalMobileLongProfilePickerScroll: Story = {

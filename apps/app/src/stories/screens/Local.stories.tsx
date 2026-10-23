@@ -78,7 +78,11 @@ function localPageData(localTimeline = localConnection([firstPost, secondPost]))
   return {
     currentSession: { id: 'local-story-session', selectedProfile },
     localTimeline,
-    me: { id: 'local-story-account', profiles: [{ id: selectedProfile.id }] },
+    me: {
+      id: 'local-story-account',
+      profiles: [{ id: selectedProfile.id }],
+      seenCoachmarks: [],
+    },
   };
 }
 
