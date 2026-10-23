@@ -59,6 +59,7 @@ mockModule('@/components/profile/ProfileListItemContent', {
 mockModule('@/components/profile/ProfileBlockAction', { ProfileBlockAction: 'ProfileBlockAction' });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     background: '#fff',
     foregroundPrimary: '#111',
