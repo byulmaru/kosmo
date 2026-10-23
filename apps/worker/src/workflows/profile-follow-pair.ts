@@ -13,12 +13,12 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
+  ProfileFollowInboundFollow,
   ProfileFollowPair,
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
   ProfileFollowPairLifecycleState,
   ProfileFollowPairTransitionOutcome,
-  ProfileFollowInboundFollow,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 

@@ -732,6 +732,11 @@ describe('inbound Follow and Undo', () => {
           objectUri: localActorUri.href,
           published: published.toString(),
         });
+        await db.insert(ProfileFollowRequests).values({
+          id: expectedRequestId,
+          followerProfileId: fixture.remoteProfile.id,
+          followeeProfileId: fixture.localProfile.id,
+        });
         return {
           ok: true as const,
           result: {

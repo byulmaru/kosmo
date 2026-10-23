@@ -23,8 +23,8 @@ export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profil
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,
-  ProfileFollowCreateEffectInput,
   ProfileFollowAcceptEffectInput,
+  ProfileFollowCreateEffectInput,
   ProfileFollowDeleteEffectInput,
   ProfileFollowInboundFollow,
   ProfileFollowPairCommand,

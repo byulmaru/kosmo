@@ -1,23 +1,23 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { z } from 'zod';
 import {
   ActivityPubActors,
   db,
   first,
+  Instances,
   pg,
   pgRead,
   ProfileFollows,
   Profiles,
-  Instances,
   withPrimaryDatabase,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { closeFedifyQueue, fedifyQueue } from '../src/queue';
+import { z } from 'zod';
 import { sendProfileFollowAccept } from '../src/profile-follow-delivery';
+import { closeFedifyQueue, fedifyQueue } from '../src/queue';
 
 const RemoteProfiles = alias(Profiles, 'accept_recovery_remote_profile');
 const RemoteInstances = alias(Instances, 'accept_recovery_remote_instance');
@@ -75,7 +75,9 @@ const loadCurrentFollow = async (input: FollowInput) =>
 const requireHttpUrl = (value: string | null, name: string): URL => {
   let url: URL;
   try {
-    if (value == null) throw new TypeError();
+    if (value == null) {
+      throw new TypeError();
+    }
     url = new URL(value);
   } catch {
     throw new TypeError(`${name} must be an HTTP(S) URL without credentials.`);

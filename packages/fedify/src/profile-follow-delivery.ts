@@ -1,6 +1,5 @@
 import { Follow, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import type { ProfileFollowInboundFollow } from '@kosmo/core/services';
 import { federation } from './federation';
 import {
   getFollowActivityUri,
@@ -9,6 +8,7 @@ import {
 } from './follow-delivery';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
+import type { ProfileFollowInboundFollow } from '@kosmo/core/services';
 
 type RemoteProfileFollowActor = {
   inboxUri: string | null;
