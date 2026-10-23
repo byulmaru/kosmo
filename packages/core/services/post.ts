@@ -29,7 +29,9 @@ import {
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { normalizePostContentPlainText } from '../post-content';
 import {
+  applyRemotePostContentHashtags,
   canonicalizePostContentDocument,
+  findRemotePostContentHashtags,
   postContentDocumentFromTextAndMedia,
   postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
@@ -67,6 +69,7 @@ type LocalPostInput = {
 
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
+  hashtagNames?: readonly string[];
   media?: readonly RemoteMediaCandidate[];
   mentionProfileIds: readonly string[];
   objectUri: string;
@@ -117,6 +120,31 @@ type CreatedPost = {
 
 type DuplicatePost = { created: false };
 
+const upsertHashtags = async (
+  tx: Transaction,
+  namesAndDisplayNames: ReadonlyMap<string, string>,
+) => {
+  if (namesAndDisplayNames.size === 0) {
+    return new Map<string, string>();
+  }
+
+  const names = [...namesAndDisplayNames.keys()];
+  await tx
+    .insert(Hashtags)
+    .values(
+      [...namesAndDisplayNames]
+        .map(([name, displayName]) => ({ displayName, name }))
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+    )
+    .onConflictDoNothing({ target: Hashtags.name });
+
+  const hashtagRows = await tx
+    .select({ id: Hashtags.id, name: Hashtags.name })
+    .from(Hashtags)
+    .where(inArray(Hashtags.name, names));
+  return new Map(hashtagRows.map(({ id, name }) => [name, id]));
+};
+
 const resolveLocalPostHashtags = async (
   tx: Transaction,
   bodyText: string,
@@ -134,21 +162,7 @@ const resolveLocalPostHashtags = async (
       namesAndDisplayNames.set(name, displayName);
     }
   }
-  const names = [...namesAndDisplayNames.keys()];
-  await tx
-    .insert(Hashtags)
-    .values(
-      [...namesAndDisplayNames]
-        .map(([name, displayName]) => ({ displayName, name }))
-        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
-    )
-    .onConflictDoNothing({ target: Hashtags.name });
-
-  const hashtagRows = await tx
-    .select({ id: Hashtags.id, name: Hashtags.name })
-    .from(Hashtags)
-    .where(inArray(Hashtags.name, names));
-  const hashtagIdsByName = new Map(hashtagRows.map(({ id, name }) => [name, id]));
+  const hashtagIdsByName = await upsertHashtags(tx, namesAndDisplayNames);
   const references = candidates.map(({ end, start }) => {
     const { name } = normalizeHashtag(bodyText.slice(start, end));
     return { end, hashtagId: hashtagIdsByName.get(name)!, start };
@@ -157,6 +171,35 @@ const resolveLocalPostHashtags = async (
   return {
     hashtagIds: [...new Set(references.map(({ hashtagId }) => hashtagId))],
     references,
+  };
+};
+
+const resolveRemotePostHashtags = async (
+  tx: Transaction,
+  document: PostContentDocumentV1,
+  hashtagNames: readonly string[],
+) => {
+  const matches = findRemotePostContentHashtags(document, hashtagNames);
+  if (matches.length === 0) {
+    return { document, hashtagIds: [] as string[] };
+  }
+
+  const namesAndDisplayNames = new Map<string, string>();
+  for (const { name: typedName } of matches) {
+    const { displayName, name } = normalizeHashtag(typedName);
+    if (!namesAndDisplayNames.has(name)) {
+      namesAndDisplayNames.set(name, displayName);
+    }
+  }
+  const hashtagIdsByName = await upsertHashtags(tx, namesAndDisplayNames);
+  const matchesWithIds = matches.map((match) => ({
+    ...match,
+    hashtagId: hashtagIdsByName.get(normalizeHashtag(match.name).name)!,
+  }));
+
+  return {
+    document: applyRemotePostContentHashtags(document, matchesWithIds),
+    hashtagIds: [...new Set(matchesWithIds.map(({ hashtagId }) => hashtagId))],
   };
 };
 
@@ -651,12 +694,12 @@ export async function createPost(
   try {
     result = await db.transaction(async (tx) => {
       let document: PostContentDocumentV1;
-      let localHashtagIds: string[] = [];
+      let postContentHashtagIds: string[] = [];
       if (input.origin === 'LOCAL') {
         const bodyText = normalizePostContentPlainText(input.bodyText);
         const mentions = input.mentions ?? [];
         const { hashtagIds, references } = await resolveLocalPostHashtags(tx, bodyText, mentions);
-        localHashtagIds = hashtagIds;
+        postContentHashtagIds = hashtagIds;
         document = validateLocalPostContentDocument(
           postContentDocumentFromTextAndMedia(
             bodyText,
@@ -669,7 +712,13 @@ export async function createPost(
           bodyText,
         );
       } else {
-        document = input.document;
+        const resolved = await resolveRemotePostHashtags(
+          tx,
+          input.document,
+          input.hashtagNames ?? [],
+        );
+        document = resolved.document;
+        postContentHashtagIds = resolved.hashtagIds;
       }
       const mentionProfileIds = new Set(
         input.origin === 'ACTIVITYPUB'
@@ -795,9 +844,9 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (localHashtagIds.length > 0) {
+      if (postContentHashtagIds.length > 0) {
         await tx.insert(PostContentHashtags).values(
-          localHashtagIds.map((hashtagId) => ({
+          postContentHashtagIds.map((hashtagId) => ({
             hashtagId,
             postContentId: content.id,
           })),

@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { MIMEType } from 'node:util';
-import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Document, Hashtag, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
@@ -42,6 +42,25 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 };
 
 const maxUnknownRemoteMentionLookups = 32;
+
+const collectInboundHashtagNames = async (note: Note): Promise<string[]> => {
+  const names: string[] = [];
+  for await (const tag of note.getTags({
+    contextLoader: noNetworkDocumentLoader,
+    crossOrigin: 'trust',
+    documentLoader: noNetworkDocumentLoader,
+    suppressError: true,
+  })) {
+    if (!(tag instanceof Hashtag)) {
+      continue;
+    }
+    const name = tag.name?.toString();
+    if (name !== undefined && name !== '') {
+      names.push(name);
+    }
+  }
+  return names;
+};
 
 const isImageAttachment = (attachment: Document): boolean => {
   if (attachment instanceof Image) {
@@ -111,6 +130,7 @@ const projectRemoteNote = async (
   const targetHrefs = await collectInboundMentionTargetHrefs(note);
   const { candidates: mentionCandidates, knownActorHrefs } =
     await resolveStoredInboundMentionCandidates(targetHrefs);
+  const hashtagNames = await collectInboundHashtagNames(note);
   let document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
   const media = await projectRemoteNoteMedia(note);
   const knownActorHrefSet = new Set(knownActorHrefs);
@@ -169,6 +189,7 @@ const projectRemoteNote = async (
 
   return {
     document,
+    hashtagNames,
     media,
     mentionProfileIds: [...new Set(mentionCandidates.map(({ profileId }) => profileId))],
   };
@@ -253,6 +274,7 @@ const resolveNoteVisibility = (note: Note, followersUri?: string | null): PostVi
 const createRemoteNotePost = async ({
   context,
   document,
+  hashtagNames,
   media,
   mentionProfileIds,
   note,
@@ -263,6 +285,7 @@ const createRemoteNotePost = async ({
 }: {
   context: RemoteNoteMaterializationContext;
   document: ReturnType<typeof projectRemoteNoteContent>;
+  hashtagNames: readonly string[];
   media: Awaited<ReturnType<typeof projectRemoteNoteMedia>>;
   mentionProfileIds: readonly string[];
   note: Note;
@@ -274,6 +297,7 @@ const createRemoteNotePost = async ({
   const replyParentId = await resolveReplyParentId(context, note);
   const input = {
     document,
+    hashtagNames,
     media,
     mentionProfileIds,
     objectUri,
@@ -419,6 +443,7 @@ const materializeRemoteNote = async ({
   const result = await createRemoteNotePost({
     context,
     document: projection.document,
+    hashtagNames: projection.hashtagNames,
     media: projection.media,
     mentionProfileIds: projection.mentionProfileIds,
     note,

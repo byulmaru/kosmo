@@ -13,6 +13,7 @@ import {
   Create,
   CryptographicKey,
   Document,
+  Hashtag,
   Image,
   LanguageString,
   Mention,
@@ -139,11 +140,13 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
@@ -170,11 +173,13 @@ describe('inbound Create dispatch', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       Notifications,
       pg,
       PostContents,
+      PostContentHashtags,
       PostMentions,
       Posts,
       ProfileBlocks,
@@ -384,6 +389,157 @@ describe('inbound Create dispatch', () => {
       { postContentId: content.id, profileId: profile.id },
     ]);
     assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test('materializes only typed Hashtags that match the remote body and reuses local identity', async () => {
+    const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+    const localProfile = await createLocalFollowerProfile(`hashtag-author-${suffix}`);
+    const localToken = `#Shared${suffix}`;
+    await createPost({
+      bodyText: localToken,
+      origin: 'LOCAL',
+      profileId: localProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const sharedName = `shared${suffix}`;
+    const localHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, sharedName))
+      .then(firstOrThrow);
+    const hashtagCountBeforeReceipt = await db.$count(Hashtags);
+
+    const remoteSharedToken = `#ＳＨＡＲＥＤ${suffix.toUpperCase()}`;
+    const longToken = `#${'r'.repeat(65)}`;
+    const emojiToken = '#remote-tag🔥';
+    const spaceToken = '#two words';
+    const absentToken = '#absent body expression';
+    const bodyOnlyToken = `#bodyonly${suffix}`;
+    const unconfirmedToken = `#unconfirmed${suffix}`;
+    const sharedHref = `https://remote.example/tags/${suffix}`;
+    const longHref = 'https://remote.example/tags/long';
+    const emojiHref = 'https://remote.example/tags/remote-tag';
+    const spaceHref = 'https://remote.example/tags/two-words';
+    const objectUri = new URL(`https://remote.example/notes/hashtag-${suffix}`);
+    await createStoredRemoteActor();
+
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p>First <a class="hashtag" href="${sharedHref}"><span>#ＳＨＡＲＥ</span><strong>Ｄ${suffix.toUpperCase()}</strong></a> and ` +
+        `<a class="hashtag" href="${sharedHref}">#shared${suffix}</a></p>` +
+        `<p>Again ${remoteSharedToken} / <a href="${longHref}">${longToken}</a> / ` +
+        `<a href="${emojiHref}">${emojiToken}</a></p>` +
+        `<p><a href="${spaceHref}">${spaceToken}</a> ${bodyOnlyToken} ` +
+        `<a href="https://evil.example/tags/unconfirmed">${unconfirmedToken}</a> ` +
+        `${localToken}Extra abc${localToken} ` +
+        `<a href="https://example.com/#shared${suffix}">https://example.com/#shared${suffix}</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Hashtag({ href: new URL(sharedHref), name: remoteSharedToken }),
+        new Hashtag({ href: new URL(longHref), name: longToken }),
+        new Hashtag({ href: new URL(emojiHref), name: emojiToken }),
+        new Hashtag({ href: new URL(spaceHref), name: spaceToken }),
+        new Hashtag({
+          href: new URL(`https://remote.example/tags/absent-${suffix}`),
+          name: absentToken,
+        }),
+        new URL(`https://remote.example/tags/unloaded-${suffix}`),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+    const documentLoads: string[] = [];
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Hashtag receipt must not fetch any Hashtag href');
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(async (url) => {
+          documentLoads.push(url);
+          throw new Error(`Hashtag receipt must not load ${url}`);
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const { content, post } = await getMaterializedPost(objectUri);
+    assert.equal(fetchMock.mock.callCount(), 0);
+    assert.deepEqual(documentLoads, []);
+    assert.equal(post.currentContentId, content.id);
+    assert.equal(
+      postContentDocumentToText(content.document),
+      `First ${remoteSharedToken} and #shared${suffix}\n` +
+        `Again ${remoteSharedToken} / ${longToken} / ${emojiToken}\n` +
+        `${spaceToken} ${bodyOnlyToken} ${unconfirmedToken} ${localToken}Extra abc${localToken} ` +
+        `https://example.com/#shared${suffix}`,
+    );
+
+    const hashtagsByParagraph = content.document.body.content.map((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    );
+    assert.deepEqual(
+      hashtagsByParagraph.map((paragraph) => paragraph.map(({ token }) => token)),
+      [
+        [remoteSharedToken, `#shared${suffix}`],
+        [remoteSharedToken, longToken, emojiToken],
+        [spaceToken],
+      ],
+    );
+
+    const shared = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, sharedName))
+      .then(firstOrThrow);
+    assert.equal(shared.id, localHashtag.id);
+    assert.equal(shared.displayName, localHashtag.displayName);
+    assert.equal(await db.$count(Hashtags), hashtagCountBeforeReceipt + 3);
+    const relations = await db
+      .select()
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, content.id));
+    const hashtagNodeIds = new Set(hashtagsByParagraph.flat().map(({ hashtagId }) => hashtagId));
+    assert.equal(relations.length, 4);
+    assert.deepEqual(new Set(relations.map(({ hashtagId }) => hashtagId)), hashtagNodeIds);
+    assert.equal(relations.filter(({ hashtagId }) => hashtagId === shared.id).length, 1);
+    assert.deepEqual(
+      hashtagsByParagraph
+        .flat()
+        .filter(({ token }) => token === remoteSharedToken)
+        .map(({ hashtagId }) => hashtagId),
+      [shared.id, shared.id],
+    );
+    const lastParagraph = content.document.body.content[2];
+    assert.ok(lastParagraph?.type === 'paragraph');
+    assert.deepEqual(
+      lastParagraph.content?.find((node) => node.type === 'text' && node.text === unconfirmedToken),
+      {
+        type: 'text',
+        text: unconfirmedToken,
+        marks: [{ type: 'link', attrs: { href: 'https://evil.example/tags/unconfirmed' } }],
+      },
+    );
+    assert.deepEqual(
+      lastParagraph.content?.find(
+        (node) => node.type === 'text' && node.text === `https://example.com/#shared${suffix}`,
+      ),
+      {
+        type: 'text',
+        text: `https://example.com/#shared${suffix}`,
+        marks: [{ type: 'link', attrs: { href: `https://example.com/#shared${suffix}` } }],
+      },
+    );
   });
 
   test('falls back to the actor URI when a stored profile URL alias is malformed', async () => {
@@ -4131,15 +4287,26 @@ describe('inbound Create dispatch', () => {
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
     const profile = await createStoredRemoteActor();
     const mentionLabel = '@alice';
+    const firstHashtagToken = `#first${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const changedHashtagToken = `#changed${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const firstHashtagName = firstHashtagToken.slice(1);
+    const changedHashtagName = changedHashtagToken.slice(1);
+    const firstHashtagHref = new URL('https://remote.example/tags/first');
+    const changedHashtagHref = new URL('https://remote.example/tags/changed');
     const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const first = new Note({
       attribution: remoteActorUri,
-      content: `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a></p>`,
+      content:
+        `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a> ` +
+        `<a href="${firstHashtagHref.href}">${firstHashtagToken}</a></p>`,
       id: remoteObjectUri,
       mediaType: 'text/html',
       published: publishedAt,
       summary: '<p>Content warning</p>',
-      tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
+      tags: [
+        new Mention({ href: remoteActorUri, name: mentionLabel }),
+        new Hashtag({ href: firstHashtagHref, name: firstHashtagToken }),
+      ],
       to: PUBLIC_COLLECTION,
     });
 
@@ -4163,11 +4330,15 @@ describe('inbound Create dispatch', () => {
             cc: PUBLIC_COLLECTION,
             content:
               `<div>\n  <p>First <a class="h-card" href="${remoteActorUri.href}">` +
-              `<span>${mentionLabel}</span></a></p>\n</div>`,
+              `<span>${mentionLabel}</span></a> ` +
+              `<a href="${changedHashtagHref.href}">${changedHashtagToken}</a></p>\n</div>`,
             id: remoteObjectUri,
             mediaType: 'text/html',
             published: receivedAt.add({ hours: 1 }),
-            tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
+            tags: [
+              new Mention({ href: remoteActorUri, name: mentionLabel }),
+              new Hashtag({ href: changedHashtagHref, name: changedHashtagToken }),
+            ],
           }),
         }),
         receivedAt.add({ hours: 2 }),
@@ -4196,11 +4367,26 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), 'First @alice@remote.example');
+    assert.equal(
+      postContentDocumentToText(content.document),
+      `First @alice@remote.example ${firstHashtagToken}`,
+    );
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },
     ]);
+    const firstHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, firstHashtagName.toLowerCase()))
+      .then(firstOrThrow);
+    assert.deepEqual(await db.select().from(PostContentHashtags), [
+      { postContentId: content.id, hashtagId: firstHashtag.id },
+    ]);
+    assert.deepEqual(
+      await db.select().from(Hashtags).where(eq(Hashtags.name, changedHashtagName.toLowerCase())),
+      [],
+    );
 
     const futureObjectUri = new URL('https://remote.example/notes/future');
     const futurePublishedAt = receivedAt.add({ hours: 24 });
@@ -4281,6 +4467,9 @@ describe('inbound Create dispatch', () => {
 
   test('rolls back a partial materialization and allows retry', async () => {
     await createStoredRemoteActor();
+    const hashtagToken = `#retry${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const hashtagName = hashtagToken.slice(1);
+    const hashtagHref = new URL('https://remote.example/tags/retry');
     const create = () =>
       new Create({
         actor: remoteActorUri,
@@ -4292,23 +4481,25 @@ describe('inbound Create dispatch', () => {
             }),
           ],
           attribution: remoteActorUri,
-          content: 'Retryable',
+          content: `<p>Retryable <a href="${hashtagHref.href}">${hashtagToken}</a></p>`,
           id: remoteObjectUri,
+          mediaType: 'text/html',
+          tags: [new Hashtag({ href: hashtagHref, name: hashtagToken })],
           to: PUBLIC_COLLECTION,
         }),
       });
     await pg`
-      create function fail_inbound_post_content() returns trigger
+      create function fail_inbound_post_content_hashtag() returns trigger
       language plpgsql as $function$
       begin
-        raise exception 'intentional post content failure';
+        raise exception 'intentional post content hashtag failure';
       end
       $function$
     `;
     await pg`
-      create trigger fail_inbound_post_content
-      before insert on post_content
-      for each row execute function fail_inbound_post_content()
+      create trigger fail_inbound_post_content_hashtag
+      before insert on post_content_hashtag
+      for each row execute function fail_inbound_post_content_hashtag()
     `;
 
     try {
@@ -4316,14 +4507,31 @@ describe('inbound Create dispatch', () => {
       assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
       assert.equal((await db.select().from(Posts)).length, 0);
       assert.equal((await db.select().from(PostContents)).length, 0);
+      assert.equal((await db.select().from(PostContentHashtags)).length, 0);
+      assert.deepEqual(await db.select().from(Hashtags).where(eq(Hashtags.name, hashtagName)), []);
       assert.equal((await db.select().from(Media)).length, 0);
     } finally {
-      await pg`drop trigger fail_inbound_post_content on post_content`;
-      await pg`drop function fail_inbound_post_content()`;
+      await pg`drop trigger fail_inbound_post_content_hashtag on post_content_hashtag`;
+      await pg`drop function fail_inbound_post_content_hashtag()`;
     }
 
     await handleInboundCreate(createContext(), create(), receivedAt);
-    assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
+    const materialized = await getMaterializedPost(remoteObjectUri);
+    assert.equal(materialized.mapping.uri, remoteObjectUri.href);
+    const hashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, hashtagName))
+      .then(firstOrThrow);
+    assert.deepEqual(await db.select().from(PostContentHashtags), [
+      { postContentId: materialized.content.id, hashtagId: hashtag.id },
+    ]);
+    const paragraph = materialized.content.document.body.content[0];
+    assert.ok(paragraph?.type === 'paragraph');
+    assert.deepEqual(paragraph.content, [
+      { type: 'text', text: 'Retryable ' },
+      { type: 'hashtag', attrs: { hashtagId: hashtag.id, token: hashtagToken } },
+    ]);
     assert.equal((await db.select().from(Media)).length, 1);
   });
 });

@@ -31,9 +31,8 @@ identity를 해석한다. 같은 identity가 없으면 생성하고, 있으면 �
 들어와도 기존 Display Hashtag Name을 유지한다.
 
 공통 identity 규칙은 로컬 Post 본문 Hashtag의 64 code point·Unicode Letter (`L`)·Number (`N`)·`_` 문법이나
-Profile Tag 입력의 20 code point·같은 문자 문법을 Hashtag 저장 전체에 적용하지 않는다. 원격 Note의 typed Hashtag 보존·연결은 별도 ActivityPub 계약이
-소유하며, 그 계약에서 허용한 원격 이름은 로컬 입력 제한과 관계없이 같은 공통 identity로 표현할 수 있다. 이
-경계만으로 원격 Note의 Hashtag 인식이나 전달이 활성화되지는 않는다.
+Profile Tag 입력의 20 code point·같은 문자 문법을 Hashtag 저장 전체에 적용하지 않는다. Remote Note의 typed Hashtag
+수신 규칙은 [Post Content](./post-content.md)가 소유한다.
 
 ## 권한
 
