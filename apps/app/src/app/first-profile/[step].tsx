@@ -4,7 +4,6 @@ import { useFirstProfileOnboarding } from '@/components/onboarding/FirstProfileO
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
 import { Button } from '@/components/ui/Button';
-import { getPublicWebOrigin } from '@/config/origin';
 import type { Href } from 'expo-router';
 import type { FirstProfileStep } from '@/components/onboarding/firstProfileOnboardingState';
 
@@ -62,7 +61,6 @@ export default function FirstProfileStepRoute() {
         </Link>
       }
       step={current}
-      webHost={new URL(getPublicWebOrigin()).host}
     />
   );
 }

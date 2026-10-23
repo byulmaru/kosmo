@@ -276,7 +276,6 @@ function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
       result={flow.result}
       summary={flow.summary}
       step={step}
-      webHost="kosmo.example"
       startAction={
         <Link asChild href="/home" replace>
           <Button>시작하기</Button>

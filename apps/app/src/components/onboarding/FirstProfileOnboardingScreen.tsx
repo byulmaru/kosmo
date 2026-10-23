@@ -79,7 +79,6 @@ export type FirstProfileOnboardingScreenProps = {
     header: ProfileEditImageDraft;
   } | null;
   step: FirstProfileStep | 'complete';
-  webHost: string;
 };
 
 export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreenProps) {
@@ -97,7 +96,6 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
     result,
     startAction,
     step,
-    webHost,
   } = props;
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
@@ -261,7 +259,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 </View>
               </View>
               <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                내 프로필 주소: {webHost}/@{draft.handle.trim()}
+                영문, 숫자, 밑줄(_)만 사용할 수 있어요.
               </Text>
             </View>
           ) : null}

@@ -63,7 +63,6 @@ function OnboardingStory({
       summary={summary}
       startAction={<Button>시작하기</Button>}
       step={step}
-      webHost="kosmo.example"
     />
   );
 }
