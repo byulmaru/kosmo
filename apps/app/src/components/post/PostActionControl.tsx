@@ -139,6 +139,7 @@ export function PostActionControl({
           native ? styles.nativeAction : styles.webAction,
           native && (alignToEnd || alignVisualToEnd) ? styles.nativeEndAction : undefined,
           blocked ? styles.blocked : pressed ? styles.pressed : undefined,
+          !native && blocked ? { cursor: 'auto' } : undefined,
         ]}
       >
         {({ pressed }) => {
