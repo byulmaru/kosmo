@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>글 전체 숨김 · KOSMO 자연어 뮤트</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #ffffff;
+        --surface: #fafafb;
+        --ink: #1a1a1a;
+        --secondary: #64646f;
+        --line: #dfdfe5;
+        --primary: #ffe597;
+        --subtle: #fff9e6;
+        --selected: #ae8512;
+        --focus: #4f46e5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          16px/1.5 'SUIT Variable',
+          'Apple SD Gothic Neo',
+          'Malgun Gothic',
+          sans-serif;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+      main {
+        max-width: 1280px;
+        margin: auto;
+        padding: 32px;
+      }
+      .brandline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brandline img {
+        width: 48px;
+        height: 48px;
+      }
+      .eyebrow,
+      .caption {
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--secondary);
+      }
+      h1 {
+        margin: 8px 0;
+        font-size: 28px;
+        line-height: 1.3;
+      }
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h2 {
+        font-size: 22px;
+        line-height: 1.3;
+      }
+      h3 {
+        font-size: 18px;
+        line-height: 1.3;
+      }
+      .intro {
+        margin: 24px 0;
+      }
+      .cases {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 0 0 24px;
+        padding: 0;
+        border: 0;
+      }
+      .cases legend {
+        margin-bottom: 12px;
+        font-weight: 700;
+      }
+      .cases label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 48px;
+        padding: 12px 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      .cases label:has(:checked) {
+        background: var(--subtle);
+        border-color: var(--selected);
+        font-weight: 700;
+      }
+      .cases label:focus-within {
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
+      }
+      .cases input {
+        accent-color: var(--selected);
+      }
+      main:has(#case-timeline:checked) #search-case,
+      main:has(#case-search:checked) #timeline-case {
+        display: none;
+      }
+      .case-heading {
+        margin-bottom: 24px;
+      }
+      .case-heading p {
+        margin-top: 8px;
+        color: var(--secondary);
+      }
+      .screens {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .scene {
+        min-width: 0;
+        margin: 0;
+      }
+      .step {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .number {
+        display: grid;
+        place-items: center;
+        min-width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--primary);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .description {
+        min-height: 48px;
+        margin-bottom: 16px;
+        color: var(--secondary);
+      }
+      .screen-link {
+        display: block;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--canvas);
+      }
+      .screen-link:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 4px;
+      }
+      .screen-link img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .result .screen-link {
+        border: 2px solid var(--selected);
+      }
+      .note {
+        margin-top: 16px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 14px;
+        line-height: 20px;
+      }
+      .result .note {
+        background: var(--subtle);
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        padding-top: 24px;
+        margin-top: 32px;
+        border-top: 1px solid var(--line);
+      }
+      @media (max-width: 900px) {
+        main {
+          padding: 24px 16px;
+        }
+        h1 {
+          font-size: 24px;
+        }
+        .cases {
+          flex-direction: column;
+        }
+        .screens {
+          grid-template-columns: 1fr;
+          gap: 32px;
+        }
+        .scene {
+          width: 100%;
+          max-width: 480px;
+          margin: auto;
+        }
+        .description {
+          min-height: 0;
+        }
+        footer {
+          flex-direction: column;
+          gap: 12px;
+        }
+      }
+      @media print {
+        .cases {
+          display: none;
+        }
+        main #timeline-case,
+        main #search-case {
+          display: block !important;
+        }
+        #search-case {
+          break-before: page;
+        }
+        .scene {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="brandline">
+        <img src="brand-mark.png" width="48" height="48" alt="KOSMO" />
+        <p class="eyebrow">코미버스 · 자연어 뮤트 구상</p>
+      </header>
+      <div class="intro">
+        <p class="eyebrow">“〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.”</p>
+        <h1>보고 싶지 않은 글은 목록에서 숨겨요.</h1>
+        <p>조건에 해당하는 글 전체가 타임라인·검색 결과 등에 나타나지 않아요.</p>
+      </div>
+      <fieldset class="cases">
+        <legend>적용 화면 선택</legend>
+        <label><input id="case-timeline" type="radio" name="case" checked />01 타임라인</label>
+        <label><input id="case-search" type="radio" name="case" />02 검색</label>
+      </fieldset>
+      <section id="timeline-case" aria-labelledby="timeline-heading">
+        <div class="case-heading">
+          <h2 id="timeline-heading">01 · 타임라인에서 글 전체 숨김</h2>
+          <p>결말을 담은 글이 목록에서 빠져요. 남은 글은 기존 순서대로 이어져요.</p>
+        </div>
+        <div class="screens">
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">1</span>
+                <h3>피하고 싶은 내용을 적어요</h3>
+              </div>
+              <p class="description">
+                작품의 결말·반전은 피하고, 다른 감상과 일상 글은 읽고 싶어요.
+              </p>
+            </figcaption>
+            <a class="screen-link" href="setting.jpg" aria-label="글 숨김 설정 이미지 크게 보기"
+              ><img
+                src="setting.jpg"
+                width="390"
+                height="844"
+                alt="코스모 자연어 뮤트 설정 예시. 별의 정원의 결말이나 반전을 보고 싶지 않다는 입력과 이 조건으로 글 숨기기 버튼. 타임라인과 검색 결과 등에서 글 전체가 보이지 않는다는 안내가 있다."
+            /></a>
+            <p class="note">뮤트 대상: <strong>결말·반전이 담긴 글 전체</strong></p>
+          </figure>
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">2</span>
+                <h3>적용 전 타임라인</h3>
+              </div>
+              <p class="description">결말 공개, 작화 감상, 행사 준비 글이 함께 보여요.</p>
+            </figcaption>
+            <a class="screen-link" href="before.jpg" aria-label="적용 전 타임라인 이미지 크게 보기"
+              ><img
+                src="before.jpg"
+                width="390"
+                height="844"
+                alt="코스모 홈 피드. 달빛의 결말 공개 글, 여울의 작화 감상, 모아의 행사 준비 글이 차례로 보인다."
+            /></a>
+            <p class="note">결말이 담긴 <strong>달빛의 글 전체</strong>가 숨김 대상이에요.</p>
+          </figure>
+          <figure class="scene result">
+            <figcaption>
+              <div class="step">
+                <span class="number">3</span>
+                <h3>해당 글이 보이지 않아요</h3>
+              </div>
+              <p class="description">첫 글이 빠지고 아래 글이 올라와, 빈자리 없이 이어져요.</p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="hidden.jpg"
+              aria-label="글을 숨긴 타임라인 이미지 크게 보기"
+              ><img
+                src="hidden.jpg"
+                width="390"
+                height="844"
+                alt="달빛의 글은 타임라인에 없다. 여울의 작화 감상이 첫 글이 되고 모아의 행사 준비 글이 바로 이어진다. 숨긴 글을 대신하는 카드나 빈자리는 없다."
+            /></a>
+            <p class="note">
+              <strong>글 자체가 목록에서 빠져요.</strong> 같은 작품의 작화 감상과 행사 글은 그대로
+              남아요.
+            </p>
+          </figure>
+        </div>
+      </section>
+      <section id="search-case" aria-labelledby="search-heading">
+        <div class="case-heading">
+          <h2 id="search-heading">02 · 검색 결과에서도 글 전체 숨김</h2>
+          <p>같은 조건이 검색 결과에도 적용돼요. 작품을 검색해도 결말을 담은 글은 보이지 않아요.</p>
+        </div>
+        <div class="screens">
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">1</span>
+                <h3>같은 뮤트 조건을 사용해요</h3>
+              </div>
+              <p class="description">“〈별의 정원〉 결말이나 반전은 보고 싶지 않아요.”</p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="setting.jpg"
+              aria-label="검색에 적용할 글 숨김 설정 이미지 크게 보기"
+              ><img
+                src="setting.jpg"
+                width="390"
+                height="844"
+                alt="타임라인과 동일한 자연어 뮤트 조건. 결말이나 반전이 담긴 글 전체를 숨기는 설정 예시다."
+            /></a>
+            <p class="note">타임라인과 <strong>같은 글 숨김 조건</strong>이에요.</p>
+          </figure>
+          <figure class="scene">
+            <figcaption>
+              <div class="step">
+                <span class="number">2</span>
+                <h3>적용 전 검색 결과</h3>
+              </div>
+              <p class="description">
+                ‘별의 정원’을 검색하면 결말 공개 글과 작화 감상이 함께 나와요.
+              </p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="search-before.jpg"
+              aria-label="적용 전 검색 결과 이미지 크게 보기"
+              ><img
+                src="search-before.jpg"
+                width="390"
+                height="844"
+                alt="별의 정원 검색 결과의 최신 탭. 달빛의 결말 공개 글과 여울의 작화 감상이 보인다."
+            /></a>
+            <p class="note">
+              검색어와 일치하더라도 <strong>결말을 담은 글</strong>은 숨김 대상이에요.
+            </p>
+          </figure>
+          <figure class="scene result">
+            <figcaption>
+              <div class="step">
+                <span class="number">3</span>
+                <h3>검색에서도 보이지 않아요</h3>
+              </div>
+              <p class="description">결말 공개 글이 결과에서 빠지고, 작화 감상만 남아요.</p>
+            </figcaption>
+            <a
+              class="screen-link"
+              href="search-hidden.jpg"
+              aria-label="글을 숨긴 검색 결과 이미지 크게 보기"
+              ><img
+                src="search-hidden.jpg"
+                width="390"
+                height="844"
+                alt="검색어 별의 정원과 최신 탭은 그대로다. 달빛의 글은 검색 결과에 없고 여울의 작화 감상만 보인다. 대체 카드나 가린 문장은 없다."
+            /></a>
+            <p class="note">
+              <strong>검색어는 그대로예요.</strong> 조건에 해당하지 않는 작화 감상은 계속 볼 수
+              있어요.
+            </p>
+          </figure>
+        </div>
+      </section>
+      <footer class="caption">
+        <p>
+          기존 코스모 UI로 구성한 소개용 목업입니다. 타임라인·검색 결과는 준비한 예시이며 실제
+          서비스의 적용 결과가 아닙니다.
+        </p>
+        <p>작품·인물·글은 모두 가상입니다.<br />실제 모델 판단과 정확도는 검증하지 않았습니다.</p>
+      </footer>
+    </main>
+  </body>
+</html>
