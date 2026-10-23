@@ -100,6 +100,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 
 - [Public Content Onboarding Policy](./policies/public-content-onboarding.md): 공개 방문자의 안내와 인증·Profile 준비 후 콘텐츠 복귀.
 
+- [첫 Profile 태그 기반 사람 찾기](./policies/first-profile-tag-discovery.md): 저장 태그 기반 탐색과 개별 팔로우·후속 진행.
+
 ## 결정과 기록
 
 - [ADR 0001: Core Ubiquitous Language](./decisions/0001-core-ubiquitous-language.md)

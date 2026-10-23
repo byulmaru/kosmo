@@ -1,10 +1,8 @@
-import { Link, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useFirstProfileOnboarding } from '@/components/onboarding/FirstProfileOnboardingRoute';
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
-import { Button } from '@/components/ui/Button';
-import { getPublicWebOrigin } from '@/config/origin';
 import type { Href } from 'expo-router';
 import type { FirstProfileStep } from '@/components/onboarding/firstProfileOnboardingState';
 
@@ -19,7 +17,10 @@ export default function FirstProfileStepRoute() {
   ) {
     return <Redirect href="/first-profile/handle" />;
   }
-  const current = step as FirstProfileStep | 'complete';
+  if (step === 'complete') {
+    return <Redirect href="/home" />;
+  }
+  const current = step as FirstProfileStep;
   const next = () =>
     router.push(
       `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(current as FirstProfileStep) + 1]}` as Href,
@@ -35,11 +36,11 @@ export default function FirstProfileStepRoute() {
       onChange={flow.setDraft}
       onComplete={() => {
         flow.complete(() => {
-          router.push('/first-profile/complete');
+          router.push('/first-profile/discover');
         });
       }}
       onNext={() => {
-        if (current !== 'complete' && current !== 'review') {
+        if (current !== 'review') {
           flow.next(current, next);
         }
       }}
@@ -56,13 +57,7 @@ export default function FirstProfileStepRoute() {
       onHeaderRetry={() => flow.retryImage('header')}
       result={flow.result}
       summary={flow.summary}
-      startAction={
-        <Link asChild href="/home" replace>
-          <Button>시작하기</Button>
-        </Link>
-      }
       step={current}
-      webHost={new URL(getPublicWebOrigin()).host}
     />
   );
 }

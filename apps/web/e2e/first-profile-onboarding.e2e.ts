@@ -22,8 +22,7 @@ async function ownedProfiles(accountId: string) {
     .where(eq(AccountProfiles.accountId, accountId));
 }
 async function expectCompleted(page: Page) {
-  await expect(page.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page).toHaveURL(/\/home$/);
 }
 function trackMutations(page: Page) {
   const mutations: string[] = [];
@@ -89,7 +88,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
       .where(eq(ProfileHashtags.profileId, created[0]!.id)),
   ).toHaveLength(0);
   const savedMutations = [...mutations];
-  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  await page.getByRole('button', { name: '다음', exact: true }).click();
   await expectCompleted(page);
   expect(mutations).toEqual(savedMutations);
   expect(mutations.filter((name) => name === 'FirstProfileOnboardingCreateMutation')).toHaveLength(
@@ -112,8 +111,14 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
   await setE2ESessionCookie(context, session.token);
   const mutations = trackMutations(page);
   await page.goto('/first-profile/handle');
-  await expect(page.getByRole('button', { name: '바로 시작' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeDisabled();
+  for (const invalid of ['ab', 'bad-handle', '한글핸들', 'a'.repeat(31)]) {
+    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(invalid);
+    await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeDisabled();
+  }
+  expect(mutations).toEqual([]);
   await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_quick');
+  await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '바로 시작' }).click();
   await expectCompleted(page);
   expect(await ownedProfiles(session.account.id)).toMatchObject([
@@ -217,7 +222,6 @@ test('생성 후 흐름을 나갔다가 다시 진입하면 기존 Profile로 �
   const created = await ownedProfiles(session.account.id);
   await page.getByRole('button', { name: '바로 시작' }).click();
   await expectCompleted(page);
-  await page.getByRole('link', { name: '시작하기', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/home$/);

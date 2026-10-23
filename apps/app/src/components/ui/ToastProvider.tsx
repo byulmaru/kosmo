@@ -68,15 +68,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
 
   const showToast = useCallback(
     (nextMessage: string, options: ToastOptions) => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
       const id = nextToastId.current++;
-      if (options.persistent) {
-        suspendedPersistentToast.current = null;
-      } else if (toastRef.current?.persistent) {
-        suspendedPersistentToast.current = toastRef.current;
-      }
       const nextToast = {
         action: options.action,
         id,
@@ -84,6 +76,18 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
         persistent: options.persistent,
         tone: options.tone,
       };
+      if (options.persistent && toastRef.current && !toastRef.current.persistent) {
+        suspendedPersistentToast.current = nextToast;
+        return () => dismissToast(id);
+      }
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+      if (options.persistent) {
+        suspendedPersistentToast.current = null;
+      } else if (toastRef.current?.persistent) {
+        suspendedPersistentToast.current = toastRef.current;
+      }
       toastRef.current = nextToast;
       setToast(nextToast);
       setToastVisible(true);

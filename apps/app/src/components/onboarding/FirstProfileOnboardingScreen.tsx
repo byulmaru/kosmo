@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { BrandLogo } from '@/components/BrandLogo';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileTagChip } from '@/components/profile/ProfileTagChip';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
@@ -19,9 +18,9 @@ import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { radius, space, textStyles } from '@/theme/tokens';
+import { FirstProfileOnboardingFrame } from './FirstProfileOnboardingFrame';
 import { firstProfileSteps } from './firstProfileOnboardingState';
-import type { ReactNode } from 'react';
 import type { ProfileEditImageDraft } from '@/components/profile/profileEditState';
 import type {
   FirstProfileDraft,
@@ -72,14 +71,12 @@ export type FirstProfileOnboardingScreenProps = {
   onHeaderRemove: () => void;
   onHeaderRetry: () => void;
   result: { kind: 'idle' | 'success' } | { kind: 'error'; message: string };
-  startAction?: ReactNode;
   summary?: {
     draft: FirstProfileDraft;
     avatar: ProfileEditImageDraft;
     header: ProfileEditImageDraft;
   } | null;
-  step: FirstProfileStep | 'complete';
-  webHost: string;
+  step: FirstProfileStep;
 };
 
 export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreenProps) {
@@ -95,18 +92,15 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
     onNext,
     onSkip,
     result,
-    startAction,
     step,
-    webHost,
   } = props;
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
-  const inputStep = step !== 'complete';
   const summaryDraft = props.summary?.draft ?? draft;
   const summaryAvatar = props.summary?.avatar ?? avatar;
   const summaryHeader = props.summary?.header ?? header;
-  const title = inputStep ? copy[step].title : '첫 프로필이\n준비됐어요';
-  const description = inputStep ? copy[step].description : undefined;
+  const title = copy[step].title;
+  const description = copy[step].description;
   const handleError =
     errors.handle ??
     (draft.handle.trim() && !localProfileHandleSchema.safeParse(draft.handle).success
@@ -172,11 +166,11 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
       style={[styles.root, safeArea, { backgroundColor: theme.backgroundCanvas }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <BrandLogo width={38} />
-            <View style={styles.spacer} />
-            {inputStep && step !== 'review' ? (
+        <FirstProfileOnboardingFrame
+          title={title}
+          description={description}
+          headerAction={
+            step !== 'review' ? (
               <Button
                 disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
                 onPress={onComplete}
@@ -185,9 +179,9 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               >
                 바로 시작
               </Button>
-            ) : null}
-          </View>
-          {inputStep ? (
+            ) : null
+          }
+          progress={
             <View
               accessibilityLabel={`${firstProfileSteps.indexOf(step) + 1} / 5단계`}
               style={styles.progress}
@@ -210,20 +204,24 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 {firstProfileSteps.indexOf(step) + 1} / 5
               </Text>
             </View>
-          ) : null}
-          <View style={styles.heading}>
-            <Text
-              accessibilityRole="header"
-              style={[textStyles.uiHeadingM, { color: theme.foregroundPrimary }]}
-            >
-              {title}
-            </Text>
-            {description ? (
-              <Text style={[textStyles.uiCopyL, { color: theme.foregroundSecondary }]}>
-                {description}
-              </Text>
-            ) : null}
-          </View>
+          }
+          actions={
+            <>
+              <Button
+                disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
+                loading={busy}
+                onPress={step === 'review' ? onComplete : onNext}
+              >
+                다음
+              </Button>
+              {step !== 'handle' && step !== 'review' ? (
+                <Button disabled={busy} onPress={onSkip} tone="secondary">
+                  지금은 건너뛰기
+                </Button>
+              ) : null}
+            </>
+          }
+        >
           {step === 'handle' ? (
             <View style={styles.fields}>
               <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>핸들</Text>
@@ -245,13 +243,13 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                     editable={!busy && !created}
                     error={handleError || undefined}
                     onChangeText={(handle) => onChange({ ...draft, handle })}
-                    placeholder="예: bom"
+                    placeholder="예: kosmo"
                     value={draft.handle}
                   />
                 </View>
               </View>
               <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                내 프로필 주소: {webHost}/@{draft.handle.trim()}
+                영문, 숫자, 밑줄(_)만 사용할 수 있어요.
               </Text>
             </View>
           ) : null}
@@ -367,8 +365,8 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               </View>
             </View>
           ) : null}
-          {step === 'review' || step === 'complete' ? summary : null}
-          {inputStep && result.kind === 'error' && !(step === 'details' && hasImageError) ? (
+          {step === 'review' ? summary : null}
+          {result.kind === 'error' && !(step === 'details' && hasImageError) ? (
             <Text
               accessibilityRole="alert"
               style={[textStyles.uiCopyM, { color: theme.feedbackDangerOnSubtle }]}
@@ -389,25 +387,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               ))}
             </View>
           ) : null}
-          <View style={styles.actions}>
-            {inputStep ? (
-              <Button
-                disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
-                loading={busy}
-                onPress={step === 'review' ? onComplete : onNext}
-              >
-                {step === 'review' ? '시작하기' : '다음'}
-              </Button>
-            ) : (
-              startAction
-            )}
-            {inputStep && step !== 'handle' && step !== 'review' ? (
-              <Button disabled={busy} onPress={onSkip} tone="secondary">
-                지금은 건너뛰기
-              </Button>
-            ) : null}
-          </View>
-        </View>
+        </FirstProfileOnboardingFrame>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -416,18 +396,9 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrollContent: { alignItems: 'center', flexGrow: 1 },
-  content: {
-    gap: space[24],
-    maxWidth: breakpoints.compact,
-    padding: space[24],
-    paddingBottom: space[48],
-    width: '100%',
-  },
-  header: { alignItems: 'center', flexDirection: 'row', gap: space[12] },
-  spacer: { flex: 1, minWidth: 0 },
   progress: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   progressPart: { borderRadius: radius.full, flex: 1, height: space[4] },
-  heading: { gap: space[12] },
+  spacer: { flex: 1, minWidth: 0 },
   fields: { gap: space[12] },
   handleField: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   counter: { alignSelf: 'flex-end', ...textStyles.uiCopyS },
@@ -435,5 +406,4 @@ const styles = StyleSheet.create({
   summary: { borderRadius: radius[16], borderWidth: 1, gap: space[12], padding: space[16] },
   summaryHeader: { aspectRatio: 3, borderRadius: radius[12], width: '100%' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },
-  actions: { gap: space[12] },
 });

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import {
   firstProfileSteps,
   initialFirstProfileDraft,
 } from '@/components/onboarding/firstProfileOnboardingState';
-import { Button } from '@/components/ui/Button';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FirstProfileOnboardingScreenProps } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import type {
@@ -19,12 +18,14 @@ function OnboardingStory({
   initialResult = { kind: 'idle' },
   busy = false,
   summary,
+  onComplete,
 }: {
-  initialStep?: FirstProfileStep | 'complete';
+  initialStep?: FirstProfileStep;
   initialDraft?: FirstProfileDraft;
   initialResult?: FirstProfileOnboardingScreenProps['result'];
   busy?: boolean;
   summary?: FirstProfileOnboardingScreenProps['summary'];
+  onComplete: () => void;
 }) {
   const [step, setStep] = useState(initialStep);
   const [draft, setDraft] = useState(initialDraft);
@@ -49,7 +50,7 @@ function OnboardingStory({
       onComplete={() => {
         setCreated(true);
         setResult({ kind: 'success' });
-        setStep('complete');
+        onComplete();
       }}
       onNext={next}
       onSkip={next}
@@ -61,9 +62,7 @@ function OnboardingStory({
       onHeaderRetry={() => undefined}
       result={result}
       summary={summary}
-      startAction={<Button>시작하기</Button>}
       step={step}
-      webHost="kosmo.example"
     />
   );
 }
@@ -76,6 +75,7 @@ const populated: FirstProfileDraft = {
 };
 const meta = {
   component: OnboardingStory,
+  args: { onComplete: fn() },
   excludeStories: [
     'HandleOnlyCompletion',
     'OptionalStepsAndSkip',
@@ -119,16 +119,16 @@ export const LongDark: Story = {
   globals: { theme: 'dark' },
 };
 export const HandleOnlyCompletion: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: '바로 시작' })).toBeDisabled();
     await userEvent.type(canvas.getByRole('textbox', { name: '핸들' }), 'spring');
     await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
-    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+    await expect(args.onComplete).toHaveBeenCalledOnce();
   },
 };
 export const OptionalStepsAndSkip: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByRole('textbox', { name: '핸들' }), 'spring');
     await userEvent.click(canvas.getByRole('button', { name: '다음' }));
@@ -144,19 +144,19 @@ export const OptionalStepsAndSkip: Story = {
     await expect(canvas.getByRole('radio', { name: /팔로워만:/ })).toBeChecked();
     await expect(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' })).not.toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
-    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+    await expect(args.onComplete).toHaveBeenCalledOnce();
   },
 };
 
 export const OptionalFailureCanSkip: Story = {
   args: Failed.args,
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('textbox', { name: '표시 이름' })).toHaveValue('봄');
     await userEvent.click(canvas.getByRole('button', { name: '지금은 건너뛰기' }));
     await expect(canvas.getByRole('textbox', { name: '프로필 태그' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
-    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+    await expect(args.onComplete).toHaveBeenCalledOnce();
   },
 };
 
@@ -166,10 +166,10 @@ export const UnavailableSummaryCanComplete: Story = {
     initialDraft: { ...populated, displayName: '저장되지 않은 이름' },
     summary: null,
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '시작하기' }));
-    await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '다음' }));
+    await expect(args.onComplete).toHaveBeenCalledOnce();
     await expect(canvas.queryByText('저장되지 않은 이름', { exact: true })).not.toBeInTheDocument();
   },
 };
