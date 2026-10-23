@@ -45,6 +45,10 @@ mockModule('relay-runtime', {
   fetchQuery: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
   getRequest: () => ({}),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });

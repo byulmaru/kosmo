@@ -110,6 +110,10 @@ mockModule('relay-runtime', {
   }),
   getRequest: () => ({}),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/observability/UnexpectedErrorContext', {

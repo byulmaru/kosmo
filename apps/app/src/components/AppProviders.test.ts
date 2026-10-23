@@ -295,6 +295,10 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', {
   PageHeader: () => null,
 });
