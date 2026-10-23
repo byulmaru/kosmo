@@ -180,7 +180,18 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
   await page.goto('/home');
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   await page.locator('#mobile-sidebar').getByRole('button', { name: '피드백 보내기' }).click();
-  const surface = page.getByTestId('feedback-overlay-surface');
+  const surface = page.getByTestId('feedback-overlay-surface').locator('..');
+  await expect
+    .poll(async () => {
+      const box = await surface.boundingBox();
+      return Boolean(
+        box &&
+        Math.abs(box.x) <= 0.5 &&
+        Math.abs(box.width - 390) <= 0.5 &&
+        Math.abs(box.y + box.height - 568) <= 0.5,
+      );
+    })
+    .toBe(true);
   const mobileBox = await surface.boundingBox();
   expect(mobileBox).not.toBeNull();
   expect(mobileBox!.x).toBeCloseTo(0, 0);
@@ -204,6 +215,17 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
       .getByRole('button', { name: '피드백 보내기' })
       .click();
     await expect(surface).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await surface.boundingBox();
+        return Boolean(
+          box &&
+          Math.abs(box.width - 600) <= 0.5 &&
+          Math.abs(box.x + box.width / 2 - viewport.width / 2) <= 0.5 &&
+          Math.abs(box.y - 48) <= 0.5,
+        );
+      })
+      .toBe(true);
     const desktopBox = await surface.boundingBox();
     expect(desktopBox).not.toBeNull();
     expect(desktopBox!.width).toBeCloseTo(600, 0);
