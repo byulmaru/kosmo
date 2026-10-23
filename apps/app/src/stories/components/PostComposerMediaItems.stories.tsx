@@ -5,8 +5,8 @@ import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMedi
 import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { ComposerMediaEditorTool } from '@/components/post/ComposerMediaEditor';
+import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostComposerUploadedMediaItemsTargetProps } from '@/components/post/PostComposerMediaItemsTarget';
 
 const mediaAsset = { height: 156, uri: ogImage, width: 156 };

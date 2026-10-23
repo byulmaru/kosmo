@@ -37,9 +37,9 @@ import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
-import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type {
   PostComposerDraft,
