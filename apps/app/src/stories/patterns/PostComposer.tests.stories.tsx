@@ -9,6 +9,7 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from '@/components/post/postComposerState';
+import { semanticColors } from '@/theme/tokens';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
   Error as errorStory,
@@ -51,6 +52,7 @@ import type {
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Post Composer/Tests',
 } satisfies Meta;
 
@@ -300,7 +302,17 @@ export const MobileReplyMediaScrollContract: Story = {
     expect(footer.getBoundingClientRect().top).toBe(initialFooterTop);
   },
 };
-export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
+export const MobilePlaygroundContract: Story = {
+  ...mobilePlaygroundContract,
+  play: async (context) => {
+    const trigger = within(context.canvasElement).getByRole('button', { name: /공개 범위:/ });
+    const visual = trigger.firstElementChild as HTMLElement;
+    const theme = semanticColors[context.globals.theme === 'dark' ? 'dark' : 'light'];
+    expect(visual).toHaveStyle({ borderColor: theme.borderSubtle });
+    expect(getComputedStyle(visual).borderTopWidth).toBe('1px');
+    await mobilePlaygroundContract.play?.(context);
+  },
+};
 export const MobileFullPickerBackdropDismissContract: Story = {
   ...mobilePlaygroundStory,
   args: { ...mobilePlaygroundStory.args, body: '모바일 반응 선택', items: [] },
@@ -351,7 +363,17 @@ export const MobileFullPickerBackdropDismissContract: Story = {
 export const MobileReplyShellContract: Story = mobileReplyShellContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
-export const OverlayGeometryContract: Story = overlayGeometryContract;
+export const OverlayGeometryContract: Story = {
+  ...overlayGeometryContract,
+  play: async (context) => {
+    const trigger = within(context.canvasElement).getByRole('button', { name: /공개 범위:/ });
+    const visual = trigger.firstElementChild as HTMLElement;
+    const theme = semanticColors[context.globals.theme === 'dark' ? 'dark' : 'light'];
+    expect(visual).toHaveStyle({ borderColor: theme.borderSubtle });
+    expect(getComputedStyle(visual).borderTopWidth).toBe('1px');
+    await overlayGeometryContract.play?.(context);
+  },
+};
 export const WebModalLayoutContract: Story = {
   ...webModalLayoutContract,
   parameters: { controls: { disable: true } },
@@ -359,7 +381,17 @@ export const WebModalLayoutContract: Story = {
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
-export const RailGeometryContract: Story = railGeometryContract;
+export const RailGeometryContract: Story = {
+  ...railGeometryContract,
+  play: async (context) => {
+    const trigger = within(context.canvasElement).getByRole('button', { name: /공개 범위:/ });
+    const visual = trigger.firstElementChild as HTMLElement;
+    const theme = semanticColors[context.globals.theme === 'dark' ? 'dark' : 'light'];
+    expect(visual).toHaveStyle({ borderColor: theme.borderDefault });
+    expect(getComputedStyle(visual).borderTopWidth).toBe('1px');
+    await railGeometryContract.play?.(context);
+  },
+};
 export const RailBodyMaxHeightContract: Story = railBodyMaxHeightContract;
 export const RailFocusBoundaryContract: Story = railFocusBoundaryContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
