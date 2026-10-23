@@ -397,8 +397,6 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
     expect(body.errors).toBeUndefined();
     const id = body.data?.createProfile?.profile?.id;
     expect(id).toEqual(expect.any(String));
-    await expect(page.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
-    await page.getByRole('link', { name: '시작하기' }).click();
     await expect(page).toHaveURL(/\/home$/);
     await expect(sidebarProfileHandle(page, handle)).toBeVisible();
     return id as string;

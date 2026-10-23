@@ -1,4 +1,4 @@
-import { Link, usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import HomeRoute from '@/app/(tabs)/(protected)/home';
@@ -10,7 +10,6 @@ import {
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
 import { UniversalShell } from '@/components/shell/UniversalShell';
-import { Button } from '@/components/ui/Button';
 import { SessionProvider } from '@/session/SessionProvider';
 import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
@@ -210,7 +209,7 @@ function FirstProfileDiscoveryFlow() {
 function Walkthrough({ savedTags }: { savedTags: () => number }) {
   const pathname = usePathname();
   const { height } = useWindowDimensions();
-  if (pathname === '/home') {
+  if (pathname === '/home' || (pathname === '/first-profile/discover' && savedTags() === 0)) {
     return (
       <RouterMockProvider pathname="/home">
         <UniversalShell>
@@ -222,25 +221,17 @@ function Walkthrough({ savedTags }: { savedTags: () => number }) {
   return (
     <View style={{ height }}>
       <FirstProfileOnboardingRoute>
-        {pathname === '/first-profile/discover' ? (
-          savedTags() > 0 ? (
-            <FirstProfileDiscoveryRoute />
-          ) : (
-            <InputSteps stepOverride="complete" />
-          )
-        ) : (
-          <InputSteps />
-        )}
+        {pathname === '/first-profile/discover' ? <FirstProfileDiscoveryRoute /> : <InputSteps />}
       </FirstProfileOnboardingRoute>
     </View>
   );
 }
 
-function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
+function InputSteps() {
   const flow = useFirstProfileOnboarding();
   const pathname = usePathname();
   const router = useRouter();
-  const step = stepOverride ?? (pathname.split('/').at(-1) as FirstProfileStep | 'complete');
+  const step = pathname.split('/').at(-1) as FirstProfileStep;
   const next = () =>
     router.push(
       `/first-profile/${firstProfileSteps[firstProfileSteps.indexOf(step as FirstProfileStep) + 1]}`,
@@ -258,7 +249,7 @@ function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
         flow.complete(() => router.push('/first-profile/discover'));
       }}
       onNext={() => {
-        if (step !== 'complete' && step !== 'review') {
+        if (step !== 'review') {
           flow.next(step, next);
         }
       }}
@@ -276,11 +267,6 @@ function InputSteps({ stepOverride }: { stepOverride?: 'complete' }) {
       result={flow.result}
       summary={flow.summary}
       step={step}
-      startAction={
-        <Link asChild href="/home" replace>
-          <Button>시작하기</Button>
-        </Link>
-      }
     />
   );
 }

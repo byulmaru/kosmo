@@ -22,8 +22,7 @@ async function ownedProfiles(accountId: string) {
     .where(eq(AccountProfiles.accountId, accountId));
 }
 async function expectCompleted(page: Page) {
-  await expect(page.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page).toHaveURL(/\/home$/);
 }
 function trackMutations(page: Page) {
   const mutations: string[] = [];
@@ -168,7 +167,7 @@ test('선택 단계의 저장 실패 후에도 같은 Profile로 건너뛰고 �
   await expect(page).toHaveURL(/\/first-profile\/details$/);
   await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
   await expect(page).toHaveURL(/\/first-profile\/tags$/);
-  await page.getByRole('button', { name: '나중에 설정' }).click();
+  await page.getByRole('button', { name: '바로 시작' }).click();
   await expectCompleted(page);
   await expect(page.getByText('저장되지 않은 이름', { exact: true })).toHaveCount(0);
   expect(await ownedProfiles(session.account.id)).toEqual(created);
@@ -221,9 +220,8 @@ test('생성 후 흐름을 나갔다가 다시 진입하면 기존 Profile로 �
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await expect(page).toHaveURL(/\/first-profile\/details$/);
   const created = await ownedProfiles(session.account.id);
-  await page.getByRole('button', { name: '나중에 설정' }).click();
+  await page.getByRole('button', { name: '바로 시작' }).click();
   await expectCompleted(page);
-  await page.getByRole('link', { name: '시작하기', exact: true }).click();
   await expect(page).toHaveURL(/\/home$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/home$/);

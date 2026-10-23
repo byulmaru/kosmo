@@ -108,10 +108,10 @@ function DiscoveryStory({ state = 'ready' }: { state?: State }) {
       <SessionProvider>
         <View style={{ height }}>
           {continued ? (
-            <StateView title="최종 완료 화면으로 이동했어요" />
+            <StateView title="홈으로 이동했어요" />
           ) : (
             <FirstProfileTagDiscoveryRoute
-              empty={<StateView title="저장한 태그가 없어 다음 단계로 이동해요" />}
+              empty={<StateView title="저장한 태그가 없어 홈으로 이동해요" />}
               onContinue={() => setContinued(true)}
               profileId="discovery-owner"
             />

@@ -21,7 +21,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, space, textStyles } from '@/theme/tokens';
 import { FirstProfileOnboardingFrame } from './FirstProfileOnboardingFrame';
 import { firstProfileSteps } from './firstProfileOnboardingState';
-import type { ReactNode } from 'react';
 import type { ProfileEditImageDraft } from '@/components/profile/profileEditState';
 import type {
   FirstProfileDraft,
@@ -72,13 +71,12 @@ export type FirstProfileOnboardingScreenProps = {
   onHeaderRemove: () => void;
   onHeaderRetry: () => void;
   result: { kind: 'idle' | 'success' } | { kind: 'error'; message: string };
-  startAction?: ReactNode;
   summary?: {
     draft: FirstProfileDraft;
     avatar: ProfileEditImageDraft;
     header: ProfileEditImageDraft;
   } | null;
-  step: FirstProfileStep | 'complete';
+  step: FirstProfileStep;
 };
 
 export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreenProps) {
@@ -94,17 +92,15 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
     onNext,
     onSkip,
     result,
-    startAction,
     step,
   } = props;
   const theme = useTheme();
   const safeArea = useSafeAreaPadding();
-  const inputStep = step !== 'complete';
   const summaryDraft = props.summary?.draft ?? draft;
   const summaryAvatar = props.summary?.avatar ?? avatar;
   const summaryHeader = props.summary?.header ?? header;
-  const title = inputStep ? copy[step].title : '첫 프로필이\n준비됐어요';
-  const description = inputStep ? copy[step].description : undefined;
+  const title = copy[step].title;
+  const description = copy[step].description;
   const handleError =
     errors.handle ??
     (draft.handle.trim() && !localProfileHandleSchema.safeParse(draft.handle).success
@@ -174,57 +170,51 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
           title={title}
           description={description}
           headerAction={
-            inputStep && step !== 'review' ? (
+            step !== 'review' ? (
               <Button
                 disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
                 onPress={onComplete}
                 size="compact"
                 tone="secondary"
               >
-                {step === 'handle' ? '바로 시작' : '나중에 설정'}
+                바로 시작
               </Button>
             ) : null
           }
           progress={
-            inputStep ? (
-              <View
-                accessibilityLabel={`${firstProfileSteps.indexOf(step) + 1} / 5단계`}
-                style={styles.progress}
-              >
-                {firstProfileSteps.map((item, index) => (
-                  <View
-                    key={item}
-                    style={[
-                      styles.progressPart,
-                      {
-                        backgroundColor:
-                          index <= firstProfileSteps.indexOf(step)
-                            ? theme.actionPrimaryBase
-                            : theme.borderDefault,
-                      },
-                    ]}
-                  />
-                ))}
-                <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
-                  {firstProfileSteps.indexOf(step) + 1} / 5
-                </Text>
-              </View>
-            ) : null
+            <View
+              accessibilityLabel={`${firstProfileSteps.indexOf(step) + 1} / 5단계`}
+              style={styles.progress}
+            >
+              {firstProfileSteps.map((item, index) => (
+                <View
+                  key={item}
+                  style={[
+                    styles.progressPart,
+                    {
+                      backgroundColor:
+                        index <= firstProfileSteps.indexOf(step)
+                          ? theme.actionPrimaryBase
+                          : theme.borderDefault,
+                    },
+                  ]}
+                />
+              ))}
+              <Text style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
+                {firstProfileSteps.indexOf(step) + 1} / 5
+              </Text>
+            </View>
           }
           actions={
             <>
-              {inputStep ? (
-                <Button
-                  disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
-                  loading={busy}
-                  onPress={step === 'review' ? onComplete : onNext}
-                >
-                  다음
-                </Button>
-              ) : (
-                startAction
-              )}
-              {inputStep && step !== 'handle' && step !== 'review' ? (
+              <Button
+                disabled={busy || !localProfileHandleSchema.safeParse(draft.handle).success}
+                loading={busy}
+                onPress={step === 'review' ? onComplete : onNext}
+              >
+                다음
+              </Button>
+              {step !== 'handle' && step !== 'review' ? (
                 <Button disabled={busy} onPress={onSkip} tone="secondary">
                   지금은 건너뛰기
                 </Button>
@@ -375,8 +365,8 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
               </View>
             </View>
           ) : null}
-          {step === 'review' || step === 'complete' ? summary : null}
-          {inputStep && result.kind === 'error' && !(step === 'details' && hasImageError) ? (
+          {step === 'review' ? summary : null}
+          {result.kind === 'error' && !(step === 'details' && hasImageError) ? (
             <Text
               accessibilityRole="alert"
               style={[textStyles.uiCopyM, { color: theme.feedbackDangerOnSubtle }]}
