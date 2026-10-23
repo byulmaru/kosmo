@@ -1,6 +1,7 @@
 export type ErrorCode =
   | 'CONFLICT'
   | 'NOT_FOUND'
+  | 'NOTIFICATION_FEED_SNAPSHOT_EXPIRED'
   | 'PERMISSION_DENIED'
   | 'PROFILE_LIMIT_EXCEEDED'
   | 'VALIDATION';
@@ -54,6 +55,15 @@ export class ProfileLimitExceededError extends KosmoError {
 export class NotFoundError extends KosmoError {
   constructor(message = 'Not found') {
     super({ code: 'NOT_FOUND', message });
+  }
+}
+
+export class NotificationFeedSnapshotExpiredError extends KosmoError {
+  constructor() {
+    super({
+      code: 'NOTIFICATION_FEED_SNAPSHOT_EXPIRED',
+      message: 'Notification Feed snapshot expired',
+    });
   }
 }
 

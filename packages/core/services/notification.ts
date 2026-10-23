@@ -1,6 +1,7 @@
-import { and, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
+  db,
   getDatabaseConnection,
   Instances,
   Notifications,
@@ -12,6 +13,10 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { materializeNotification } from './notification-policy';
+import {
+  assignReactionNotificationGroups,
+  withReactionNotificationGroupTransaction,
+} from './notification-reaction-group';
 import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
@@ -96,7 +101,7 @@ export const createReactionNotification = async (
   sourceId: string,
   handle?: Database,
 ): Promise<string[]> =>
-  getDatabaseConnection(handle).transaction(async (tx) => {
+  withReactionNotificationGroupTransaction(handle ?? db, async (tx) => {
     const source = await tx
       .select({
         actorAccountId: Reactions.actorAccountId,
@@ -126,13 +131,34 @@ export const createReactionNotification = async (
       return [];
     }
 
-    return materializeNotification(tx, {
+    const notificationIds = await materializeNotification(tx, {
       actorAccountId: source.actorAccountId,
       kind: NotificationKind.REACTION,
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.actorProfileId,
       sourceId: source.id,
     });
+
+    if (notificationIds.length > 0) {
+      const recipientScopes = await tx
+        .select({
+          recipientAccountId: Notifications.recipientAccountId,
+          recipientProfileId: Notifications.recipientProfileId,
+        })
+        .from(Notifications)
+        .where(inArray(Notifications.id, notificationIds));
+
+      for (const scope of recipientScopes) {
+        if (scope.recipientProfileId !== null) {
+          await assignReactionNotificationGroups(tx, {
+            recipientAccountId: scope.recipientAccountId,
+            recipientProfileId: scope.recipientProfileId,
+          });
+        }
+      }
+    }
+
+    return notificationIds;
   });
 
 export const createRepostNotification = async (
