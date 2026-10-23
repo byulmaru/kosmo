@@ -245,7 +245,7 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
   });
 
-  it('completes each attachment with only its selected Nightshade setting', async () => {
+  it('reuploads only a submitted attachment when its Nightshade setting changes', async () => {
     pickerResult = { assets: [asset(), asset()], canceled: false };
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
@@ -256,13 +256,21 @@ describe('PostComposerMediaControls deferred completion', () => {
     assert.ok(second);
     assert.equal(first.applyNightshade, false);
     assert.equal(second.applyNightshade, false);
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(second.key, true));
+    await act(async () => {
+      mediaRenderProps?.onApplyNightshadeChange(first.key, true);
+      mediaRenderProps?.onAltTextChange(second.key, 'Second image description');
+    });
     await flush();
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
-    assert.equal(mediaRenderProps?.items[1]?.applyNightshade, true);
+    const valuesBeforeSameChange = mediaValues.length;
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(first.key, true));
+    await flush();
+    assert.equal(mediaValues.length, valuesBeforeSameChange);
+    assert.equal(issueCalls.length, 2);
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
+    assert.equal(mediaRenderProps?.items[1]?.applyNightshade, false);
     assert.deepEqual(mediaValues.at(-1)?.items, [
       { altText: null, mediaId: 'media-1' },
-      { altText: null, mediaId: 'media-2' },
+      { altText: 'Second image description', mediaId: 'media-2' },
     ]);
 
     let completion!: Promise<void>;
@@ -271,17 +279,130 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
     assert.equal(completeCalls.length, 2);
     assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
+      applyNightshade: true,
       id: 'media-1',
     });
     assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: true,
+      applyNightshade: false,
       id: 'media-2',
     });
     await act(async () => {
       completeCalls[0]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
       });
+      completeCalls[1]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
+      });
+      await completion;
+    });
+
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(second.key, true));
+    await flush();
+    assert.equal(issueCalls.length, 3);
+    assert.deepEqual(
+      mediaRenderProps?.items.map((item) => ({
+        altText: item.altText,
+        applyNightshade: item.applyNightshade,
+        mediaId: item.mediaId,
+      })),
+      [
+        { altText: '', applyNightshade: true, mediaId: 'media-1' },
+        {
+          altText: 'Second image description',
+          applyNightshade: true,
+          mediaId: 'media-3',
+        },
+      ],
+    );
+
+    await act(async () => {
+      completion = mediaValues.at(-1)!.completeUploads();
+    });
+    assert.equal(completeCalls.length, 4);
+    assert.deepEqual(completeCalls[2]?.variables.input, {
+      applyNightshade: true,
+      id: 'media-1',
+    });
+    assert.deepEqual(completeCalls[3]?.variables.input, {
+      applyNightshade: true,
+      id: 'media-3',
+    });
+    await act(async () => {
+      completeCalls[2]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
+      });
+      completeCalls[3]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-3', state: 'READY' } },
+      });
+      await completion;
+    });
+  });
+
+  it('uses a fresh upload after completion dispatch and keeps later changes on that upload', async () => {
+    let resolveReupload!: (mediaId: string | null) => void;
+    uploadImageImpl = async (options) => {
+      if (!options.isActive()) {
+        return null;
+      }
+      const issued = await options.issue();
+      if (!options.isActive()) {
+        return null;
+      }
+      if (issued.mediaId === 'media-2') {
+        return new Promise((resolve) => {
+          resolveReupload = resolve;
+        });
+      }
+      return issued.mediaId;
+    };
+    await renderControls();
+    await act(async () => mediaRenderProps?.onMediaAction());
+    await flush();
+
+    const item = mediaRenderProps?.items[0];
+    assert.ok(item);
+    let completion!: Promise<void>;
+    await act(async () => {
+      completion = mediaValues.at(-1)!.completeUploads();
+    });
+    assert.deepEqual(completeCalls[0]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-1',
+    });
+
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(item.key, true));
+    await flush();
+    assert.equal(issueCalls.length, 2);
+    assert.equal(mediaRenderProps?.items[0]?.state, 'uploading');
+    assert.equal(mediaRenderProps?.items[0]?.mediaId, undefined);
+
+    await act(async () => mediaRenderProps?.onApplyNightshadeChange(item.key, false));
+    await flush();
+    assert.equal(issueCalls.length, 2);
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
+
+    await act(async () => {
+      completeCalls[0]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
+      });
+      await assert.rejects(completion);
+    });
+
+    await act(async () => resolveReupload('media-2'));
+    await flush();
+    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
+    assert.equal(mediaRenderProps?.items[0]?.mediaId, 'media-2');
+    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
+
+    await act(async () => {
+      completion = mediaValues.at(-1)!.completeUploads();
+    });
+    assert.equal(completeCalls.length, 2);
+    assert.deepEqual(completeCalls[1]?.variables.input, {
+      applyNightshade: false,
+      id: 'media-2',
+    });
+    await act(async () => {
       completeCalls[1]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
       });
