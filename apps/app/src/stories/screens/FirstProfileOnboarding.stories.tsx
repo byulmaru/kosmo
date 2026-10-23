@@ -121,9 +121,9 @@ export const LongDark: Story = {
 export const HandleOnlyCompletion: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: '나중에 설정' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: '바로 시작' })).toBeDisabled();
     await userEvent.type(canvas.getByRole('textbox', { name: '핸들' }), 'spring');
-    await userEvent.click(canvas.getByRole('button', { name: '나중에 설정' }));
+    await userEvent.click(canvas.getByRole('button', { name: '바로 시작' }));
     await expect(canvas.getByRole('heading', { name: /첫 프로필이\s*준비됐어요/ })).toBeVisible();
   },
 };

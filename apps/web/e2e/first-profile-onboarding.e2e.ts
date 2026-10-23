@@ -104,7 +104,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
   expect(completed[0]).toMatchObject({ id: created[0]!.id, displayName: '저장한 이름' });
 });
 
-test('첫 화면의 나중에 설정은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
+test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
   context,
   page,
 }) => {
@@ -112,9 +112,15 @@ test('첫 화면의 나중에 설정은 기본값으로 생성하고 나머지 �
   await setE2ESessionCookie(context, session.token);
   const mutations = trackMutations(page);
   await page.goto('/first-profile/handle');
-  await expect(page.getByRole('button', { name: '나중에 설정' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeDisabled();
+  for (const invalid of ['ab', 'bad-handle', '한글핸들', 'a'.repeat(31)]) {
+    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(invalid);
+    await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeDisabled();
+  }
+  expect(mutations).toEqual([]);
   await page.getByRole('textbox', { name: '핸들', exact: true }).fill('first_quick');
-  await page.getByRole('button', { name: '나중에 설정' }).click();
+  await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '바로 시작' }).click();
   await expectCompleted(page);
   expect(await ownedProfiles(session.account.id)).toMatchObject([
     {

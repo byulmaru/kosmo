@@ -183,7 +183,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 size="compact"
                 tone="secondary"
               >
-                나중에 설정
+                {step === 'handle' ? '바로 시작' : '나중에 설정'}
               </Button>
             ) : null
           }

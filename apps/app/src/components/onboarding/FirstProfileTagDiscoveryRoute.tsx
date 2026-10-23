@@ -85,7 +85,7 @@ export function FirstProfileTagDiscoveryRoute({ empty, onBack, onContinue, profi
   const renderFrame: RenderFrame = (content, disabled) => (
     <FirstProfileOnboardingFrame
       title={'관심사가 같은 사람을\n만나보세요'}
-      description="프로필에 저장한 태그를 골라 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
+      description="나와 취향이 같은 사람들을 둘러보고, 마음에 드는 사람을 팔로우해 보세요."
       onBack={onBack}
       disabled={disabled}
       style={styles.frame}

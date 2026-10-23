@@ -389,7 +389,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   if (new URL(page.url()).pathname === '/first-profile/handle') {
     await page.getByRole('textbox', { name: '핸들', exact: true }).fill(handle);
     const created = waitForGraphQLOperation(page, 'FirstProfileOnboardingCreateMutation');
-    await page.getByRole('button', { name: '나중에 설정' }).click();
+    await page.getByRole('button', { name: '바로 시작' }).click();
     const body = (await (await created).json()) as {
       data?: { createProfile?: { profile?: { id?: string } } };
       errors?: unknown[];
