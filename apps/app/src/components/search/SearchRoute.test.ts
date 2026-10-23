@@ -33,6 +33,7 @@ const icons = {
 mockModule('lucide-react-native', icons);
 mockModule(require.resolve('lucide-react-native'), icons);
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -94,7 +95,12 @@ mockModule('@/lib/recentSearches', {
   readRecentSearches: async () => [],
   writeRecentSearches: async () => undefined,
 });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({ surface: '#fff', text: '#111', textSecondary: '#777' }),
 });
 

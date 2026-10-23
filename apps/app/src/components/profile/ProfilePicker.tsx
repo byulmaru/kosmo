@@ -1,8 +1,9 @@
 import { CheckIcon } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ProfileSwitcherUnreadBadge } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
+import { useElevation, useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { ReactNode, Ref } from 'react';
 import type { ViewStyle } from 'react-native';
@@ -79,32 +80,15 @@ export function ProfilePicker({
         disabled={busy}
         key={profile.id}
         onPress={() => onSelect(profile.id)}
-        style={({ pressed }) => [
-          styles.profile,
-          !selected ? styles.unselectedProfile : undefined,
-          {
-            backgroundColor: selected || pressed ? theme.backgroundSurface : 'transparent',
-            opacity: busy ? 0.5 : 1,
-          },
-        ]}
+        style={{ opacity: busy ? 0.5 : 1 }}
       >
-        <Avatar
-          imageUri={profile.avatar?.url}
-          label={profile.displayName}
-          size={selected ? 48 : 32}
-        />
-        <View style={styles.profileLabel}>
-          <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
-            {profile.displayName}
-          </Text>
-          <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
-            {profile.relativeHandle}
-          </Text>
-        </View>
-        {selected ? (
-          <CheckIcon color={theme.foregroundPrimary} size={16} />
-        ) : (
-          <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+        {({ pressed }) => (
+          <ProfilePickerOptionVisual
+            pressed={pressed}
+            profile={profile}
+            selected={selected}
+            theme={theme}
+          />
         )}
       </Pressable>
     );
@@ -145,6 +129,57 @@ export function ProfilePicker({
       </View>
       {footer ? <View style={styles.pickerFooter}>{footer}</View> : null}
     </View>
+  );
+}
+
+function ProfilePickerOptionVisual({
+  pressed,
+  profile,
+  selected,
+  theme,
+}: {
+  pressed: boolean;
+  profile: ProfilePickerProfile;
+  selected: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const reducedMotion = useReducedMotion();
+  const animatedBackground = useAnimatedColorTransition({
+    color: selected || pressed ? theme.backgroundSurface : 'transparent',
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: selected ? 'selection' : pressed ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.profile,
+        !selected ? styles.unselectedProfile : undefined,
+        { backgroundColor: animatedBackground } as unknown as ViewStyle,
+      ]}
+    >
+      <Avatar
+        imageUri={profile.avatar?.url}
+        label={profile.displayName}
+        size={selected ? 48 : 32}
+      />
+      <View style={styles.profileLabel}>
+        <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
+          {profile.displayName}
+        </Text>
+        <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
+          {profile.relativeHandle}
+        </Text>
+      </View>
+      {selected ? (
+        <CheckIcon color={theme.foregroundPrimary} size={16} />
+      ) : (
+        <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+      )}
+    </Animated.View>
   );
 }
 

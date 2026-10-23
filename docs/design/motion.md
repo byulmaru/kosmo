@@ -27,16 +27,16 @@ Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용
 
 ## Component 사용표
 
-| 역할               | Duration                 | Easing     | 표현                                            |
-| ------------------ | ------------------------ | ---------- | ----------------------------------------------- |
-| Hover·Pressed      | `fast` 120ms             | standard   | color·opacity, 필요한 경우 scale `0.98`         |
-| Selected           | `standard` 200ms         | standard   | indicator 위치, surface·border·color            |
-| Modal·Drawer enter | `emphasized` 360ms       | enter      | scrim fade와 짧은 position·opacity 변화         |
-| Modal·Drawer exit  | `standard` 200ms         | exit       | position·opacity를 함께 정리                    |
-| Toast              | enter 200ms / exit 120ms | enter/exit | translate·opacity, 체류시간은 별도              |
-| Reaction           | `reaction` 300ms         | standard   | 유한한 scale·color 확인 피드백                  |
-| Spinner            | `loading-cycle` 800ms    | linear     | rotation만 반복                                 |
-| Skeleton           | `skeleton-wave` 2000ms   | linear     | placeholder highlight 이동 후 2000ms 대기, 반복 |
+| 역할               | Duration                 | Easing     | 표현                                                                 |
+| ------------------ | ------------------------ | ---------- | -------------------------------------------------------------------- |
+| Hover·Pressed      | `fast` 120ms             | standard   | color·opacity, 필요한 경우 scale `0.98`                              |
+| Selected           | `standard` 200ms         | standard   | indicator 위치, surface·border·color                                 |
+| Modal·Drawer enter | `emphasized` 360ms       | enter      | scrim fade와 짧은 position·opacity 변화                              |
+| Modal·Drawer exit  | `standard` 200ms         | exit       | position·opacity를 함께 정리                                         |
+| Toast              | enter 200ms / exit 120ms | enter/exit | translate·opacity, 체류시간은 별도                                   |
+| Reaction           | 별도 유한 확인 전이 없음 | —          | 선택·count 의미는 즉시 반영; pending spinner만 `loading-cycle` 800ms |
+| Spinner            | `loading-cycle` 800ms    | linear     | rotation만 반복                                                      |
+| Skeleton           | `skeleton-wave` 2000ms   | linear     | placeholder highlight 이동 후 2000ms 대기, 반복                      |
 
 Underline Tabs에서는 64px 선택 바의 양 끝이 새 위치까지 서로 다른 속도로 동시에 이동해 탭 사이 거리에 따른 폭 변화가 생긴다. 초기 배치·레이아웃 변경·reduced-motion에서는 최종 위치와 크기를 즉시 반영한다.
 
@@ -76,14 +76,37 @@ lifecycle은 이 시각 전이의 완료를 기다리지 않는다.
 
 DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래 판정이 DSN-19·21의 migration 입력이며, 후속 구현은 duration·easing·reduced-motion 동작을 다시 결정하지 않는다.
 
-| 현행 유형      | 현재 source·표현                                                          | 판정      | 목표 계약                                                                              | 후속 소유자                               |
-| -------------- | ------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Hover·Pressed  | `Button`, `IconButton`, `PostActionControl`의 즉시 opacity·pressed 상태   | 수정      | 상태 의미는 즉시 반영하고 시각 color·opacity·필요한 scale만 `fast` 120ms + `standard`  | DSN-19 shared primitive, DSN-21 domain    |
-| Modal·Sheet    | `ModalSheet`와 여러 overlay의 React Native `Modal` `fade`                 | 수정·예외 | KOSMO 소유 overlay는 enter 360ms/exit 200ms. iOS·Android system sheet timing은 OS 예외 | DSN-19 shared primitive, DSN-21 call-site |
-| Drawer         | `UniversalShell` mobile drawer의 Web `Modal`과 Native `Drawer`            | 수정·예외 | Web은 enter 360ms/exit 200ms, Native는 현재 구현 예외를 사용                           | DSN-21                                    |
-| Loading        | React Native `ActivityIndicator` 기본 동작과 custom spinner가 혼재        | 유지·수정 | system indicator는 플랫폼 소유로 유지하고 KOSMO custom spinner만 800ms `linear`에 수렴 | DSN-19 shared helper, DSN-21 consumer     |
-| Reaction       | `ReactionPendingSpinner` 820ms linear loop와 즉시 selected·count feedback | 수정      | pending spinner는 800ms `linear`, 유한 reaction feedback은 300ms `standard`            | DSN-19 helper, DSN-21/Product consumer    |
-| Reduced motion | OS setting adapter와 component별 대체 규칙이 아직 중앙화되지 않음         | 수정      | OS setting을 단일 입력으로 사용하고 아래 대체표대로 비필수 이동을 제거                 | DSN-19 adapter, DSN-21/Product consumer   |
+| 현행 유형                      | 현재 source·표현                                                                                                                                                 | 판정      | 목표 계약                                                                                                                                                               | 후속 소유자                               |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Hover·Pressed                  | `Button`, `IconButton`, `PostActionControl`의 즉시 opacity·pressed 상태                                                                                          | 수정      | 상태 의미는 즉시 반영하고 시각 color·opacity·필요한 scale만 `fast` 120ms + `standard`                                                                                   | DSN-19 shared primitive, DSN-21 domain    |
+| Modal·Sheet                    | `ModalSheet`와 여러 overlay의 React Native `Modal` `fade`                                                                                                        | 수정·예외 | KOSMO 소유 overlay는 enter 360ms/exit 200ms. iOS·Android system sheet timing은 OS 예외                                                                                  | DSN-19 shared primitive, DSN-21 call-site |
+| Drawer                         | `UniversalShell` mobile drawer의 Web `Modal`과 Native `Drawer`                                                                                                   | 수정·예외 | Web은 enter 360ms/exit 200ms, Native는 현재 구현 예외를 사용                                                                                                            | DSN-21                                    |
+| Loading                        | React Native `ActivityIndicator` 기본 동작과 custom spinner가 혼재                                                                                               | 유지·수정 | system indicator는 플랫폼 소유로 유지하고 KOSMO custom spinner만 800ms `linear`에 수렴                                                                                  | DSN-19 shared helper, DSN-21 consumer     |
+| Reaction                       | `ReactionPendingSpinner` 820ms linear loop와 즉시 selected·count feedback                                                                                        | 수정      | pending spinner는 800ms `linear`; 별도 300ms 유한 확인 피드백은 적용하지 않음                                                                                           | DSN-19 helper, DSN-21/Product consumer    |
+| Reduced motion                 | OS setting adapter와 component별 대체 규칙이 아직 중앙화되지 않음                                                                                                | 수정      | OS setting을 단일 입력으로 사용하고 아래 대체표대로 비필수 이동을 제거                                                                                                  | DSN-19 adapter, DSN-21/Product consumer   |
+| PROD-1039 direct app consumers | `PostListItem`, `PostContentWarning`, notification/search recent, profile switchers/picker, composer/media/profile image controls의 Pressable color·opacity 상태 | 수정      | 기존 hover·pressed는 `fast` 120ms, 기존 selected surface는 `standard` 200ms, reduced-motion은 최종값 즉시 반영. content warning hide/unmount는 exit 전이 없이 즉시 처리 | PROD-1039 app domain scope                |
+
+### PROD-1039 direct consumer inventory
+
+아래 표는 이번 이관에서 실제로 기존 상태값이 바뀌던 direct Pressable 소비처만 기록한다. Web은
+pointer hover를 가진 경로를, Native는 touch pressed를 표시한다. 두 플랫폼에 모두 존재하는 소비처는
+같은 semantic token을 사용하되 플랫폼이 제공하지 않는 상태는 만들지 않는다.
+
+| 소비처 그룹·source                                                                                              | 실제 변경 속성·상태                                                                     | Web                | iOS·Android        | 이관 규칙·제외 근거                                                                                 |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------ | ------------------ | --------------------------------------------------------------------------------------------------- |
+| `PostListItem.tsx`                                                                                              | card `backgroundColor`: `stateHover`, `statePressedSubtle`; `pointerHovered`·`pressed`  | hover + pressed    | pressed            | hover는 pressed 중 억제하고 양방향 `fast` 120ms                                                     |
+| `PostContentWarning.tsx`                                                                                        | warning surface `backgroundSurface`·`stateHover`·`statePressed`                         | hover + pressed    | pressed            | 숨김 시 본문·media hide/unmount는 exit 보류 없이 즉시 처리                                          |
+| `PostComposer.tsx`, `ComposerMediaEditor.tsx`                                                                   | visibility selected/pressed surface, gallery selected surface, preview/complete opacity | pressed + selected | pressed + selected | interaction `fast` 120ms, selection `standard` 200ms; mobile idle canvas와 gallery 48px target 보존 |
+| `ProfilePicker.tsx`, `ProfileSwitcher.tsx`, `ProfileSwitcherTarget.tsx`, `PostComposerProfileSwitcher.tsx`      | option selected/pressed surface, trigger/add/edit opacity                               | hover + pressed    | pressed + selected | selected key와 interaction key를 분리해 selection 해제도 `standard` 200ms                           |
+| `ProfileEditImageFields.tsx`, `PostMediaImage.tsx`                                                              | retry opacity `0.7`, image edit veil opacity `0.16`                                     | pressed            | pressed            | 기존 disabled opacity·image geometry는 즉시 유지                                                    |
+| `search.tsx`, `NotificationListItemView.tsx`, `PostSourcePresentationView.tsx`                                  | recent/source `stateHover`, notification hover overlay, recent pressed surface          | hover + pressed    | pressed            | pointer hover가 없는 Native에서는 hover 상태를 생성하지 않음                                        |
+| `NativeChannelSettings.tsx`, `ProfileSettingsScreen.tsx`, `ProfileMuteAction.tsx`, `PostMediaViewerSurface.tsx` | channel/delete/ack surface, mute action color, viewer status action surface             | hover + pressed    | pressed            | focus·action·accessibility 의미는 전이에 의존하지 않음                                              |
+
+게시글 액션(`PostActionControl`)과 리액션(`ReactionSelector`, `FullReactionPicker`, `ReactionSummary`)도 기존 color·surface·border·opacity에 같은 규칙을 적용한다. hover·pressed는 120ms, selected는 200ms이며, optimistic selected·count와 pending·error 의미는 즉시 유지한다. pending spinner는 기존 800ms linear와 reduced-motion 정적 대체를 유지한다. 별도 성공 확인 애니메이션은 추가하지 않는다.
+
+`ProfileEditHeader`처럼 direct Pressable의 changing visual state가 없고 Button·IconButton이 상태를
+소유하는 래퍼는 새 motion을 중복 적용하지 않았다. admin 전용·Storybook 전용 표면도 제품 runtime
+소비처 inventory에 포함하지 않는다. 모든 행에서 reduced-motion은 현재 endpoint를 즉시 커밋한다.
 
 ### PROD-1043 loading ownership
 
@@ -127,15 +150,15 @@ Loading 변경은 위 navigation·scroll 소유권과 timing을 바꾸지 않는
 
 `ThemeProvider`는 최초 OS 설정 확인 전까지 reduced-motion을 유지한다. 현재 OS 입력에서 관찰한 최신 변경은 늦게 도착한 초기 조회보다 우선하며, 구독 해제 뒤 도착한 초기 조회 응답은 현재 preference를 갱신하지 않는다. 명시적 Storybook override의 `true`·`false` 값은 OS 입력을 사용하지 않으며, override를 해제하면 OS 설정을 다시 따른다.
 
-| 일반 표현                | OS reduced-motion에서의 대체                                     |
-| ------------------------ | ---------------------------------------------------------------- |
-| hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영                       |
-| selected indicator 이동  | 최종 위치·surface·border를 즉시 반영                             |
-| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※                     |
-| toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지                     |
-| reaction scale·ripple    | 즉시 color·count·selected 상태로 대체                            |
-| spinner rotation loop    | spinner를 숨기고 정적 `···`를 표시하며 기존 consumer 문구는 유지 |
-| skeleton                 | 정적 placeholder 유지                                            |
+| 일반 표현                | OS reduced-motion에서의 대체                                               |
+| ------------------------ | -------------------------------------------------------------------------- |
+| hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영                                 |
+| selected indicator 이동  | 최종 위치·surface·border를 즉시 반영                                       |
+| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※                               |
+| toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지                               |
+| reaction scale·ripple    | 즉시 color·count·selected 상태로 대체; 별도 유한 확인 전이는 추가하지 않음 |
+| spinner rotation loop    | spinner를 숨기고 정적 `···`를 표시하며 기존 consumer 문구는 유지           |
+| skeleton                 | 정적 placeholder 유지                                                      |
 
 ※ 현재 Native shell drawer의 built-in spring 예외는 아래 PROD-952 Native drawer 규칙을 따른다.
 
