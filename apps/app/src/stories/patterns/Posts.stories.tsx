@@ -52,6 +52,7 @@ import {
   resetImagePickerMock,
   setNextImagePickerResult,
 } from '../../../.storybook/mocks/expo-image-picker';
+import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
 import {
   getCopiedStrings,
   resetClipboardMock,
@@ -880,6 +881,23 @@ const threadStoryPosts = [
   threadReplyQuotePost,
   threadQuoteSourcePost,
 ];
+const authorBoundaryPosts = [
+  ['long-name', '이름이 더 길게 표시되는 작성자', '@a'],
+  ['long-handle', '가', '@longer-author@remote.example'],
+  ['short', '가', '@a'],
+  [
+    'truncated',
+    '좁은 화면에서 잘리는 아주 긴 작성자 이름입니다',
+    '@very-long-author-handle@remote.example',
+  ],
+].map(([id, displayName, relativeHandle]) =>
+  post({
+    id: `author-boundary-${id}`,
+    bodyText: '작성자 이동 경계를 확인하는 게시글입니다.',
+    profile: profile({ id: `author-boundary-profile-${id}`, displayName, relativeHandle }),
+  }),
+);
+
 const storyPosts = [
   shortPost,
   longPost,
@@ -937,6 +955,7 @@ const storyPosts = [
   loadErrorMediaPost,
   loadErrorThreeMediaPost,
   replyPost,
+  ...authorBoundaryPosts,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -3111,6 +3130,13 @@ const meta = {
   },
   component: PostCatalog,
   excludeStories: [
+    'AuthorNavigationLongName',
+    'AuthorNavigationLongHandle',
+    'AuthorNavigationShort',
+    'AuthorNavigationTruncated',
+    'AuthorNavigationQuote',
+    'AuthorNavigationRepost',
+    'AuthorNavigationRepostOfQuote',
     'ComposerBeforeUnloadContract',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
     'ContentWarningCardPressableFeedbackInteraction',
@@ -9014,3 +9040,132 @@ export const ReactionSummaryQuoteNavigation: Story = {
 export const ReactionSummaryRepostNavigation: Story = {
   ...reactionSummaryNavigationStory('post-repost', '/@source@remote.example/post-source'),
 };
+
+function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
+  const onNavigate = fn();
+  return {
+    render: () => (
+      <RouterMockProvider onNavigate={onNavigate}>
+        <View style={{ alignSelf: 'center', maxWidth: '100%', width }}>
+          <ProductionPostListItemStory postId={surfacePost.id} presentation="mobile" />
+        </View>
+      </RouterMockProvider>
+    ),
+    play: async ({ canvasElement }) => {
+      await canvasElement.ownerDocument.fonts.ready;
+      const user = userEvent.setup();
+      const canvas = within(canvasElement);
+      const card = canvas.getByTestId('post-list-item-card');
+      const pathname = canvas.getByTestId('presentation-story-pathname');
+      const primary = surfacePost.content ? surfacePost : surfacePost.repostSource!;
+      const targets = primary.repostSource ? [primary, primary.repostSource] : [primary];
+      const tap = async (x: number, y: number, expectedPath: string, drag = false) => {
+        const target = canvasElement.ownerDocument.elementFromPoint(x, y);
+        expect(target).not.toBeNull();
+        expect(card.contains(target)).toBe(true);
+        onNavigate.mockClear();
+        const before = pathname.textContent;
+        const coords = {
+          clientX: x,
+          clientY: y,
+          pageX: x + window.scrollX,
+          pageY: y + window.scrollY,
+        };
+        await user.pointer([
+          { keys: '[MouseLeft>]', target: target!, coords },
+          ...(drag
+            ? [
+                {
+                  target: target!,
+                  coords: { ...coords, clientY: y + 30, pageY: coords.pageY + 30 },
+                },
+                { target: target!, coords },
+              ]
+            : []),
+          { keys: '[/MouseLeft]', target: target!, coords },
+        ]);
+        await waitFor(() => {
+          expect(pathname.textContent).toBe(drag ? before : expectedPath);
+          expect(onNavigate).toHaveBeenCalledTimes(drag ? 0 : 1);
+        });
+      };
+      for (const targetPost of targets) {
+        const name = within(card).getByText(targetPost.profile.displayName);
+        const handle = within(card).getByText(targetPost.profile.relativeHandle);
+        const link = name.closest('a')!;
+        expect(link).not.toBeNull();
+        link.scrollIntoView({ block: 'center' });
+        const profilePath = `/${targetPost.profile.relativeHandle}`;
+        const detailPath = `${profilePath}/${targetPost.id}`;
+        expect(link).toHaveAttribute('href', profilePath);
+        const bounds = link.getBoundingClientRect();
+        expect(bounds.width).toBeGreaterThan(0);
+        const nameBounds = name.getBoundingClientRect();
+        const handleBounds = handle.getBoundingClientRect();
+        const renderedWidth = (text: HTMLElement) => {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          return Math.min(range.getBoundingClientRect().width, text.getBoundingClientRect().width);
+        };
+        const textRight = nameBounds.left + Math.max(renderedWidth(name), renderedWidth(handle));
+        expect(Math.abs(bounds.right - textRight)).toBeLessThan(2);
+        expect(bounds.right).toBeLessThan(card.getBoundingClientRect().right);
+        for (const rowBounds of [nameBounds, handleBounds]) {
+          await tap(bounds.right - 1, rowBounds.top + rowBounds.height / 2, profilePath);
+          await tap(bounds.right + 2, rowBounds.top + rowBounds.height / 2, detailPath);
+        }
+        if (targetPost !== primary || (surfacePost.content && !surfacePost.replyParent)) {
+          await tap(nameBounds.left + 2, nameBounds.top - 2, profilePath);
+        }
+        await tap(bounds.right + 2, nameBounds.top + nameBounds.height / 2, detailPath, true);
+        const avatar = within(card).getByLabelText(
+          `${targetPost.profile.displayName || targetPost.profile.handle} 프로필 이미지`,
+        );
+        const avatarBounds = avatar.getBoundingClientRect();
+        await tap(
+          avatarBounds.left + avatarBounds.width / 2,
+          avatarBounds.top + avatarBounds.height / 2,
+          profilePath,
+        );
+        const timestamp = [...card.querySelectorAll('a')].find(
+          (anchor) => anchor.getAttribute('href') === detailPath,
+        )!;
+        expect(timestamp).not.toBeUndefined();
+        const timeBounds = timestamp.getBoundingClientRect();
+        await tap(
+          timeBounds.left + timeBounds.width / 2,
+          timeBounds.top + timeBounds.height / 2,
+          detailPath,
+        );
+        onNavigate.mockClear();
+        link.focus();
+        await user.keyboard('{Enter}');
+        expect(pathname.textContent).toBe(profilePath);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+        onNavigate.mockClear();
+        await user.keyboard('{Control>}');
+        await user.click(link);
+        await user.keyboard('{/Control}');
+        expect(pathname.textContent).toBe(profilePath);
+        expect(onNavigate).not.toHaveBeenCalled();
+      }
+      if (!surfacePost.content) {
+        const attribution = within(card).getByRole('link', {
+          name: `${surfacePost.profile.displayName} 프로필 보기`,
+        });
+        onNavigate.mockClear();
+        await user.click(attribution);
+        expect(pathname.textContent).toBe(`/${surfacePost.profile.relativeHandle}`);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+      }
+    },
+  };
+}
+
+export const AuthorNavigationLongName: Story = authorNavigationStory(authorBoundaryPosts[0]!);
+export const AuthorNavigationLongHandle: Story = authorNavigationStory(authorBoundaryPosts[1]!);
+export const AuthorNavigationShort: Story = authorNavigationStory(authorBoundaryPosts[2]!, 390);
+export const AuthorNavigationTruncated: Story = authorNavigationStory(authorBoundaryPosts[3]!, 320);
+export const AuthorNavigationQuote: Story = authorNavigationStory(quotePost);
+export const AuthorNavigationRepost: Story = authorNavigationStory(pureRepost);
+export const AuthorNavigationRepostOfQuote: Story = authorNavigationStory(pureRepostOfQuote);

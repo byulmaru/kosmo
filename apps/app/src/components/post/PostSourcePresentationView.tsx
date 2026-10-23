@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -128,12 +128,14 @@ function presentationKind(post: {
 }
 
 export function PostSourcePresentationView({
+  authorTopInset = 0,
   onBackgroundPress,
   onMediaOpen,
   post: postKey,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
+  authorTopInset?: number;
   onBackgroundPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   post: PostSourcePresentationView_post$key;
@@ -141,29 +143,32 @@ export function PostSourcePresentationView({
   sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const router = useRouter();
   const post = useFragment(PostSourcePresentationViewFragment, postKey);
   const kind = presentationKind(post);
 
+  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
+  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
+  const openPost = useCallback(() => router.push(postDetailHref), [postDetailHref, router]);
   if (kind === 'invalid') {
     return null;
   }
-
-  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
-  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
   const postHeader = (
-    <View style={styles.authorHeader}>
-      <View style={styles.authorSlot}>
+    <PostDetailBackground onBackgroundPress={openPost} style={styles.authorHeader}>
+      <PostDetailBackground onBackgroundPress={openPost} style={styles.authorSlot}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
           href={postProfileHref}
           resetScroll
+          style={{ paddingTop: authorTopInset }}
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
-      </View>
+      </PostDetailBackground>
       <PresentationLink
         accessibilityLabel={`${post.profile.displayName}의 게시글 보기`}
         href={postDetailHref}
+        style={{ paddingTop: authorTopInset }}
       >
         <Text
           style={[styles.timestamp, { color: theme.foregroundSecondary }]}
@@ -172,7 +177,7 @@ export function PostSourcePresentationView({
           {formatTimelineTimestamp(post.createdAt)}
         </Text>
       </PresentationLink>
-    </View>
+    </PostDetailBackground>
   );
 
   if (kind === 'ordinary') {
@@ -230,31 +235,45 @@ export function PostSourcePreview({
 }): ReactNode {
   const theme = useTheme();
   const [pointerHovered, setPointerHovered] = useState(false);
+  const router = useRouter();
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
+  const authorTopInset = interactive ? spacing.md : 0;
+  const openSource = useCallback(() => router.push(sourcePostHref), [router, sourcePostHref]);
   if (!interactive && pointerHovered) {
     setPointerHovered(false);
   }
   const content = (
     <>
-      <View style={styles.authorHeader}>
-        <View style={styles.authorSlot}>
+      <PostDetailBackground
+        onBackgroundPress={interactive ? openSource : undefined}
+        style={[styles.authorHeader, { marginTop: -authorTopInset }]}
+      >
+        <PostDetailBackground
+          onBackgroundPress={interactive ? openSource : undefined}
+          style={styles.authorSlot}
+        >
           {interactive ? (
             <PresentationLink
               accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
               href={sourceProfileHref}
               resetScroll
+              style={{ paddingTop: authorTopInset }}
             >
               <Author profile={source.profile} showAvatar />
             </PresentationLink>
           ) : (
             <Author profile={source.profile} showAvatar />
           )}
-        </View>
+        </PostDetailBackground>
         {interactive ? (
-          <PresentationLink accessibilityLabel="원문 게시글 보기" href={sourcePostHref}>
+          <PresentationLink
+            accessibilityLabel="원문 게시글 보기"
+            href={sourcePostHref}
+            style={{ paddingTop: authorTopInset }}
+          >
             <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
               {formatTimelineTimestamp(source.createdAt)}
             </Text>
@@ -264,7 +283,7 @@ export function PostSourcePreview({
             {formatTimelineTimestamp(source.createdAt)}
           </Text>
         )}
-      </View>
+      </PostDetailBackground>
       {source.content && interactive ? (
         <PostBodyPressTarget
           content={source.content}
@@ -333,17 +352,19 @@ function PresentationLink({
   children,
   href,
   resetScroll = false,
+  style,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
   href: Href;
   resetScroll?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const trigger = (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
-      style={styles.presentationLink}
+      style={StyleSheet.flatten([styles.presentationLink, style])}
     >
       {children}
     </Pressable>
@@ -433,12 +454,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
+    maxWidth: '100%',
     minHeight: 44,
     minWidth: 0,
   },
-  authorText: { flex: 1, minWidth: 0 },
+  authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
-  authorSlot: { flex: 1, minWidth: 0 },
+  authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
   timestamp: {
     fontFamily: fontFamilies.ui,
     minHeight: 44,
@@ -449,5 +471,5 @@ const styles = StyleSheet.create({
   },
   sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
-  presentationLink: { minWidth: 0 },
+  presentationLink: { maxWidth: '100%', minWidth: 0 },
 });

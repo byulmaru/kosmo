@@ -1,4 +1,11 @@
 import baseMeta, {
+  AuthorNavigationLongHandle as authorNavigationLongHandle,
+  AuthorNavigationLongName as authorNavigationLongName,
+  AuthorNavigationQuote as authorNavigationQuote,
+  AuthorNavigationRepost as authorNavigationRepost,
+  AuthorNavigationRepostOfQuote as authorNavigationRepostOfQuote,
+  AuthorNavigationShort as authorNavigationShort,
+  AuthorNavigationTruncated as authorNavigationTruncated,
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
   ContentWarningCardPressableFeedbackInteraction as contentWarningCardPressableFeedback,
   ContentWarningProductionConsumersShareRevealStateInteraction as contentWarningConsumersInteraction,
@@ -50,3 +57,11 @@ export const ReplyModalComposerMediaEditorGeometry: Story = replyModalComposerMe
 export const ReactionSummaryPostNavigation: Story = reactionSummaryPostNavigation;
 export const ReactionSummaryQuoteNavigation: Story = reactionSummaryQuoteNavigation;
 export const ReactionSummaryRepostNavigation: Story = reactionSummaryRepostNavigation;
+
+export const AuthorNavigationLongName: Story = authorNavigationLongName;
+export const AuthorNavigationLongHandle: Story = authorNavigationLongHandle;
+export const AuthorNavigationShort: Story = authorNavigationShort;
+export const AuthorNavigationTruncated: Story = authorNavigationTruncated;
+export const AuthorNavigationQuote: Story = authorNavigationQuote;
+export const AuthorNavigationRepost: Story = authorNavigationRepost;
+export const AuthorNavigationRepostOfQuote: Story = authorNavigationRepostOfQuote;
