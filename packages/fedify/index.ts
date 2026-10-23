@@ -26,7 +26,11 @@ export {
   sendProfileBlock,
   sendProfileBlockUndo,
 } from './src/profile-block-delivery';
-export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
+export {
+  sendProfileFollow,
+  sendProfileFollowAccept,
+  sendProfileUnfollow,
+} from './src/profile-follow-delivery';
 export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {

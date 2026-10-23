@@ -1,7 +1,12 @@
 import { Follow, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import type { ProfileFollowInboundFollow } from '@kosmo/core/services';
 import { federation } from './federation';
-import { getFollowActivityUri, getFollowOrderingKey } from './follow-delivery';
+import {
+  getFollowActivityUri,
+  getFollowOrderingKey,
+  sendAcceptFollowActivity,
+} from './follow-delivery';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
 
@@ -14,6 +19,12 @@ type RemoteProfileFollowActor = {
 type ProfileFollowDeliveryOptions<OutboundFollow> = {
   actor: RemoteProfileFollowActor;
   outboundFollow: OutboundFollow;
+  senderProfileId: string;
+};
+
+type ProfileFollowAcceptDeliveryOptions = {
+  actor: RemoteProfileFollowActor;
+  inboundFollow?: ProfileFollowInboundFollow;
   senderProfileId: string;
 };
 
@@ -60,6 +71,34 @@ export const sendProfileFollow = async ({
     }),
     { orderingKey: getFollowOrderingKey(actorUri, recipientActor.id) },
   );
+};
+
+export const sendProfileFollowAccept = async ({
+  actor,
+  inboundFollow,
+  senderProfileId,
+}: ProfileFollowAcceptDeliveryOptions): Promise<void> => {
+  const recipientActor = toProfileFollowRecipient(actor);
+  const context = await createFederationContext();
+  const receivedFollow =
+    inboundFollow === undefined
+      ? new Follow({ actor: recipientActor.id, object: context.getActorUri(senderProfileId) })
+      : new Follow({
+          actor: new URL(inboundFollow.actorUri),
+          object: new URL(inboundFollow.objectUri),
+          ...(inboundFollow.activityUri === undefined
+            ? {}
+            : { id: new URL(inboundFollow.activityUri) }),
+          ...(inboundFollow.published === undefined
+            ? {}
+            : { published: Temporal.Instant.from(inboundFollow.published) }),
+        });
+  await sendAcceptFollowActivity({
+    context,
+    recipientActor,
+    receivedFollow,
+    senderProfileId,
+  });
 };
 
 export const sendProfileUnfollow = async ({

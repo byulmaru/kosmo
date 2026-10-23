@@ -24,7 +24,9 @@ export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,
   ProfileFollowCreateEffectInput,
+  ProfileFollowAcceptEffectInput,
   ProfileFollowDeleteEffectInput,
+  ProfileFollowInboundFollow,
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
   ProfileFollowPairEffectPlan,
