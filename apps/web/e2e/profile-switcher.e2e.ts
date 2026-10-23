@@ -455,7 +455,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function dismissTimelineGuide(page: Page) {
-  const guide = page.getByRole('dialog', { name: '홈과 로컬 둘러보기' });
+  const guide = page.getByRole('dialog', { name: '내가 팔로우한 사람들의 글' });
   await guide.getByRole('button', { name: '건너뛰기' }).click();
   await expect(guide).toBeHidden();
 }

@@ -184,6 +184,7 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ status: sessionSt
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
+  getTimelineGuideViewportWidth: (_web: boolean, width: number) => width,
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });

@@ -158,6 +158,7 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
+  getTimelineGuideViewportWidth: (_web: boolean, width: number) => width,
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });

@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactNode, RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,7 +48,11 @@ mock.module(new URL('./shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({ reselectTab }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
+let TimelineTabs: ComponentType<{
+  homeAnchorRef?: RefObject<NativeView | null>;
+  localAnchorRef?: RefObject<NativeView | null>;
+  value: 'home' | 'local';
+}>;
 
 before(async () => {
   ({ TimelineTabs } = await import('./TimelineTabs'));
@@ -97,6 +102,20 @@ describe('TimelineTabs', () => {
       renderer?.root.findAllByType(MockTab).map(({ props }) => props.option.label),
       ['홈', '로컬'],
     );
+  });
+
+  it('홈과 로컬의 실제 control ref를 각각 전달한다', async () => {
+    const homeAnchorRef = { current: null };
+    const localAnchorRef = { current: null };
+    await act(async () => {
+      renderer = create(
+        createElement(TimelineTabs, { homeAnchorRef, localAnchorRef, value: 'home' }),
+      );
+    });
+
+    const tabs = renderer?.root.findAllByType(MockTab);
+    assert.equal(tabs?.[0]?.props.anchorRef, homeAnchorRef);
+    assert.equal(tabs?.[1]?.props.anchorRef, localAnchorRef);
   });
 
   it('Native 비활성 route는 현재 화면의 파라미터만 바꾼다', async () => {
