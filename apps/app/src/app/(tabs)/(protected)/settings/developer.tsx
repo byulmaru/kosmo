@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { PageHeader } from '@/components/PageHeader';
 import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
 import { SettingsItem } from '@/components/settings/SettingsItem';
@@ -9,6 +10,7 @@ import { returnToSettingsParent } from '@/components/settings/settingsNavigation
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
+import { StateView } from '@/components/ui/StateView';
 import { getPublicConfig } from '@/config/public';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes } from '@/theme/tokens';
@@ -16,6 +18,7 @@ import { layoutRecipes } from '@/theme/tokens';
 export default function SettingsDeveloperRoute() {
   const router = useRouter();
   const theme = useTheme();
+  const developerInformationEnabled = useFeatureFlag('developer-information');
   const detailHeaderMode = useSettingsDetailHeaderMode();
   const backButton =
     detailHeaderMode === 'back' ? (
@@ -41,11 +44,13 @@ export default function SettingsDeveloperRoute() {
       <View style={[layoutRecipes.listStack, styles.root]}>
         {Platform.OS === 'web' ? (
           <SettingsItem description={getPublicConfig('channel')} label="채널" />
-        ) : (
+        ) : developerInformationEnabled ? (
           <>
             <NativeChannelSettings />
             <NativeUpdateDiagnostics />
           </>
+        ) : (
+          <StateView title="현재 이용할 수 없는 설정이에요" />
         )}
       </View>
     </RouteScrollContainer>

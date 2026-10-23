@@ -27,6 +27,7 @@ let otaIsUpdatePending = false;
 let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
+let developerInformationEnabled = false;
 let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
@@ -95,6 +96,11 @@ mock.module(new URL('./SettingsNavigationList.tsx', import.meta.url), {
   exports: {
     SettingsNavigationList: (props: Record<string, unknown>) =>
       createElement('SettingsNavigationList', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
+  exports: {
+    useFeatureFlag: (key: string) => key === 'developer-information' && developerInformationEnabled,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./NativeChannelSettings.tsx', import.meta.url), {
@@ -254,6 +260,7 @@ afterEach(async () => {
   otaCheckError = null;
   otaDownloadError = null;
   publicChannel = 'prod';
+  developerInformationEnabled = false;
   muteHeadingFocusCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -700,6 +707,31 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsItem').length, 0);
   });
 
+  it('Native 정보 화면은 flag가 꺼지면 정책 링크만 표시한다', async () => {
+    developerInformationEnabled = true;
+    platform = 'ios';
+    await renderRoute('/settings/info', SettingsInfoRoute);
+
+    assert.deepEqual(
+      rendered('SettingsLinkRow').map((node) => node.props.href),
+      ['/privacy', '/account-deletion', '/child-safety', '/settings/developer'],
+    );
+
+    developerInformationEnabled = false;
+    await rerenderRoute('/settings/info', SettingsInfoRoute);
+    assert.deepEqual(
+      rendered('SettingsLinkRow').map((node) => node.props.href),
+      ['/privacy', '/account-deletion', '/child-safety'],
+    );
+
+    platform = 'android';
+    await rerenderRoute('/settings/info', SettingsInfoRoute);
+    assert.deepEqual(
+      rendered('SettingsLinkRow').map((node) => node.props.href),
+      ['/privacy', '/account-deletion', '/child-safety'],
+    );
+  });
+
   it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
     await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
@@ -722,6 +754,7 @@ describe('Settings routes', () => {
   });
 
   it('Native 개발 정보는 OTA 진단 행을 렌더링하고 정보 parent로 돌아간다', async () => {
+    developerInformationEnabled = true;
     platform = 'android';
     width = 390;
     otaUpdateId = '123e4567-e89b-12d3-a456-426614174000';
@@ -756,6 +789,7 @@ describe('Settings routes', () => {
   });
 
   it('Native 개발 정보는 현재 값이 없을 때 식별 불가를 표시하고 오류 행은 조건부로 표시한다', async () => {
+    developerInformationEnabled = true;
     platform = 'ios';
     width = 390;
     otaUpdateId = null;
@@ -788,6 +822,32 @@ describe('Settings routes', () => {
       String(settingsItem('업데이트 다운로드 오류').props.description),
       /download failed/,
     );
+  });
+
+  it('Native 개발 정보 direct route는 flag가 꺼지면 unavailable만 표시하고 자식 기능을 마운트하지 않는다', async () => {
+    developerInformationEnabled = false;
+    platform = 'android';
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(rendered('StateView')[0].props.title, '현재 이용할 수 없는 설정이에요');
+    assert.equal(rendered('NativeChannelSettings').length, 0);
+    assert.equal(settingsItems().length, 0);
+  });
+
+  it('Native 개발 정보는 flag가 켜졌다가 꺼지면 기존 기능을 제거한다', async () => {
+    developerInformationEnabled = true;
+    platform = 'ios';
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(rendered('NativeChannelSettings').length, 1);
+    assert.equal(settingsItem('업데이트 상태').props.label, '업데이트 상태');
+
+    developerInformationEnabled = false;
+    await rerenderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(rendered('StateView')[0].props.title, '현재 이용할 수 없는 설정이에요');
+    assert.equal(rendered('NativeChannelSettings').length, 0);
+    assert.equal(settingsItems().length, 0);
   });
 });
 

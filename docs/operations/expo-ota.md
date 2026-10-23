@@ -15,8 +15,10 @@ PROD-812의 `userInterfaceStyle: automatic`은 새 Native binary에 포함되어
 선택을 Light 고정인 기존 `0.3` binary에 OTA로 전달하지 않도록 `0.4`로 분리하며, Android/iOS 새 binary와
 OS 모드 전환 검증을 완료한 뒤 해당 세대를 출시한다. 이 source 변경 자체는 Store 배포 완료를 뜻하지 않는다.
 
-Native Store binary의 기본 OTA channel은 `prod`다. 인증된 Native Settings의 `설정 → 정보 → 개발 정보`에서만 `dev`·`prod`를 선택해
-API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며,
+Native Store binary의 기본 OTA channel은 `prod`다. 인증된 Native Settings의 `설정 → 정보 → 개발 정보`에서
+`developer-information` flag가 켜진 경우에만 `dev`·`prod`를 선택해 API origin·OIDC 로그인 환경과 OTA channel을
+함께 전환한다. Production에서는 기존 flagd `isDeveloper` evaluator의 승인된 3개 계정 targeting을 유지하고,
+개발 channel에서는 기존 예외로 모든 feature flag가 자동 활성화된다. 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며,
 로그인하지 못한 사용자는 앱 내부에서 channel을 되돌릴 수 없다. Web channel과 `/settings/info` policy link는 이 전환의
 대상이 아니다.
 
