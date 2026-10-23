@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
-import type { MutableRefObject, ReactNode } from 'react';
+import type { MutableRefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type {
@@ -56,25 +56,8 @@ const LocalFragment = graphql`
   }
 `;
 
-export default function LocalScreen() {
-  return <LocalTimeline>{(refresh) => <LocalHeader onReselect={refresh} />}</LocalTimeline>;
-}
-
-export function GuestLocalScreen() {
+export default function LocalTimelineScreen({ publicEntry = false }: { publicEntry?: boolean }) {
   const { width } = useWindowDimensions();
-
-  return (
-    <LocalTimeline>
-      {() =>
-        getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
-          <PageHeader title="타임라인 둘러보기" />
-        ) : null
-      }
-    </LocalTimeline>
-  );
-}
-
-function LocalTimeline({ children }: { children: (refresh: () => void) => ReactNode }) {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
@@ -114,7 +97,13 @@ function LocalTimeline({ children }: { children: (refresh: () => void) => ReactN
 
   return (
     <View style={styles.root}>
-      {children(refresh)}
+      {publicEntry ? (
+        getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
+          <PageHeader title="타임라인 둘러보기" />
+        ) : null
+      ) : (
+        <LocalHeader onReselect={refresh} width={width} />
+      )}
       <View style={styles.body}>
         <RouteBoundary
           loading={<StateView loading title="로컬 타임라인을 불러오는 중입니다." />}
@@ -147,9 +136,8 @@ function LocalTimeline({ children }: { children: (refresh: () => void) => ReactN
   );
 }
 
-function LocalHeader({ onReselect }: { onReselect: () => void }) {
+function LocalHeader({ onReselect, width }: { onReselect: () => void; width: number }) {
   const shellChrome = useShellChrome();
-  const { width } = useWindowDimensions();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 

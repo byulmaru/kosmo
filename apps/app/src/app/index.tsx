@@ -7,7 +7,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
-import { GuestLocalScreen } from '@/components/timeline/LocalTimelineScreen';
+import LocalTimelineScreen from '@/components/timeline/LocalTimelineScreen';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -95,7 +95,7 @@ export default function IndexScreen() {
 
     return (
       <UniversalShell>
-        <GuestLocalScreen />
+        <LocalTimelineScreen publicEntry />
       </UniversalShell>
     );
   }

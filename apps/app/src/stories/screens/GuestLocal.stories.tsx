@@ -1,5 +1,5 @@
 import { UniversalShell } from '@/components/shell/UniversalShell';
-import { GuestLocalScreen } from '@/components/timeline/LocalTimelineScreen';
+import LocalTimelineScreen from '@/components/timeline/LocalTimelineScreen';
 import { SessionProvider } from '@/session/SessionProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -33,7 +33,7 @@ function GuestLocalStory() {
   return (
     <SessionProvider>
       <UniversalShell>
-        <GuestLocalScreen />
+        <LocalTimelineScreen publicEntry />
       </UniversalShell>
     </SessionProvider>
   );

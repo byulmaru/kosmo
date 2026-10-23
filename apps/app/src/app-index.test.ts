@@ -23,8 +23,6 @@ const resetSession = mock.fn();
 const startNativeAuthorization = mock.fn(async () => null);
 
 mockModule('expo-router', {
-  Link: ({ children, href }: { children: ReactNode; href: string }) =>
-    createElement('Link', { href }, children),
   useRouter: () => ({ replace }),
 });
 mockModule('react-native', {
@@ -44,15 +42,9 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
   useMutation: () => [() => undefined],
 });
-mockModule('@/auth/login', {
-  startNativeAuthorization,
-  startWebLoginFromPress: () => undefined,
-});
+mockModule('@/auth/login', { startNativeAuthorization });
 mockModule('@/components/BrandLogo', {
   BrandLogo: () => createElement('BrandLogo'),
-});
-mockModule('@/components/settings/NativeChannelSettings', {
-  NativeChannelSettings: () => createElement('NativeChannelSettings'),
 });
 mockModule('@/components/shell/NavigationLink', {
   NavigationLink: ({ children }: { children: ReactNode }) =>
@@ -63,7 +55,7 @@ mockModule('@/components/shell/UniversalShell', {
     createElement('UniversalShell', null, children),
 });
 mockModule('@/components/timeline/LocalTimelineScreen', {
-  GuestLocalScreen: () => createElement('GuestLocalScreen'),
+  default: (props: object) => createElement('LocalTimelineScreen', props),
 });
 mockModule('@/components/ui/StateView', {
   StateView: (props: object) => createElement('StateView', props),
@@ -108,7 +100,8 @@ describe('로그인 route', () => {
     await renderLoginScreen('web');
 
     assert.equal(rendered('UniversalShell').length, 1);
-    assert.equal(rendered('GuestLocalScreen').length, 1);
+    assert.equal(rendered('LocalTimelineScreen').length, 1);
+    assert.equal(rendered('LocalTimelineScreen')[0]?.props.publicEntry, true);
     assert.deepEqual(rendered('Button'), []);
     assert.equal(startNativeAuthorization.mock.callCount(), 0);
   });
@@ -117,7 +110,7 @@ describe('로그인 route', () => {
     await renderLoginScreen('ios');
 
     assert.equal(rendered('Button').length, 1);
-    assert.deepEqual(rendered('GuestLocalScreen'), []);
+    assert.deepEqual(rendered('LocalTimelineScreen'), []);
     await act(async () => rendered('Button')[0]?.props.onPress());
     assert.equal(startNativeAuthorization.mock.callCount(), 1);
   });
@@ -126,7 +119,7 @@ describe('로그인 route', () => {
     await renderLoginScreen('android');
 
     assert.equal(rendered('Button').length, 1);
-    assert.deepEqual(rendered('GuestLocalScreen'), []);
+    assert.deepEqual(rendered('LocalTimelineScreen'), []);
     await act(async () => rendered('Button')[0]?.props.onPress());
     assert.equal(startNativeAuthorization.mock.callCount(), 1);
   });
@@ -137,7 +130,7 @@ describe('session landing route', () => {
     sessionStatus = 'error';
     await renderLoginScreen('web');
 
-    assert.deepEqual(rendered('GuestLocalScreen'), []);
+    assert.deepEqual(rendered('LocalTimelineScreen'), []);
     assert.deepEqual(rendered('UniversalShell'), []);
     assert.equal(rendered('StateView').length, 1);
     await act(async () => rendered('StateView')[0]?.props.onAction());
@@ -146,14 +139,14 @@ describe('session landing route', () => {
 
     sessionStatus = 'guest';
     await act(async () => renderer?.update(createElement(IndexScreen)));
-    assert.equal(rendered('GuestLocalScreen').length, 1);
+    assert.equal(rendered('LocalTimelineScreen').length, 1);
   });
 
   it('keeps active accounts on the existing Home route', async () => {
     sessionStatus = 'valid';
     await renderLoginScreen('web');
 
-    assert.deepEqual(rendered('GuestLocalScreen'), []);
+    assert.deepEqual(rendered('LocalTimelineScreen'), []);
     assert.deepEqual(
       replace.mock.calls.map(({ arguments: args }) => args),
       [['/home']],

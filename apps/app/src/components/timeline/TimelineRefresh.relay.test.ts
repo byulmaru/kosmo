@@ -22,8 +22,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let renderer: ReactTestRenderer | null = null;
 let HomeTimelineScreen: ComponentType;
-let LocalTimelineScreen: ComponentType;
-let GuestLocalScreen: ComponentType;
+let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
 const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
 const openProfileSwitcher = mock.fn();
@@ -158,7 +157,7 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
 
 before(async () => {
   ({ default: HomeTimelineScreen } = await import('./HomeTimelineScreen'));
-  ({ default: LocalTimelineScreen, GuestLocalScreen } = await import('./LocalTimelineScreen'));
+  ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
@@ -377,7 +376,7 @@ function guestPayload(ids: string[], hasNextPage = true) {
   return { ...payload('localTimeline', ids, hasNextPage), currentSession: null, me: null };
 }
 
-async function renderLocal(Screen = GuestLocalScreen, status: 'guest' | 'valid' = 'guest') {
+async function renderLocal(status: 'guest' | 'valid' = 'guest') {
   platform.OS = 'web';
   sessionStatus = status;
   const environment = new Environment({
@@ -392,7 +391,10 @@ async function renderLocal(Screen = GuestLocalScreen, status: 'guest' | 'valid' 
     renderer = create(
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
-        children: createElement(Screen),
+        children: createElement(
+          LocalTimelineScreen,
+          status === 'guest' ? { publicEntry: true } : {},
+        ),
       }),
     );
   });
@@ -481,7 +483,7 @@ describe('Guest Local with real Relay', () => {
   });
 
   it('keeps valid sessions without a selected profile in profile preparation', async () => {
-    await renderLocal(LocalTimelineScreen, 'valid');
+    await renderLocal('valid');
     const data = payload('localTimeline', ['a'], false);
     await respond(latest('LocalPageQuery'), {
       ...data,
