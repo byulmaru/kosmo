@@ -154,6 +154,10 @@ mockModule('relay-runtime', {
   }),
   getRequest: () => ({}),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
 mockModule('react-native-safe-area-context', {

@@ -93,6 +93,13 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children: ReactNode }) =>
     createElement('Pressable', props, children),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
+mockModule('@/components/PageHeader', {
+  PageHeader: (props: object) => createElement('PageHeader', props),
+});
 mockModule('@/components/post/PostList', { PostList: () => null });
 mockModule('@/components/post/PostRequestList', {
   PostRequestHomeSummaryFallback: () => null,

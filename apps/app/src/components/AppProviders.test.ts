@@ -312,6 +312,10 @@ mockModule('@/components/notification/NotificationReadAllContext', {
 mockModule('@/components/notification/NotificationStreamUpdates', {
   NotificationStreamUpdates: () => null,
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/PageHeader', {
   PageHeader: () => null,
 });
