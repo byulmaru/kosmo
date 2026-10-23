@@ -175,7 +175,7 @@ describe('Post Reply GraphQL 경계', () => {
       `query CreatedHashtagPost($postId: ID!) {
         node(id: $postId) {
           ... on Post {
-            content { bodyText document(includeHashtags: true) }
+            content { bodyText document }
           }
         }
       }`,

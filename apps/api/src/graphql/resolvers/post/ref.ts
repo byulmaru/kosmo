@@ -51,11 +51,7 @@ PostContent.implement({
   fields: (t) => ({
     document: t.field({
       type: 'PostContentDocument',
-      args: {
-        includeHashtags: t.arg.boolean({ defaultValue: false, required: false }),
-      },
-      resolve: (content, { includeHashtags }) =>
-        projectPostContentDocument(content.document, includeHashtags ?? false),
+      resolve: (content) => projectPostContentDocument(content.document),
     }),
     bodyText: t.string({
       resolve: (content) => postContentDocumentToText(content.document),
@@ -96,7 +92,6 @@ PostContent.implement({
 
 function projectPostContentDocument(
   document: typeof PostContents.$inferSelect.document,
-  includeHashtags: boolean,
 ): typeof PostContents.$inferSelect.document {
   return {
     ...document,
@@ -126,10 +121,6 @@ function projectPostContentDocument(
               };
             }
             if (node.type === 'hashtag') {
-              if (!includeHashtags) {
-                return { text: node.attrs.token, type: 'text' };
-              }
-
               return {
                 ...node,
                 attrs: {

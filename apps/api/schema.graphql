@@ -467,7 +467,7 @@ type PostContent implements Node {
   bodyText: String!
   contentWarning: String
   createdAt: DateTime!
-  document(includeHashtags: Boolean = false): PostContentDocument!
+  document: PostContentDocument!
   id: ID!
   media: [Media!]
   mentionedProfiles: [Profile!]!

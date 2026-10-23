@@ -13,7 +13,6 @@ Hashtag identity 관계를 함께 사용하며, 클라이언트가 raw text를 �
 
 ## 범위
 
-- Post Content 표시와 Hashtag 관계는 현재 revision을 따른다. 본문 원문은 tag relation이 없거나 Hashtag 표시를 지원하지 않는
-  reader에서도 그대로 읽을 수 있다.
+- Post Content 표시와 Hashtag 관계는 현재 revision을 따른다.
 - Composer의 입력·validation·draft 동작은 [Post Composer](./post-composer.md)가 소유한다.
 - Hashtag 선택·이동과 공개 게시물 목록은 PROD-827이 소유한다.

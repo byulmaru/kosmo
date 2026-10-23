@@ -9,7 +9,7 @@ const PostBodyFragment = graphql`
     id
     content {
       id
-      document(includeHashtags: true)
+      document
       bodyText
       contentWarning
       mentionedProfiles {

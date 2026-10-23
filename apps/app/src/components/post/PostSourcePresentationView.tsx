@@ -57,7 +57,7 @@ const PostSourcePreviewFragment = graphql`
     content {
       bodyText
       contentWarning
-      document(includeHashtags: true)
+      document
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -88,7 +88,7 @@ const PostSourcePresentationViewFragment = graphql`
     content {
       bodyText
       contentWarning
-      document(includeHashtags: true)
+      document
       mentionedProfiles {
         id
         ...PostContentMention_profile

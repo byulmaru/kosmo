@@ -47,20 +47,31 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.deepEqual(Object.keys(createPostPayload.getFields()), ['post']);
 });
 
-test('PostContent.document preserves old readers by default and exposes Hashtag IDs on opt-in', async () => {
+test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
   const postContent = schema.getType('PostContent');
   assert.ok(isObjectType(postContent));
 
-  const bodyText = 'before #Tag after';
+  const bodyText = 'before @alice #Tag after';
   const hashtagId = '019f6678-86fa-709b-984e-1520766b8447';
   const mediaId = '019f6678-86fa-709b-984e-1520766b8448';
+  const profileId = '019f6678-86fa-709b-984e-1520766b8449';
+  const mentionStart = bodyText.indexOf('@alice');
+  const hashtagStart = bodyText.indexOf('#Tag');
   const document = postContentDocumentFromTextAndMedia(
     bodyText,
     [{ mediaId }],
     true,
     'Content warning',
-    [],
-    [{ end: bodyText.indexOf(' after'), hashtagId, start: bodyText.indexOf('#Tag') }],
+    [
+      {
+        end: mentionStart + '@alice'.length,
+        handle: '@alice',
+        profileId,
+        relativeHandle: '@alice',
+        start: mentionStart,
+      },
+    ],
+    [{ end: hashtagStart + '#Tag'.length, hashtagId, start: hashtagStart }],
   );
   const executableSchema = new GraphQLSchema({
     query: new GraphQLObjectType({
@@ -74,42 +85,29 @@ test('PostContent.document preserves old readers by default and exposes Hashtag 
     }),
   });
 
-  const legacy = await graphql({
+  const projected = await graphql({
     schema: executableSchema,
     source: '{ content { document bodyText contentWarning } }',
   });
-  assert.deepEqual(legacy.errors, undefined);
-  const legacyContent = legacy.data?.content as {
+  assert.deepEqual(projected.errors, undefined);
+  const content = projected.data?.content as {
     bodyText: string;
     contentWarning: string;
     document: typeof document;
   };
-  assert.equal(legacyContent.bodyText, bodyText);
-  assert.equal(legacyContent.contentWarning, 'Content warning');
-  assert.equal(legacyContent.document.body.attrs?.sensitiveMedia, true);
-  assert.deepEqual(legacyContent.document.body.content[0], {
+  assert.equal(content.bodyText, bodyText);
+  assert.equal(content.contentWarning, 'Content warning');
+  assert.equal(content.document.summary, 'Content warning');
+  assert.deepEqual(content.document.body.attrs, { sensitiveMedia: true });
+  assert.deepEqual(content.document.body.content[0], {
     type: 'paragraph',
     content: [
       { type: 'text', text: 'before ' },
-      { type: 'text', text: '#Tag' },
-      { type: 'text', text: ' after' },
-    ],
-  });
-  assert.deepEqual(legacyContent.document.body.content[1], {
-    attrs: { mediaId: encodeGlobalId('Media', mediaId) },
-    type: 'media',
-  });
-
-  const optedIn = await graphql({
-    schema: executableSchema,
-    source: '{ content { document(includeHashtags: true) } }',
-  });
-  assert.deepEqual(optedIn.errors, undefined);
-  const optedInDocument = (optedIn.data?.content as { document: typeof document }).document;
-  assert.deepEqual(optedInDocument.body.content[0], {
-    type: 'paragraph',
-    content: [
-      { type: 'text', text: 'before ' },
+      {
+        attrs: { handle: '@alice', profileId: encodeGlobalId('Profile', profileId) },
+        type: 'mention',
+      },
+      { type: 'text', text: ' ' },
       {
         attrs: { hashtagId: encodeGlobalId('Hashtag', hashtagId), token: '#Tag' },
         type: 'hashtag',
@@ -117,8 +115,7 @@ test('PostContent.document preserves old readers by default and exposes Hashtag 
       { type: 'text', text: ' after' },
     ],
   });
-  assert.deepEqual(optedInDocument.body.attrs, { sensitiveMedia: true });
-  assert.deepEqual(optedInDocument.body.content[1], {
+  assert.deepEqual(content.document.body.content[1], {
     attrs: { mediaId: encodeGlobalId('Media', mediaId) },
     type: 'media',
   });
