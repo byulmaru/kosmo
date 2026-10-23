@@ -20,7 +20,7 @@ for (const width of [390, 1440]) {
       db.select().from(AccountCoachmarks).where(eq(AccountCoachmarks.accountId, viewer.account.id));
 
     await page.goto('/home');
-    const homeGuide = page.getByRole('dialog', { name: '내가 팔로우한 사람들의 글' });
+    const homeGuide = page.getByRole('dialog', { name: '팔로우한 사람들의 소식' });
     await expect(homeGuide).toBeVisible();
     await expect
       .poll(async () => (await shownRows()).map(({ guide }) => guide))
@@ -28,18 +28,18 @@ for (const width of [390, 1440]) {
     const [firstShown] = await shownRows();
     await homeGuide.getByRole('button', { name: '다음', exact: true }).click();
     const localGuide = page.getByRole('dialog', {
-      name: '코스모 사람들의 글을 둘러보세요',
+      name: '새로운 사람들을 만나보세요',
     });
     await expect(localGuide).toBeVisible();
     await expect(page).toHaveURL(/\/home(?:\?.*)?$/);
     await localGuide.getByRole('button', { name: '다음', exact: true }).click();
-    const profileGuide = page.getByRole('dialog', { name: '지금 활동하는 프로필' });
+    const profileGuide = page.getByRole('dialog', { name: '지금 활동 중인 프로필' });
     await expect(profileGuide).toBeVisible();
     if (width === 390) {
       await expect(page.locator('#mobile-sidebar')).toBeVisible();
     }
     await profileGuide.getByRole('button', { name: '다음', exact: true }).click();
-    const composerGuide = page.getByRole('dialog', { name: '내 이야기도 남겨보세요' });
+    const composerGuide = page.getByRole('dialog', { name: '내 이야기를 들려주세요' });
     await expect(composerGuide).toBeVisible();
     await expect(page).toHaveURL(/\/home(?:\?.*)?$/);
     await composerGuide.getByRole('button', { name: '건너뛰기' }).click();
