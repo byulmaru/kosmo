@@ -135,7 +135,7 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                 icon={
                   <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>AI</Text>
                 }
-                label="AI 학습 방지"
+                label="AI 학습 방지 필터(베타)"
                 onPress={() => props.onToolChange('nightshade')}
                 selected={mobileTool === 'nightshade'}
               />
@@ -177,11 +177,6 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
             style={[styles.footer, { borderColor: theme.borderSubtle }]}
             testID="composer-media-editor-footer"
           >
-            <Text style={[styles.footerCopy, { color: theme.foregroundSecondary }]}>
-              {props.tool === 'sensitive'
-                ? '게시물 전체의 민감도 변경 사항을 Composer 초안에 반영합니다.'
-                : '선택한 이미지의 변경 사항을 Composer 초안에 반영합니다.'}
-            </Text>
             <Button onPress={props.onDone}>완료</Button>
           </View>
         </>
@@ -268,7 +263,7 @@ function EditorTabs({
       : []),
     <Tab key="alt" option={{ label: '대체 텍스트', value: 'alt' }} />,
     <Tab key="sensitive" option={{ label: '민감도', value: 'sensitive' }} />,
-    <Tab key="nightshade" option={{ label: 'AI 학습 방지', value: 'nightshade' }} />,
+    <Tab key="nightshade" option={{ label: 'AI 학습 방지 필터(베타)', value: 'nightshade' }} />,
   ];
 
   return (
@@ -646,7 +641,9 @@ function NightshadeToolContent({
           이미지 {itemNumber}
         </Text>
       ) : null}
-      <Text style={[styles.toolTitle, { color: theme.foregroundPrimary }]}>AI 학습 방지</Text>
+      <Text style={[styles.toolTitle, { color: theme.foregroundPrimary }]}>
+        AI 학습 방지 필터(베타)
+      </Text>
       <View
         style={[
           styles.sensitiveSetting,
@@ -655,14 +652,11 @@ function NightshadeToolContent({
       >
         <View style={styles.sensitiveCopy}>
           <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
-            AI 학습 방지
-          </Text>
-          <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
-            켜면 이미지의 긴 변을 최대 1024px로 줄입니다.
+            Nightshade 적용
           </Text>
         </View>
         <Switch
-          accessibilityLabel={`첨부 이미지 ${itemNumber} AI 학습 방지`}
+          accessibilityLabel={`첨부 이미지 ${itemNumber} Nightshade 적용`}
           onValueChange={onApplyNightshadeChange}
           value={applyNightshade}
         />
@@ -802,11 +796,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     height: 64,
-    paddingLeft: space[24],
+    justifyContent: 'flex-end',
     paddingRight: 18,
     paddingVertical: 10,
   },
-  footerCopy: { flex: 1, ...textStyles.uiCopyM },
   mobileActions: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],

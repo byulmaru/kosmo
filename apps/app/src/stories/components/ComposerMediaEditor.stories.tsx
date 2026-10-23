@@ -299,10 +299,10 @@ export const InteractionContract: Story = {
     await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지' }));
     expect(args.onSensitiveMediaChange).toHaveBeenLastCalledWith(true);
 
-    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지' }));
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
     expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
     const secondImageNightshade = canvas.getByRole('switch', {
-      name: '첨부 이미지 2 AI 학습 방지',
+      name: '첨부 이미지 2 Nightshade 적용',
     });
     expect(secondImageNightshade).not.toBeChecked();
     await userEvent.click(secondImageNightshade);
@@ -310,9 +310,9 @@ export const InteractionContract: Story = {
     expect(secondImageNightshade).toBeChecked();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지' })).not.toBeChecked();
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 AI 학습 방지' })).toBeChecked();
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
 
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(args.onDone).toHaveBeenCalledOnce();
@@ -384,7 +384,7 @@ export const MobileNightshadeGeometryContract: Story = {
     expect(canvas.getByTestId('mobile-composer-media-editor-tool-sheet')).toHaveStyle({
       height: '184px',
     });
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지' })).not.toBeChecked();
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
   },
 };
 
@@ -422,10 +422,10 @@ export const MobileToolInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
 
-    await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
     expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
     const nightshadeSwitch = canvas.getByRole('switch', {
-      name: '첨부 이미지 1 AI 학습 방지',
+      name: '첨부 이미지 1 Nightshade 적용',
     });
     expect(nightshadeSwitch).not.toBeChecked();
     await userEvent.click(nightshadeSwitch);

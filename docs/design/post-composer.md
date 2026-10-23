@@ -127,10 +127,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
   제거·재시도, nullable Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control이 늘어나면 Parent와 editor가
   공유하는 중앙 영역에서 함께 스크롤하고 고정 footer를 밀어내지 않는다.
-- Media editor는 Web에서 `AI 학습 방지` tool tab, 모바일에서 같은 이름의 tool button을 제공한다. 선택한 이미지마다
-  Switch를 따로 두고 기본값은 off다. Switch 아래에 `켜면 이미지의 긴 변을 최대 1024px로 줄입니다.`를 표시한다.
-  선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성 Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible
-  name에는 첨부 이미지 번호를 포함한다. 처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
+- Media editor는 Web에서 `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button을 제공한다. 선택한 이미지마다
+  `Nightshade 적용` Switch를 따로 두고 기본값은 off다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
+  Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N Nightshade 적용`이다.
+  처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
   [Media 객체](../domain/objects/media.md)를 따른다.
 - Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
   `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
@@ -255,8 +255,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 오류는 alert semantics, Content Warning 입력·reveal control·Visibility와 Reply action은 name/state, 남은
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
 - Media 추가·제거·재시도, 업로드 상태, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control은 기존 일반
-  Composer와 같은 accessible name·state·live feedback을 제공한다. AI 학습 방지 Switch의 이름에는 현재 첨부 이미지
-  번호가 포함된다.
+  Composer와 같은 accessible name·state·live feedback을 제공한다. AI 학습 방지 Switch의 이름은
+  `첨부 이미지 N Nightshade 적용`이다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
   관찰을 source of truth로 삼고, 이전 target-size 수치를 자동으로 이식하지 않는다.
 - 중앙 scroll은 keyboard focus가 Parent 또는 editor의 현재 위치를 가리지 않게 유지한다. Parent 전용 nested
