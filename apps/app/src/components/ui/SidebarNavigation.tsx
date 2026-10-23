@@ -17,15 +17,7 @@ import {
   UsersRound,
 } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
@@ -277,7 +269,12 @@ function SidebarVisual({
         style={styles.iconFrame}
       >
         {busy ? (
-          <LoadingIndicator accessibilityLabel="로그아웃 처리 중" color={color} />
+          <LoadingIndicator
+            accessibilityLabel="로그아웃 처리 중"
+            accessible={false}
+            aria-hidden
+            color={color}
+          />
         ) : profile ? (
           <Avatar imageUri={profile.imageUri ?? null} label={profile.label} size={28} />
         ) : (
