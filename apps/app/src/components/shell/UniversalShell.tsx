@@ -554,7 +554,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
-              anchorRef={composerMode === 'rail' ? timelineComposerRef : undefined}
+              anchorRef={showRightRail ? timelineComposerRef : undefined}
               fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
               onRequestClose={closeComposer}
               open={composerVisible}
