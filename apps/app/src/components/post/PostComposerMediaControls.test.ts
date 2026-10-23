@@ -301,7 +301,7 @@ describe('PostComposerMediaControls deferred completion', () => {
     assert.equal(captureCalls.length, 1);
   });
 
-  it('completes retained images sequentially and fails only the image that is not READY', async () => {
+  it('completes retained images concurrently and waits until all are READY', async () => {
     pickerResult = { assets: [asset(), asset()], canceled: false };
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
@@ -326,8 +326,9 @@ describe('PostComposerMediaControls deferred completion', () => {
         completionSettled = true;
       },
     );
-    assert.equal(completeCalls.length, 1);
+    assert.equal(completeCalls.length, 2);
     assert.deepEqual(completeCalls[0]?.variables.input, { id: 'media-1' });
+    assert.deepEqual(completeCalls[1]?.variables.input, { id: 'media-2' });
 
     await act(async () => {
       completeCalls[0]?.onCompleted({
@@ -335,27 +336,92 @@ describe('PostComposerMediaControls deferred completion', () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[1]?.variables.input, { id: 'media-2' });
     assert.equal(completionSettled, false);
 
     await act(async () => {
       completeCalls[1]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
+      });
+      await completion;
+    });
+
+    assert.equal(completionSettled, true);
+    assert.deepEqual(
+      mediaRenderProps?.items.map((item) => item.state),
+      ['ready', 'ready'],
+    );
+    assert.equal(toastCalls.length, 0);
+  });
+
+  it('waits for every completion failure and leaves successful siblings ready', async () => {
+    pickerResult = { assets: [asset(), asset(), asset()], canceled: false };
+    await renderControls();
+    await act(async () => mediaRenderProps?.onMediaAction());
+    await flush();
+
+    assert.equal(issueCalls.length, 3);
+    assert.deepEqual(
+      mediaRenderProps?.items.map((item) => item.state),
+      ['ready', 'ready', 'ready'],
+    );
+
+    let completion!: Promise<void>;
+    let completionSettled = false;
+    await act(async () => {
+      completion = mediaValues.at(-1)!.completeUploads();
+    });
+    void completion.then(
+      () => {
+        completionSettled = true;
+      },
+      () => {
+        completionSettled = true;
+      },
+    );
+    assert.equal(completeCalls.length, 3);
+    assert.deepEqual(
+      completeCalls.map((call) => call.variables.input.id),
+      ['media-1', 'media-2', 'media-3'],
+    );
+
+    await act(async () => {
+      completeCalls[0]?.onCompleted({
+        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
+      });
+      completeCalls[1]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-2', state: 'UPLOADING' } },
       });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(completionSettled, false);
+
+    await act(async () => {
+      completeCalls[2]?.onError(new Error('third completion failed'));
       await assert.rejects(completion);
     });
 
     assert.equal(completionSettled, true);
     assert.deepEqual(
       mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'failed'],
+      ['ready', 'failed', 'failed'],
     );
-    assert.equal(toastCalls.length, 1);
-    assert.deepEqual(toastCalls[0], [
-      '2번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
-      { tone: 'danger' },
+    assert.deepEqual(toastCalls, [
+      ['2번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
+      ['3번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
     ]);
+    assert.equal(captureCalls.length, 2);
+
+    await act(async () => {
+      const failedItem = mediaRenderProps?.items[1];
+      assert.ok(failedItem);
+      mediaRenderProps?.onMediaRetry(failedItem);
+    });
+    await flush();
+    assert.equal(issueCalls.length, 4);
+    assert.deepEqual(
+      mediaRenderProps?.items.map((item) => item.state),
+      ['ready', 'ready', 'failed'],
+    );
   });
 
   it('rejects an outdated item snapshot and never completes a removed image', async () => {

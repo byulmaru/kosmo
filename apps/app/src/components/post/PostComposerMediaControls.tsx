@@ -302,49 +302,47 @@ export function PostComposerMediaControls({
         throw mediaChanged;
       }
 
-      for (const [index, item] of media.entries()) {
-        const mediaValue = items[index];
-        if (!mounted.current || mediaRef.current !== media || !mediaValue) {
-          throw mediaChanged;
-        }
+      const completions = await Promise.allSettled(
+        items.map(
+          ({ mediaId }) =>
+            new Promise<void>((resolve, reject) => {
+              commitCompleteMediaUpload({
+                variables: { input: { id: mediaId } },
+                onCompleted: (response, errors) => {
+                  if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
+                    reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
+                    return;
+                  }
+                  resolve();
+                },
+                onError: reject,
+              });
+            }),
+        ),
+      );
+      if (!mounted.current || mediaRef.current !== media) {
+        throw mediaChanged;
+      }
 
-        try {
-          await new Promise<void>((resolve, reject) => {
-            commitCompleteMediaUpload({
-              variables: { input: { id: mediaValue.mediaId } },
-              onCompleted: (response, errors) => {
-                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                  return;
-                }
-                resolve();
-              },
-              onError: reject,
-            });
-          });
-        } catch (error) {
-          if (mounted.current && mediaRef.current === media) {
-            const uploadError = asImageUploadError(error, 'complete', 'complete');
-            reportImageUploadError(uploadError, 'complete');
-            const failure = uploadError.failure;
-            const itemNumber = index + 1;
-            const next = media.map((current) =>
-              current.key === item.key
-                ? { ...current, failure, state: 'failed' as const }
-                : current,
-            );
-            mediaRef.current = next;
-            setMedia(next);
-            showToast(formatImageUploadFailureMessage(`${itemNumber}번째 이미지`, failure), {
-              tone: 'danger',
-            });
+      const firstFailure = completions.find((completion) => completion.status === 'rejected');
+      if (firstFailure?.status === 'rejected') {
+        const next = media.map((item, index) => {
+          const completion = completions[index];
+          if (!completion || completion.status !== 'rejected') {
+            return item;
           }
-          throw error;
-        }
 
-        if (!mounted.current || mediaRef.current !== media) {
-          throw mediaChanged;
-        }
+          const uploadError = asImageUploadError(completion.reason, 'complete', 'complete');
+          reportImageUploadError(uploadError, 'complete');
+          showToast(
+            formatImageUploadFailureMessage(`${index + 1}번째 이미지`, uploadError.failure),
+            { tone: 'danger' },
+          );
+          return { ...item, failure: uploadError.failure, state: 'failed' as const };
+        });
+        mediaRef.current = next;
+        setMedia(next);
+        throw firstFailure.reason;
       }
     };
 
