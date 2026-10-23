@@ -1,5 +1,7 @@
 import { RouteTabList } from '@/components/ui/RouteTabList';
 import { Tab } from '@/components/ui/Tabs';
+import type { RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { TabOption } from '@/components/ui/Tabs';
 
 export type TimelineTab = 'home' | 'local';
@@ -10,9 +12,13 @@ const options: readonly TabOption<TimelineTab>[] = [
 ];
 
 export function TimelineTabs({
+  homeAnchorRef,
+  localAnchorRef,
   onReselect,
   value,
 }: {
+  homeAnchorRef?: RefObject<NativeView | null>;
+  localAnchorRef?: RefObject<NativeView | null>;
   onReselect?: () => void;
   value: TimelineTab;
 }) {
@@ -27,7 +33,11 @@ export function TimelineTabs({
       webAction="replace"
     >
       {options.map((option) => (
-        <Tab key={option.value} option={option} />
+        <Tab
+          anchorRef={option.value === 'home' ? homeAnchorRef : localAnchorRef}
+          key={option.value}
+          option={option}
+        />
       ))}
     </RouteTabList>
   );

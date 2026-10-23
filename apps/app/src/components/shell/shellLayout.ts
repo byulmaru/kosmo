@@ -31,6 +31,16 @@ export function getShellLayout(web: boolean, width: number) {
   return width < breakpoints.full ? 'compact' : 'full';
 }
 
+// Coachmark lifecycle keys must use the layout viewport so scroll locking cannot
+// restart the guide when the scrollbar changes the document client width.
+export function getTimelineGuideViewportWidth(web: boolean, width: number) {
+  if (!web || typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
+    return width;
+  }
+
+  return window.innerWidth;
+}
+
 export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
   title:

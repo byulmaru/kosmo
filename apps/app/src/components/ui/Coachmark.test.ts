@@ -14,6 +14,7 @@ const mockModule = (specifier: string, exports: object) =>
 
 let dimensions = { height: 0, width: 0 };
 const motionInputs: boolean[] = [];
+let placement: 'top' | 'bottom' = 'bottom';
 
 mockModule('react-native', {
   Animated: { View: 'AnimatedView' },
@@ -37,6 +38,8 @@ mockModule('@/theme/ThemeProvider', {
     actionPrimaryBase: 'primary-base',
     backgroundElevated: 'background',
     borderDefault: 'border',
+    borderStrong: 'border-strong',
+    backgroundSurface: 'surface',
     foregroundPrimary: 'foreground',
     foregroundSecondary: 'foreground-secondary',
     overlayScrim: 'scrim',
@@ -75,7 +78,7 @@ mockModule('./coachmarkPosition', {
     arrowLeft: 30,
     left: 20,
     maxHeight: 300,
-    placement: 'bottom',
+    placement,
     top: 20,
   }),
 });
@@ -104,6 +107,7 @@ before(async () => {
 afterEach(() => {
   dimensions = { height: 0, width: 0 };
   motionInputs.length = 0;
+  placement = 'bottom';
 });
 
 test('delayed target starts motion only after measurement and exits after visibility ends', async () => {
@@ -190,6 +194,32 @@ test('onExited only fires after an actual exit, including an unready target exit
   await act(async () => renderer.unmount());
 });
 
+test('exit completes when the live anchor unmounts with the hidden presentation', async () => {
+  dimensions = { height: 40, width: 120 };
+  let exited = 0;
+  const liveAnchorRef = { current: anchor } as unknown as RefObject<NativeView | null>;
+  let renderer!: ReactTestRenderer;
+  const renderCoachmark = (visible: boolean) =>
+    createElement(coachmarkModule.Coachmark, {
+      anchorRef: liveAnchorRef,
+      description: '대상을 확인하세요.',
+      onClose: () => {},
+      onComplete: () => {},
+      onExited: () => {
+        exited += 1;
+      },
+      visible,
+    });
+
+  await act(async () => {
+    renderer = create(renderCoachmark(true));
+  });
+  liveAnchorRef.current = null;
+  await act(async () => renderer.update(renderCoachmark(false)));
+  assert.equal(exited, 1);
+  await act(async () => renderer.unmount());
+});
+
 test('renders validated multi-step progress with one accessible progressbar', async () => {
   dimensions = { height: 40, width: 120 };
   let renderer!: ReactTestRenderer;
@@ -231,5 +261,35 @@ test('renders validated multi-step progress with one accessible progressbar', as
   assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'progressbar' }).length, 0);
   await act(async () => renderer.update(renderCoachmark({ current: 1.5, total: 4 })));
   assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'progressbar' }).length, 0);
+  await act(async () => renderer.unmount());
+});
+
+test('draws the coachmark arrow with the surface border on both placements', async () => {
+  dimensions = { height: 40, width: 120 };
+  let renderer!: ReactTestRenderer;
+  const renderCoachmark = () =>
+    createElement(coachmarkModule.Coachmark, {
+      anchorRef,
+      description: '대상을 확인하세요.',
+      onClose: () => {},
+      onComplete: () => {},
+      visible: true,
+    });
+
+  await act(async () => {
+    renderer = create(renderCoachmark());
+  });
+  let arrow = renderer.root.findByProps({ testID: 'coachmark-arrow' });
+  assert.equal(arrow.props.style[1].borderColor, 'border');
+  assert.equal(arrow.props.style[2].borderTopWidth, 1);
+  assert.equal(arrow.props.style[2].borderLeftWidth, 1);
+
+  placement = 'top';
+  await act(async () => renderer.update(renderCoachmark()));
+  arrow = renderer.root.findByProps({ testID: 'coachmark-arrow' });
+  assert.equal(arrow.props.style[1].borderColor, 'border');
+  assert.equal(arrow.props.style[2].borderBottomWidth, 1);
+  assert.equal(arrow.props.style[2].borderRightWidth, 1);
+
   await act(async () => renderer.unmount());
 });
