@@ -430,6 +430,11 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   expect(createdProfile?.handle).toBe(handle);
   expect(createdProfile?.id).toEqual(expect.any(String));
   await expect(sidebarProfileHandle(page, handle)).toBeVisible();
+  if (responseBody.data?.createProfile?.account?.profiles?.length === 1) {
+    const guide = page.getByRole('dialog', { name: '홈과 로컬 둘러보기' });
+    await guide.getByRole('button', { name: '건너뛰기' }).click();
+    await expect(guide).toBeHidden();
+  }
 
   return createdProfile?.id as string;
 }
