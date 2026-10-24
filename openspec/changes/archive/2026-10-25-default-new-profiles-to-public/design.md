@@ -1,7 +1,8 @@
-## Current Constraints
+## Investigation Snapshot
 
 제품 범위는 PROD-1226과 canonical 문서를 따른다. 아래 내용은 구현 세션에서 조정할 수 있는 작업 메모다.
-조사 기준은 main `502b5a6543eefc054952670af96e1da084dce407`이다.
+아래는 구현 전 조사 기록이며, 조사 기준은 main `502b5a6543eefc054952670af96e1da084dce407`이다.
+완료한 변경과 검증 증거는 `tasks.md`와 PR #1286을 따른다.
 
 - `apps/api/src/graphql/resolvers/profile/mutation/create.ts`는 새 Profile에 `UNLISTED`를 명시적으로 저장한다.
   첫 온보딩과 `apps/app/src/components/shell/ProfileSwitcher.tsx`의 추가 생성은 같은 mutation을 사용한다.
@@ -40,7 +41,8 @@ API와 클라이언트가 모두 변경된 조합에서 생성·생략·저장�
 Public으로 바꾸지 않는다. 배포된 API·앱 버전의 조합과 적용 시점은 이번 소스 조사로 확인하지 않았다.
 
 코드 rollback은 이후 생성의 기본값에 영향을 주지만, 이미 저장된 Public 값을 되돌리는 데이터 변경을 포함하지 않는다.
-현재 세션에서는 제품 테스트·CI·Web·iOS·Android runtime·운영 데이터 조회를 실행하지 않았다.
+Spec 조사에서는 제품 테스트를 실행하지 않았다. 이후 CI의 API·앱·Web 검증 결과는 `tasks.md`에 기록했다.
+iOS·Android runtime과 배포·운영 데이터는 검증하지 않았다.
 
 ## Open Questions
 

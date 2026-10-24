@@ -28,7 +28,8 @@
 ## Verification
 
 프로필 생성의 저장값·조회 결과, 온보딩의 초기 선택·저장·생략·바로 시작, 새 글쓰기의 초기값을 실행으로 확인한다.
-기존 저장값·Unlisted 대체 처리·열린 초안·답글 제한의 회귀도 확인한다. 이 Spec 세션은 문서 검증만 수행한다.
+기존 저장값·Unlisted 대체 처리·열린 초안·답글 제한의 회귀도 확인한다. 완료한 검증과 실행하지 않은 항목은
+`tasks.md`와 PR #1286에 기록한다.
 
 ## Business Context
 
@@ -39,5 +40,5 @@
 
 ## Session Status
 
-- Status: Active
-- Last updated: 2026-10-24
+- Status: Archived
+- Last updated: 2026-10-25
