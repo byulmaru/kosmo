@@ -60,7 +60,7 @@ test('공개 Profile Tag link는 keyboard로 exact Hashtag 관련 Profile과 기
   await expect(page.getByRole('heading', { name: '#Fediverse 관련 프로필' })).toBeVisible();
   await expect(
     page.locator('a[href="/@prod529-entry"]').filter({ hasText: '태그 진입 프로필' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.locator('a[href="/@prod529-related-a"]').filter({ hasText: '별빛 여행자' }),
   ).toBeVisible();
