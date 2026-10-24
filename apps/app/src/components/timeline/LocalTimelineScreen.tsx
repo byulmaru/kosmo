@@ -7,7 +7,6 @@ import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
-import { PublicHomeIntroduction } from '@/components/shell/PublicHomeIntroduction';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
@@ -98,7 +97,6 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
 
   return (
     <View style={styles.root}>
-      {publicEntry ? <PublicHomeIntroduction /> : null}
       {publicEntry ? (
         getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
           <PageHeader title="타임라인 둘러보기" />

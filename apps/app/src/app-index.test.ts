@@ -132,12 +132,6 @@ describe('session landing route', () => {
 
     assert.deepEqual(rendered('LocalTimelineScreen'), []);
     assert.deepEqual(rendered('UniversalShell'), []);
-    assert.ok(rendered('Text').some(({ children }) => children.includes('코스모 KOSMO')));
-    assert.ok(
-      rendered('Text').some(({ children }) =>
-        children.includes('동인과 서브컬처를 위한 SNS. 좋아하는 작품과 이야기를 나눠보세요.'),
-      ),
-    );
     assert.equal(rendered('StateView').length, 1);
     await act(async () => rendered('StateView')[0]?.props.onAction());
     assert.equal(resetSession.mock.callCount(), 1);

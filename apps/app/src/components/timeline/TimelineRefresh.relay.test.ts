@@ -134,7 +134,6 @@ mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   space: { 8: 8, 16: 16 },
   spacing: { lg: 16, sm: 8, xl: 24 },
-  textStyles: { uiCopyL: {}, uiHeadingM: {} },
   typography: { md: {}, sm: {} },
 });
 
@@ -419,14 +418,6 @@ function visibleToast() {
 describe('Guest Local with real Relay', () => {
   it('loads and paginates public rows without a profile or protected timeline tabs', async () => {
     const environment = await renderLocal();
-    const renderedText = renderer!.root
-      .findAllByType('Text' as never)
-      .map((node) => node.children.join(''));
-
-    assert.ok(renderedText.includes('코스모 KOSMO'));
-    assert.ok(
-      renderedText.includes('동인과 서브컬처를 위한 SNS. 좋아하는 작품과 이야기를 나눠보세요.'),
-    );
     assert.equal(
       renderer!.root.findAllByType('StateView' as never).some((node) => node.props.loading),
       true,

@@ -5,7 +5,6 @@ import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization } from '@/auth/login';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NavigationLink } from '@/components/shell/NavigationLink';
-import { PublicHomeIntroduction } from '@/components/shell/PublicHomeIntroduction';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
 import LocalTimelineScreen from '@/components/timeline/LocalTimelineScreen';
@@ -85,16 +84,12 @@ export default function IndexScreen() {
   if (Platform.OS === 'web') {
     if (status === 'error') {
       return (
-        <View style={[styles.webSessionError, { backgroundColor: theme.background }]}>
-          <PublicHomeIntroduction />
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            onAction={resetSession}
-            style={styles.webSessionErrorState}
-            title="로그인 상태를 확인하지 못했어요"
-          />
-        </View>
+        <StateView
+          actionLabel="다시 시도"
+          alert
+          onAction={resetSession}
+          title="로그인 상태를 확인하지 못했어요"
+        />
       );
     }
 
@@ -152,8 +147,6 @@ export default function IndexScreen() {
 }
 
 const styles = StyleSheet.create({
-  webSessionError: { flex: 1 },
-  webSessionErrorState: { flex: 1, justifyContent: 'center' },
   root: { flexGrow: 1 },
   mobileRoot: { paddingBottom: spacing.xxl, paddingTop: 44 },
   hero: {
