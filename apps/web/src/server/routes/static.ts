@@ -40,9 +40,24 @@ staticRoutes.on(['GET', 'HEAD'], '*', async (c, next) => {
   }
 });
 const spaEtag = etag();
+const serveHomepage = serveStatic({
+  onFound: (_path, c) => c.res.headers.set('Cache-Control', 'no-cache'),
+  path: 'home.html',
+  precompressed: true,
+  root: STATIC_ROOT,
+});
 const serveSpaFallback = serveStatic({
   onFound: (_path, c) => c.res.headers.set('Cache-Control', 'no-cache'),
   path: 'index.html',
+  precompressed: true,
+  root: STATIC_ROOT,
+});
+const serveStaticAsset = serveStatic({
+  onFound: (_path, c) =>
+    c.res.headers.set(
+      'Cache-Control',
+      HASHED_ASSET.test(c.req.path) ? 'public, max-age=31536000, immutable' : 'no-cache',
+    ),
   precompressed: true,
   root: STATIC_ROOT,
 });
@@ -55,18 +70,8 @@ staticRoutes.on(['GET', 'HEAD'], '*', async (c, next) => {
   await spaEtag(c, next);
   c.res.headers.set('Cache-Control', 'no-cache');
 });
-staticRoutes.on(
-  ['GET', 'HEAD'],
-  '*',
-  serveStatic({
-    onFound: (_path, c) =>
-      c.res.headers.set(
-        'Cache-Control',
-        HASHED_ASSET.test(c.req.path) ? 'public, max-age=31536000, immutable' : 'no-cache',
-      ),
-    precompressed: true,
-    root: STATIC_ROOT,
-  }),
+staticRoutes.on(['GET', 'HEAD'], '*', (c, next) =>
+  c.req.path === '/' ? serveHomepage(c, next) : serveStaticAsset(c, next),
 );
 staticRoutes.on(['GET', 'HEAD'], '*', (c, next) =>
   isSpaRequest(c) ? serveSpaFallback(c, next) : next(),

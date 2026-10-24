@@ -66,6 +66,7 @@ const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
+  await writeFile(join(staticRoot, 'home.html'), '<html>kosmo homepage</html>');
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
@@ -500,7 +501,7 @@ describe('runtime routing', () => {
     expect(asset.headers.get('content-type')).toContain('text/javascript');
     expect(await asset.text()).toBe('console.log("asset")');
     expect(root.status).toBe(200);
-    expect(await root.text()).toBe('<html>expo app</html>');
+    expect(await root.text()).toBe('<html>kosmo homepage</html>');
     expect(deepLink.status).toBe(200);
     expect(await deepLink.text()).toBe('<html>expo app</html>');
     expect(federationFetch).toHaveBeenCalledTimes(4);
@@ -670,6 +671,18 @@ describe('runtime routing', () => {
     expect(revalidated.status).toBe(304);
     expect(revalidated.headers.get('cache-control')).toBe('no-cache');
     expect(hashedAsset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+  });
+
+  test('serves the homepage shell at the root and keeps the generic shell for deep links', async () => {
+    const root = await app.request('/');
+    const deepLink = await app.request('/@kosmo', { headers: { accept: 'text/html' } });
+    const rootHead = await app.request('/', { method: 'HEAD' });
+
+    expect(await root.text()).toBe('<html>kosmo homepage</html>');
+    expect(await deepLink.text()).toBe('<html>expo app</html>');
+    expect(rootHead.status).toBe(200);
+    expect(await rootHead.text()).toBe('');
+    expect(rootHead.headers.get('cache-control')).toBe('no-cache');
   });
 
   test('serves deterministic precompressed assets when gzip is accepted', async () => {

@@ -21,7 +21,7 @@ const run = (command, args, options = {}) => {
   }
 };
 
-run('pnpm', ['--filter', '@kosmo/app', 'run', 'export:web', '--source-maps', 'external']);
+run('pnpm', ['--filter', '@kosmo/app', 'run', 'export:web:source-maps']);
 
 const artifactPath = 'apps/app/dist';
 
