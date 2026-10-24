@@ -122,4 +122,19 @@ export const localProfileHandleSchema = localProfileHandlePolicySchema.pipe(prof
 
 export const profileDisplayNameSchema = z.string().trim().min(1).max(80);
 
-export const profileBioSchema = z.string().trim().max(500).nullable();
+export const profileBioSchema = z
+  .string()
+  .trim()
+  .check(({ value, issues }) => {
+    if (value.length > 500) {
+      issues.push({
+        code: 'too_big',
+        origin: 'string',
+        maximum: 500,
+        inclusive: true,
+        input: value,
+        continue: true,
+      });
+    }
+  })
+  .nullable();
