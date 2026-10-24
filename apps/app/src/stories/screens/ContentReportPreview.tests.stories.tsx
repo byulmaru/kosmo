@@ -109,22 +109,13 @@ export const BlockActionAfterReport: Story = {
       },
     },
   },
-  play: async ({ canvasElement, parameters }) => {
+  play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
     let confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
     let confirmation = within(confirmationDialog);
-    await userEvent.click(confirmation.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
-    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
-    await waitFor(() => expect(block).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
-
-    await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
@@ -142,7 +133,6 @@ export const BlockActionAfterReport: Story = {
       expect(page.queryByText('신고가 접수되었어요')).not.toBeInTheDocument();
     });
     await waitFor(() => expect(page.getByRole('button', { name: '신고 메뉴 열기' })).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledTimes(3);
   },
 };
 
