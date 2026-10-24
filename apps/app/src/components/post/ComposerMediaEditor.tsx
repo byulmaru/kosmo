@@ -20,13 +20,19 @@ import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
-export type ComposerMediaEditorTool = 'alt' | 'sensitive';
-export type ComposerMediaEditorMobileState = 'alt' | 'altKeyboard' | 'default' | 'sensitive';
+export type ComposerMediaEditorTool = 'alt' | 'nightshade' | 'sensitive';
+export type ComposerMediaEditorMobileState =
+  | 'alt'
+  | 'altKeyboard'
+  | 'default'
+  | 'nightshade'
+  | 'sensitive';
 
 export type ComposerMediaEditorProps = {
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
@@ -56,13 +62,13 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   );
   const selected = props.media[selectedIndex];
   const mobile = props.presentation === 'mobile';
-  const mobileState = props.mobileState ?? (props.tool === 'sensitive' ? 'sensitive' : 'alt');
+  const mobileState = props.mobileState ?? props.tool;
   const mobileTool =
     mobileState === 'default'
       ? null
       : mobileState === 'alt' || mobileState === 'altKeyboard'
         ? 'alt'
-        : 'sensitive';
+        : mobileState;
 
   useEffect(() => {
     backRef.current?.focus();
@@ -125,6 +131,14 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                 onPress={() => props.onToolChange('sensitive')}
                 selected={mobileTool === 'sensitive'}
               />
+              <MobileToolButton
+                icon={
+                  <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>AI</Text>
+                }
+                label="AI 학습 방지 필터(베타)"
+                onPress={() => props.onToolChange('nightshade')}
+                selected={mobileTool === 'nightshade'}
+              />
             </View>
             {mobileTool ? (
               <MobileToolSheet
@@ -163,11 +177,6 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
             style={[styles.footer, { borderColor: theme.borderSubtle }]}
             testID="composer-media-editor-footer"
           >
-            <Text style={[styles.footerCopy, { color: theme.foregroundSecondary }]}>
-              {props.tool === 'sensitive'
-                ? '게시물 전체의 민감도 변경 사항을 Composer 초안에 반영합니다.'
-                : '선택한 이미지의 변경 사항을 Composer 초안에 반영합니다.'}
-            </Text>
             <Button onPress={props.onDone}>완료</Button>
           </View>
         </>
@@ -254,6 +263,7 @@ function EditorTabs({
       : []),
     <Tab key="alt" option={{ label: '대체 텍스트', value: 'alt' }} />,
     <Tab key="sensitive" option={{ label: '민감도', value: 'sensitive' }} />,
+    <Tab key="nightshade" option={{ label: 'AI 학습 방지 필터(베타)', value: 'nightshade' }} />,
   ];
 
   return (
@@ -402,11 +412,21 @@ function WebToolPanel(
             }
           }}
         />
-      ) : (
+      ) : props.tool === 'sensitive' ? (
         <SensitiveToolContent
           itemNumber={props.selectedIndex + 1}
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
+        />
+      ) : (
+        <NightshadeToolContent
+          applyNightshade={props.selected?.applyNightshade ?? false}
+          itemNumber={props.selectedIndex + 1}
+          onApplyNightshadeChange={(value) => {
+            if (props.selected) {
+              props.onApplyNightshadeChange(props.selected.key, value);
+            }
+          }}
         />
       )}
     </ScrollView>
@@ -441,12 +461,23 @@ function MobileToolSheet(
             }
           }}
         />
-      ) : (
+      ) : props.tool === 'sensitive' ? (
         <SensitiveToolContent
           compact
           itemNumber={props.selectedIndex + 1}
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
+        />
+      ) : (
+        <NightshadeToolContent
+          applyNightshade={props.selected?.applyNightshade ?? false}
+          compact
+          itemNumber={props.selectedIndex + 1}
+          onApplyNightshadeChange={(value) => {
+            if (props.selected) {
+              props.onApplyNightshadeChange(props.selected.key, value);
+            }
+          }}
         />
       )}
     </View>
@@ -590,6 +621,53 @@ function SensitiveToolContent({
   );
 }
 
+function NightshadeToolContent({
+  applyNightshade,
+  compact = false,
+  itemNumber,
+  onApplyNightshadeChange,
+}: {
+  readonly applyNightshade: boolean;
+  readonly compact?: boolean;
+  readonly itemNumber: number;
+  readonly onApplyNightshadeChange: (value: boolean) => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <>
+      {!compact ? (
+        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>
+          이미지 {itemNumber}
+        </Text>
+      ) : null}
+      <Text style={[styles.toolTitle, { color: theme.foregroundPrimary }]}>
+        AI 학습 방지 필터(베타)
+      </Text>
+      <View
+        style={[
+          styles.sensitiveSetting,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
+      >
+        <View style={styles.sensitiveCopy}>
+          <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
+            Nightshade 적용
+          </Text>
+          <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
+            실험적인 기능입니다.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel={`첨부 이미지 ${itemNumber} Nightshade 적용`}
+          onValueChange={onApplyNightshadeChange}
+          value={applyNightshade}
+        />
+      </View>
+    </>
+  );
+}
+
 function MobileToolButton({
   icon,
   label,
@@ -721,11 +799,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     height: 64,
-    paddingLeft: space[24],
+    justifyContent: 'flex-end',
     paddingRight: 18,
     paddingVertical: 10,
   },
-  footerCopy: { flex: 1, ...textStyles.uiCopyM },
   mobileActions: {
     alignItems: 'center',
     borderTopWidth: borderWidths[1],

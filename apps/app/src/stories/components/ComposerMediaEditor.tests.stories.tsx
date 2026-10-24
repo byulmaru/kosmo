@@ -3,6 +3,7 @@ import baseMeta, {
   InteractionContract as interactionContract,
   MobileAltKeyboardGeometryContract as mobileAltKeyboardGeometryContract,
   MobileDefaultGeometryContract as mobileDefaultGeometryContract,
+  MobileNightshadeGeometryContract as mobileNightshadeGeometryContract,
   MobileSensitiveGeometryContract as mobileSensitiveGeometryContract,
   MobileToolInteractionContract as mobileToolInteractionContract,
   PlaygroundMobileViewportContract as playgroundMobileViewportContract,
@@ -23,6 +24,7 @@ export const InteractionContract: Story = interactionContract;
 export const FutureImageEditPreviewContract: Story = futureImageEditPreviewContract;
 export const MobileAltKeyboardGeometryContract: Story = mobileAltKeyboardGeometryContract;
 export const MobileDefaultGeometryContract: Story = mobileDefaultGeometryContract;
+export const MobileNightshadeGeometryContract: Story = mobileNightshadeGeometryContract;
 export const MobileSensitiveGeometryContract: Story = mobileSensitiveGeometryContract;
 export const MobileToolInteractionContract: Story = mobileToolInteractionContract;
 export const PlaygroundMobileViewportContract: Story = playgroundMobileViewportContract;

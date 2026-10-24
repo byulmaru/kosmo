@@ -42,6 +42,7 @@ export type ComposerMediaItem = {
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
+  readonly applyNightshade?: boolean;
 };
 
 export type PostComposerMediaValue = {
@@ -57,6 +58,7 @@ export type PostComposerMediaValue = {
 export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -102,6 +104,7 @@ export function PostComposerMediaControls({
   const [sensitiveMedia, setSensitiveMedia] = useState(false);
   const mounted = useRef(true);
   const removedMediaKeys = useRef(new Set<string>());
+  const submittedCompletionMediaIds = useRef(new Set<string>());
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
   const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
@@ -136,7 +139,14 @@ export function PostComposerMediaControls({
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
     updateMedia((items) =>
       items.map((item) =>
-        item.key === key ? { ...item, failure: undefined, state: 'uploading' } : item,
+        item.key === key
+          ? {
+              ...item,
+              failure: undefined,
+              mediaId: undefined,
+              state: 'uploading',
+            }
+          : item,
       ),
     );
 
@@ -189,6 +199,7 @@ export function PostComposerMediaControls({
     }
 
     const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
+      applyNightshade: false,
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
@@ -303,22 +314,24 @@ export function PostComposerMediaControls({
       }
 
       const completions = await Promise.allSettled(
-        items.map(
-          ({ mediaId }) =>
-            new Promise<void>((resolve, reject) => {
-              commitCompleteMediaUpload({
-                variables: { input: { id: mediaId } },
-                onCompleted: (response, errors) => {
-                  if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                    reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                    return;
-                  }
-                  resolve();
-                },
-                onError: reject,
-              });
-            }),
-        ),
+        items.map(({ mediaId }, index) => {
+          submittedCompletionMediaIds.current.add(mediaId);
+          return new Promise<void>((resolve, reject) => {
+            commitCompleteMediaUpload({
+              variables: {
+                input: { id: mediaId, applyNightshade: media[index]?.applyNightshade ?? false },
+              },
+              onCompleted: (response, errors) => {
+                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
+                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
+                  return;
+                }
+                resolve();
+              },
+              onError: reject,
+            });
+          });
+        }),
       );
       if (!mounted.current || mediaRef.current !== media) {
         throw mediaChanged;
@@ -375,6 +388,21 @@ export function PostComposerMediaControls({
         updateMedia((items) =>
           items.map((item) => (item.key === key ? { ...item, altText } : item)),
         ),
+      onApplyNightshadeChange: (key, value) => {
+        const item = mediaRef.current.find((current) => current.key === key);
+        if (!item || (item.applyNightshade ?? false) === value) {
+          return;
+        }
+
+        updateMedia((items) =>
+          items.map((current) =>
+            current.key === key ? { ...current, applyNightshade: value } : current,
+          ),
+        );
+        if (item.mediaId && submittedCompletionMediaIds.current.has(item.mediaId)) {
+          void uploadMedia(item.key, item.asset);
+        }
+      },
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,
       onMediaRetry: (item) => void uploadMedia(item.key, item.asset),

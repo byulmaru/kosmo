@@ -24,7 +24,10 @@ import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
 import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ComposerMediaEditorMobileState } from '@/components/post/ComposerMediaEditor';
+import type {
+  ComposerMediaEditorMobileState,
+  ComposerMediaEditorTool,
+} from '@/components/post/ComposerMediaEditor';
 import type { PostComposerProps } from '@/components/post/PostComposer';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type {
@@ -381,7 +384,7 @@ function InteractiveComposer({
   const [editor, setEditor] = useState<{
     key: string;
     mobileState: ComposerMediaEditorMobileState;
-    tool: 'alt' | 'sensitive';
+    tool: ComposerMediaEditorTool;
   } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
@@ -543,6 +546,13 @@ function InteractiveComposer({
         <ComposerMediaEditor
           media={items.filter((item) => item.state === 'ready')}
           mobileState={editor.mobileState}
+          onApplyNightshadeChange={(key, value) => {
+            setItems((current) =>
+              current.map((item) =>
+                item.key === key ? { ...item, applyNightshade: value } : item,
+              ),
+            );
+          }}
           onAltTextChange={(key, altText) => {
             setItems((current) =>
               current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -569,11 +579,11 @@ function InteractiveComposer({
               return {
                 ...current,
                 mobileState:
-                  tool === 'sensitive'
-                    ? 'sensitive'
-                    : current.mobileState === 'altKeyboard'
+                  tool === 'alt'
+                    ? current.mobileState === 'altKeyboard'
                       ? 'default'
-                      : 'altKeyboard',
+                      : 'altKeyboard'
+                    : tool,
                 tool,
               };
             })
@@ -694,6 +704,13 @@ function InteractiveComposer({
           {editor ? (
             <ComposerMediaEditor
               media={items.filter((item) => item.state === 'ready')}
+              onApplyNightshadeChange={(key, value) => {
+                setItems((current) =>
+                  current.map((item) =>
+                    item.key === key ? { ...item, applyNightshade: value } : item,
+                  ),
+                );
+              }}
               onAltTextChange={(key, altText) => {
                 setItems((current) =>
                   current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -1158,6 +1175,7 @@ export const MobileRuntimeAltEditorContract: Story = {
         media={readyComposerMedia}
         mobileState="alt"
         onAltTextChange={fn()}
+        onApplyNightshadeChange={fn()}
         onBack={fn()}
         onClose={fn()}
         onDone={fn()}

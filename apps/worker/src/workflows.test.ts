@@ -3434,6 +3434,17 @@ test(
 
 const nexusMediaUploadTestService = service('media', {
   startUpload: operation<NexusMediaUploadStartInput, MediaUploadWorkflowResult>(),
+  applyHope: operation<
+    {
+      readonly id: string;
+      readonly hope: {
+        readonly algorithm: string;
+        readonly iterations: number;
+        readonly intensity: number;
+      };
+    },
+    { readonly id: string }
+  >(),
   publishUpload: operation<{ readonly id: string }, { readonly id: string }>(),
 });
 
@@ -3446,7 +3457,7 @@ type NexusMediaUploadStartInput = {
 };
 
 test(
-  'Media Upload Workflow는 publish 확인 뒤 원격 처리 결과로만 finalize한다',
+  'Media Upload Workflow는 선택한 Nightshade를 await한 뒤 publish하고 원격 결과로 finalize한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -3460,11 +3471,17 @@ test(
     const createUpload = (
       contentType: NexusMediaUploadStartInput['contentType'],
       shouldFail = false,
+      applyNightshade = false,
+      shouldFailNightshade = false,
     ) => {
       const uuid = crypto.randomUUID();
       const remoteId = `u_${uuid}`;
       return {
-        input: { mediaId: crypto.randomUUID(), accountId: crypto.randomUUID() },
+        input: {
+          mediaId: crypto.randomUUID(),
+          accountId: crypto.randomUUID(),
+          ...(applyNightshade ? { applyNightshade } : {}),
+        },
         prepared: {
           id: remoteId,
           sourceKey: `uploads/${remoteId}/${uuid}`,
@@ -3476,15 +3493,17 @@ test(
           mediaType: 'image/webp',
         },
         shouldFail,
+        shouldFailNightshade,
         publicationAck: Promise.withResolvers<void>(),
       };
     };
     const uploads = [
-      createUpload('image/jpeg'),
+      createUpload('image/jpeg', false, true),
       createUpload('image/png', true),
       createUpload('image/webp'),
+      createUpload('image/png', false, true, true),
     ];
-    const [success, failure, cancelled] = uploads;
+    const [success, failure, cancelled, nightshadeFailure] = uploads;
     const uploadById = new Map<string, (typeof uploads)[number]>(
       uploads.flatMap((upload) => [
         [upload.input.mediaId, upload] as const,
@@ -3494,7 +3513,15 @@ test(
     const events: string[] = [];
     const activityCalls: string[] = [];
     const startInputs: NexusMediaUploadStartInput[] = [];
-    const finalized: Array<{ mediaId: string; result: MediaUploadWorkflowResult }> = [];
+    const hopeInputs: Array<{
+      id: string;
+      hope: { algorithm: string; iterations: number; intensity: number };
+    }> = [];
+    const finalized: Array<{
+      applyNightshade: boolean;
+      mediaId: string;
+      result: MediaUploadWorkflowResult;
+    }> = [];
 
     const nexusServiceHandler = serviceHandler(nexusMediaUploadTestService, {
       startUpload: new WorkflowRunOperationHandler<
@@ -3519,6 +3546,20 @@ test(
         events.push(`start-ack:${input.id}`);
         return handle;
       }),
+      applyHope: async (_ctx, input) => {
+        hopeInputs.push(input);
+        events.push(`hope:${input.id}`);
+        const upload = uploadById.get(input.id);
+        assert.ok(upload);
+        if (upload.shouldFailNightshade) {
+          throw ApplicationFailure.nonRetryable(
+            'Mock Nightshade processing failed',
+            'HopeProcessingError',
+          );
+        }
+        events.push(`hope-ack:${input.id}`);
+        return { id: input.id };
+      },
       publishUpload: async (_ctx, { id }) => {
         events.push(`publish:${id}`);
         const upload = uploadById.get(id);
@@ -3548,17 +3589,19 @@ test(
           return upload.prepared;
         },
         finalizeMediaUploadActivity: async ({
+          applyNightshade,
           mediaId,
           remoteUploadId,
           result,
         }: {
+          readonly applyNightshade: boolean;
           readonly mediaId: string;
           readonly remoteUploadId: string;
           readonly result: MediaUploadWorkflowResult;
         }) => {
           assert.equal(remoteUploadId, result.id);
           activityCalls.push(`finalize:${mediaId}`);
-          finalized.push({ mediaId, result });
+          finalized.push({ applyNightshade, mediaId, result });
           return result;
         },
       },
@@ -3589,8 +3632,13 @@ test(
         await success.publicationAck.promise;
 
         const successStartAckIndex = events.indexOf(`start-ack:${success.prepared.id}`);
+        const successHopeAckIndex = events.indexOf(`hope-ack:${success.prepared.id}`);
         const successPublishIndex = events.indexOf(`publish:${success.prepared.id}`);
-        assert.ok(successStartAckIndex >= 0 && successStartAckIndex < successPublishIndex);
+        assert.ok(
+          successStartAckIndex >= 0 &&
+            successStartAckIndex < successHopeAckIndex &&
+            successHopeAckIndex < successPublishIndex,
+        );
         assert.equal(
           events.filter((event) => event === `publish:${success.prepared.id}`).length,
           1,
@@ -3604,7 +3652,9 @@ test(
           await Promise.all([successHandle.result(), existingSuccessHandle.result()]),
           [success.result, success.result],
         );
-        assert.deepEqual(finalized, [{ mediaId: success.input.mediaId, result: success.result }]);
+        assert.deepEqual(finalized, [
+          { applyNightshade: true, mediaId: success.input.mediaId, result: success.result },
+        ]);
         await assert.rejects(
           environment.client.workflow.start('mediaUploadWorkflow', successOptions),
         );
@@ -3625,6 +3675,22 @@ test(
         );
         assert.equal(
           finalized.some(({ mediaId }) => mediaId === failure.input.mediaId),
+          false,
+        );
+
+        const nightshadeFailureHandle = await environment.client.workflow.start(
+          'mediaUploadWorkflow',
+          {
+            args: [nightshadeFailure.input],
+            taskQueue: callerTaskQueue,
+            workflowId: mediaUploadWorkflow.workflowIdFromArgs(nightshadeFailure.input),
+          },
+        );
+        await assert.rejects(nightshadeFailureHandle.result(), WorkflowFailedError);
+        assert.ok(events.includes(`hope:${nightshadeFailure.prepared.id}`));
+        assert.equal(events.includes(`publish:${nightshadeFailure.prepared.id}`), false);
+        assert.equal(
+          finalized.some(({ mediaId }) => mediaId === nightshadeFailure.input.mediaId),
           false,
         );
 
@@ -3662,16 +3728,27 @@ test(
 
     assert.deepEqual(
       startInputs,
-      uploads.map(({ prepared }) => ({
+      [success, failure, nightshadeFailure, cancelled].map(({ prepared }) => ({
         ...prepared,
         maxBytes: 16_777_216,
         maxDimension: 8192,
       })),
     );
+    assert.deepEqual(hopeInputs, [
+      {
+        id: success.prepared.id,
+        hope: { algorithm: 'nightshade', iterations: 562, intensity: 0.3 },
+      },
+      {
+        id: nightshadeFailure.prepared.id,
+        hope: { algorithm: 'nightshade', iterations: 562, intensity: 0.3 },
+      },
+    ]);
     assert.deepEqual(activityCalls, [
       `prepare:${success.input.mediaId}`,
       `finalize:${success.input.mediaId}`,
       `prepare:${failure.input.mediaId}`,
+      `prepare:${nightshadeFailure.input.mediaId}`,
       `prepare:${cancelled.input.mediaId}`,
     ]);
   },

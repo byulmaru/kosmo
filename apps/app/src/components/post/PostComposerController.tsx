@@ -37,6 +37,7 @@ import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -349,7 +350,7 @@ function PostComposerContents({
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
-    tool: 'alt' | 'sensitive';
+    tool: ComposerMediaEditorTool;
   } | null>(null);
   if (!expanded && mediaEditor !== null) {
     setMediaEditor(null);
@@ -628,6 +629,7 @@ function PostComposerContents({
               render={({
                 items,
                 onAltTextChange,
+                onApplyNightshadeChange,
                 onMediaAction,
                 onMediaRemove,
                 onMediaRetry,
@@ -661,8 +663,9 @@ function PostComposerContents({
                 const mediaEditorContent = mediaEditor ? (
                   <ComposerMediaEditor
                     media={items}
-                    mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
+                    mobileState={mediaEditor.tool}
                     onAltTextChange={onAltTextChange}
+                    onApplyNightshadeChange={onApplyNightshadeChange}
                     onBack={closeMediaEditor}
                     onClose={() => {
                       setMediaEditor(null);
@@ -679,7 +682,7 @@ function PostComposerContents({
                   />
                 ) : null;
 
-                const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
+                const openMediaEditor = (key: string, tool: ComposerMediaEditorTool) => {
                   editor.current?.blur();
                   setMediaEditor({ key, tool });
                   if (resolvedPresentation === 'rail') {

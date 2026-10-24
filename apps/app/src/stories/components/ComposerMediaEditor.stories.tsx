@@ -9,6 +9,7 @@ import type { ComposerMediaItem } from '@/components/post/PostComposerMediaContr
 
 export const editorMedia: readonly ComposerMediaItem[] = [
   {
+    applyNightshade: false,
     altText: '노을빛 밤하늘 아래 모인 사람들',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-1',
@@ -16,6 +17,7 @@ export const editorMedia: readonly ComposerMediaItem[] = [
     state: 'ready',
   },
   {
+    applyNightshade: false,
     altText: '',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-2',
@@ -29,6 +31,7 @@ const meta = {
     media: editorMedia,
     mobileState: undefined,
     onAltTextChange: fn(),
+    onApplyNightshadeChange: fn(),
     onBack: fn(),
     onClose: fn(),
     onDone: fn(),
@@ -46,9 +49,10 @@ const meta = {
     media: { control: 'object' },
     mobileState: {
       control: 'select',
-      options: ['default', 'alt', 'altKeyboard', 'sensitive'],
+      options: ['default', 'alt', 'altKeyboard', 'sensitive', 'nightshade'],
     },
     onAltTextChange: { action: 'altTextChange', control: false },
+    onApplyNightshadeChange: { action: 'applyNightshadeChange', control: false },
     onBack: { action: 'back', control: false },
     onClose: { action: 'close', control: false },
     onDone: { action: 'done', control: false },
@@ -63,7 +67,7 @@ const meta = {
       control: 'boolean',
       name: '미래 이미지 편집 미리보기',
     },
-    tool: { control: 'inline-radio', options: ['alt', 'sensitive'] },
+    tool: { control: 'inline-radio', options: ['alt', 'sensitive', 'nightshade'] },
   },
   component: ComposerMediaEditor,
   excludeStories: [
@@ -72,6 +76,7 @@ const meta = {
     'MobileAltKeyboardGeometryContract',
     'MobileDefaultGeometryContract',
     'MobileSensitiveGeometryContract',
+    'MobileNightshadeGeometryContract',
     'MobileToolInteractionContract',
     'editorMedia',
   ],
@@ -139,6 +144,17 @@ export const MobileSensitive: Story = {
   render: (args) => <InteractiveEditor {...args} />,
 };
 
+export const MobileNightshade: Story = {
+  args: {
+    mobileState: 'nightshade',
+    presentation: 'mobile',
+    tool: 'nightshade',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  render: (args) => <InteractiveEditor {...args} />,
+};
+
 function InteractiveEditor(props: ComposerMediaEditorProps) {
   const [media, setMedia] = useState(props.media);
   const [mobileState, setMobileState] = useState(props.mobileState);
@@ -160,6 +176,12 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
       onAltTextChange={(key, altText) => {
         props.onAltTextChange(key, altText);
         setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)));
+      }}
+      onApplyNightshadeChange={(key, value) => {
+        props.onApplyNightshadeChange(key, value);
+        setMedia((items) =>
+          items.map((item) => (item.key === key ? { ...item, applyNightshade: value } : item)),
+        );
       }}
       onSelectMedia={(key) => {
         props.onSelectMedia(key);
@@ -186,7 +208,7 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
               ? 'default'
               : value === 'alt'
                 ? 'altKeyboard'
-                : 'sensitive',
+                : value,
           );
         }
       }}
@@ -227,6 +249,7 @@ function ViewportAwareEditor({ mobile, ...props }: ComposerMediaEditorProps & { 
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onAltTextChange.mockClear();
+    args.onApplyNightshadeChange.mockClear();
     args.onBack.mockClear();
     args.onClose.mockClear();
     args.onDone.mockClear();
@@ -275,6 +298,21 @@ export const InteractionContract: Story = {
     expect(args.onToolChange).toHaveBeenLastCalledWith('sensitive');
     await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지' }));
     expect(args.onSensitiveMediaChange).toHaveBeenLastCalledWith(true);
+
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
+    const secondImageNightshade = canvas.getByRole('switch', {
+      name: '첨부 이미지 2 Nightshade 적용',
+    });
+    expect(secondImageNightshade).not.toBeChecked();
+    await userEvent.click(secondImageNightshade);
+    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-2', true);
+    expect(secondImageNightshade).toBeChecked();
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
 
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(args.onDone).toHaveBeenCalledOnce();
@@ -339,10 +377,22 @@ export const MobileSensitiveGeometryContract: Story = {
   },
 };
 
+export const MobileNightshadeGeometryContract: Story = {
+  ...MobileNightshade,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('mobile-composer-media-editor-tool-sheet')).toHaveStyle({
+      height: '184px',
+    });
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+  },
+};
+
 export const MobileToolInteractionContract: Story = {
   ...MobileDefault,
   play: async ({ args, canvasElement }) => {
     args.onPreviewPress?.mockClear();
+    args.onApplyNightshadeChange.mockClear();
     args.onToolChange.mockClear();
     const canvas = within(canvasElement);
 
@@ -371,6 +421,16 @@ export const MobileToolInteractionContract: Story = {
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
+
+    await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
+    const nightshadeSwitch = canvas.getByRole('switch', {
+      name: '첨부 이미지 1 Nightshade 적용',
+    });
+    expect(nightshadeSwitch).not.toBeChecked();
+    await userEvent.click(nightshadeSwitch);
+    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-1', true);
+    expect(nightshadeSwitch).toBeChecked();
   },
 };
 

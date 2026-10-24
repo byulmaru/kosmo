@@ -2666,7 +2666,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2676,7 +2679,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const retriedReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2686,6 +2692,32 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
+    );
+
+    const nightshade = await createUploadingMedia();
+    const nightshadeResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: nightshade.remoteUploadId,
+      url: 'https://media.example/nightshade.webp',
+    };
+    const nightshadeInput = {
+      mediaId: nightshade.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: nightshade.remoteUploadId,
+      applyNightshade: true,
+      result: nightshadeResult,
+    };
+    assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
+    const nightshadeReady = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, nightshade.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
+      nightshadeResult,
     );
 
     const concurrent = await createUploadingMedia();

@@ -15,8 +15,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   [`Parent revealed on upward scroll 7392:27994`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-27994)이다.
   Dark inheritance는 같은 reveal 조립을 재사용한 [`5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)로 확인한다.
 - 일반 Post Composer가 지원하는 Plain Text 본문, Content Warning, Visibility, 글자 수, Media
-  선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로
-  재사용한다.
+  선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 선택, validation,
+  pending과 오류 상태를 그대로 재사용한다.
 - Local Post·Reply·Quote의 Hashtag는 기존 본문에 직접 입력한다. 별도 Hashtag 입력·선택·자동완성 UI를 두지 않는다.
   Hashtag marker와 이름은 기존 본문 글자 수에 포함하며, 인식되지 않는 긴 text도 잘라내거나 게시를 막지 않는다.
 - 일반 Post, Reply와 Quote는 같은 Plain Text editor에서 token boundary의 `@` 뒤에 한 글자 이상 입력했을
@@ -125,8 +125,13 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   modal 전용 raw font size나 font family를 만들지 않는다.
 - 기존 Composer의 본문 아래 content 위치를 Quote Source preview와 Media가 공유한다. 순서는
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
-  제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
-  함께 스크롤하고 고정 footer를 밀어내지 않는다.
+  제거·재시도, nullable Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control이 늘어나면 Parent와 editor가
+  공유하는 중앙 영역에서 함께 스크롤하고 고정 footer를 밀어내지 않는다.
+- Media editor는 Web에서 `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button을 제공한다. 선택한 이미지마다
+  `Nightshade 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는 `실험적인 기능입니다.`를 표시한다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
+  Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N Nightshade 적용`이다.
+  처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
+  [Media 객체](../domain/objects/media.md)를 따른다.
 - Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
   `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
 - footer는 modal 바닥에 고정한다. 좌측에는 기존 작성 도구를, 우측에는 남은 글자 수와 공용 `게시` primary
@@ -139,6 +144,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Media-only Reply를 제출할 수 있다.
 - Media 업로드 실패는 공용 Danger Toast로 상세 원인을 한 번 알리고, 현재 preview와 Parent 맥락을 유지한 채
   같은 위치에 `업로드 실패` 상태와 재시도·제거 action을 남긴다. 상세 문구를 inline으로 중복하지 않는다.
+- AI 학습 방지 처리 중에는 기존 `게시 중` 상태를 표시한다. 처리 오류는 기존 업로드 오류 toast와 해당 첨부의
+  `업로드 실패` 상태로 표시하고, draft와 제거·재시도 action을 유지한다. 처리 정책은 [Media 객체](../domain/objects/media.md)를
+  따른다.
 - 제출 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Content Warning·Visibility의 중복 변경과
   닫기를 막는다.
 - 게시 mutation의 network·GraphQL·미생성 실패는 공용 Danger Toast로 표시하고 작성 내용과 재시도 가능한
@@ -216,8 +224,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
   문맥의 늦은 upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다.
 - 새 Post Rail·Overlay Composer에 한해 Composer-local 작성 Profile을 전환할 수 있다. 이 전환은 전역
-  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·현재
-  Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
+  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·이미지별
+  AI 학습 방지 선택·현재 Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
   Reply·Quote Composer에는 이 local 전환을 제공하지 않는다.
 - local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
   picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
@@ -246,8 +254,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Native에서는 닫은 뒤 접근성 포커스를 수동으로 옮기거나 특정 요소로의 포커스 복귀는 요구하지 않는다.
 - 오류는 alert semantics, Content Warning 입력·reveal control·Visibility와 Reply action은 name/state, 남은
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
-- Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은
-  accessible name·state·live feedback을 제공한다.
+- Media 추가·제거·재시도, 업로드 상태, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control은 기존 일반
+  Composer와 같은 accessible name·state·live feedback을 제공한다. AI 학습 방지 Switch의 이름은
+  `첨부 이미지 N Nightshade 적용`이다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
   관찰을 source of truth로 삼고, 이전 target-size 수치를 자동으로 이식하지 않는다.
 - 중앙 scroll은 keyboard focus가 Parent 또는 editor의 현재 위치를 가리지 않게 유지한다. Parent 전용 nested
@@ -301,9 +310,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Reply-open discard/reset/error 유지 상태를 확인한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.
-- 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
-  Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
-  다시 계산해야 한다.
+- 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, 이미지별 AI
+  학습 방지 선택과 Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤
+  유효성을 다시 계산해야 한다. AI 학습 방지 선택은 다른 이미지·editor close·local Profile 전환에 걸쳐 보존한다.
 - Web modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, editor focus open·Reply action focus
   restore, 성공 snackbar의
   `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header

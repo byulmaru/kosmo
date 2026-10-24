@@ -133,6 +133,9 @@ rollback해 partial relation을 남기지 않는다.
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
+Nightshade 선택은 Content Document의 속성이 아니며 새 Local Media에 적용된다. 처리 정책은 [Media 객체](./media.md)에
+두며, Post Content는 처리 결과가 반영된 Media ID만 참조한다.
+
 ActivityPub `tag`의 typed `Mention`은 앞서 정의한 `Mention.href` identity 확인으로 알려진 Local/Remote Profile을 Mentioned Profile
 관계 입력으로 삼는다. 확인된 identity는 본문 anchor URL이나 body parser 결과와 독립적이다. body Mention node는 anchor href가 확인된 actor URI,
 기존 actor materialization·refresh로 저장한 Profile URL alias 또는
@@ -207,6 +210,7 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 - 현재 Post Composer 이미지 업로드는 새 Post의 첫 Post Content만 만들며 기존 Post 수정은 포함하지 않는다.
 - Hashtag 본문 작성·보존은 새 Local Post·Reply·Quote에만 적용한다. 기존 Post 수정·revision 추출·backfill과 Remote Note의
   ActivityPub Hashtag 인식·표현은 별도 계약에서 다룬다.
-- crop, filter처럼 Media의 이미지 byte나 파생 표현 자체를 편집하는 기능은 포함하지 않는다. 새 이미지를
-  업로드해 Media 참조를 교체하는 기능은 포함한다.
+- 기존 Media의 crop, filter 등 이미지 byte나 파생 표현을 편집하는 기능은 포함하지 않는다. 새 Post에 첨부할
+  이미지의 선택적 Nightshade 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
+  기능은 포함한다.
 - revision 번호, 과거 revision 목록·복원, 동시 편집 충돌 UX와 Media 물리 삭제 정책은 후속 계약에서 정한다.
