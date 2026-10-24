@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useRef } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -11,12 +11,14 @@ import type { ReplyComposerSurface as ReplyComposerSurfaceComponent } from './Re
 
 const platform = { OS: 'android' };
 const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
+let relayEnvironment = {};
 let composerProps:
   | {
       initialBodyText?: string;
       onRequestClose?: (event?: unknown) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
+      contextGuard?: { current: number };
       replyParentId?: string;
       replyParentVisibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
       repostSourceId?: string;
@@ -25,6 +27,8 @@ let composerProps:
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
+let exitMounted = false;
+let composerMountCount = 0;
 const require = createRequire(import.meta.url);
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -48,7 +52,7 @@ mockModule('react-native-safe-area-context', {
 mockModule('react-relay', {
   graphql: () => ({}),
   useFragment: (_fragment: unknown, value: unknown) => value,
-  useRelayEnvironment: () => ({}),
+  useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('relay-runtime', {
   getDataIDsFromFragment: (_fragment: unknown, value: { id?: string }) => value.id,
@@ -83,9 +87,20 @@ mockModule('@/theme/tokens', {
   spacing: { lg: 24, md: 12, sm: 8, xs: 4 },
   typography: { lg: {}, md: {}, sm: {} },
 });
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean) => ({
+    mounted: visible || exitMounted,
+    progress: { interpolate: () => 0 },
+  }),
+});
 mockModule(new URL('./PostBody.tsx', import.meta.url), { PostBody: 'PostBody' });
 mockModule(new URL('./PostComposerController.tsx', import.meta.url), {
   PostComposerController: (props: NonNullable<typeof composerProps>) => {
+    const firstRender = useRef(true);
+    if (firstRender.current) {
+      composerMountCount += 1;
+      firstRender.current = false;
+    }
     composerProps = props;
     const form = createElement('PostComposer');
     return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
@@ -111,6 +126,9 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   composerProps = undefined;
+  exitMounted = false;
+  composerMountCount = 0;
+  relayEnvironment = {};
   platform.OS = 'android';
   safeAreaInsets.top = 0;
 });
@@ -234,6 +252,153 @@ test('iOS Reply와 Quote는 키보드 회피에 safe-area 화면 offset을 사�
   keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
   assert.equal(keyboardAvoidingView?.props.behavior, 'height');
   assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
+});
+
+test('닫힌 Reply surface는 exit 동안 유지되지만 입력과 접근성을 즉시 차단한다', async () => {
+  platform.OS = 'web';
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => undefined,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+
+  exitMounted = true;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+
+  const modal = renderer?.root.findByType('Modal' as ElementType);
+  const motionRoot = renderer?.root.findByProps({
+    accessibilityElementsHidden: true,
+    pointerEvents: 'none',
+  });
+  assert.equal(modal?.props.visible, true);
+  assert.equal(modal?.props.accessibilityElementsHidden, true);
+  assert.equal(motionRoot?.props.pointerEvents, 'none');
+  assert.equal(motionRoot?.props['aria-hidden'], true);
+  assert.equal(motionRoot?.props.importantForAccessibility, 'no-hide-descendants');
+  assert.equal(motionRoot?.props.inert, true);
+
+  exitMounted = false;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  assert.equal(renderer?.root.findAllByType('Modal' as ElementType).length, 0);
+});
+
+test('정상 사용자 dismiss는 exit 중 surface 내용을 유지하고 재개방 시 문맥을 reset한다', async () => {
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => undefined,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+  const initialGuard = composerProps?.contextGuard?.current;
+  const initialMountCount = composerMountCount;
+
+  exitMounted = true;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  assert.equal(composerProps?.contextGuard?.current, (initialGuard ?? 0) + 1);
+  assert.equal(composerMountCount, initialMountCount);
+  assert.equal(
+    renderer?.root.findAllByProps({ testID: 'quote-composer-dialog-surface' }).length,
+    1,
+  );
+
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: true }));
+  });
+  assert.equal(composerProps?.contextGuard?.current, (initialGuard ?? 0) + 2);
+  assert.equal(composerMountCount, initialMountCount + 1);
+  assert.equal(
+    renderer?.root.findAllByProps({ testID: 'quote-composer-dialog-surface' }).length,
+    1,
+  );
+});
+
+test('닫힌 Native surface의 back은 close를 다시 요청하지 않는다', async () => {
+  let closeCount = 0;
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => closeCount++,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+
+  exitMounted = true;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  const modal = renderer?.root.findByType('Modal' as ElementType);
+  await act(async () => modal?.props.onRequestClose());
+
+  assert.equal(closeCount, 0);
+  assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
+});
+
+test('generation ref가 없는 Relay environment 교체는 surface 문맥을 remount한다', async () => {
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => undefined,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+  const initialGuard = composerProps?.contextGuard?.current;
+  const initialMountCount = composerMountCount;
+
+  relayEnvironment = {};
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, props));
+  });
+
+  assert.equal(composerProps?.contextGuard?.current, (initialGuard ?? 0) + 1);
+  assert.equal(composerMountCount, initialMountCount + 1);
+});
+
+test('owner 전환 continuation은 outgoing surface를 exit 없이 즉시 제거한다', async () => {
+  const surfaceRef = { current: null as { requestClose: (onClosed?: () => void) => void } | null };
+  let continuationCount = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(ReplyComposerSurface, {
+        mode: 'quote',
+        onRequestClose: () => undefined,
+        open: true,
+        parent: { id: 'post-1' } as never,
+        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+        ref: surfaceRef,
+      }),
+    );
+  });
+
+  await act(async () => surfaceRef.current?.requestClose(() => continuationCount++));
+  const discard = renderer?.root
+    .findAllByType('Button' as ElementType)
+    .find((button) => button.props.tone === 'danger');
+  assert.ok(discard);
+  await act(async () => discard?.props.onPress());
+
+  assert.equal(continuationCount, 1);
+  assert.equal(renderer?.root.findAllByType('Modal' as ElementType).length, 0);
 });
 
 test('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫는다', async () => {

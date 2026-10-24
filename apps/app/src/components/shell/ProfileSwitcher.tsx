@@ -3,6 +3,7 @@ import { usePathname } from 'expo-router';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -34,6 +35,7 @@ import {
   textStyles,
   typography,
 } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import { getProfileEditActionCurrentState, getProfileEditActionTargetMetrics } from './shellLayout';
@@ -216,6 +218,7 @@ export function ProfileSwitcher({
   const nativeDrawerSurface = Platform.OS !== 'web' && surface === 'drawer';
   const desktopWebSurface = Platform.OS === 'web' && surface !== 'drawer';
   const open = controlledOpen ?? internalOpen;
+  const overlayMotion = useOverlayMotion(open);
   const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) {
@@ -225,6 +228,11 @@ export function ProfileSwitcher({
   };
   const dismissPicker = () => {
     setOpen(false);
+  };
+  const handleOverlayDismiss = () => {
+    if (!open) {
+      triggerRef.current?.focus();
+    }
   };
   const showDrawerOperationError: OperationErrorHandler = (message) => {
     showToast(message, { tone: 'danger' });
@@ -242,7 +250,7 @@ export function ProfileSwitcher({
   }, [open, desktopWebSurface]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !open) {
+    if (Platform.OS !== 'web' || !open || typeof document === 'undefined') {
       return;
     }
 
@@ -284,6 +292,21 @@ export function ProfileSwitcher({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open, surface]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    const picker = pickerRef.current as unknown as HTMLElement | null;
+    if (!picker) {
+      return;
+    }
+    picker.inert = !open;
+    return () => {
+      picker.inert = false;
+    };
+  }, [open, overlayMotion.mounted]);
 
   const commitProfileSelection = (
     id: string,
@@ -616,14 +639,36 @@ export function ProfileSwitcher({
       {profiles.length ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
     </Text>
   );
+  const renderWebPicker = (positionStyle: ViewStyle) => (
+    <div inert={!open} style={{ display: 'contents' }}>
+      <Animated.View
+        accessibilityElementsHidden={!open}
+        aria-hidden={!open}
+        pointerEvents={open ? 'auto' : 'none'}
+        style={[
+          styles.webMenu,
+          positionStyle,
+          {
+            opacity: overlayMotion.progress,
+            transform: [
+              {
+                translateY: overlayMotion.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [space[8], 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        {pickerContent}
+      </Animated.View>
+    </div>
+  );
   const fullWebPicker =
-    fullWeb && open ? (
-      <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
-    ) : null;
+    fullWeb && overlayMotion.mounted ? renderWebPicker(styles.fullOverlayPosition) : null;
   const drawerWebPicker =
-    mobileWebDrawer && open ? (
-      <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
-    ) : null;
+    mobileWebDrawer && overlayMotion.mounted ? renderWebPicker(styles.fullOverlayPosition) : null;
   const triggerSurface = !compact ? (
     <View
       accessibilityLabel="활성 프로필"
@@ -711,50 +756,64 @@ export function ProfileSwitcher({
       style={[
         styles.root,
         compact ? styles.compactRoot : styles.fullRoot,
-        { zIndex: open ? 30 : 0 },
+        { zIndex: open || overlayMotion.mounted ? 30 : 0 },
       ]}
     >
       {triggerSurface}
 
       {Platform.OS === 'web' ? (
-        open && !fullWeb && !mobileWebDrawer ? (
-          <View
-            style={[
-              styles.webMenu,
-              surface === 'compact' ? styles.compactMenuPosition : styles.drawerMenuPosition,
-            ]}
-          >
-            {pickerContent}
-          </View>
+        overlayMotion.mounted && !fullWeb && !mobileWebDrawer ? (
+          renderWebPicker(
+            surface === 'compact' ? styles.compactMenuPosition : styles.drawerMenuPosition,
+          )
         ) : null
       ) : (
         <Modal
           accessibilityLabel="프로필 전환"
-          animationType="fade"
+          animationType="none"
+          onDismiss={handleOverlayDismiss}
           navigationBarTranslucent
-          onRequestClose={() => setOpen(false)}
+          onRequestClose={dismissPicker}
           role="dialog"
           statusBarTranslucent
           transparent
-          visible={open}
+          visible={overlayMotion.mounted}
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.nativeKeyboardAvoidingView}
           >
-            <Pressable
-              onPress={() => setOpen(false)}
-              style={[styles.backdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
+            <Animated.View
+              accessibilityElementsHidden={!open}
+              importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+              pointerEvents={open ? 'auto' : 'none'}
+              style={[
+                styles.backdrop,
+                safeAreaStyle,
+                { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+              ]}
             >
-              <Pressable
+              <Pressable disabled={!open} onPress={dismissPicker} style={StyleSheet.absoluteFill} />
+              <Animated.View
                 accessibilityLabel="프로필 전환"
                 accessibilityViewIsModal
-                onPress={(event) => event.stopPropagation()}
-                style={styles.nativeMenu}
+                style={[
+                  styles.nativeMenu,
+                  {
+                    transform: [
+                      {
+                        translateY: overlayMotion.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [space[12], 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
               >
                 {pickerContent}
-              </Pressable>
-            </Pressable>
+              </Animated.View>
+            </Animated.View>
           </KeyboardAvoidingView>
         </Modal>
       )}

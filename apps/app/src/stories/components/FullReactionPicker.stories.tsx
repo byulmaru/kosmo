@@ -285,6 +285,7 @@ const meta = {
     'RecentTwoRowsNativeContract',
     'reactionOptions',
     'SequentialKeyboardBrowseContract',
+    'WebExitInertEscapeContract',
   ],
   parameters: { layout: 'centered' },
   render: (args) => <StoryPicker {...args} />,
@@ -300,6 +301,24 @@ export const WebSearchResults: Story = { args: { query: '하트' } };
 export const WebEmpty: Story = { args: { query: '존재하지않음' } };
 export const WebLoading: Story = { args: { loading: true } };
 export const WebRecent: Story = { args: { recentValues: ['fire', 'laugh'] } };
+
+export const WebExitInertEscapeContract: Story = {
+  render: (args) => <ExitInertEscapeHarness {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const closeCount = canvas.getByTestId('full-reaction-picker-close-count');
+
+    await userEvent.click(canvas.getByRole('button', { name: '종료 상태로 전환' }));
+    await userEvent.keyboard('{Escape}');
+    expect(closeCount).toHaveTextContent('0');
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 열기' }));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(closeCount).toHaveTextContent('1'));
+    expect(page.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+  },
+};
 
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;
@@ -563,6 +582,28 @@ function MobileStoryPicker(props: FullReactionPickerProps) {
     >
       <InteractivePicker {...props} onClose={close} />
     </ModalOverlay>
+  );
+}
+
+function ExitInertEscapeHarness(props: FullReactionPickerProps) {
+  const [exiting, setExiting] = useState(false);
+  const [closeCount, setCloseCount] = useState(0);
+
+  return (
+    <>
+      <button onClick={() => setExiting(true)}>종료 상태로 전환</button>
+      <button onClick={() => setExiting(false)}>다시 열기</button>
+      <div data-testid="full-reaction-picker-exit-owner" inert={exiting || undefined}>
+        <FullReactionPicker
+          {...props}
+          onClose={() => {
+            props.onClose();
+            setCloseCount((count) => count + 1);
+          }}
+        />
+      </div>
+      <output data-testid="full-reaction-picker-close-count">{closeCount}</output>
+    </>
   );
 }
 

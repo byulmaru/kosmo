@@ -180,7 +180,15 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
   await page.goto('/local');
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   await page.locator('#mobile-sidebar').getByRole('button', { name: '피드백 보내기' }).click();
-  const surface = page.getByTestId('feedback-overlay-surface');
+  const surface = page.getByTestId('feedback-overlay-surface').locator('..');
+  await expect
+    .poll(async () => {
+      const box = await surface.boundingBox();
+      return box
+        ? Math.max(Math.abs(box.x), Math.abs(box.width - 390), Math.abs(box.y + box.height - 568))
+        : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThanOrEqual(0.5);
   const mobileBox = await surface.boundingBox();
   expect(mobileBox).not.toBeNull();
   expect(mobileBox!.x).toBeCloseTo(0, 0);
@@ -204,10 +212,26 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
       .getByRole('button', { name: '피드백 보내기' })
       .click();
     await expect(surface).toBeVisible();
+    const layoutCenter = await surface.locator('..').evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.x + element.clientWidth / 2;
+    });
+    await expect
+      .poll(async () => {
+        const box = await surface.boundingBox();
+        return box
+          ? Math.max(
+              Math.abs(box.width - 600),
+              Math.abs(box.x + box.width / 2 - layoutCenter),
+              Math.abs(box.y - 48),
+            )
+          : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(0.5);
     const desktopBox = await surface.boundingBox();
     expect(desktopBox).not.toBeNull();
     expect(desktopBox!.width).toBeCloseTo(600, 0);
-    expect(desktopBox!.x + desktopBox!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(desktopBox!.x + desktopBox!.width / 2).toBeCloseTo(layoutCenter, 0);
     expect(desktopBox!.y).toBe(48);
     expect(desktopBox!.height).toBeLessThanOrEqual(viewport.height - 96 + 1);
     await page.getByRole('button', { name: '피드백 닫기' }).click();

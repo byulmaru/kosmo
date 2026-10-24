@@ -18,6 +18,7 @@ const blockProfileFragment = graphql`
 `;
 
 type Props = {
+  onDismiss: () => void;
   onRequestClose: () => void;
   target: ContentReportTarget | null;
   visible: boolean;
@@ -25,7 +26,7 @@ type Props = {
 
 type ContentProps = Omit<Props, 'target'> & { target: ContentReportTarget };
 
-export function ContentReportOverlay({ onRequestClose, target, visible }: Props) {
+export function ContentReportOverlay({ onDismiss, onRequestClose, target, visible }: Props) {
   if (!target) {
     return null;
   }
@@ -33,6 +34,7 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
   return (
     <ContentReportOverlayContent
       key={`${target.kind}:${target.id}`}
+      onDismiss={onDismiss}
       onRequestClose={onRequestClose}
       target={target}
       visible={visible}
@@ -40,7 +42,7 @@ export function ContentReportOverlay({ onRequestClose, target, visible }: Props)
   );
 }
 
-function ContentReportOverlayContent({ onRequestClose, target, visible }: ContentProps) {
+function ContentReportOverlayContent({ onDismiss, onRequestClose, target, visible }: ContentProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < breakpoints.compact;
@@ -53,6 +55,11 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
     }
   }, []);
   const title = target.kind === 'PROFILE' ? '프로필 신고' : '게시물 신고';
+  const handleDismiss = useCallback(() => {
+    if (!visible) {
+      onDismiss();
+    }
+  }, [onDismiss, visible]);
 
   return (
     <FormOverlay
@@ -63,6 +70,7 @@ function ContentReportOverlayContent({ onRequestClose, target, visible }: Conten
       discardTitle="작성 중인 신고를 버릴까요?"
       fallbackFocusSelector='[data-content-report-focus-fallback], [data-testid="universal-shell-root"]'
       limitNativeHeight
+      onDismiss={handleDismiss}
       onRequestClose={onRequestClose}
       renderForm={({ close, onStateChange }) =>
         delivered ? (

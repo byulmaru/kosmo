@@ -16,6 +16,7 @@ const platform = { OS: 'web' };
 const viewport = { height: 800, width: 767 };
 let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
+let exitMounted = false;
 const openedUrls: string[] = [];
 const viewerKeyTarget = { tagName: 'DIV' };
 const childOverlayKeyTarget = { tagName: 'DIV' };
@@ -153,6 +154,10 @@ mock.module('@/theme/ThemeProvider', {
 
 mock.module('@/theme/useOverlayMotion', {
   exports: {
+    useOverlayMotion: (visible: boolean) => ({
+      mounted: visible || exitMounted,
+      progress: { interpolate: () => 1 },
+    }),
     useToastMotion: (visible: boolean) => ({
       mounted: visible,
       progress: { interpolate: () => 1 },
@@ -163,7 +168,9 @@ mock.module('@/theme/useOverlayMotion', {
 type ViewerProps = {
   actionBar: ReactNode;
   fallbackFocus?: RefObject<NativeView | null>;
+  onDismiss?: () => void;
   onClose: () => void;
+  open?: boolean;
   originControl: RefObject<NativeView | null>;
   post: PostMediaViewer_post$key;
   selectedIndex: number;
@@ -184,7 +191,9 @@ before(async () => {
       module.PostMediaViewer,
       {
         fallbackFocus: props.fallbackFocus,
+        onDismiss: props.onDismiss,
         onClose: props.onClose,
+        open: props.open,
         originControl: props.originControl,
         selectedIndex: props.selectedIndex,
       },
@@ -207,6 +216,7 @@ afterEach(async () => {
   viewport.width = 767;
   keydownListener = null;
   closeFocused = 0;
+  exitMounted = false;
   openedUrls.length = 0;
 });
 
@@ -881,6 +891,32 @@ describe('PostMediaViewer', () => {
     await act(async () => rendered('Modal')[0]!.props.onRequestClose());
     assert.equal(closed, 2);
     assert.equal(originFocused, 2);
+  });
+
+  it('정상 close는 exit 동안 입력과 접근성을 차단하고 완료 callback 뒤에 정리한다', async () => {
+    let closed = 0;
+    let dismissed = 0;
+    exitMounted = true;
+    await render({
+      onClose: () => closed++,
+      onDismiss: () => dismissed++,
+      open: false,
+    });
+
+    const modal = rendered('Modal')[0];
+    const backdrop = byTestId('post-media-viewer-backdrop');
+    assert.equal(modal.props.visible, true);
+    assert.equal(backdrop.props.pointerEvents, 'none');
+    assert.equal(backdrop.props.accessibilityElementsHidden, true);
+    assert.equal(backdrop.props.importantForAccessibility, 'no-hide-descendants');
+    assert.equal(byTestId('post-media-viewer-backdrop-dismiss').props.disabled, true);
+    assert.equal(byTestId('post-media-viewer-dialog').props.onAccessibilityEscape, undefined);
+    assert.equal(closed, 0);
+    assert.equal(dismissed, 0);
+
+    exitMounted = false;
+    await render({ open: false, onDismiss: () => dismissed++ });
+    assert.equal(dismissed, 1);
   });
 
   it('origin tile이 없으면 안전한 Post surface로 focus를 복귀한다', async () => {

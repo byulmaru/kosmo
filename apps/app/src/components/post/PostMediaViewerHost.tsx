@@ -65,6 +65,11 @@ type ViewerSession = Readonly<{
   surfacePostId: string;
 }>;
 
+type ActiveViewerSession = Readonly<{
+  open: boolean;
+  session: ViewerSession;
+}>;
+
 type OpenViewer = (session: ViewerSession) => void;
 
 const PostMediaViewerHostContext = createContext<OpenViewer | null>(null);
@@ -88,19 +93,30 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   const previousActorLifecycleKey = useRef(actorLifecycleKey);
   const fallbackFocus = useRef<NativeView>(null);
   const screenFallback = useContext(PostMediaViewerScreenFallbackContext);
-  const [session, setSession] = useState<ViewerSession | null>(null);
-  const sessionRef = useRef<ViewerSession | null>(null);
-  sessionRef.current = session;
-  const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
-  const closeViewer = useCallback(() => {
+  const [activeSession, setActiveSession] = useState<ActiveViewerSession | null>(null);
+  const sessionRef = useRef<ActiveViewerSession | null>(null);
+  sessionRef.current = activeSession;
+  const openViewer = useCallback<OpenViewer>(
+    (nextSession) => setActiveSession({ open: true, session: nextSession }),
+    [],
+  );
+  const closeViewerImmediately = useCallback(() => {
     sessionRef.current = null;
-    setSession(null);
+    setActiveSession(null);
+  }, []);
+  const requestCloseViewer = useCallback(() => {
+    setActiveSession((current) => (current ? { ...current, open: false } : null));
+  }, []);
+  const dismissViewer = useCallback((closingSession: ViewerSession) => {
+    setActiveSession((current) =>
+      current?.session === closingSession && !current.open ? null : current,
+    );
   }, []);
   const lifecycleFallbackFocus = screenFallback ?? fallbackFocus;
 
   useEffect(
-    () => unstable_navigationEvents.addListener('actionDispatched', closeViewer),
-    [closeViewer],
+    () => unstable_navigationEvents.addListener('actionDispatched', closeViewerImmediately),
+    [closeViewerImmediately],
   );
 
   useLayoutEffect(() => {
@@ -111,7 +127,7 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
         // Layout cleanup is the last point at which the origin or a stable screen target can still
         // be captured. Focus after the deletion commit so the stable target is the active screen.
         requestAnimationFrame(() =>
-          focusPostMediaViewerTarget(activeSession.originControl, lifecycleFallbackFocus),
+          focusPostMediaViewerTarget(activeSession.session.originControl, lifecycleFallbackFocus),
         );
       }
     };
@@ -122,29 +138,31 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
       return;
     }
     previousActorLifecycleKey.current = actorLifecycleKey;
-    if (session) {
-      setSession(null);
+    if (activeSession) {
+      closeViewerImmediately();
       requestAnimationFrame(() => focusPostMediaViewerTarget(lifecycleFallbackFocus));
     }
-  }, [actorLifecycleKey, lifecycleFallbackFocus, session]);
+  }, [activeSession, actorLifecycleKey, closeViewerImmediately, lifecycleFallbackFocus]);
 
   const handleDeleted = useCallback(() => {
-    session?.onDeleted?.();
-    setSession(null);
+    activeSession?.session.onDeleted?.();
+    closeViewerImmediately();
     requestAnimationFrame(() => focusPostMediaViewerTarget(fallbackFocus));
-  }, [session]);
+  }, [activeSession, closeViewerImmediately]);
 
   return (
     <PostMediaViewerHostContext.Provider value={openViewer}>
       <View ref={fallbackFocus} style={styles.surface} tabIndex={-1}>
         {children}
       </View>
-      {session ? (
+      {activeSession ? (
         <PostMediaViewer
           fallbackFocus={fallbackFocus}
-          onClose={closeViewer}
-          originControl={session.originControl}
-          selectedIndex={session.selectedIndex}
+          onClose={requestCloseViewer}
+          onDismiss={() => dismissViewer(activeSession.session)}
+          open={activeSession.open}
+          originControl={activeSession.session.originControl}
+          selectedIndex={activeSession.session.selectedIndex}
         >
           <RouteBoundary
             error={(retry) => <PostMediaViewerQueryState onRetry={retry} />}
@@ -152,9 +170,9 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
             title="게시글을 불러오지 못했어요"
           >
             <PostMediaViewerHostContent
-              onClose={closeViewer}
+              onClose={closeViewerImmediately}
               onDeleted={handleDeleted}
-              session={session}
+              session={activeSession.session}
             />
           </RouteBoundary>
         </PostMediaViewer>

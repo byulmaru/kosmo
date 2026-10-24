@@ -1650,7 +1650,7 @@ export const ReactionViewerOverlayContract: Story = {
     await userEvent.click(trigger);
     picker = await screen.findByRole('dialog', { name: '반응 선택' });
     const position = screen.getByTestId('full-reaction-overlay-position');
-    const overlayRoot = position.parentElement!;
+    const overlayRoot = position.parentElement!.parentElement!;
     const scroll = screen.getByTestId('reaction-viewer-scroll') as HTMLDivElement;
     const column = screen.getByTestId('reaction-viewer-column') as HTMLDivElement;
     const positionIsAnchored = () => {
@@ -1663,7 +1663,7 @@ export const ReactionViewerOverlayContract: Story = {
 
     expect(viewer).toContainElement(position);
     expect(document.defaultView!.getComputedStyle(overlayRoot).position).toBe('fixed');
-    positionIsAnchored();
+    await waitFor(positionIsAnchored);
 
     scroll.scrollTop = 48;
     fireEvent.scroll(scroll);

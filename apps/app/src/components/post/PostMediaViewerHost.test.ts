@@ -13,6 +13,7 @@ import {
   Store,
 } from 'relay-runtime';
 import PostMediaViewerHostQueryNode from './__generated__/PostMediaViewerHostQuery.graphql';
+import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type {
@@ -114,8 +115,8 @@ mock.module('./PostActionSurface', {
 
 mock.module('./PostMediaViewer', {
   exports: {
-    PostMediaViewer: ({ children }: { children?: React.ReactNode }) =>
-      createElement('ModalShell', { testID: 'post-media-viewer-dialog' }, children),
+    PostMediaViewer: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+      createElement('ModalShell', { ...props, testID: 'post-media-viewer-dialog' }, children),
     PostMediaViewerContent: (props: Record<string, unknown>) =>
       createElement('ViewerContent', { ...props, testID: 'post-media-viewer-content' }),
     PostMediaViewerQueryState: ({
@@ -291,6 +292,26 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     assert.ok(byTestId('post-media-viewer-content'));
   });
 
+  it('정상 close는 semantic close와 exit 완료 session 정리를 분리하고 stale dismiss를 무시한다', async () => {
+    const relay = createEnvironment(hostPayload());
+    await renderHost(relay.environment);
+    await openViewer();
+
+    const dialog = byTestId('post-media-viewer-dialog');
+    const staleDismiss = dialog.props.onDismiss as () => void;
+    await act(async () => dialog.props.onClose());
+    assert.strictEqual(byTestId('post-media-viewer-dialog'), dialog);
+    assert.equal(byTestId('post-media-viewer-dialog').props.open, false);
+    await openViewer();
+    assert.equal(byTestId('post-media-viewer-dialog').props.open, true);
+    await act(async () => staleDismiss());
+    assert.ok(optionalByTestId('post-media-viewer-dialog'));
+
+    await act(async () => byTestId('post-media-viewer-dialog').props.onClose());
+    await act(async () => byTestId('post-media-viewer-dialog').props.onDismiss());
+    assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
+  });
+
   it('query error를 실제 ErrorBoundary에서 retry해 같은 modal shell에 복구한다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -342,16 +363,17 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
   });
 });
 
+const launcherSession = {
+  mediaOwnerPostId: 'post-1',
+  originControl: { current: { focus: () => undefined } } as never,
+  selectedIndex: 0,
+  surfacePostId: 'post-1',
+};
+
 function Launcher() {
   const openViewer = useHost();
   return createElement('Pressable', {
-    onPress: () =>
-      openViewer({
-        mediaOwnerPostId: 'post-1',
-        originControl: { current: { focus: () => undefined } } as never,
-        selectedIndex: 0,
-        surfacePostId: 'post-1',
-      }),
+    onPress: () => openViewer(launcherSession),
     testID: 'launcher',
   });
 }

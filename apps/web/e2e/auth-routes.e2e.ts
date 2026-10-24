@@ -1157,7 +1157,19 @@ test.describe('로그인 사용자 보호 라우트', () => {
     for (const profileLink of profileLinks) {
       await expect(profileLink).toHaveAttribute('href', canonicalProfilePath);
     }
-    expect(await drawer.boundingBox()).toMatchObject({ height: 667, width: 320, x: 0, y: 0 });
+    await expect
+      .poll(async () => {
+        const box = await drawer.boundingBox();
+        return box
+          ? {
+              height: Math.round(box.height),
+              width: Math.round(box.width),
+              x: Math.round(box.x),
+              y: Math.round(box.y),
+            }
+          : null;
+      })
+      .toEqual({ height: 667, width: 320, x: 0, y: 0 });
     expect(await home.boundingBox()).toMatchObject({ height: 45, width: 288 });
     const iconBox = await homeIcon.boundingBox();
     const labelBox = await homeLabel.boundingBox();
