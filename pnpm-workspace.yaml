@@ -56,7 +56,9 @@ overrides:
   # source-map-js 1.2.2 fixes CVE-2026-93749 within consumers' 1.x range.
   'source-map-js@<1.2.2': ^1.2.2
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
-  'undici@': 6.28.1
+  'undici@': 6.29.1
+  # Zod 4.6.6 fixes CVE-2023-54404 within declared 4.x ranges.
+  'zod@>=4.0.0 <4.6.6': 4.6.6
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
   'ajv@8.20.0>fast-uri': 3.1.8
   # minimatch 10 accepts brace-expansion 5.x; keep older minimatch lines unchanged.
@@ -88,7 +90,7 @@ overrides:
   # SvelteKit/Svelte accept 5.x; 5.9.3 fixes shared-memory disclosure and three DoS advisories.
   'devalue@': 5.9.3
   # jsdom accepts ^7.25.0; fix CVE-2026-19534 / CVE-2026-84961 without replacing 6.x.
-  'jsdom@29.1.1>undici': 7.29.1
+  'jsdom@29.1.1>undici': 7.30.1
 # TODO(PROD-916): Remove this patch, its override, and patch file after a compatible upstream update.
 patchedDependencies:
   decode-uri-component@0.5.0: patches/decode-uri-component@0.5.0.patch
