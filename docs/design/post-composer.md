@@ -127,8 +127,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
   제거·재시도, nullable Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control이 늘어나면 Parent와 editor가
   공유하는 중앙 영역에서 함께 스크롤하고 고정 footer를 밀어내지 않는다.
-- Media editor는 Web에서 `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button을 제공한다. 선택한 이미지마다
-  `Nightshade 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는 `실험적인 기능입니다.`를 표시한다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
+- Media editor는 developer-targeted `post-composer-nightshade` feature flag가 켜진 경우 Web에서
+  `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button과 tool content를 제공한다. flag가 꺼져 있거나
+  평가되지 않았으면 이를 숨긴다. 선택한 이미지마다 `Nightshade 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는
+  `실험적인 기능입니다.`를 표시한다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
   Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N Nightshade 적용`이다.
   처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
   [Media 객체](../domain/objects/media.md)를 따른다.
