@@ -5,6 +5,7 @@ import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { PostComposerProfilePickerLayer } from './PostComposerProfilePickerLayer';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileSwitcher_profiles$key } from './__generated__/PostComposerProfileSwitcher_profiles.graphql';
@@ -47,9 +48,12 @@ export function PostComposerProfileSwitcher({
   const theme = useTheme();
   const rootRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
+  // Portal containment must be checked against its DOM node, outside the trigger subtree.
+  const pickerRef = useRef<View>(null);
   const pendingRef = useRef(false);
   const operationVersionRef = useRef(0);
   const [open, setOpen] = useState(false);
+  const [dismissFocus, setDismissFocus] = useState<'trigger' | 'editor' | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
@@ -89,7 +93,8 @@ export function PostComposerProfileSwitcher({
       operationVersionRef.current += 1;
       setError(null);
       setOpen(false);
-      if (restoreFocus) {
+      setDismissFocus(restoreFocus ? 'trigger' : null);
+      if (restoreFocus && Platform.OS === 'web') {
         focusTrigger();
       }
     },
@@ -113,7 +118,8 @@ export function PostComposerProfileSwitcher({
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      if (!root.contains(event.target as Node)) {
+      const picker = pickerRef.current as unknown as HTMLElement | null;
+      if (!root.contains(event.target as Node) && !picker?.contains(event.target as Node)) {
         dismiss(false);
       }
     };
@@ -167,7 +173,10 @@ export function PostComposerProfileSwitcher({
           setPending(false);
           pendingRef.current = false;
           operationVersionRef.current += 1;
-          onSelectionSuccess?.();
+          setDismissFocus('editor');
+          if (Platform.OS === 'web') {
+            onSelectionSuccess?.();
+          }
         },
         () => {
           if (operationVersion !== operationVersionRef.current) {
@@ -226,10 +235,24 @@ export function PostComposerProfileSwitcher({
           ) : null}
         </View>
       </View>
-      {open ? (
-        <View testID="post-composer-profile-picker" style={styles.pickerLayer}>
+      <PostComposerProfilePickerLayer
+        onDismiss={() => {
+          if (dismissFocus === 'trigger') {
+            focusTrigger();
+          }
+          if (dismissFocus === 'editor') {
+            onSelectionSuccess?.();
+          }
+        }}
+        onRequestClose={() => dismiss(true)}
+        open={open}
+        pickerRef={pickerRef}
+        triggerRef={triggerRef}
+      >
+        {(maxHeight) => (
           <ProfilePicker
             busy={disabled || pending}
+            maxHeight={maxHeight}
             footer={
               error ? (
                 <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
@@ -243,8 +266,8 @@ export function PostComposerProfileSwitcher({
             showDivider={false}
             surface={surface === 'rail' ? 'compact' : 'full'}
           />
-        </View>
-      ) : null}
+        )}
+      </PostComposerProfilePickerLayer>
     </View>
   );
 }
@@ -261,6 +284,5 @@ const styles = StyleSheet.create({
   triggerCopy: { flex: 1, minWidth: 0 },
   triggerName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   triggerHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
-  pickerLayer: { left: 0, position: 'absolute', top: 48, zIndex: 30 },
   error: { fontFamily: fontFamilies.ui, padding: spacing.sm, ...typography.xsm },
 });

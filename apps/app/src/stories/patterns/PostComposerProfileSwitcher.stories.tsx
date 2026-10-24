@@ -5,7 +5,9 @@ import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerHost } from '@/components/post/PostComposerHost';
 import { PostComposerProfileSwitcher } from '@/components/post/PostComposerProfileSwitcher';
+import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { composerMedia } from './PostComposer.stories';
@@ -117,6 +119,7 @@ export function ComposerProfileFixture({
   const [sensitiveMedia, setSensitiveMedia] = useState(initialSensitiveMedia);
   const [visibility, setVisibility] = useState<PostComposerVisibility>('UNLISTED');
   const bodyRef = useRef<TextInput>(null);
+  const fixtureRef = useRef<View>(null);
   const remaining =
     postBodyMaxLength -
     normalizePostContentPlainText(body).length -
@@ -155,57 +158,62 @@ export function ComposerProfileFixture({
   };
 
   return (
-    <View
-      style={[
-        styles.fixture,
-        {
-          maxWidth: '100%',
-          width: surface === 'rail' ? 326 + spacing.lg * 2 : 600 + spacing.lg * 2,
-        },
-      ]}
-    >
-      <View accessibilityLabel="전역 활성 프로필" style={styles.globalProfile}>
-        <Text style={[styles.globalLabel, { color: theme.textSecondary }]}>전역 활성 프로필</Text>
-        <Text style={[styles.globalName, { color: theme.text }]}>
-          {globalProfile.displayName} {globalProfile.relativeHandle}
-        </Text>
+    <OverlayPortalProvider hostRef={fixtureRef}>
+      <View
+        ref={fixtureRef}
+        style={[
+          styles.fixture,
+          {
+            maxWidth: '100%',
+            width: surface === 'rail' ? 326 + spacing.lg * 2 : 600 + spacing.lg * 2,
+          },
+        ]}
+      >
+        <View accessibilityLabel="전역 활성 프로필" style={styles.globalProfile}>
+          <Text style={[styles.globalLabel, { color: theme.textSecondary }]}>전역 활성 프로필</Text>
+          <Text style={[styles.globalName, { color: theme.text }]}>
+            {globalProfile.displayName} {globalProfile.relativeHandle}
+          </Text>
+        </View>
+        <PostComposer
+          author={
+            <PostComposerProfileSwitcher
+              onSelectionSuccess={() => bodyRef.current?.focus()}
+              onSelectProfile={selectProfile}
+              profiles={data.me?.profiles ?? []}
+              selectedProfileId={initialSelectedProfileId}
+              surface={surface}
+            />
+          }
+          body={body}
+          bodyRef={bodyRef}
+          contentWarning={contentWarning}
+          contentWarningExpanded={contentWarningExpanded}
+          items={items}
+          onBodyChange={(value) => setBody(value)}
+          onSelectionChange={setSelection}
+          onContentWarningChange={setContentWarning}
+          onContentWarningToggle={() => setContentWarningExpanded((value) => !value)}
+          onEmojiAction={fn()}
+          onExpand={fn()}
+          onMediaAction={fn()}
+          onMediaEdit={fn()}
+          onMediaRemove={(itemId) =>
+            setItems((value) => value.filter((item) => item.key !== itemId))
+          }
+          onMediaRetry={fn()}
+          onPollAction={fn()}
+          onSubmit={fn()}
+          onVisibilityChange={setVisibility}
+          remaining={remaining}
+          sensitiveMedia={sensitiveMedia}
+          selection={selection}
+          showPollAction={false}
+          surface={surface}
+          visibility={visibility}
+        />
       </View>
-      <PostComposer
-        author={
-          <PostComposerProfileSwitcher
-            onSelectionSuccess={() => bodyRef.current?.focus()}
-            onSelectProfile={selectProfile}
-            profiles={data.me?.profiles ?? []}
-            selectedProfileId={initialSelectedProfileId}
-            surface={surface}
-          />
-        }
-        body={body}
-        bodyRef={bodyRef}
-        contentWarning={contentWarning}
-        contentWarningExpanded={contentWarningExpanded}
-        items={items}
-        onBodyChange={(value) => setBody(value)}
-        onSelectionChange={setSelection}
-        onContentWarningChange={setContentWarning}
-        onContentWarningToggle={() => setContentWarningExpanded((value) => !value)}
-        onEmojiAction={fn()}
-        onExpand={fn()}
-        onMediaAction={fn()}
-        onMediaEdit={fn()}
-        onMediaRemove={(itemId) => setItems((value) => value.filter((item) => item.key !== itemId))}
-        onMediaRetry={fn()}
-        onPollAction={fn()}
-        onSubmit={fn()}
-        onVisibilityChange={setVisibility}
-        remaining={remaining}
-        sensitiveMedia={sensitiveMedia}
-        selection={selection}
-        showPollAction={false}
-        surface={surface}
-        visibility={visibility}
-      />
-    </View>
+    </OverlayPortalProvider>
   );
 }
 
@@ -523,3 +531,113 @@ const styles = {
   globalLabel: { fontFamily: fontFamilies.ui, ...typography.xsm },
   globalName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
 } as const;
+
+const manyProfileData = {
+  me: {
+    ...profileSwitcherStoryData.me,
+    profiles: Array.from({ length: 16 }, (_, index) => ({
+      ...profileSwitcherStoryData.me.profiles[0]!,
+      id: `host-profile-${index}`,
+      displayName: `작성자 ${index + 1}`,
+      handle: `writer${index + 1}`,
+      relativeHandle: `@writer${index + 1}`,
+    })),
+  },
+};
+
+function HostProfileFixture({ mode }: { mode: 'rail' | 'overlay' | 'mobile' }) {
+  const data = useLazyLoadQuery<PostComposerProfileSwitcherStoriesQueryType>(
+    PostComposerProfileSwitcherStoriesQuery,
+    {},
+  );
+  const profiles = data.me?.profiles ?? [];
+  const [open, setOpen] = useState(true);
+  if (!profiles[0]) {
+    return null;
+  }
+  return (
+    <View style={{ width: mode === 'rail' ? 326 : '100%', height: 600 }}>
+      <PostComposerHost
+        {...(mode === 'rail' ? { mode, onExpand: fn() } : { mode })}
+        onRequestClose={() => setOpen(false)}
+        open={open}
+        profile={profiles[0]}
+        profiles={profiles}
+      />
+    </View>
+  );
+}
+
+const hostLongListPlay: NonNullable<Story['play']> = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+  const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+  await userEvent.type(body, '전환 뒤에도 남는 초안');
+  await userEvent.click(trigger);
+  const picker = await canvas.findByTestId('post-composer-profile-picker');
+  const bounds = picker.getBoundingClientRect();
+  expect(bounds.top).toBeGreaterThanOrEqual(0);
+  expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
+  const list = within(picker).getByRole('group', { name: '전환할 프로필 목록' });
+  expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+  list.scrollTop = list.scrollHeight;
+  const last = within(picker).getByRole('button', { name: '작성자 16, @writer16' });
+  await waitFor(() => {
+    const rect = last.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    expect(rect.top).toBeGreaterThanOrEqual(listRect.top);
+    expect(rect.bottom).toBeLessThanOrEqual(listRect.bottom + 1);
+    expect(
+      last.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)),
+    ).toBe(true);
+  });
+  await userEvent.click(last);
+  await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+  expect(canvas.getByText('작성자 16', { exact: true })).toBeVisible();
+  expect(body).toHaveValue('전환 뒤에도 남는 초안');
+  await waitFor(() => expect(body).toHaveFocus());
+  await userEvent.click(trigger);
+  const reopened = await canvas.findByTestId('post-composer-profile-picker');
+  const first = within(reopened).getByRole('button', { name: '작성자 1, @writer1' });
+  first.focus();
+  await userEvent.keyboard('{Enter}');
+  await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+  expect(canvas.getByText('작성자 1', { exact: true })).toBeVisible();
+  await userEvent.click(trigger);
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(body).toHaveValue('전환 뒤에도 남는 초안');
+};
+
+export const HostRailLongList: Story = {
+  render: () => <HostProfileFixture mode="rail" />,
+  parameters: { relay: { data: manyProfileData }, layout: 'fullscreen' },
+  play: hostLongListPlay,
+};
+export const HostOverlayLongList: Story = {
+  ...HostRailLongList,
+  render: () => <HostProfileFixture mode="overlay" />,
+};
+export const HostMobileLongList: Story = {
+  ...HostRailLongList,
+  render: () => <HostProfileFixture mode="mobile" />,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+};
+
+export const HostCompactLongList: Story = {
+  ...HostOverlayLongList,
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+};
+export const HostShortOverlayLongList: Story = {
+  ...HostOverlayLongList,
+  globals: { viewport: { isRotated: false, value: 'composerShort' } },
+  parameters: {
+    ...HostOverlayLongList.parameters,
+    relay: { data: manyProfileData },
+    viewport: {
+      options: {
+        composerShort: { name: 'Short composer', styles: { width: '900px', height: '360px' } },
+      },
+    },
+  },
+};

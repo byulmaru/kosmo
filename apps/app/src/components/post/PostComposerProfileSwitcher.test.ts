@@ -41,6 +41,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Modal: 'Modal',
   Platform: platform,
   Pressable: forwardRef(
     (
@@ -58,7 +61,8 @@ mockModule('react-native', {
       return createElement('Pressable', props, children as never);
     },
   ),
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
   Text: 'Text',
   View: 'View',
 });
@@ -69,12 +73,22 @@ mockModule('react-relay', {
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: (props: Record<string, unknown>) => createElement('ProfilePicker', props),
 });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }),
+});
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean) => ({
+    mounted: visible,
+    progress: { interpolate: () => 0 },
+  }),
+});
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
     card: '#fff',
     danger: '#c00',
     surface: '#eee',
+    overlayScrim: '#0008',
     text: '#111',
     textSecondary: '#666',
   }),
@@ -82,6 +96,7 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   spacing: { md: 16, sm: 8 },
+  space: { 12: 12, 16: 16 },
   typography: { md: {}, sm: {}, xsm: {} },
 });
 
@@ -103,6 +118,10 @@ const openPicker = async () => {
   const trigger = renderer?.root.findByProps({ accessibilityLabel: '작성 프로필' });
   await act(async () => trigger?.props.onPress());
   await act(async () => undefined);
+  const bounds = renderer?.root.findAll(
+    (node) => typeof node.type === 'string' && typeof node.props.onLayout === 'function',
+  )[0];
+  await act(async () => bounds?.props.onLayout({ nativeEvent: { layout: { height: 719 } } }));
   return renderer?.root.findByType('ProfilePicker' as never);
 };
 
@@ -126,6 +145,8 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
       picker?.props.onSelect(profiles[1]!.id);
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
+    assert.equal(selectionSuccessCount, 0);
+    await act(async () => renderer?.root.findByType('Modal' as never).props.onDismiss());
     assert.equal(selectionSuccessCount, 1);
     assert.equal(triggerFocusCount, 0);
 
@@ -134,6 +155,7 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
       picker?.props.onSelect(profiles[1]!.id);
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
+    await act(async () => renderer?.root.findByType('Modal' as never).props.onDismiss());
     assert.equal(selectionSuccessCount, 2);
     assert.equal(triggerFocusCount, 0);
   });
@@ -156,7 +178,39 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
 
     await openPicker();
     await act(async () => dismiss?.());
+    assert.equal(triggerFocusCount, 0);
+    await act(async () => renderer?.root.findByType('Modal' as never).props.onDismiss());
     assert.equal(triggerFocusCount, 1);
+  });
+
+  it('Native picker background cancels and inside presses preserve the open picker', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerProfileSwitcher, {
+          onSelectProfile: () => undefined,
+          profiles,
+          selectedProfileId: profiles[0]!.id,
+          surface: 'overlay',
+        }),
+      );
+    });
+    await openPicker();
+    const trigger = renderer?.root.findByProps({ accessibilityLabel: '작성 프로필' });
+    const bounds = renderer?.root.findAll(
+      (node) => typeof node.type === 'string' && typeof node.props.onLayout === 'function',
+    )[0];
+    await act(async () => bounds?.props.onPress?.());
+    assert.equal(trigger?.props.accessibilityState.expanded, false);
+    assert.equal(triggerFocusCount, 0);
+    await act(async () => renderer?.root.findByType('Modal' as never).props.onDismiss());
+    assert.equal(triggerFocusCount, 1);
+
+    await openPicker();
+    const inside = renderer?.root.findByProps({ testID: 'post-composer-profile-picker' });
+    let stopped = false;
+    await act(async () => inside?.props.onPress?.({ stopPropagation: () => (stopped = true) }));
+    assert.equal(stopped, true);
+    assert.equal(trigger?.props.accessibilityState.expanded, true);
   });
 
   it('deduplicates refreshed fragment refs by profile id', async () => {
