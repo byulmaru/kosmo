@@ -17,6 +17,10 @@ Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912�
 현재 Membership을 함께 확인하도록 정했다. 기존 경로, Profile 전환, payload privacy, Push 만료와 Provider의
 전달·회수 경계는 변경하지 않는다.
 
+2026-10-24 사용자 정정으로 로그인한 Native 앱에서 OS 권한이 미결정이면 권한을 요청하고, 이미 허용되거나
+거부된 권한은 로그인 때 자동 재요청하지 않도록 갱신했다. 신규 설치는 최초 로그인 때 요청하며, 기존 설치도
+다음 로그인된 앱 시작 때 권한이 미결정이면 요청한다. Guest·인증 중·Web에서는 요청하지 않는다.
+
 ## 날짜
 
 2026-09-10
@@ -32,9 +36,11 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 
 ## 결정
 
-- 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
-  OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
-  활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
+- 로그인한 Native 앱은 OS 알림 권한이 미결정이면 권한을 요청한다. 신규 설치에서는 최초 로그인 때 요청하며,
+  기존 설치도 다음 로그인된 앱 시작 때 미결정이면 요청한다. Guest, 인증 진행 중, Web에서는 요청하지 않는다.
+  이미 허용되거나 거부된 권한은 로그인 때 자동 재요청하지 않는다. 요청이 허용되면 FCM token을 즉시 동기화한다.
+  앱 설정의 알림 action은 권한이 미결정이면 OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을
+  연다. 권한을 허용한 로그인 세션은 로그인·앱 활성화와 token 갱신 때 FCM token을 동기화한다.
 - Profile Notification Push의 title/body는 행위자와 수신 Profile의 이름·핸들, 행동 종류를 공통 정보로 구성한다.
   Reaction은 실제 Reaction emoji를 사용한다. Recipient가 조회할 수 있고 sensitive 또는 Content Warning이 아닌
   게시글 본문도 포함하며, 줄 수·줄바꿈·자름·접힘·펼침은 OS가 소유한다. 플랫폼별 별도 표시, 아바타, 수신자
@@ -114,8 +120,9 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
 - 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
-  연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
-  현재 Push 대상 검증 범위, 공통 title/body 정보 구성과 본문 예외, foreground OS 배너, OS 설정 이동과 token 동기화,
+  연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 로그인 시 OS 권한 요청,
+  앱 설정의 권한 상태별 동작, 현재 Push 대상 검증 범위, 공통 title/body 정보 구성과 본문 예외,
+  foreground OS 배너, OS 설정 이동과 token 동기화,
   Profile 및 Operational target 처리, 다중 설치 fan-out, Push 만료와 read state 독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   정확한 retry/backoff 정책과 route data 및 OS 표시용 title/body 밖의 provider payload는 이 ADR에서 정하지 않는다.

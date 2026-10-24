@@ -62,6 +62,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const installationIdRef = useRef<string | null | undefined>(undefined);
+  const hasRunInitialPermissionSyncRef = useRef(false);
   const tokenSyncQueueRef = useRef(Promise.resolve());
   const [commitRegister] = useMutation<NativePushRegisterInstallationMutationType>(
     NativePushRegisterInstallationMutation,
@@ -169,12 +170,21 @@ export function NativePushProvider({ children }: PropsWithChildren) {
   );
 
   const syncPermissionAndToken = useCallback(
-    async (refreshedToken?: string) => {
+    async (refreshedToken?: string, requestIfUndetermined = false) => {
       if (sessionRef.current.status !== 'valid') {
         return;
       }
 
-      const status = await getNativeNotificationPermissionStatus();
+      let status = await getNativeNotificationPermissionStatus();
+      if (sessionRef.current.status !== 'valid') {
+        return;
+      }
+      if (status.status === 'undetermined' && requestIfUndetermined) {
+        status = await requestNativeNotificationPermission();
+        if (sessionRef.current.status !== 'valid') {
+          return;
+        }
+      }
       if (!status.granted) {
         if (status.status !== 'denied') {
           return;
@@ -214,6 +224,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (session.status !== 'valid') {
       installationIdRef.current = undefined;
+      hasRunInitialPermissionSyncRef.current = false;
       return;
     }
 
@@ -226,7 +237,9 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       }
     });
 
-    void syncPermissionAndToken().catch(() => undefined);
+    const requestIfUndetermined = !hasRunInitialPermissionSyncRef.current;
+    hasRunInitialPermissionSyncRef.current = true;
+    void syncPermissionAndToken(undefined, requestIfUndetermined).catch(() => undefined);
 
     return () => {
       unsubscribe();
