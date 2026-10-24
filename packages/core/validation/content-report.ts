@@ -6,19 +6,7 @@ export const contentReportDetailsMaxLength = 2_000;
 const contentReportDetailsSchema = z
   .string()
   .trim()
-  .check(({ value, issues }) => {
-    if (value.length > contentReportDetailsMaxLength) {
-      issues.push({
-        code: 'too_big',
-        origin: 'string',
-        maximum: contentReportDetailsMaxLength,
-        inclusive: true,
-        input: value,
-        message: '신고 상세 내용은 2,000자 이내로 입력해주세요.',
-        continue: true,
-      });
-    }
-  })
+  .max(contentReportDetailsMaxLength, '신고 상세 내용은 2,000자 이내로 입력해주세요.')
   .transform((details) => details || undefined)
   .optional();
 

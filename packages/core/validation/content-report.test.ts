@@ -58,7 +58,7 @@ test('Content Report allows omitted details for other reasons and enforces the s
     false,
   );
 
-  const detailsAtLimit = '😀'.repeat(contentReportDetailsMaxLength / 2);
+  const detailsAtLimit = '😀'.repeat(contentReportDetailsMaxLength);
   assert.equal(
     contentReportInputSchema.safeParse({
       reason: ContentReportReason.SPAM_FRAUD,
