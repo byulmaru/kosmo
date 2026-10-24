@@ -29,7 +29,7 @@ export const initialFirstProfileDraft: FirstProfileDraft = {
   bio: '',
   tags: [],
   tagInput: '',
-  defaultPostVisibility: 'UNLISTED',
+  defaultPostVisibility: 'PUBLIC',
   followPolicy: 'OPEN',
 };
 

@@ -7,7 +7,7 @@ import {
 } from './firstProfileOnboardingState';
 
 describe('first profile draft', () => {
-  it('starts with empty optional inputs and Unlisted/Open defaults', () => {
+  it('prepares empty optional inputs with Public/Open defaults', () => {
     const result = prepareFirstProfileDraft({ ...initialFirstProfileDraft, handle: 'spring' });
     assert.deepEqual(result, {
       ok: true,
@@ -16,10 +16,20 @@ describe('first profile draft', () => {
         displayName: 'spring',
         bio: null,
         tags: [],
-        defaultPostVisibility: 'UNLISTED',
+        defaultPostVisibility: 'PUBLIC',
         followPolicy: 'OPEN',
       },
     });
+  });
+
+  it('saves Public/Open when the posting step keeps its initial selection', () => {
+    assert.deepEqual(
+      prepareFirstProfileStep({ ...initialFirstProfileDraft, handle: 'spring' }, 'posting'),
+      {
+        ok: true,
+        value: { defaultPostVisibility: 'PUBLIC', followPolicy: 'OPEN' },
+      },
+    );
   });
 
   it('keeps the existing handle format and reserved-name policy', () => {

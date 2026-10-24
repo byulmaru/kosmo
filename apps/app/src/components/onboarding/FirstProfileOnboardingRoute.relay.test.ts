@@ -146,7 +146,7 @@ function profile(overrides: Record<string, unknown> = {}) {
     tags: [],
     avatar: null,
     header: null,
-    private: { defaultPostVisibility: 'UNLISTED' },
+    private: { defaultPostVisibility: 'PUBLIC' },
     instance: { kind: 'LOCAL' },
     viewerState: { membership: { role: 'OWNER' } },
     ...overrides,
@@ -244,6 +244,41 @@ afterEach(async () => {
 });
 
 describe('first profile step mutations', () => {
+  it('starts and saves the posting step with Public/Open defaults', async () => {
+    await createFirst();
+    await selected();
+    await skip('details');
+    await skip('tags');
+    assert.equal(flow.draft.defaultPostVisibility, 'PUBLIC');
+    await next('posting');
+    assert.deepEqual(requests[0]!.variables, {
+      input: { defaultPostVisibility: 'PUBLIC', followPolicy: 'OPEN' },
+    });
+    await save({});
+    assert.equal(displayedStep(), 'review');
+    assert.equal(flow.summary?.draft.defaultPostVisibility, 'PUBLIC');
+    assert.equal(flow.summary?.draft.followPolicy, 'OPEN');
+  });
+
+  for (const action of ['skip', 'complete'] as const) {
+    it(`keeps saved Public when ${action} discards an unsaved Unlisted selection`, async () => {
+      await createFirst();
+      await selected();
+      await skip('details');
+      await skip('tags');
+      await change({ defaultPostVisibility: 'UNLISTED' });
+      if (action === 'skip') {
+        await skip('posting');
+      } else {
+        await finish();
+      }
+      assert.equal(displayedStep(), action === 'skip' ? 'review' : 'complete');
+      assert.equal(flow.summary?.draft.defaultPostVisibility, 'PUBLIC');
+      assert.equal(flow.summary?.draft.followPolicy, 'OPEN');
+      assert.equal(requests.length, 0);
+    });
+  }
+
   it('creates and selects on handle Next before advancing and ignores repeated pending actions', async () => {
     await change({ handle: 'spring' });
     assert.equal(requests.length, 0);
