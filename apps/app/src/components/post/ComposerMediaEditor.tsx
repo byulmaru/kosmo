@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Tab, TabList } from '@/components/ui/Tabs';
@@ -55,6 +56,7 @@ const composerFieldFocusStyle = {
 
 export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   const theme = useTheme();
+  const nightshadeEnabled = useFeatureFlag('post-composer-nightshade');
   const backRef = useRef<View>(null);
   const selectedIndex = Math.max(
     0,
@@ -62,9 +64,10 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   );
   const selected = props.media[selectedIndex];
   const mobile = props.presentation === 'mobile';
+  const tool = !nightshadeEnabled && props.tool === 'nightshade' ? 'alt' : props.tool;
   const mobileState = props.mobileState ?? props.tool;
   const mobileTool =
-    mobileState === 'default'
+    mobileState === 'default' || (!nightshadeEnabled && mobileState === 'nightshade')
       ? null
       : mobileState === 'alt' || mobileState === 'altKeyboard'
         ? 'alt'
@@ -131,14 +134,18 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                 onPress={() => props.onToolChange('sensitive')}
                 selected={mobileTool === 'sensitive'}
               />
-              <MobileToolButton
-                icon={
-                  <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>AI</Text>
-                }
-                label="AI 학습 방지 필터(베타)"
-                onPress={() => props.onToolChange('nightshade')}
-                selected={mobileTool === 'nightshade'}
-              />
+              {nightshadeEnabled ? (
+                <MobileToolButton
+                  icon={
+                    <Text style={[styles.altToolLabel, { color: theme.foregroundPrimary }]}>
+                      AI
+                    </Text>
+                  }
+                  label="AI 학습 방지 필터(베타)"
+                  onPress={() => props.onToolChange('nightshade')}
+                  selected={mobileTool === 'nightshade'}
+                />
+              ) : null}
             </View>
             {mobileTool ? (
               <MobileToolSheet
@@ -154,9 +161,10 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
       ) : (
         <>
           <EditorTabs
+            nightshadeEnabled={nightshadeEnabled}
             onToolChange={props.onToolChange}
             showImageEditPreview={props.showImageEditPreview ?? false}
-            tool={props.tool}
+            tool={tool}
           />
           <View style={styles.webBody}>
             <View style={styles.webWorkspace}>
@@ -171,7 +179,12 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                 selectedKey={selected?.key}
               />
             </View>
-            <WebToolPanel {...props} selected={selected} selectedIndex={selectedIndex} />
+            <WebToolPanel
+              {...props}
+              selected={selected}
+              selectedIndex={selectedIndex}
+              tool={tool}
+            />
           </View>
           <View
             style={[styles.footer, { borderColor: theme.borderSubtle }]}
@@ -239,10 +252,12 @@ function EditorHeader({
 }
 
 function EditorTabs({
+  nightshadeEnabled,
   onToolChange,
   showImageEditPreview,
   tool,
 }: {
+  readonly nightshadeEnabled: boolean;
   readonly onToolChange: (tool: ComposerMediaEditorTool) => void;
   readonly showImageEditPreview: boolean;
   readonly tool: ComposerMediaEditorTool;
@@ -263,7 +278,14 @@ function EditorTabs({
       : []),
     <Tab key="alt" option={{ label: '대체 텍스트', value: 'alt' }} />,
     <Tab key="sensitive" option={{ label: '민감도', value: 'sensitive' }} />,
-    <Tab key="nightshade" option={{ label: 'AI 학습 방지 필터(베타)', value: 'nightshade' }} />,
+    ...(nightshadeEnabled
+      ? [
+          <Tab
+            key="nightshade"
+            option={{ label: 'AI 학습 방지 필터(베타)', value: 'nightshade' }}
+          />,
+        ]
+      : []),
   ];
 
   return (
