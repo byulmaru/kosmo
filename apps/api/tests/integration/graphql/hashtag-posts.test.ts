@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -18,6 +20,7 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
@@ -29,6 +32,7 @@ let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
+let Instances: typeof CoreDb.Instances;
 let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -37,6 +41,7 @@ let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let pg: typeof CoreDb.pg;
 let seedDatabase: typeof CoreSeed.seedDatabase;
+let createPost: typeof CoreServices.createPost;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let app: Hono<Env>;
@@ -84,6 +89,7 @@ describe('GraphQL Hashtag posts', () => {
       db,
       firstOrThrow,
       Hashtags,
+      Instances,
       PostContentHashtags,
       PostContents,
       Posts,
@@ -93,6 +99,7 @@ describe('GraphQL Hashtag posts', () => {
       pg,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ createPost } = await import('@kosmo/core/services'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -136,6 +143,34 @@ describe('GraphQL Hashtag posts', () => {
       .where(eq(Hashtags.name, 'flowtag'))
       .then(firstOrThrow);
     const tagId = hashtag.id;
+    const remoteAuthor = await createRemoteProfile();
+    const remotePost = await createPost({
+      document: postContentDocumentFromText('#FLOWTAG from a remote Note'),
+      hashtagNames: ['#FLOWTAG'],
+      mentionProfileIds: [],
+      objectUri: `https://remote-${crypto.randomUUID()}.example/notes/tagged`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt: null,
+      receivedAt: Temporal.Now.instant(),
+      visibility: PostVisibility.PUBLIC,
+    });
+    assert.equal(remotePost.created, true);
+    assert.equal(remotePost.post.currentContentId, remotePost.content.id);
+    assert.deepEqual(
+      await db
+        .select({ id: Hashtags.id, displayName: Hashtags.displayName })
+        .from(Hashtags)
+        .where(eq(Hashtags.name, 'flowtag')),
+      [{ id: tagId, displayName: hashtag.displayName }],
+    );
+    assert.deepEqual(
+      await db
+        .select()
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, remotePost.content.id)),
+      [{ postContentId: remotePost.content.id, hashtagId: tagId }],
+    );
     const directAuthor = await createProfile('direct-author');
     const source = await createContentfulPost(directAuthor.id, [tagId]);
     const quoteAuthor = await createProfile('quote-author');
@@ -202,7 +237,7 @@ describe('GraphQL Hashtag posts', () => {
     assertNoGraphQLErrors(secondPage);
     const secondPosts = secondPage.data?.node?.posts;
     assert.ok(secondPosts);
-    assert.equal(secondPosts.edges.length, 1);
+    assert.equal(secondPosts.edges.length, 2);
     assert.equal(secondPosts.pageInfo.hasNextPage, false);
 
     const listedIds = [
@@ -211,6 +246,7 @@ describe('GraphQL Hashtag posts', () => {
     ];
     const expectedIds = [
       created.data!.createPost.post.id,
+      globalId('Post', remotePost.post.id),
       globalId('Post', source.post.id),
       globalId('Post', ownTagQuote.post.id),
     ];
@@ -411,6 +447,33 @@ const createProfile = async (handle: string, state: ProfileState = ProfileState.
     .returning()
     .then(firstOrThrow);
 
+const createRemoteProfile = async () => {
+  const domain = `remote-${crypto.randomUUID()}.example`;
+  const instance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const handle = `remote-author-${crypto.randomUUID().slice(0, 8)}`;
+  return db
+    .insert(Profiles)
+    .values({
+      displayName: handle,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle,
+      instanceId: instance.id,
+      normalizedHandle: normalizeHandle(handle),
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
+
 const createAuthenticatedSession = async () => {
   const account = await db
     .insert(Accounts)
@@ -449,6 +512,7 @@ const resetFixtures = async () => {
   await db.delete(Accounts);
   await db.delete(Hashtags);
   await db.delete(Profiles);
+  await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
 };
 
 const truncateDatabase = async () => {

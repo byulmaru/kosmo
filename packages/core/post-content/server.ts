@@ -17,7 +17,12 @@ import { postContentSchema } from './schema';
 import { normalizeLinkHref } from './schema/marks/link';
 import { canonicalizePostContentDocument } from './server-document';
 import type { Match } from 'linkify-it';
-import type { PostContentDocumentV1, PostContentInlineNode, PostContentMediaNode } from './index';
+import type {
+  PostContentDocumentV1,
+  PostContentInlineNode,
+  PostContentMediaNode,
+  PostContentTextNode,
+} from './index';
 
 export {
   canonicalizePostContentDocument,
@@ -50,6 +55,14 @@ export interface PostContentHashtagCandidate {
 
 export interface PostContentHashtagReference extends PostContentHashtagCandidate {
   readonly hashtagId: string;
+}
+
+export interface RemotePostContentHashtagMatch {
+  readonly end: number;
+  readonly name: string;
+  readonly paragraphIndex: number;
+  readonly start: number;
+  readonly token: string;
 }
 
 export function postContentDocumentFromText(
@@ -97,34 +110,7 @@ export function postContentHashtagCandidatesFromText(
   bodyText: string,
   mentions: readonly PostContentMentionReference[] = [],
 ): PostContentHashtagCandidate[] {
-  const linkRanges = (postContentHashtagUrlLinkify.match(bodyText) ?? []).map(
-    ({ index, lastIndex }) => ({ end: lastIndex, start: index }),
-  );
-  const explicitUrlPattern = /(^|(?!_)[><\uFF5C\p{Z}\p{P}\p{C}])([A-Za-z][A-Za-z0-9+.-]*:\/\/)/gu;
-  for (const match of bodyText.matchAll(explicitUrlPattern)) {
-    const start = match.index + match[0].length - match[2]!.length;
-    let end = match.index + match[0].length;
-    const openBrackets: string[] = [];
-    for (const codePoint of bodyText.slice(end)) {
-      if (/[\s<>"'|]/u.test(codePoint)) {
-        break;
-      }
-      const matchingOpen =
-        codePoint === ')' ? '(' : codePoint === ']' ? '[' : codePoint === '}' ? '{' : null;
-      if (matchingOpen !== null) {
-        if (openBrackets.pop() !== matchingOpen) {
-          break;
-        }
-      } else if (codePoint === '(' || codePoint === '[' || codePoint === '{') {
-        openBrackets.push(codePoint);
-      }
-      end += codePoint.length;
-    }
-    linkRanges.push({ end, start });
-  }
-  for (const match of bodyText.matchAll(/\bmailto:[^\s<>"']+/giu)) {
-    linkRanges.push({ end: match.index + match[0].length, start: match.index });
-  }
+  const linkRanges = postContentHashtagUrlRangesFromText(bodyText);
   const candidates: PostContentHashtagCandidate[] = [];
   const pattern = /#/gu;
 
@@ -162,6 +148,198 @@ export function postContentHashtagCandidatesFromText(
   }
 
   return candidates;
+}
+
+export function findRemotePostContentHashtags(
+  document: PostContentDocumentV1,
+  hashtagNames: readonly string[],
+): RemotePostContentHashtagMatch[] {
+  const namesByCanonicalName = new Map<string, string>();
+  for (const name of hashtagNames) {
+    const canonicalName = normalizeHashtag(name).name;
+    if (canonicalName.length > 0 && !namesByCanonicalName.has(canonicalName)) {
+      namesByCanonicalName.set(canonicalName, name);
+    }
+  }
+  if (namesByCanonicalName.size === 0) {
+    return [];
+  }
+
+  const nameTrie = createHashtagNameTrie(namesByCanonicalName);
+  const matches: RemotePostContentHashtagMatch[] = [];
+  let paragraphIndex = 0;
+  for (const block of document.body.content) {
+    if (block.type !== 'paragraph') {
+      continue;
+    }
+
+    let paragraphOffset = 0;
+    let runStart = 0;
+    let runText = '';
+    const flushRun = (): void => {
+      if (runText.length === 0) {
+        return;
+      }
+      matches.push(
+        ...findRemoteHashtagMatchesInTextRun({
+          namesByCanonicalName,
+          nameTrie,
+          paragraphIndex,
+          runStart,
+          runText,
+        }),
+      );
+      runText = '';
+    };
+
+    for (const node of block.content ?? []) {
+      if (node.type === 'text') {
+        let segmentStart = 0;
+        for (let offset = 0; offset < node.text.length; offset += 1) {
+          if (node.text[offset] !== '\n' && node.text[offset] !== '\r') {
+            continue;
+          }
+          if (offset > segmentStart) {
+            if (runText.length === 0) {
+              runStart = paragraphOffset;
+            }
+            const segment = node.text.slice(segmentStart, offset);
+            runText += segment;
+          }
+          flushRun();
+          paragraphOffset += offset - segmentStart + 1;
+          segmentStart = offset + 1;
+        }
+        if (segmentStart < node.text.length) {
+          if (runText.length === 0) {
+            runStart = paragraphOffset;
+          }
+          const segment = node.text.slice(segmentStart);
+          runText += segment;
+          paragraphOffset += segment.length;
+        }
+        continue;
+      }
+
+      flushRun();
+      paragraphOffset += postContentInlineNodeText(node).length;
+    }
+    flushRun();
+    paragraphIndex += 1;
+  }
+
+  return matches;
+}
+
+export function applyRemotePostContentHashtags(
+  document: PostContentDocumentV1,
+  matches: readonly (RemotePostContentHashtagMatch & { readonly hashtagId: string })[],
+): PostContentDocumentV1 {
+  if (matches.length === 0) {
+    return document;
+  }
+
+  const matchesByParagraph = new Map<
+    number,
+    (RemotePostContentHashtagMatch & { hashtagId: string })[]
+  >();
+  for (const match of matches) {
+    const paragraphMatches = matchesByParagraph.get(match.paragraphIndex) ?? [];
+    paragraphMatches.push(match);
+    matchesByParagraph.set(match.paragraphIndex, paragraphMatches);
+  }
+
+  let paragraphIndex = 0;
+  const content = document.body.content.map((block) => {
+    if (block.type !== 'paragraph') {
+      return block;
+    }
+    const paragraphMatches = matchesByParagraph.get(paragraphIndex) ?? [];
+    paragraphIndex += 1;
+    if (paragraphMatches.length === 0) {
+      return block;
+    }
+
+    const result: PostContentInlineNode[] = [];
+    let paragraphOffset = 0;
+    let runStart = 0;
+    let runNodes: PostContentTextNode[] = [];
+    let runLength = 0;
+    let matchIndex = 0;
+    const flushRun = (): void => {
+      if (runLength === 0) {
+        runNodes = [];
+        return;
+      }
+      const runEnd = runStart + runLength;
+      const runMatches: (RemotePostContentHashtagMatch & { hashtagId: string })[] = [];
+      while (matchIndex < paragraphMatches.length) {
+        const match = paragraphMatches[matchIndex]!;
+        if (match.start < runStart) {
+          throw new TypeError('Remote Hashtag match is outside its text run');
+        }
+        if (match.end > runEnd) {
+          break;
+        }
+        runMatches.push(match);
+        matchIndex += 1;
+      }
+      result.push(...applyRemoteHashtagMatchesToTextRun(runNodes, runStart, runMatches));
+      runNodes = [];
+      runLength = 0;
+    };
+
+    for (const node of block.content ?? []) {
+      if (node.type === 'text') {
+        let segmentStart = 0;
+        for (let offset = 0; offset < node.text.length; offset += 1) {
+          if (node.text[offset] !== '\n' && node.text[offset] !== '\r') {
+            continue;
+          }
+          if (offset > segmentStart) {
+            if (runNodes.length === 0) {
+              runStart = paragraphOffset;
+            }
+            const segment = node.text.slice(segmentStart, offset);
+            runNodes.push({ ...node, text: segment });
+            runLength += segment.length;
+          }
+          flushRun();
+          result.push({
+            type: 'text',
+            text: node.text.slice(offset, offset + 1),
+            ...(node.marks ? { marks: node.marks } : {}),
+          });
+          paragraphOffset += offset - segmentStart + 1;
+          segmentStart = offset + 1;
+        }
+        if (segmentStart < node.text.length) {
+          if (runNodes.length === 0) {
+            runStart = paragraphOffset;
+          }
+          const segment = node.text.slice(segmentStart);
+          runNodes.push({ ...node, text: segment });
+          runLength += segment.length;
+          paragraphOffset += segment.length;
+        }
+        continue;
+      }
+
+      flushRun();
+      result.push(node);
+      paragraphOffset += postContentInlineNodeText(node).length;
+    }
+    flushRun();
+    if (matchIndex !== paragraphMatches.length) {
+      throw new TypeError('Remote Hashtag match is outside its text run');
+    }
+    return { ...block, content: result };
+  });
+
+  return canonicalizePostContentDocument({
+    ...document,
+    body: { ...document.body, content },
+  });
 }
 
 export function postContentDocumentToHtml(
@@ -279,6 +457,235 @@ function rangesOverlap(
   rightEnd: number,
 ): boolean {
   return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+type HashtagNameTrie = {
+  canonicalNames?: string[];
+  children: Map<string, HashtagNameTrie>;
+};
+
+const createHashtagNameTrie = (namesByCanonicalName: ReadonlyMap<string, string>) => {
+  const root: HashtagNameTrie = { children: new Map() };
+  for (const canonicalName of namesByCanonicalName.keys()) {
+    let node = root;
+    for (const codePoint of canonicalName.replaceAll('ς', 'σ')) {
+      let next = node.children.get(codePoint);
+      if (!next) {
+        next = { children: new Map() };
+        node.children.set(codePoint, next);
+      }
+      node = next;
+    }
+    (node.canonicalNames ??= []).push(canonicalName);
+  }
+  return root;
+};
+
+function findRemoteHashtagMatchesInTextRun({
+  namesByCanonicalName,
+  nameTrie,
+  paragraphIndex,
+  runStart,
+  runText,
+}: {
+  namesByCanonicalName: ReadonlyMap<string, string>;
+  nameTrie: HashtagNameTrie;
+  paragraphIndex: number;
+  runStart: number;
+  runText: string;
+}): RemotePostContentHashtagMatch[] {
+  const segments = Array.from(
+    new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(runText),
+    ({ index, segment }) => ({ end: index + segment.length, index, segment }),
+  );
+  const urlRanges = postContentHashtagUrlRangesFromText(runText);
+  const matches: RemotePostContentHashtagMatch[] = [];
+
+  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
+    const hashtagSegment = segments[segmentIndex]!;
+    if (hashtagSegment.segment !== '#') {
+      continue;
+    }
+    const previous = postContentCodePointBefore(runText, hashtagSegment.index);
+    if (previous && (previous === '#' || isPostContentHashtagNameCodePoint(previous))) {
+      continue;
+    }
+
+    const firstNameSegmentIndex = segmentIndex + 1;
+    if (firstNameSegmentIndex >= segments.length) {
+      continue;
+    }
+
+    let trieNode = nameTrie;
+    let bestMatch: RemotePostContentHashtagMatch | undefined;
+    for (
+      let nameSegmentIndex = firstNameSegmentIndex;
+      nameSegmentIndex < segments.length;
+      nameSegmentIndex += 1
+    ) {
+      const nameSegment = segments[nameSegmentIndex]!;
+      const normalizedSegment = nameSegment.segment
+        .normalize('NFKC')
+        .toLowerCase()
+        .replaceAll('ς', 'σ');
+      let matchedSegment = true;
+      for (const codePoint of normalizedSegment) {
+        const next = trieNode.children.get(codePoint);
+        if (!next) {
+          matchedSegment = false;
+          break;
+        }
+        trieNode = next;
+      }
+      if (!matchedSegment) {
+        break;
+      }
+
+      if (!trieNode.canonicalNames) {
+        continue;
+      }
+      const end = nameSegment.end;
+      const nextCodePoint = postContentCodePointAt(runText, end);
+      if (
+        nextCodePoint &&
+        (nextCodePoint === '#' || isPostContentHashtagNameCodePoint(nextCodePoint))
+      ) {
+        continue;
+      }
+      const start = hashtagSegment.index;
+      const token = runText.slice(start, end);
+      const canonicalName = normalizeHashtag(token).name;
+      if (!trieNode.canonicalNames.includes(canonicalName)) {
+        continue;
+      }
+      if (urlRanges.some((range) => rangesOverlap(start, end, range.start, range.end))) {
+        continue;
+      }
+      bestMatch = {
+        end: runStart + end,
+        name: namesByCanonicalName.get(canonicalName)!,
+        paragraphIndex,
+        start: runStart + start,
+        token,
+      };
+    }
+
+    if (bestMatch) {
+      matches.push(bestMatch);
+      while (
+        segmentIndex + 1 < segments.length &&
+        segments[segmentIndex + 1]!.index < bestMatch.end - runStart
+      ) {
+        segmentIndex += 1;
+      }
+    }
+  }
+
+  return matches;
+}
+
+function applyRemoteHashtagMatchesToTextRun(
+  nodes: readonly PostContentTextNode[],
+  runStart: number,
+  matches: readonly (RemotePostContentHashtagMatch & { readonly hashtagId: string })[],
+): PostContentInlineNode[] {
+  const runText = nodes.map(({ text }) => text).join('');
+  const result: PostContentInlineNode[] = [];
+  let cursor = runStart;
+  for (const match of matches) {
+    if (
+      match.start < cursor ||
+      match.end <= match.start ||
+      match.end > runStart + runText.length ||
+      match.token !== runText.slice(match.start - runStart, match.end - runStart)
+    ) {
+      throw new TypeError('Remote Hashtag match is outside its text run');
+    }
+    appendRemoteHashtagTextRange(result, nodes, runStart, cursor, match.start);
+    result.push({
+      type: 'hashtag',
+      attrs: {
+        hashtagId: normalizePostContentHashtagId(match.hashtagId),
+        token: normalizePostContentHashtagToken(match.token),
+      },
+    });
+    cursor = match.end;
+  }
+  appendRemoteHashtagTextRange(result, nodes, runStart, cursor, runStart + runText.length);
+  return result;
+}
+
+function appendRemoteHashtagTextRange(
+  output: PostContentInlineNode[],
+  nodes: readonly PostContentTextNode[],
+  runStart: number,
+  start: number,
+  end: number,
+): void {
+  let nodeStart = runStart;
+  for (const node of nodes) {
+    const nodeEnd = nodeStart + node.text.length;
+    const sliceStart = Math.max(start, nodeStart);
+    const sliceEnd = Math.min(end, nodeEnd);
+    if (sliceStart < sliceEnd) {
+      output.push({
+        type: 'text',
+        text: node.text.slice(sliceStart - nodeStart, sliceEnd - nodeStart),
+        ...(node.marks === undefined ? {} : { marks: node.marks }),
+      });
+    }
+    nodeStart = nodeEnd;
+  }
+}
+
+function postContentInlineNodeText(node: PostContentInlineNode): string {
+  if (node.type === 'text') {
+    return node.text;
+  }
+  if (node.type === 'hard_break') {
+    return '\n';
+  }
+  if (node.type === 'hashtag') {
+    return node.attrs.token;
+  }
+  return node.attrs.handle ?? postContentMentionFallbackText;
+}
+
+function postContentHashtagUrlRangesFromText(bodyText: string): PostContentHashtagCandidate[] {
+  const linkRanges = (postContentHashtagUrlLinkify.match(bodyText) ?? []).map(
+    ({ index, lastIndex }) => ({ end: lastIndex, start: index }),
+  );
+  const explicitUrlPattern = /(^|(?!_)[><\uFF5C\p{Z}\p{P}\p{C}])([A-Za-z][A-Za-z0-9+.-]*:\/\/)/gu;
+  for (const match of bodyText.matchAll(explicitUrlPattern)) {
+    const start = match.index + match[0].length - match[2]!.length;
+    let end = match.index + match[0].length;
+    const openBrackets: string[] = [];
+    for (const codePoint of bodyText.slice(end)) {
+      if (/[\s<>"'|]/u.test(codePoint)) {
+        break;
+      }
+      const matchingOpen =
+        codePoint === ')' ? '(' : codePoint === ']' ? '[' : codePoint === '}' ? '{' : null;
+      if (matchingOpen !== null) {
+        if (openBrackets.pop() !== matchingOpen) {
+          break;
+        }
+      } else if (codePoint === '(' || codePoint === '[' || codePoint === '{') {
+        openBrackets.push(codePoint);
+      }
+      end += codePoint.length;
+    }
+    linkRanges.push({ end, start });
+  }
+  for (const match of bodyText.matchAll(/\bmailto:[^\s<>"']+/giu)) {
+    linkRanges.push({ end: match.index + match[0].length, start: match.index });
+  }
+  return linkRanges;
+}
+
+function postContentCodePointAt(value: string, offset: number): string | undefined {
+  const codePoint = value.codePointAt(offset);
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
 }
 
 function isPostContentHashtagNameCodePoint(value: string): boolean {

@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { projectRemoteNoteContent } from '../activitypub-note-content';
 import { isPostContentDocumentV1, readPostContentDocumentV1 } from './index';
 import {
+  applyRemotePostContentHashtags,
   arePostContentRevisionsEqual,
   canonicalizePostContentDocument,
+  findRemotePostContentHashtags,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
   postContentDocumentToHtml,
@@ -15,6 +18,7 @@ import {
 const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
 const otherProfileId = '019f6678-86fa-709b-984e-1520766b8442';
 const hashtagId = '019f6678-86fa-709b-984e-1520766b8443';
+const otherHashtagId = '019f6678-86fa-709b-984e-1520766b8444';
 
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
@@ -248,6 +252,198 @@ test('keeps 64-codepoint hashtags and preserves longer tokens as Plain Text', ()
     ],
   });
   assert.equal(postContentDocumentToText(document), bodyText);
+});
+
+test('matches typed remote Hashtags across projected linked markup and preserves body tokens', () => {
+  const longToken = `#${'名'.repeat(65)}`;
+  const document = projectRemoteNoteContent({
+    content:
+      '<p>Topic <a href="https://remote.example/tags/mixed"><span>#Ｍｉ</span><strong>XeD</strong></a> / ' +
+      '<a href="https://remote.example/tags/mixed">#mixed</a></p>' +
+      `<p>More ${longToken} and #remote-tag🔥 and #two words</p>`,
+    mediaType: 'text/html',
+    summary: null,
+  });
+  const matches = findRemotePostContentHashtags(document, [
+    '#Mixed',
+    longToken,
+    '#remote-tag🔥',
+    '#two words',
+  ]);
+
+  assert.deepEqual(matches, [
+    { name: '#Mixed', paragraphIndex: 0, start: 6, end: 12, token: '#ＭｉXeD' },
+    { name: '#Mixed', paragraphIndex: 0, start: 15, end: 21, token: '#mixed' },
+    { name: longToken, paragraphIndex: 1, start: 5, end: 71, token: longToken },
+    { name: '#remote-tag🔥', paragraphIndex: 1, start: 76, end: 89, token: '#remote-tag🔥' },
+    { name: '#two words', paragraphIndex: 1, start: 94, end: 104, token: '#two words' },
+  ]);
+
+  const tagged = applyRemotePostContentHashtags(
+    document,
+    matches.map((match) => ({
+      ...match,
+      hashtagId: match.name === '#Mixed' ? hashtagId : otherHashtagId,
+    })),
+  );
+
+  assert.equal(postContentDocumentToText(tagged), postContentDocumentToText(document));
+  assert.deepEqual(
+    tagged.body.content.map((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    ),
+    [
+      [
+        { hashtagId, token: '#ＭｉXeD' },
+        { hashtagId, token: '#mixed' },
+      ],
+      [
+        { hashtagId: otherHashtagId, token: longToken },
+        { hashtagId: otherHashtagId, token: '#remote-tag🔥' },
+        { hashtagId: otherHashtagId, token: '#two words' },
+      ],
+    ],
+  );
+});
+
+test('matches only complete typed remote Hashtags and never crosses body boundaries', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '#TagExtra abc#tag ' },
+            {
+              type: 'text',
+              text: 'https://example.com/#tag',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/#tag' } }],
+            },
+            { type: 'text', text: ' #BodyOnly' },
+          ],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '#ta' },
+            { type: 'hard_break' },
+            { type: 'text', text: 'g' },
+          ],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '#ta' },
+            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'text', text: 'g' },
+          ],
+        },
+        { type: 'paragraph', content: [{ type: 'text', text: '#ta' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'g' }] },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'begin #Ta',
+              marks: [{ type: 'link', attrs: { href: 'https://remote.example/tags/first' } }],
+            },
+            {
+              type: 'text',
+              text: 'gExtra finish',
+              marks: [{ type: 'link', attrs: { href: 'https://remote.example/tags/second' } }],
+            },
+          ],
+        },
+        { type: 'paragraph', content: [{ type: 'text', text: '#tag' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '#οσ #ος' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '#one #two' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '# tag' }] },
+      ],
+    },
+  });
+  const sigmaMatches = findRemotePostContentHashtags(document, ['#οσ', '#ος']);
+  assert.deepEqual(sigmaMatches, [
+    { name: '#οσ', paragraphIndex: 7, start: 0, end: 3, token: '#οσ' },
+    { name: '#ος', paragraphIndex: 7, start: 4, end: 7, token: '#ος' },
+  ]);
+  assert.deepEqual(findRemotePostContentHashtags(document, ['#ος', '#οσ']), sigmaMatches);
+  const matches = findRemotePostContentHashtags(document, [
+    '#TAG',
+    '#tagExtra',
+    '#ος',
+    '#οσ',
+    '#two',
+    '#one #two',
+    '# tag',
+  ]);
+
+  assert.deepEqual(matches, [
+    { name: '#tagExtra', paragraphIndex: 0, start: 0, end: 9, token: '#TagExtra' },
+    { name: '#tagExtra', paragraphIndex: 5, start: 6, end: 15, token: '#TagExtra' },
+    { name: '#TAG', paragraphIndex: 6, start: 0, end: 4, token: '#tag' },
+    ...sigmaMatches,
+    { name: '#one #two', paragraphIndex: 8, start: 0, end: 9, token: '#one #two' },
+    { name: '# tag', paragraphIndex: 9, start: 0, end: 5, token: '# tag' },
+  ]);
+
+  const tagged = applyRemotePostContentHashtags(
+    document,
+    matches.map((match) => ({
+      ...match,
+      hashtagId:
+        match.name === '#TAG' || match.name === '#οσ' || match.name === '# tag'
+          ? hashtagId
+          : otherHashtagId,
+    })),
+  );
+
+  assert.equal(postContentDocumentToText(tagged), postContentDocumentToText(document));
+  const firstParagraph = tagged.body.content[0];
+  assert.ok(firstParagraph?.type === 'paragraph');
+  assert.deepEqual(firstParagraph.content?.[0], {
+    type: 'hashtag',
+    attrs: { hashtagId: otherHashtagId, token: '#TagExtra' },
+  });
+  assert.deepEqual(firstParagraph.content?.[2], {
+    type: 'text',
+    text: 'https://example.com/#tag',
+    marks: [{ type: 'link', attrs: { href: 'https://example.com/#tag' } }],
+  });
+  assert.equal(
+    tagged.body.content.flatMap((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).filter((node) => node.type === 'hashtag')
+        : [],
+    ).length,
+    7,
+  );
+  assert.deepEqual(
+    tagged.body.content
+      .slice(7)
+      .map((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).filter((node) => node.type === 'hashtag')
+          : [],
+      ),
+    [
+      [
+        { type: 'hashtag', attrs: { hashtagId, token: '#οσ' } },
+        { type: 'hashtag', attrs: { hashtagId: otherHashtagId, token: '#ος' } },
+      ],
+      [{ type: 'hashtag', attrs: { hashtagId: otherHashtagId, token: '#one #two' } }],
+      [{ type: 'hashtag', attrs: { hashtagId, token: '# tag' } }],
+    ],
+  );
 });
 
 test('excludes hashtag fragments from FTP, mailto, protocol-relative, and HTTPS URLs', () => {
