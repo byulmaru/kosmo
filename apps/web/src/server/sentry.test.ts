@@ -9,6 +9,7 @@ const sentry = vi.hoisted(() => ({
   captureException: vi.fn(),
   init: vi.fn(),
   metrics: { count: vi.fn() },
+  postgresJsIntegration: vi.fn(() => ({ name: 'PostgresJs' })),
   withScope: vi.fn(),
 }));
 
@@ -17,6 +18,7 @@ vi.mock('@sentry/node', () => sentry);
 beforeEach(() => {
   vi.resetModules();
   sentry.init.mockReset();
+  sentry.postgresJsIntegration.mockClear();
   sentry.captureException.mockReset();
   sentry.metrics.count.mockReset();
   sentry.withScope.mockReset();
@@ -43,19 +45,39 @@ describe('Web BFF Sentry configuration', () => {
 
   it('initializes with complete deployment metadata', async () => {
     vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
-    vi.stubEnv('ENVIRONMENT', 'production');
+    vi.stubEnv('ENVIRONMENT', 'prod');
     vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
 
     await import('./sentry');
 
     expect(sentry.init).toHaveBeenCalledWith(
       expect.objectContaining({
-        environment: 'production',
+        environment: 'prod',
         initialScope: { tags: { runtime: 'web-bff' } },
+        tracesSampleRate: 0.1,
+        integrations: [expect.objectContaining({ name: 'PostgresJs' })],
         release: 'kosmo@abc123',
+        sendDefaultPii: false,
       }),
     );
     expect(sentry.init.mock.calls[0]?.[0].beforeSend).toBeUndefined();
+  });
+
+  it('keeps performance tracing disabled outside production', async () => {
+    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
+
+    await import('./sentry');
+
+    expect(sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({
+        environment: 'dev',
+        sendDefaultPii: false,
+      }),
+    );
+    expect(sentry.init.mock.calls[0]?.[0]).not.toHaveProperty('tracesSampleRate');
+    expect(sentry.postgresJsIntegration).not.toHaveBeenCalled();
   });
 
   it('adds bounded inbound grouping metadata to internal captures', async () => {
