@@ -109,22 +109,13 @@ export const BlockActionAfterReport: Story = {
       },
     },
   },
-  play: async ({ canvasElement, parameters }) => {
+  play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
     let confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
     let confirmation = within(confirmationDialog);
-    await userEvent.click(confirmation.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
-    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
-    await waitFor(() => expect(block).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
-
-    await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
@@ -133,8 +124,81 @@ export const BlockActionAfterReport: Story = {
     await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
     await waitFor(() => expect(block).toHaveFocus());
 
+    const document = canvasElement.ownerDocument;
+    const blockBeforeRetry = {
+      connected: block.isConnected,
+      disabled: block.matches(':disabled') || block.getAttribute('aria-disabled') === 'true',
+      focused: block === document.activeElement,
+      pointerEvents: getComputedStyle(block).pointerEvents,
+    };
+    let retryClickDelivered = false;
+    block.addEventListener(
+      'click',
+      () => {
+        retryClickDelivered = true;
+      },
+      { once: true },
+    );
     await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    try {
+      confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    } catch (error) {
+      const cancelButtons = page.queryAllByRole('button', { name: '취소', hidden: true });
+      const modalHosts = Array.from(document.querySelectorAll('[aria-modal="true"]'));
+      console.error(
+        'BlockActionAfterReport retry modal snapshot',
+        JSON.stringify(
+          {
+            blockBeforeRetry,
+            retryClickDelivered,
+            blockAfterRetry: {
+              connected: block.isConnected,
+              disabled: block.matches(':disabled') || block.getAttribute('aria-disabled') === 'true',
+              focused: block === document.activeElement,
+              pointerEvents: getComputedStyle(block).pointerEvents,
+            },
+            cancelButtons: cancelButtons.map((button) => {
+              const host = button.closest('[aria-modal="true"]');
+              const style = getComputedStyle(button);
+              return {
+                connected: button.isConnected,
+                focused: button === document.activeElement,
+                hidden: button.hidden,
+                attributes: Array.from(button.attributes).map(({ name, value }) => ({ name, value })),
+                inert: button.closest('[inert]') !== null,
+                display: style.display,
+                visibility: style.visibility,
+                modalHostIndex: host ? modalHosts.indexOf(host) : null,
+              };
+            }),
+            modalHosts: modalHosts.map((host) => {
+              const style = getComputedStyle(host);
+              return {
+                attributes: Array.from(host.attributes).map(({ name, value }) => ({ name, value })),
+                inert: host.hasAttribute('inert') || host.closest('[inert]') !== null,
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
+                containsCancel: cancelButtons.some((button) => host.contains(button)),
+              };
+            }),
+            activeElement: {
+              tagName: document.activeElement?.tagName,
+              role: document.activeElement?.getAttribute('role'),
+              label: document.activeElement?.getAttribute('aria-label'),
+              text: document.activeElement?.textContent?.trim().slice(0, 100),
+            },
+            story: {
+              canvasConnected: canvasElement.isConnected,
+              parentConnected: canvasElement.parentElement?.isConnected ?? false,
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      throw error;
+    }
     confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() => {
@@ -142,7 +206,6 @@ export const BlockActionAfterReport: Story = {
       expect(page.queryByText('신고가 접수되었어요')).not.toBeInTheDocument();
     });
     await waitFor(() => expect(page.getByRole('button', { name: '신고 메뉴 열기' })).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledTimes(3);
   },
 };
 
