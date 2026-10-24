@@ -38,8 +38,9 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
   않으며, 원격 조회·refresh·새 materialization은 수행하지 않는다.
 - 탐색 요청은 인증된 Account만 허용한다. 인증되지 않은 요청은 Profile 후보를 조회하기 전에 기존 로그인 정책에
   따라 처리한다.
-- 유효한 Account에 selected Profile이 있으면 그 Profile을 viewer로 사용해 양방향 Active Block 관계인 후보를
-  pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를
+- 유효한 Account에 selected Profile이 있으면 해당 Profile 자체와 그 Profile에 양방향 Active Block 관계인 후보를
+  pagination·cursor·limit 전에 제외한다. Profile 자체 제외는 현재 selected Profile 하나에만 적용하며 같은
+  Account의 다른 Profile은 제외하지 않는다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를
   유지하며 Profile Block predicate나 selected Profile을 새로 요구하지 않는다.
 - 결과는 Profile 목록으로 반환하며 Profile마다 한 번만 나타난다. 관련도·알파벳순 정렬을 도입하지 않고, 안정적인
   immutable Profile cursor와 forward pagination을 사용한다. 한 요청의 페이지 크기는 최대 20개다. Profile Tag

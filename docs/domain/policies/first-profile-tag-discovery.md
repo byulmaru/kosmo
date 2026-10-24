@@ -20,7 +20,7 @@
 
 - Profile에 저장된 canonical Hashtag identity로 해당 태그의 관련 Profile을 조회한다. 미저장 입력, 표시 이름을 임의로 재해석한 검색 결과나 추천 목록으로 바꾸지 않는다.
 - 여러 태그가 있으면 각 태그의 목록을 선택해서 볼 수 있다. 태그의 저장 순서·개수 제한이나 추천·관련도 순위를 새로 만들지 않는다.
-- 인증, 공개 Profile 조건, 차단, 뮤트와 페이지 조회 정책은 기존 [Hashtag 탐색 계약](../decisions/0021-hashtag-related-profile-navigation.md)을 따른다. 본인 Profile에 대한 새로운 후보 제외 정책도 추가하지 않는다.
+- 인증, 공개 Profile 조건, 차단, 뮤트와 페이지 조회 정책은 기존 [Hashtag 탐색 계약](../decisions/0021-hashtag-related-profile-navigation.md)을 따른다. 관련 Profile 결과에서는 현재 selected Profile 자체만 제외하며 같은 Account의 다른 Profile은 제외하지 않는다.
 - 조회 중·오류 중에도 요청한 태그와 선택 상태를 표시한다. 조회 오류를 빈 목록으로 오인하게 하지 않고 해당 태그·페이지에서 재시도할 수 있게 한다. 다음 페이지 오류는 현재 목록 행과 관계 상태를 유지하며, 다른 태그 결과를 현재 선택 결과로 표시하지 않는다.
 
 ## 팔로우와 상태
