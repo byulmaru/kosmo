@@ -192,10 +192,15 @@ follower 처리는 끝날 수 있지만, 관계가 없거나 다른 source로 �
 Move는 계속되지 않는다. 준비 관계와 독립적인 remote-to-remote Move는 이 해제의 영향을 받지 않는다. 새 source 지정에는
 기존 Remote Profile 검증과 source·target 1:1 제약이 그대로 적용된다.
 
-기본 Post Visibility는 Account 공통 설정이 아니라 Local Profile 설정이다. 기존 Local Profile과 저장값이 없는
-Local Profile은 Unlisted로 동작한다. Profile Member는 새 Post·Reply·Quote Composer의 초기값으로 서버가 반환한
-값을 사용하지만, Owner가 아니라면 이 설정을 변경할 수 없다. Composer에서 개별 Post Visibility를 바꾸는 동작은
-기본값을 자동으로 갱신하지 않는다. Remote Profile에는 Kosmo Local 기본값을 만들거나 변경하지 않는다.
+기본 Post Visibility는 Account 공통 설정이 아니라 Local Profile 설정이다.
+[PROD-1226](https://linear.app/byulmaru/issue/PROD-1226)에 따라 별도 설정 없이도 공개로 글을 시작할 수 있도록
+새 Local Profile의 기본값은 Public으로 정한다. 첫 Profile 온보딩과 기존 Account의 추가 Profile 생성에 같은
+기본값을 적용한다. 기존 Local Profile의 저장된 기본값과 이미 작성한 Post는 일괄 변경하지 않는다.
+저장값이 없는 Local Profile과 기본값을 조회하지 못한 경우의 Unlisted 대체 동작은 유지한다.
+Profile Member는 새 Post·Reply·Quote Composer의 초기값으로 서버가 반환한 값을 사용하지만, Owner가 아니라면
+이 설정을 변경할 수 없다. Reply의 초기 공개 범위는 기존처럼 직접 Parent보다 넓게 시작하지 않는다.
+Composer에서 개별 Post Visibility를 바꾸는 동작은 기본값을 자동으로 갱신하지 않으며, 이미 열린 Composer의
+선택도 덮어쓰지 않는다. Remote Profile에는 Kosmo Local 기본값을 만들거나 변경하지 않는다.
 
 ActivityPub Remote Profile 등록·갱신에서 actor의 embedded `icon`은 avatar Media, embedded `image`는 header
 Media 관계로 투영한다. 최초 actor lookup, stale refresh와 검증된 inbound `Update(Actor)`는 같은 표현 동기화

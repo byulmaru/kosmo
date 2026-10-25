@@ -3733,6 +3733,52 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(followee.followersCount, 3);
   });
 
+  test('starts first and additional profiles as Public while preserving saved defaults', async () => {
+    const auth = await createAuthenticatedSession({ selectedProfile: false });
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
+    assert.equal(await countAccountProfileMemberships(auth.account.id), 0);
+    let firstProfileId: string | undefined;
+
+    for (const handle of ['first_public', 'additional_public']) {
+      const result = await requestGraphQL<{
+        createProfile: {
+          profile: { id: string; private: { defaultPostVisibility: string } | null };
+        } | null;
+      }>(
+        `mutation CreatePublicDefaultProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) {
+            profile { id private { defaultPostVisibility } }
+          }
+        }`,
+        { handle },
+        auth.token,
+      );
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'PUBLIC');
+      const created = await db
+        .select()
+        .from(Profiles)
+        .where(and(eq(Profiles.instanceId, localInstanceId), eq(Profiles.handle, handle)))
+        .then(firstOrThrow);
+      assert.equal(created.defaultPostVisibility, PostVisibility.PUBLIC);
+      assert.equal(created.followPolicy, ProfileFollowPolicy.OPEN);
+      if (!firstProfileId) {
+        firstProfileId = created.id;
+        await db
+          .update(Profiles)
+          .set({ defaultPostVisibility: PostVisibility.FOLLOWERS })
+          .where(eq(Profiles.id, firstProfileId));
+      }
+    }
+    assert.equal(await countAccountProfileMemberships(auth.account.id), 2);
+    const preserved = await db
+      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .from(Profiles)
+      .where(eq(Profiles.id, firstProfileId!))
+      .then(firstOrThrow);
+    assert.equal(preserved.defaultPostVisibility, PostVisibility.FOLLOWERS);
+  });
+
   test('allows creating a local profile when only a remote profile has the same handle', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
@@ -3758,7 +3804,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
-    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'UNLISTED');
+    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'PUBLIC');
 
     const created = await db
       .select({
@@ -3771,7 +3817,7 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
     assert.equal(created.instanceId, localInstanceId);
-    assert.equal(created.defaultPostVisibility, PostVisibility.UNLISTED);
+    assert.equal(created.defaultPostVisibility, PostVisibility.PUBLIC);
 
     const ownership = await db
       .select()
@@ -3807,7 +3853,7 @@ describe('GraphQL remote profile boundary', () => {
       assertNoGraphQLErrors(result);
       const profile = result.data?.createProfile?.profile;
       assert.equal(profile?.instance.kind, 'LOCAL', handle);
-      assert.equal(profile?.private?.defaultPostVisibility, 'UNLISTED', handle);
+      assert.equal(profile?.private?.defaultPostVisibility, 'PUBLIC', handle);
 
       const created = await db
         .select({

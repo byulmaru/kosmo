@@ -24,6 +24,21 @@ async function ownedProfiles(accountId: string) {
 async function expectCompleted(page: Page) {
   await expect(page).toHaveURL(/\/home$/);
 }
+async function expectNewComposerVisibility(page: Page, label: '공개' | '조용한 공개' | '팔로워만') {
+  const expand = page.getByRole('button', { name: 'Composer 확장' });
+  const open = page.getByRole('button', { name: '글쓰기', exact: true });
+  await expect(expand.or(open)).toBeVisible();
+  if (await expand.isVisible()) {
+    await expand.click();
+  } else {
+    await open.click();
+  }
+  await expect(
+    page
+      .getByLabel('게시글 작성', { exact: true })
+      .getByRole('button', { name: `공개 범위: ${label}`, exact: true }),
+  ).toBeVisible();
+}
 function trackMutations(page: Page) {
   const mutations: string[] = [];
   page.on('request', (request) => {
@@ -55,7 +70,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
     handle: 'first_steps',
     displayName: 'first_steps',
     bio: null,
-    defaultPostVisibility: 'UNLISTED',
+    defaultPostVisibility: 'PUBLIC',
     followPolicy: 'OPEN',
   });
 
@@ -101,6 +116,7 @@ test('핸들의 다음에서 생성하고 각 단계의 다음에서 같은 Prof
   const completed = await ownedProfiles(session.account.id);
   expect(completed).toHaveLength(1);
   expect(completed[0]).toMatchObject({ id: created[0]!.id, displayName: '저장한 이름' });
+  await expectNewComposerVisibility(page, '팔로워만');
 });
 
 test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단계를 생략한다', async ({
@@ -109,6 +125,7 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
 }) => {
   const session = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, session.token);
+  await page.setViewportSize({ width: 390, height: 844 });
   const mutations = trackMutations(page);
   await page.goto('/first-profile/handle');
   await expect(page.getByRole('button', { name: '바로 시작', exact: true })).toBeDisabled();
@@ -125,7 +142,7 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
     {
       handle: 'first_quick',
       displayName: 'first_quick',
-      defaultPostVisibility: 'UNLISTED',
+      defaultPostVisibility: 'PUBLIC',
       followPolicy: 'OPEN',
     },
   ]);
@@ -133,7 +150,53 @@ test('첫 화면의 바로 시작은 기본값으로 생성하고 나머지 단�
     'FirstProfileOnboardingCreateMutation',
     'FirstProfileOnboardingSelectMutation',
   ]);
+  await expectNewComposerVisibility(page, '공개');
 });
+
+for (const scenario of [
+  { id: 'default', action: '다음', changeToUnlisted: false, expected: 'PUBLIC' },
+  { id: 'skip', action: '지금은 건너뛰기', changeToUnlisted: true, expected: 'PUBLIC' },
+  { id: 'immediate', action: '바로 시작', changeToUnlisted: true, expected: 'PUBLIC' },
+  { id: 'unlisted', action: '다음', changeToUnlisted: true, expected: 'UNLISTED' },
+] as const) {
+  test(`게시 설정 ${scenario.id} 결과를 저장값과 새 글쓰기에 반영한다`, async ({
+    context,
+    page,
+  }) => {
+    const session = await createE2ESession({ profile: false });
+    await setE2ESessionCookie(context, session.token);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mutations = trackMutations(page);
+    await page.goto('/first-profile/handle');
+    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(`public_${scenario.id}`);
+    await page.getByRole('button', { name: '다음', exact: true }).click();
+    await expect(page).toHaveURL(/\/first-profile\/details$/);
+    await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
+    await expect(page).toHaveURL(/\/first-profile\/tags$/);
+    await page.getByRole('button', { name: '지금은 건너뛰기' }).click();
+    await expect(page).toHaveURL(/\/first-profile\/posting$/);
+    await expect(page.getByRole('radio', { name: /^전체 공개:/ })).toBeChecked();
+    if (scenario.changeToUnlisted) {
+      await page.getByRole('radio', { name: /^조용한 공개:/ }).click();
+    }
+    await page.getByRole('button', { name: scenario.action, exact: true }).click();
+    if (scenario.action !== '바로 시작') {
+      await expect(page).toHaveURL(/\/first-profile\/review$/);
+      await page.getByRole('button', { name: '다음', exact: true }).click();
+    }
+    await expectCompleted(page);
+    expect(await ownedProfiles(session.account.id)).toMatchObject([
+      { defaultPostVisibility: scenario.expected, followPolicy: 'OPEN' },
+    ]);
+    expect(mutations.filter((name) => name === 'FirstProfileOnboardingSaveMutation')).toHaveLength(
+      scenario.action === '다음' ? 1 : 0,
+    );
+    await expectNewComposerVisibility(
+      page,
+      scenario.expected === 'PUBLIC' ? '공개' : '조용한 공개',
+    );
+  });
+}
 
 test('선택 단계의 저장 실패 후에도 같은 Profile로 건너뛰고 완료할 수 있다', async ({
   context,
