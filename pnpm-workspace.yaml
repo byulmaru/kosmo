@@ -57,8 +57,8 @@ overrides:
   'source-map-js@<1.2.2': ^1.2.2
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   'undici@': 6.29.1
-  # Zod 4.6.6 fixes CVE-2023-54404 within declared 4.x ranges.
-  'zod@>=4.0.0 <4.6.6': 4.6.6
+  # Zod 4.6.7 includes the CVE-2023-54404 fix and aligns Drizzle Zod peers.
+  'zod@>=4.0.0 <4.6.7': 4.6.7
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
   'ajv@8.20.0>fast-uri': 3.1.8
   # minimatch 10 accepts brace-expansion 5.x; keep older minimatch lines unchanged.

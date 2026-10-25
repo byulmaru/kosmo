@@ -22,7 +22,7 @@
       params.set('direction', direction);
     }
 
-    return resolve(`/profiles/${data.profile.id}/posts?${params.toString()}`);
+    return resolve(`/profiles/[id]/posts?${params.toString()}`, { id: data.profile.id });
   }
 </script>
 
@@ -42,7 +42,9 @@
       </div>
       <p class="break-all text-sm text-muted-foreground">{data.profile.displayName}</p>
     </div>
-    <Button href={resolve(`/profiles/${data.profile.id}`)} variant="outline">Profile</Button>
+    <Button href={resolve('/profiles/[id]', { id: data.profile.id })} variant="outline"
+      >Profile</Button
+    >
   </header>
 
   <section aria-labelledby="posts-heading" class="grid gap-4">

@@ -1,5 +1,5 @@
 import { normalizeIdentityHeader } from '$lib/server/identity';
-import type { Handle, HandleServerError } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 
 export const handle: Handle = async ({ event, resolve }) => {
   const login = normalizeIdentityHeader(event.request.headers.get('Tailscale-User-Login'));
@@ -17,6 +17,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-export const handleError: HandleServerError = ({ status }) => ({
-  message: status === 404 ? 'Not Found' : 'Admin Console unavailable',
-});
+export const handleError: HandleServerError = ({ kind, error }) =>
+  kind === 'app'
+    ? error
+    : {
+        message:
+          kind === 'framework' && error.status === 404 ? 'Not Found' : 'Admin Console unavailable',
+      };

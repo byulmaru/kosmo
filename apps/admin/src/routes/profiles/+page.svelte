@@ -100,7 +100,7 @@
           <Table.Row>
             <Table.Cell>
               <a
-                href={resolve(`/profiles/${profile.id}`)}
+                href={resolve('/profiles/[id]', { id: profile.id })}
                 class="flex min-w-0 items-center gap-3 rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {#if safeHttpUrl(profile.avatarUrl)}
@@ -139,7 +139,7 @@
             <Table.Cell class="text-right tabular-nums">{profile.followingCount}</Table.Cell>
             <Table.Cell class="text-right tabular-nums">
               <a
-                href={resolve(`/profiles/${profile.id}/posts`)}
+                href={resolve('/profiles/[id]/posts', { id: profile.id })}
                 aria-label={`${profile.postCount} PUBLIC and UNLISTED posts for ${profile.relativeHandle}`}
                 class="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

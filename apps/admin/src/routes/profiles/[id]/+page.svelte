@@ -68,7 +68,7 @@
       </Card.Header>
       <Card.Content class="text-2xl font-semibold tabular-nums">
         <a
-          href={resolve(`/profiles/${data.profile.id}/posts`)}
+          href={resolve('/profiles/[id]/posts', { id: data.profile.id })}
           aria-label={`${data.profile.postCount} PUBLIC and UNLISTED posts for ${data.profile.relativeHandle}`}
           class="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

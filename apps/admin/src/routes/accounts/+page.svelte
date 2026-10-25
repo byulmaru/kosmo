@@ -38,7 +38,8 @@
           {#each data.accounts as account (account.id)}
             <Table.Row>
               <Table.Cell class="font-medium">
-                <a class="hover:underline" href={resolve(`/accounts/${account.id}`)}>{account.id}</a
+                <a class="hover:underline" href={resolve('/accounts/[id]', { id: account.id })}
+                  >{account.id}</a
                 >
               </Table.Cell>
               <Table.Cell>{account.displayName}</Table.Cell>

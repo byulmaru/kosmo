@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { handle } from './hooks.server';
+import { handle, handleError } from './hooks.server';
 
 describe('Admin Console request policy', () => {
   test('stores normalized viewer metadata locally and disables response caching', async () => {
@@ -34,5 +34,36 @@ describe('Admin Console request policy', () => {
 
     expect(locals.viewer.login).toBeUndefined();
     expect(locals.viewer.label.length).toBeGreaterThan(0);
+  });
+
+  test('preserves intentional errors', async () => {
+    const error = { status: 404, message: 'Profile not found', code: 'PROFILE_NOT_FOUND' } as const;
+    const result = await handleError({
+      kind: 'app',
+      error,
+      event: {} as Parameters<typeof handleError>[0]['event'],
+    });
+
+    expect(result).toEqual(error);
+  });
+
+  test('keeps framework 404s generic', async () => {
+    const result = await handleError({
+      kind: 'framework',
+      error: { status: 404, message: 'Not Found' },
+      event: {} as Parameters<typeof handleError>[0]['event'],
+    });
+
+    expect(result).toEqual({ message: 'Not Found' });
+  });
+
+  test('hides unexpected error details', async () => {
+    const result = await handleError({
+      kind: 'unknown',
+      error: new Error('database connection secret'),
+      event: {} as Parameters<typeof handleError>[0]['event'],
+    });
+
+    expect(result).toEqual({ message: 'Admin Console unavailable' });
   });
 });
