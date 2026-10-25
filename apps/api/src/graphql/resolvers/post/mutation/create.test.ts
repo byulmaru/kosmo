@@ -131,7 +131,7 @@ test('validates createPost input before running the resolver', async () => {
       'bodyText',
     ],
     [
-      { bodyText: '가'.repeat(499), contentWarning: '경고', visibility: 'UNLISTED' },
+      { bodyText: '가'.repeat(500), contentWarning: '😀', visibility: 'UNLISTED' },
       '본문과 내용 경고는 500자까지 작성할 수 있어요.',
       'contentWarning',
     ],
@@ -171,6 +171,41 @@ test('validates createPost input before running the resolver', async () => {
     assert.ok(error instanceof ValidationError);
     assert.equal(error.field, field);
   }
+});
+
+test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
+  const serviceReached = new Error('createPost reached');
+  t.mock.method(db, 'transaction', async () => {
+    throw serviceReached;
+  });
+
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) {
+          post { id }
+        }
+      }
+    `,
+    variableValues: {
+      input: {
+        bodyText: '가'.repeat(499),
+        contentWarning: '😀',
+        visibility: 'UNLISTED',
+      },
+    },
+    contextValue: {
+      session: {
+        profile: {
+          id: '00000000-0000-8000-8000-000000000001',
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  assert.equal(result.errors?.[0]?.originalError, serviceReached);
 });
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {

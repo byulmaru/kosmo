@@ -178,7 +178,7 @@ function MentionIdentityDeletionFixture({ onSubmit }: { onSubmit: () => void }) 
           setSubmitted(normalized);
         }}
         onVisibilityChange={() => undefined}
-        remaining={500 - normalized.bodyText.length}
+        remaining={500 - [...normalized.bodyText].length}
         selection={draft.selection}
         selectionToApply={draft.selectionToApply}
         sensitiveMedia={false}

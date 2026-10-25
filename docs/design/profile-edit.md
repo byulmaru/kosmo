@@ -34,7 +34,7 @@ DSN-45 Figma Candidate는 프로필 태그 다음에 `프로필 추가 정보`�
   40 code point를 초과하는
   legacy 초기값은 form에 들어온 원문과 정확히 같은 값으로 남겨 둔 경우에만 다른 field와 함께 저장할 수 있다.
   40 code point를 초과한 이름을 한 글자라도 변경하면 같은 1~40 code point 규칙을 적용한다.
-- bio는 앞뒤 공백을 제거한 뒤 500자 이하이며 긴 텍스트 입력으로 표현한다.
+- bio는 앞뒤 공백을 제거한 뒤 Unicode code point 기준 500자 이하이며 긴 텍스트 입력으로 표현한다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
 - 표시 이름·소개·프로필 태그의 외부 label은 `UI/Label/L`(`16/24/600`)을 사용한다. displayName·bio의

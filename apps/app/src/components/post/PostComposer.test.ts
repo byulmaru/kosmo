@@ -70,6 +70,7 @@ let targetProps:
       ) => void;
       onSubmit: () => void;
       onVisibilityChange: (value: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
+      remaining: number;
       selection: { end: number; start: number };
       selectionToApply?: { end: number; start: number };
       submitting?: boolean;
@@ -435,6 +436,37 @@ describe('PostComposer initial body', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'PUBLIC',
     );
+  });
+});
+
+describe('PostComposer character count', () => {
+  it('counts the combined body and Content Warning in Unicode code points', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      targetProps?.onBodyChange('가'.repeat(500));
+      targetProps?.onContentWarningChange('😀');
+    });
+    assert.equal(targetProps?.remaining, -1);
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls.length, 0);
+
+    await act(async () => targetProps?.onBodyChange('가'.repeat(499)));
+    assert.equal(targetProps?.remaining, 0);
+    await act(async () => targetProps?.onSubmit());
+
+    assert.equal(mutationCalls.length, 1);
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '가'.repeat(499));
+    assert.equal(mutationCalls[0]?.variables.input.contentWarning, '😀');
   });
 });
 

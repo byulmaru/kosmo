@@ -154,8 +154,8 @@ export function validateLocalPostContentDocument(
       field: 'bodyText',
     });
   }
-  const bodyTextLength = bodyText.length;
-  const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
+  const bodyTextLength = [...bodyText].length;
+  const authoredTextLength = [...(document.summary ?? '')].length + bodyTextLength;
 
   if (bodyTextLength === 0 && mediaCount === 0) {
     throw new RangeError('PostContent must contain body text or Media');

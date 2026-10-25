@@ -566,8 +566,7 @@ function AltToolContent({
       <TextArea
         accessibilityLabel="이미지 설명"
         label={compact ? undefined : '이미지 설명'}
-        maxLength={altTextLimit}
-        onChangeText={onAltTextChange}
+        onChangeText={(value) => onAltTextChange([...value].slice(0, altTextLimit).join(''))}
         placeholder="이미지에서 중요한 내용을 설명해 주세요."
         style={[composerFieldFocusStyle, compact ? styles.mobileTextArea : undefined]}
         value={altText}
@@ -581,7 +580,7 @@ function AltToolContent({
         </>
       ) : null}
       <Text style={[styles.counter, { color: theme.foregroundSecondary }]}>
-        {altText.length} / {altTextLimit}
+        {[...altText].length} / {altTextLimit}
       </Text>
     </>
   );

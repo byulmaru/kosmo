@@ -376,7 +376,7 @@ function PostComposerContents({
     media.items.length > 0 ||
     media.hasPendingMedia;
   const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
-  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
+  const remaining = postBodyMaxLength - [...bodyText].length - [...contentWarningText].length;
   const disabled =
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||

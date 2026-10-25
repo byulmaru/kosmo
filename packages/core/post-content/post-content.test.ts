@@ -1558,10 +1558,10 @@ test('normalizes summary as authored revision content', () => {
 
 test('validates the combined local summary and body length', () => {
   assert.doesNotThrow(() =>
-    validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(499), '나')),
+    validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(499), '😀')),
   );
   assert.throws(
-    () => validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(500), '나')),
+    () => validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(500), '😀')),
     /exceeds 500 characters/,
   );
   assert.throws(

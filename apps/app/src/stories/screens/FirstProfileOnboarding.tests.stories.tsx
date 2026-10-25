@@ -1,4 +1,5 @@
 import meta, {
+  BioCounterUsesCodePointBoundary as BioCounterUsesCodePointBoundaryStory,
   HandleOnlyCompletion as HandleOnlyCompletionStory,
   OptionalFailureCanSkip as OptionalFailureCanSkipStory,
   OptionalStepsAndSkip as OptionalStepsAndSkipStory,
@@ -17,3 +18,4 @@ export const HandleOnlyCompletion = HandleOnlyCompletionStory;
 export const OptionalFailureCanSkip = OptionalFailureCanSkipStory;
 
 export const UnavailableSummaryCanComplete = UnavailableSummaryCanCompleteStory;
+export const BioCounterUsesCodePointBoundary = BioCounterUsesCodePointBoundaryStory;
