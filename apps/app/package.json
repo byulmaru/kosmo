@@ -81,7 +81,7 @@
     "relay-runtime": "^21.0.1",
     "temporal-polyfill": "^0.3.2",
     "ts-pattern": "^5.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
