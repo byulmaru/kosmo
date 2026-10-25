@@ -396,8 +396,8 @@ function InteractiveComposer({
   });
   const remaining =
     postBodyMaxLength -
-    normalizePostContentPlainText(body).length -
-    normalizePostContentPlainText(contentWarning).length;
+    [...normalizePostContentPlainText(body)].length -
+    [...normalizePostContentPlainText(contentWarning)].length;
   const closePicker = useCallback(() => {
     setPickerOpen(false);
     pickerTriggerRef.current?.focus();

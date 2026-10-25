@@ -65,9 +65,18 @@ describe('first profile draft', () => {
       assert.equal(result.value.defaultPostVisibility, 'FOLLOWERS');
       assert.equal(result.value.followPolicy, 'APPROVAL_REQUIRED');
     }
+    const bioAtLimit = prepareFirstProfileDraft({
+      ...initialFirstProfileDraft,
+      handle: 'spring',
+      bio: `  ${'😀'.repeat(500)}  `,
+    });
+    assert.equal(bioAtLimit.ok, true);
+    if (bioAtLimit.ok) {
+      assert.equal(bioAtLimit.value.bio, '😀'.repeat(500));
+    }
     for (const input of [
       { displayName: '🌼'.repeat(41) },
-      { bio: '가'.repeat(501) },
+      { bio: '😀'.repeat(501) },
       { tagInput: 'bad tag' },
     ]) {
       const invalid = prepareFirstProfileDraft({
@@ -76,6 +85,9 @@ describe('first profile draft', () => {
         ...input,
       });
       assert.equal(invalid.ok, false);
+      if ('bio' in input && !invalid.ok) {
+        assert.equal(invalid.errors.bio, '소개는 500자 이하로 입력해 주세요.');
+      }
     }
   });
 

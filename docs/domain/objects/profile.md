@@ -53,6 +53,8 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | Remote URL           | URL, 필수                         | 원격 원본 Profile URL                                                                                           | Origin이 Remote | Profile 조회 정책 통과     | 없음             |
 | Profile Link         | URL 목록, nullable                | 각 항목은 유효한 URL이다                                                                                        | Origin이 Local  | Profile 조회 정책 통과     | 없음             |
 
+표시 이름과 bio의 길이 제한은 Unicode code point 기준으로 센다.
+
 ### Local handle 생성 정책
 
 Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예약 식별자 정책을 통과해야 한다. 이 정책은

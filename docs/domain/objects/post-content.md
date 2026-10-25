@@ -38,7 +38,8 @@ occurrence를 보존하고 관계는 한 번만 저장한다. 같은 Remote obje
 관계를 유지하고 새 revision을 만들지 않는다. 이 동작은 새 Remote Note revision 생성에만 적용하며 `Update(Note)`와 기존
 revision backfill은 포함하지 않는다.
 
-500자 작성 제한은 Local Post의 작성 내용에만 적용한다. Remote Post는 정규화한 summary와 body Plain Text의
+500자 작성 제한은 Local Post의 작성 내용에만 적용하며, Content Warning summary와 body Plain Text의 합계를
+Unicode code point 기준으로 계산한다. Remote Post는 정규화한 summary와 body Plain Text의
 UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다. 정확히 10,000자는 허용하며 초과하면
 원문을 자르지 않고 해당 Note 전체를 무시한다. 기존에 저장된 Post와 revision은 변경하지 않는다.
 길이는 기존 canonical Plain Text 변환이 만드는 줄바꿈을 포함하며 HTML markup, Media와 표시용 구분자는
@@ -91,7 +92,7 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 
 Mentioned Profile은 Local 작성에서 본문에 입력된 eligible Profile의 handle token이나 작성자가 명시적으로 선택해 본문 범위와 일치하는 Profile identity, 또는 inbound typed `Mention.href`에서
 확인한 stable Profile identity를 immutable revision에 저장하는 관계이며 `post_mentions` DB table에 persisted projection으로 저장한다. Local 작성은 bare handle과 configured Local domain을 configured Local Instance에서만 찾고, qualified remote handle은 이미 저장된 ActivityPub Profile에서만 찾는다. 작성 중 remote resolve/fetch는 하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 실제 작성 Profile 기준으로 typed·selected target의 visibility와 양방향 Block 정책을 검증하며, 명시적으로 선택한 범위가 본문과 일치하지 않거나 selected target을 이용할 수 없으면 Post 전체를 거부한다. 같은 Profile이 여러 번 나타나면 각 Mention node는 남지만 Profile relation은
-한 번만 저장한다. Local authored body text는 문서 검증과 500자 길이 계산에 사용하고 저장하지 않는다. Authored token과 선택 Mention
+한 번만 저장한다. Local authored body text는 문서 검증과 Content Warning summary에 더할 Unicode code point 길이 계산에 사용하고 저장하지 않는다. Authored token과 선택 Mention
 range는 기존대로 본문 기준 검증을 통과해야 하며, token 원문은 snapshot 출처가 아니다. Inbound typed Mention의 관계 입력은 body
 conversion과 독립된 typed identity 집합이다. 두 작성 경계 모두 canonical Mention node에 저장된 Profile identity인 `profileId`와
 optional `handle` attr를 가진다. `handle`은 검증된 Profile의 `relativeHandle`에서만 가져오는 node 생성 시점의 snapshot이며,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import {
   firstProfileSteps,
@@ -117,6 +117,20 @@ export const LongDark: Story = {
     },
   },
   globals: { theme: 'dark' },
+};
+export const BioCounterUsesCodePointBoundary: Story = {
+  args: {
+    initialStep: 'details',
+    initialDraft: { ...populated, bio: `  ${'😀'.repeat(500)}  ` },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bio = canvas.getByRole('textbox', { name: '소개' });
+
+    await expect(canvas.getByText('500/500')).toBeVisible();
+    fireEvent.change(bio, { target: { value: '😀'.repeat(501) } });
+    await expect(canvas.getByText('501/500')).toBeVisible();
+  },
 };
 export const HandleOnlyCompletion: Story = {
   play: async ({ canvasElement, args }) => {

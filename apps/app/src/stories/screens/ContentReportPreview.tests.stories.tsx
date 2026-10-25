@@ -412,3 +412,59 @@ export const FallbackFocusAfterTriggerRemoval: Story = {
     await waitFor(() => expect(fallback).toHaveFocus());
   },
 };
+
+export const CodePointLimitAcceptsTrimmedEmoji: Story = {
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    await userEvent.click(page.getByRole('radio', { name: '스팸·사기' }));
+
+    const details = ` \n${'😀'.repeat(2_000)} \t`;
+    const body = page.getByRole('textbox', { name: '게시물 신고 상세 내용' });
+    await userEvent.click(body);
+    await userEvent.paste(details);
+
+    expect(page.getByText('2,000 / 2,000')).toBeVisible();
+    expect(page.queryByText('신고 상세 내용은 2,000자 이내로 입력해주세요.')).toBeNull();
+    const submit = page.getByRole('button', { name: '신고하기' });
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    await waitFor(() => expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce());
+    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'ContentReportFormSubmitContentReportMutation',
+        operationKind: 'mutation',
+      }),
+      {
+        input: {
+          details: '😀'.repeat(2_000),
+          reason: 'SPAM_FRAUD',
+          targetId: 'post-local-preview',
+          targetType: 'POST',
+        },
+      },
+    );
+  },
+};
+
+export const CodePointLimitRejectsOverLimitEmoji: Story = {
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    await userEvent.click(page.getByRole('radio', { name: '스팸·사기' }));
+
+    const details = ` \n${'😀'.repeat(2_001)} \t`;
+    fireEvent.change(page.getByRole('textbox', { name: '게시물 신고 상세 내용' }), {
+      target: { value: details },
+    });
+
+    expect(page.getByText('2,001 / 2,000')).toBeVisible();
+    expect(page.getByText('신고 상세 내용은 2,000자 이내로 입력해주세요.')).toBeVisible();
+    expect(page.getByRole('button', { name: '신고하기' })).toBeDisabled();
+    expect(parameters.relay.mutationRequestObserver).not.toHaveBeenCalled();
+  },
+};

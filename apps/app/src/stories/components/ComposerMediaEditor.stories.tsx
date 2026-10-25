@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import ogImage from '../../../public/og-default.png?url';
@@ -84,6 +84,7 @@ const meta = {
     'MobileFeatureFlagOffContract',
     'StaleFeatureFlagDropContract',
     'MobileStaleFeatureFlagDropContract',
+    'AltTextCodePointLimitContract',
     'editorMedia',
   ],
   parameters: {
@@ -354,6 +355,32 @@ export const InteractionContract: Story = {
     expect(args.onBack).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole('button', { name: '미디어 편집 닫기' }));
     expect(args.onClose).toHaveBeenCalledOnce();
+  },
+  render: (args) => <WebEditorStory {...args} />,
+};
+
+export const AltTextCodePointLimitContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    args.onAltTextChange.mockClear();
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '이미지 설명' });
+    const atLimit = '😀'.repeat(1_000);
+
+    await userEvent.click(input);
+    await userEvent.clear(input);
+    await userEvent.paste(atLimit);
+    await waitFor(() => {
+      expect(input).toHaveValue(atLimit);
+      expect(canvas.getByText('1000 / 1000')).toBeVisible();
+    });
+    expect(args.onAltTextChange).toHaveBeenLastCalledWith('media-1', atLimit);
+
+    fireEvent.change(input, { target: { value: `${atLimit}😀` } });
+    await waitFor(() => {
+      expect(input).toHaveValue(atLimit);
+      expect(canvas.getByText('1000 / 1000')).toBeVisible();
+    });
+    expect(args.onAltTextChange).toHaveBeenLastCalledWith('media-1', atLimit);
   },
   render: (args) => <WebEditorStory {...args} />,
 };

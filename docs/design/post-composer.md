@@ -33,7 +33,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   편집된 token이 다른 적격 Profile과 일치하면 Mention으로 저장한다. 앞뒤 문장만 편집하면 해당 선택 연결은
   유지한다. 같은 Profile을 여러 번 선택한 경우 각 occurrence를 독립적으로 편집할 수 있다. 선택한 Profile을
   게시 시 이용할 수 없거나 본문 handle과 선택한 Profile이 일치하지 않으면 게시 전체가 실패한다. Mention은
-  본문에 실제 작성한 문자열로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
+  본문에 실제 작성한 문자열을 Unicode code point 기준으로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
 - 새 Reply 본문에는 direct Parent 작성자와 원글에서 멘션한 사람들을 미리 적는다. 현재 작성 Profile은
   제외하고 같은 Profile은 한 번만 넣는다. 사용자는 문구를 수정하거나 지울 수 있고, 이 기본 문구는 Mention 검색 UI가
   꺼져 있어도 제공하며 Profile을 새로 조회하지 않는다. 일반 Post와 Quote 본문은 기존처럼 비어 있다.
@@ -138,9 +138,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
 - footer는 modal 바닥에 고정한다. 좌측에는 기존 작성 도구를, 우측에는 남은 글자 수와 공용 `게시` primary
   button을 이 순서로 둔다.
-- 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 합계를 500에서 차감해 항상 표시하며
+- 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 Unicode code point 수 합계를 500에서 차감해 항상 표시하며
   초과 시 semantic danger 상태로 표시한다.
-- trim한 본문과 업로드를 완료한 Media가 모두 없거나, Content Warning과 본문 Plain Text의 합계가 500자를
+- trim한 본문과 업로드를 완료한 Media가 모두 없거나, Content Warning과 본문 Plain Text의 Unicode code point 합계가 500자를
   초과하거나, Media가 업로드 중·실패 상태이거나, Reply 제출 중이면 `게시`를 disabled로 표시한다.
   Content Warning만으로는 contentful Reply가 되지 않지만, 본문이 없어도 Ready Media가 하나 이상 있으면
   Media-only Reply를 제출할 수 있다.
@@ -304,11 +304,11 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   사용자가 고른 Visibility와 열린 draft가 자동 변경되지 않는지 확인한다. `DIRECT` Post의 현재 Content canonical
   Mentioned Profile 조회 범위(Author/Mentioned Profile Origin 무관), 멘션이 없는 작성자의 조회 권한, 미확인·malformed
   handle text가 `DIRECT` 수신자로 계산되지 않는지 확인한다.
-  `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는 유지되는지 확인한다. 500자 count와
+  `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는 유지되는지 확인한다. Unicode code point 기준 합산 500자 count와
   disabled/pending/error 상태도 확인한다.
 - Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
-- 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
+- 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, Unicode code point 기준 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.

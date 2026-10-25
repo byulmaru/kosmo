@@ -119,8 +119,8 @@ export function ComposerProfileFixture({
   const bodyRef = useRef<TextInput>(null);
   const remaining =
     postBodyMaxLength -
-    normalizePostContentPlainText(body).length -
-    normalizePostContentPlainText(contentWarning).length;
+    [...normalizePostContentPlainText(body)].length -
+    [...normalizePostContentPlainText(contentWarning)].length;
 
   useEffect(() => {
     setBody(initialBody);

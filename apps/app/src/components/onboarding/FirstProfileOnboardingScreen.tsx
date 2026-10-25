@@ -294,7 +294,7 @@ export function FirstProfileOnboardingScreen(props: FirstProfileOnboardingScreen
                 당신이 어떤 사람인지 알려주세요.
               </Text>
               <Text style={[styles.counter, { color: theme.foregroundSecondary }]}>
-                {draft.bio.trim().length}/500
+                {[...draft.bio.trim()].length}/500
               </Text>
             </View>
           ) : null}

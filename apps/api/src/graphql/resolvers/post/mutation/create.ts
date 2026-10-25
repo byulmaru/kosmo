@@ -55,8 +55,8 @@ builder.mutationField('createPost', (t) =>
         })
         .refine(
           ({ bodyText, contentWarning }) =>
-            normalizePostContentPlainText(bodyText).length +
-              normalizePostContentPlainText(contentWarning ?? '').length <=
+            [...normalizePostContentPlainText(bodyText)].length +
+              [...normalizePostContentPlainText(contentWarning ?? '')].length <=
             postBodyMaxLength,
           {
             message:

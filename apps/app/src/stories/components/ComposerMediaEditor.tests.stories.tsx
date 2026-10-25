@@ -1,4 +1,5 @@
 import baseMeta, {
+  AltTextCodePointLimitContract as altTextCodePointLimitContract,
   FeatureFlagOffContract as featureFlagOffContract,
   FutureImageEditPreviewContract as futureImageEditPreviewContract,
   InteractionContract as interactionContract,
@@ -25,6 +26,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
+export const AltTextCodePointLimitContract: Story = altTextCodePointLimitContract;
 export const FutureImageEditPreviewContract: Story = futureImageEditPreviewContract;
 export const FeatureFlagOffContract: Story = featureFlagOffContract;
 export const MobileAltKeyboardGeometryContract: Story = mobileAltKeyboardGeometryContract;

@@ -2,7 +2,7 @@
   "name": "@kosmo/monorepo",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "pnpm@11.27.1+sha512.a81d4c21b9b09a4b0aebf90ef5e527d4262bdda322d26082978cb549023ac6d9cafc98b19fffaa5c71db438a65f70224edb78d7311187861ff96480d1cdca23c",
+  "packageManager": "pnpm@11.28.8+sha512.f6988a32046b9a3f78d7d7ee0747926bbe905ff9dff73bf19abb87bd7d1906a2ac90d93f73be32b5f9e14c2899569bcb0c9c5ec8a19e083f5d71bbab6dd9e0b8",
   "scripts": {
     "build:sentry-artifacts": "node scripts/build-sentry-artifacts.mjs",
     "db:test:down": "node scripts/test-db.mjs down",
