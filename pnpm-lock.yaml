@@ -498,7 +498,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/fedify
       '@sentry/node':
-        specifier: 10.66.0
+        specifier: ^10.66.0
         version: 10.66.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(supports-color@8.1.1)
       tsx:
         specifier: ^4.22.4
