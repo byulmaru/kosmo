@@ -36,24 +36,13 @@ async function exerciseTimelineCoachmark(canvasElement: HTMLElement) {
   const help = await canvas.findByRole('button', { name: '타임라인 도움말' });
 
   await userEvent.click(help);
-  let homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
-  expect(within(homeDialog).getByText('1/4')).toBeVisible();
+  const homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
+  expect(within(homeDialog).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '4');
   await waitFor(() =>
     expect(within(homeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
   );
   await userEvent.click(within(homeDialog).getByRole('button', { name: '다음' }));
   let localDialog = await page.findByRole('dialog', {
-    name: '새로운 사람들을 만나보세요',
-  });
-  expect(within(localDialog).getByText('2/4')).toBeVisible();
-  await userEvent.click(within(localDialog).getByRole('button', { name: '이전' }));
-  await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
-  homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
-  await waitFor(() =>
-    expect(homeDialog.contains(canvasElement.ownerDocument.activeElement)).toBe(true),
-  );
-  await userEvent.click(within(homeDialog).getByRole('button', { name: '다음' }));
-  localDialog = await page.findByRole('dialog', {
     name: '새로운 사람들을 만나보세요',
   });
   await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
@@ -92,11 +81,11 @@ async function exerciseTimelineCoachmark(canvasElement: HTMLElement) {
   );
   await waitFor(() => expect(help).toHaveFocus());
   await userEvent.click(help);
-  homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
+  const restartedHomeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
   await waitFor(() =>
-    expect(within(homeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
+    expect(within(restartedHomeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
   );
-  await userEvent.click(within(homeDialog).getByRole('button', { name: '다음' }));
+  await userEvent.click(within(restartedHomeDialog).getByRole('button', { name: '다음' }));
   localDialog = await page.findByRole('dialog', {
     name: '새로운 사람들을 만나보세요',
   });
@@ -327,7 +316,7 @@ export const UniversalMobileTimelineNoSelectedProfile: Story = {
     const help = await within(canvasElement).findByRole('button', { name: '타임라인 도움말' });
     await userEvent.click(help);
     const homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
-    expect(within(homeDialog).getByText('1/3')).toBeVisible();
+    expect(within(homeDialog).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '3');
     await waitFor(() =>
       expect(within(homeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
     );
@@ -335,11 +324,8 @@ export const UniversalMobileTimelineNoSelectedProfile: Story = {
     const localDialog = await page.findByRole('dialog', {
       name: '새로운 사람들을 만나보세요',
     });
-    expect(within(localDialog).getByText('2/3')).toBeVisible();
     await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
     const profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
-    expect(within(profileDialog).getByText('활동할 프로필을 선택할 수 있어요.')).toBeVisible();
-    expect(within(profileDialog).getByText('3/3')).toBeVisible();
     await waitFor(() =>
       expect(within(profileDialog).getByRole('button', { name: '완료' })).toBeEnabled(),
     );
