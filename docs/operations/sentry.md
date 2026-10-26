@@ -87,7 +87,7 @@ projection 및 post-commit delivery 경계를 inventory로 유지한다. Listene
 | 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `delete_object_lookup_failed`, `*_object_lookup_failed`, `external_listener_error`                                                                                                          | 1회 기록    | 기록하지 않음                       |
 | Kosmo 내부 오류      | DB projection, post-commit effect, inbound Reaction Effects Workflow start(`reaction_notification_effect_failed`, `reaction_undo_notification_effect_failed`), `follow_notification_effect_failed`, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error` | 1회 기록    | 기존 runtime reporter로 1회 capture |
 
-Fedify inbox LogTape 기록은 `fedify.federation.inbox` category에서 JSON Lines로 stdout에 남긴다. `info` 기록은 1%를 표본 기록하고, `warning`·`error`·`fatal`은 모두 표본화 없이 기록하며 `debug`는 끈다. LogTape 자체 warning 이상도 같은 sink에 남긴다. 성공 event `activity_enqueued`와 `activity_processed`는 enqueue와 queue consumer 처리를 구분하므로, enqueue 기록만으로 처리가 끝났다고 판단하지 않는다. Sink는 허용한 Fedify message template을 고정 event label과 안전한 정적 message로 바꾼다. 모든 기록에는 category·event·level·timestamp가 있고, 알려진 template에는 정적 message가 추가된다. 알 수 없는 template은 `event: "unknown"`으로 기록하고 message를 생략하며 warning 이상은 표본화하지 않는다. 기록에 추가될 수 있는 속성은 요청이 주장한 activity ID와 미검증 key ID에서 `http(s)` origin만 추출한 `activityOriginClaimed`·`keyOriginUnverified`, 유한한 `authReason`으로 제한한다. 확장된 message와 임의 LogRecord properties는 전달하지 않는다. 따라서 request body, raw Activity JSON, 인증 header, signature/key material, raw error와 전체 URL은 로그에 포함하지 않는다. Inbox 인증 거절은 Sentry event로 보내지 않으며, typed listener의 내부 오류는 기존 runtime reporter를 통해 계속 Sentry에 capture한다.
+Web server와 Fedify consumer는 inbox LogTape 기록에 `fedify.federation.inbox` category의 표준 JSON console sink를 사용하며, 출력은 log level에 따라 stdout 또는 stderr에 남긴다. `info` 기록은 1%를 표본 기록하고, `warning`·`error`·`fatal`은 모두 기록하며 `debug`는 끈다. LogTape 자체 warning 이상도 같은 sink에 남긴다. Fedify의 기본 message는 enqueue와 consumer 처리를 구분한다. Sink는 Fedify LogTape record의 JSON `message`와 properties를 그대로 보존한다. Inbox 인증 거절은 Sentry event로 보내지 않으며, typed listener의 내부 오류는 기존 runtime reporter를 통해 계속 Sentry에 capture한다.
 
 오류 분류의 경계는 다음과 같다.
 
@@ -99,8 +99,8 @@ Fedify inbox LogTape 기록은 `fedify.federation.inbox` category에서 JSON Lin
   `federation.ts`의 관측되지 않은 `onError` 경계에서 malformed body 외부 실패로 로그만 남긴다.
   `withInboundObservability`가 typed listener 오류를 먼저 observed로 표시하므로 typed handler 안에서
   발생한 `SyntaxError`는 이 예외에 해당하지 않고 내부 오류로 capture한다.
-- raw Activity JSON, Note 본문·수신 대상, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
-  기존 Kosmo inbound failure/rejection structured log에는 복구 대상을 식별하기 위해 전체 object URI와 origin을 남긴다. 새 native LogTape sink는 앞서 정한 allowlist에 따라 요청이 주장하거나 미검증인 URL의 origin과 허용된 `authReason`만 남긴다.
+- 기존 Kosmo inbound failure/rejection structured log와 Sentry context에는 raw Activity JSON, Note 본문·수신 대상, signature/key material, credential과 불필요한 개인정보를 넣지 않는다.
+  기존 structured log에는 복구 대상을 식별하기 위해 전체 object URI와 origin을 남긴다.
   Sentry context는 origin 수준으로 유지하고 URI를 metric, tag 또는 fingerprint에 넣지 않는다.
 
 Inbound Reaction transaction 뒤 Effects Workflow start 실패는 Create의

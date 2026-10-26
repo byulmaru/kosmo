@@ -212,10 +212,14 @@ describe('Fedify inbox routes', () => {
     }
   });
 
-  test('rejects an invalid inbox signature with 401 and logs its bounded native reason', async (t) => {
+  test('rejects an invalid inbox signature with 401 and logs its native reason and context', async (t) => {
     const output: string[] = [];
     const captures: unknown[] = [];
-    t.mock.method(console, 'log', (...args: unknown[]) => output.push(String(args[0])));
+    const capture = (...args: unknown[]) => output.push(String(args[0]));
+    t.mock.method(console, 'debug', capture);
+    t.mock.method(console, 'info', capture);
+    t.mock.method(console, 'warn', capture);
+    t.mock.method(console, 'error', capture);
     const restoreReporter = setInboundObservabilityReporter({
       captureException: (error) => captures.push(error),
       log: () => undefined,
@@ -233,10 +237,18 @@ describe('Fedify inbox routes', () => {
       assert.equal(captures.length, 0);
       const record = output
         .map((line) => JSON.parse(line) as Record<string, unknown>)
-        .find(({ event }) => event === 'signature_verification_failed');
-      assert.equal(record?.authReason, 'invalidSignature');
-      assert.equal(record?.keyOriginUnverified, 'https://remote.example');
-      assert.doesNotMatch(output.join('\n'), /main-key|invalid-signature/u);
+        .find(
+          ({ logger: category, message }) =>
+            category === 'fedify.federation.inbox' &&
+            message === "Failed to verify the request's HTTP Signatures.",
+        );
+      assert.equal(record?.level, 'ERROR');
+      assert.equal(record?.logger, 'fedify.federation.inbox');
+      assert.deepEqual(record?.properties, {
+        keyId: remoteKeyUri.href,
+        recipient: null,
+        reason: 'invalidSignature',
+      });
     } finally {
       restoreReporter();
     }

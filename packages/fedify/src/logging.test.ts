@@ -3,75 +3,71 @@ import { test } from 'node:test';
 import { getConfig, getLogger } from '@logtape/logtape';
 import { configureFedifyInboxLogging } from './logging';
 
-test('projects sampled Fedify inbox records into safe JSON logs', (t) => {
+test('emits native JSON lines and samples only info records', (t) => {
   const output: string[] = [];
   let random = 0.009;
-  t.mock.method(console, 'log', (...args: unknown[]) => output.push(String(args[0])));
+  const capture = (...args: unknown[]) => output.push(String(args[0]));
+  t.mock.method(console, 'debug', capture);
+  t.mock.method(console, 'info', capture);
+  t.mock.method(console, 'warn', capture);
+  t.mock.method(console, 'error', capture);
   t.mock.method(Math, 'random', () => random);
 
   configureFedifyInboxLogging();
   const logger = getLogger(['fedify', 'federation', 'inbox']);
-  logger.info('Activity {activityId} is enqueued.', {
-    activityId: 'https://remote.example/activities/queued?secret=activity-query',
-  });
-  logger.info('Activity {activityId} has been processed.', {
-    activityId: 'https://remote.example/activities/processed?secret=activity-query',
-  });
+  const activityId = 'https://remote.example/activities/queued?secret=activity-query';
+  logger.info('Activity {activityId} is enqueued.', { activityId });
 
   random = 0.01;
   logger.info('Activity {activityId} is enqueued.', {
     activityId: 'https://remote.example/activities/sampled-out',
   });
-  logger.debug('debug body canary');
-  logger.warn('Unknown warning template {value}', { value: 'warning property canary' });
-  logger.error('Unknown error template {value}', { value: 'error property canary' });
-  logger.fatal('Unknown fatal template {value}', { value: 'fatal property canary' });
-  logger.error("Failed to verify the request's HTTP Signatures.", {
-    keyId: 'https://user:password@keys.example/key?secret=key-query',
-    reason: 'invalidSignature',
-    recipient: 'recipient-private',
-    signature: 'signature-private',
-  });
-  logger.error('Unknown private error template {body}', {
-    activity: { body: 'activity-body-private' },
-    body: 'raw-message-private',
-    error: new Error('raw-error-private'),
-  });
+  logger.debug('debug body');
 
-  const records = output.map((line) => JSON.parse(line) as Record<string, unknown>);
+  random = 0.5;
+  logger.warn('Warning {value}', { value: 'warning property' });
+  logger.error('Error {value}', { value: 'error property' });
+  logger.fatal('Fatal {value}', { value: 'fatal property' });
+
+  const records = output
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter(({ logger: category }) => category === 'fedify.federation.inbox');
+  const timestamp = records[0]?.['@timestamp'];
+  assert.equal(typeof timestamp, 'string');
+  assert.ok(Number.isFinite(Date.parse(String(timestamp))));
   assert.deepEqual(
-    records.slice(0, 2).map(({ event, activityOriginClaimed }) => ({
-      activityOriginClaimed,
-      event,
+    records.map(({ level, message, logger: category, properties }) => ({
+      category,
+      level,
+      message,
+      properties,
     })),
     [
-      { activityOriginClaimed: 'https://remote.example', event: 'activity_enqueued' },
-      { activityOriginClaimed: 'https://remote.example', event: 'activity_processed' },
+      {
+        category: 'fedify.federation.inbox',
+        level: 'INFO',
+        message: `Activity "${activityId}" is enqueued.`,
+        properties: { activityId },
+      },
+      {
+        category: 'fedify.federation.inbox',
+        level: 'WARN',
+        message: 'Warning "warning property"',
+        properties: { value: 'warning property' },
+      },
+      {
+        category: 'fedify.federation.inbox',
+        level: 'ERROR',
+        message: 'Error "error property"',
+        properties: { value: 'error property' },
+      },
+      {
+        category: 'fedify.federation.inbox',
+        level: 'FATAL',
+        message: 'Fatal "fatal property"',
+        properties: { value: 'fatal property' },
+      },
     ],
-  );
-  assert.notEqual(records[0]?.event, records[1]?.event);
-  assert.deepEqual(
-    records.slice(2, 5).map(({ level }) => level),
-    ['warning', 'error', 'fatal'],
-  );
-  assert.deepEqual(records[5], {
-    authReason: 'invalidSignature',
-    category: ['fedify', 'federation', 'inbox'],
-    event: 'signature_verification_failed',
-    keyOriginUnverified: 'https://keys.example',
-    level: 'error',
-    message: 'Fedify could not verify an inbox signature.',
-    timestamp: records[5]?.timestamp,
-  });
-  assert.deepEqual(Object.keys(records[6] ?? {}).sort(), [
-    'category',
-    'event',
-    'level',
-    'timestamp',
-  ]);
-  assert.doesNotMatch(
-    output.join('\n'),
-    /activity-query|sampled-out|debug body|private|key-query/u,
   );
 });
 
