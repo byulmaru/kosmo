@@ -29,6 +29,7 @@ import {
   hasInboundErrorBeenObserved,
   isExternalInboundError,
   observeInbound,
+  observeInboxAuthenticationRejection,
   withInboundObservability,
 } from './inbound-observability';
 import { handleInboundBlock } from './inbound-profile-block';
@@ -198,6 +199,7 @@ federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFo
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+  .onRequestFinished(observeInboxAuthenticationRejection)
   .on(Accept, withInboundObservability('accept', handleInboundAccept))
   .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
   .on(Block, withInboundObservability('block', handleInboundBlock))

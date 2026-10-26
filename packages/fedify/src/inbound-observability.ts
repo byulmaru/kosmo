@@ -1,5 +1,5 @@
 import { ValidationError } from '@kosmo/core/error';
-import type { InboxContext } from '@fedify/fedify';
+import type { InboxContext, InboxRequestFinishedHandler, InboxRequestReport } from '@fedify/fedify';
 
 export type InboundActivityType =
   | 'Accept'
@@ -31,6 +31,7 @@ export type InboundHandler =
   | 'listener';
 
 export type InboundPhase =
+  | 'authentication'
   | 'validation'
   | 'actor_lookup'
   | 'object_lookup'
@@ -53,7 +54,17 @@ export type InboundObservation = {
   objectUri?: string;
   activityOrigin?: string;
   error?: unknown;
+  authentication?: InboundAuthenticationDetails;
   message?: string;
+};
+
+type InboundAuthenticationDetails = {
+  httpAttemptReasonTypes: string[];
+  httpCheckFailureTypes: string[];
+  httpSignatureSpecs: string[];
+  remoteKeyHttpStatuses: number[];
+  claimedActorOrigin?: string;
+  claimedActivityOrigin?: string;
 };
 
 export type InboundCaptureContext = {
@@ -82,6 +93,16 @@ const activityTypes = new Set<InboundActivityType>([
   'Undo',
   'Update',
 ]);
+
+const authenticationReasonCodes = {
+  verificationFailed: 'inbox_authentication_verification_failed',
+  actorKeyMismatch: 'inbox_authentication_actor_key_mismatch',
+  proofPolicy: 'inbox_authentication_proof_policy',
+  invalidNonce: 'inbox_authentication_invalid_nonce',
+} satisfies Record<
+  Extract<InboxRequestReport['authentication'], { status: 'rejected' }>['reason']['type'],
+  string
+>;
 
 const toOrigin = (value: string | URL | null | undefined): string | undefined => {
   if (!value) {
@@ -163,6 +184,7 @@ export const getInboundActivityType = (activity: unknown): InboundActivityType =
 };
 
 export const observeInbound = ({
+  authentication: rawAuthentication,
   error,
   message,
   objectUri,
@@ -170,8 +192,20 @@ export const observeInbound = ({
   ...observation
 }: InboundObservation): void => {
   const objectOrigin = toOrigin(rawObjectOrigin ?? objectUri);
+  const authentication = rawAuthentication
+    ? {
+        ...rawAuthentication,
+        ...(rawAuthentication.claimedActorOrigin
+          ? { claimedActorOrigin: toOrigin(rawAuthentication.claimedActorOrigin) }
+          : {}),
+        ...(rawAuthentication.claimedActivityOrigin
+          ? { claimedActivityOrigin: toOrigin(rawAuthentication.claimedActivityOrigin) }
+          : {}),
+      }
+    : undefined;
   const safeObservation = {
     ...observation,
+    ...(authentication ? { authentication } : {}),
     ...(objectUri ? { objectUri } : {}),
     ...(message ? { message } : {}),
     ...(observation.actorOrigin ? { actorOrigin: toOrigin(observation.actorOrigin) } : {}),
@@ -203,7 +237,11 @@ export const observeInbound = ({
     }
   }
 
-  if (observation.outcome !== 'internal_failure') {
+  const captureAuthenticationRejection =
+    observation.outcome === 'rejected' &&
+    observation.phase === 'authentication' &&
+    authentication !== undefined;
+  if (observation.outcome !== 'internal_failure' && !captureAuthenticationRejection) {
     return;
   }
 
@@ -229,11 +267,101 @@ export const observeInbound = ({
         ...(safeObservation.activityOrigin
           ? { activity_origin: safeObservation.activityOrigin }
           : {}),
+        ...(authentication?.httpAttemptReasonTypes.length
+          ? {
+              http_attempt_reason_types: [...authentication.httpAttemptReasonTypes]
+                .sort()
+                .join(','),
+            }
+          : {}),
+        ...(authentication?.httpCheckFailureTypes.length
+          ? { http_check_failure_types: [...authentication.httpCheckFailureTypes].sort().join(',') }
+          : {}),
+        ...(authentication?.httpSignatureSpecs.length
+          ? { http_signature_specs: [...authentication.httpSignatureSpecs].sort().join(',') }
+          : {}),
+        ...(authentication?.remoteKeyHttpStatuses.length
+          ? {
+              remote_key_http_statuses: [...authentication.remoteKeyHttpStatuses]
+                .sort((a, b) => a - b)
+                .join(','),
+            }
+          : {}),
+        ...(authentication?.claimedActorOrigin
+          ? { claimed_actor_origin: authentication.claimedActorOrigin }
+          : {}),
+        ...(authentication?.claimedActivityOrigin
+          ? { claimed_activity_origin: authentication.claimedActivityOrigin }
+          : {}),
       },
     });
   } catch {
     // Observability must not alter ActivityPub processing.
   }
+};
+
+export const observeInboxAuthenticationRejection: InboxRequestFinishedHandler<void> = (
+  _context,
+  report,
+) => {
+  if (
+    report.outcome.type !== 'response' ||
+    report.outcome.disposition !== 'rejected' ||
+    report.outcome.reason !== 'authentication' ||
+    report.authentication.status !== 'rejected'
+  ) {
+    return;
+  }
+
+  const httpAttemptReasonTypes = new Set<string>();
+  const httpCheckFailureTypes = new Set<string>();
+  const httpSignatureSpecs = new Set<string>();
+  const remoteKeyHttpStatuses = new Set<number>();
+  for (const attempt of report.attempts) {
+    if (attempt.mechanism !== 'http') {
+      continue;
+    }
+    if (attempt.status === 'rejected') {
+      httpAttemptReasonTypes.add(attempt.reason.type);
+    }
+    for (const check of attempt.checks) {
+      if (check.mechanism !== 'http') {
+        continue;
+      }
+      httpSignatureSpecs.add(check.spec);
+      if (check.status !== 'rejected') {
+        continue;
+      }
+      httpCheckFailureTypes.add(check.reason.type);
+      if (
+        check.reason.type === 'keyFetchError' &&
+        'status' in check.reason.result &&
+        Number.isInteger(check.reason.result.status) &&
+        check.reason.result.status >= 100 &&
+        check.reason.result.status <= 599
+      ) {
+        remoteKeyHttpStatuses.add(check.reason.result.status);
+      }
+    }
+  }
+
+  const actorId = report.activity?.actorId;
+  const activityId = report.activity?.id;
+  observeInbound({
+    activityType: getInboundActivityType(report.activity),
+    authentication: {
+      httpAttemptReasonTypes: [...httpAttemptReasonTypes],
+      httpCheckFailureTypes: [...httpCheckFailureTypes],
+      httpSignatureSpecs: [...httpSignatureSpecs],
+      remoteKeyHttpStatuses: [...remoteKeyHttpStatuses],
+      ...(actorId instanceof URL ? { claimedActorOrigin: actorId.origin } : {}),
+      ...(activityId instanceof URL ? { claimedActivityOrigin: activityId.origin } : {}),
+    },
+    handler: 'listener',
+    outcome: 'rejected',
+    phase: 'authentication',
+    reasonCode: authenticationReasonCodes[report.authentication.reason.type],
+  });
 };
 
 export const isExternalInboundError = (error: unknown, seen = new Set<object>()): boolean => {

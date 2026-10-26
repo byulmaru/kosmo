@@ -7,12 +7,13 @@ import {
   signRequest,
 } from '@fedify/fedify';
 import { CryptographicKey, EmojiReact, Follow, Like, Person } from '@fedify/vocab';
-import { getDocumentLoader } from '@fedify/vocab-runtime';
+import { FetchError, getDocumentLoader } from '@fedify/vocab-runtime';
 import { ValidationError } from '@kosmo/core/error';
 import {
   hasInboundErrorBeenObserved,
   isExternalInboundError,
   observeInbound,
+  observeInboxAuthenticationRejection,
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './inbound-observability';
@@ -211,6 +212,175 @@ describe('Fedify inbox routes', () => {
     }
   });
 
+  test('captures rejected inbox authentication with bounded Fedify diagnostics', async () => {
+    const captures: Array<{
+      context: { extra?: Record<string, string>; tags: Record<string, string> };
+      error: unknown;
+    }> = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: () => undefined,
+    });
+
+    try {
+      const fixture = await createInboxFixture(async () => undefined);
+      const acceptedRequest = await fixture.createSignedFollowRequest('/inbox', 'accepted');
+      const acceptedResponse = await fixture.federation.fetch(acceptedRequest, {
+        contextData: undefined,
+      });
+      assert.equal(acceptedResponse.status, 202);
+      assert.equal(captures.length, 0);
+
+      const rejectedRequest = await fixture.createInvalidSignatureFollowRequest(
+        '/inbox',
+        'rejected-private-activity',
+      );
+      const requestBody = await rejectedRequest.clone().text();
+      const signature = rejectedRequest.headers.get('signature');
+      const rejectedResponse = await fixture.federation.fetch(rejectedRequest, {
+        contextData: undefined,
+      });
+
+      assert.equal(rejectedResponse.status, 401);
+      assert.equal(captures.length, 1);
+      assert.deepEqual(captures[0]?.context.tags, {
+        activity_type: 'Follow',
+        handler: 'listener',
+        outcome: 'rejected',
+        phase: 'authentication',
+        reason_code: 'inbox_authentication_verification_failed',
+      });
+      assert.equal(
+        captures[0]?.context.extra?.http_attempt_reason_types,
+        'signatureVerificationFailed',
+      );
+      assert.equal(captures[0]?.context.extra?.http_check_failure_types, 'invalidSignature');
+      assert.equal(
+        captures[0]?.context.extra?.http_signature_specs,
+        'draft-cavage-http-signatures-12',
+      );
+      assert.equal(captures[0]?.context.extra?.claimed_actor_origin, remoteActorUri.origin);
+      assert.equal(captures[0]?.context.extra?.claimed_activity_origin, remoteActorUri.origin);
+
+      const observed = JSON.stringify(captures);
+      assert.equal(observed.includes(requestBody), false);
+      assert.equal(signature ? observed.includes(signature) : false, false);
+      assert.equal(observed.includes('rejected-private-activity'), false);
+      assert.equal(
+        (captures[0]?.error as Error).message,
+        'inbox_authentication_verification_failed',
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  test('captures key-fetch status and keeps authentication failures as 401', async () => {
+    const captures: Array<{
+      context: { extra?: Record<string, string> };
+      error: unknown;
+    }> = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: () => undefined,
+    });
+
+    try {
+      const fixture = await createInboxFixture(async () => undefined, { keyFetchStatus: 404 });
+      const response = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest('/inbox', 'key-fetch-failure'),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 401);
+      assert.equal(captures.length, 1);
+      assert.equal(captures[0]?.context.extra?.http_check_failure_types, 'keyFetchError');
+      assert.equal(captures[0]?.context.extra?.remote_key_http_statuses, '404');
+    } finally {
+      restore();
+    }
+  });
+
+  test('captures a production federation authentication rejection once', async () => {
+    const captures: Array<{
+      context: { extra?: Record<string, string>; tags: Record<string, string> };
+      error: unknown;
+    }> = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: () => undefined,
+    });
+
+    try {
+      const { federation: productionFederation } = await import('./federation');
+      const activity = new Follow({
+        actor: remoteActorUri,
+        id: new URL('/activities/production-unsigned', remoteActorUri),
+        object: new URL(`/ap/actor/${localProfileId}`, 'https://kos.moe'),
+      });
+      const request = new Request(new URL('/inbox', 'https://kos.moe'), {
+        body: JSON.stringify(await activity.toJsonLd({ contextLoader: getDocumentLoader() })),
+        headers: { 'content-type': 'application/activity+json' },
+        method: 'POST',
+      });
+      const response = await productionFederation.fetch(request, { contextData: undefined });
+
+      assert.equal(response.status, 401);
+      assert.equal(captures.length, 1);
+      assert.equal(
+        captures[0]?.context.tags.reason_code,
+        'inbox_authentication_verification_failed',
+      );
+      assert.equal(captures[0]?.context.extra?.http_attempt_reason_types, 'noSignature');
+      assert.equal(captures[0]?.context.extra?.claimed_actor_origin, remoteActorUri.origin);
+    } finally {
+      restore();
+    }
+  });
+
+  test('does not capture non-authentication inbox rejections and reporter errors preserve 401', async () => {
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: () => undefined,
+    });
+
+    try {
+      const fixture = await createInboxFixture(async () => undefined);
+      const malformedJsonResponse = await fixture.federation.fetch(
+        new Request(new URL('/inbox', 'https://kos.moe'), {
+          body: '{',
+          headers: { 'content-type': 'application/activity+json' },
+          method: 'POST',
+        }),
+        { contextData: undefined },
+      );
+      assert.equal(malformedJsonResponse.status, 400);
+      assert.equal(captures.length, 0);
+    } finally {
+      restore();
+    }
+
+    const restoreThrowingReporter = setInboundObservabilityReporter({
+      captureException: () => {
+        throw new Error('Sentry unavailable');
+      },
+      log: () => {
+        throw new Error('logger unavailable');
+      },
+    });
+    try {
+      const fixture = await createInboxFixture(async () => undefined);
+      const response = await fixture.federation.fetch(
+        await fixture.createInvalidSignatureFollowRequest('/inbox', 'reporter-failure'),
+        { contextData: undefined },
+      );
+      assert.equal(response.status, 401);
+    } finally {
+      restoreThrowingReporter();
+    }
+  });
+
   test('does not capture a remote listener failure', async () => {
     const captures: unknown[] = [];
     const logs: unknown[] = [];
@@ -270,7 +440,10 @@ describe('Fedify inbox routes', () => {
   });
 });
 
-const createInboxFixture = async (onFollow: FollowHandler) => {
+const createInboxFixture = async (
+  onFollow: FollowHandler,
+  options: { keyFetchStatus?: number } = {},
+) => {
   const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteKey = new CryptographicKey({
     id: remoteKeyUri,
@@ -286,6 +459,14 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
   const documentLoader = async (url: string) => {
     if (url !== remoteActorUri.href && url !== remoteKeyUri.href) {
       throw new Error(`Unexpected document URL: ${url}`);
+    }
+
+    if (options.keyFetchStatus != null && url === remoteKeyUri.href) {
+      throw new FetchError(
+        url,
+        'Remote key fetch failed',
+        new Response(null, { status: options.keyFetchStatus }),
+      );
     }
 
     return {
@@ -310,6 +491,7 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
     .setKeyPairsDispatcher(() => [localKeyPair]);
   federation
     .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+    .onRequestFinished(observeInboxAuthenticationRejection)
     .on(Follow, withInboundObservability('follow', onFollow))
     .onError((_context, error) => {
       if (hasInboundErrorBeenObserved(error)) {
@@ -327,7 +509,7 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
       });
     });
 
-  const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
+  const createFollowRequest = async (path: string, id: string): Promise<Request> => {
     const activity = new Follow({
       actor: remoteActorUri,
       id: new URL(`/activities/${id}`, remoteActorUri),
@@ -338,11 +520,21 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
       headers: { 'content-type': 'application/activity+json' },
       method: 'POST',
     });
-
-    return signRequest(request, remoteKeyPair.privateKey, remoteKeyUri);
+    return request;
   };
 
-  return { createSignedFollowRequest, federation };
+  const createSignedFollowRequest = async (path: string, id: string): Promise<Request> =>
+    signRequest(await createFollowRequest(path, id), remoteKeyPair.privateKey, remoteKeyUri);
+
+  const createInvalidSignatureFollowRequest = async (
+    path: string,
+    id: string,
+  ): Promise<Request> => {
+    const otherKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    return signRequest(await createFollowRequest(path, id), otherKeyPair.privateKey, remoteKeyUri);
+  };
+
+  return { createInvalidSignatureFollowRequest, createSignedFollowRequest, federation };
 };
 
 const createReactionInboxFixture = async (onReaction: ReactionHandler) => {
