@@ -1,14 +1,19 @@
 import { configureSync, getConfig, getConsoleSink, getJsonLinesFormatter } from '@logtape/logtape';
+import { getSentrySink } from '@logtape/sentry';
+import type { SentryNamespace } from '@logtape/sentry';
 
 const inboxCategory = ['fedify', 'federation', 'inbox'];
 
-export const configureFedifyInboxLogging = (): void => {
+export const configureFedifyInboxLogging = (sentry: SentryNamespace): void => {
   if (getConfig()) {
     return;
   }
 
   configureSync({
-    sinks: { json: getConsoleSink({ formatter: getJsonLinesFormatter() }) },
+    sinks: {
+      json: getConsoleSink({ formatter: getJsonLinesFormatter() }),
+      sentry: getSentrySink({ sentry }),
+    },
     filters: {
       sampleInfo: (record) => record.level !== 'info' || Math.random() < 0.01,
     },
@@ -16,7 +21,7 @@ export const configureFedifyInboxLogging = (): void => {
       { category: 'logtape', sinks: ['json'], lowestLevel: 'warning' },
       {
         category: inboxCategory,
-        sinks: ['json'],
+        sinks: ['json', 'sentry'],
         filters: ['sampleInfo'],
         lowestLevel: 'info',
       },

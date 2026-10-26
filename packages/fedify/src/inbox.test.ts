@@ -18,6 +18,7 @@ import {
 } from './inbound-observability';
 import { configureFedifyInboxLogging } from './logging';
 import type { InboxContext } from '@fedify/fedify';
+import type { SentryNamespace } from '@logtape/sentry';
 
 type FollowHandler = (context: InboxContext<void>, activity: Follow) => void | Promise<void>;
 type ReactionHandler = (
@@ -214,17 +215,32 @@ describe('Fedify inbox routes', () => {
 
   test('rejects an invalid inbox signature with 401 and logs its native reason and context', async (t) => {
     const output: string[] = [];
-    const captures: unknown[] = [];
+    const reporterCaptures: unknown[] = [];
+    const sentryIssues: Array<{ message: string; context: unknown }> = [];
+    const sentryLogs: Array<{ message: string; attributes: Record<string, unknown> }> = [];
+    const sentry = {
+      captureMessage: (message, context) => {
+        sentryIssues.push({ message: String(message), context });
+        return 'event-id';
+      },
+      captureException: () => 'event-id',
+      getActiveSpan: () => undefined,
+      getClient: () => ({ getOptions: () => ({ enableLogs: true }) }),
+      getIsolationScope: () => undefined,
+      logger: {
+        error: (message, attributes) => sentryLogs.push({ message: String(message), attributes }),
+      },
+    } satisfies SentryNamespace;
     const capture = (...args: unknown[]) => output.push(String(args[0]));
     t.mock.method(console, 'debug', capture);
     t.mock.method(console, 'info', capture);
     t.mock.method(console, 'warn', capture);
     t.mock.method(console, 'error', capture);
     const restoreReporter = setInboundObservabilityReporter({
-      captureException: (error) => captures.push(error),
+      captureException: (error) => reporterCaptures.push(error),
       log: () => undefined,
     });
-    configureFedifyInboxLogging();
+    configureFedifyInboxLogging(sentry);
 
     try {
       const fixture = await createInboxFixture(async () => undefined);
@@ -234,7 +250,7 @@ describe('Fedify inbox routes', () => {
       );
 
       assert.equal(response.status, 401);
-      assert.equal(captures.length, 0);
+      assert.equal(reporterCaptures.length, 0);
       const record = output
         .map((line) => JSON.parse(line) as Record<string, unknown>)
         .find(
@@ -249,6 +265,29 @@ describe('Fedify inbox routes', () => {
         recipient: null,
         reason: 'invalidSignature',
       });
+      assert.deepEqual(
+        sentryLogs.map(({ message, attributes }) => ({
+          keyId: attributes.keyId,
+          message,
+          reason: attributes.reason,
+          recipient: attributes.recipient,
+        })),
+        [
+          {
+            keyId: remoteKeyUri.href,
+            message: "Failed to verify the request's HTTP Signatures.",
+            reason: 'invalidSignature',
+            recipient: null,
+          },
+        ],
+      );
+      assert.deepEqual(
+        sentryIssues.map(({ message, context }) => ({
+          level: (context as { level: string }).level,
+          message,
+        })),
+        [{ level: 'error', message: "Failed to verify the request's HTTP Signatures." }],
+      );
     } finally {
       restoreReporter();
     }

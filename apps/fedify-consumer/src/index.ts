@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg, pgRead } from '@kosmo/core/db';
 import { closeFedifyQueue, configureFedifyInboxLogging, federation } from '@kosmo/fedify';
+import { Sentry } from './sentry';
 import type { Server } from 'node:http';
 
 const healthStatus = (
@@ -35,7 +36,7 @@ const closeHttpServer = async (server: Server, listening: boolean): Promise<void
 };
 
 async function run(): Promise<void> {
-  configureFedifyInboxLogging();
+  configureFedifyInboxLogging(Sentry);
 
   if (!process.env.FEDIFY_QUEUE_DATABASE_URL?.trim()) {
     throw new Error('FEDIFY_QUEUE_DATABASE_URL is required.');

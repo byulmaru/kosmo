@@ -12,6 +12,7 @@
   "dependencies": {
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
+    "@sentry/node": "10.66.0",
     "tsx": "^4.22.4"
   }
 }
