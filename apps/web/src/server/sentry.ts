@@ -33,12 +33,6 @@ export const captureUnexpectedError = (cause: unknown, context?: InboundCaptureC
     if (context.extra) {
       scope.setExtras(context.extra);
     }
-    if (context.tags.phase === 'authentication' && context.tags.outcome === 'rejected') {
-      scope.addEventProcessor((event) => {
-        delete event.request;
-        return event;
-      });
-    }
     Sentry.captureException(cause);
   });
 };

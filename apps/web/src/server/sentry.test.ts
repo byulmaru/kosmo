@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sentryScope = vi.hoisted(() => ({
-  addEventProcessor: vi.fn(),
   setExtras: vi.fn(),
   setFingerprint: vi.fn(),
   setTags: vi.fn(),
@@ -21,7 +20,6 @@ beforeEach(() => {
   sentry.captureException.mockReset();
   sentry.metrics.count.mockReset();
   sentry.withScope.mockReset();
-  sentryScope.addEventProcessor.mockReset();
   sentryScope.setExtras.mockReset();
   sentryScope.setFingerprint.mockReset();
   sentryScope.setTags.mockReset();
@@ -93,52 +91,7 @@ describe('Web BFF Sentry configuration', () => {
       'projection',
       'projection_failed',
     ]);
-    expect(sentryScope.addEventProcessor).not.toHaveBeenCalled();
     expect(sentry.captureException).toHaveBeenCalledWith(error);
-  });
-
-  it('omits automatic request data only from inbox authentication captures', async () => {
-    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
-    vi.stubEnv('ENVIRONMENT', 'production');
-    vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
-
-    const { captureUnexpectedError } = await import('./sentry');
-    captureUnexpectedError(new Error('inbox_authentication_verification_failed'), {
-      tags: {
-        handler: 'listener',
-        outcome: 'rejected',
-        phase: 'authentication',
-        reason_code: 'inbox_authentication_verification_failed',
-      },
-      fingerprint: [
-        'activitypub-inbound',
-        'Unknown',
-        'listener',
-        'authentication',
-        'inbox_authentication_verification_failed',
-      ],
-    });
-
-    const event = {
-      contexts: { runtime: { name: 'node' } },
-      debug_meta: { images: [] },
-      exception: { values: [{ type: 'Error', value: 'inbox_authentication_verification_failed' }] },
-      release: 'kosmo@abc123',
-      request: { data: 'raw body', headers: { signature: 'raw signature' } },
-      tags: { outcome: 'rejected', phase: 'authentication' },
-    };
-    const processEvent = sentryScope.addEventProcessor.mock.calls[0]?.[0] as (
-      event: Record<string, unknown>,
-    ) => Record<string, unknown>;
-
-    expect(sentryScope.addEventProcessor).toHaveBeenCalledOnce();
-    expect(processEvent(event)).toEqual({
-      contexts: event.contexts,
-      debug_meta: event.debug_meta,
-      exception: event.exception,
-      release: event.release,
-      tags: event.tags,
-    });
   });
 
   it('counts an inbound metric with fixed bounded attributes', async () => {

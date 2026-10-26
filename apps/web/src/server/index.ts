@@ -1,5 +1,8 @@
+import { configureFedifyInboxLogging } from '@kosmo/fedify';
 import { serve } from '@hono/node-server';
 import app from './app';
+
+configureFedifyInboxLogging();
 
 serve({
   fetch: app.fetch,

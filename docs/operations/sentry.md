@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 Fedify inbox request-level 인증 거절만 별도로 capture하고, 설정 누락·upstream 실패 같은 5xx 인증 경로 오류도 수집한다. Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
 
 피드백 본문·선택적 이미지도 기존 SDK를 통해 User Feedback으로 접수한다. 제출 결과와 Slack 알림의 운영 조건은 [피드백 Sentry 접수 운영](./feedback-sentry.md)을 따른다.
 
@@ -34,13 +34,13 @@ Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernet
 
 ## Event 전달 정책
 
-Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지 않고 전송한다. 단, Fedify inbox 인증 거절 capture에서는 event별 processor가 자동 수집된 `request`만 제거한다. 다른 event와 이 capture의 exception, debug metadata, tags, context, release 정보는 유지한다.
+Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지 않고 그대로 전송한다. 따라서 다음 진단 정보를 유지한다.
 
 - Sentry SDK가 만든 exception 전체(values, type, message, mechanism, stack frame과 frame metadata)
 - Web event의 source map debug ID
 - 각 runtime event의 environment와 full commit SHA release
 - `api`, `web-bff`, `web`, `native` runtime tag와 Native platform context
-- SDK가 수집한 request, user, extra와 context. 단, Fedify inbox 인증 거절 capture의 `request`는 아래 경계에 따라 제거한다.
+- SDK가 수집한 request, user, extra와 context
 
 자동 breadcrumb는 `beforeBreadcrumb`에서 모두 제거한다.
 
@@ -87,9 +87,7 @@ projection 및 post-commit delivery 경계를 inventory로 유지한다. Listene
 | 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `delete_object_lookup_failed`, `*_object_lookup_failed`, `external_listener_error`                                                                                                          | 1회 기록    | 기록하지 않음                       |
 | Kosmo 내부 오류      | DB projection, post-commit effect, inbound Reaction Effects Workflow start(`reaction_notification_effect_failed`, `reaction_undo_notification_effect_failed`), `follow_notification_effect_failed`, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error` | 1회 기록    | 기존 runtime reporter로 1회 capture |
 
-위 표는 typed listener에 전달된 ActivityPub 실패 분류다. 별도로 Fedify `onRequestFinished` 보고가 `outcome.type === 'response'`, `disposition === 'rejected'`, `reason === 'authentication'`일 때만 Web BFF가 Sentry event를 capture한다. 이 예외는 Fedify inbox 인증 경계에 한정되며 모든 HTTP 401이나 typed listener의 다른 보안·정책 거절을 수집하지 않는다. Capture는 기존 `captureException`의 error severity와 fingerprint grouping을 사용하고, Fedify가 반환하는 401 및 인증 동작은 바꾸지 않는다. Fingerprint에는 bounded activity type, handler, phase와 reason code를 사용하며 origin은 포함하지 않는다. Reason code는 `inbox_authentication_verification_failed`, `inbox_authentication_actor_key_mismatch`, `inbox_authentication_proof_policy`, `inbox_authentication_invalid_nonce` 중 하나다.
-
-인증 거절 event에는 분류한 HTTP attempt reason(`noSignature`, `signatureVerificationFailed`, `uncoveredAttribution`, `missingOwner`, `proofPolicy`)과 check reason(`invalidSignature`, `keyFetchError`), 서명 규격(`draft-cavage-http-signatures-12`, `rfc9421`), 원격 키 조회의 숫자 HTTP status만 추가할 수 있다. Origin을 포함하는 경우 `claimed_actor_origin` 또는 `claimed_activity_origin` extra에 두고, 해당 값이 요청자가 주장한 미검증 값임을 표시한다. 이 capture에는 원본 Fedify 오류를 전달하지 않고 reason code만 담은 synthetic error를 사용한다. SDK가 자동 수집하는 request에는 raw Signature·Cookie·Authorization header, 서명 값, request body, query와 URL이 포함될 수 있어 이 capture에 한해 `request` 전체를 event에서 제거한다. 그 외 오류 event의 기존 SDK request metadata와 전달 정책은 바꾸지 않으며 전역 `beforeSend` 정제 규칙도 추가하지 않는다.
+Fedify inbox LogTape 기록은 `fedify.federation.inbox` category에서 JSON Lines로 stdout에 남긴다. `info` 기록은 1%를 표본 기록하고, `warning`·`error`·`fatal`은 모두 표본화 없이 기록하며 `debug`는 끈다. LogTape 자체 warning 이상도 같은 sink에 남긴다. 성공 event `activity_enqueued`와 `activity_processed`는 enqueue와 queue consumer 처리를 구분하므로, enqueue 기록만으로 처리가 끝났다고 판단하지 않는다. Sink는 허용한 Fedify message template을 고정 event label과 안전한 정적 message로 바꾼다. 모든 기록에는 category·event·level·timestamp가 있고, 알려진 template에는 정적 message가 추가된다. 알 수 없는 template은 `event: "unknown"`으로 기록하고 message를 생략하며 warning 이상은 표본화하지 않는다. 기록에 추가될 수 있는 속성은 요청이 주장한 activity ID와 미검증 key ID에서 `http(s)` origin만 추출한 `activityOriginClaimed`·`keyOriginUnverified`, 유한한 `authReason`으로 제한한다. 확장된 message와 임의 LogRecord properties는 전달하지 않는다. 따라서 request body, raw Activity JSON, 인증 header, signature/key material, raw error와 전체 URL은 로그에 포함하지 않는다. Inbox 인증 거절은 Sentry event로 보내지 않으며, typed listener의 내부 오류는 기존 runtime reporter를 통해 계속 Sentry에 capture한다.
 
 오류 분류의 경계는 다음과 같다.
 
@@ -102,7 +100,7 @@ projection 및 post-commit delivery 경계를 inventory로 유지한다. Listene
   `withInboundObservability`가 typed listener 오류를 먼저 observed로 표시하므로 typed handler 안에서
   발생한 `SyntaxError`는 이 예외에 해당하지 않고 내부 오류로 capture한다.
 - raw Activity JSON, Note 본문·수신 대상, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
-  기존 수신 실패·거절 structured log에는 복구 대상을 식별하기 위해 전체 object URI를 origin과 함께 남긴다.
+  기존 Kosmo inbound failure/rejection structured log에는 복구 대상을 식별하기 위해 전체 object URI와 origin을 남긴다. 새 native LogTape sink는 앞서 정한 allowlist에 따라 요청이 주장하거나 미검증인 URL의 origin과 허용된 `authReason`만 남긴다.
   Sentry context는 origin 수준으로 유지하고 URI를 metric, tag 또는 fingerprint에 넣지 않는다.
 
 Inbound Reaction transaction 뒤 Effects Workflow start 실패는 Create의
@@ -112,7 +110,7 @@ Web BFF inbound reporter가 기존과 같이 1회 capture하고, committed React
 history와 Worker runtime 경계가 소유한다. 이 Worker 경계는 Web BFF inbound reporter의 중복 Sentry capture
 대상이 아니다.
 
-Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. Fedify inbox 인증 거절 capture만 자동 수집된 request 전체를 제외하며, 다른 event의 SDK request metadata는 기존 전달 정책을 따른다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
+Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 
 ## Build와 source map
 

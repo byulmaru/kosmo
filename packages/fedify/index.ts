@@ -19,6 +19,7 @@ export {
 export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
+export { configureFedifyInboxLogging } from './src/logging';
 export {
   getProfileBlockActivityUri,
   getProfileBlockOrderingKey,
