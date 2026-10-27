@@ -118,7 +118,7 @@ describe('PublicContentInvitation', () => {
     const styleObjects = (panel.props.style as unknown[]).flat(Infinity) as Array<
       Record<string, unknown>
     >;
-    const fixedStyle = styleObjects.find((style) => style.position === 'fixed');
+    const fixedStyle = styleObjects.find((style) => style?.position === 'fixed');
 
     assert.deepEqual(
       { left: fixedStyle?.left, right: fixedStyle?.right, width: fixedStyle?.width },
@@ -128,7 +128,7 @@ describe('PublicContentInvitation', () => {
         width: undefined,
       },
     );
-    assert.ok(!styleObjects.some((style) => style.width === '100%'));
+    assert.ok(!styleObjects.some((style) => style?.width === '100%'));
   });
 
   it('starts authentication without passing through the signup home', async () => {

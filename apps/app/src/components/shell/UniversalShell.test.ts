@@ -256,6 +256,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  globalThis.sessionStorage?.removeItem('kosmo:public-content-invitation-dismissed');
   platform.OS = 'web';
   layout = 'mobile';
   viewport = { height: 800, width: 390 };
