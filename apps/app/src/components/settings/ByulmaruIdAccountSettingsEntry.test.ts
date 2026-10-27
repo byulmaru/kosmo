@@ -16,13 +16,17 @@ mock.module('expo-router', {
     Link: ({
       children,
       href,
+      rel,
+      target,
     }: {
       children: ReactElement<{ href?: string; onPress?: () => void; style?: object }>;
       href: string;
+      rel?: string;
+      target?: string;
     }) => {
       return createElement(
         'Link',
-        { href },
+        { href, rel, target },
         cloneElement(children, { href, onPress: linkOnPress }),
       );
     },
@@ -82,7 +86,13 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(entry.props.accessibilityLabel, 'Byulmaru ID Account Settings 외부 서비스로 이동');
     assert.equal(entry.props.accessibilityRole, 'link');
     assert.equal(entry.props.href, 'https://id.byulmaru.co');
+    assert.deepEqual(entry.props.hrefAttrs, {
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    });
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
+    assert.equal(rendered('Link')[0].props.target, '_blank');
+    assert.equal(rendered('Link')[0].props.rel, 'noopener noreferrer');
     assert.equal(rendered('ChevronRightIcon').length, 1);
   });
 });
