@@ -730,6 +730,49 @@ describe('check-ui-contract-pr', () => {
     assert.deepEqual(result.categories, ['feature']);
   });
 
+  it('matches a legacy cleanup only for the selected StyleSheet member', async () => {
+    const legacyKey =
+      'apps/app/src/components/post/PostComposerMediaItemsTarget.tsx::IconButton::visualStyle::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]';
+    const root = await createRepository({
+      [CHECKER_PATH]: 'export {};\n',
+      'scripts/ui-contract-legacy.json': JSON.stringify({
+        version: 1,
+        entries: {
+          [legacyKey]: {
+            occurrences: 5,
+            reason: 'existing media action recipe',
+            reference: 'docs/design/post-composer.md',
+          },
+        },
+      }),
+      'apps/app/src/components/post/PostComposerMediaItemsTarget.tsx':
+        "import { StyleSheet } from 'react-native';\nimport { borderWidths } from '@/theme/tokens';\nconst styles = StyleSheet.create({ actionVisual: { borderWidth: borderWidths[1], borderRadius: 999 }, navigationVisual: { borderWidth: borderWidths[1], borderRadius: 999 }, galleryShell: { borderWidth: borderWidths[1], width: '100%' } });\nexport const Fixture = () => <> <View style={styles.galleryShell} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.navigationVisual} /> <IconButton visualStyle={styles.navigationVisual} /> </>;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'scripts/ui-contract-legacy.json',
+      JSON.stringify({
+        version: 1,
+        entries: {
+          [legacyKey]: {
+            occurrences: 2,
+            reason: 'existing media action recipe',
+            reference: 'docs/design/post-composer.md',
+          },
+        },
+      }) + '\n',
+    );
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/post/PostComposerMediaItemsTarget.tsx',
+      "import { StyleSheet } from 'react-native';\nimport { borderWidths } from '@/theme/tokens';\nconst styles = StyleSheet.create({ actionVisual: { borderRadius: 999 }, navigationVisual: { borderWidth: borderWidths[1], borderRadius: 999 }, galleryShell: { borderWidth: borderWidths[1], width: '100%' } });\nexport const Fixture = () => <> <View style={styles.galleryShell} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.actionVisual} /> <IconButton visualStyle={styles.navigationVisual} /> <IconButton visualStyle={styles.navigationVisual} /> </>;\n",
+    );
+    commit(root, 'remove selected action visual override');
+    const result = checkPullRequest({ ...refs(root), cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, ['feature']);
+  });
+
   it('allows a screen story as supporting evidence without classifying it as feature work', async () => {
     const root = await createRepository({
       'apps/app/src/stories/screens/Home.stories.tsx': "export default { title: 'Home' };\n",

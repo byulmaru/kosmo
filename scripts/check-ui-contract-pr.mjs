@@ -129,6 +129,20 @@ function propertyName(property) {
   return undefined;
 }
 
+function memberPropertyName(member) {
+  if (!member.computed && member.property?.type === 'Identifier') {
+    return member.property.name;
+  }
+  if (
+    member.computed &&
+    member.property?.type === 'Literal' &&
+    typeof member.property.value === 'string'
+  ) {
+    return member.property.value;
+  }
+  return undefined;
+}
+
 function tokenValue(token) {
   return `${token.type}:${token.value}`;
 }
@@ -187,13 +201,27 @@ function collectStyleRanges(ast) {
       return resolveStyleExpression(initializers.get(value.name), new Set(seen).add(value.name));
     }
     if (value.type === 'MemberExpression' && value.object?.type === 'Identifier') {
+      const memberName = memberPropertyName(value);
+      const initializer = initializers.get(value.object.name);
+      const source = unwrap(initializer);
+      const styleObject =
+        source?.type === 'ObjectExpression'
+          ? source
+          : source?.type === 'CallExpression' && isStyleSheetCreate(source)
+            ? unwrap(source.arguments[0])
+            : undefined;
+      const member =
+        styleObject?.type === 'ObjectExpression'
+          ? styleObject.properties.find(
+              (property) => property.type === 'Property' && propertyName(property) === memberName,
+            )
+          : undefined;
       if (seen.has(value.object.name)) {
         return [];
       }
-      return resolveStyleExpression(
-        initializers.get(value.object.name),
-        new Set(seen).add(value.object.name),
-      );
+      return member
+        ? resolveStyleExpression(member.value, new Set(seen).add(value.object.name))
+        : [];
     }
     if (value.type === 'ArrayExpression') {
       return [
@@ -223,16 +251,19 @@ function collectStyleRanges(ast) {
   };
 
   const roots = [];
+  let nextStyleUseId = 0;
   walk(ast, (node, parent) => {
     if (node.type === 'JSXAttribute' && STYLE_PROPS.has(node.name?.name)) {
       const expression =
         node.value?.type === 'JSXExpressionContainer' ? node.value.expression : null;
+      const styleUseId = nextStyleUseId++;
       for (const root of resolveStyleExpression(expression)) {
         if (root?.range) {
           roots.push({
             component: jsxName(parent?.name),
             property: node.name.name,
             range: root.range,
+            styleUseId,
           });
         }
       }
@@ -258,32 +289,47 @@ function collectVisualProperties(ast) {
     const matchingRanges = styleRanges.filter(
       ({ range: [start, end] }) => node.range[0] >= start && node.range[1] <= end,
     );
-    const styleRange = matchingRanges.find(({ component }) => component) ?? matchingRanges[0];
-    if (!styleRange) {
+    const componentRanges = matchingRanges.filter(({ component }) => component);
+    const ranges = componentRanges.length > 0 ? componentRanges : matchingRanges.slice(0, 1);
+    if (ranges.length === 0) {
       return;
     }
     const name = propertyName(node);
     if (!name || !VISUAL_PROPERTY.test(name)) {
       return;
     }
-    let start = node.range[0];
-    let end = node.range[1];
-    if (parent?.type === 'ObjectExpression') {
-      const index = parent.properties.indexOf(node);
-      const next = parent.properties[index + 1];
-      const previous = parent.properties[index - 1];
-      if (next?.range) {
-        end = next.range[0];
-      } else if (previous?.range) {
-        start = previous.range[1];
+    const seenRanges = [];
+    for (const styleRange of ranges) {
+      const duplicate = seenRanges.some(
+        (seen) =>
+          seen.styleUseId === styleRange.styleUseId &&
+          seen.component === styleRange.component &&
+          seen.property === styleRange.property &&
+          rangeContains(seen.range, styleRange.range),
+      );
+      if (duplicate) {
+        continue;
       }
+      seenRanges.push(styleRange);
+      let start = node.range[0];
+      let end = node.range[1];
+      if (parent?.type === 'ObjectExpression') {
+        const index = parent.properties.indexOf(node);
+        const next = parent.properties[index + 1];
+        const previous = parent.properties[index - 1];
+        if (next?.range) {
+          end = next.range[0];
+        } else if (previous?.range) {
+          start = previous.range[1];
+        }
+      }
+      properties.push({
+        component: styleRange.component,
+        fingerprint: `${name}::${tokensInRange(ast, node.value.range[0], node.value.range[1])}`,
+        property: styleRange.property,
+        range: [start, end],
+      });
     }
-    properties.push({
-      component: styleRange.component,
-      fingerprint: `${name}::${tokensInRange(ast, node.value.range[0], node.value.range[1])}`,
-      property: styleRange.property,
-      range: [start, end],
-    });
   });
   return properties;
 }
@@ -316,16 +362,22 @@ function rangeContains(container, range) {
   return range[0] >= container[0] && range[1] <= container[1];
 }
 
+function visualEntryKey({ component, property, fingerprint }) {
+  return `${component ?? ''}::${property ?? ''}::${fingerprint}`;
+}
+
 function visualOnlyRemoval(baseVisual, headVisual) {
   const remaining = new Map();
-  for (const { fingerprint } of headVisual) {
-    remaining.set(fingerprint, (remaining.get(fingerprint) ?? 0) + 1);
+  for (const visual of headVisual) {
+    const key = visualEntryKey(visual);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
   let removed = false;
-  for (const { fingerprint } of baseVisual) {
-    const count = remaining.get(fingerprint) ?? 0;
+  for (const visual of baseVisual) {
+    const key = visualEntryKey(visual);
+    const count = remaining.get(key) ?? 0;
     if (count > 0) {
-      remaining.set(fingerprint, count - 1);
+      remaining.set(key, count - 1);
     } else {
       removed = true;
     }
@@ -416,22 +468,21 @@ function analyzeSource(baseSource, headSource, filePath) {
 
   const baseVisual = base ? collectVisualProperties(base) : [];
   const headVisual = head ? collectVisualProperties(head) : [];
-  const baseFingerprints = baseVisual.map(({ fingerprint }) => fingerprint).sort();
-  const headFingerprints = headVisual.map(({ fingerprint }) => fingerprint).sort();
+  const baseFingerprints = baseVisual.map(visualEntryKey).sort();
+  const headFingerprints = headVisual.map(visualEntryKey).sort();
   const removedVisualRanges = [];
   const removedVisualFingerprints = [];
   const removedVisualEntries = [];
   const remainingHeadFingerprints = new Map();
-  for (const { fingerprint } of headVisual) {
-    remainingHeadFingerprints.set(
-      fingerprint,
-      (remainingHeadFingerprints.get(fingerprint) ?? 0) + 1,
-    );
+  for (const visual of headVisual) {
+    const key = visualEntryKey(visual);
+    remainingHeadFingerprints.set(key, (remainingHeadFingerprints.get(key) ?? 0) + 1);
   }
   for (const item of baseVisual) {
-    const count = remainingHeadFingerprints.get(item.fingerprint) ?? 0;
+    const key = visualEntryKey(item);
+    const count = remainingHeadFingerprints.get(key) ?? 0;
     if (count > 0) {
-      remainingHeadFingerprints.set(item.fingerprint, count - 1);
+      remainingHeadFingerprints.set(key, count - 1);
     } else {
       removedVisualRanges.push(item.range);
       removedVisualFingerprints.push(item.fingerprint);
