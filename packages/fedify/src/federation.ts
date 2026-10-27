@@ -54,7 +54,7 @@ import {
 } from './local-profile-featured';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
-import { fedifyQueue } from './queue';
+import { fedifyKv, fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
 
@@ -62,7 +62,7 @@ const federationOrigin = process.env.PUBLIC_ORIGIN;
 
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
-  kv: new MemoryKvStore(),
+  kv: fedifyKv ?? new MemoryKvStore(),
   ...(fedifyQueue
     ? {
         // Producer and consumer processes share one durable queue.  Queue
