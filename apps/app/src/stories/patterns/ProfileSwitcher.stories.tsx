@@ -161,13 +161,7 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: [
-        'surface',
-        'profiles',
-        'selectedProfileId',
-        'open',
-        'disabled',
-      ],
+      include: ['surface', 'profiles', 'selectedProfileId', 'open', 'disabled'],
     },
   },
 };
