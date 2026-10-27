@@ -17,11 +17,12 @@ Account가 아니라 Profile이다.
 
 ## 속성
 
-| 속성         | 타입/nullability | 검증 정책                                                              | 존재 조건 | 조회 조건                | 조회 권한                              |
-| ------------ | ---------------- | ---------------------------------------------------------------------- | --------- | ------------------------ | -------------------------------------- |
-| OIDC subject | 문자열, 필수     | 신뢰한 OIDC 인증 결과의 subject를 보존하며 하나의 Account에만 연결한다 | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
-| 표시 이름    | 문자열, 필수     | 신뢰한 OIDC 인증 결과에서 제공된 표시 값을 보존한다                    | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
-| 생성 시각    | 시각, 필수       | 생성 결과로 기록하며 변경 불가                                         | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
+| 속성         | 타입/nullability      | 검증 정책                                                                                                                                                                                 | 존재 조건 | 조회 조건                | 조회 권한                              |
+| ------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------ | -------------------------------------- |
+| OIDC subject | 문자열, 필수          | 신뢰한 OIDC 인증 결과의 subject를 보존하며 하나의 Account에만 연결한다                                                                                                                    | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
+| 표시 이름    | 문자열, 필수          | 신뢰한 OIDC 인증 결과에서 제공된 표시 값을 보존한다                                                                                                                                       | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
+| 생성 시각    | 시각, 필수            | 생성 결과로 기록하며 변경 불가                                                                                                                                                            | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
+| metadata     | 문자열 key/value 집합 | key는 1..128자이며 첫 글자는 영문 소문자 또는 숫자, 이후에는 영문 소문자·숫자·마침표·밑줄·하이픈만 허용한다. value는 빈 문자열을 허용하고 UTF-8 4096 byte 이하이며 NUL을 허용하지 않는다. | 선택      | 요청한 key만 조회        | `Account.Self`                         |
 
 Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확장하지 않고
 [Admin Console Read Policy](../policies/admin-console-read.md)의 Admin Console Viewer projection으로만 제공한다.
@@ -35,11 +36,12 @@ Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확�
 
 ## 행동
 
-| 행동              | 행동 주체      | 대상 객체 | 입력값 | 권한                                 | 조건                                                                            | 결과                                                                                                                        |
-| ----------------- | -------------- | --------- | ------ | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Account 삭제      | Account        | Account   | 없음   | `Account.Self`                       | Account State가 Active이고 연결된 Profile의 저장 State가 `ACTIVE`인 경우가 없다 | Account State가 Deleted가 되고 연결된 Profile·Membership과 Account 속성은 보존되며, Kosmo 인증·Session·기기 연결이 폐기된다 |
-| Account 정지      | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Active다                                                   | Account State가 Suspended가 된다                                                                                            |
-| Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                | Account State가 Active가 된다                                                                                               |
+| 행동                  | 행동 주체      | 대상 객체        | 입력값     | 권한                                 | 조건                                                                            | 결과                                                                                                                        |
+| --------------------- | -------------- | ---------------- | ---------- | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Account 삭제          | Account        | Account          | 없음       | `Account.Self`                       | Account State가 Active이고 연결된 Profile의 저장 State가 `ACTIVE`인 경우가 없다 | Account State가 Deleted가 되고 연결된 Profile·Membership과 Account 속성은 보존되며, Kosmo 인증·Session·기기 연결이 폐기된다 |
+| Account metadata 생성 | Account        | Account metadata | key, value | `Account.Self`                       | key가 유효하고 같은 Account·key가 아직 없다                                     | metadata가 생성되며 같은 Account·key의 후속 생성은 기존 값과 최초 시각을 유지한다                                           |
+| Account 정지          | 운영자 Account | Account          | 사유       | `Account.Active`, `Account.Operator` | 대상 Account State가 Active다                                                   | Account State가 Suspended가 된다                                                                                            |
+| Account 정지 해제     | 운영자 Account | Account          | 사유       | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                | Account State가 Active가 된다                                                                                               |
 
 탈퇴 허용 여부는 연결된 모든 Profile 저장 State를 요청 시점에 서버가 다시 확인하며, 하나라도 `ACTIVE`이면
 Account와 관계를 변경하지 않고 거부한다. `SUSPENDED`와 `DISABLED` Profile은 이 조건만으로 탈퇴를 막지 않는다.

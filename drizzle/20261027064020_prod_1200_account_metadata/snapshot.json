@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "7e2bb016-e2a7-42c1-866c-431e35345390",
+  "id": "d01c57ef-b509-4c3b-a9be-7fdff5e12c03",
   "prevIds": ["d4980e0c-c8a0-45d6-af39-242de120aa66"],
   "ddl": [
     {
@@ -37,12 +37,6 @@
     {
       "values": ["CONFIDENTIAL", "PUBLIC"],
       "name": "application_type",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["TIMELINE", "SEARCH", "TAG", "PROFILE", "POST", "COMPOSER"],
-      "name": "coachmark_guide",
       "entityType": "enums",
       "schema": "public"
     },
@@ -153,7 +147,7 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "account_coachmark",
+      "name": "account_metadata",
       "entityType": "tables",
       "schema": "public"
     },
@@ -366,7 +360,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
     },
     {
       "type": "uuid",
@@ -379,20 +373,33 @@
       "name": "account_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
     },
     {
-      "type": "coachmark_guide",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "guide",
+      "name": "key",
       "entityType": "columns",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_metadata"
     },
     {
       "type": "timestamp with time zone",
@@ -402,10 +409,10 @@
       "default": "now()",
       "generated": null,
       "identity": null,
-      "name": "first_shown_at",
+      "name": "created_at",
       "entityType": "columns",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
     },
     {
       "type": "uuid",
@@ -4396,10 +4403,10 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "account_coachmark_account_id_account_id_fkey",
+      "name": "account_metadata_account_id_account_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
     },
     {
       "nameExplicit": false,
@@ -5213,9 +5220,9 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "account_coachmark_pkey",
+      "name": "account_metadata_pkey",
       "schema": "public",
-      "table": "account_coachmark",
+      "table": "account_metadata",
       "entityType": "pks"
     },
     {
@@ -5468,12 +5475,12 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["account_id", "guide"],
+      "columns": ["account_id", "key"],
       "nullsNotDistinct": false,
-      "name": "account_coachmark_account_id_guide_unique",
+      "name": "account_metadata_account_id_key_unique",
       "entityType": "uniques",
       "schema": "public",
-      "table": "account_coachmark"
+      "table": "account_metadata"
     },
     {
       "nameExplicit": false,

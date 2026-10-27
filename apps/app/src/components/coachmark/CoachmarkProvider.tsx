@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Coachmark } from '@/components/ui/Coachmark';
-import type { CoachmarkGuide } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
+import type { CoachmarkGuide } from './CoachmarkGuide';
 
 export type CoachmarkStep = Readonly<{
   anchorRef: RefObject<NativeView | null>;

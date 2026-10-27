@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, mock, test } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
+import { CoachmarkMetadataKey } from './CoachmarkGuide';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as CoachmarkControllerModule from './CoachmarkController';
@@ -15,13 +16,13 @@ type CoachmarkStep = CoachmarkProviderModule.CoachmarkStep;
 type AccountFixture = {
   id: string;
   profiles: Array<{ id: string }>;
-  seenCoachmarks: string[];
+  metadata: Array<{ key: string; value: string }>;
 };
 
 const account: AccountFixture = {
   id: 'account-1',
   profiles: [{ id: 'profile-1' }],
-  seenCoachmarks: [],
+  metadata: [],
 };
 const session = { status: 'valid' as 'guest' | 'valid' };
 const commitCalls: Array<{ options: Record<string, unknown> }> = [];
@@ -125,7 +126,7 @@ before(async () => {
 });
 
 beforeEach(() => {
-  account.seenCoachmarks = [];
+  account.metadata = [];
   account.profiles = [{ id: 'profile-1' }];
   session.status = 'valid';
   commitCalls.length = 0;
@@ -275,7 +276,9 @@ test('automatic start requires a usable profile and records only after the first
 
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onShown());
   assert.equal(commitCalls.length, 1);
-  assert.deepEqual(commitCalls[0]?.options.variables, { input: { guide: 'TIMELINE' } });
+  assert.deepEqual(commitCalls[0]?.options.variables, {
+    input: { key: CoachmarkMetadataKey.TIMELINE, value: 'true' },
+  });
 
   await act(async () => renderer?.root.findByType('Coachmark' as never).props.onClose());
   await act(async () => probe()?.requestAutoStart());
@@ -291,6 +294,20 @@ test('automatic start effect keeps its request callback stable while the guide o
   assert.equal(autoStartEffectRuns, 1);
   assert.equal(autoStartEffectCancellations, 0);
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+});
+
+test('metadata marked as shown suppresses automatic start while manual help remains available', async () => {
+  account.metadata = [{ key: CoachmarkMetadataKey.TIMELINE, value: 'true' }];
+  await renderProvider(createElement(ControllerProbe));
+  const probe = () => renderer?.root.findByType('ControllerProbe' as never).props;
+
+  await act(async () => probe()?.requestAutoStart());
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
+
+  await act(async () => probe()?.open());
+  assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+  await act(async () => renderer?.root.findByType('Coachmark' as never).props.onShown());
+  assert.equal(commitCalls.length, 1);
 });
 
 test('manual multi-step help moves both ways and restarts from the first step', async () => {
@@ -478,7 +495,7 @@ test('controller callbacks from the previous account reject synchronously', asyn
   const nextAccount: AccountFixture = {
     id: 'account-2',
     profiles: [{ id: 'profile-2' }],
-    seenCoachmarks: [],
+    metadata: [],
   };
   await renderProvider(createElement(ControllerProbe), account.id);
   const previous = renderer?.root.findByType('ControllerProbe' as never).props;

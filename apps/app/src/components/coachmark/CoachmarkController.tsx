@@ -2,12 +2,13 @@ import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useSession } from '@/session/SessionProvider';
+import { CoachmarkMetadataKey } from './CoachmarkGuide';
 import { useCoachmark } from './CoachmarkProvider';
-import type { CoachmarkGuide } from '@kosmo/core/enums';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { CoachmarkController_account$key } from './__generated__/CoachmarkController_account.graphql';
-import type { CoachmarkControllerRecordMutation } from './__generated__/CoachmarkControllerRecordMutation.graphql';
+import type { CoachmarkControllerCreateMetadataMutation } from './__generated__/CoachmarkControllerCreateMetadataMutation.graphql';
+import type { CoachmarkGuide } from './CoachmarkGuide';
 import type { CoachmarkRequestHandle, CoachmarkStep } from './CoachmarkProvider';
 
 const accountFragment = graphql`
@@ -16,13 +17,27 @@ const accountFragment = graphql`
     profiles {
       id
     }
-    seenCoachmarks
+    metadata(
+      keys: [
+        "coachmark.timeline.shown"
+        "coachmark.search.shown"
+        "coachmark.tag.shown"
+        "coachmark.profile.shown"
+        "coachmark.post.shown"
+        "coachmark.composer.shown"
+      ]
+    ) {
+      id
+      key
+      value
+      createdAt
+    }
   }
 `;
 
-const recordCoachmarkShownMutation = graphql`
-  mutation CoachmarkControllerRecordMutation($input: RecordCoachmarkShownInput!) {
-    recordCoachmarkShown(input: $input) {
+const createAccountMetadataMutation = graphql`
+  mutation CoachmarkControllerCreateMetadataMutation($input: CreateAccountMetadataInput!) {
+    createAccountMetadata(input: $input) {
       account {
         ...CoachmarkController_account
       }
@@ -54,8 +69,8 @@ export function useCoachmarkController({
   const { request } = useCoachmark();
   const session = useSession();
   const reportUnexpectedError = useUnexpectedErrorReporter();
-  const [commitRecord] = useMutation<CoachmarkControllerRecordMutation>(
-    recordCoachmarkShownMutation,
+  const [commitMetadata] = useMutation<CoachmarkControllerCreateMetadataMutation>(
+    createAccountMetadataMutation,
   );
 
   const onShown = useCallback(() => {
@@ -63,8 +78,8 @@ export function useCoachmarkController({
       return;
     }
 
-    commitRecord({
-      variables: { input: { guide } },
+    commitMetadata({
+      variables: { input: { key: CoachmarkMetadataKey[guide], value: 'true' } },
       onCompleted: (_response, errors) => {
         if (errors?.length) {
           reportUnexpectedError?.(errors, { componentStack: 'CoachmarkController' });
@@ -72,7 +87,7 @@ export function useCoachmarkController({
       },
       onError: (error) => reportUnexpectedError?.(error, { componentStack: 'CoachmarkController' }),
     });
-  }, [account, commitRecord, guide, reportUnexpectedError]);
+  }, [account, commitMetadata, guide, reportUnexpectedError]);
 
   const requestCoachmark = useCallback(
     (mode: 'automatic' | 'manual') => {
@@ -96,7 +111,9 @@ export function useCoachmarkController({
         session.status !== 'valid' ||
         !account ||
         account.profiles.length === 0 ||
-        account.seenCoachmarks.includes(guide)
+        account.metadata.some(
+          (metadata) => metadata.key === CoachmarkMetadataKey[guide] && metadata.value === 'true',
+        )
       ) {
         return null;
       }

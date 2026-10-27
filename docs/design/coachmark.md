@@ -1,6 +1,6 @@
 # Coachmark
 
-`Coachmark`는 단계형 온보딩에서 대상 옆에 짧은 안내와 진행 action을 보여주는 공용 말풍선이다. 실제 화면 연결, 최초 노출 저장, 투어 상태와 hover 도움말은 caller가 소유한다.
+`Coachmark`는 단계형 온보딩에서 대상 옆에 짧은 안내와 진행 action을 보여주는 공용 말풍선이다. 실제 화면 연결, 투어 상태와 hover 도움말은 caller가 소유한다. 최초 노출 이력은 로그인한 Account의 metadata에 저장한다.
 
 아래 geometry와 크기 수치는 플랫폼 공용 `logical unit`으로 표기한다(Web CSS px, iOS pt, Android dp). 실제 Native 기기 렌더링은 별도 검증 대상이다.
 
@@ -15,6 +15,12 @@
 - 로딩·빈 화면·오류 등으로 안내 대상이 준비되지 않았으면 표시와 이력 기록을 보류한다. 서로 다른 안내를 동시에 표시하지 않는다.
 - 이전·다음·닫기·다시 보기는 실제 팔로우·반응·게시를 실행하지 않는다. 작성 내용·검색어·선택을 유지하며, 기능 사용이나 다른 페이지 방문을 완료 조건으로 요구하지 않는다.
 - 표시 후 저장 실패 또는 두 기기의 동시 최초 진입에서는 중복 자동 안내가 발생할 수 있다. 서버 저장 완료 전까지 기기 간 정확히 한 번 표시를 보장하지 않는다.
+
+자동 안내 이력은 다음 Account metadata를 사용한다.
+
+- 안내 이름은 `timeline`, `search`, `tag`, `profile`, `post`, `composer`로 두고 각각 `coachmark.<guide>.shown` 키를 사용한다.
+- 첫 단계가 실제로 표시된 뒤 해당 키에 문자열 `true`를 한 번 기록한다. 이미 값이 있으면 기존 값과 최초 시각을 유지한다.
+- metadata 조회·생성은 현재 로그인한 Account에만 허용하며, metadata 전체 목록·초기화·수정·삭제 API는 제공하지 않는다.
 
 PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단계·문구·실제 대상·도움말 위치와 해당 화면의 Web·iOS·Android 통합 검증은 PROD-1201~1206에서 연결한다.
 
@@ -37,7 +43,7 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 | `preferredFocusRef` | 선택 | `RefObject<View \| HTMLElement \| null>`       | 종료 후 Web 포커스를 돌려줄 대상을 지정한다.                                                       |
 | `progress`          | 선택 | `Readonly<{ current: number; total: number }>` | 제목 위에 현재/전체 숫자와 단계별 분할 막대를 표시한다. current는 1부터 시작한다.                  |
 
-단계 상태·진행 번호·최초 노출 저장은 caller가 소유한다. `progress`는 유한 정수이며 `1 <= current <= total`인 값만 표시한다. 미지정·잘못된 값·`total=1`에서는 숫자와 막대를 모두 숨긴다. 하단 `children` 합성은 제공하지 않는다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
+단계 상태·진행 번호는 caller가 소유하고 최초 노출 이력은 Account metadata에 기록한다. `progress`는 유한 정수이며 `1 <= current <= total`인 값만 표시한다. 미지정·잘못된 값·`total=1`에서는 숫자와 막대를 모두 숨긴다. 하단 `children` 합성은 제공하지 않는다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
 
 페이지 연결은 `useCoachmarkController`의 `requestAutoStart()`와 `open()`을 사용한다. caller는 현재 화면에서 안내할 대상이 마운트되어 측정 가능한 상태일 때 `ready`를 전달하고, 페이지 이탈이나 대상 구성이 바뀌면 반환된 handle의 `cancel()`을 호출한다. 대상이 준비되지 않았거나 다른 안내가 표시·퇴장 중이면 요청을 거절하고 예약하지 않는다. 계정 전환 전에 보관한 요청 함수도 거절한다. 이후 조건이 충족되면 caller가 다시 요청할 수 있다. 요청 수락 자체는 이력 소비를 의미하지 않는다. 공통 Provider의 활성 안내·임시 노출 이력 갱신만으로 요청 함수가 바뀌지는 않는다. Controller의 계정 데이터·단계·준비 상태 등 입력이 바뀌면 콜백은 바뀔 수 있다. 페이지 effect에서는 `useEffectEvent`로 최신 요청 함수를 호출하고, cleanup은 페이지 이탈·대상 구성 변경 등 실제 안내 종료 조건에 연결한다. 서버 노출 이력 갱신만으로 표시 중인 안내를 취소하지 않는다.
 
@@ -88,3 +94,8 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 - `progress`의 현재/전체 숫자·분할 막대와 단계 이동, 단일 단계·잘못된 값의 숨김을 포함해 관련 단위 테스트 31개와 Coachmark Storybook 테스트 19개를 통과했다. Web progressbar의 현재·최소·최대 값도 확인했다.
 - 내장 Browser에서 320×568의 밝은·어두운 테마 배치와 단계 이동을 확인했다. 앱 Relay·TypeScript 검사, ESLint, Prettier와 정적 Storybook 빌드를 통과했다.
 - Native 실기기·VoiceOver·TalkBack의 진행률 발화는 확인하지 않았다.
+
+### Account metadata 전환 검증 · 2026-10-27
+
+- 빈 임시 DB에 마이그레이션을 적용한 뒤 API 통합 테스트 5개와 마이그레이션 재실행을 통과했다. 본인 계정 접근, 일반 문자열 key/value 조회, 입력 경계와 동시 중복 생성의 최초 값·시각 보존을 검증했다.
+- 관련 앱 단위 테스트 32개, Coachmark Storybook 19개, API 스키마·TypeScript와 앱 Relay·TypeScript 검사를 통과했다. Native 실기기와 운영 환경은 별도 검증 대상이다.

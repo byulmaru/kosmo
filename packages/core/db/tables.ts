@@ -43,19 +43,18 @@ export const Accounts = pgTable('account', {
   createdAt: createdAt(),
 });
 
-export const AccountCoachmarks = pgTable(
-  'account_coachmark',
+export const AccountMetadata = pgTable(
+  'account_metadata',
   {
     id: id(),
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id, { onDelete: 'cascade' }),
-    guide: Enum.coachmarkGuide('guide').notNull(),
-    firstShownAt: datetime('first_shown_at')
-      .notNull()
-      .default(sql`now()`),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+    createdAt: createdAt(),
   },
-  (table) => [unique().on(table.accountId, table.guide)],
+  (table) => [unique().on(table.accountId, table.key)],
 );
 
 export const AccountProfiles = pgTable(

@@ -1,6 +1,6 @@
 import './account';
 import './bookmark';
-import './coachmark';
+import './account-metadata';
 import './content-report';
 import './hashtag';
 import './media';
