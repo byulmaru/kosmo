@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -34,7 +35,9 @@ export default function SettingsInfoRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="정보" /> : null}
+      <MobileWebRouteChrome>
+        <PageHeader leading={backButton} title="정보" />
+      </MobileWebRouteChrome>
       <View style={[layoutRecipes.listStack, styles.root]}>
         <SettingsLinkRow
           accessibilityLabel="개인정보 처리방침"

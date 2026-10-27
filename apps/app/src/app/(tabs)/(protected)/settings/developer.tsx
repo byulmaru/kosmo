@@ -7,6 +7,7 @@ import { NativeChannelSettings } from '@/components/settings/NativeChannelSettin
 import { SettingsItem } from '@/components/settings/SettingsItem';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { getPublicConfig } from '@/config/public';
@@ -37,7 +38,9 @@ export default function SettingsDeveloperRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="개발 정보" /> : null}
+      <MobileWebRouteChrome>
+        <PageHeader leading={backButton} title="개발 정보" />
+      </MobileWebRouteChrome>
       <View style={[layoutRecipes.listStack, styles.root]}>
         {Platform.OS === 'web' ? (
           <SettingsItem description={getPublicConfig('channel')} label="채널" />

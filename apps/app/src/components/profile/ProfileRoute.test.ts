@@ -107,6 +107,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule(new URL('../shell/MobileWebRouteMenu.tsx', import.meta.url), {
+  MobileWebRouteMenu: () => null,
+});
 mockModule('expo-router', {
   Slot: () =>
     SlotContent

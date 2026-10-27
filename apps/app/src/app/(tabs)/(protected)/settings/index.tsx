@@ -2,6 +2,8 @@ import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 
@@ -18,7 +20,12 @@ export default function SettingsRoute() {
       </>
     ) : (
       <>
-        {!web || layout !== 'mobile' ? <PageHeader title="설정" /> : null}
+        <MobileWebRouteChrome>
+          <PageHeader
+            leading={web && layout === 'mobile' ? <NavigationDrawerTrigger /> : undefined}
+            title="설정"
+          />
+        </MobileWebRouteChrome>
         <SettingsNavigationList />
       </>
     );

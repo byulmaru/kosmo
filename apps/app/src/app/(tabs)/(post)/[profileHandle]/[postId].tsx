@@ -1,4 +1,4 @@
-import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
@@ -6,10 +6,12 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
-import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -57,19 +59,9 @@ export default function PostDetailScreen() {
     postId: string;
     profileHandle: string;
   }>();
-  const pathname = usePathname();
-  const routeSegments = useSegments();
-  const { width } = useWindowDimensions();
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
-  const header = getWebMobileShellHeader(
-    Platform.OS === 'web',
-    width,
-    pathname,
-    routeSegments,
-  ) ? null : (
-    <PostDetailHeader />
-  );
+  const header = <PostDetailHeader />;
 
   return (
     <RouteBoundary
@@ -101,21 +93,29 @@ export default function PostDetailScreen() {
 }
 
 function PostDetailHeader() {
+  const { status } = useSession();
+  const { width } = useWindowDimensions();
+  const guestMobileWeb =
+    Platform.OS === 'web' && getShellLayout(true, width) === 'mobile' && status === 'guest';
   const theme = useTheme();
   const router = useRouter();
 
   return (
     <PageHeader
       leading={
-        <IconButton
-          accessibilityLabel="뒤로 가기"
-          onPress={() => router.back()}
-          style={styles.back}
-          targetSize={44}
-          visualSize={44}
-        >
-          <ChevronLeftIcon color={theme.text} size={20} />
-        </IconButton>
+        guestMobileWeb ? (
+          <NavigationDrawerTrigger />
+        ) : (
+          <IconButton
+            accessibilityLabel="뒤로 가기"
+            onPress={() => router.back()}
+            style={styles.back}
+            targetSize={44}
+            visualSize={44}
+          >
+            <ChevronLeftIcon color={theme.text} size={20} />
+          </IconButton>
+        )
       }
       title="게시글"
     />

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,6 +27,26 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
+
+const openNavigationDrawer = mock.fn();
+mockModule('react-native', {
+  Platform: { OS: 'web' },
+  View: 'View',
+  StyleSheet: { create: (styles: object) => styles },
+  useWindowDimensions: () => ({ width: 390 }),
+});
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, left: 0, right: 0, bottom: 0 }),
+});
+mockModule('lucide-react-native', { Menu: 'Menu' });
+mockModule('@/components/ui/IconButton', {
+  IconButton: ({ children, ...props }: PropsWithChildren) =>
+    createElement('Pressable', props, children),
+});
+mockModule('@/components/shell/ShellChromeContext', {
+  useShellChrome: () => ({ openNavigationDrawer, navigationDrawerOpen: false }),
+});
+mockModule('@/theme/ThemeProvider', { useTheme: () => ({ backgroundCanvas: '#fff' }) });
 
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
@@ -117,6 +137,7 @@ afterEach(async () => {
   queryMode = 'success';
   selectedProfileId = 'profile-a';
   toastCleanupCount = 0;
+  openNavigationDrawer.mock.resetCalls();
   latestToastAction = null;
   latestToast = null;
 });
@@ -161,6 +182,12 @@ describe('follow requests route actor lifecycle', () => {
     await renderScreen();
 
     assert.equal(requireRendered('FollowRequestListState').props.state, 'profileRequired');
+    const menu = rendered('Pressable').find(
+      (node) => node.props.accessibilityLabel === '메뉴 열기',
+    );
+    assert.ok(menu);
+    await act(async () => menu.props.onPress());
+    assert.equal(openNavigationDrawer.mock.callCount(), 1);
     assert.deepEqual(rendered('FollowRequestList'), []);
   });
 
@@ -171,6 +198,11 @@ describe('follow requests route actor lifecycle', () => {
       queryMode = 'error';
       await renderScreen();
       const loading = requireRendered('FollowRequestListState');
+      assert.equal(
+        rendered('Pressable').filter((node) => node.props.accessibilityLabel === '메뉴 열기')
+          .length,
+        1,
+      );
       assert.equal(loading.props.state, 'loading');
       assert.equal(loading.props.loadingAnnouncement, false);
       assert.deepEqual(latestToast, {

@@ -6,6 +6,7 @@ import { SettingsFollowingImportDetail } from '@/components/settings/SettingsFol
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { SettingsProfileMigrationDetail } from '@/components/settings/SettingsProfileMigrationDetail';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -35,9 +36,9 @@ export default function SettingsProfileMigrationRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="다른 서비스에서 이전" />
-      ) : null}
+      </MobileWebRouteChrome>
       <View style={styles.sections}>
         <View style={[styles.section, styles.accountSection, { borderColor: theme.divider }]}>
           <Text accessibilityRole="header" style={[styles.sectionHeading, { color: theme.text }]}>
