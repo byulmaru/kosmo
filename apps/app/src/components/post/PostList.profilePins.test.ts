@@ -172,7 +172,7 @@ async function start() {
   });
   return environment;
 }
-const postNode = (id: string, isPinned: boolean) => ({
+const postNode = (id: string, isPinned: boolean, kind = 'LOCAL') => ({
   __typename: 'Post',
   id,
   isPinned,
@@ -207,7 +207,7 @@ const postNode = (id: string, isPinned: boolean) => ({
     handle: 'owner',
     relativeHandle: '@owner',
     avatar: null,
-    instance: { kind: 'LOCAL' },
+    instance: { kind },
     viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
   },
 });
@@ -215,10 +215,11 @@ const connection = (
   ids: string[],
   hasNextPage = false,
   isPinned: boolean | ((id: string) => boolean) = false,
+  kind = 'LOCAL',
 ) => ({
   edges: ids.map((id) => ({
     cursor: id,
-    node: postNode(id, typeof isPinned === 'function' ? isPinned(id) : isPinned),
+    node: postNode(id, typeof isPinned === 'function' ? isPinned(id) : isPinned, kind),
   })),
   pageInfo: {
     startCursor: ids[0] ?? null,
@@ -232,8 +233,8 @@ const profile = (kind: string, pins: string[], posts: string[], postsHasNext = f
   id: 'owner',
   instance: { kind },
   viewerState: { profileBlock: null, profileMute: null },
-  pinnedPosts: pins.map((id) => postNode(id, true)),
-  posts: connection(posts, postsHasNext, (id) => pins.includes(id)),
+  pinnedPosts: pins.map((id) => postNode(id, true, kind)),
+  posts: connection(posts, postsHasNext, (id) => pins.includes(id), kind),
 });
 async function respond(data: Record<string, unknown>) {
   await respondAt(requests.length - 1, data);
