@@ -156,6 +156,47 @@ describe('check-ui-contract-pr', () => {
     assert.deepEqual(result.categories, ['feature']);
   });
 
+  it('uses the merge-base snapshot for a stale branch layout-only change', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/Feature.tsx':
+        "export const Feature = () => <div style={{ color: 'red', margin: 1 }} />;\n",
+    });
+    git(root, ['checkout', '-b', 'pr']);
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/Feature.tsx',
+      "export const Feature = () => <div style={{ color: 'red', margin: 2 }} />;\n",
+    );
+    commit(root, 'stale PR layout change');
+    const prHead = git(root, ['rev-parse', 'HEAD']).trim();
+    git(root, ['checkout', 'main']);
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/Feature.tsx',
+      "export const Feature = () => <div style={{ color: 'blue', margin: 1 }} />;\n",
+    );
+    commit(root, 'upstream visual change');
+    const currentBase = git(root, ['rev-parse', 'HEAD']).trim();
+    const result = checkPullRequest({ base: currentBase, head: prHead, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, ['feature']);
+  });
+
+  it('fails closed when the base and head have no merge base', async () => {
+    const root = await createRepository({ 'README.md': 'main\n' });
+    const currentBase = git(root, ['rev-parse', 'HEAD']).trim();
+    git(root, ['checkout', '--orphan', 'isolated']);
+    git(root, ['rm', '-rf', '.']);
+    await writeRepositoryFile(root, 'README.md', 'isolated\n');
+    commit(root, 'unrelated root');
+    const result = checkPullRequest({
+      base: currentBase,
+      head: git(root, ['rev-parse', 'HEAD']).trim(),
+      cwd: root,
+    });
+    assert.ok(result.errors.some((error) => error.includes('Unable to resolve merge base')));
+  });
+
   it('treats removal of a visual property and its solely-used token import as UI cleanup', async () => {
     const root = await createRepository({
       'apps/app/src/app/index.tsx':

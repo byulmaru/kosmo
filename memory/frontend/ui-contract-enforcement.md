@@ -50,7 +50,7 @@ Lucide의 일반 glyph와 type-only import는 허용하고, builtin `no-restrict
 node scripts/check-ui-contract-pr.mjs --base <base-sha> --head <head-sha>
 ```
 
-검사기는 base snapshot/config를 기준으로 changed paths, UI owner source, normalized visual/non-visual AST projection과 legacy migration을 비교한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 섞지 않는다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
+검사 정책·config·legacy snapshot은 현재 PR base를 신뢰하고, changed paths와 source·catalog·visual/non-visual AST 비교는 base/head의 공통 조상부터 head까지의 변경만 분석한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 섞지 않는다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
 
 owner 판단은 `components/ui/**`와 실제 Production component를 import하는 `components`·`patterns` story에 한정한다. screen story만으로 새 canonical owner를 만들 수 없으며, platform sibling(`.native`/`.web`)은 같은 Production module 경계로 본다. `react-relay`, `expo-router`, `FeatureFlagsContext`와 같은 알려진 runtime 연결은 base/head 양쪽 source를 함께 보아 시각 변경과 feature 변경을 섞지 않는다.
 

@@ -755,6 +755,18 @@ function changedFiles(cwd, base, head) {
   return changes;
 }
 
+function resolveMergeBase(cwd, base, head) {
+  try {
+    const mergeBase = git(cwd, ['merge-base', base, head]).trim();
+    if (!mergeBase) {
+      throw new Error('git merge-base returned no commit.');
+    }
+    return mergeBase;
+  } catch (error) {
+    throw new Error(`Unable to resolve merge base for ${base} and ${head}: ${error.message}`);
+  }
+}
+
 function basePolicyExists(cwd, base) {
   return readAtRef(cwd, base, CHECKER_PATH) !== undefined;
 }
@@ -1136,10 +1148,17 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     };
   }
 
-  const baseCatalog = buildCatalog(cwd, base);
+  let analysisBase;
+  try {
+    analysisBase = resolveMergeBase(cwd, base, head);
+  } catch (error) {
+    return { errors: [error.message], signals: [] };
+  }
+
+  const baseCatalog = buildCatalog(cwd, analysisBase);
   const headCatalog = buildCatalog(cwd, head);
   const owners = new Set([...baseCatalog.owners, ...headCatalog.owners]);
-  const files = changedFiles(cwd, base, head);
+  const files = changedFiles(cwd, analysisBase, head);
   const errors = [];
   const signals = [];
   const categories = new Set();
@@ -1222,7 +1241,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     }
 
     if (isStoryPath(file)) {
-      const source = readAtRef(cwd, head, file) ?? readAtRef(cwd, base, file);
+      const source = readAtRef(cwd, head, file) ?? readAtRef(cwd, analysisBase, file);
       try {
         const info = source ? storyTargets(source, file, headCatalog.available) : undefined;
         if (!info?.productionImport) {
@@ -1254,7 +1273,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       continue;
     }
 
-    const baseSource = readAtRef(cwd, base, changed.oldPath ?? file);
+    const baseSource = readAtRef(cwd, analysisBase, changed.oldPath ?? file);
     const headSource = changed.status === 'D' ? undefined : readAtRef(cwd, head, file);
     const catalogOwner =
       catalogOwnsSource(file, owners) ||
