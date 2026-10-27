@@ -92,6 +92,7 @@ export function PageHeaderView(props: PageHeaderProps) {
               numberOfLines={props.titleLines}
               ref={props.titleRef}
               style={[styles.title, { color: theme.foregroundPrimary }]}
+              tabIndex={props.titleRef ? -1 : undefined}
             >
               {props.title}
             </Text>
