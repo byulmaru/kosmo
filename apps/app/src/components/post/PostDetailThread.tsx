@@ -79,7 +79,7 @@ export const PostDetailConversationFragment = graphql`
       ...PostListItem_post @alias(as: "listItem")
     }
     replyDescendants(first: $count, after: $cursor)
-      @connection(key: "PostDetailConversation_replyDescendants") {
+      @connection(key: "PostDetailThread_replyDescendants") {
       edges {
         node {
           id
