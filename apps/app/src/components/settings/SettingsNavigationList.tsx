@@ -9,7 +9,6 @@ import { getThemePreferenceLabel } from '@/theme/themePreference';
 import { useThemePreference } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes } from '@/theme/tokens';
-import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
@@ -37,7 +36,14 @@ export function SettingsNavigationList({
       role="navigation"
       style={[layoutRecipes.listStack, styles.root]}
     >
-      <ByulmaruIdAccountSettingsEntry />
+      <SettingsLinkRow
+        accessibilityLabel="Byulmaru ID Account Settings 외부 서비스로 이동"
+        external
+        href="https://id.byulmaru.co"
+        label="계정 설정"
+        target="_blank"
+        testID="byulmaru-id-account-settings-entry"
+      />
       <SettingsLinkRow
         accessibilityLabel="프로필 설정 열기"
         href="/settings/profile"
