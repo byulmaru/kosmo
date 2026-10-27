@@ -107,7 +107,12 @@ stub('expo-router', {
   usePathname: () => '/home',
   useRouter: () => ({ push: () => undefined }),
 });
-stub('lucide-react-native', { MessageCircle: 'MessageCircle', Pin: 'Pin' });
+stub('lucide-react-native', {
+  MessageCircle: 'MessageCircle',
+  Pin: 'Pin',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 stub('react-native-svg', {
   Circle: 'Circle',
   Defs: 'Defs',

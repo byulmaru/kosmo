@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  bytea,
   check,
   index,
   integer,
@@ -659,10 +660,12 @@ export const ProfilePinnedPosts = pgTable(
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
     position: integer('position'),
+    orderKey: bytea('order_key'),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
     unique().on(table.profileId, table.position),
+    unique().on(table.profileId, table.orderKey),
     index().on(table.profileId, table.id),
     check(
       'profile_pinned_post_position_nonnegative',

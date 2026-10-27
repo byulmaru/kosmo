@@ -365,6 +365,7 @@ type Mutation {
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
   registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  reorderProfilePost(input: ReorderProfilePostInput!): ReorderProfilePostPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
@@ -727,6 +728,16 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input ReorderProfilePostInput {
+  beforePostId: ID
+  postId: ID!
+}
+
+type ReorderProfilePostPayload {
+  changed: Boolean!
+  profile: Profile!
 }
 
 type ReplyNotification implements Node & Notification {

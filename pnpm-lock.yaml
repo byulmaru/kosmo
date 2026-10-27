@@ -619,6 +619,9 @@ importers:
       emoji-datasource-google:
         specifier: 16.0.0
         version: 16.0.0
+      fraci:
+        specifier: 0.19.0
+        version: 0.19.0(drizzle-orm@1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.6.7))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -5954,6 +5957,18 @@ packages:
   formdata-polyfill@4.0.10:
     resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
     engines: {node: '>=12.20.0'}
+
+  fraci@0.19.0:
+    resolution: {integrity: sha512-MBL5W7D2j0PW7WfLw11ISRREcHFUGonpfeyn/3uX9NZSq4gJ7PdnFKgUVAJurOUvHgbdoM14upE+wsuZ1qWOrA==}
+    engines: {node: '>=22.13.0'}
+    peerDependencies:
+      '@prisma/client': ^5.0.0 || ^6.0.0 || ^7.0.0
+      drizzle-orm: '>= 0.30.0 < 1.0.0 || ^1.0.0-0'
+    peerDependenciesMeta:
+      '@prisma/client':
+        optional: true
+      drizzle-orm:
+        optional: true
 
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
@@ -14998,6 +15013,10 @@ snapshots:
   formdata-polyfill@4.0.10:
     dependencies:
       fetch-blob: 3.2.0
+
+  fraci@0.19.0(drizzle-orm@1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.6.7)):
+    optionalDependencies:
+      drizzle-orm: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.6.7)
 
   fresh@0.5.2: {}
 
