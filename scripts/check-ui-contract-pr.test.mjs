@@ -248,6 +248,22 @@ describe('check-ui-contract-pr', () => {
     assert.deepEqual(result.categories, ['feature']);
   });
 
+  it('does not follow a member value into an unrelated local object', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/Feature.tsx':
+        'const geometry = { width: 10, borderWidth: 1 };\nconst style = { margin: geometry.width };\nexport const Feature = () => <div style={style} />;\n',
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/Feature.tsx',
+      'const geometry = { width: 10, borderWidth: 2 };\nconst style = { margin: geometry.width };\nexport const Feature = () => <div style={style} />;\n',
+    );
+    commit(root, 'change unrelated geometry data');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, ['feature']);
+  });
+
   it('allows an owner-only visual change and derives a catalog owner from a story', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx':
@@ -675,6 +691,40 @@ describe('check-ui-contract-pr', () => {
       'export const Feature = () => <Feature style={{ margin: 1 }} />;\n',
     );
     commit(root, 'legacy cleanup');
+    const result = checkPullRequest({ ...refs(root), cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, ['feature']);
+  });
+
+  it('matches a legacy cleanup through a local style array and object', async () => {
+    const legacyKey =
+      'apps/app/src/components/post/ComposerMediaEditor.tsx::TextArea::style::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]';
+    const root = await createRepository({
+      [CHECKER_PATH]: 'export {};\n',
+      'scripts/ui-contract-legacy.json': JSON.stringify({
+        version: 1,
+        entries: {
+          [legacyKey]: {
+            occurrences: 1,
+            reason: 'existing media editor focus recipe',
+            reference: 'docs/design/post-composer.md',
+          },
+        },
+      }),
+      'apps/app/src/components/post/ComposerMediaEditor.tsx':
+        "import { TextArea } from '@/components/ui/TextArea';\nimport { borderWidths } from '@/theme/tokens';\nconst composerFieldFocusStyle = { borderWidth: borderWidths[1], outlineWidth: 0 };\nexport const Fixture = () => <TextArea style={[composerFieldFocusStyle]} />;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'scripts/ui-contract-legacy.json',
+      '{"version":1,"entries":{}}\n',
+    );
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/post/ComposerMediaEditor.tsx',
+      "import { TextArea } from '@/components/ui/TextArea';\nconst composerFieldFocusStyle = { outlineWidth: 0 };\nexport const Fixture = () => <TextArea style={[composerFieldFocusStyle]} />;\n",
+    );
+    commit(root, 'remove nested legacy visual override');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.categories, ['feature']);

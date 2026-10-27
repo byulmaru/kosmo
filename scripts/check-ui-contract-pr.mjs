@@ -178,23 +178,48 @@ function collectStyleRanges(ast) {
   const resolveStyleExpression = (expression, seen = new Set()) => {
     const value = unwrap(expression);
     if (!value) {
-      return undefined;
+      return [];
     }
     if (value.type === 'Identifier') {
       if (seen.has(value.name)) {
-        return undefined;
+        return [];
       }
-      seen.add(value.name);
-      return resolveStyleExpression(initializers.get(value.name), seen);
+      return resolveStyleExpression(initializers.get(value.name), new Set(seen).add(value.name));
     }
     if (value.type === 'MemberExpression' && value.object?.type === 'Identifier') {
       if (seen.has(value.object.name)) {
-        return undefined;
+        return [];
       }
-      seen.add(value.object.name);
-      return resolveStyleExpression(initializers.get(value.object.name), seen);
+      return resolveStyleExpression(
+        initializers.get(value.object.name),
+        new Set(seen).add(value.object.name),
+      );
     }
-    return value;
+    if (value.type === 'ArrayExpression') {
+      return [
+        value,
+        ...value.elements.flatMap((element) => resolveStyleExpression(element, new Set(seen))),
+      ];
+    }
+    if (value.type === 'ObjectExpression') {
+      return [
+        value,
+        ...value.properties
+          .filter((property) => property.type === 'SpreadElement')
+          .flatMap((property) => resolveStyleExpression(property.argument, new Set(seen))),
+      ];
+    }
+    if (value.type === 'ConditionalExpression' || value.type === 'LogicalExpression') {
+      return [
+        value,
+        ...resolveStyleExpression(value.consequent ?? value.left, new Set(seen)),
+        ...resolveStyleExpression(value.alternate ?? value.right, new Set(seen)),
+      ];
+    }
+    if (value.type === 'SpreadElement') {
+      return resolveStyleExpression(value.argument, new Set(seen));
+    }
+    return [value];
   };
 
   const roots = [];
@@ -202,13 +227,14 @@ function collectStyleRanges(ast) {
     if (node.type === 'JSXAttribute' && STYLE_PROPS.has(node.name?.name)) {
       const expression =
         node.value?.type === 'JSXExpressionContainer' ? node.value.expression : null;
-      const root = resolveStyleExpression(expression);
-      if (root?.range) {
-        roots.push({
-          component: jsxName(parent?.name),
-          property: node.name.name,
-          range: root.range,
-        });
+      for (const root of resolveStyleExpression(expression)) {
+        if (root?.range) {
+          roots.push({
+            component: jsxName(parent?.name),
+            property: node.name.name,
+            range: root.range,
+          });
+        }
       }
     }
     if (node.type === 'CallExpression' && isStyleSheetCreate(node)) {
