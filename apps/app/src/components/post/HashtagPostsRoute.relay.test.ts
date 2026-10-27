@@ -42,6 +42,7 @@ mockModule('expo-router', {
   useRouter: () => ({ back: () => undefined, canGoBack: () => false, replace: () => undefined }),
 });
 mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon' });
+mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'ArrowLeftIcon' });
 mockModule('react-native', {
   Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },

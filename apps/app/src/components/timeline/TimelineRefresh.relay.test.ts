@@ -12,6 +12,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { colors } from '@/theme/tokens';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -76,6 +77,14 @@ class AnimatedValueMock {
   stopAnimation() {}
 }
 
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation() {}
+}
+
 // Only resolve graphql tags to compiler artifacts; all Relay hooks and normalization are real.
 mockModule('react-relay', {
   ...ReactRelay,
@@ -107,6 +116,8 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('react-native', {
   Platform: platform,
   Animated: {
+    Color: AnimatedColorMock,
+    Text: 'Text',
     Value: AnimatedValueMock,
     View: 'View',
     subtract: (a: AnimatedValueMock, b: AnimatedValueMock) => a.value - b.value,
@@ -160,7 +171,7 @@ mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ text: '#111', textSecondary: '#777' }),
+  useTheme: () => colors.light,
   useReducedMotion: () => true,
 });
 
