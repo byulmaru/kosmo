@@ -6,3 +6,5 @@ node_modules
 dist
 apps/app/android
 apps/app/ios
+apps/app/src/components/reaction/reactionEmojiPickerOptions.json
+packages/core/validation/reaction-emoji-values.json
