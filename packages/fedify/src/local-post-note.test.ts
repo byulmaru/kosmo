@@ -507,7 +507,14 @@ describe('ActivityPub Local Post Note', () => {
     const note = await dispatchLocalPostNote(createContext(), { id: post.id });
     assert.ok(note);
     assert.equal(note.toId?.href, PUBLIC_COLLECTION.href);
-    assert.equal(note.ccId?.href, `${publicOrigin}/ap/actor/${author.id}/followers`);
+    assert.deepEqual(
+      note.ccIds.map((uri) => uri.href).sort(),
+      [
+        `${publicOrigin}/ap/actor/${author.id}/followers`,
+        remoteActorUri.href,
+        unsafeUrlActorUri.href,
+      ].sort(),
+    );
     const html = note.content?.toString() ?? '';
     assert.ok(html.includes('Hello &lt;script&gt;alert(1)&lt;/script&gt; &amp; '));
     assert.ok(

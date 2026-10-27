@@ -164,9 +164,10 @@ const projectLocalPostMentions = async (
       : [],
   );
   const mentionLinks = new Map<string, { readonly href: string; readonly label: string }>();
+  const remoteActorUris: URL[] = [];
   const tags: Mention[] = [];
   if (profileIds.length === 0) {
-    return { mentionLinks, tags };
+    return { mentionLinks, remoteActorUris, tags };
   }
 
   const rows = await db
@@ -212,9 +213,12 @@ const projectLocalPostMentions = async (
 
     mentionLinks.set(row.profileId, { href: profileUrl.href, label });
     tags.push(new Mention({ href: actorUri, name: label }));
+    if (!isLocal) {
+      remoteActorUris.push(actorUri);
+    }
   }
 
-  return { mentionLinks, tags };
+  return { mentionLinks, remoteActorUris, tags };
 };
 
 const projectLocalPostHashtags = async (
@@ -413,11 +417,12 @@ export const projectLocalPostNote = async (
     projectLocalPostHashtags(configuredLocalInstance, note.contentId, note.contentDocument),
   ]);
   const tags = [...mentions.tags, ...hashtags.tags];
+  const ccs = cc && mentions.remoteActorUris.length > 0 ? [cc, ...mentions.remoteActorUris] : null;
 
   const object = new Note({
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
-    ...(cc ? { cc } : {}),
+    ...(ccs ? { ccs } : cc ? { cc } : {}),
     ...audience,
     content: postContentDocumentToHtml(
       note.contentDocument,

@@ -365,6 +365,8 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   eligible remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 규칙은 DIRECT Note 역참조, Featured
   membership, signed-fetch 권한, inbound DIRECT 처리나 Notification을 추가하지 않는다. Canonical Mention node는
   `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에 포함하지 않는다.
+- Public·Unlisted Post의 게시·삭제는 멘션한 Remote Profile을 기존 수신자에 포함하며, 같은 수신자에는 중복 전달하지 않는다.
+  Followers Only와 Mentioned Profiles의 수신 범위는 기존 정책을 유지한다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -554,7 +556,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
   Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
-  따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
+  따른다. Custom emoji는 후속 계약에 남기고, inbound
   Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
