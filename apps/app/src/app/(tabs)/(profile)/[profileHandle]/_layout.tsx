@@ -62,6 +62,14 @@ function getProfileHandleParam(params: object | undefined): string | string[] | 
     : undefined;
 }
 
+function getProfileScreenParam(params: object | undefined): string | undefined {
+  if (!params || !('screen' in params)) {
+    return undefined;
+  }
+
+  return typeof params.screen === 'string' ? params.screen : undefined;
+}
+
 const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileByHandle(handle: $handle) {
@@ -114,10 +122,12 @@ export default function ProfileLayout() {
   const profileRouteState = activeProfileParent?.state;
   const activeProfileChild = profileRouteState?.routes[profileRouteState.index ?? 0];
   const activeProfileRouteHandle = getProfileHandleParam(activeProfileParent?.params);
+  const activeProfileChildName =
+    activeProfileChild?.name ?? getProfileScreenParam(activeProfileParent?.params);
   const isProfilePostsRoute =
     !connectionKind &&
     isProfileHome &&
-    activeProfileChild?.name === 'index' &&
+    activeProfileChildName === 'index' &&
     normalizeProfileHandle(activeProfileRouteHandle) === handle;
   const fallbackRelativeHandle = `@${handle}`;
   const router = useRouter();

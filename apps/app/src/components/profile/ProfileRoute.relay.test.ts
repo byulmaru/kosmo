@@ -30,6 +30,8 @@ let ProfilePostListPage: React.ComponentType | null = null;
 let routeHandle = '@target';
 let routePath = '/@target';
 let globalPath = '/@target';
+let navigationScreenHint: string | undefined;
+let omitNestedNavigationState = false;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -64,20 +66,27 @@ mockModule('expo-router', {
         {
           key: 'profile',
           name: '[profileHandle]',
-          params: { profileHandle: routeHandle },
-          state: {
-            index: 0,
-            routes: [
-              {
-                key: 'profile-child',
-                name: routePath.endsWith('/followers')
-                  ? 'followers'
-                  : routePath.endsWith('/following')
-                    ? 'following'
-                    : 'index',
-              },
-            ],
+          params: {
+            profileHandle: routeHandle,
+            ...(navigationScreenHint ? { screen: navigationScreenHint } : {}),
           },
+          ...(omitNestedNavigationState
+            ? {}
+            : {
+                state: {
+                  index: 0,
+                  routes: [
+                    {
+                      key: 'profile-child',
+                      name: routePath.endsWith('/followers')
+                        ? 'followers'
+                        : routePath.endsWith('/following')
+                          ? 'following'
+                          : 'index',
+                    },
+                  ],
+                },
+              }),
         },
       ],
     }),
@@ -202,6 +211,8 @@ afterEach(async () => {
   routeHandle = '@target';
   routePath = '/@target';
   globalPath = '/@target';
+  navigationScreenHint = undefined;
+  omitNestedNavigationState = false;
 });
 
 function createEnvironment(environmentId = 'default') {
@@ -525,6 +536,27 @@ describe('Profile route with real Relay', () => {
     const environment = createEnvironment();
     await render(environment);
 
+    assert.deepEqual(
+      requests.map(({ name }) => name),
+      ['ProfileLayoutQuery'],
+    );
+  });
+
+  it('nested navigation state가 없어도 parent screen hint로 posts route를 판정한다', async () => {
+    omitNestedNavigationState = true;
+    navigationScreenHint = 'index';
+    const environment = createEnvironment();
+    await render(environment);
+    assert.deepEqual(
+      requests.map(({ name }) => name),
+      ['ProfileLayoutQuery', 'ProfilePostListPageQuery'],
+    );
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    requests.length = 0;
+    navigationScreenHint = 'following';
+    await render(createEnvironment('following-hint'));
     assert.deepEqual(
       requests.map(({ name }) => name),
       ['ProfileLayoutQuery'],
