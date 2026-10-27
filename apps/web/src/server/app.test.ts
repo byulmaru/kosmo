@@ -49,6 +49,12 @@ vi.mock('@kosmo/core/services', () => ({
   revokeCurrentSession: revokeSession,
 }));
 
+const { resolveConfiguredLocalInstance } = vi.hoisted(() => ({
+  resolveConfiguredLocalInstance: vi.fn(),
+}));
+
+vi.mock('@kosmo/core/local-instance', () => ({ resolveConfiguredLocalInstance }));
+
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
   setInboundObservabilityReporter,
@@ -70,6 +76,7 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
   await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
+  await writeFile(join(staticRoot, 'robots.txt'), 'User-agent: *\nDisallow: /private\n');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -159,6 +166,115 @@ describe('Web channel bootstrap', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(await response.text()).toBe('ENVIRONMENT must be dev or prod');
+  });
+});
+
+describe('Dev search exclusion', () => {
+  test.each([
+    ['dev', 'noindex'],
+    ['prod', null],
+    [undefined, null],
+  ] as const)('%s environment applies the expected search header', async (environment, value) => {
+    vi.stubEnv('ENVIRONMENT', environment);
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe(value);
+  });
+
+  test('dev robots permits crawling while production serves the exported policy', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+
+    const devResponse = await app.request('/robots.txt');
+    const devHead = await app.request('/robots.txt', { method: 'HEAD' });
+
+    expect(devResponse.status).toBe(200);
+    expect(devResponse.headers.get('content-type')).toContain('text/plain');
+    expect(devResponse.headers.get('cache-control')).toBe('no-cache');
+    expect(devResponse.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await devResponse.text()).toBe('User-agent: *\nAllow: /\n');
+    expect(devHead.status).toBe(200);
+    expect(devHead.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await devHead.text()).toBe('');
+
+    vi.stubEnv('ENVIRONMENT', 'prod');
+    const prodResponse = await app.request('/robots.txt');
+
+    expect(prodResponse.status).toBe(200);
+    expect(prodResponse.headers.get('x-robots-tag')).toBeNull();
+    expect(await prodResponse.text()).toBe('User-agent: *\nDisallow: /private\n');
+  });
+
+  test('adds noindex to an HTML post share preview', async () => {
+    const originalShell = '<html>expo app</html>';
+    await writeFile(
+      join(staticRoot, 'index.html'),
+      '<html><head><!-- kosmo-share-metadata:start --><!-- kosmo-share-metadata:end --></head><body>app shell</body></html>',
+    );
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    vi.stubEnv('PUBLIC_ORIGIN', 'https://dev.kos.moe');
+    resolveConfiguredLocalInstance.mockRejectedValueOnce(new Error('database unavailable'));
+
+    try {
+      const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
+      const response = await app.request(`/@alice/${globalId}`, {
+        headers: { accept: 'text/html' },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('x-robots-tag')).toBe('noindex');
+      expect(await response.text()).toContain('app shell');
+    } finally {
+      await writeFile(join(staticRoot, 'index.html'), originalShell);
+    }
+  });
+
+  test('adds noindex to federation responses, static assets, and not found responses', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    federationFetch.mockResolvedValueOnce(
+      new Response('federation response', {
+        headers: { 'Content-Type': 'application/activity+json' },
+      }),
+    );
+
+    const federation = await app.request('/ap/actor/alice');
+    const asset = await app.request('/asset.js');
+    const missing = await app.request('/missing.js');
+
+    expect(federation.headers.get('content-type')).toContain('application/activity+json');
+    expect(federation.headers.get('x-robots-tag')).toBe('noindex');
+    expect(asset.headers.get('content-type')).toContain('text/javascript');
+    expect(asset.headers.get('x-robots-tag')).toBe('noindex');
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('x-robots-tag')).toBe('noindex');
+  });
+
+  test('adds noindex to HEAD, 304, and error responses', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    const shell = await app.request('/@alice', { headers: { accept: 'text/html' } });
+    const head = await app.request('/@alice', {
+      headers: { accept: 'text/html' },
+      method: 'HEAD',
+    });
+    const revalidated = await app.request('/@alice', {
+      headers: { accept: 'text/html', 'if-none-match': shell.headers.get('etag') ?? '' },
+    });
+    revokeSession.mockRejectedValueOnce(new Error('database unavailable'));
+    const failure = await app.request('https://dev.kos.moe/logout', {
+      headers: { cookie: 'kosmo_session=cookie-token', origin: 'https://dev.kos.moe' },
+      method: 'POST',
+    });
+
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe('');
+    expect(head.headers.get('x-robots-tag')).toBe('noindex');
+    expect(revalidated.status).toBe(304);
+    expect(revalidated.headers.get('x-robots-tag')).toBe('noindex');
+    expect(failure.status).toBe(500);
+    expect(failure.headers.get('x-robots-tag')).toBe('noindex');
   });
 });
 
