@@ -2,7 +2,9 @@
 
 KOSMO uses `emoji-datasource-google@16.0.0` for Emoji 16.0 Unicode emoji data. Unicode strings remain the Reaction Type identifiers.
 
-The picker and server allow the same 3,781 fully-qualified emoji. Web, iOS, and Android render their Unicode strings with the client system emoji font; glyph appearance and coverage can vary by browser and OS version.
+The picker displays 1,906 base emoji. The server accepts all 3,781 fully-qualified emoji, including skin-tone variants. Web, iOS, and Android render their Unicode strings with the client system emoji font; glyph appearance and coverage can vary by browser and OS version.
+
+The generated picker and validation data are rebuilt with `node scripts/generate-reaction-emoji.mjs` from the pinned package versions above.
 
 - Package source: <https://github.com/iamcal/emoji-data>
 - Package data and code: MIT license (`emoji-datasource-google/LICENSE`)
