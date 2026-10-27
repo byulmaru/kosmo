@@ -2,6 +2,8 @@
 
 Read this entire file when changing shared React Native presentation, layout, accessibility, post content, UI copy, or action/composition ownership.
 
+UI contract enforcement의 검사 범위, consumer와 feature PR의 경계, legacy migration 및 정적 분석의 한계는 [Frontend: UI Contract Enforcement](./ui-contract-enforcement.md)에서 관리한다. 이 문서는 조합·상태·소유권 원칙을 유지하며 enforcement snapshot의 세부사항을 복제하지 않는다.
+
 ## UI Composition And State Ownership
 
 - `useRef`와 `useEffect`는 기본적으로 제거 대상이다. 새 코드의 기준은 두 hook을 "올바르게 쓰는 것"이 아니라 선언형 대안으로 삭제하는 것이며, 먼저 controlled props, render-time derivation, event handler, `key` remount, 기존 framework/common primitive를 검토한다.
