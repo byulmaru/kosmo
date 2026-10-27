@@ -6,6 +6,7 @@ import simpleImportSortPlugin from 'eslint-plugin-simple-import-sort';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
+import uiContract from './scripts/eslint-ui-contract.mjs';
 
 const config = ts.config(
   js.configs.recommended,
@@ -23,6 +24,7 @@ const config = ts.config(
     plugins: {
       '@eslint-react': eslintReact,
       'simple-import-sort': simpleImportSortPlugin,
+      'ui-contract': uiContract,
     },
     rules: {
       curly: ['error', 'all'],
@@ -54,6 +56,7 @@ const config = ts.config(
           ],
         },
       ],
+      'ui-contract/no-visual-style-overrides': 'error',
     },
   },
   {
