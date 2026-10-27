@@ -57,10 +57,8 @@ Remote Instance를 구분하고, safety 정책, 통신 실패 관측, 서비스 
 Instance 하나로 결정한다. 모든 Profile은 Instance 하나와 연결되며 Profile Origin은 연결된 Instance Type과 같다.
 Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생한다.
 
-ActivityPub server actor의 RSA와 Ed25519 공개·개인 JWK keyset은 configured Local Instance가 소유한다. Local
-Instance는 Profile과 독립적인 ActivityPub server actor를 가지며, 공용 inbox 처리에서 필요한 인증된 공개키 조회의
-서명 주체로 사용한다. 키는 첫 사용 때 keyset으로 저장하며, 기존 Local Instance와 Remote Instance는 모두 미설정
-상태로 시작한다. 이 키는 Profile에 연결하지 않고, 공개 Instance 조회 결과나 GraphQL 응답에 포함하지 않는다.
+Configured Local Instance는 Profile과 독립적인 ActivityPub server actor와 서명 키를 소유한다. 이 actor는 공용 inbox
+처리에 필요한 인증된 공개키 조회의 서명 주체다. 서명 키는 공개 Instance 조회 결과나 GraphQL 응답에 포함하지 않는다.
 
 ## 행동
 
