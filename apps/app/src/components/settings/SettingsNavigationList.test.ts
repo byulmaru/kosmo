@@ -185,6 +185,10 @@ describe('SettingsNavigationList', () => {
       'Byulmaru ID Account Settings 외부 서비스로 이동',
     );
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
+    assert.deepEqual(links[0].props.hrefAttrs, {
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    });
     assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
     assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
