@@ -15,8 +15,17 @@ let reducedMotion = false;
 
 mock.module('expo-router', {
   exports: {
-    Link: ({ children, href }: { children: ReactElement<{ href?: string }>; href: string }) =>
-      createElement('Link', { href }, cloneElement(children, { href })),
+    Link: ({
+      children,
+      href,
+      rel,
+      target,
+    }: {
+      children: ReactElement<{ href?: string }>;
+      href: string;
+      rel?: string;
+      target?: string;
+    }) => createElement('Link', { href, rel, target }, cloneElement(children, { href })),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
@@ -163,6 +172,7 @@ describe('SettingsLinkRow', () => {
     assert.equal(rendered('NavigationLink').length, 0);
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(row.props.href, 'https://id.byulmaru.co');
+    assert.equal(row.props.hrefAttrs, undefined);
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: false });
     assert.deepEqual(texts(), ['계정 설정']);
@@ -196,6 +206,25 @@ describe('SettingsLinkRow', () => {
     const row = byTestId('external-action-row');
     row.props.onPress();
     assert.equal(navigations, 1);
+  });
+
+  it('외부 링크 target=_blank는 noopener noreferrer를 사용한다', async () => {
+    await render({
+      accessibilityLabel: '외부 설정 새 탭으로 열기',
+      external: true,
+      href: 'https://id.byulmaru.co',
+      label: '계정 설정',
+      target: '_blank',
+      testID: 'external-settings-row-with-target',
+    });
+
+    const row = byTestId('external-settings-row-with-target');
+    assert.deepEqual(row.props.hrefAttrs, {
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    });
+    assert.equal(rendered('Link')[0].props.target, '_blank');
+    assert.equal(rendered('Link')[0].props.rel, 'noopener noreferrer');
   });
 
   it('selected row feedback uses selected, hover, then pressed precedence', async () => {

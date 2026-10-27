@@ -34,6 +34,8 @@ export const LinkContract: Story = {
 
     await expect(entry).toBeVisible();
     await expect(entry).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
+    await expect(entry).toHaveAttribute('target', '_blank');
+    await expect(entry).toHaveAttribute('rel', 'noopener noreferrer');
     const domEntry = entry as HTMLElement;
     expect(getComputedStyle(domEntry).minHeight).toBe('64px');
     expect(getComputedStyle(domEntry).width).toBe('600px');

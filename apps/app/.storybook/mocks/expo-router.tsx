@@ -130,11 +130,15 @@ export function Link({
   children,
   href,
   onPress,
+  rel,
   replace = false,
+  target,
 }: PropsWithChildren<{
   asChild?: boolean;
   href: Href;
+  rel?: string;
   replace?: boolean;
+  target?: string;
   onPress?: (event: LinkPressEvent) => void;
 }>) {
   const { replacePathname, setPathname } = useContext(RouterContext);
@@ -143,6 +147,8 @@ export function Link({
     !isValidElement<{
       href?: string;
       onPress?: (event: LinkPressEvent) => void;
+      rel?: string;
+      target?: string;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
@@ -161,6 +167,7 @@ export function Link({
   };
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
+    ...(Platform.OS === 'web' ? { rel, target } : {}),
     ...(Platform.OS === 'web'
       ? {
           onClick: handlePress,

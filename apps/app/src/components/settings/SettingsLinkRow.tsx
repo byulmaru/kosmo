@@ -6,7 +6,7 @@ import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
-import type { Href } from 'expo-router';
+import type { Href, WebAnchorProps } from 'expo-router';
 import type { ViewStyle } from 'react-native';
 
 export type SettingsLinkRowProps = {
@@ -19,6 +19,7 @@ export type SettingsLinkRowProps = {
   onNavigate?: () => void;
   primary?: boolean;
   selected?: boolean;
+  target?: WebAnchorProps['target'];
   testID?: string;
 };
 
@@ -32,15 +33,18 @@ export function SettingsLinkRow({
   onNavigate,
   primary = false,
   selected = false,
+  target,
   testID,
 }: SettingsLinkRowProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
+  const externalRel = target === '_blank' ? 'noopener noreferrer' : undefined;
 
   const row = (
     <Pressable
+      {...(web && external && target ? { hrefAttrs: { rel: externalRel, target } } : {})}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       accessibilityState={{ selected }}
@@ -110,7 +114,7 @@ export function SettingsLinkRow({
 
   if (external) {
     return (
-      <Link asChild href={href}>
+      <Link asChild href={href} rel={externalRel} target={target}>
         {row}
       </Link>
     );

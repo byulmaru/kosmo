@@ -14,6 +14,7 @@ export function ByulmaruIdAccountSettingsEntry() {
         external
         href={BYULMARU_ID_ACCOUNT_SETTINGS_URL}
         label={ENTRY_LABEL}
+        target="_blank"
         testID="byulmaru-id-account-settings-entry"
       />
     </View>
