@@ -10,12 +10,10 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import {
-  OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX,
-  OTA_UPDATE_NOTIFICATION_TYPE,
-} from './otaUpdateNotification';
 import { parseNativePushResponseTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
+
+export const OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX = 'kosmo-ota-update:';
 
 export function useNativePushNotificationResponses(pendingOtaUpdateId: string | null) {
   const router = useRouter();
@@ -34,23 +32,16 @@ export function useNativePushNotificationResponses(pendingOtaUpdateId: string | 
       const request = response.notification.request;
       const notificationIdentifier = request.identifier;
       if (
-        (request.trigger === null || request.trigger === undefined) &&
+        request.trigger === null &&
         notificationIdentifier.startsWith(OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX)
       ) {
         clearLastNativeNotificationResponse();
-        const data = request.content.data;
         if (
           pendingOtaUpdateId &&
-          typeof data === 'object' &&
-          data !== null &&
-          'type' in data &&
-          data.type === OTA_UPDATE_NOTIFICATION_TYPE &&
-          'updateId' in data &&
-          data.updateId === pendingOtaUpdateId &&
           notificationIdentifier ===
             `${OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX}${pendingOtaUpdateId}`
         ) {
-          await Updates.reloadAsync().catch(() => undefined);
+          await Updates.reloadAsync();
         }
         return;
       }

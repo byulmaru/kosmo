@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useRef } from 'react';
@@ -12,21 +13,18 @@ import {
 } from './nativePushClient';
 import { NativePushPermissionActionContext } from './nativePushPermissionContext';
 import {
-  OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX,
-  OTA_UPDATE_NOTIFICATION_TYPE,
-} from './otaUpdateNotification';
-import {
   syncPushInstallationToken,
   unregisterDeniedPushInstallation,
 } from './pushInstallationLifecycle';
 import {
   deletePushInstallationId,
-  readLastNotifiedOtaUpdateId,
   readPushInstallationId,
-  writeLastNotifiedOtaUpdateId,
   writePushInstallationId,
 } from './pushStorage';
-import { useNativePushNotificationResponses } from './useNativePushNotificationResponses.native';
+import {
+  OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX,
+  useNativePushNotificationResponses,
+} from './useNativePushNotificationResponses.native';
 import type { PropsWithChildren } from 'react';
 import type { NativePushRegisterInstallationMutation as NativePushRegisterInstallationMutationType } from './__generated__/NativePushRegisterInstallationMutation.graphql';
 import type { NativePushUnregisterInstallationMutation as NativePushUnregisterInstallationMutationType } from './__generated__/NativePushUnregisterInstallationMutation.graphql';
@@ -64,15 +62,13 @@ const NativePushUnregisterInstallationMutation = graphql`
 `;
 
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
+const LAST_NOTIFIED_OTA_UPDATE_ID_KEY = '@kosmo/native-updates/last-notified-update-id';
 
 export function NativePushProvider({ children }: PropsWithChildren) {
   const session = useSession();
   const { downloadedUpdate, isUpdatePending } = Updates.useUpdates();
   const pendingOtaUpdateId =
-    isUpdatePending &&
-    downloadedUpdate?.type === Updates.UpdateInfoType.NEW &&
-    typeof downloadedUpdate.updateId === 'string' &&
-    downloadedUpdate.updateId.trim()
+    isUpdatePending && downloadedUpdate?.type === Updates.UpdateInfoType.NEW
       ? downloadedUpdate.updateId
       : null;
   const sessionRef = useRef(session);
@@ -269,21 +265,20 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     }
 
     // This effect synchronizes Expo's native update snapshot with the OS notification center.
-    void readLastNotifiedOtaUpdateId()
+    void AsyncStorage.getItem(LAST_NOTIFIED_OTA_UPDATE_ID_KEY)
       .then(async (lastNotifiedUpdateId) => {
         if (lastNotifiedUpdateId === pendingOtaUpdateId) {
           return;
         }
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: '업데이트 준비됨',
+            title: '업데이트가 준비되었어요.',
             body: '누르면 앱을 재시작해 적용합니다.',
-            data: { type: OTA_UPDATE_NOTIFICATION_TYPE, updateId: pendingOtaUpdateId },
           },
           identifier: `${OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX}${pendingOtaUpdateId}`,
           trigger: null,
         });
-        await writeLastNotifiedOtaUpdateId(pendingOtaUpdateId);
+        await AsyncStorage.setItem(LAST_NOTIFIED_OTA_UPDATE_ID_KEY, pendingOtaUpdateId);
       })
       .catch(() => undefined);
   }, [pendingOtaUpdateId]);

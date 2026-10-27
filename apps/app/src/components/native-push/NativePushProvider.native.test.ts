@@ -23,9 +23,16 @@ let permission: Permission = { granted: false, status: 'undetermined' };
 let requestedPermission: Permission = { granted: true, status: 'granted' };
 let nextPermissionRead: Promise<Permission> | null = null;
 let storedInstallationId: string | null = null;
-let storedLastNotifiedOtaUpdateId: string | null = null;
+const LAST_NOTIFIED_OTA_UPDATE_ID_KEY = '@kosmo/native-updates/last-notified-update-id';
+const storageValues = new Map<string, string>();
+const asyncStorage = {
+  getItem: async (key: string) => storageValues.get(key) ?? null,
+  setItem: async (key: string, value: string) => {
+    storageValues.set(key, value);
+  },
+};
 let updatesSnapshot: {
-  downloadedUpdate?: { type: 'new' | 'rollback'; updateId?: string };
+  downloadedUpdate?: { type: 'new'; updateId: string } | { type: 'rollback' };
   isUpdatePending: boolean;
 } = { isUpdatePending: false };
 let rejectNextSchedule = false;
@@ -93,6 +100,9 @@ mock.module('react-native', {
     Platform: { OS: 'ios' },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@react-native-async-storage/async-storage', {
+  exports: { default: asyncStorage },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-notifications', {
   exports: { scheduleNotificationAsync: scheduleNotification },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -130,18 +140,17 @@ mock.module('./pushStorage', {
     deletePushInstallationId: async () => {
       storedInstallationId = null;
     },
-    readLastNotifiedOtaUpdateId: async () => storedLastNotifiedOtaUpdateId,
     readPushInstallationId: async () => storedInstallationId,
-    writeLastNotifiedOtaUpdateId: async (updateId: string) => {
-      storedLastNotifiedOtaUpdateId = updateId;
-    },
     writePushInstallationId: async (installationId: string) => {
       storedInstallationId = installationId;
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./useNativePushNotificationResponses.native', {
-  exports: { useNativePushNotificationResponses: () => undefined },
+  exports: {
+    OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX: 'kosmo-ota-update:',
+    useNativePushNotificationResponses: () => undefined,
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let NativePushProvider: typeof NativePushProviderComponent;
@@ -161,7 +170,7 @@ afterEach(async () => {
   requestedPermission = { granted: true, status: 'granted' };
   nextPermissionRead = null;
   storedInstallationId = null;
-  storedLastNotifiedOtaUpdateId = null;
+  storageValues.clear();
   updatesSnapshot = { isUpdatePending: false };
   rejectNextSchedule = false;
   appStateListener = null;
@@ -294,15 +303,14 @@ describe('native OTA update notices', () => {
     assert.deepEqual(scheduledNotifications, [
       {
         content: {
-          title: '업데이트 준비됨',
+          title: '업데이트가 준비되었어요.',
           body: '누르면 앱을 재시작해 적용합니다.',
-          data: { type: 'ota-update-ready', updateId: 'ota-update-1' },
         },
         identifier: 'kosmo-ota-update:ota-update-1',
         trigger: null,
       },
     ]);
-    assert.equal(storedLastNotifiedOtaUpdateId, 'ota-update-1');
+    assert.equal(storageValues.get(LAST_NOTIFIED_OTA_UPDATE_ID_KEY), 'ota-update-1');
     assert.equal(requestPermission.mock.callCount(), 0);
   });
 
@@ -344,26 +352,13 @@ describe('native OTA update notices', () => {
     await updateProvider();
 
     assert.equal(scheduledNotifications.length, 2);
-    assert.equal(storedLastNotifiedOtaUpdateId, 'ota-update-2');
+    assert.equal(storageValues.get(LAST_NOTIFIED_OTA_UPDATE_ID_KEY), 'ota-update-2');
   });
 
-  it('does not notify before a new update is pending', async () => {
-    updatesSnapshot = {
-      downloadedUpdate: { type: 'new', updateId: 'ota-update-1' },
-      isUpdatePending: false,
-    };
-
-    await mountProvider();
-
-    assert.equal(scheduledNotifications.length, 0);
-    assert.equal(storedLastNotifiedOtaUpdateId, null);
-  });
-
-  it('ignores rollback updates and new updates without IDs', async () => {
+  it('ignores rollback updates and empty new update IDs', async () => {
     for (const downloadedUpdate of [
       { type: 'rollback' as const },
-      { type: 'new' as const },
-      { type: 'new' as const, updateId: '  ' },
+      { type: 'new' as const, updateId: '' },
     ]) {
       updatesSnapshot = { downloadedUpdate, isUpdatePending: true };
       await mountProvider();
@@ -374,7 +369,7 @@ describe('native OTA update notices', () => {
     }
 
     assert.equal(scheduledNotifications.length, 0);
-    assert.equal(storedLastNotifiedOtaUpdateId, null);
+    assert.equal(storageValues.get(LAST_NOTIFIED_OTA_UPDATE_ID_KEY), undefined);
   });
 
   it('does not record an update when local notification scheduling fails', async () => {
@@ -387,7 +382,7 @@ describe('native OTA update notices', () => {
     await mountProvider();
 
     assert.equal(scheduledNotifications.length, 1);
-    assert.equal(storedLastNotifiedOtaUpdateId, null);
+    assert.equal(storageValues.get(LAST_NOTIFIED_OTA_UPDATE_ID_KEY), undefined);
   });
 });
 

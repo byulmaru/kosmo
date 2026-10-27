@@ -302,10 +302,7 @@ describe('native push responses', () => {
     pendingOtaUpdateId = 'ota-update-1';
     await renderHook();
 
-    await handle(
-      { type: 'ota-update-ready', updateId: 'ota-update-1' },
-      { identifier: 'kosmo-ota-update:ota-update-1', trigger: null },
-    );
+    await handle({}, { identifier: 'kosmo-ota-update:ota-update-1', trigger: null });
 
     assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
     assert.equal(reloadUpdate.mock.callCount(), 1);
@@ -313,60 +310,33 @@ describe('native push responses', () => {
     assert.equal(resetActor.mock.callCount(), 0);
   });
 
-  it('recognizes an immediate local OTA response when the native trigger field is omitted', async () => {
-    pendingOtaUpdateId = 'ota-update-1';
-    await renderHook();
-
-    await handle(
-      { type: 'ota-update-ready', updateId: 'ota-update-1' },
-      { identifier: 'kosmo-ota-update:ota-update-1', omitTrigger: true },
-    );
-
-    assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
-    assert.equal(reloadUpdate.mock.callCount(), 1);
-    assert.equal(router.replace.mock.callCount(), 0);
-  });
-
   it('contains a failed OTA reload after consuming the local notification response', async () => {
     pendingOtaUpdateId = 'ota-update-1';
     rejectNextReload = true;
     await renderHook();
 
-    await handle(
-      { type: 'ota-update-ready', updateId: 'ota-update-1' },
-      { identifier: 'kosmo-ota-update:ota-update-1', trigger: null },
-    );
+    await handle({}, { identifier: 'kosmo-ota-update:ota-update-1', trigger: null });
 
     assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
     assert.equal(reloadUpdate.mock.callCount(), 1);
     assert.equal(router.replace.mock.callCount(), 0);
   });
 
-  it('consumes stale, already-applied, and malformed local OTA notices without navigation', async () => {
+  it('consumes stale and already-applied local OTA notices without navigation', async () => {
     pendingOtaUpdateId = 'ota-update-current';
     await renderHook();
-    await handle(
-      { type: 'ota-update-ready', updateId: 'ota-update-old' },
-      { identifier: 'kosmo-ota-update:ota-update-old', trigger: null },
-    );
+    await handle({}, { identifier: 'kosmo-ota-update:ota-update-old', trigger: null });
 
     pendingOtaUpdateId = null;
     await updateHook();
-    await handle(
-      { type: 'ota-update-ready', updateId: 'ota-update-current' },
-      { identifier: 'kosmo-ota-update:ota-update-current', trigger: null },
-    );
-    await handle(
-      { type: 'ota-update-ready' },
-      { identifier: 'kosmo-ota-update:malformed', trigger: null },
-    );
+    await handle({}, { identifier: 'kosmo-ota-update:ota-update-current', trigger: null });
 
-    assert.deepEqual(profileSelectionCalls, ['clear-response', 'clear-response', 'clear-response']);
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'clear-response']);
     assert.equal(reloadUpdate.mock.callCount(), 0);
     assert.equal(router.replace.mock.callCount(), 0);
   });
 
-  it('keeps an OTA-marked remote push on its normal routing path without reloading', async () => {
+  it('keeps a remote push with the OTA identifier on its normal routing path', async () => {
     pendingOtaUpdateId = 'ota-update-1';
     await renderHook();
 
@@ -375,8 +345,6 @@ describe('native push responses', () => {
         href: '/@current/postId',
         notificationId: 'notification-ota-spoof',
         recipientProfileId: 'profile-1',
-        type: 'ota-update-ready',
-        updateId: 'ota-update-1',
       },
       {
         identifier: 'kosmo-ota-update:ota-update-1',
@@ -403,7 +371,7 @@ function HookHarness() {
 
 async function handle(
   data: Record<string, unknown>,
-  request: { identifier?: string; omitTrigger?: boolean; trigger?: unknown } = {},
+  request: { identifier?: string; trigger?: unknown } = {},
 ) {
   assert.ok(responseListener);
   const listener = responseListener;
@@ -414,9 +382,7 @@ async function handle(
         request: {
           content: { data },
           identifier: request.identifier ?? `push-${String(data.notificationId)}`,
-          ...(request.omitTrigger
-            ? {}
-            : { trigger: request.trigger === undefined ? { type: 'push' } : request.trigger }),
+          trigger: request.trigger === undefined ? { type: 'push' } : request.trigger,
         },
       },
     });

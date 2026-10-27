@@ -17,21 +17,15 @@ mock.module('@react-native-async-storage/async-storage', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PUSH_INSTALLATION_ID_KEY: string;
-let LAST_NOTIFIED_OTA_UPDATE_ID_KEY: string;
 let deletePushInstallationId: () => Promise<void>;
-let readLastNotifiedOtaUpdateId: () => Promise<string | null>;
 let readPushInstallationId: () => Promise<string | null>;
-let writeLastNotifiedOtaUpdateId: (updateId: string) => Promise<void>;
 let writePushInstallationId: (id: string) => Promise<void>;
 
 before(async () => {
   const storageModule = await import('./pushStorage');
-  LAST_NOTIFIED_OTA_UPDATE_ID_KEY = storageModule.LAST_NOTIFIED_OTA_UPDATE_ID_KEY;
   PUSH_INSTALLATION_ID_KEY = storageModule.PUSH_INSTALLATION_ID_KEY;
   deletePushInstallationId = storageModule.deletePushInstallationId;
-  readLastNotifiedOtaUpdateId = storageModule.readLastNotifiedOtaUpdateId;
   readPushInstallationId = storageModule.readPushInstallationId;
-  writeLastNotifiedOtaUpdateId = storageModule.writeLastNotifiedOtaUpdateId;
   writePushInstallationId = storageModule.writePushInstallationId;
 });
 
@@ -53,17 +47,5 @@ describe('native push local storage', () => {
 
     assert.equal(await readPushInstallationId(), null);
     assert.deepEqual([...values.keys()], []);
-  });
-
-  it('stores the last OTA update notice ID independently from the push installation ID', async () => {
-    await writePushInstallationId('installation-1');
-    await writeLastNotifiedOtaUpdateId('ota-update-1');
-
-    assert.equal(await readPushInstallationId(), 'installation-1');
-    assert.equal(await readLastNotifiedOtaUpdateId(), 'ota-update-1');
-    assert.deepEqual(
-      [...values.keys()].sort(),
-      [LAST_NOTIFIED_OTA_UPDATE_ID_KEY, PUSH_INSTALLATION_ID_KEY].sort(),
-    );
   });
 });
