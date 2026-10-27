@@ -239,7 +239,8 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 
 KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` thumb와 투명 track을 사용하는 얇은 scrollbar를 기본으로 한다. Overlay 내부 scroller는 stable gutter도 예약해 scrollbar가 content 위를 덮지 않게 한다. Rail은 header와 본문의 좌우 기준선을 유지하도록 gutter를 추가하지 않는다. document와 sticky rail 같은 바깥 scroll owner에도 gutter를 추가하지 않는다. 기능별로 시각적 scrollbar를 숨기는 horizontal gallery·tab scroller는 기존 navigation·swipe·keyboard 도달 계약과 함께 예외로 유지한다.
 
-- `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
+- 비로그인 모바일 Web의 정확한 `/`에서는 PROD-1232에 따라 하단 탭과 탭용 공간을 제거한다. 기존 방문자 안내 전체를 safe area를 고려해 화면 하단에 고정하고 실제 높이만큼 콘텐츠 공간을 확보한다. 안내를 닫으면 해당 공간도 제거하며 상단 메뉴 진입은 유지한다. 다른 route·인증 상태·Native에는 적용하지 않는다.
+- `< compact`에서는 위 예외를 제외하고 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `< compact` Web과 Android/iOS의 mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과
   `피드백 보내기`·`설정 및 기타`·`로그아웃` footer actions를 함께 스크롤한다. `설정 및 기타`를 열어 `설정`과
   `로그아웃` 하위 행이 추가되어도 같은 흐름을 유지한다. Profile summary는 drawer chrome으로 유지하고, profile

@@ -80,7 +80,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-async function renderInvitation() {
+async function renderInvitation(pinToBottom = false) {
   await act(async () => {
     renderer = create(
       createElement(PublicContentInvitation, {
@@ -90,6 +90,7 @@ async function renderInvitation() {
         onLayout: (height: number) => {
           measuredHeight = height;
         },
+        pinToBottom,
         visible: true,
       }),
     );
@@ -99,6 +100,17 @@ async function renderInvitation() {
 }
 
 describe('PublicContentInvitation', () => {
+  it('keeps the whole narrow root panel fixed with safe area inside its measured bounds', async () => {
+    viewport = { height: 480, width: 320 };
+    const view = await renderInvitation(true);
+    const panel = view.root.findByProps({ testID: 'public-content-invitation' });
+    const style = Object.assign({}, ...panel.props.style);
+    assert.equal(style.position, 'fixed');
+    assert.equal(style.bottom, 0);
+    assert.equal(style.paddingBottom, 36);
+    assert.equal(view.root.findAllByType('NavigationLink' as never).length, 1);
+  });
+
   it('lets fixed left and right bounds determine the compact CTA width', async () => {
     viewport = { height: 900, width: 1024 };
     const view = await renderInvitation();
