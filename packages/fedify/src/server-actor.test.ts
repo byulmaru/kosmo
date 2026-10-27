@@ -87,12 +87,12 @@ describe('local Instance ActivityPub actor', () => {
     assert.match(actorResponse.headers.get('content-type') ?? '', /application\/activity\+json/);
 
     const actor = (await actorResponse.json()) as {
-      assertionMethod?: {
+      assertionMethod?: Array<{
         controller?: string;
         id?: string;
         publicKeyMultibase?: string;
         type?: string;
-      };
+      }>;
       id?: string;
       inbox?: string;
       preferredUsername?: string;
@@ -108,10 +108,11 @@ describe('local Instance ActivityPub actor', () => {
     assert.equal(actor.publicKey?.id, publicKeyId);
     assert.equal(actor.publicKey?.owner, actorUri);
     assert.ok(actor.publicKey?.publicKeyPem);
-    assert.equal(actor.assertionMethod?.id, `${actorUri}#multikey-2`);
-    assert.equal(actor.assertionMethod?.controller, actorUri);
-    assert.equal(actor.assertionMethod?.type, 'Multikey');
-    assert.ok(actor.assertionMethod?.publicKeyMultibase);
+    assert.equal(actor.assertionMethod?.length, 1);
+    assert.equal(actor.assertionMethod?.[0]?.id, `${actorUri}#multikey-2`);
+    assert.equal(actor.assertionMethod?.[0]?.controller, actorUri);
+    assert.equal(actor.assertionMethod?.[0]?.type, 'Multikey');
+    assert.ok(actor.assertionMethod?.[0]?.publicKeyMultibase);
     assert.equal(JSON.stringify(actor).includes('privateKey'), false);
 
     const repeatedResponse = await federation.fetch(
