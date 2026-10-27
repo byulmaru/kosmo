@@ -50,7 +50,7 @@
     "temporal-polyfill": "^0.3.2",
     "tsx": "^4.22.4",
     "uuid": "^14.0.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "scripts": {
     "db:migrate": "node --import tsx db/migrate.ts",
