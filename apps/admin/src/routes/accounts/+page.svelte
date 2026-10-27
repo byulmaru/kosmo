@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { Badge } from '#lib/components/ui/badge/index.js';
+  import { Button } from '#lib/components/ui/button/index.js';
+  import * as Table from '#lib/components/ui/table/index.js';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import * as Table from '$lib/components/ui/table';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

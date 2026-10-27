@@ -4,7 +4,7 @@ import {
   profileIdSchema,
   profileOriginSchema,
   profileStateSchema,
-} from '$lib/server/profiles';
+} from '#lib/server/profiles.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { SvelteURLSearchParams } from 'svelte/reactivity';
+  import { Badge } from '#lib/components/ui/badge/index.js';
+  import { Button } from '#lib/components/ui/button/index.js';
+  import { Input } from '#lib/components/ui/input/index.js';
+  import * as Table from '#lib/components/ui/table/index.js';
+  import { safeHttpUrl } from '#lib/profile-url.js';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
-  import * as Table from '$lib/components/ui/table';
-  import { safeHttpUrl } from '$lib/profile-url';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -27,7 +27,7 @@ overrides:
   react-native-worklets: 0.8.3
   '@grpc/grpc-js@<1.13.6': 1.14.5
   react-devtools-core@6.1.5>shell-quote: 1.12.0
-  devalue@: 5.9.3
+  devalue@: 5.9.4
   jsdom@29.1.1>undici: 7.30.1
 
 patchedDependencies:
@@ -5085,9 +5085,6 @@ packages:
 
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
-
-  devalue@5.9.3:
-    resolution: {integrity: sha512-xRumYOCUZN/EesqHEU3WOXanOZNvfZFZ/o1AHVFDX1yI0UAkZkOgDXt341CzKoBVIkgQba55/+DjGBKrIoKcHw==}
 
   devalue@5.9.4:
     resolution: {integrity: sha512-sPAT4pztbu6586/hrhOnMKS17IJrvg12mXiSPSS3W5qDeN2RGgvZ0diZCm31dBbnevfVmujNO3IM2wrS4Y2Rhg==}
@@ -10382,7 +10379,7 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.41.1
       '@standard-schema/spec': 1.1.0
       byte-encodings: 1.0.11
-      devalue: 5.9.3
+      devalue: 5.9.4
       es-toolkit: 1.46.1
       json-canon: 1.0.1
       jsonld: 9.0.0
@@ -13972,8 +13969,6 @@ snapshots:
   detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
-
-  devalue@5.9.3: {}
 
   devalue@5.9.4: {}
 
@@ -17795,7 +17790,7 @@ snapshots:
       aria-query: 5.3.1
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.9.3
+      devalue: 5.9.4
       esm-env: 1.2.2
       esrap: 2.4.0(@typescript-eslint/types@8.62.1)
       is-reference: 3.0.3

@@ -10,8 +10,6 @@ export default defineConfig({
     sveltekit({
       adapter: adapter(),
       preprocess: vitePreprocess(),
-      // shortcut: Keeps the deprecated $lib alias, migrate to #lib before Kit removes it.
-      alias: { $lib: './src/lib' },
     }),
   ],
 });

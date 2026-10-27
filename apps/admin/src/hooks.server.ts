@@ -1,4 +1,4 @@
-import { normalizeIdentityHeader } from '$lib/server/identity';
+import { normalizeIdentityHeader } from '#lib/server/identity.js';
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 
 export const handle: Handle = async ({ event, resolve }) => {

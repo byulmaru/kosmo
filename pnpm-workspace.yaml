@@ -87,8 +87,8 @@ overrides:
   '@grpc/grpc-js@<1.13.6': 1.14.5
   # react-devtools-core accepts shell-quote 1.x; use its patched 1.12.0 release.
   'react-devtools-core@6.1.5>shell-quote': 1.12.0
-  # SvelteKit/Svelte accept 5.x; 5.9.3 fixes shared-memory disclosure and three DoS advisories.
-  'devalue@': 5.9.3
+  # SvelteKit/Svelte accept 5.x; 5.9.4 includes the shared-memory disclosure and three DoS fixes.
+  'devalue@': 5.9.4
   # jsdom accepts ^7.25.0; fix CVE-2026-19534 / CVE-2026-84961 without replacing 6.x.
   'jsdom@29.1.1>undici': 7.30.1
 # TODO(PROD-916): Remove this patch, its override, and patch file after a compatible upstream update.
