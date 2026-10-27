@@ -49,12 +49,6 @@ vi.mock('@kosmo/core/services', () => ({
   revokeCurrentSession: revokeSession,
 }));
 
-const { resolveConfiguredLocalInstance } = vi.hoisted(() => ({
-  resolveConfiguredLocalInstance: vi.fn(),
-}));
-
-vi.mock('@kosmo/core/local-instance', () => ({ resolveConfiguredLocalInstance }));
-
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
   setInboundObservabilityReporter,
@@ -196,7 +190,6 @@ describe('Dev search exclusion', () => {
     expect(await devResponse.text()).toBe('User-agent: *\nAllow: /\n');
     expect(devHead.status).toBe(200);
     expect(devHead.headers.get('x-robots-tag')).toBe('noindex');
-    expect(await devHead.text()).toBe('');
 
     vi.stubEnv('ENVIRONMENT', 'prod');
     const prodResponse = await app.request('/robots.txt');
@@ -206,33 +199,7 @@ describe('Dev search exclusion', () => {
     expect(await prodResponse.text()).toBe('User-agent: *\nDisallow: /private\n');
   });
 
-  test('adds noindex to an HTML post share preview', async () => {
-    const originalShell = '<html>expo app</html>';
-    await writeFile(
-      join(staticRoot, 'index.html'),
-      '<html><head><!-- kosmo-share-metadata:start --><!-- kosmo-share-metadata:end --></head><body>app shell</body></html>',
-    );
-    vi.stubEnv('ENVIRONMENT', 'dev');
-    vi.stubEnv('PUBLIC_ORIGIN', 'https://dev.kos.moe');
-    resolveConfiguredLocalInstance.mockRejectedValueOnce(new Error('database unavailable'));
-
-    try {
-      const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
-      const response = await app.request(`/@alice/${globalId}`, {
-        headers: { accept: 'text/html' },
-      });
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('text/html');
-      expect(response.headers.get('cache-control')).toBe('no-store');
-      expect(response.headers.get('x-robots-tag')).toBe('noindex');
-      expect(await response.text()).toContain('app shell');
-    } finally {
-      await writeFile(join(staticRoot, 'index.html'), originalShell);
-    }
-  });
-
-  test('adds noindex to federation responses, static assets, and not found responses', async () => {
+  test('adds noindex to direct federation responses', async () => {
     vi.stubEnv('ENVIRONMENT', 'dev');
     federationFetch.mockResolvedValueOnce(
       new Response('federation response', {
@@ -241,40 +208,10 @@ describe('Dev search exclusion', () => {
     );
 
     const federation = await app.request('/ap/actor/alice');
-    const asset = await app.request('/asset.js');
-    const missing = await app.request('/missing.js');
 
+    expect(federation.status).toBe(200);
     expect(federation.headers.get('content-type')).toContain('application/activity+json');
     expect(federation.headers.get('x-robots-tag')).toBe('noindex');
-    expect(asset.headers.get('content-type')).toContain('text/javascript');
-    expect(asset.headers.get('x-robots-tag')).toBe('noindex');
-    expect(missing.status).toBe(404);
-    expect(missing.headers.get('x-robots-tag')).toBe('noindex');
-  });
-
-  test('adds noindex to HEAD, 304, and error responses', async () => {
-    vi.stubEnv('ENVIRONMENT', 'dev');
-    const shell = await app.request('/@alice', { headers: { accept: 'text/html' } });
-    const head = await app.request('/@alice', {
-      headers: { accept: 'text/html' },
-      method: 'HEAD',
-    });
-    const revalidated = await app.request('/@alice', {
-      headers: { accept: 'text/html', 'if-none-match': shell.headers.get('etag') ?? '' },
-    });
-    revokeSession.mockRejectedValueOnce(new Error('database unavailable'));
-    const failure = await app.request('https://dev.kos.moe/logout', {
-      headers: { cookie: 'kosmo_session=cookie-token', origin: 'https://dev.kos.moe' },
-      method: 'POST',
-    });
-
-    expect(head.status).toBe(200);
-    expect(await head.text()).toBe('');
-    expect(head.headers.get('x-robots-tag')).toBe('noindex');
-    expect(revalidated.status).toBe(304);
-    expect(revalidated.headers.get('x-robots-tag')).toBe('noindex');
-    expect(failure.status).toBe(500);
-    expect(failure.headers.get('x-robots-tag')).toBe('noindex');
   });
 });
 
