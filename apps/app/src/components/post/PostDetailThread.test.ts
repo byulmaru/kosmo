@@ -4,7 +4,11 @@ import { createElement, Fragment, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { PostDetailThread as PostDetailThreadComponent } from './PostDetailThread';
+import type {
+  PostDetailThread as PostDetailThreadComponent,
+  PostDetailThreadData as PostDetailThreadDataComponent,
+  PostDetailThreadViewport as PostDetailThreadViewportComponent,
+} from './PostDetailThread';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -158,9 +162,12 @@ mock.module('@/theme/tokens', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PostDetailThread: typeof PostDetailThreadComponent;
+let PostDetailThreadData: typeof PostDetailThreadDataComponent;
+let PostDetailThreadViewport: typeof PostDetailThreadViewportComponent;
 
 before(async () => {
-  ({ PostDetailThread } = await import('./PostDetailThread'));
+  ({ PostDetailThread, PostDetailThreadData, PostDetailThreadViewport } =
+    await import('./PostDetailThread'));
 });
 
 afterEach(async () => {
@@ -313,6 +320,35 @@ async function render(presentation: 'route' | 'viewer') {
 }
 
 describe('PostDetailThread Native initial target scroll', () => {
+  it('늦게 마운트된 pagination child가 먼저 도착한 짧은 viewport metrics를 재생한다', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThreadViewport, {
+          children: null,
+          header: createElement('Header'),
+        }),
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } });
+      scroll.props.onContentSizeChange(390, 150);
+    });
+    assert.equal(loadNextCalls, 0);
+
+    await act(async () => {
+      renderer!.update(
+        createElement(PostDetailThreadViewport, {
+          children: createElement(PostDetailThreadData, { post: {} as never }),
+          header: createElement('Header'),
+        }),
+      );
+    });
+
+    assert.equal(loadNextCalls, 1);
+  });
+
   it('진입 prop 없이 대상 답글부터 표시하고 지연 이미지 보정과 수동 이동을 유지한다', async () => {
     platform.OS = 'ios';
     let offset = 0;

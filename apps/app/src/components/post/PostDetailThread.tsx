@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -19,6 +27,7 @@ import type {
   ScrollViewProps,
   View as NativeView,
 } from 'react-native';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 import type {
   PostDetailConversation_post$data,
   PostDetailConversation_post$key,
@@ -94,6 +103,39 @@ type PostDetailFrameProps = PropsWithChildren<{
     'onContentSizeChange' | 'onLayout' | 'onScroll' | 'onScrollBeginDrag' | 'scrollEventThrottle'
   >;
 }>;
+
+type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
+type NativeLayoutEvent = Parameters<NativeScrollProps['onLayout']>[0];
+type NativeScrollEventPayload = Parameters<NativeScrollProps['onScroll']>[0];
+type NativeScrollEvent =
+  | {
+      args: Parameters<NativeScrollProps['onContentSizeChange']>;
+      type: 'contentSize';
+    }
+  | { args: [NativeLayoutEvent]; type: 'layout' }
+  | { args: [NativeScrollEventPayload]; type: 'scroll' };
+
+function snapshotNativeLayoutEvent(event: LayoutChangeEvent): NativeLayoutEvent {
+  return { nativeEvent: { layout: { height: event.nativeEvent.layout.height } } };
+}
+
+function snapshotNativeScrollEvent(event: Parameters<NonNullable<ScrollViewProps['onScroll']>>[0]) {
+  return {
+    nativeEvent: {
+      contentOffset: { y: event.nativeEvent.contentOffset.y },
+      contentSize: { height: event.nativeEvent.contentSize.height },
+      layoutMeasurement: { height: event.nativeEvent.layoutMeasurement.height },
+    },
+  } as NativeScrollEventPayload;
+}
+
+function recordLatestNativeScrollEvent(events: NativeScrollEvent[], event: NativeScrollEvent) {
+  const previousIndex = events.findIndex((previous) => previous.type === event.type);
+  if (previousIndex >= 0) {
+    events.splice(previousIndex, 1);
+  }
+  events.push(event);
+}
 
 type ThreadRenderablePost = Readonly<{
   detail: PostLayout_post$key | null;
@@ -227,9 +269,7 @@ type RouteThreadViewportContextValue = Readonly<{
   currentRef: RefObject<NativeView | null>;
   currentSectionMinHeight: number | undefined;
   postListPresentation: PostListPresentation;
-  registerNativeScrollProps: (
-    props: Pick<ScrollViewProps, 'onContentSizeChange' | 'onLayout' | 'onScroll'>,
-  ) => void;
+  registerNativeScrollProps: (props: NativeScrollProps) => () => void;
   scheduleInitialScroll: () => void;
 }>;
 
@@ -258,9 +298,12 @@ export function PostDetailThreadViewport({
   const lastProgrammaticScrollOffsetRef = useRef<number | null>(null);
   const previousPreserveScrollPositionRef = useRef<boolean | null>(null);
   const initialScrollFrameRef = useRef<number | null>(null);
-  const nativeScrollPropsRef = useRef<
-    Pick<ScrollViewProps, 'onContentSizeChange' | 'onLayout' | 'onScroll'>
-  >({});
+  const latestNativeScrollEventsRef = useRef<NativeScrollEvent[]>([]);
+  const nativeScrollRegistrationRef = useRef<symbol | null>(null);
+  const nativeScrollPropsRef = useRef<Pick<
+    ScrollViewProps,
+    'onContentSizeChange' | 'onLayout' | 'onScroll'
+  > | null>(null);
   const postListPresentation: PostListPresentation =
     getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const cancelInitialScroll = useCallback(() => {
@@ -412,7 +455,11 @@ export function PostDetailThreadViewport({
   );
   const nativeLaidOut: NonNullable<ScrollViewProps['onLayout']> = useCallback(
     (event) => {
-      nativeScrollPropsRef.current.onLayout?.(event);
+      recordLatestNativeScrollEvent(latestNativeScrollEventsRef.current, {
+        args: [snapshotNativeLayoutEvent(event)],
+        type: 'layout',
+      });
+      nativeScrollPropsRef.current?.onLayout?.(event);
       nativeViewportHeightRef.current = event.nativeEvent.layout.height;
       setNativeViewportHeight(event.nativeEvent.layout.height);
       scheduleInitialScroll();
@@ -421,13 +468,21 @@ export function PostDetailThreadViewport({
   );
   const nativeContentSizeChanged: NonNullable<ScrollViewProps['onContentSizeChange']> = useCallback(
     (contentWidth, contentHeight) => {
-      nativeScrollPropsRef.current.onContentSizeChange?.(contentWidth, contentHeight);
+      recordLatestNativeScrollEvent(latestNativeScrollEventsRef.current, {
+        args: [contentWidth, contentHeight],
+        type: 'contentSize',
+      });
+      nativeScrollPropsRef.current?.onContentSizeChange?.(contentWidth, contentHeight);
       scheduleInitialScroll();
     },
     [scheduleInitialScroll],
   );
   const nativeScrolled: NonNullable<ScrollViewProps['onScroll']> = useCallback(
     (event) => {
+      recordLatestNativeScrollEvent(latestNativeScrollEventsRef.current, {
+        args: [snapshotNativeScrollEvent(event)],
+        type: 'scroll',
+      });
       nativeScrollGenerationRef.current += 1;
       nativeScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
       if (!shouldKeepCurrentInViewRef.current && presentation === 'route') {
@@ -439,16 +494,30 @@ export function PostDetailThreadViewport({
           nativeCurrentTopRef.current = currentTop;
         });
       }
-      nativeScrollPropsRef.current.onScroll?.(event);
+      nativeScrollPropsRef.current?.onScroll?.(event);
     },
     [presentation],
   );
-  const registerNativeScrollProps = useCallback(
-    (props: Pick<ScrollViewProps, 'onContentSizeChange' | 'onLayout' | 'onScroll'>) => {
-      nativeScrollPropsRef.current = props;
-    },
-    [],
-  );
+  const registerNativeScrollProps = useCallback((props: NativeScrollProps) => {
+    const registrationId = Symbol('native-scroll-registration');
+    nativeScrollRegistrationRef.current = registrationId;
+    nativeScrollPropsRef.current = props;
+    for (const event of latestNativeScrollEventsRef.current) {
+      if (event.type === 'contentSize') {
+        props.onContentSizeChange?.(...event.args);
+      } else if (event.type === 'layout') {
+        props.onLayout?.(...event.args);
+      } else {
+        props.onScroll?.(...event.args);
+      }
+    }
+    return () => {
+      if (nativeScrollRegistrationRef.current === registrationId) {
+        nativeScrollRegistrationRef.current = null;
+        nativeScrollPropsRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const preservingScrollPosition = preserveScrollPosition?.() ?? false;
@@ -610,7 +679,9 @@ export function PostDetailThreadData({
     pageSize: 20,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
-  viewport.registerNativeScrollProps(nativeScrollProps);
+  useLayoutEffect(() => {
+    return viewport.registerNativeScrollProps(nativeScrollProps);
+  }, [nativeScrollProps, viewport.registerNativeScrollProps]);
   return (
     <PostDetailThreadRows
       currentDetail={data.detail}
@@ -670,7 +741,9 @@ export function PostDetailConversationData({
     pageSize: 20,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
-  viewport.registerNativeScrollProps(nativeScrollProps);
+  useLayoutEffect(() => {
+    return viewport.registerNativeScrollProps(nativeScrollProps);
+  }, [nativeScrollProps, viewport.registerNativeScrollProps]);
   return (
     <PostDetailThreadRows
       conversationError={conversationError}
