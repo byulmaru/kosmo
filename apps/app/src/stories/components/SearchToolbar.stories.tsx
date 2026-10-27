@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { TextInput } from 'react-native';
 import type { SearchToolbarLeadingAction, SearchToolbarProps } from '@/components/ui/SearchToolbar';
 
 type CatalogProps = SearchToolbarProps;
+const headerClear = fn();
+const headerClearPressIn = fn();
 
 function SearchToolbarCatalog({
   disabled = false,
@@ -48,6 +52,29 @@ function SearchToolbarCatalog({
   );
 }
 
+function HeaderSearchInputCatalog() {
+  const inputRef = useRef<TextInput>(null);
+  const [value, setValue] = useState('코스모');
+
+  return (
+    <View style={{ width: 390 }}>
+      <SearchInput
+        appearance="header"
+        inputRef={inputRef}
+        onChangeText={setValue}
+        onClear={() => {
+          setValue('');
+          headerClear();
+        }}
+        onClearPressIn={headerClearPressIn}
+        onSubmitEditing={() => undefined}
+        platform="ios"
+        value={value}
+      />
+    </View>
+  );
+}
+
 const meta = {
   args: {
     disabled: false,
@@ -79,6 +106,7 @@ const meta = {
     'AndroidBackInteractionContract',
     'DisabledInteractionContract',
     'IosBackInteractionContract',
+    'HeaderAppearanceContract',
     'InteractionContract',
     'ReducedMotionContract',
   ],
@@ -229,6 +257,12 @@ export const InteractionContract: Story = {
       await waitFor(() => expect(getComputedStyle(leading).outlineStyle).toBe('solid'));
       await userEvent.tab();
       expect(input).toHaveFocus();
+      await userEvent.tab();
+      const clear = getButton(canvasElement, '검색 지우기');
+      expect(clear).toHaveFocus();
+      await waitFor(() => expect(getComputedStyle(clear).outlineStyle).toBe('solid'));
+      await userEvent.tab({ shift: true });
+      expect(input).toHaveFocus();
     });
 
     await step('입력·leading action·Clear callback 확인', async () => {
@@ -265,6 +299,32 @@ export const InteractionContract: Story = {
         expect(input).toHaveFocus();
       });
       expect(within(canvasElement).queryByRole('button', { name: '검색 지우기' })).toBeNull();
+    });
+  },
+};
+
+export const HeaderAppearanceContract: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <HeaderSearchInputCatalog />,
+  play: async ({ canvasElement }) => {
+    headerClear.mockClear();
+    headerClearPressIn.mockClear();
+    const canvas = within(canvasElement);
+    const input = getInput(canvasElement);
+    const shell = canvas.getByTestId('search-input-shell');
+    const clear = getButton(canvasElement, '검색 지우기');
+
+    expect(input).toHaveAccessibleName('검색어');
+    expect(shell.getBoundingClientRect().height).toBe(44);
+    expectTarget(clear, 44);
+    expect(getComputedStyle(input).fontSize).toBe('16px');
+
+    await userEvent.click(clear);
+    expect(headerClearPressIn).toHaveBeenCalledOnce();
+    expect(headerClear).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(input).toHaveValue('');
+      expect(canvas.queryByRole('button', { name: '검색 지우기' })).toBeNull();
     });
   },
 };

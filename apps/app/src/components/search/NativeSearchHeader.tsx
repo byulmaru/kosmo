@@ -1,13 +1,15 @@
-import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
+import { ArrowLeft, Menu } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { IconButton } from '@/components/ui/IconButton';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { RefObject } from 'react';
+import type { TextInput } from 'react-native';
 
 export function NativeSearchHeader({
   backHref,
@@ -73,40 +75,18 @@ export function NativeSearchHeader({
           </IconButton>
         </NavigationLink>
       )}
-      <View
-        style={[styles.inputShell, { backgroundColor: theme.surface }]}
-        testID="search-input-shell"
-      >
-        <Search color={theme.textSecondary} size={20} strokeWidth={2} />
-        <TextInput
-          ref={inputRef}
-          accessibilityLabel="검색어"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={(text) => setDraft((current) => ({ ...current, text }))}
-          onSubmitEditing={({ nativeEvent }) => onSubmit(nativeEvent.text)}
-          placeholder="검색어를 입력하세요"
-          placeholderTextColor={theme.textSecondary}
-          returnKeyType="search"
-          style={[styles.input, { color: theme.text }]}
-          value={draft.text}
-        />
-        {draft.text ? (
-          <IconButton
-            accessibilityLabel="검색 지우기"
-            onPress={() => {
-              setDraft((current) => ({ ...current, text: '' }));
-              onClear();
-            }}
-            onPressIn={onFocus}
-            style={styles.clearButton}
-            targetSize={44}
-            visualSize={44}
-          >
-            <X color={theme.textSecondary} size={18} strokeWidth={2} />
-          </IconButton>
-        ) : null}
-      </View>
+      <SearchInput
+        appearance="header"
+        inputRef={inputRef}
+        onChangeText={(text) => setDraft((current) => ({ ...current, text }))}
+        onClear={() => {
+          setDraft((current) => ({ ...current, text: '' }));
+          onClear();
+        }}
+        onClearPressIn={onFocus}
+        onSubmitEditing={({ nativeEvent }) => onSubmit(nativeEvent.text)}
+        value={draft.text}
+      />
     </View>
   );
 }
@@ -114,22 +94,4 @@ export function NativeSearchHeader({
 const styles = StyleSheet.create({
   root: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm },
   iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
-  inputShell: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    flex: 1,
-    flexDirection: 'row',
-    height: 44,
-    paddingLeft: spacing.lg,
-  },
-  input: {
-    flex: 1,
-    fontFamily: fontFamilies.ui,
-    minWidth: 0,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    ...typography.sm,
-    fontSize: typography.md.fontSize,
-  },
-  clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
 });

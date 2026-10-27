@@ -1,11 +1,12 @@
-import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
+import { ArrowLeft, Menu } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, fontSizes, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, radius, space } from '@/theme/tokens';
 import { IconButton } from './IconButton';
+import { SearchInput } from './SearchInput';
 import type { ReactElement, RefObject } from 'react';
-import type { View as NativeView, ViewStyle } from 'react-native';
+import type { TextInput, View as NativeView, ViewStyle } from 'react-native';
 import type { NavigationChromePlatform } from './navigationChrome';
 
 export type SearchToolbarLeadingAction = 'back' | 'menu' | 'none';
@@ -54,8 +55,7 @@ export function SearchToolbar({
   const theme = useTheme();
   const internalInputRef = useRef<TextInput>(null);
   const resolvedInputRef = inputRef ?? internalInputRef;
-  const [inputFocused, setInputFocused] = useState(false);
-  const [focusVisibleControl, setFocusVisibleControl] = useState<'clear' | 'leading' | null>(null);
+  const [leadingFocusVisible, setLeadingFocusVisible] = useState(false);
   const targetSize = platform === 'android' ? 48 : 44;
   const showMenu = leadingAction === 'menu' && platform === 'web';
   const showBack = leadingAction === 'back';
@@ -64,35 +64,31 @@ export function SearchToolbar({
     disabled || (showMenu && onMenuPress === undefined) || (showBack && onBackPress === undefined);
   const iconColor = disabled ? theme.stateDisabledForeground : theme.foregroundSecondary;
   const leadingIconColor = leadingDisabled ? theme.stateDisabledForeground : iconColor;
-  const controlStyle = (control: 'clear' | 'leading') => {
-    return [
-      styles.control,
-      { height: targetSize, width: targetSize },
-      platform === 'web'
-        ? ({
-            outlineColor: focusVisibleControl === control ? theme.stateFocusRing : undefined,
-            outlineOffset: -2,
-            outlineStyle: focusVisibleControl === control ? 'solid' : 'none',
-            outlineWidth: focusVisibleControl === control ? borderWidths[2] : borderWidths[0],
-          } as ViewStyle)
-        : undefined,
-    ];
-  };
+  const controlStyle = StyleSheet.flatten([
+    styles.control,
+    { height: targetSize, width: targetSize },
+    platform === 'web'
+      ? ({
+          outlineColor: leadingFocusVisible ? theme.stateFocusRing : undefined,
+          outlineOffset: -2,
+          outlineStyle: leadingFocusVisible ? 'solid' : 'none',
+          outlineWidth: leadingFocusVisible ? borderWidths[2] : borderWidths[0],
+        } as ViewStyle)
+      : undefined,
+  ]);
   const backControl = showBack ? (
     <IconButton
       accessibilityLabel="뒤로"
       disabled={leadingDisabled}
-      onBlur={() => setFocusVisibleControl(null)}
+      onBlur={() => setLeadingFocusVisible(false)}
       onFocus={(event) => {
         const target = event.currentTarget as unknown as {
           matches?: (selector: string) => boolean;
         };
-        setFocusVisibleControl(
-          platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
-        );
+        setLeadingFocusVisible(platform === 'web' && target.matches?.(':focus-visible') === true);
       }}
       onPress={onBackPress}
-      style={StyleSheet.flatten(controlStyle('leading'))}
+      style={controlStyle}
       targetSize={targetSize}
       visualSize={targetSize}
       visualStyle={styles.controlVisual}
@@ -120,18 +116,18 @@ export function SearchToolbar({
           accessibilityState={{ expanded: leadingControlExpanded }}
           controlRef={leadingControlRef}
           disabled={leadingDisabled}
-          onBlur={() => setFocusVisibleControl(null)}
+          onBlur={() => setLeadingFocusVisible(false)}
           onFocus={(event) => {
             event.stopPropagation();
             const target = event.currentTarget as unknown as {
               matches?: (selector: string) => boolean;
             };
-            setFocusVisibleControl(
-              platform === 'web' && target.matches?.(':focus-visible') ? 'leading' : null,
+            setLeadingFocusVisible(
+              platform === 'web' && target.matches?.(':focus-visible') === true,
             );
           }}
           onPress={onMenuPress}
-          style={StyleSheet.flatten(controlStyle('leading'))}
+          style={controlStyle}
           targetSize={targetSize}
           visualSize={targetSize}
           visualStyle={styles.controlVisual}
@@ -147,75 +143,25 @@ export function SearchToolbar({
           }) ?? backControl)
         : null}
 
-      <View
-        testID="search-input-shell"
-        style={[
-          styles.inputShell,
-          {
-            backgroundColor: disabled ? theme.stateDisabledSurface : theme.backgroundSurface,
-            borderColor: inputFocused ? theme.stateFocusRing : theme.borderSubtle,
-            borderWidth: inputFocused ? borderWidths[2] : borderWidths[1],
-            paddingRight: value.length > 0 ? space[0] : space[16],
-          },
-        ]}
-      >
-        <Search color={iconColor} size={iconSizes[20]} strokeWidth={2} />
-        <TextInput
-          aria-disabled={disabled}
-          accessibilityLabel="검색어"
-          accessibilityState={{ disabled }}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!disabled}
-          ref={resolvedInputRef}
-          onBlur={() => setInputFocused(false)}
-          onChangeText={(nextValue) => {
-            if (!disabled) {
-              onChangeText(nextValue);
-            }
-          }}
-          onFocus={() => setInputFocused(true)}
-          onSubmitEditing={() => {
-            if (!disabled) {
-              onSubmit(value);
-            }
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={iconColor}
-          returnKeyType="search"
-          style={[
-            styles.input,
-            { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
-          ]}
-          value={value}
-        />
-        {value.length > 0 ? (
-          <IconButton
-            accessibilityLabel="검색 지우기"
-            disabled={disabled}
-            onBlur={() => setFocusVisibleControl(null)}
-            onFocus={(event) => {
-              const target = event.currentTarget as unknown as {
-                matches?: (selector: string) => boolean;
-              };
-              setFocusVisibleControl(
-                platform === 'web' && target.matches?.(':focus-visible') ? 'clear' : null,
-              );
-            }}
-            onPress={() => {
-              onClear();
-              resolvedInputRef.current?.focus();
-            }}
-            onPressIn={() => resolvedInputRef.current?.focus()}
-            style={StyleSheet.flatten(controlStyle('clear'))}
-            targetSize={targetSize}
-            visualSize={targetSize}
-            visualStyle={styles.controlVisual}
-          >
-            <X color={iconColor} size={iconSizes[18]} strokeWidth={2} />
-          </IconButton>
-        ) : null}
-      </View>
+      <SearchInput
+        appearance="toolbar"
+        disabled={disabled}
+        inputRef={resolvedInputRef}
+        onChangeText={onChangeText}
+        onClear={() => {
+          onClear();
+          resolvedInputRef.current?.focus();
+        }}
+        onClearPressIn={() => resolvedInputRef.current?.focus()}
+        onSubmitEditing={() => {
+          if (!disabled) {
+            onSubmit(value);
+          }
+        }}
+        placeholder={placeholder}
+        platform={platform}
+        value={value}
+      />
     </View>
   );
 }
@@ -238,22 +184,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius[8],
     justifyContent: 'center',
-  },
-  inputShell: {
-    alignItems: 'center',
-    borderRadius: radius.full,
-    flex: 1,
-    flexDirection: 'row',
-    height: 48,
-    paddingLeft: space[16],
-  },
-  input: {
-    ...textStyles.uiCopyM,
-    // iOS Web 입력 포커스 시 자동 확대를 막는 기존 16px 계약을 유지한다.
-    fontSize: fontSizes[16],
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: space[8],
-    paddingVertical: space[0],
   },
 });

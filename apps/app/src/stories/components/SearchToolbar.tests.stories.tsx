@@ -1,6 +1,7 @@
 import baseMeta, {
   AndroidBackInteractionContract as androidBackInteractionContract,
   DisabledInteractionContract as disabledInteractionContract,
+  HeaderAppearanceContract as headerAppearanceContract,
   InteractionContract as interactionContract,
   IosBackInteractionContract as iosBackInteractionContract,
   ReducedMotionContract as reducedMotionContract,
@@ -17,6 +18,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
+export const HeaderAppearanceContract: Story = headerAppearanceContract;
 export const ReducedMotionContract: Story = reducedMotionContract;
 export const IosBackInteractionContract: Story = iosBackInteractionContract;
 export const AndroidBackInteractionContract: Story = androidBackInteractionContract;
