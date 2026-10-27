@@ -318,6 +318,7 @@ function MediaPreview({
       accessibilityIgnoresInvertColors
       accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
       accessibilityRole="image"
+      fadeDuration={0}
       resizeMode="contain"
       source={{ uri: selected.asset.uri }}
       style={styles.selectedPreview}
@@ -399,6 +400,7 @@ function MediaGallery({
           >
             <Image
               accessibilityIgnoresInvertColors
+              fadeDuration={0}
               source={{ uri: item.asset.uri }}
               style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
             />
