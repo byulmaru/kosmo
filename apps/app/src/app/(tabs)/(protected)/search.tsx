@@ -1,16 +1,8 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, History, Menu, Search as SearchIcon, X } from 'lucide-react-native';
+import { History, X } from 'lucide-react-native';
 import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
@@ -22,6 +14,7 @@ import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { NativeSearchHeader } from '@/components/search/NativeSearchHeader';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -33,9 +26,10 @@ import { StateView } from '@/components/ui/StateView';
 import { Tab } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement } from 'react';
+import type { TextInput } from 'react-native';
 import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/SearchToolbar';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
@@ -421,77 +415,20 @@ export default function SearchScreen() {
 
   const nativeSearchHeader = !web ? (
     <PageHeader>
-      <View
-        accessibilityLabel="검색"
+      <NativeSearchHeader
+        backHref={searchHref('', activeTab)}
+        focused={focused}
+        inputRef={inputRef}
+        onBackPress={() => {
+          preserveQueryNavigationPosition(false);
+          setFocused(false);
+        }}
         onBlur={leaveSearchFocus}
+        onClear={clearSearch}
         onFocus={keepSearchFocused}
-        style={styles.nativeSearchHeader}
-      >
-        {phase === 'before' ? (
-          <IconButton
-            aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
-            accessibilityLabel="메뉴 열기"
-            accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
-            controlRef={shellChrome?.navigationDrawerTriggerRef}
-            onFocus={(event) => event.stopPropagation()}
-            onPress={shellChrome?.openNavigationDrawer}
-            style={styles.iconButton}
-            targetSize={44}
-            visualSize={44}
-          >
-            <Menu color={theme.text} size={24} strokeWidth={2} />
-          </IconButton>
-        ) : (
-          <NavigationLink href={searchHref('', activeTab)}>
-            <IconButton
-              accessibilityLabel="뒤로"
-              accessibilityRole="link"
-              onPress={() => {
-                preserveQueryNavigationPosition(false);
-                setInput('');
-                setFocused(false);
-              }}
-              onPressIn={keepSearchFocused}
-              style={styles.iconButton}
-              targetSize={44}
-              visualSize={44}
-            >
-              <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-            </IconButton>
-          </NavigationLink>
-        )}
-        <View
-          style={[styles.inputShell, { backgroundColor: theme.surface }]}
-          testID="search-input-shell"
-        >
-          <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel="검색어"
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setInput}
-            onSubmitEditing={() => navigate(input)}
-            placeholder="검색어를 입력하세요"
-            placeholderTextColor={theme.textSecondary}
-            returnKeyType="search"
-            style={[styles.input, { color: theme.text }]}
-            value={input}
-          />
-          {input ? (
-            <IconButton
-              accessibilityLabel="검색 지우기"
-              onPress={clearSearch}
-              onPressIn={keepSearchFocused}
-              style={styles.clearButton}
-              targetSize={44}
-              visualSize={44}
-            >
-              <X color={theme.textSecondary} size={18} strokeWidth={2} />
-            </IconButton>
-          ) : null}
-        </View>
-      </View>
+        onSubmit={navigate}
+        query={query}
+      />
     </PageHeader>
   ) : null;
 
@@ -657,31 +594,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
-  nativeSearchHeader: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
-  inputShell: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    flex: 1,
-    flexDirection: 'row',
-    height: 44,
-    paddingLeft: spacing.lg,
-  },
-  input: {
-    flex: 1,
-    fontFamily: fontFamilies.ui,
-    minWidth: 0,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    ...typography.sm,
-    fontSize: typography.md.fontSize,
-  },
-  clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
   sectionTitle: {
     fontFamily: fontFamilies.ui,
