@@ -1,5 +1,6 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import { SelectTrigger } from '@/components/ui/SelectTrigger';
@@ -17,17 +18,31 @@ type CatalogProps = {
   value: string;
 };
 
-function SelectTriggerCatalog({ open, disabled, ...args }: CatalogProps) {
+type SelectTriggerCatalogProps = CatalogProps & {
+  updateArgs?: (update: Partial<Pick<CatalogProps, 'open'>>) => void;
+};
+
+function SelectTriggerCatalog({ disabled, open, updateArgs, ...args }: SelectTriggerCatalogProps) {
   const elevation = useElevation();
   const theme = useTheme();
   const controls = useId();
-  const expanded = open && !disabled;
+  const [localOpen, setLocalOpen] = useState(open);
+
+  useEffect(() => setLocalOpen(open), [open]);
+
+  const expanded = localOpen && !disabled;
 
   return (
     <View style={{ gap: 8, width: '100%', maxWidth: 320, padding: 4 }}>
       <SelectTrigger
         {...args}
         {...(expanded ? { open: true, controls } : { open: false, disabled })}
+        onPress={() => {
+          args.onPress();
+          const nextOpen = !localOpen;
+          setLocalOpen(nextOpen);
+          updateArgs?.({ open: nextOpen });
+        }}
       />
       {expanded ? (
         <View
@@ -86,7 +101,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {};
+export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<CatalogProps>();
+    return <SelectTriggerCatalog {...args} updateArgs={updateArgs} />;
+  },
+};
 
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },
@@ -142,9 +162,12 @@ export const InteractionContract: Story = {
     });
     await user.keyboard('{Enter}');
     expect(args.onPress).toHaveBeenCalledOnce();
-    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(canvas.getByRole('listbox')).toBeVisible();
     await user.keyboard(' ');
     expect(args.onPress).toHaveBeenCalledTimes(2);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(canvas.queryByRole('listbox')).toBeNull();
     const disabled = canvas.getByRole('button', { name: `비활성 공개 범위: ${args.value}` });
     expect(disabled).toHaveAttribute('aria-disabled', 'true');
     await fireEvent.click(disabled);

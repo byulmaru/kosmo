@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Pressable, Text } from 'react-native';
-import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { useToast } from '@/components/ui/ToastProvider';
 import ogImage from '../../../public/og-default.png?url';
 import { post } from '../fixtures';
-import baseMeta, { PostMediaViewerCatalog } from './PostMediaViewer.stories';
+import baseMeta, {
+  PostMediaViewerCatalog,
+  PostMediaViewerPlayground,
+} from './PostMediaViewer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { StoryArgs } from './PostMediaViewer.stories';
 
@@ -28,6 +31,66 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const PlaygroundNavigationUpdatesIndex: Story = {
+  args: {
+    currentIndex: 4,
+    mediaItems: Array.from({ length: 5 }, (_, index) => ({
+      altText: `${index + 1}번째 이미지`,
+      id: `playground-media-${index + 1}`,
+      url: ogImage,
+    })),
+    onIndexChange: fn(),
+    onNext: fn(),
+    onPrevious: fn(),
+    presentation: 'compact',
+    viewState: 'ready',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: (args) => {
+    return PostMediaViewerPlayground(args);
+  },
+  play: async ({ args, canvasElement }) => {
+    args.onNext.mockClear();
+    args.onPrevious.mockClear();
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('5 / 5');
+
+    await userEvent.click(canvas.getByRole('button', { name: '이전 이미지' }));
+    await expect(args.onPrevious).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 5'),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '다음 이미지' }));
+    await expect(args.onNext).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('5 / 5'),
+    );
+  },
+};
+
+export const PlaygroundClampsIndexToMediaLength: Story = {
+  args: {
+    currentIndex: 4,
+    mediaItems: Array.from({ length: 3 }, (_, index) => ({
+      altText: `${index + 1}번째 이미지`,
+      id: `playground-short-media-${index + 1}`,
+      url: ogImage,
+    })),
+    presentation: 'compact',
+    viewState: 'ready',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: (args) => {
+    return PostMediaViewerPlayground(args);
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByTestId('post-media-viewer-counter')).toHaveTextContent(
+      '3 / 3',
+    );
+  },
+};
 
 function RevisionSurface(args: StoryArgs) {
   const [revision, setRevision] = useState('content-a');

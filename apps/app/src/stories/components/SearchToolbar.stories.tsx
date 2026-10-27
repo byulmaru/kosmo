@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { colors } from '@/theme/tokens';
@@ -150,6 +151,34 @@ function expectLeadingIcon(
 }
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<SearchToolbarProps>();
+    return (
+      <SearchToolbarCatalog
+        {...args}
+        onBackPress={() => {
+          args.onBackPress?.();
+          updateArgs({ focused: false, query: '' });
+        }}
+        onBlur={() => {
+          args.onBlur();
+          updateArgs({ focused: false });
+        }}
+        onClear={() => {
+          args.onClear();
+          updateArgs({ query: '' });
+        }}
+        onFocus={() => {
+          args.onFocus();
+          updateArgs({ focused: true });
+        }}
+        onSubmit={(text) => {
+          args.onSubmit(text);
+          updateArgs({ focused: false, query: text });
+        }}
+      />
+    );
+  },
   args: { query: '코스모' },
   parameters: {
     controls: {
@@ -204,6 +233,7 @@ export const Playground: Story = {
 export const InteractionContract: Story = {
   ...Playground,
   args: { ...Playground.args, query: '기존 검색어' },
+  render: (args) => <SearchToolbarCatalog {...args} />,
   parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement, step }) => {
     args.onBackPress?.mockClear();

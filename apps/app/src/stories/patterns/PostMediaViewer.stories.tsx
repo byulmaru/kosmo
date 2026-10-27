@@ -1,3 +1,4 @@
+import { useContext, useEffect, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
@@ -10,6 +11,7 @@ import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
+import { StoryArgsUpdaterContext } from '../../../.storybook/StoryArgsUpdater';
 import appleTouchImage from '../../../public/apple-touch-icon.png?url';
 import iconImage from '../../../public/icon-512.png?url';
 import maskableIconImage from '../../../public/icon-maskable-512.png?url';
@@ -23,6 +25,7 @@ export type StoryArgs = {
   currentIndex: number;
   mediaCount: number;
   onClose: () => void;
+  onIndexChange?: (index: number) => void;
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
@@ -109,12 +112,17 @@ function mediaForCount(count: number): PostMediaItem[] {
   }));
 }
 
+function clampMediaIndex(index: number, mediaLength: number) {
+  return Math.max(0, Math.min(mediaLength - 1, Math.trunc(index)));
+}
+
 export function PostMediaViewerCatalog({
   compactSurfacePostId = wideRailCurrentPost.id,
   contentRevisionId = wideRailCurrentPost.content?.id ?? null,
   mediaItems,
   currentIndex,
   mediaCount,
+  onIndexChange,
   onClose,
   onNext,
   onPrevious,
@@ -128,13 +136,13 @@ export function PostMediaViewerCatalog({
 }) {
   const { height } = useWindowDimensions();
   const media = mediaItems ?? mediaForCount(mediaCount);
-  const clampedIndex = Math.max(0, Math.min(media.length - 1, Math.trunc(currentIndex)));
+  const clampedIndex = clampMediaIndex(currentIndex, media.length);
   const surfaceProps = {
     contentRevisionId,
     currentIndex: clampedIndex,
     media,
     onClose,
-    onIndexChange: fn(),
+    onIndexChange: onIndexChange ?? fn(),
     onNext,
     onPrevious,
     onRetry,
@@ -158,6 +166,66 @@ export function PostMediaViewerCatalog({
       )}
     </View>
   );
+}
+
+type PlaygroundArgs = StoryArgs & { mediaItems?: PostMediaItem[] };
+
+function PostMediaViewerPlaygroundState({
+  args,
+  currentIndex: initialIndex,
+  media,
+}: {
+  args: PlaygroundArgs;
+  currentIndex: number;
+  media: PostMediaItem[];
+}) {
+  const updateArgs = useContext(StoryArgsUpdaterContext);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  if (updateArgs === null) {
+    throw new globalThis.Error('Post Media Viewer Playground에는 Story Args Updater가 필요합니다.');
+  }
+
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+    if (args.currentIndex !== initialIndex) {
+      updateArgs({ currentIndex: initialIndex });
+    }
+  }, [args.currentIndex, initialIndex, updateArgs]);
+  const displayedIndex = clampMediaIndex(currentIndex, media.length);
+
+  const setIndex = (index: number) => {
+    const clampedIndex = clampMediaIndex(index, media.length);
+    setCurrentIndex(clampedIndex);
+    updateArgs({ currentIndex: clampedIndex });
+  };
+
+  return (
+    <PostMediaViewerCatalog
+      {...args}
+      currentIndex={displayedIndex}
+      mediaItems={media}
+      onIndexChange={(index) => {
+        args.onIndexChange?.(index);
+        setIndex(index);
+      }}
+      onNext={() => {
+        args.onNext();
+        setIndex(displayedIndex + 1);
+      }}
+      onPrevious={() => {
+        args.onPrevious();
+        setIndex(displayedIndex - 1);
+      }}
+    />
+  );
+}
+
+export function PostMediaViewerPlayground(args: PlaygroundArgs) {
+  const media = args.mediaItems ?? mediaForCount(args.mediaCount);
+  const currentIndex = clampMediaIndex(args.currentIndex, media.length);
+
+  return <PostMediaViewerPlaygroundState args={args} currentIndex={currentIndex} media={media} />;
 }
 
 function ViewerCompactDetailFixture({ surfacePostId }: { surfacePostId: string }) {
@@ -234,9 +302,11 @@ const meta = {
     viewState: 'ready',
   },
   argTypes: {
-    currentIndex: { control: { max: 3, min: 0, step: 1, type: 'number' } },
+    currentIndex: { control: { min: 0, step: 1, type: 'number' } },
     mediaCount: { control: { max: 4, min: 1, step: 1, type: 'range' } },
+    mediaItems: { control: 'object' },
     onClose: { action: 'close', control: false },
+    onIndexChange: { action: 'indexChange', control: false },
     onNext: { action: 'next', control: false },
     onPrevious: { action: 'previous', control: false },
     onRetry: { action: 'retry', control: false },
@@ -248,7 +318,7 @@ const meta = {
   },
   component: PostMediaViewerCatalog,
   decorators: [withViewerProviders],
-  excludeStories: ['PostMediaViewerCatalog'],
+  excludeStories: ['PostMediaViewerCatalog', 'PostMediaViewerPlayground'],
   parameters: {
     controls: { disable: true },
     layout: 'fullscreen',
@@ -263,6 +333,7 @@ const meta = {
         PostMediaViewerThreadQuery: { data: wideRailThreadResponseData },
       },
     },
+    storyArgsUpdater: true,
   },
   title: 'KOSMO/Patterns/Post Media Viewer',
 } satisfies Meta<typeof PostMediaViewerCatalog>;
@@ -271,11 +342,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  args: { mediaItems: mediaForCount(4), onIndexChange: fn() },
   parameters: {
     controls: {
       disable: false,
-      include: ['presentation', 'mediaCount', 'currentIndex', 'viewState'],
+      include: ['presentation', 'mediaItems', 'currentIndex', 'viewState'],
     },
+  },
+  render: (args) => {
+    return PostMediaViewerPlayground(args);
   },
 };
 
