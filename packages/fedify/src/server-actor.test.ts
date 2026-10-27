@@ -25,7 +25,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteProfileId = '019f6f67-2222-7777-8888-123456789abc';
 const serverActorUri = new URL('/ap/actor/~instance', publicOrigin);
-const remoteActorUri = new URL(`https://remote.example/users/${crypto.randomUUID()}`);
+const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -131,7 +131,7 @@ describe('local Instance ActivityPub actor', () => {
     const postResponse = await federation.fetch(new Request(actor.outbox!, { method: 'POST' }), {
       contextData: undefined,
     });
-    assert.equal(postResponse.status, 404);
+    assert.equal(postResponse.status, 405);
 
     const actorRow = await db
       .select()

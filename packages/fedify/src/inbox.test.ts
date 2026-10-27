@@ -68,7 +68,8 @@ describe('Fedify inbox routes', () => {
   test('uses the Local Instance actor key for a shared inbox AUTHORIZED_FETCH document request', async (t) => {
     const serverActorUri = new URL('/ap/actor/~instance', 'https://kos.moe');
     const serverKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const remoteActorUri = new URL(`https://remote.example/users/${crypto.randomUUID()}`);
+    // Fedify validates public DNS before the mocked fetch, so this host must resolve.
+    const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
     const remoteKeyUri = new URL('#main-key', remoteActorUri);
     const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
     const remoteKey = new CryptographicKey({
@@ -87,7 +88,7 @@ describe('Fedify inbox routes', () => {
       recipient: string | null;
     }> = [];
     const federation = createFederation<void>({
-      allowPrivateAddress: true,
+      allowPrivateAddress: false,
       kv: new MemoryKvStore(),
       origin: 'https://kos.moe',
     });
