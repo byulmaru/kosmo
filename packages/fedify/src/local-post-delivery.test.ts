@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Create, Delete, Image, Note } from '@fedify/vocab';
+import { Create, Delete, Image, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   AccountState,
   ActivityPubActorType,
@@ -147,7 +147,7 @@ describe('ActivityPub Local Post delivery', () => {
     }
   });
 
-  test('Create(Note) delivery serializes Hashtag links without adding recipients', async () => {
+  test('Create(Note) delivery serializes Hashtag links and sends to remote Mentions', async () => {
     const author = await createProfile({ instanceId: localInstanceId });
     const follower = await createRemoteActor({ handle: 'mention-delivery-follower' });
     const mentionTarget = await createRemoteActor({ handle: 'mention-delivery-target' });
@@ -251,9 +251,71 @@ describe('ActivityPub Local Post delivery', () => {
       ].sort((left, right) => left.href.localeCompare(right.href)),
     );
     assert.deepEqual(
-      call.recipients.map((recipient) => recipient.id?.href),
-      [follower.actorUri],
+      call.recipients.map((recipient) => recipient.id?.href).sort(),
+      [follower.actorUri, mentionTarget.actorUri].sort(),
     );
+    assert.deepEqual(
+      call.activity.ccIds.map((uri) => uri.href).sort(),
+      [`${publicOrigin}/ap/actor/${author.id}/followers`, mentionTarget.actorUri].sort(),
+    );
+  });
+
+  test('PUBLIC/UNLISTED Mention recipients receive Create/Delete with the existing audience addresses', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const mentionTarget = await createRemoteActor({ handle: 'public-mention-target' });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    for (const visibility of [PostVisibility.PUBLIC, PostVisibility.UNLISTED]) {
+      const post = await createPost(author.id, { visibility });
+      assert.ok(post.currentContentId);
+      await addPostMentions(post.currentContentId, [mentionTarget.profile.id]);
+      await sendLocalPostCreate(post.id);
+
+      const createCall = fixture.calls.at(-1);
+      assert.ok(createCall?.activity instanceof Create);
+      const followersUri = `${publicOrigin}/ap/actor/${author.id}/followers`;
+      const toIds =
+        visibility === PostVisibility.PUBLIC ? [PUBLIC_COLLECTION.href] : [followersUri];
+      const ccIds =
+        visibility === PostVisibility.PUBLIC
+          ? [followersUri, mentionTarget.actorUri]
+          : [PUBLIC_COLLECTION.href, mentionTarget.actorUri];
+      assert.deepEqual(
+        createCall.recipients.map((recipient) => recipient.id?.href),
+        [mentionTarget.actorUri],
+      );
+      assert.deepEqual(
+        createCall.activity.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(createCall.activity.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+      const note = await createCall.activity.getObject();
+      assert.ok(note instanceof Note);
+      assert.deepEqual(
+        note.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(note.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+
+      await db
+        .update(Posts)
+        .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+        .where(eq(Posts.id, post.id));
+      await sendLocalPostDelete(post.id);
+
+      const deleteCall = fixture.calls.at(-1);
+      assert.ok(deleteCall?.activity instanceof Delete);
+      assert.deepEqual(
+        deleteCall.recipients.map((recipient) => recipient.id?.href),
+        [mentionTarget.actorUri],
+      );
+      assert.deepEqual(
+        deleteCall.activity.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(deleteCall.activity.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+    }
   });
 
   test('DIRECT Create/Delete는 현재 Content의 remote Mention만 대상으로 하고 follower와 Parent를 제외한다', async () => {
@@ -489,6 +551,8 @@ describe('ActivityPub Local Post delivery', () => {
       replyParentId: parent.id,
       visibility: PostVisibility.FOLLOWERS,
     });
+    assert.ok(followersReply.currentContentId);
+    await addPostMentions(followersReply.currentContentId, [parentAuthor.profile.id]);
     const directReply = await createPost(author.id, {
       replyParentId: parent.id,
       visibility: PostVisibility.DIRECT,
@@ -509,7 +573,7 @@ describe('ActivityPub Local Post delivery', () => {
     );
   });
 
-  test('Root Post followers와 direct Parent target을 함께 확장하고 actor 기준으로 중복 제거한다', async () => {
+  test('Mention, followers, reply Parent가 같은 actor면 Create/Delete를 한 번만 전달한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActor({ handle: 'follower', sharedInbox: true });
     await db.insert(ProfileFollows).values({
@@ -519,17 +583,34 @@ describe('ActivityPub Local Post delivery', () => {
     const rootPost = await createPost(author.id);
     const remoteParent = await createPost(follower.profile.id);
     const reply = await createPost(author.id, { replyParentId: remoteParent.id });
+    assert.ok(reply.currentContentId);
+    await addPostMentions(reply.currentContentId, [follower.profile.id]);
     const fixture = createContextFixture();
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
     await sendLocalPostCreate(rootPost.id);
     await sendLocalPostCreate(reply.id);
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+      .where(eq(Posts.id, reply.id));
+    await sendLocalPostDelete(reply.id);
 
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 3);
     assert.deepEqual(
       fixture.calls.map((call) => call.recipients.map((recipient) => recipient.id?.href)),
-      [[follower.actorUri], [follower.actorUri]],
+      [[follower.actorUri], [follower.actorUri], [follower.actorUri]],
     );
+    assert.deepEqual(
+      fixture.calls[0]?.activity.ccIds.map((uri) => uri.href),
+      [`${publicOrigin}/ap/actor/${author.id}/followers`],
+    );
+    for (const call of fixture.calls.slice(1)) {
+      assert.deepEqual(
+        call.activity.ccIds.map((uri) => uri.href).sort(),
+        [`${publicOrigin}/ap/actor/${author.id}/followers`, follower.actorUri].sort(),
+      );
+    }
   });
 
   test('Local Parent Reply는 Parent direct target 없이 Author followers에게만 전달한다', async () => {
