@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Linking } from 'react-native';
 import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
@@ -9,10 +10,14 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
+import {
+  OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX,
+  OTA_UPDATE_NOTIFICATION_TYPE,
+} from './otaUpdateNotification';
 import { parseNativePushResponseTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 
-export function useNativePushNotificationResponses() {
+export function useNativePushNotificationResponses(pendingOtaUpdateId: string | null) {
   const router = useRouter();
   const session = useSession();
   const { resetActor } = useRelayActor();
@@ -26,6 +31,30 @@ export function useNativePushNotificationResponses() {
 
   const handleNotificationResponse = useCallback(
     async (response: NotificationResponse) => {
+      const request = response.notification.request;
+      const notificationIdentifier = request.identifier;
+      if (
+        (request.trigger === null || request.trigger === undefined) &&
+        notificationIdentifier.startsWith(OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX)
+      ) {
+        clearLastNativeNotificationResponse();
+        const data = request.content.data;
+        if (
+          pendingOtaUpdateId &&
+          typeof data === 'object' &&
+          data !== null &&
+          'type' in data &&
+          data.type === OTA_UPDATE_NOTIFICATION_TYPE &&
+          'updateId' in data &&
+          data.updateId === pendingOtaUpdateId &&
+          notificationIdentifier ===
+            `${OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX}${pendingOtaUpdateId}`
+        ) {
+          await Updates.reloadAsync().catch(() => undefined);
+        }
+        return;
+      }
+
       const currentSession = sessionRef.current;
       if (currentSession.status !== 'valid') {
         clearLastNativeNotificationResponse();
@@ -73,7 +102,7 @@ export function useNativePushNotificationResponses() {
       clearLastNativeNotificationResponse();
       router.replace(envelope.href);
     },
-    [fallbackToNotifications, resetActor, router],
+    [fallbackToNotifications, pendingOtaUpdateId, resetActor, router],
   );
 
   const enqueueNotificationResponse = useCallback(

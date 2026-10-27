@@ -17,6 +17,7 @@ const recordProfileWrite = async (profileId: string) => {
   profileSelectionCalls.push(`persist:${profileId}`);
 };
 let writeProfile: (profileId: string) => Promise<void> = recordProfileWrite;
+let rejectNextReload = false;
 const router = {
   replace: mock.fn((href: string) => {
     profileSelectionCalls.push(`navigate:${href}`);
@@ -30,10 +31,18 @@ const openURL = mock.fn(async () => {
     throw new Error('External URL could not be opened.');
   }
 });
+const reloadUpdate = mock.fn(async () => {
+  profileSelectionCalls.push('reload-update');
+  if (rejectNextReload) {
+    rejectNextReload = false;
+    throw new Error('Downloaded update could not be reloaded.');
+  }
+});
 const resetActor = mock.fn((profileId: string) => profileSelectionCalls.push(`reset:${profileId}`));
 let renderer: ReactTestRenderer | null = null;
 let clearResponseCount = 0;
-let useNativePushNotificationResponses: () => void;
+let pendingOtaUpdateId: string | null = null;
+let useNativePushNotificationResponses: (pendingOtaUpdateId: string | null) => void;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -45,6 +54,7 @@ mockModule('react-native', {
   },
   Linking: { openURL },
 });
+mockModule('expo-updates', { reloadAsync: reloadUpdate });
 mockModule('@/relay/RelayActorProvider', { useRelayActor: () => ({ resetActor }) });
 mockModule('@/session/SessionProvider', { useSession: () => session });
 mockModule('@/auth/selectedProfileStorage', {
@@ -75,12 +85,15 @@ afterEach(async () => {
     renderer = null;
   }
   session = { accountId: 'account-1', selectedProfileId: 'profile-1', status: 'valid' };
+  pendingOtaUpdateId = null;
+  rejectNextReload = false;
   responseListener = null;
   writeProfile = recordProfileWrite;
   profileSelectionCalls.length = 0;
   router.replace = defaultReplace;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
+  reloadUpdate.mock.resetCalls();
   rejectNextOpenURL = false;
   resetActor.mock.resetCalls();
   clearResponseCount = 0;
@@ -283,6 +296,97 @@ describe('native push responses', () => {
 
     assert.deepEqual(profileSelectionCalls, ['clear-response', 'navigate:/@recipient/postId']);
   });
+
+  it('clears a matching local OTA notice before reloading the pending update', async () => {
+    session.status = 'guest';
+    pendingOtaUpdateId = 'ota-update-1';
+    await renderHook();
+
+    await handle(
+      { type: 'ota-update-ready', updateId: 'ota-update-1' },
+      { identifier: 'kosmo-ota-update:ota-update-1', trigger: null },
+    );
+
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
+    assert.equal(reloadUpdate.mock.callCount(), 1);
+    assert.equal(router.replace.mock.callCount(), 0);
+    assert.equal(resetActor.mock.callCount(), 0);
+  });
+
+  it('recognizes an immediate local OTA response when the native trigger field is omitted', async () => {
+    pendingOtaUpdateId = 'ota-update-1';
+    await renderHook();
+
+    await handle(
+      { type: 'ota-update-ready', updateId: 'ota-update-1' },
+      { identifier: 'kosmo-ota-update:ota-update-1', omitTrigger: true },
+    );
+
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
+    assert.equal(reloadUpdate.mock.callCount(), 1);
+    assert.equal(router.replace.mock.callCount(), 0);
+  });
+
+  it('contains a failed OTA reload after consuming the local notification response', async () => {
+    pendingOtaUpdateId = 'ota-update-1';
+    rejectNextReload = true;
+    await renderHook();
+
+    await handle(
+      { type: 'ota-update-ready', updateId: 'ota-update-1' },
+      { identifier: 'kosmo-ota-update:ota-update-1', trigger: null },
+    );
+
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'reload-update']);
+    assert.equal(reloadUpdate.mock.callCount(), 1);
+    assert.equal(router.replace.mock.callCount(), 0);
+  });
+
+  it('consumes stale, already-applied, and malformed local OTA notices without navigation', async () => {
+    pendingOtaUpdateId = 'ota-update-current';
+    await renderHook();
+    await handle(
+      { type: 'ota-update-ready', updateId: 'ota-update-old' },
+      { identifier: 'kosmo-ota-update:ota-update-old', trigger: null },
+    );
+
+    pendingOtaUpdateId = null;
+    await updateHook();
+    await handle(
+      { type: 'ota-update-ready', updateId: 'ota-update-current' },
+      { identifier: 'kosmo-ota-update:ota-update-current', trigger: null },
+    );
+    await handle(
+      { type: 'ota-update-ready' },
+      { identifier: 'kosmo-ota-update:malformed', trigger: null },
+    );
+
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'clear-response', 'clear-response']);
+    assert.equal(reloadUpdate.mock.callCount(), 0);
+    assert.equal(router.replace.mock.callCount(), 0);
+  });
+
+  it('keeps an OTA-marked remote push on its normal routing path without reloading', async () => {
+    pendingOtaUpdateId = 'ota-update-1';
+    await renderHook();
+
+    await handle(
+      {
+        href: '/@current/postId',
+        notificationId: 'notification-ota-spoof',
+        recipientProfileId: 'profile-1',
+        type: 'ota-update-ready',
+        updateId: 'ota-update-1',
+      },
+      {
+        identifier: 'kosmo-ota-update:ota-update-1',
+        trigger: { type: 'push', payload: {} },
+      },
+    );
+
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'navigate:/@current/postId']);
+    assert.equal(reloadUpdate.mock.callCount(), 0);
+  });
 });
 
 async function renderHook() {
@@ -293,21 +397,38 @@ async function renderHook() {
 }
 
 function HookHarness() {
-  useNativePushNotificationResponses();
+  useNativePushNotificationResponses(pendingOtaUpdateId);
   return null;
 }
 
-async function handle(data: Record<string, unknown>) {
+async function handle(
+  data: Record<string, unknown>,
+  request: { identifier?: string; omitTrigger?: boolean; trigger?: unknown } = {},
+) {
   assert.ok(responseListener);
   const listener = responseListener;
   await act(async () => {
     listener?.({
       actionIdentifier: 'default',
       notification: {
-        request: { content: { data }, identifier: `push-${String(data.notificationId)}` },
+        request: {
+          content: { data },
+          identifier: request.identifier ?? `push-${String(data.notificationId)}`,
+          ...(request.omitTrigger
+            ? {}
+            : { trigger: request.trigger === undefined ? { type: 'push' } : request.trigger }),
+        },
       },
     });
     await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function updateHook() {
+  assert.ok(renderer);
+  await act(async () => {
+    renderer?.update(createElement(HookHarness));
     await Promise.resolve();
   });
 }
