@@ -2156,6 +2156,7 @@ test(
       'createContext',
       () =>
         ({
+          getDocumentLoader: async () => () => ({}) as never,
           lookupObject: async () => {
             lookupCalls += 1;
             signalLookupStarted();
