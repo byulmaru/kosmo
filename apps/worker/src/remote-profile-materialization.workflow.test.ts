@@ -52,6 +52,7 @@ let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let federation: typeof Fedify.federation;
+let localInstanceActorIdentifier: string;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
@@ -68,7 +69,7 @@ before(async () => {
   ({ ActivityPubActors, db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } =
     await import('@kosmo/core/db'));
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-  ({ federation } = await import('@kosmo/fedify'));
+  ({ federation, localInstanceActorIdentifier } = await import('@kosmo/fedify'));
   ({
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
@@ -119,7 +120,16 @@ test(
       lookups.push(identifier);
       return actor;
     };
-    t.mock.method(federation, 'createContext', () => ({ lookupObject, lookupWebFinger }) as never);
+    t.mock.method(
+      federation,
+      'createContext',
+      () =>
+        ({
+          getDocumentLoader: async () => () => ({}) as never,
+          lookupObject,
+          lookupWebFinger,
+        }) as never,
+    );
 
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
@@ -264,6 +274,7 @@ test(
     t.mock.method(federation, 'createContext', (origin: URL) => {
       origins.push(origin.href);
       return {
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async (identifier: string | URL) => {
           actorLookupCalls += 1;
           assert.equal(String(identifier), actorUri.href);
@@ -402,7 +413,16 @@ test(
       }
       return actor;
     };
-    t.mock.method(federation, 'createContext', () => ({ lookupObject, lookupWebFinger }) as never);
+    t.mock.method(
+      federation,
+      'createContext',
+      () =>
+        ({
+          getDocumentLoader: async () => () => ({}) as never,
+          lookupObject,
+          lookupWebFinger,
+        }) as never,
+    );
 
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
@@ -614,6 +634,7 @@ test(
       'createContext',
       () =>
         ({
+          getDocumentLoader: async () => () => ({}) as never,
           lookupObject: async (identifier: string | URL) => {
             actorLookupCalls += 1;
             assert.equal(String(identifier), actorUri.href);
@@ -658,14 +679,18 @@ test(
   },
 );
 
-test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하고 actor metadata 결손을 거부한다', async (t) => {
+test('Remote Profile Activity는 기본 Instance actor로 서명하고 actor metadata 결손을 거부한다', async (t) => {
   const origins: string[] = [];
   const lookupUris: Array<string | URL> = [];
   const lookupDocumentLoaders: unknown[] = [];
   const documentLoaderIdentifiers: string[] = [];
   const documentLoaders: unknown[] = [];
-  let lookupCalls = 0;
-  const actorDomains = ['omitted-target.example', 'local-target.example', 'remote-target.example'];
+  const actorDomains = [
+    'fallback-target.example',
+    'context-target.example',
+    'local-target.example',
+    'remote-target.example',
+  ];
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
     const actorDomain = actorDomains[origins.length - 1]!;
@@ -677,7 +702,6 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
         return documentLoader;
       },
       lookupObject: async (identifier: string | URL, options?: { documentLoader?: unknown }) => {
-        lookupCalls += 1;
         lookupUris.push(identifier);
         lookupDocumentLoaders.push(options?.documentLoader);
         return createActor({ id: new URL(`https://${actorDomain}/users/alice`) });
@@ -685,8 +709,13 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     } as never;
   });
 
-  const omittedProfileId = await refreshRemoteProfileActorActivity({
-    actorUri: 'https://omitted-target.example/users/alice',
+  const fallbackProfileId = await refreshRemoteProfileActorActivity({
+    actorUri: 'https://fallback-target.example/users/alice',
+  });
+  const contextOrigin = publicOrigin;
+  const contextProfileId = await refreshRemoteProfileActorActivity({
+    actorUri: 'https://context-target.example/users/alice',
+    contextOrigin,
   });
   const localProfile = await createStoredProfile({
     handle: 'local-source',
@@ -711,18 +740,7 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     profileId: remoteProfile.id,
   });
 
-  assert.deepEqual(origins, [publicOrigin, publicOrigin, sourceOrigin]);
-  assert.deepEqual(lookupUris.map(String), [
-    'https://omitted-target.example/users/alice',
-    'https://local-target.example/users/alice',
-    'https://remote-target.example/users/alice',
-  ]);
-  assert.equal(lookupCalls, 3);
-  assert.deepEqual(documentLoaderIdentifiers, [localProfile.id]);
-  assert.equal(lookupDocumentLoaders[0], undefined);
-  assert.equal(lookupDocumentLoaders[1], documentLoaders[0]);
-  assert.equal(lookupDocumentLoaders[2], undefined);
-  for (const profileId of [omittedProfileId, localProfileId, remoteProfileId]) {
+  for (const profileId of [fallbackProfileId, contextProfileId, localProfileId, remoteProfileId]) {
     const stored = await readStoredProfile(profileId);
     assert.equal(stored.profile.id, profileId);
     assert.equal(stored.profile.state, ProfileState.ACTIVE);
@@ -749,8 +767,24 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     },
   );
 
-  assert.equal(origins.length, 3);
-  assert.equal(lookupCalls, 3);
+  assert.deepEqual(origins, [publicOrigin, contextOrigin, publicOrigin, sourceOrigin]);
+  assert.deepEqual(lookupUris.map(String), [
+    'https://fallback-target.example/users/alice',
+    'https://context-target.example/users/alice',
+    'https://local-target.example/users/alice',
+    'https://remote-target.example/users/alice',
+  ]);
+  assert.deepEqual(documentLoaderIdentifiers, [
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+    localProfile.id,
+  ]);
+  assert.deepEqual(lookupDocumentLoaders, [
+    documentLoaders[0],
+    documentLoaders[1],
+    documentLoaders[2],
+    undefined,
+  ]);
   assert.equal(await db.$count(Profiles), profileCount);
 });
 
@@ -762,6 +796,7 @@ test('Remote Profile Activity는 fresh actor를 재조회하지 않고 stale act
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
     return {
+      getDocumentLoader: async () => () => ({}) as never,
       lookupObject: async (identifier: string | URL) => {
         lookupCalls += 1;
         lookups.push(identifier);
@@ -856,6 +891,7 @@ test('Remote Profile Activity는 stale actor 실행 시 현재 Profile·Instance
   let lookupCalls = 0;
   t.mock.method(federation, 'createContext', () => {
     return {
+      getDocumentLoader: async () => () => ({}) as never,
       lookupObject: async () => {
         lookupCalls += 1;
         return createActor();
@@ -918,6 +954,7 @@ test('Remote Profile Activity는 같은 actor URI의 username 변경을 기존 P
     'createContext',
     () =>
       ({
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async (identifier: string | URL) => {
           lookups.push(identifier);
           return refreshedActor;
@@ -966,6 +1003,7 @@ test('Remote Profile Activity는 handle 재할당 시에도 원래 actor URI를 
     'createContext',
     () =>
       ({
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async (identifier: string | URL) => {
           lookups.push(identifier);
           return String(identifier) === originalActorUri.href ? originalActor : reassignedActor;
@@ -1012,6 +1050,7 @@ test('Remote Profile Activity는 lookup actor URI가 요청 URI와 다르면 저
     'createContext',
     () =>
       ({
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async (identifier: string | URL) => {
           lookups.push(identifier);
           return mismatchedActor;
@@ -1076,6 +1115,7 @@ test('Remote Profile Activity는 actor lookup 실패 뒤 UNRESPONSIVE를 유지�
     'createContext',
     () =>
       ({
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async () => {
           lookupCalls += 1;
           throw lookupFailure;
@@ -1115,6 +1155,7 @@ test('Remote Profile Activity는 exact actor URI 조회 성공 뒤 UNRESPONSIVE�
     'createContext',
     () =>
       ({
+        getDocumentLoader: async () => () => ({}) as never,
         lookupObject: async (identifier: string | URL) => {
           lookups.push(identifier);
           return createActor({ id: actorUri, name: 'Recovered Alice' });
@@ -1139,6 +1180,7 @@ test('Actor receipt만 UNRESPONSIVE actor를 복구하고 stale TTL을 유지한
   t.mock.method(federation, 'createContext', () => {
     contextCalls += 1;
     return {
+      getDocumentLoader: async () => () => ({}) as never,
       lookupObject: async (identifier: string | URL) => {
         lookupCalls += 1;
         assert.equal(String(identifier), missingUri);
@@ -1643,6 +1685,7 @@ test('분리된 fetch Activity는 요청 전 시각을 반환하고 actor projec
   t.mock.method(federation, 'createContext', (origin: URL) => {
     contextOrigin = origin.origin;
     return {
+      getDocumentLoader: async () => () => ({}) as never,
       lookupObject: async (identifier: string | URL) => {
         lookupCalls += 1;
         assert.equal(String(identifier), actorUri.href);

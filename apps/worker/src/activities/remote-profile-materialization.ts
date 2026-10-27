@@ -10,6 +10,7 @@ import {
   federation,
   fetchRemoteProfileActorDocument,
   findStoredRemoteProfileActorByUri,
+  localInstanceActorIdentifier,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
 import { ApplicationFailure } from '@temporalio/activity';
@@ -216,10 +217,11 @@ export const fetchRemoteProfileActorActivity = async (
     await ensureRemoteProfileLookupAllowed(actorUri);
 
     let origin: string;
-    let signingProfileId: string | undefined;
+    let signingActorIdentifier: string | undefined;
 
     if (!input.profileId) {
       origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
+      signingActorIdentifier = localInstanceActorIdentifier;
     } else {
       const selected = await db
         .select({
@@ -248,7 +250,7 @@ export const fetchRemoteProfileActorActivity = async (
           );
         }
         origin = localOrigin;
-        signingProfileId = input.profileId;
+        signingActorIdentifier = input.profileId;
       } else {
         if (selected.instanceKind !== InstanceKind.ACTIVITYPUB || !selected.actorUri) {
           throw new InitiatorOriginMaterializationError(
@@ -279,8 +281,8 @@ export const fetchRemoteProfileActorActivity = async (
     }
 
     const context = federation.createContext(new URL(origin), undefined);
-    const documentLoader = signingProfileId
-      ? await context.getDocumentLoader({ identifier: signingProfileId })
+    const documentLoader = signingActorIdentifier
+      ? await context.getDocumentLoader({ identifier: signingActorIdentifier })
       : undefined;
 
     return {
