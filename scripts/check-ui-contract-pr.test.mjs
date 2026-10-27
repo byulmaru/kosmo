@@ -12,7 +12,59 @@ import {
 
 const repositoryRoot = path.resolve(new URL('..', import.meta.url).pathname);
 const CHECKER_PATH = 'scripts/check-ui-contract-pr.mjs';
+const SVG_OWNER_ENTRIES = [
+  'apps/app/src/components/ui/StateView.tsx',
+  'apps/app/src/components/ui/BottomTabBarIcon.tsx',
+  'apps/app/src/components/ui/RadioGroup.tsx',
+  'apps/app/src/components/ui/ColorPickerPanel.tsx',
+  'apps/app/src/components/reaction/ReactionPendingSpinner.tsx',
+  'apps/app/src/components/post/PostComposer.tsx',
+];
 const temporaryRepositories = [];
+
+function svgOwnerConfig(entries, marker = '') {
+  return `const svgOwnerFiles = ${JSON.stringify(entries, null, 2)};\n${marker}export default [];\n`;
+}
+
+function customIconBody() {
+  return [
+    '- 고려한 Lucide 대안: Lucide glyph를 검토했지만 동일한 형태가 없습니다.',
+    '- 미채택 이유: 이 UI는 제품 전용 경로 geometry가 필요합니다.',
+  ].join('\n');
+}
+
+async function createCustomIconFixture({
+  iconPath = 'apps/app/src/components/icons/CustomBadge.tsx',
+  configEntries = [...SVG_OWNER_ENTRIES, iconPath],
+  configMarker = '',
+  includeStory = true,
+} = {}) {
+  const iconImport = `@/${iconPath.slice('apps/app/src/'.length).replace(/\.[^.]+$/, '')}`;
+  const root = await createRepository({
+    [CHECKER_PATH]: 'export {};\n',
+    'eslint.config.mjs': svgOwnerConfig(SVG_OWNER_ENTRIES),
+    [iconPath]: 'export const CustomBadge = () => null;\n',
+  });
+  await writeRepositoryFile(root, 'eslint.config.mjs', svgOwnerConfig(configEntries, configMarker));
+  await writeRepositoryFile(
+    root,
+    iconPath,
+    'import Svg, { Path } from \'react-native-svg\';\nexport const CustomBadge = () => <Svg><Path d="M0 0" /></Svg>;\n',
+  );
+  if (includeStory) {
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/components/CustomBadge.stories.tsx',
+      `import { CustomBadge } from '${iconImport}';\nexport default { component: CustomBadge };\n`,
+    );
+  }
+  commit(root, 'custom icon admission');
+  const bodyPath = path.join(root, 'pr-body.md');
+  const eventPath = path.join(root, 'pull-request-event.json');
+  await writeFile(bodyPath, customIconBody(), 'utf8');
+  await writeFile(eventPath, JSON.stringify({ pull_request: { body: customIconBody() } }), 'utf8');
+  return { root, bodyPath, eventPath, ...refs(root) };
+}
 
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -122,10 +174,12 @@ describe('check-ui-contract-pr', () => {
 
   it('allows the initial policy bootstrap with an existing UI cleanup only', async () => {
     const root = await createRepository({
+      'eslint.config.mjs': 'export default [];\n',
       'apps/app/src/app/index.tsx':
         "import { radii, spacing } from '@/theme/tokens';\nimport { StyleSheet } from 'react-native';\nconst styles = StyleSheet.create({ button: { borderRadius: radii.sm, height: 48, marginTop: spacing.sm } });\nexport const Index = () => null;\n",
     });
     await writeRepositoryFile(root, CHECKER_PATH, 'export {};\n');
+    await writeRepositoryFile(root, 'eslint.config.mjs', 'export default [{ rules: {} }];\n');
     await writeRepositoryFile(
       root,
       'apps/app/src/app/index.tsx',
@@ -376,6 +430,156 @@ describe('check-ui-contract-pr', () => {
     assert.ok(result.errors.some((error) => error.includes('mixes enforcement-policy changes')));
   });
 
+  it('allows a custom icon, owner registration, canonical component, story, and review body together', async () => {
+    const fixture = await createCustomIconFixture();
+    const result = runCli(fixture.root, [
+      '--base',
+      fixture.base,
+      '--head',
+      fixture.head,
+      '--event-file',
+      fixture.eventPath,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /UI contract PR check passed/);
+  });
+
+  it('keeps registered custom owners covered in follow-up source changes', async () => {
+    const fixture = await createCustomIconFixture();
+    await writeRepositoryFile(
+      fixture.root,
+      'apps/app/src/components/icons/CustomBadge.tsx',
+      'import Svg, { Path } from \'react-native-svg\';\nexport const CustomBadge = () => <Svg><Path d="M1 1" /></Svg>;\n',
+    );
+    git(fixture.root, ['add', 'apps/app/src/components/icons/CustomBadge.tsx']);
+    git(fixture.root, ['commit', '-m', 'custom icon geometry follow-up']);
+    const followUpHead = git(fixture.root, ['rev-parse', 'HEAD']).trim();
+    const missingBody = checkPullRequest({
+      base: fixture.head,
+      head: followUpHead,
+      cwd: fixture.root,
+    });
+    assert.ok(missingBody.errors.some((error) => error.includes('고려한 Lucide 대안')));
+
+    const withBody = checkPullRequest({
+      base: fixture.head,
+      head: followUpHead,
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.deepEqual(withBody.errors, []);
+    assert.deepEqual(withBody.categories, ['ui']);
+
+    await writeRepositoryFile(
+      fixture.root,
+      'apps/app/src/components/icons/CustomBadge.tsx',
+      "import { graphql } from 'react-relay';\nimport Svg, { Path } from 'react-native-svg';\nconst query = graphql`query CustomBadgeQuery { viewer { id } }`;\nexport const CustomBadge = () => <Svg style={{ color: 'red' }}><Path d=\"M2 2\" /></Svg>;\n",
+    );
+    git(fixture.root, ['add', 'apps/app/src/components/icons/CustomBadge.tsx']);
+    git(fixture.root, ['commit', '-m', 'custom icon runtime mixed follow-up']);
+    const mixed = checkPullRequest({
+      base: fixture.head,
+      head: git(fixture.root, ['rev-parse', 'HEAD']).trim(),
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(mixed.errors.some((error) => error.includes('same source changes visual contract')));
+  });
+
+  it('requires both custom icon review fields and rejects missing or placeholder bodies', async () => {
+    const fixture = await createCustomIconFixture();
+    for (const body of [
+      '',
+      '- 고려한 Lucide 대안: 없음\n- 미채택 이유: 해당 없음\n',
+      '<!-- - 고려한 Lucide 대안: 실제 대안 -->\n<!-- - 미채택 이유: 실제 이유 -->',
+    ]) {
+      await writeFile(fixture.bodyPath, body, 'utf8');
+      const result = runCli(fixture.root, [
+        '--base',
+        fixture.base,
+        '--head',
+        fixture.head,
+        '--pr-body-file',
+        fixture.bodyPath,
+      ]);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /고려한 Lucide 대안/);
+    }
+  });
+
+  it('rejects custom icon admission mixed with feature source changes', async () => {
+    const fixture = await createCustomIconFixture();
+    await writeRepositoryFile(
+      fixture.root,
+      'apps/app/src/components/Feature.tsx',
+      'export const Feature = () => <div />;\n',
+    );
+    commit(fixture.root, 'feature integration');
+    const result = checkPullRequest({
+      base: fixture.base,
+      head: git(fixture.root, ['rev-parse', 'HEAD']).trim(),
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(result.errors.some((error) => error.includes('mixes UI contract changes')));
+  });
+
+  it('rejects custom icon admission when config rules are weakened', async () => {
+    const fixture = await createCustomIconFixture({
+      configMarker: "const policyMarker = 'head';\n",
+    });
+    const result = checkPullRequest({
+      ...fixture,
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(result.errors.some((error) => error.includes('enforcement-policy')));
+  });
+
+  it('rejects an owner registration without a changed source and representative story', async () => {
+    const root = await createRepository({
+      [CHECKER_PATH]: 'export {};\n',
+      'eslint.config.mjs': svgOwnerConfig(SVG_OWNER_ENTRIES),
+    });
+    await writeRepositoryFile(
+      root,
+      'eslint.config.mjs',
+      svgOwnerConfig([...SVG_OWNER_ENTRIES, 'apps/app/src/components/ui/MissingIcon.tsx']),
+    );
+    commit(root, 'unmatched icon owner registration');
+    const result = checkPullRequest({ ...refs(root), cwd: root, prBody: customIconBody() });
+    assert.ok(result.errors.some((error) => error.includes('must be added or modified')));
+  });
+
+  it('rejects a test fixture path as a custom icon owner', async () => {
+    const fixture = await createCustomIconFixture({
+      iconPath: 'apps/app/src/components/ui/CustomIcon.test.tsx',
+    });
+    const result = checkPullRequest({
+      ...fixture,
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(result.errors.some((error) => error.includes('exact components/* source paths')));
+  });
+
+  it('requires the custom icon body when an existing BottomTabBarIcon owner changes', async () => {
+    const root = await createRepository({
+      [CHECKER_PATH]: 'export {};\n',
+      'eslint.config.mjs': svgOwnerConfig(SVG_OWNER_ENTRIES),
+      'apps/app/src/components/ui/BottomTabBarIcon.tsx':
+        'export const BottomTabBarIcon = () => null;\n',
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/ui/BottomTabBarIcon.tsx',
+      'export const BottomTabBarIcon = () => <span />;\n',
+    );
+    commit(root, 'modify known custom icon owner');
+    const result = checkPullRequest({ ...refs(root), cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('고려한 Lucide 대안')));
+  });
+
   it('allows legacy snapshot narrowing with the corresponding visual cleanup', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
@@ -558,7 +762,12 @@ describe('merge queue resolution', () => {
         response([
           {
             headCommit: { oid: 'synthetic-1' },
-            pullRequest: { number: 1, baseRefOid: 'base-1', headRefOid: 'head-1' },
+            pullRequest: {
+              number: 1,
+              baseRefOid: 'base-1',
+              headRefOid: 'head-1',
+              body: '- 고려한 Lucide 대안: existing glyph\n- 미채택 이유: existing geometry',
+            },
           },
           {
             headCommit: { oid: 'synthetic-2' },
@@ -575,6 +784,10 @@ describe('merge queue resolution', () => {
     assert.deepEqual(
       entries.map(({ pullRequest }) => pullRequest.number),
       [1, 2],
+    );
+    assert.equal(
+      entries[0].pullRequest.body,
+      '- 고려한 Lucide 대안: existing glyph\n- 미채택 이유: existing geometry',
     );
   });
 

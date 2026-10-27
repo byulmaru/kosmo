@@ -40,6 +40,8 @@
 
 Lucide의 일반 glyph와 type-only import는 허용하고, builtin `no-restricted-imports`의 value import/re-export 제한으로 `createLucideIcon`·`Icon` custom API를 막는다. 이 builtin 경계에서는 namespace import도 custom API와 구분하지 않으므로 일반 named glyph import를 사용한다. Story/test fixture는 production 규칙에서 제외해 inline SVG placeholder를 허용한다. 크기·stroke·color·문자 glyph, 여섯 owner 내부 geometry 변경, CSS drawing과 외부 asset binary의 의미 판정은 이 guardrail이 검사하지 않으며 리뷰에서 확인한다.
 
+새 custom icon은 owner 등록, canonical UI component와 component/pattern representative story를 같은 UI-only PR에서 함께 admission할 수 있다. 별도의 icon-only PR이나 icon-only story는 요구하지 않지만, 해당 PR은 실제 runtime consumer·Relay·route·feature flag 연결을 포함하지 않아야 하며 후속 feature/runtime PR에서 연결한다. 등록 배열은 기존 literal entry를 보존한 채 정확한 `components/*` 경로만 추가할 수 있고, 해당 source의 SVG value import와 변경된 대표 story의 직접 또는 one-hop component import가 함께 있어야 한다. 새 owner 등록 PR과 등록된 custom owner source 변경은 PR 본문에 `고려한 Lucide 대안:`과 `미채택 이유:`를 각각 비어 있지 않게 적어야 한다. 다섯 canonical SVG owner의 기존 geometry 변경에는 이 본문 요구를 적용하지 않는다. 이 검사기는 대안의 의미·승인 품질을 판정하지 않는다.
+
 ## PR classifier와 실행 경계
 
 일반 검토에서는 정확한 base/head ref를 지정해 다음과 같이 실행한다.
@@ -51,6 +53,8 @@ node scripts/check-ui-contract-pr.mjs --base <base-sha> --head <head-sha>
 검사기는 base snapshot/config를 기준으로 changed paths, UI owner source, normalized visual/non-visual AST projection과 legacy migration을 비교한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 섞지 않는다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
 
 owner 판단은 `components/ui/**`와 실제 Production component를 import하는 `components`·`patterns` story에 한정한다. screen story만으로 새 canonical owner를 만들 수 없으며, platform sibling(`.native`/`.web`)은 같은 Production module 경계로 본다. `react-relay`, `expo-router`, `FeatureFlagsContext`와 같은 알려진 runtime 연결은 base/head 양쪽 source를 함께 보아 시각 변경과 feature 변경을 섞지 않는다.
+
+custom icon admission은 일반 enforcement-policy 완화와 구분한다. `eslint.config.mjs`의 top-level `svgOwnerFiles` literal array에 기존 entry를 그대로 두고 exact `apps/app/src/components/*` source path를 추가하는 경우만 후보가 되며, 다른 rule/config token 변경·glob·중복·traversal·runtime 혼합·catalog/story 누락은 거부한다. story와 source 관계는 현재 direct import와 bounded one-hop만 해석하고 임의의 re-export/whole-program dependency graph는 지원하지 않는다.
 
 merge queue에서는 webhook의 immutable event head/base와 exact queue entry를 사용한다. GraphQL queue 응답은 exact event head를 찾을 때까지 page를 따라가며, 누락·오류·unknown head·필요한 SHA fetch 실패·local ancestry 검증 실패는 fail closed한다. 선택된 queue entry와 PR의 base/head를 개별적으로 검증하며 moving branch tip이나 전체 repository history query를 성공 근거로 삼지 않는다. 이 CLI와 workflow는 read-only 검사 경계이며, 원격 ruleset을 변경하지 않는다.
 

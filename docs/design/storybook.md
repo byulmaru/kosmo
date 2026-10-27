@@ -64,6 +64,7 @@ apps/app/src/stories/
 
 - 기존 컴포넌트가 공개한 named prop·variant와 기존 조합 지점을 재사용하는 consumer 변경은 해당 Production source와 story 근거를 함께 제시하는 기능 PR에서 진행할 수 있다. 배치·간격 같은 caller-owned layout 조정도 이 경계에 속한다.
 - 새 component·variant·public visual prop을 만들거나 작은 시각 계약을 바꾸는 변경은 canonical Production component와 대표 story만 다루는 UI-only PR로 분리한다. route·data·Relay·API·mutation·cache·권한·feature flag 같은 runtime 통합은 후속 또는 별도 Product PR에서 연결한다.
+- Custom icon 예외 등록, canonical UI component와 대표 component/pattern story는 같은 UI-only PR에서 함께 진행할 수 있다. 별도 icon-only story는 필요하지 않으며 대표 component story로 검증한다. 실제 runtime consumer·Relay/route/data와 feature-flag 통합은 별도 feature/runtime PR로 분리하고, Storybook 검증만으로 해당 경로의 완료를 추론하지 않는다.
 - 기존 Production component의 state·variant·callback·interaction 지원을 실제로 보강하는 변경은 해당 DSN Storybook 이슈의 UI-only PR에서 진행한다. Story를 추가했다는 사실만으로 새로운 public 계약이나 runtime 완료를 추론하지 않는다.
 - `style`의 시각 override는 배치 조정과 다르다. color·background·border·font·shadow·opacity·outline 같은 component-owned visual 계약을 바꿀 때는 canonical component/recipe의 근거와 예외 책임을 명시하고, 기존 recipe를 유지하는 경우에도 새 디자인 승인으로 기록하지 않는다.
 

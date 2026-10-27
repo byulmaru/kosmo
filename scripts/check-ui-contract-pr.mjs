@@ -11,6 +11,15 @@ const VISUAL_PROPERTY =
   /^(?:color|background(?:Color|Image)?|border(?:$|[A-Z])|font(?:$|[A-Z])|shadow(?:$|[A-Z])|opacity$|outline(?:$|[A-Z]))/;
 const STYLE_PROPS = new Set(['style', 'visualStyle', 'actionStyle']);
 const CHECKER_PATH = 'scripts/check-ui-contract-pr.mjs';
+const SVG_OWNER_CONFIG_NAME = 'svgOwnerFiles';
+const NON_CUSTOM_SVG_OWNER_FILES = new Set([
+  'apps/app/src/components/ui/StateView.tsx',
+  'apps/app/src/components/ui/RadioGroup.tsx',
+  'apps/app/src/components/ui/ColorPickerPanel.tsx',
+  'apps/app/src/components/reaction/ReactionPendingSpinner.tsx',
+  'apps/app/src/components/post/PostComposer.tsx',
+]);
+const CUSTOM_ICON_BODY_LABELS = ['고려한 Lucide 대안', '미채택 이유'];
 const POLICY_PATHS = new Set([
   CHECKER_PATH,
   'scripts/check-ui-contract-pr.test.mjs',
@@ -754,7 +763,224 @@ function catalogOwnsSource(file, owners) {
   return [...owners].some((owner) => platformIndependentPath(owner) === normalized);
 }
 
-function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = false }) {
+function parseSvgOwnerConfig(source, filePath = 'eslint.config.mjs') {
+  if (source === undefined) {
+    return { error: `${filePath}: svgOwnerFiles declaration is missing.` };
+  }
+  try {
+    const ast = parseSource(source, filePath);
+    const declarations = [];
+    for (const statement of ast.body) {
+      if (statement.type !== 'VariableDeclaration' || statement.kind !== 'const') {
+        continue;
+      }
+      for (const declaration of statement.declarations) {
+        if (
+          declaration.id?.type === 'Identifier' &&
+          declaration.id.name === SVG_OWNER_CONFIG_NAME
+        ) {
+          declarations.push(declaration);
+        }
+      }
+    }
+    if (declarations.length !== 1 || declarations[0].init?.type !== 'ArrayExpression') {
+      return { error: `${filePath}: svgOwnerFiles must be one top-level const literal array.` };
+    }
+    const values = [];
+    for (const element of declarations[0].init.elements) {
+      if (element?.type !== 'Literal' || typeof element.value !== 'string') {
+        return { error: `${filePath}: svgOwnerFiles entries must be string literals.` };
+      }
+      values.push(element.value);
+    }
+    if (new Set(values).size !== values.length) {
+      return { error: `${filePath}: svgOwnerFiles entries must be unique.` };
+    }
+    return { ast, values, range: declarations[0].init.range };
+  } catch (error) {
+    return { error: `${filePath}: unable to parse svgOwnerFiles: ${error.message}` };
+  }
+}
+
+function isCustomIconOwnerPath(file) {
+  return (
+    /^apps\/app\/src\/components\/(?:[^/\\*?]+\/)*[^/\\*?]+\.[cm]?[jt]sx?$/.test(file) &&
+    !file.split('/').some((segment) => segment === '..') &&
+    !/(?:\.test|\.tests|\.stories|\.type-test)\.[cm]?[jt]sx?$/.test(file)
+  );
+}
+
+function customIconConfigChange(baseSource, headSource) {
+  const base = parseSvgOwnerConfig(baseSource);
+  const head = parseSvgOwnerConfig(headSource);
+  if (base.error || head.error) {
+    return { kind: 'policy', additions: [], errors: [] };
+  }
+  if (nonVisualProjection(base.ast, [base.range]) !== nonVisualProjection(head.ast, [head.range])) {
+    return {
+      kind: 'policy',
+      additions: [],
+      errors: [],
+    };
+  }
+  if (
+    head.values.length < base.values.length ||
+    base.values.some((entry) => !head.values.includes(entry))
+  ) {
+    return {
+      kind: 'policy',
+      additions: [],
+      errors: [],
+    };
+  }
+  const additions = head.values.filter((entry) => !base.values.includes(entry));
+  if (additions.length === 0) {
+    return { kind: 'policy', additions, errors: [] };
+  }
+  if (additions.some((entry) => !isCustomIconOwnerPath(entry))) {
+    return {
+      kind: 'invalid',
+      additions,
+      errors: [
+        'eslint.config.mjs: custom icon owner entries must be exact components/* source paths.',
+      ],
+    };
+  }
+  return { kind: 'candidate', additions, errors: [] };
+}
+
+function registeredCustomIconOwners(source) {
+  const config = parseSvgOwnerConfig(source);
+  return new Set((config.values ?? []).filter((entry) => !NON_CUSTOM_SVG_OWNER_FILES.has(entry)));
+}
+
+function sourceImportsValue(source, filePath, packagePrefix) {
+  if (source === undefined) {
+    return false;
+  }
+  try {
+    const ast = parseSource(source, filePath);
+    return ast.body.some(
+      (node) =>
+        node.type === 'ImportDeclaration' &&
+        node.importKind !== 'type' &&
+        typeof node.source.value === 'string' &&
+        (node.source.value === packagePrefix ||
+          node.source.value.startsWith(`${packagePrefix}/`)) &&
+        node.specifiers.some((specifier) => specifier.importKind !== 'type'),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function bodyFieldIsMeaningful(body, label) {
+  const withoutComments = String(body ?? '').replace(/<!--[\s\S]*?-->/g, '');
+  const pattern = new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${label}\\s*[:：]\\s*([^\\n]*)`);
+  const match = withoutComments.match(pattern);
+  if (!match) {
+    return false;
+  }
+  const value = match[1].trim();
+  return value.length > 0 && !/^(?:없음|해당\s*없음|n\/?a|todo|tbd|[-_…]+)$/i.test(value);
+}
+
+function customIconBodyIsComplete(body) {
+  return CUSTOM_ICON_BODY_LABELS.every((label) => bodyFieldIsMeaningful(body, label));
+}
+
+function directImportsTarget(source, importer, target, available) {
+  if (source === undefined) {
+    return false;
+  }
+  try {
+    const ast = parseSource(source, importer);
+    return ast.body.some((node) => {
+      if (node.type !== 'ImportDeclaration') {
+        return false;
+      }
+      if (
+        node.importKind === 'type' ||
+        !node.specifiers.some((specifier) => specifier.importKind !== 'type')
+      ) {
+        return false;
+      }
+      return resolveImportPath(importer, node.source.value, available) === target;
+    });
+  } catch {
+    return false;
+  }
+}
+
+function changedStorySupportsIcon({ cwd, head, headCatalog, changedFilesList, target }) {
+  // shortcut: inspect direct/one-hop static imports only; extend for re-export graphs when admission needs them.
+  return changedFilesList.some((changed) => {
+    const story = changed.path;
+    if (!isStoryPath(story)) {
+      return false;
+    }
+    const source = readAtRef(cwd, head, story);
+    const info = source ? headCatalog.storyInfo.get(story) : undefined;
+    if (!info) {
+      return false;
+    }
+    if (info.targets.has(target)) {
+      return true;
+    }
+    return [...info.targets].some((component) =>
+      directImportsTarget(
+        readAtRef(cwd, head, component),
+        component,
+        target,
+        headCatalog.available,
+      ),
+    );
+  });
+}
+
+function evaluateCustomIconAdmission({ cwd, head, baseConfig, headConfig, files, headCatalog }) {
+  const change = customIconConfigChange(baseConfig, headConfig);
+  if (change.kind !== 'candidate') {
+    return { ...change, sourcePaths: new Set() };
+  }
+  const errors = [];
+  const sourcePaths = new Set();
+  for (const target of change.additions) {
+    const changed = files.find(({ path: file, oldPath }) => file === target || oldPath === target);
+    const source = readAtRef(cwd, head, target);
+    if (!changed || source === undefined) {
+      errors.push(
+        `eslint.config.mjs: custom icon owner ${target} must be added or modified in this PR.`,
+      );
+      continue;
+    }
+    if (!sourceImportsValue(source, target, 'react-native-svg')) {
+      errors.push(`${target}: custom icon owner must contain a react-native-svg value import.`);
+      continue;
+    }
+    if (isMixedSource(source, target)) {
+      errors.push(
+        `${target}: custom icon owner cannot include Relay, route, or feature-flag integration.`,
+      );
+      continue;
+    }
+    if (!changedStorySupportsIcon({ cwd, head, headCatalog, changedFilesList: files, target })) {
+      errors.push(
+        `${target}: custom icon admission requires a changed representative component/pattern story.`,
+      );
+      continue;
+    }
+    sourcePaths.add(target);
+  }
+  return {
+    kind: errors.length ? 'invalid' : 'valid',
+    additions: change.additions,
+    errors,
+    sourcePaths,
+  };
+}
+
+function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = false, prBody }) {
   if (!base || !head) {
     return { errors: ['Both --base and --head are required.'], signals: [] };
   }
@@ -784,6 +1010,32 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
         readAtRef(cwd, head, 'scripts/ui-contract-legacy.json'),
       )
     : { kind: 'unchanged' };
+  const customAdmission = files.some(({ path: file }) => file === 'eslint.config.mjs')
+    ? evaluateCustomIconAdmission({
+        baseConfig: readAtRef(cwd, base, 'eslint.config.mjs'),
+        files,
+        head,
+        headCatalog,
+        headConfig: readAtRef(cwd, head, 'eslint.config.mjs'),
+        cwd,
+      })
+    : { kind: 'unchanged', additions: [], errors: [], sourcePaths: new Set() };
+  const customSourcePaths = new Set([
+    ...registeredCustomIconOwners(readAtRef(cwd, base, 'eslint.config.mjs')),
+    ...customAdmission.sourcePaths,
+  ]);
+  const requiresCustomIconBody = files.some(
+    ({ path: file, oldPath }) =>
+      customSourcePaths.has(file) || (oldPath && customSourcePaths.has(oldPath)),
+  );
+  if (requiresCustomIconBody && !customIconBodyIsComplete(prBody)) {
+    errors.push(
+      `Custom icon changes require nonempty PR body fields: ${CUSTOM_ICON_BODY_LABELS.map((label) => `${label}:`).join(' / ')}.`,
+    );
+  }
+  if (customAdmission.kind === 'invalid') {
+    errors.push(...customAdmission.errors);
+  }
   if (legacyChange.kind === 'narrowing') {
     for (const [key, count] of legacyChange.reductions) {
       legacyReductions.set(key, count);
@@ -800,6 +1052,12 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
         signals.push(`${file}: treated as supporting legacy-contract cleanup.`);
         continue;
       }
+    }
+    if (file === 'eslint.config.mjs' && customAdmission.kind === 'valid') {
+      categories.add('ui');
+      uiCleanupOnly = false;
+      signals.push(`${file}: treated as a custom icon owner admission.`);
+      continue;
     }
     if (isPolicyPath(cwd, base, head, file)) {
       categories.add('policy');
@@ -853,10 +1111,12 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
 
     const baseSource = readAtRef(cwd, base, changed.oldPath ?? file);
     const headSource = changed.status === 'D' ? undefined : readAtRef(cwd, head, file);
-    const owner =
-      isUiOwnerPath(file) ||
+    const catalogOwner =
       catalogOwnsSource(file, owners) ||
       (changed.oldPath && catalogOwnsSource(changed.oldPath, owners));
+    const registeredCustomSource =
+      customSourcePaths.has(file) || (changed.oldPath && customSourcePaths.has(changed.oldPath));
+    const owner = isUiOwnerPath(file) || catalogOwner || registeredCustomSource;
     const isNewSource = baseSource === undefined && headSource !== undefined;
     const mixedOwner =
       owner && (isMixedSource(baseSource, file) || isMixedSource(headSource, file));
@@ -874,7 +1134,12 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       continue;
     }
 
-    if (owner && !mixedOwner && !isNewSource) {
+    if (isNewSource && isUiOwnerPath(file) && !catalogOwner && !registeredCustomSource) {
+      errors.push(`${file}: new UI source has no component/pattern story catalog entry.`);
+      continue;
+    }
+
+    if (owner && !mixedOwner && (!isNewSource || catalogOwner || registeredCustomSource)) {
       categories.add('ui');
       if (!analysis.visualOnlyRemoval || analysis.nonVisualChanged) {
         uiCleanupOnly = false;
@@ -882,7 +1147,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       continue;
     }
 
-    if (mixedOwner && isNewSource && analysis.visualChanged) {
+    if (mixedOwner && isNewSource && (analysis.visualChanged || analysis.nonVisualChanged)) {
       errors.push(
         `${file}: a new cataloged source with Relay/route integration cannot combine a visual definition with runtime integration.`,
       );
@@ -950,7 +1215,7 @@ const MERGE_QUEUE_QUERY = `
           nodes {
             headCommit { oid }
             baseCommit { oid }
-            pullRequest { number headRefOid baseRefOid }
+            pullRequest { number headRefOid baseRefOid body }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -1116,8 +1381,15 @@ function parseArgs(argv) {
       options.bootstrap = true;
     } else if (argument === '--merge-group') {
       options.mergeGroup = true;
-    } else if (argument === '--base' || argument === '--head' || argument === '--event-file') {
-      options[argument.slice(2).replace('-', '')] = argv[++index];
+    } else if (
+      argument === '--base' ||
+      argument === '--head' ||
+      argument === '--event-file' ||
+      argument === '--pr-body-file'
+    ) {
+      const optionName =
+        argument === '--pr-body-file' ? 'prbodyfile' : argument.slice(2).replace('-', '');
+      options[optionName] = argv[++index];
     } else {
       throw new Error(`Unknown argument: ${argument}`);
     }
@@ -1144,6 +1416,7 @@ async function main(argv = process.argv.slice(2)) {
         base: entry.pullRequest.baseRefOid,
         bootstrap: options.bootstrap,
         head: entry.pullRequest.headRefOid,
+        prBody: entry.pullRequest.body,
         cwd: REPOSITORY_ROOT,
       });
       failures.push(...result.errors.map((error) => `PR #${entry.pullRequest.number}: ${error}`));
@@ -1158,10 +1431,16 @@ async function main(argv = process.argv.slice(2)) {
   if (!options.base || !options.head) {
     throw new Error('Both --base and --head are required unless --merge-group is used.');
   }
+  const prBody = options.prbodyfile
+    ? readFileSync(options.prbodyfile, 'utf8')
+    : options.eventfile
+      ? JSON.parse(readFileSync(options.eventfile, 'utf8')).pull_request?.body
+      : undefined;
   const result = classifyPullRequest({
     base: options.base,
     bootstrap: options.bootstrap,
     head: options.head,
+    prBody,
     cwd: REPOSITORY_ROOT,
   });
   if (result.errors.length) {

@@ -56,7 +56,7 @@ jobs:
           if [ "$UI_CONTRACT_EVENT_NAME" = "merge_group" ]; then
             node "$UI_CONTRACT_CHECKER" --merge-group $UI_CONTRACT_BOOTSTRAP --event-file "$GITHUB_EVENT_PATH"
           else
-            node "$UI_CONTRACT_CHECKER" --base "$UI_CONTRACT_BASE_SHA" --head "$UI_CONTRACT_HEAD_SHA" $UI_CONTRACT_BOOTSTRAP
+            node "$UI_CONTRACT_CHECKER" --base "$UI_CONTRACT_BASE_SHA" --head "$UI_CONTRACT_HEAD_SHA" --event-file "$GITHUB_EVENT_PATH" $UI_CONTRACT_BOOTSTRAP
           fi
 
       - name: Run lint for workspace root
