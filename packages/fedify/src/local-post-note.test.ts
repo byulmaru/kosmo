@@ -1384,12 +1384,13 @@ describe('ActivityPub Local Post Note', () => {
     const unlistedPost = await createPost(author.id, { visibility: PostVisibility.UNLISTED });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const directPost = await createPost(author.id, { visibility: PostVisibility.DIRECT });
-    await db.insert(ProfilePinnedPosts).values([
-      { profileId: author.id, postId: publicPost.id },
-      { profileId: author.id, postId: unlistedPost.id },
-      { profileId: author.id, postId: followersPost.id },
-      { profileId: author.id, postId: directPost.id },
-    ]);
+    await db.insert(ProfilePinnedPosts).values(
+      [publicPost, unlistedPost, followersPost, directPost].map((post, index) => ({
+        id: `00000000-0000-7000-8002-${String(index).padStart(12, '0')}`,
+        profileId: author.id,
+        postId: post.id,
+      })),
+    );
 
     await reorderProfilePost({
       profileId: author.id,
@@ -1486,7 +1487,7 @@ describe('ActivityPub Local Post Note', () => {
     const signedPage = (await signedPageResponse.json()) as { orderedItems?: { id?: string }[] };
     assert.deepEqual(
       signedPage.orderedItems?.map((item) => item.id),
-      [publicPost.id, unlistedPost.id, followersPost.id].map(
+      [unlistedPost.id, publicPost.id, followersPost.id].map(
         (id) => `${publicOrigin}/ap/note/${id}`,
       ),
     );
