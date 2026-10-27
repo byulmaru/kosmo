@@ -34,6 +34,12 @@
 - 새 entry·count 증가·값/경로/메타데이터 변경은 별도 policy/contract review가 필요한 policy 변경이다. snapshot을 자동 재생성하는 CLI나 blanket `eslint-disable`는 제공하지 않는다.
 - 남은 entry는 계속 재현 가능해야 하며, unused entry는 제거를 유도한다. 기존 recipe를 snapshot에 남겼다고 해서 새 코드가 같은 override를 추가할 수 있는 것은 아니다.
 
+## Icon source guardrail
+
+앱 production source(`apps/app/src/**/*.{js,jsx,ts,tsx}`)에서는 새 `react-native-svg` value import·re-export와 intrinsic `<svg>`를 막는다. 기존 canonical geometry/asset owner인 `ui/StateView.tsx`, `ui/BottomTabBarIcon.tsx`, `ui/RadioGroup.tsx`, `ui/ColorPickerPanel.tsx`, `reaction/ReactionPendingSpinner.tsx`, `post/PostComposer.tsx` 여섯 파일만 SVG value import를 유지할 수 있으며, 이 예외도 raw `<svg>`와 Lucide custom API까지 면제하지 않는다.
+
+Lucide의 일반 glyph와 type-only import는 허용하고, builtin `no-restricted-imports`의 value import/re-export 제한으로 `createLucideIcon`·`Icon` custom API를 막는다. 이 builtin 경계에서는 namespace import도 custom API와 구분하지 않으므로 일반 named glyph import를 사용한다. Story/test fixture는 production 규칙에서 제외해 inline SVG placeholder를 허용한다. 크기·stroke·color·문자 glyph, 여섯 owner 내부 geometry 변경, CSS drawing과 외부 asset binary의 의미 판정은 이 guardrail이 검사하지 않으며 리뷰에서 확인한다.
+
 ## PR classifier와 실행 경계
 
 일반 검토에서는 정확한 base/head ref를 지정해 다음과 같이 실행한다.

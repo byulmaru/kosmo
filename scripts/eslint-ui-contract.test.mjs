@@ -39,6 +39,13 @@ function violations(messages) {
   );
 }
 
+function iconContractViolations(messages) {
+  return messages.filter(
+    ({ ruleId, severity }) =>
+      severity === 2 && (ruleId === 'no-restricted-imports' || ruleId === 'no-restricted-syntax'),
+  );
+}
+
 describe('ui-contract/no-visual-style-overrides', () => {
   it('rejects visual overrides through named aliases and local StyleSheet values', async () => {
     const messages = await lint(`
@@ -249,5 +256,129 @@ describe('ui-contract/no-visual-style-overrides', () => {
     `);
 
     assert.equal(violations(messages).length, 5);
+  });
+
+  it('rejects new SVG value imports, reexports, and intrinsic SVG elements', async () => {
+    const messages = await lint(
+      `
+        import { Svg } from 'react-native-svg';
+        export { Svg as ReexportedSvg } from 'react-native-svg/native';
+
+        export function Fixture() {
+          return <svg aria-label="custom" />;
+        }
+      `,
+      'apps/app/src/components/CustomIcon.tsx',
+    );
+
+    const iconMessages = iconContractViolations(messages);
+    assert.equal(iconMessages.filter(({ ruleId }) => ruleId === 'no-restricted-imports').length, 2);
+    assert.equal(iconMessages.filter(({ ruleId }) => ruleId === 'no-restricted-syntax').length, 1);
+  });
+
+  it('rejects namespace SVG and Lucide custom APIs through builtin import restrictions', async () => {
+    const messages = await lint(
+      `
+        import * as Svg from 'react-native-svg';
+        import * as Lucide from 'lucide-react-native';
+
+        const Custom = Lucide.createLucideIcon('Custom', []);
+        export function Fixture() {
+          return <Lucide.Icon iconNode={[]} />;
+        }
+      `,
+      'apps/app/src/components/CustomIcon.tsx',
+    );
+
+    const iconMessages = iconContractViolations(messages);
+    assert.equal(iconMessages.filter(({ ruleId }) => ruleId === 'no-restricted-imports').length, 2);
+    assert.equal(iconMessages.filter(({ ruleId }) => ruleId === 'no-restricted-syntax').length, 0);
+  });
+
+  it('rejects Lucide custom value reexports', async () => {
+    const messages = await lint(
+      "export { createLucideIcon, Icon as CustomIcon } from 'lucide-react-native';\n",
+      'apps/app/src/components/CustomIcon.tsx',
+    );
+
+    assert.equal(
+      iconContractViolations(messages).filter(({ ruleId }) => ruleId === 'no-restricted-imports')
+        .length,
+      2,
+    );
+  });
+
+  it('allows regular Lucide glyphs and type-only icon imports', async () => {
+    const messages = await lint(
+      `
+        import { Search as SearchIcon } from 'lucide-react-native';
+        import type { LucideIcon } from 'lucide-react-native';
+        import type { SvgProps } from 'react-native-svg';
+
+        const Local = { Icon: () => null };
+        export function Fixture() {
+          return <><SearchIcon aria-label="Search" /><Local.Icon /></>;
+        }
+      `,
+      'apps/app/src/components/ExistingIcon.tsx',
+    );
+
+    assert.deepEqual(iconContractViolations(messages), []);
+  });
+
+  it('allows SVG imports only in the six existing owner files and still blocks Lucide factories', async () => {
+    const svgOwners = [
+      'apps/app/src/components/ui/StateView.tsx',
+      'apps/app/src/components/ui/BottomTabBarIcon.tsx',
+      'apps/app/src/components/ui/RadioGroup.tsx',
+      'apps/app/src/components/ui/ColorPickerPanel.tsx',
+      'apps/app/src/components/reaction/ReactionPendingSpinner.tsx',
+      'apps/app/src/components/post/PostComposer.tsx',
+    ];
+
+    for (const filePath of svgOwners) {
+      const messages = await lint(
+        `
+          import { Svg } from 'react-native-svg';
+          export function Fixture() {
+            return <Svg />;
+          }
+        `,
+        filePath,
+      );
+      assert.deepEqual(iconContractViolations(messages), [], filePath);
+    }
+
+    const factoryMessages = await lint(
+      `
+        import { Svg } from 'react-native-svg';
+        import { createLucideIcon } from 'lucide-react-native';
+        const Custom = createLucideIcon('Custom', []);
+        export function Fixture() {
+          return <Svg />;
+        }
+      `,
+      svgOwners[0],
+    );
+    assert.equal(
+      iconContractViolations(factoryMessages).filter(
+        ({ ruleId }) => ruleId === 'no-restricted-imports',
+      ).length,
+      1,
+    );
+  });
+
+  it('does not apply production icon restrictions to story placeholders or test fixtures', async () => {
+    const storyMessages = await lint(
+      'export const Placeholder = () => <svg aria-label="placeholder" />;\n',
+      'apps/app/src/stories/components/Icon.stories.tsx',
+    );
+    const testMessages = await lint(
+      'export const Fixture = () => <svg aria-label="fixture" />;\n',
+      'apps/app/src/components/Icon.test.tsx',
+    );
+
+    assert.deepEqual(iconContractViolations(storyMessages), []);
+    assert.deepEqual(iconContractViolations(testMessages), []);
   });
 });
