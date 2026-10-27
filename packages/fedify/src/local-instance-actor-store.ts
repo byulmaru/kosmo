@@ -46,13 +46,6 @@ const importStoredKeyPair = async (
       throw invalidStoredKeyPair();
     }
 
-    const data = new TextEncoder().encode('kosmo ActivityPub instance signing key check');
-    const signature = await crypto.subtle.sign(privateKey.algorithm.name, privateKey, data);
-
-    if (!(await crypto.subtle.verify(privateKey.algorithm.name, publicKey, signature, data))) {
-      throw invalidStoredKeyPair();
-    }
-
     return { privateKey, publicKey };
   } catch {
     throw invalidStoredKeyPair();

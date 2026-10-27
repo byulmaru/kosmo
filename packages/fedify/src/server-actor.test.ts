@@ -25,6 +25,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteProfileId = '019f6f67-2222-7777-8888-123456789abc';
 const serverActorUri = new URL('/ap/actor/~instance', publicOrigin);
+const localInstanceActorHandle = 'kosmo.instance';
 const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
@@ -77,7 +78,7 @@ describe('local Instance ActivityPub actor', () => {
     await pg.end();
   });
 
-  test('serves a public, stable Application with a read-only empty outbox and no WebFinger user', async () => {
+  test('serves a stable public Application through its Mastodon WebFinger handle', async () => {
     const actorResponse = await federation.fetch(
       new Request(serverActorUri, { headers: { accept: 'application/activity+json' } }),
       { contextData: undefined },
@@ -88,7 +89,7 @@ describe('local Instance ActivityPub actor', () => {
     const actor = (await actorResponse.json()) as {
       id?: string;
       inbox?: string;
-      outbox?: string;
+      preferredUsername?: string;
       publicKey?: { id?: string; owner?: string; publicKeyPem?: string };
       type?: string;
     };
@@ -97,7 +98,7 @@ describe('local Instance ActivityPub actor', () => {
     assert.equal(actor.id, actorUri);
     assert.equal(actor.type, 'Application');
     assert.equal(actor.inbox, `${publicOrigin}/inbox`);
-    assert.equal(actor.outbox, `${actorUri}/outbox`);
+    assert.equal(actor.preferredUsername, localInstanceActorHandle);
     assert.equal(actor.publicKey?.id, publicKeyId);
     assert.equal(actor.publicKey?.owner, actorUri);
     assert.ok(actor.publicKey?.publicKeyPem);
@@ -112,39 +113,43 @@ describe('local Instance ActivityPub actor', () => {
     assert.equal(repeatedActor.publicKey?.id, actor.publicKey?.id);
     assert.equal(repeatedActor.publicKey?.publicKeyPem, actor.publicKey?.publicKeyPem);
 
-    const outboxResponse = await federation.fetch(
-      new Request(actor.outbox!, { headers: { accept: 'application/activity+json' } }),
-      { contextData: undefined },
+    const webFingerUrl = new URL('/.well-known/webfinger', publicOrigin);
+    webFingerUrl.searchParams.set(
+      'resource',
+      `acct:${localInstanceActorHandle}@${new URL(publicOrigin).host}`,
     );
-    assert.equal(outboxResponse.status, 200);
-    const outbox = (await outboxResponse.json()) as {
-      id?: string;
-      orderedItems?: unknown[];
-      totalItems?: number;
-      type?: string;
-    };
-    assert.equal(outbox.id, actor.outbox);
-    assert.equal(outbox.type, 'OrderedCollection');
-    assert.equal(outbox.totalItems, 0);
-    assert.deepEqual(outbox.orderedItems ?? [], []);
-
-    const postResponse = await federation.fetch(new Request(actor.outbox!, { method: 'POST' }), {
+    const webFingerResponse = await federation.fetch(new Request(webFingerUrl), {
       contextData: undefined,
     });
-    assert.equal(postResponse.status, 405);
-
+    assert.equal(webFingerResponse.status, 200);
+    const webFinger = (await webFingerResponse.json()) as {
+      aliases?: string[];
+      links?: Array<{ href?: string; rel?: string; type?: string }>;
+      subject?: string;
+    };
+    assert.equal(
+      webFinger.subject,
+      `acct:${localInstanceActorHandle}@${new URL(publicOrigin).host}`,
+    );
+    assert.ok(webFinger.aliases?.includes(actorUri));
+    assert.ok(
+      webFinger.links?.some(
+        (link) =>
+          link.rel === 'self' &&
+          link.href === actorUri &&
+          link.type === 'application/activity+json',
+      ),
+    );
+    assert.equal(
+      webFinger.links?.some((link) => link.rel === 'http://webfinger.net/rel/profile-page'),
+      false,
+    );
+    assert.deepEqual(await db.select().from(Profiles), []);
     const actorRow = await db
       .select()
       .from(ActivityPubActors)
       .where(eq(ActivityPubActors.uri, actorUri));
     assert.deepEqual(actorRow, []);
-
-    const webFingerUrl = new URL('/.well-known/webfinger', publicOrigin);
-    webFingerUrl.searchParams.set('resource', `acct:~instance@${new URL(publicOrigin).host}`);
-    const webFingerResponse = await federation.fetch(new Request(webFingerUrl), {
-      contextData: undefined,
-    });
-    assert.equal(webFingerResponse.status, 404);
   });
 
   test('preserves local Profile actors while rejecting requests on a foreign host', async () => {
@@ -179,25 +184,6 @@ describe('local Instance ActivityPub actor', () => {
       { contextData: undefined },
     );
     assert.equal(alternateHostResponse.status, 404);
-
-    const alternateOutboxResponse = await federation.fetch(
-      new Request(`${profileActorUri.href}/outbox`, {
-        headers: { accept: 'application/activity+json' },
-      }),
-      { contextData: undefined },
-    );
-    assert.equal(alternateOutboxResponse.status, 404);
-
-    const alternateServerOutboxResponse = await federation.fetch(
-      new Request(
-        `${serverActorUri.href}/outbox`.replace(new URL(publicOrigin).host, 'alternate.example'),
-        {
-          headers: { accept: 'application/activity+json' },
-        },
-      ),
-      { contextData: undefined },
-    );
-    assert.equal(alternateServerOutboxResponse.status, 404);
   });
 
   test('uses the server actor key for shared-inbox AUTHORIZED_FETCH and accepts the Follow', async (t) => {
@@ -273,7 +259,14 @@ describe('local Instance ActivityPub actor', () => {
 
       assert.equal(response.status, 202, await response.text());
       assert.ok(signedFetches.length > 0);
-      assert.ok(signedFetches.every((url) => url === remoteActorUri.href));
+      assert.ok(
+        signedFetches.every((url) => {
+          const actorDocumentUrl = new URL(url);
+          actorDocumentUrl.hash = '';
+          return actorDocumentUrl.href === remoteActorUri.href;
+        }),
+        JSON.stringify(signedFetches),
+      );
       const [requestRow] = await db.select().from(ProfileFollowRequests);
       assert.equal(requestRow?.followeeProfileId, localProfile.id);
       assert.equal(requestRow?.followerProfileId, remoteProfile.id);

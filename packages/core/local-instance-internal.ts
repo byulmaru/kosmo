@@ -18,7 +18,7 @@ type LocalInstanceRow = Pick<
   'canonicalOrigin' | 'createdAt' | 'domain' | 'id' | 'kind' | 'state' | 'updatedAt'
 >;
 
-export type ConfiguredLocalInstance = Omit<LocalInstanceRow, 'canonicalOrigin'> & {
+export type ConfiguredLocalInstance = LocalInstanceRow & {
   canonicalOrigin: string;
 };
 

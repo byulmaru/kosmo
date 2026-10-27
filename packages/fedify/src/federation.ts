@@ -2,8 +2,10 @@ import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import {
   Accept,
   Announce,
+  Application,
   Block,
   Create,
+  CryptographicKey,
   Delete,
   EmojiReact,
   Follow,
@@ -18,6 +20,7 @@ import {
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
@@ -39,10 +42,6 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
-import {
-  createLocalInstanceApplication,
-  localInstanceActorIdentifier,
-} from './local-instance-actor';
 import { ensureDrizzleLocalInstanceActorKeyPair } from './local-instance-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
@@ -64,6 +63,8 @@ import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
+const localInstanceActorIdentifier = '~instance';
+const localInstanceActorHandle = 'kosmo.instance';
 
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
@@ -91,7 +92,17 @@ federation
     const localInstance = await resolveConfiguredLocalInstance();
     if (identifier === localInstanceActorIdentifier) {
       const keyPair = await ensureDrizzleLocalInstanceActorKeyPair(localInstance.id);
-      return createLocalInstanceApplication(ctx, keyPair);
+      const actorUri = ctx.getActorUri(localInstanceActorIdentifier);
+      return new Application({
+        id: actorUri,
+        inbox: new URL('/inbox', ctx.canonicalOrigin),
+        preferredUsername: localInstanceActorHandle,
+        publicKey: new CryptographicKey({
+          id: new URL('#main-key', actorUri),
+          owner: actorUri,
+          publicKey: keyPair.publicKey,
+        }),
+      });
     }
 
     const result = await ensureDrizzleLocalProfileActor({
@@ -113,9 +124,15 @@ federation
       profile: result.profile,
     });
   })
-  .mapHandle((context, username) =>
-    hasCanonicalHost(context) ? resolveLocalActorIdentifierByHandle(username) : null,
-  )
+  .mapHandle((context, username) => {
+    if (!hasCanonicalHost(context)) {
+      return null;
+    }
+
+    return normalizeHandle(username) === localInstanceActorHandle
+      ? localInstanceActorIdentifier
+      : resolveLocalActorIdentifierByHandle(username);
+  })
   .setKeyPairsDispatcher(async (ctx, identifier) => {
     if (identifier === localInstanceActorIdentifier) {
       if (!hasCanonicalHost(ctx)) {
@@ -140,16 +157,6 @@ federation
           profileId: identifier,
         });
   });
-
-federation
-  .setOutboxDispatcher('/ap/actor/{identifier}/outbox', async (context, identifier, cursor) =>
-    hasCanonicalHost(context) && identifier === localInstanceActorIdentifier && cursor === null
-      ? { items: [] }
-      : null,
-  )
-  .setCounter((context, identifier) =>
-    hasCanonicalHost(context) && identifier === localInstanceActorIdentifier ? 0 : null,
-  );
 
 const findActiveLocalProfile = async (
   context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,

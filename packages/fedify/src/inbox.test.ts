@@ -5,7 +5,6 @@ import {
   generateCryptoKeyPair,
   MemoryKvStore,
   signRequest,
-  verifyRequest,
 } from '@fedify/fedify';
 import { CryptographicKey, EmojiReact, Follow, Like, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
@@ -17,10 +16,6 @@ import {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './inbound-observability';
-import {
-  createLocalInstanceApplication,
-  localInstanceActorIdentifier,
-} from './local-instance-actor';
 import { configureFedifyInboxLogging } from './logging';
 import type { InboxContext } from '@fedify/fedify';
 import type { SentryNamespace } from '@logtape/sentry';
@@ -63,169 +58,6 @@ describe('Fedify inbox routes', () => {
         { id: 'https://remote.example/activities/shared-follow', recipient: null },
       ],
     );
-  });
-
-  test('uses the Local Instance actor key for a shared inbox AUTHORIZED_FETCH document request', async (t) => {
-    const serverActorUri = new URL('/ap/actor/~instance', 'https://kos.moe');
-    const serverKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    // Fedify validates public DNS before the mocked fetch, so this host must resolve.
-    const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
-    const remoteKeyUri = new URL('#main-key', remoteActorUri);
-    const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const remoteKey = new CryptographicKey({
-      id: remoteKeyUri,
-      owner: remoteActorUri,
-      publicKey: remoteKeyPair.publicKey,
-    });
-    const remoteActorDocument = await new Person({
-      id: remoteActorUri,
-      publicKey: remoteKey,
-    }).toJsonLd({ format: 'expand' });
-    const contextLoader = getDocumentLoader();
-    const delivered: Array<{
-      actor: string | undefined;
-      id: string | undefined;
-      recipient: string | null;
-    }> = [];
-    const federation = createFederation<void>({
-      allowPrivateAddress: false,
-      kv: new MemoryKvStore(),
-      origin: 'https://kos.moe',
-    });
-    federation
-      .setActorDispatcher('/ap/actor/{identifier}', (context, identifier) =>
-        identifier === localInstanceActorIdentifier
-          ? createLocalInstanceApplication(context, serverKeyPair)
-          : null,
-      )
-      .setKeyPairsDispatcher((_context, identifier) =>
-        identifier === localInstanceActorIdentifier ? [serverKeyPair] : [],
-      );
-    federation
-      .setOutboxDispatcher('/ap/actor/{identifier}/outbox', () => ({ items: [] }))
-      .setCounter((context, identifier) =>
-        context.host === new URL(context.canonicalOrigin).host &&
-        identifier === localInstanceActorIdentifier
-          ? 0
-          : null,
-      );
-    federation
-      .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
-      .setSharedKeyDispatcher((context) =>
-        context.host === new URL(context.canonicalOrigin).host
-          ? { identifier: localInstanceActorIdentifier }
-          : null,
-      )
-      .on(Follow, (context, activity) => {
-        delivered.push({
-          actor: activity.actorId?.href,
-          id: activity.id?.href,
-          recipient: context.recipient,
-        });
-      });
-
-    const actorResponse = await federation.fetch(
-      new Request(serverActorUri, { headers: { accept: 'application/activity+json' } }),
-      { contextData: undefined },
-    );
-    assert.equal(actorResponse.status, 200);
-    const serverActorDocument = await actorResponse.json();
-    const actor = serverActorDocument as {
-      id?: string;
-      inbox?: string;
-      outbox?: string;
-      publicKey?: { id?: string; owner?: string; publicKeyPem?: string };
-      type?: string;
-    };
-    assert.equal(actor.id, serverActorUri.href);
-    assert.equal(actor.type, 'Application');
-    assert.equal(actor.inbox, 'https://kos.moe/inbox');
-    assert.equal(actor.publicKey?.id, `${serverActorUri.href}#main-key`);
-    assert.equal(actor.publicKey?.owner, serverActorUri.href);
-    assert.ok(actor.publicKey?.publicKeyPem);
-    const serializedActor = JSON.stringify(serverActorDocument).replaceAll('\\n', '');
-    assert.equal(serializedActor.includes('privateKey'), false);
-    const privateKeyPkcs8 = await crypto.subtle.exportKey('pkcs8', serverKeyPair.privateKey);
-    assert.equal(serializedActor.includes(Buffer.from(privateKeyPkcs8).toString('base64')), false);
-    assert.equal(actor.outbox, 'https://kos.moe/ap/actor/~instance/outbox');
-    const outboxResponse = await federation.fetch(
-      new Request(actor.outbox!, { headers: { accept: 'application/activity+json' } }),
-      { contextData: undefined },
-    );
-    assert.equal(outboxResponse.status, 200);
-    const outbox = (await outboxResponse.json()) as {
-      id?: string;
-      orderedItems?: unknown[];
-      totalItems?: number;
-      type?: string;
-    };
-    assert.equal(outbox.id, actor.outbox);
-    assert.equal(outbox.type, 'OrderedCollection');
-    assert.equal(outbox.totalItems, 0);
-    assert.deepEqual(outbox.orderedItems ?? [], []);
-    const serverKeyId = new URL('#main-key', serverActorUri);
-    const remoteFetchAttempts: Array<{ keyId: string | null; signed: boolean; url: string }> = [];
-
-    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      if (request.method !== 'GET' || new URL(request.url).origin !== remoteActorUri.origin) {
-        return new Response(null, { status: 401 });
-      }
-
-      const key = await verifyRequest(request, {
-        contextLoader,
-        documentLoader: async (url) => ({
-          contextUrl: null,
-          document: serverActorDocument,
-          documentUrl: url,
-        }),
-      });
-      remoteFetchAttempts.push({
-        keyId: key?.id?.href ?? null,
-        signed: request.headers.has('signature') || request.headers.has('signature-input'),
-        url: request.url,
-      });
-      if (key?.id?.href !== serverKeyId.href) {
-        return new Response(null, { status: 401 });
-      }
-
-      return new Response(JSON.stringify(remoteActorDocument), {
-        headers: { 'content-type': 'application/activity+json' },
-      });
-    });
-
-    const follow = new Follow({
-      actor: remoteActorUri,
-      id: new URL('/activities/shared-authorized-fetch', remoteActorUri),
-      object: serverActorUri,
-    });
-    const unsignedRequest = new Request('https://kos.moe/inbox', {
-      body: JSON.stringify(await follow.toJsonLd({ contextLoader })),
-      headers: { 'content-type': 'application/activity+json' },
-      method: 'POST',
-    });
-    const response = await federation.fetch(
-      await signRequest(unsignedRequest, remoteKeyPair.privateKey, remoteKeyUri),
-      { contextData: undefined },
-    );
-
-    assert.equal(
-      response.status,
-      202,
-      JSON.stringify({ attempts: remoteFetchAttempts, body: await response.text() }),
-    );
-    assert.ok(remoteFetchAttempts.length > 0, JSON.stringify(remoteFetchAttempts));
-    assert.ok(
-      remoteFetchAttempts.every(({ keyId, signed }) => signed && keyId === serverKeyId.href),
-      JSON.stringify(remoteFetchAttempts),
-    );
-    assert.deepEqual(delivered, [
-      {
-        actor: remoteActorUri.href,
-        id: follow.id?.href,
-        recipient: null,
-      },
-    ]);
   });
 
   test('signed Like and EmojiReact reach typed handlers through personal and shared inboxes', async () => {

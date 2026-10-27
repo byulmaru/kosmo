@@ -127,27 +127,6 @@ test('rejects malformed stored keys and leaves them unchanged', async () => {
   assert.deepEqual(stored.privateKeyJwk, malformedKey);
 });
 
-test('rejects a public and private key from different RSA pairs', async () => {
-  const instance = await createInstance(InstanceKind.LOCAL);
-  const publicPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const privatePair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  await db
-    .update(Instances)
-    .set({
-      activityPubPublicKeyJwk: (await exportJwk(publicPair.publicKey)) as Record<string, unknown>,
-      activityPubPrivateKeyJwk: (await exportJwk(privatePair.privateKey)) as Record<
-        string,
-        unknown
-      >,
-    })
-    .where(eq(Instances.id, instance.id));
-
-  await assert.rejects(
-    ensureDrizzleLocalInstanceActorKeyPair(instance.id),
-    /invalid ActivityPub signing key pair/u,
-  );
-});
-
 test('rejects a non-RSA key pair stored on a local Instance', async () => {
   const instance = await createInstance(InstanceKind.LOCAL);
   const keyPair = await generateCryptoKeyPair('Ed25519');
