@@ -470,6 +470,46 @@ describe('check-ui-contract-pr', () => {
     assert.deepEqual(result.errors, []);
   });
 
+  it('uses the pre-change catalog for deleted and renamed component stories', async () => {
+    const componentPath = 'apps/app/src/components/post/CatalogedFeature.tsx';
+    const storyPath = 'apps/app/src/stories/components/CatalogedFeature.stories.tsx';
+    const baseFiles = {
+      [componentPath]: 'export const CatalogedFeature = () => <div />;\n',
+      [storyPath]:
+        "import { CatalogedFeature } from '@/components/post/CatalogedFeature';\nexport default { component: CatalogedFeature };\n",
+    };
+
+    const deletedRoot = await createRepository(baseFiles);
+    git(deletedRoot, ['rm', componentPath, storyPath]);
+    commit(deletedRoot, 'delete cataloged component and story');
+    const deletedResult = checkPullRequest({
+      ...refs(deletedRoot),
+      bootstrap: true,
+      cwd: deletedRoot,
+    });
+    assert.deepEqual(deletedResult.errors, []);
+    assert.deepEqual(deletedResult.categories, ['ui']);
+
+    const renamedRoot = await createRepository(baseFiles);
+    const renamedComponentPath = 'apps/app/src/components/post/RenamedFeature.tsx';
+    const renamedStoryPath = 'apps/app/src/stories/components/RenamedFeature.stories.tsx';
+    git(renamedRoot, ['mv', componentPath, renamedComponentPath]);
+    git(renamedRoot, ['mv', storyPath, renamedStoryPath]);
+    await writeRepositoryFile(
+      renamedRoot,
+      renamedStoryPath,
+      "import { CatalogedFeature } from '@/components/post/RenamedFeature';\nexport default { component: CatalogedFeature };\n",
+    );
+    commit(renamedRoot, 'rename cataloged component and story');
+    const renamedResult = checkPullRequest({
+      ...refs(renamedRoot),
+      bootstrap: true,
+      cwd: renamedRoot,
+    });
+    assert.deepEqual(renamedResult.errors, []);
+    assert.deepEqual(renamedResult.categories, ['ui']);
+  });
+
   it('rejects a story that does not admit a production component', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx': 'export const Feature = () => null;\n',

@@ -1318,9 +1318,11 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     }
 
     if (isStoryPath(file)) {
-      const source = readAtRef(cwd, head, file) ?? readAtRef(cwd, analysisBase, file);
+      const headSource = readAtRef(cwd, head, file);
+      const source = headSource ?? readAtRef(cwd, analysisBase, file);
+      const available = headSource !== undefined ? headCatalog.available : baseCatalog.available;
       try {
-        const info = source ? storyTargets(source, file, headCatalog.available) : undefined;
+        const info = source ? storyTargets(source, file, available) : undefined;
         if (!info?.productionImport) {
           errors.push(
             `${file}: changed component/pattern story has no production component import.`,
