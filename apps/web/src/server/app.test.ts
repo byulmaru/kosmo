@@ -70,6 +70,7 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
   await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
+  await writeFile(join(staticRoot, 'robots.txt'), 'User-agent: *\nDisallow: /private\n');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -159,6 +160,58 @@ describe('Web channel bootstrap', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(await response.text()).toBe('ENVIRONMENT must be dev or prod');
+  });
+});
+
+describe('Dev search exclusion', () => {
+  test.each([
+    ['dev', 'noindex'],
+    ['prod', null],
+    [undefined, null],
+  ] as const)('%s environment applies the expected search header', async (environment, value) => {
+    vi.stubEnv('ENVIRONMENT', environment);
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe(value);
+  });
+
+  test('dev robots permits crawling while production serves the exported policy', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+
+    const devResponse = await app.request('/robots.txt');
+    const devHead = await app.request('/robots.txt', { method: 'HEAD' });
+
+    expect(devResponse.status).toBe(200);
+    expect(devResponse.headers.get('content-type')).toContain('text/plain');
+    expect(devResponse.headers.get('cache-control')).toBe('no-cache');
+    expect(devResponse.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await devResponse.text()).toBe('User-agent: *\nAllow: /\n');
+    expect(devHead.status).toBe(200);
+    expect(devHead.headers.get('x-robots-tag')).toBe('noindex');
+
+    vi.stubEnv('ENVIRONMENT', 'prod');
+    const prodResponse = await app.request('/robots.txt');
+
+    expect(prodResponse.status).toBe(200);
+    expect(prodResponse.headers.get('x-robots-tag')).toBeNull();
+    expect(await prodResponse.text()).toBe('User-agent: *\nDisallow: /private\n');
+  });
+
+  test('adds noindex to direct federation responses', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    federationFetch.mockResolvedValueOnce(
+      new Response('federation response', {
+        headers: { 'Content-Type': 'application/activity+json' },
+      }),
+    );
+
+    const federation = await app.request('/ap/actor/alice');
+
+    expect(federation.status).toBe(200);
+    expect(federation.headers.get('content-type')).toContain('application/activity+json');
+    expect(federation.headers.get('x-robots-tag')).toBe('noindex');
   });
 });
 
