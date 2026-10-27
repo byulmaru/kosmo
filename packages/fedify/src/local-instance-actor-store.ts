@@ -2,7 +2,7 @@ import { exportJwk, generateCryptoKeyPair, importJwk } from '@fedify/fedify';
 import { db, first, Instances, withPrimaryDatabase } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 type JsonWebKeyRecord = Record<string, unknown>;
 
@@ -10,10 +10,7 @@ const findInstance = async (instanceId: string) =>
   db
     .select({
       kind: Instances.kind,
-      publicKeyJwk: Instances.activityPubPublicKeyJwk,
-      privateKeyJwk: Instances.activityPubPrivateKeyJwk,
-      publicKeyIsSqlNull: sql<boolean>`${Instances.activityPubPublicKeyJwk} IS NULL`,
-      privateKeyIsSqlNull: sql<boolean>`${Instances.activityPubPrivateKeyJwk} IS NULL`,
+      keyPairs: Instances.activityPubKeyPairs,
     })
     .from(Instances)
     .where(eq(Instances.id, instanceId))
@@ -23,15 +20,15 @@ const findInstance = async (instanceId: string) =>
 const isJwkRecord = (value: unknown): value is JsonWebKeyRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const invalidStoredKeyPair = () =>
-  new Error('Local Instance has an invalid ActivityPub signing key pair.');
+const invalidStoredKeySet = () =>
+  new Error('Local Instance has an invalid ActivityPub signing key set.');
 
 const importStoredKeyPair = async (
   publicKeyJwk: unknown,
   privateKeyJwk: unknown,
 ): Promise<CryptoKeyPair> => {
   if (!isJwkRecord(publicKeyJwk) || !isJwkRecord(privateKeyJwk)) {
-    throw invalidStoredKeyPair();
+    throw invalidStoredKeySet();
   }
 
   try {
@@ -39,81 +36,80 @@ const importStoredKeyPair = async (
       importJwk(privateKeyJwk as JsonWebKey, 'private'),
       importJwk(publicKeyJwk as JsonWebKey, 'public'),
     ]);
-    if (
-      privateKey.algorithm.name !== 'RSASSA-PKCS1-v1_5' ||
-      publicKey.algorithm.name !== 'RSASSA-PKCS1-v1_5'
-    ) {
-      throw invalidStoredKeyPair();
-    }
-
     return { privateKey, publicKey };
   } catch {
-    throw invalidStoredKeyPair();
+    throw invalidStoredKeySet();
   }
 };
 
-const loadStoredKeyPair = async (instanceId: string) => {
+const loadStoredKeyPairs = async (instanceId: string) => {
   const stored = await findInstance(instanceId);
 
   if (!stored || stored.kind !== InstanceKind.LOCAL) {
     throw new NotFoundError('Local Instance not found');
   }
 
-  if (stored.publicKeyIsSqlNull && stored.privateKeyIsSqlNull) {
+  if (stored.keyPairs === null) {
     return undefined;
   }
 
-  if (
-    stored.publicKeyIsSqlNull ||
-    stored.privateKeyIsSqlNull ||
-    !stored.publicKeyJwk ||
-    !stored.privateKeyJwk
-  ) {
-    throw invalidStoredKeyPair();
+  if (!Array.isArray(stored.keyPairs) || stored.keyPairs.length === 0) {
+    throw invalidStoredKeySet();
   }
 
-  return importStoredKeyPair(stored.publicKeyJwk, stored.privateKeyJwk);
+  return Promise.all(
+    stored.keyPairs.map((keyPair) =>
+      importStoredKeyPair(keyPair?.publicKeyJwk, keyPair?.privateKeyJwk),
+    ),
+  );
 };
 
-export const ensureDrizzleLocalInstanceActorKeyPair = async (
+export const ensureDrizzleLocalInstanceActorKeyPairs = async (
   instanceId: string,
-): Promise<CryptoKeyPair> =>
+): Promise<CryptoKeyPair[]> =>
   withPrimaryDatabase(async () => {
-    const existingKeyPair = await loadStoredKeyPair(instanceId);
+    const existingKeyPairs = await loadStoredKeyPairs(instanceId);
 
-    if (existingKeyPair) {
-      return existingKeyPair;
+    if (existingKeyPairs) {
+      return existingKeyPairs;
     }
 
-    const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const [publicKeyJwk, privateKeyJwk] = await Promise.all([
-      exportJwk(keyPair.publicKey),
-      exportJwk(keyPair.privateKey),
-    ]);
+    const keyPairs = await Promise.all(
+      (['RSASSA-PKCS1-v1_5', 'Ed25519'] as const).map(async (algorithm) => {
+        const keyPair = await generateCryptoKeyPair(algorithm);
+        const [publicKeyJwk, privateKeyJwk] = await Promise.all([
+          exportJwk(keyPair.publicKey),
+          exportJwk(keyPair.privateKey),
+        ]);
+        return {
+          keyPair,
+          record: {
+            publicKeyJwk: publicKeyJwk as JsonWebKeyRecord,
+            privateKeyJwk: privateKeyJwk as JsonWebKeyRecord,
+          },
+        };
+      }),
+    );
     const inserted = await db
       .update(Instances)
-      .set({
-        activityPubPublicKeyJwk: publicKeyJwk as JsonWebKeyRecord,
-        activityPubPrivateKeyJwk: privateKeyJwk as JsonWebKeyRecord,
-      })
+      .set({ activityPubKeyPairs: keyPairs.map(({ record }) => record) })
       .where(
         and(
           eq(Instances.id, instanceId),
           eq(Instances.kind, InstanceKind.LOCAL),
-          isNull(Instances.activityPubPublicKeyJwk),
-          isNull(Instances.activityPubPrivateKeyJwk),
+          isNull(Instances.activityPubKeyPairs),
         ),
       )
       .returning({ id: Instances.id });
 
     if (inserted.length > 0) {
-      return keyPair;
+      return keyPairs.map(({ keyPair }) => keyPair);
     }
 
-    const winner = await loadStoredKeyPair(instanceId);
+    const winner = await loadStoredKeyPairs(instanceId);
 
     if (!winner) {
-      throw new Error('Unable to persist Local Instance ActivityPub signing key pair.');
+      throw new Error('Unable to persist Local Instance ActivityPub signing key set.');
     }
 
     return winner;

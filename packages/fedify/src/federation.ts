@@ -5,7 +5,6 @@ import {
   Application,
   Block,
   Create,
-  CryptographicKey,
   Delete,
   EmojiReact,
   Follow,
@@ -42,7 +41,7 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
-import { ensureDrizzleLocalInstanceActorKeyPair } from './local-instance-actor-store';
+import { ensureDrizzleLocalInstanceActorKeyPairs } from './local-instance-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
   countLocalPostEmojiReactions,
@@ -89,22 +88,27 @@ federation
       return null;
     }
 
-    const localInstance = await resolveConfiguredLocalInstance();
     if (identifier === localInstanceActorIdentifier) {
-      const keyPair = await ensureDrizzleLocalInstanceActorKeyPair(localInstance.id);
+      const keyPairs = await ctx.getActorKeyPairs(localInstanceActorIdentifier);
+      const rsaKeyPair = keyPairs.find(
+        (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
+      );
+      if (rsaKeyPair == null) {
+        throw new Error(`Local Instance actor ${identifier} is missing an RSA key pair.`);
+      }
       const actorUri = ctx.getActorUri(localInstanceActorIdentifier);
       return new Application({
         id: actorUri,
         inbox: new URL('/inbox', ctx.canonicalOrigin),
         preferredUsername: localInstanceActorHandle,
-        publicKey: new CryptographicKey({
-          id: new URL('#main-key', actorUri),
-          owner: actorUri,
-          publicKey: keyPair.publicKey,
-        }),
+        publicKey: rsaKeyPair.cryptographicKey,
+        assertionMethods: keyPairs
+          .filter((keyPair) => keyPair.publicKey.algorithm.name === 'Ed25519')
+          .map((keyPair) => keyPair.multikey),
       });
     }
 
+    const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({
       actorUri: ctx.getActorUri(identifier),
       localInstanceId: localInstance.id,
@@ -140,7 +144,7 @@ federation
       }
 
       const localInstance = await resolveConfiguredLocalInstance();
-      return [await ensureDrizzleLocalInstanceActorKeyPair(localInstance.id)];
+      return ensureDrizzleLocalInstanceActorKeyPairs(localInstance.id);
     }
 
     const localInstance = await resolveConfiguredLocalInstance();

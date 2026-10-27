@@ -3,12 +3,12 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
-import { exportJwk, generateCryptoKeyPair } from '@fedify/fedify';
+import { exportJwk } from '@fedify/fedify';
 import { db, firstOrThrow, Instances, pg, withPrimaryDatabase } from '@kosmo/core/db';
 import { InstanceKind, InstanceState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { eq } from 'drizzle-orm';
-import { ensureDrizzleLocalInstanceActorKeyPair } from './local-instance-actor-store';
+import { eq, sql } from 'drizzle-orm';
+import { ensureDrizzleLocalInstanceActorKeyPairs } from './local-instance-actor-store';
 
 after(async () => pg.end());
 
@@ -26,120 +26,116 @@ const createInstance = async (kind: InstanceKind) =>
 const storedKeyPair = (instanceId: string) =>
   db
     .select({
-      publicKeyJwk: Instances.activityPubPublicKeyJwk,
-      privateKeyJwk: Instances.activityPubPrivateKeyJwk,
+      keyPairs: Instances.activityPubKeyPairs,
     })
     .from(Instances)
     .where(eq(Instances.id, instanceId))
     .then(firstOrThrow);
 
-test('persists and reloads one matching RSA key pair for a local Instance', async () => {
+test('persists and reloads the ordered RSA and Ed25519 key pairs for a local Instance', async () => {
   const instance = await createInstance(InstanceKind.LOCAL);
-  const first = await ensureDrizzleLocalInstanceActorKeyPair(instance.id);
+  const first = await ensureDrizzleLocalInstanceActorKeyPairs(instance.id);
   const stored = await withPrimaryDatabase(() => storedKeyPair(instance.id));
-  const loaded = await ensureDrizzleLocalInstanceActorKeyPair(instance.id);
+  const loaded = await ensureDrizzleLocalInstanceActorKeyPairs(instance.id);
   const data = new TextEncoder().encode('server actor key pair test');
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', first.privateKey, data);
 
-  assert.deepEqual(stored.publicKeyJwk, await exportJwk(first.publicKey));
-  assert.deepEqual(stored.privateKeyJwk, await exportJwk(first.privateKey));
-  assert.deepEqual(await exportJwk(loaded.publicKey), stored.publicKeyJwk);
-  assert.deepEqual(await exportJwk(loaded.privateKey), stored.privateKeyJwk);
-  assert.equal(
-    await crypto.subtle.verify('RSASSA-PKCS1-v1_5', loaded.publicKey, signature, data),
-    true,
+  assert.equal(first.length, 2);
+  assert.deepEqual(
+    first.map(({ privateKey }) => privateKey.algorithm.name),
+    ['RSASSA-PKCS1-v1_5', 'Ed25519'],
   );
-});
+  assert.equal(stored.keyPairs?.length, 2);
+  assert.ok(stored.keyPairs);
+  for (const [index, keyPair] of first.entries()) {
+    const persistedPair: {
+      publicKeyJwk: Record<string, unknown>;
+      privateKeyJwk: Record<string, unknown>;
+    } = stored.keyPairs[index];
+    assert.deepEqual(persistedPair.publicKeyJwk, await exportJwk(keyPair.publicKey));
+    assert.deepEqual(persistedPair.privateKeyJwk, await exportJwk(keyPair.privateKey));
+    assert.deepEqual(await exportJwk(loaded[index].publicKey), persistedPair.publicKeyJwk);
+    assert.deepEqual(await exportJwk(loaded[index].privateKey), persistedPair.privateKeyJwk);
 
-test('concurrent ensure calls return the pair committed by the atomic winner', async () => {
-  const instance = await createInstance(InstanceKind.LOCAL);
-  const keyPairs = await Promise.all(
-    Array.from({ length: 4 }, () => ensureDrizzleLocalInstanceActorKeyPair(instance.id)),
-  );
-  const stored = await withPrimaryDatabase(() => storedKeyPair(instance.id));
-
-  for (const keyPair of keyPairs) {
-    assert.deepEqual(await exportJwk(keyPair.publicKey), stored.publicKeyJwk);
-    assert.deepEqual(await exportJwk(keyPair.privateKey), stored.privateKeyJwk);
+    const signature = await crypto.subtle.sign(
+      keyPair.privateKey.algorithm.name,
+      keyPair.privateKey,
+      data,
+    );
+    assert.equal(
+      await crypto.subtle.verify(
+        loaded[index].privateKey.algorithm.name,
+        loaded[index].publicKey,
+        signature,
+        data,
+      ),
+      true,
+    );
   }
 });
 
-test('PostgreSQL rejects one-sided Instance actor key writes', async () => {
+test('concurrent ensure calls return the key set committed by the atomic winner', async () => {
   const instance = await createInstance(InstanceKind.LOCAL);
-  const partialWrites = [
-    () =>
-      db
-        .update(Instances)
-        .set({ activityPubPublicKeyJwk: { kty: 'RSA' } })
-        .where(eq(Instances.id, instance.id)),
-    () =>
-      db
-        .update(Instances)
-        .set({ activityPubPrivateKeyJwk: { kty: 'RSA' } })
-        .where(eq(Instances.id, instance.id)),
-  ];
+  const keySets = await Promise.all(
+    Array.from({ length: 4 }, () => ensureDrizzleLocalInstanceActorKeyPairs(instance.id)),
+  );
+  const stored = await withPrimaryDatabase(() => storedKeyPair(instance.id));
 
-  for (const write of partialWrites) {
-    await assert.rejects(write(), (error: unknown) => {
-      const postgresError = (error as { cause?: { code?: string; constraint_name?: string } })
-        .cause;
-      return (
-        postgresError?.code === '23514' &&
-        postgresError.constraint_name === 'instance_activitypub_key_pair_null_together'
-      );
-    });
+  for (const keySet of keySets) {
+    assert.equal(keySet.length, stored.keyPairs?.length);
+    for (const [index, keyPair] of keySet.entries()) {
+      assert.deepEqual(await exportJwk(keyPair.publicKey), stored.keyPairs?.[index].publicKeyJwk);
+      assert.deepEqual(await exportJwk(keyPair.privateKey), stored.keyPairs?.[index].privateKeyJwk);
+    }
+  }
+});
+
+test('rejects empty and malformed stored key sets without replacing them', async () => {
+  const instance = await createInstance(InstanceKind.LOCAL);
+  const malformedKeySet = [{ publicKeyJwk: { kty: 'invalid' }, privateKeyJwk: { kty: 'invalid' } }];
+  const invalidKeySets = [[], malformedKeySet];
+
+  for (const keyPairs of invalidKeySets) {
+    await db
+      .update(Instances)
+      .set({ activityPubKeyPairs: keyPairs })
+      .where(eq(Instances.id, instance.id));
+    await assert.rejects(
+      ensureDrizzleLocalInstanceActorKeyPairs(instance.id),
+      /invalid ActivityPub signing key set/u,
+    );
 
     const stored = await withPrimaryDatabase(() => storedKeyPair(instance.id));
-    assert.equal(stored.publicKeyJwk, null);
-    assert.equal(stored.privateKeyJwk, null);
+    assert.deepEqual(stored.keyPairs, keyPairs);
   }
+});
+
+test('does not overwrite a JSON null key set', async () => {
+  const instance = await createInstance(InstanceKind.LOCAL);
+  await db
+    .update(Instances)
+    .set({ activityPubKeyPairs: sql`'null'::jsonb` })
+    .where(eq(Instances.id, instance.id));
+
+  await assert.rejects(ensureDrizzleLocalInstanceActorKeyPairs(instance.id));
+
+  const stored = await db
+    .select({
+      keyPairs: Instances.activityPubKeyPairs,
+      isSqlNull: sql<boolean>`${Instances.activityPubKeyPairs} IS NULL`,
+    })
+    .from(Instances)
+    .where(eq(Instances.id, instance.id))
+    .then(firstOrThrow);
+  assert.equal(stored.keyPairs, null);
+  assert.equal(stored.isSqlNull, false);
 });
 
 test('rejects missing or remote Instances without creating key material', async () => {
   const remote = await createInstance(InstanceKind.ACTIVITYPUB);
 
-  await assert.rejects(ensureDrizzleLocalInstanceActorKeyPair(randomUUID()), NotFoundError);
-  await assert.rejects(ensureDrizzleLocalInstanceActorKeyPair(remote.id), NotFoundError);
+  await assert.rejects(ensureDrizzleLocalInstanceActorKeyPairs(randomUUID()), NotFoundError);
+  await assert.rejects(ensureDrizzleLocalInstanceActorKeyPairs(remote.id), NotFoundError);
 
   const stored = await withPrimaryDatabase(() => storedKeyPair(remote.id));
-  assert.equal(stored.publicKeyJwk, null);
-  assert.equal(stored.privateKeyJwk, null);
-});
-
-test('rejects malformed stored keys and leaves them unchanged', async () => {
-  const instance = await createInstance(InstanceKind.LOCAL);
-  const malformedKey = { kty: 'invalid' };
-  await db
-    .update(Instances)
-    .set({
-      activityPubPublicKeyJwk: malformedKey,
-      activityPubPrivateKeyJwk: malformedKey,
-    })
-    .where(eq(Instances.id, instance.id));
-
-  await assert.rejects(
-    ensureDrizzleLocalInstanceActorKeyPair(instance.id),
-    /invalid ActivityPub signing key pair/u,
-  );
-
-  const stored = await withPrimaryDatabase(() => storedKeyPair(instance.id));
-  assert.deepEqual(stored.publicKeyJwk, malformedKey);
-  assert.deepEqual(stored.privateKeyJwk, malformedKey);
-});
-
-test('rejects a non-RSA key pair stored on a local Instance', async () => {
-  const instance = await createInstance(InstanceKind.LOCAL);
-  const keyPair = await generateCryptoKeyPair('Ed25519');
-  await db
-    .update(Instances)
-    .set({
-      activityPubPublicKeyJwk: (await exportJwk(keyPair.publicKey)) as Record<string, unknown>,
-      activityPubPrivateKeyJwk: (await exportJwk(keyPair.privateKey)) as Record<string, unknown>,
-    })
-    .where(eq(Instances.id, instance.id));
-
-  await assert.rejects(
-    ensureDrizzleLocalInstanceActorKeyPair(instance.id),
-    /invalid ActivityPub signing key pair/u,
-  );
+  assert.equal(stored.keyPairs, null);
 });

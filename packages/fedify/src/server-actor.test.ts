@@ -87,6 +87,12 @@ describe('local Instance ActivityPub actor', () => {
     assert.match(actorResponse.headers.get('content-type') ?? '', /application\/activity\+json/);
 
     const actor = (await actorResponse.json()) as {
+      assertionMethod?: {
+        controller?: string;
+        id?: string;
+        publicKeyMultibase?: string;
+        type?: string;
+      };
       id?: string;
       inbox?: string;
       preferredUsername?: string;
@@ -102,6 +108,10 @@ describe('local Instance ActivityPub actor', () => {
     assert.equal(actor.publicKey?.id, publicKeyId);
     assert.equal(actor.publicKey?.owner, actorUri);
     assert.ok(actor.publicKey?.publicKeyPem);
+    assert.equal(actor.assertionMethod?.id, `${actorUri}#multikey-2`);
+    assert.equal(actor.assertionMethod?.controller, actorUri);
+    assert.equal(actor.assertionMethod?.type, 'Multikey');
+    assert.ok(actor.assertionMethod?.publicKeyMultibase);
     assert.equal(JSON.stringify(actor).includes('privateKey'), false);
 
     const repeatedResponse = await federation.fetch(
@@ -112,6 +122,7 @@ describe('local Instance ActivityPub actor', () => {
     const repeatedActor = (await repeatedResponse.json()) as typeof actor;
     assert.equal(repeatedActor.publicKey?.id, actor.publicKey?.id);
     assert.equal(repeatedActor.publicKey?.publicKeyPem, actor.publicKey?.publicKeyPem);
+    assert.deepEqual(repeatedActor.assertionMethod, actor.assertionMethod);
 
     const webFingerUrl = new URL('/.well-known/webfinger', publicOrigin);
     webFingerUrl.searchParams.set(

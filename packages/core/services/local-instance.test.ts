@@ -120,8 +120,16 @@ test('configured local Instance results omit stored ActivityPub key material', a
   const domain = `local-keys-${randomUUID()}.example`;
   const publicOrigin = `https://${domain}`;
   const instance = {
-    activityPubPublicKeyJwk: { kty: 'RSA', n: 'public-marker' },
-    activityPubPrivateKeyJwk: { kty: 'RSA', d: 'private-marker' },
+    activityPubKeyPairs: [
+      {
+        publicKeyJwk: { kty: 'RSA', n: 'public-marker' },
+        privateKeyJwk: { kty: 'RSA', d: 'private-marker' },
+      },
+      {
+        publicKeyJwk: { crv: 'Ed25519', x: 'ed-public-marker' },
+        privateKeyJwk: { crv: 'Ed25519', d: 'ed-private-marker' },
+      },
+    ],
     canonicalOrigin: publicOrigin,
     createdAt: new Date(),
     domain,
@@ -151,10 +159,11 @@ test('configured local Instance results omit stored ActivityPub key material', a
     const resolved = await resolveConfiguredLocalInstance({ publicOrigin });
     const serialized = JSON.stringify(resolved);
 
-    assert.equal(Object.hasOwn(resolved, 'activityPubPublicKeyJwk'), false);
-    assert.equal(Object.hasOwn(resolved, 'activityPubPrivateKeyJwk'), false);
+    assert.equal(Object.hasOwn(resolved, 'activityPubKeyPairs'), false);
     assert.equal(serialized.includes('public-marker'), false);
     assert.equal(serialized.includes('private-marker'), false);
+    assert.equal(serialized.includes('ed-public-marker'), false);
+    assert.equal(serialized.includes('ed-private-marker'), false);
   } finally {
     select.mock.restore();
   }

@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "80dc1761-6ead-4778-b419-cbff15564d4b",
+  "id": "a0ae00cc-8ef3-4ece-83db-6f55db0e222a",
   "prevIds": ["cdc4ab8d-b5fb-403b-973b-29931309ac08"],
   "ddl": [
     {
@@ -1332,20 +1332,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "activitypub_public_key_jwk",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "instance"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "activitypub_private_key_jwk",
+      "name": "activitypub_key_pairs",
       "entityType": "columns",
       "schema": "public",
       "table": "instance"
@@ -5793,13 +5780,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "hashtag_mute_rule"
-    },
-    {
-      "value": "(\"activitypub_public_key_jwk\" IS NULL) = (\"activitypub_private_key_jwk\" IS NULL)",
-      "name": "instance_activitypub_key_pair_null_together",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "instance"
     },
     {
       "value": "\n        (\n          \"source\" = 'LOCAL'\n          AND \"account_id\" IS NOT NULL\n          AND \"storage_reference\" IS NOT NULL\n          AND \"upload_expires_at\" IS NOT NULL\n          AND (\n            (\n              \"state\" = 'UPLOADING'\n              AND \"media_type\" IS NULL\n              AND \"url\" IS NULL\n              AND \"ready_at\" IS NULL\n            )\n            OR (\n              \"state\" = 'READY'\n              AND \"media_type\" IS NOT NULL\n              AND \"url\" IS NOT NULL\n              AND \"ready_at\" IS NOT NULL\n            )\n          )\n        )\n        OR (\n          \"source\" = 'REMOTE'\n          AND \"state\" = 'READY'\n          AND \"account_id\" IS NULL\n          AND \"storage_reference\" IS NULL\n          AND \"upload_expires_at\" IS NULL\n          AND \"url\" IS NOT NULL\n          AND \"ready_at\" IS NULL\n        )\n      ",
