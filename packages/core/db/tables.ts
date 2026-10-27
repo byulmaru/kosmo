@@ -217,10 +217,18 @@ export const Instances = pgTable(
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    activityPubPublicKeyJwk: jsonb('activitypub_public_key_jwk').$type<JsonWebKeyRecord>(),
+    activityPubPrivateKeyJwk: jsonb('activitypub_private_key_jwk').$type<JsonWebKeyRecord>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index().on(table.kind, table.state)],
+  (table) => [
+    index().on(table.kind, table.state),
+    check(
+      'instance_activitypub_key_pair_null_together',
+      sql`(${table.activityPubPublicKeyJwk} IS NULL) = (${table.activityPubPrivateKeyJwk} IS NULL)`,
+    ),
+  ],
 );
 
 export const Media = pgTable(

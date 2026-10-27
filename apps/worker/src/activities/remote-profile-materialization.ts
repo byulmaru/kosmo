@@ -222,7 +222,11 @@ export const fetchRemoteProfileActorActivity = async (
       origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
     } else {
       const selected = await db
-        .select({ actor: ActivityPubActors, instance: Instances })
+        .select({
+          actorUri: ActivityPubActors.uri,
+          instanceCanonicalOrigin: Instances.canonicalOrigin,
+          instanceKind: Instances.kind,
+        })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
@@ -236,8 +240,8 @@ export const fetchRemoteProfileActorActivity = async (
         );
       }
 
-      if (selected.instance.kind === InstanceKind.LOCAL) {
-        const localOrigin = selected.instance.canonicalOrigin;
+      if (selected.instanceKind === InstanceKind.LOCAL) {
+        const localOrigin = selected.instanceCanonicalOrigin;
         if (!localOrigin) {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Local Profile instance has no canonical origin.',
@@ -246,7 +250,7 @@ export const fetchRemoteProfileActorActivity = async (
         origin = localOrigin;
         signingProfileId = input.profileId;
       } else {
-        if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
+        if (selected.instanceKind !== InstanceKind.ACTIVITYPUB || !selected.actorUri) {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor metadata is missing.',
           );
@@ -254,7 +258,7 @@ export const fetchRemoteProfileActorActivity = async (
 
         let selectedActorUri: URL;
         try {
-          selectedActorUri = new URL(selected.actor.uri);
+          selectedActorUri = new URL(selected.actorUri);
         } catch {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI is invalid.',

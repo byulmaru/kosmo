@@ -13,7 +13,12 @@ export type LocalInstanceConfig = {
   domain: string;
 };
 
-export type ConfiguredLocalInstance = typeof Instances.$inferSelect & {
+type LocalInstanceRow = Pick<
+  typeof Instances.$inferSelect,
+  'canonicalOrigin' | 'createdAt' | 'domain' | 'id' | 'kind' | 'state' | 'updatedAt'
+>;
+
+export type ConfiguredLocalInstance = Omit<LocalInstanceRow, 'canonicalOrigin'> & {
   canonicalOrigin: string;
 };
 
@@ -49,7 +54,7 @@ export const parseLocalInstanceConfig = ({
 };
 
 export const validateConfiguredLocalInstance = (
-  instance: typeof Instances.$inferSelect | undefined,
+  instance: LocalInstanceRow | undefined,
   config: LocalInstanceConfig,
 ): ConfiguredLocalInstance => {
   if (!instance) {
@@ -66,5 +71,13 @@ export const validateConfiguredLocalInstance = (
     );
   }
 
-  return instance as ConfiguredLocalInstance;
+  return {
+    canonicalOrigin: instance.canonicalOrigin,
+    createdAt: instance.createdAt,
+    domain: instance.domain,
+    id: instance.id,
+    kind: instance.kind,
+    state: instance.state,
+    updatedAt: instance.updatedAt,
+  };
 };

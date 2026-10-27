@@ -39,6 +39,11 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
+import {
+  createLocalInstanceApplication,
+  localInstanceActorIdentifier,
+} from './local-instance-actor';
+import { ensureDrizzleLocalInstanceActorKeyPair } from './local-instance-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
   countLocalPostEmojiReactions,
@@ -74,13 +79,21 @@ export const federation: Federation<void> = createFederation<void>({
   ...(federationOrigin ? { origin: federationOrigin } : {}),
 });
 
+const hasCanonicalHost = (context: Pick<Context<void>, 'canonicalOrigin' | 'host'>) =>
+  context.host === new URL(context.canonicalOrigin).host;
+
 federation
   .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {
-    if (ctx.host !== new URL(ctx.canonicalOrigin).host) {
+    if (!hasCanonicalHost(ctx)) {
       return null;
     }
 
     const localInstance = await resolveConfiguredLocalInstance();
+    if (identifier === localInstanceActorIdentifier) {
+      const keyPair = await ensureDrizzleLocalInstanceActorKeyPair(localInstance.id);
+      return createLocalInstanceApplication(ctx, keyPair);
+    }
+
     const result = await ensureDrizzleLocalProfileActor({
       actorUri: ctx.getActorUri(identifier),
       localInstanceId: localInstance.id,
@@ -101,11 +114,18 @@ federation
     });
   })
   .mapHandle((context, username) =>
-    context.host === new URL(context.canonicalOrigin).host
-      ? resolveLocalActorIdentifierByHandle(username)
-      : null,
+    hasCanonicalHost(context) ? resolveLocalActorIdentifierByHandle(username) : null,
   )
   .setKeyPairsDispatcher(async (ctx, identifier) => {
+    if (identifier === localInstanceActorIdentifier) {
+      if (!hasCanonicalHost(ctx)) {
+        return [];
+      }
+
+      const localInstance = await resolveConfiguredLocalInstance();
+      return [await ensureDrizzleLocalInstanceActorKeyPair(localInstance.id)];
+    }
+
     const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({
       actorUri: ctx.getActorUri(identifier),
@@ -121,16 +141,23 @@ federation
         });
   });
 
+federation
+  .setOutboxDispatcher('/ap/actor/{identifier}/outbox', async (context, identifier, cursor) =>
+    hasCanonicalHost(context) && identifier === localInstanceActorIdentifier && cursor === null
+      ? { items: [] }
+      : null,
+  )
+  .setCounter((context, identifier) =>
+    hasCanonicalHost(context) && identifier === localInstanceActorIdentifier ? 0 : null,
+  );
+
 const findActiveLocalProfile = async (
   context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
   profileId: string,
 ) => {
   // Multiple Local Instances are valid domain state. This runtime currently serves only its
   // configured origin; request-origin instance resolution is tracked by PROD-376.
-  if (
-    context.host !== new URL(context.canonicalOrigin).host ||
-    !isCanonicalLocalProfileId(profileId)
-  ) {
+  if (!hasCanonicalHost(context) || !isCanonicalLocalProfileId(profileId)) {
     return undefined;
   }
 
@@ -198,6 +225,9 @@ federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFo
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+  .setSharedKeyDispatcher((context) =>
+    hasCanonicalHost(context) ? { identifier: localInstanceActorIdentifier } : null,
+  )
   .on(Accept, withInboundObservability('accept', handleInboundAccept))
   .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
   .on(Block, withInboundObservability('block', handleInboundBlock))
