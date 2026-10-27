@@ -5983,8 +5983,14 @@ export const MobilePostDetailThreadRoute: Story = {
     const canvas = within(canvasElement);
 
     await canvas.findByTestId('post-thread');
-    expect(canvas.queryByRole('heading', { name: '게시글' })).not.toBeInTheDocument();
-    expect(canvas.queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+    const heading = canvas.getByRole('heading', { name: '게시글' });
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    expect(heading).toBeVisible();
+    expect(menuButton).toBeVisible();
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(
+      menuButton.getBoundingClientRect().left - heading.parentElement!.getBoundingClientRect().left,
+    ).toBe(16);
   },
 };
 

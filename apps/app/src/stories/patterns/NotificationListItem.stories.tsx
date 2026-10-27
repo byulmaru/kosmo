@@ -184,7 +184,7 @@ export function NotificationExample(args: Args) {
   const actor = {
     id: 'notification-actor',
     name: args.name,
-    profileHref: '/@notification-actor',
+    profileHref: '/@notification-actor' as const,
   };
   const shared = {
     disabled: args.disabled,
