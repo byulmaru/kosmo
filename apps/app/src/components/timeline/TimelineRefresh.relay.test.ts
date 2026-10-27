@@ -149,6 +149,10 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -160,7 +164,6 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ status: sessionSt
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
-  getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
 mockModule('@/components/ui/StateView', {

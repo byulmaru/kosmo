@@ -30,6 +30,9 @@ let backCount = 0;
 const replacements: string[] = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule(new URL('../shell/MobileWebRouteMenu.tsx', import.meta.url), {
+  MobileWebRouteMenu: () => null,
+});
 mockModule('expo-router', {
   usePathname: () => '/hashtags/tag-a/profiles',
   useLocalSearchParams: () => ({ hashtagId: routeId }),

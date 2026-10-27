@@ -1,23 +1,12 @@
-import { usePathname, useSegments } from 'expo-router';
 import { useCallback, useEffect, useRef, useTransition } from 'react';
-import {
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation, usePaginationFragment } from 'react-relay';
-import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -32,7 +21,7 @@ import {
   ReplyNotificationListItem,
   RepostNotificationListItem,
 } from './NotificationListItem';
-import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
+import { useNotificationReadAll } from './NotificationReadAllContext';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListMarkReadMutation } from './__generated__/NotificationListMarkReadMutation.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
@@ -239,7 +228,6 @@ export function NotificationList({ profile }: NotificationListProps) {
               )
             }
           >
-            <NotificationPageHeader />
             {notifications.length ? (
               notifications
             ) : (
@@ -277,7 +265,6 @@ export function NotificationListState({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <NotificationPageHeader />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -317,19 +304,6 @@ export function NotificationListState({
         />
       )}
     </ScrollView>
-  );
-}
-
-function NotificationPageHeader() {
-  const pathname = usePathname();
-  const routeSegments = useSegments();
-  const { width } = useWindowDimensions();
-  const shellOwnsHeader =
-    getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
-    '알림';
-
-  return shellOwnsHeader ? null : (
-    <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }
 

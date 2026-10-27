@@ -3,6 +3,7 @@ import {
   NotificationList,
   NotificationListState,
 } from '@/components/notification/NotificationList';
+import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import type { NotificationsPageQuery } from './__generated__/NotificationsPageQuery.graphql';
 
@@ -20,13 +21,15 @@ const NotificationsQuery = graphql`
 
 export default function NotificationsScreen() {
   return (
-    <RouteBoundary
-      error={(retry) => <NotificationListState onRetry={retry} state="error" />}
-      loading={<NotificationListState state="loading" />}
-      title="알림을 불러오지 못했어요"
-    >
-      <NotificationsContent />
-    </RouteBoundary>
+    <NotificationRouteFrame>
+      <RouteBoundary
+        error={(retry) => <NotificationListState onRetry={retry} state="error" />}
+        loading={<NotificationListState state="loading" />}
+        title="알림을 불러오지 못했어요"
+      >
+        <NotificationsContent />
+      </RouteBoundary>
+    </NotificationRouteFrame>
   );
 }
 

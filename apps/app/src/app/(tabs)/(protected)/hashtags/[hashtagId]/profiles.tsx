@@ -9,6 +9,7 @@ import {
   HashtagRelatedProfileListState,
 } from '@/components/profile/HashtagRelatedProfileList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -30,6 +31,15 @@ const HashtagRelatedProfilesQuery = graphql`
 `;
 
 export default function HashtagRelatedProfilesScreen() {
+  return (
+    <>
+      <MobileWebRouteMenu />
+      <HashtagRelatedProfilesScreenContent />
+    </>
+  );
+}
+
+function HashtagRelatedProfilesScreenContent() {
   const { hashtagId: rawHashtagId } = useLocalSearchParams<{
     hashtagId?: string | string[];
   }>();

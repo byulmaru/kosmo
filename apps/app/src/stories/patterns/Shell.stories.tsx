@@ -1,17 +1,23 @@
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
-import { Slot } from 'expo-router';
+import { Slot, usePathname, useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
+import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import {
   NavigationGuardProvider,
   useNavigationGuard,
@@ -20,6 +26,7 @@ import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { IconButton } from '@/components/ui/IconButton';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, elevations, semanticColors, spacing } from '@/theme/tokens';
@@ -366,6 +373,7 @@ function GuardedProfileSwitcherStory() {
   return (
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+      <MobileWebRouteMenu />
       <ProfileSwitcherStory />
       <ProfileEditDiscardDialog
         onContinue={() => setPending(null)}
@@ -1938,10 +1946,61 @@ function expectElementInsideBounds(element: HTMLElement, bounds: DOMRect) {
   expect(elementBounds.bottom).toBeLessThanOrEqual(bounds.bottom);
 }
 
+// Shell stories supply route chrome just as the application routes do.
+function ShellStoryRoute() {
+  const { width } = useWindowDimensions();
+  const pathname = usePathname();
+  const router = useRouter();
+  const theme = useTheme();
+  const back = (
+    <IconButton accessibilityLabel="뒤로 가기" onPress={() => router.back()} targetSize={44}>
+      <ArrowLeft color={theme.foregroundPrimary} size={24} />
+    </IconButton>
+  );
+  if (width >= 768) {
+    return <Slot />;
+  }
+  let header: ReactNode = null;
+  if (pathname === '/home' || pathname === '/local') {
+    header = (
+      <PageHeader
+        leading={<NavigationDrawerTrigger />}
+        accessibilityLabel={pathname === '/home' ? '홈' : '로컬'}
+        variant="brand"
+      />
+    );
+  } else if (pathname === '/settings') {
+    header = <PageHeader leading={<NavigationDrawerTrigger />} title="설정" />;
+  } else if (pathname === '/settings/profile') {
+    header = <PageHeader leading={back} title="프로필 설정" />;
+  } else if (pathname === '/@writer/post-id') {
+    header = <PageHeader leading={back} title="게시글" />;
+  } else if (pathname === '/notifications') {
+    return (
+      <NotificationRouteFrame>
+        <Slot />
+      </NotificationRouteFrame>
+    );
+  } else if (pathname === '/feedback') {
+    return (
+      <>
+        <MobileWebRouteMenu />
+        <Slot />
+      </>
+    );
+  }
+  return (
+    <View style={{ minHeight: 844 }}>
+      <MobileWebRouteChrome>{header}</MobileWebRouteChrome>
+      <Slot />
+    </View>
+  );
+}
+
 function UniversalShellStory({ children }: { children?: ReactNode } = {}) {
   return (
     <SessionProvider>
-      <UniversalShell>{children ?? <Slot />}</UniversalShell>
+      <UniversalShell>{children ?? <ShellStoryRoute />}</UniversalShell>
     </SessionProvider>
   );
 }
@@ -1953,6 +2012,7 @@ function GuardedUniversalShellStory() {
     <SessionProvider>
       <UniversalShell>
         <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+        <MobileWebRouteMenu />
         <Text accessibilityRole="header" ref={profileEditHeadingRef} {...{ tabIndex: -1 }}>
           프로필 수정
         </Text>

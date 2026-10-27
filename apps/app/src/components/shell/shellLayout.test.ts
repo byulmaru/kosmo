@@ -5,17 +5,12 @@ import {
   getProfileEditActionTargetMetrics,
   getShellLayout,
   getShellRoutePresentation,
-  getWebMobileShellHeader,
-  getWebMobileShellHeaderStickyOffset,
   isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
-  isWebMobileRouteOwnedHeader,
 } from './shellLayout';
 
 describe('getShellLayout', () => {
-  const postDetailSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'] as const;
-
   it('keeps native tablets on the mobile shell', () => {
     assert.equal(getShellLayout(false, 1_024), 'mobile');
   });
@@ -41,94 +36,6 @@ describe('getShellLayout', () => {
     assert.equal(getShellLayout(true, 767), 'mobile');
     assert.equal(getShellLayout(true, 768), 'compact');
     assert.equal(getShellLayout(true, 1_280), 'full');
-  });
-
-  it('offsets a Web mobile detail header below the shell header only', () => {
-    assert.equal(getWebMobileShellHeaderStickyOffset(767), 64);
-    assert.equal(getWebMobileShellHeaderStickyOffset(768), 0);
-    assert.equal(getWebMobileShellHeaderStickyOffset(1_280), 0);
-  });
-
-  it('assigns only the approved Web mobile routes to the shell header', () => {
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/notifications', []), {
-      leading: 'menu',
-      title: '알림',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/@writer/post-id', postDetailSegments), {
-      leading: 'back',
-      title: '게시글',
-    });
-    assert.deepEqual(
-      getWebMobileShellHeader(true, 390, '/@writer/post-id', postDetailSegments, true),
-      { leading: 'menu', title: '게시글' },
-    );
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/writer/post-id', postDetailSegments), {
-      leading: 'back',
-      title: '게시글',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings', []), {
-      leading: 'menu',
-      title: '설정',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/default-post-visibility', []), {
-      leading: 'back',
-      title: '프로필 설정',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/profile', []), {
-      leading: 'back',
-      title: '프로필 설정',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/profile-migration', []), {
-      leading: 'back',
-      title: '다른 서비스에서 이전',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/following-import', []), {
-      leading: 'back',
-      title: '팔로잉 가져오기',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
-      leading: 'back',
-      title: '뮤트 및 차단',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/muted-profiles', []), {
-      leading: 'back',
-      title: '뮤트한 프로필',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/blocked-profiles', []), {
-      leading: 'back',
-      title: '차단한 프로필',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/theme', []), {
-      leading: 'back',
-      title: '테마',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/info', []), {
-      leading: 'back',
-      title: '정보',
-    });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/developer', []), {
-      leading: 'back',
-      title: '개발 정보',
-    });
-    assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/compose', []), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/following', []), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/login/callback', []), null);
-    assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
-    assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
-    assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
-  });
-
-  it('gives only confirmed mobile Web guests the public Local menu header', () => {
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/', [], true), {
-      leading: 'menu',
-      title: '타임라인 둘러보기',
-    });
-    assert.equal(getWebMobileShellHeader(true, 390, '/', [], false), null);
-    assert.equal(getWebMobileShellHeader(false, 390, '/', [], true), null);
-    assert.equal(getWebMobileShellHeader(true, 1024, '/', [], true), null);
   });
 
   it('treats only the canonical Settings route family as Settings', () => {
@@ -197,27 +104,5 @@ describe('getShellLayout', () => {
       settingsWorkspace: false,
       showRightRail: false,
     });
-  });
-
-  it('assigns mobile Web search, Profile edit and Profile-owned screens to route-owned headers', () => {
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/search'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/profile-edit'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/followers'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/following'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/post-id/reactions'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/writer/post-id/reactions'), true);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/post-id'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/notifications'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/settings/followers'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/search'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/profile-edit'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/@writer'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/@writer/followers'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(true, 1_280, '/search'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/profile-edit'), false);
-    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/@writer/following'), false);
   });
 });

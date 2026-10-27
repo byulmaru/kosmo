@@ -7,11 +7,10 @@ import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import {
-  getShellLayout,
-  getWebMobileShellHeaderStickyOffset,
-} from '@/components/shell/shellLayout';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -105,28 +104,28 @@ function HomeFrame({
   onBrandCurrentNavigate,
 }: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
   const { width } = useWindowDimensions();
-  const routeOwnsHeader =
-    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
   return (
     <View style={styles.root}>
-      {routeOwnsHeader ? (
+      <MobileWebRouteChrome>
         <PageHeader
           accessibilityLabel="홈"
-          brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          brandHref={Platform.OS === 'web' && !mobileWeb ? '/home' : undefined}
+          leading={mobileWeb ? <NavigationDrawerTrigger /> : undefined}
+          onBrandCurrentNavigate={
+            Platform.OS === 'web' && !mobileWeb ? onBrandCurrentNavigate : undefined
+          }
           variant="brand"
         />
-      ) : null}
-      <View
-        style={
-          Platform.OS === 'web'
-            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
-            : undefined
-        }
-      >
-        <TimelineTabs value="home" />
-      </View>
+        <View
+          style={
+            Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
+          }
+        >
+          <TimelineTabs value="home" />
+        </View>
+      </MobileWebRouteChrome>
       <View style={styles.body}>{children}</View>
     </View>
   );
