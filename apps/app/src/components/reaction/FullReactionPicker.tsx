@@ -67,12 +67,15 @@ export function FullReactionPicker({
     : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
   const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const searchResults = options.filter((option) =>
-    [option.emoji, option.label, ...(option.keywords ?? [])]
-      .join(' ')
-      .toLocaleLowerCase()
-      .includes(normalizedQuery),
-  );
+  const searchResults =
+    loading || normalizedQuery.length === 0
+      ? []
+      : options.filter((option) =>
+          [option.emoji, option.label, ...(option.keywords ?? [])]
+            .join(' ')
+            .toLocaleLowerCase()
+            .includes(normalizedQuery),
+        );
   const state = loading
     ? 'loading'
     : normalizedQuery.length === 0
