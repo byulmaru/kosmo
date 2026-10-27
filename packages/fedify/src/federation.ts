@@ -2,6 +2,7 @@ import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import {
   Accept,
   Announce,
+  Application,
   Block,
   Create,
   Delete,
@@ -18,6 +19,7 @@ import {
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
@@ -39,6 +41,7 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
+import { ensureDrizzleLocalInstanceActorKeyPairs } from './local-instance-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
   countLocalPostEmojiReactions,
@@ -59,6 +62,8 @@ import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
+const localInstanceActorIdentifier = '~instance';
+const localInstanceActorHandle = 'kosmo.instance';
 
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
@@ -74,10 +79,33 @@ export const federation: Federation<void> = createFederation<void>({
   ...(federationOrigin ? { origin: federationOrigin } : {}),
 });
 
+const hasCanonicalHost = (context: Pick<Context<void>, 'canonicalOrigin' | 'host'>) =>
+  context.host === new URL(context.canonicalOrigin).host;
+
 federation
   .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {
-    if (ctx.host !== new URL(ctx.canonicalOrigin).host) {
+    if (!hasCanonicalHost(ctx)) {
       return null;
+    }
+
+    if (identifier === localInstanceActorIdentifier) {
+      const keyPairs = await ctx.getActorKeyPairs(localInstanceActorIdentifier);
+      const rsaKeyPair = keyPairs.find(
+        (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
+      );
+      if (rsaKeyPair == null) {
+        throw new Error(`Local Instance actor ${identifier} is missing an RSA key pair.`);
+      }
+      const actorUri = ctx.getActorUri(localInstanceActorIdentifier);
+      return new Application({
+        id: actorUri,
+        inbox: new URL('/inbox', ctx.canonicalOrigin),
+        preferredUsername: localInstanceActorHandle,
+        publicKey: rsaKeyPair.cryptographicKey,
+        assertionMethods: keyPairs
+          .filter((keyPair) => keyPair.publicKey.algorithm.name === 'Ed25519')
+          .map((keyPair) => keyPair.multikey),
+      });
     }
 
     const localInstance = await resolveConfiguredLocalInstance();
@@ -100,12 +128,25 @@ federation
       profile: result.profile,
     });
   })
-  .mapHandle((context, username) =>
-    context.host === new URL(context.canonicalOrigin).host
-      ? resolveLocalActorIdentifierByHandle(username)
-      : null,
-  )
+  .mapHandle((context, username) => {
+    if (!hasCanonicalHost(context)) {
+      return null;
+    }
+
+    return normalizeHandle(username) === localInstanceActorHandle
+      ? localInstanceActorIdentifier
+      : resolveLocalActorIdentifierByHandle(username);
+  })
   .setKeyPairsDispatcher(async (ctx, identifier) => {
+    if (identifier === localInstanceActorIdentifier) {
+      if (!hasCanonicalHost(ctx)) {
+        return [];
+      }
+
+      const localInstance = await resolveConfiguredLocalInstance();
+      return ensureDrizzleLocalInstanceActorKeyPairs(localInstance.id);
+    }
+
     const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({
       actorUri: ctx.getActorUri(identifier),
@@ -127,10 +168,7 @@ const findActiveLocalProfile = async (
 ) => {
   // Multiple Local Instances are valid domain state. This runtime currently serves only its
   // configured origin; request-origin instance resolution is tracked by PROD-376.
-  if (
-    context.host !== new URL(context.canonicalOrigin).host ||
-    !isCanonicalLocalProfileId(profileId)
-  ) {
+  if (!hasCanonicalHost(context) || !isCanonicalLocalProfileId(profileId)) {
     return undefined;
   }
 
@@ -198,6 +236,9 @@ federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFo
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+  .setSharedKeyDispatcher((context) =>
+    hasCanonicalHost(context) ? { identifier: localInstanceActorIdentifier } : null,
+  )
   .on(Accept, withInboundObservability('accept', handleInboundAccept))
   .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
   .on(Block, withInboundObservability('block', handleInboundBlock))

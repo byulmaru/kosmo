@@ -217,6 +217,10 @@ export const Instances = pgTable(
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    activityPubKeyPairs:
+      jsonb('activitypub_key_pairs').$type<
+        { publicKeyJwk: JsonWebKeyRecord; privateKeyJwk: JsonWebKeyRecord }[]
+      >(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
