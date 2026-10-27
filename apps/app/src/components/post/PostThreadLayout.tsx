@@ -107,13 +107,13 @@ export function PostThreadLayout<TPost>({
   return (
     <View accessibilityLabel="Reply thread" onLayout={onLayout} testID="post-thread">
       {renderedRows.slice(0, ancestors.length)}
-      {currentSectionMinHeight === undefined ? (
-        renderedRows.slice(ancestors.length)
-      ) : (
-        <View style={{ minHeight: currentSectionMinHeight }}>
-          {renderedRows.slice(ancestors.length)}
-        </View>
-      )}
+      <View
+        style={
+          currentSectionMinHeight === undefined ? undefined : { minHeight: currentSectionMinHeight }
+        }
+      >
+        {renderedRows.slice(ancestors.length)}
+      </View>
     </View>
   );
 }
