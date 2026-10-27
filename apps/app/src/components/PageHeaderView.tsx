@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '../theme/tokens';
 import { BrandLogo } from './BrandLogo';
@@ -86,13 +86,13 @@ export function PageHeaderView(props: PageHeaderProps) {
           {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
           {props.title ? (
             <Text
+              {...(Platform.OS === 'web' && props.titleRef ? { tabIndex: -1 } : {})}
               accessible={props.titleRef ? true : undefined}
               accessibilityRole="header"
               ellipsizeMode={props.titleLines === 1 ? 'tail' : undefined}
               numberOfLines={props.titleLines}
               ref={props.titleRef}
               style={[styles.title, { color: theme.foregroundPrimary }]}
-              tabIndex={props.titleRef ? -1 : undefined}
             >
               {props.title}
             </Text>

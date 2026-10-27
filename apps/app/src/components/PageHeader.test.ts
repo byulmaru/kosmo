@@ -11,6 +11,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },
   Pressable: 'Pressable',
   Text: 'Text',
