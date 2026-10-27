@@ -1,14 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, usePreloadedQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
-import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
+import type { PreloadedQuery } from 'react-relay';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
 
-const ProfilePostListPageQuery = graphql`
+export const ProfilePostListPageQuery = graphql`
   query ProfilePostListPageQuery($handle: String!) {
     currentSession {
       id
@@ -35,30 +36,56 @@ export default function ProfilePostListPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
-  const { chrome, scrollKey } = useProfileRoute();
+  const { chrome, postsQueryReference, retryPosts, scrollKey } = useProfileRoute();
 
   return (
     <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
       {chrome}
       <RouteBoundary
-        error={(retry) => <PostList error onRetry={retry} />}
+        error={(retry) => (
+          <PostList
+            error
+            onRetry={() => {
+              retryPosts();
+              retry();
+            }}
+          />
+        )}
         key={handle}
         loading={<PostList loading />}
         title="게시글 목록을 불러오지 못했어요"
       >
-        <ProfilePostListPageContent handle={handle} />
+        <ProfilePostListPageContent handle={handle} postsQueryReference={postsQueryReference} />
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
-function ProfilePostListPageContent({ handle }: { handle: string }) {
-  const { fetchKey } = useRouteBoundary();
+function ProfilePostListPageContent({
+  handle,
+  postsQueryReference,
+}: {
+  handle: string;
+  postsQueryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
+}) {
+  if (!postsQueryReference) {
+    return <PostList loading />;
+  }
+
+  return <ProfilePostListPageData handle={handle} queryReference={postsQueryReference} />;
+}
+
+function ProfilePostListPageData({
+  handle,
+  queryReference,
+}: {
+  handle: string;
+  queryReference: PreloadedQuery<ProfilePostListPageQueryType>;
+}) {
   const [acknowledgedProfileBlockId, setAcknowledgedProfileBlockId] = useState<string | null>(null);
-  const data = useLazyLoadQuery<ProfilePostListPageQueryType>(
+  const data = usePreloadedQuery<ProfilePostListPageQueryType>(
     ProfilePostListPageQuery,
-    { handle },
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    queryReference,
   );
   const profileBlockId = data.profileByHandle?.viewerState?.profileBlock?.id ?? null;
 

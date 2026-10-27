@@ -1,9 +1,16 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { Slot, Stack, useCurrentRouteInfo, usePathname, useRouter } from 'expo-router';
+import {
+  Slot,
+  Stack,
+  useCurrentRouteInfo,
+  useNavigation,
+  usePathname,
+  useRouter,
+} from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import {
   getContentReportBlockProfile,
@@ -29,16 +36,31 @@ import { Tab, TabList } from '@/components/ui/Tabs';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, spacing } from '@/theme/tokens';
+import { ProfilePostListPageQuery } from './index';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { PreloadedQuery } from 'react-relay';
 import type { ProfileConnectionKind } from '@/components/profile/route';
 import type { TabOption } from '@/components/ui/Tabs';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
+import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
 
 const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
   { label: '팔로워', value: 'followers' },
   { label: '팔로잉', value: 'following' },
 ];
+
+function getProfileHandleParam(params: object | undefined): string | string[] | undefined {
+  if (!params || !('profileHandle' in params)) {
+    return undefined;
+  }
+
+  const value = params.profileHandle;
+  return typeof value === 'string' ||
+    (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+    ? value
+    : undefined;
+}
 
 const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
@@ -73,6 +95,7 @@ export default function ProfileLayout() {
   const handle = normalizeProfileHandle(routeInfo?.params.profileHandle);
   const profilePathname = routeInfo?.pathname ?? '';
   const globalPathname = usePathname();
+  const navigationState = useNavigation().getState();
   // Native layout route info names the parent; resolve only its connection child globally.
   const pathname =
     globalPathname.startsWith(`${profilePathname}/`) && getProfileConnectionKind(globalPathname)
@@ -87,6 +110,15 @@ export default function ProfileLayout() {
     pathSegments.length === 1 &&
     (pathSegments[0]?.length ?? 0) > 1 &&
     pathSegments[0]?.startsWith('@');
+  const activeProfileParent = navigationState?.routes[navigationState.index ?? 0];
+  const profileRouteState = activeProfileParent?.state;
+  const activeProfileChild = profileRouteState?.routes[profileRouteState.index ?? 0];
+  const activeProfileRouteHandle = getProfileHandleParam(activeProfileParent?.params);
+  const isProfilePostsRoute =
+    !connectionKind &&
+    isProfileHome &&
+    activeProfileChild?.name === 'index' &&
+    normalizeProfileHandle(activeProfileRouteHandle) === handle;
   const fallbackRelativeHandle = `@${handle}`;
   const router = useRouter();
   const theme = useTheme();
@@ -109,77 +141,122 @@ export default function ProfileLayout() {
   const headerLeading = guestMobileWebProfileHome ? <NavigationDrawerTrigger /> : backButton;
 
   return (
-    <RouteBoundary
-      error={
-        connectionKind
-          ? (retry) => (
-              <ProfileRouteContainer scrollKey={scrollKey}>
-                <ProfileConnectionChrome
-                  displayName={fallbackRelativeHandle}
-                  kind={connectionKind}
-                  relativeHandle={fallbackRelativeHandle}
-                />
-                <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
-              </ProfileRouteContainer>
-            )
-          : isProfileHome
-            ? (retry) => (
-                <ProfileRouteContainer scrollKey={scrollKey}>
-                  <PageHeader leading={headerLeading} title="" />
-                  <StateView
-                    actionLabel="다시 시도"
-                    alert
-                    description="잠시 후 다시 시도해주세요."
-                    onAction={retry}
-                    title="프로필을 불러오지 못했어요"
+    <ProfilePostsQueryOwner enabled={isProfilePostsRoute} handle={handle} key={handle}>
+      {(postsQueryReference, retryPosts) => (
+        <RouteBoundary
+          error={
+            connectionKind
+              ? (retry) => (
+                  <ProfileRouteContainer scrollKey={scrollKey}>
+                    <ProfileConnectionChrome
+                      displayName={fallbackRelativeHandle}
+                      kind={connectionKind}
+                      relativeHandle={fallbackRelativeHandle}
+                    />
+                    <ProfileConnectionListState
+                      kind={connectionKind}
+                      onRetry={retry}
+                      state="error"
+                    />
+                  </ProfileRouteContainer>
+                )
+              : isProfileHome
+                ? (retry) => (
+                    <ProfileRouteContainer scrollKey={scrollKey}>
+                      <PageHeader leading={headerLeading} title="" />
+                      <StateView
+                        actionLabel="다시 시도"
+                        alert
+                        description="잠시 후 다시 시도해주세요."
+                        onAction={retry}
+                        title="프로필을 불러오지 못했어요"
+                      />
+                    </ProfileRouteContainer>
+                  )
+                : undefined
+          }
+          key={`${handle}:${connectionKind ?? 'profile'}`}
+          loading={
+            <ProfileRouteContainer scrollKey={scrollKey}>
+              {connectionKind ? (
+                <>
+                  <ProfileConnectionChrome
+                    displayName={fallbackRelativeHandle}
+                    kind={connectionKind}
+                    relativeHandle={fallbackRelativeHandle}
                   />
-                </ProfileRouteContainer>
-              )
-            : undefined
-      }
-      key={`${handle}:${connectionKind ?? 'profile'}`}
-      loading={
-        <ProfileRouteContainer scrollKey={scrollKey}>
-          {connectionKind ? (
-            <>
-              <ProfileConnectionChrome
-                displayName={fallbackRelativeHandle}
-                kind={connectionKind}
-                relativeHandle={fallbackRelativeHandle}
-              />
-              <ProfileConnectionListState kind={connectionKind} state="loading" />
-            </>
-          ) : (
-            <>
-              {isProfileHome ? <PageHeader leading={headerLeading} title="" /> : null}
-              <ProfileHero loading />
-            </>
-          )}
-        </ProfileRouteContainer>
-      }
-      title="프로필을 불러오지 못했어요"
-    >
-      <ProfileLayoutContent
-        headerLeading={headerLeading}
-        connectionKind={connectionKind}
-        handle={handle}
-        scrollKey={scrollKey}
-        showPageHeader={isProfileHome}
-      />
-    </RouteBoundary>
+                  <ProfileConnectionListState kind={connectionKind} state="loading" />
+                </>
+              ) : (
+                <>
+                  {isProfileHome ? <PageHeader leading={headerLeading} title="" /> : null}
+                  <ProfileHero loading />
+                </>
+              )}
+            </ProfileRouteContainer>
+          }
+          title="프로필을 불러오지 못했어요"
+        >
+          <ProfileLayoutContent
+            headerLeading={headerLeading}
+            connectionKind={connectionKind}
+            handle={handle}
+            postsQueryReference={postsQueryReference}
+            retryPosts={retryPosts}
+            scrollKey={scrollKey}
+            showPageHeader={isProfileHome}
+          />
+        </RouteBoundary>
+      )}
+    </ProfilePostsQueryOwner>
   );
+}
+
+function ProfilePostsQueryOwner({
+  children,
+  enabled,
+  handle,
+}: {
+  children: (
+    queryReference: PreloadedQuery<ProfilePostListPageQueryType> | null,
+    retryPosts: () => void,
+  ) => ReactNode;
+  enabled: boolean;
+  handle: string;
+}) {
+  const [queryReference, loadPosts, disposePosts] =
+    useQueryLoader<ProfilePostListPageQueryType>(ProfilePostListPageQuery);
+  const retryPosts = useCallback(() => {
+    if (enabled) {
+      loadPosts({ handle }, { fetchPolicy: 'network-only' });
+    }
+  }, [enabled, handle, loadPosts]);
+
+  useEffect(() => {
+    if (enabled) {
+      loadPosts({ handle }, { fetchPolicy: 'store-and-network' });
+    } else {
+      disposePosts();
+    }
+  }, [disposePosts, enabled, handle, loadPosts]);
+
+  return children(enabled ? (queryReference ?? null) : null, retryPosts);
 }
 
 function ProfileLayoutContent({
   headerLeading,
   connectionKind,
   handle,
+  postsQueryReference,
+  retryPosts,
   scrollKey,
   showPageHeader,
 }: {
   headerLeading: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
+  postsQueryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
+  retryPosts: () => void;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
@@ -228,7 +305,12 @@ function ProfileLayoutContent({
     );
 
     return (
-      <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+      <ProfileRouteProvider
+        chrome={chrome}
+        postsQueryReference={postsQueryReference}
+        retryPosts={retryPosts}
+        scrollKey={scrollKey}
+      >
         {Platform.OS === 'web' ? (
           <Slot />
         ) : (
@@ -280,7 +362,12 @@ function ProfileLayoutContent({
   ) : null;
 
   return (
-    <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+    <ProfileRouteProvider
+      chrome={chrome}
+      postsQueryReference={postsQueryReference}
+      retryPosts={retryPosts}
+      scrollKey={scrollKey}
+    >
       {blockedProfileRoute ??
         (Platform.OS === 'web' ? (
           <Slot />
