@@ -285,6 +285,21 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   Reply/Mention/Quote의 Content Warning 공개, Action Bar와 열린 composer의 control은 자체 동작만 수행하며
   item navigation이나 Read를 함께 시작하지 않는다.
 
+## Native OTA 다운로드 완료 로컬 알림
+
+Native 기기에서 새 OTA update 다운로드가 완료되면 기존 OS 알림 권한과 foreground 알림 표시를 사용해
+로컬 OS 알림을 표시한다. 제목은 `업데이트가 준비되었어요.`, 본문은 `누르면 앱을 재시작해 적용합니다.`이다.
+알림을 누르면 대기 중인 update를 적용하도록 앱을 즉시 재시작한다. 이 동작은 진행 중인 앱 사용이나 저장하지
+않은 작업을 중단할 수 있으며, 사용자는 이를 허용했다.
+
+기존 OS 알림 설정을 따르며 별도의 권한 요청, 앱 내 알림 설정, 알림 채널 또는 background fetch를 추가하지
+않는다. 이 로컬 알림은 서버 FCM이나 broadcast가 아니며 canonical `Notification`, 알림 목록 항목 또는 unread
+count를 만들지 않는다. `ON_LOAD` 확인으로 Native 앱이 관찰하는 다운로드 완료이므로 publication 수신을 뜻하지
+않으며 앱이 종료된 동안 다운로드를 보장하지 않는다.
+
+Cold launch에서 update가 이미 적용됐거나 알림이 오래되어 일치하는 대기 update가 없으면, 알림을 처리하고
+추가 재시작이나 social navigation을 하지 않는다.
+
 ## 검증 경계
 
 2026-09-08 Figma에서 Reply의 Light/Dark·긴 이름·읽음/읽지 않음 표본과 Mention의 Light/Dark
