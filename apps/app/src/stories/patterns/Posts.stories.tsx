@@ -5769,6 +5769,28 @@ export const PostDetailThreadRoute: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPost,
+              reactionCounts: routeCurrentPostReactionCounts,
+              replyAncestors: [
+                { ...routeParentPost, repostSource: routeSourcePost },
+                routeRootPost,
+              ],
+              replyDescendants: {
+                edges: [
+                  { cursor: 'route-child', node: routeChildPost },
+                  { cursor: 'route-sibling', node: routeSiblingPost },
+                  { cursor: 'route-reply-quote', node: routeReplyQuotePost },
+                  { cursor: 'route-source-null', node: routeSourceNullPost },
+                ],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -5965,6 +5987,20 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...withReactionViewerState(quotePost),
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6040,6 +6076,17 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...withReactionViewerState(pureRepost),
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6082,6 +6129,16 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeBoundaryCurrentPostWithoutReactions,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6158,6 +6215,43 @@ export const PostDetailReplyTargetedRefetch: Story = {
             },
           ],
         },
+        PostDetailConversationQuery: {
+          sequence: [
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [{ cursor: routeCreatedReply.id, node: routeCreatedReply }],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        PostDetailComposerQuery: {
+          data: {
+            currentSession: {
+              __typename: 'Session',
+              id: 'session',
+              selectedProfile: composerProfile,
+            },
+          },
+        },
       },
     },
     router: {
@@ -6181,7 +6275,12 @@ export const PostDetailReplyTargetedRefetch: Story = {
     expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
     expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
   },
-  render: () => <PostDetailScreen />,
+  // UniversalShell keeps SessionProvider outside the actor boundary; mirror that lifecycle here.
+  render: () => (
+    <RelayActorBoundary>
+      <PostDetailScreen />
+    </RelayActorBoundary>
+  ),
 };
 
 export const PostDetailThreadShortContentAutoFills: Story = {
@@ -6201,6 +6300,19 @@ export const PostDetailThreadShortContentAutoFills: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationInitialReply.id, node: paginationInitialReply }],
+                pageInfo: { endCursor: paginationInitialReply.id, hasNextPage: true },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
       paginationResponses: [
         {
@@ -6252,6 +6364,22 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
       paginationResponses: [
         {
@@ -6327,6 +6455,22 @@ export const PostDetailThreadPageLoading: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: defaultSession.currentSession } },
       },
       paginationLoading: true,
     },
@@ -6370,6 +6514,22 @@ export const PostDetailThreadPageFailureRetries: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: defaultSession.currentSession } },
       },
       paginationResponses: [
         { error: '다음 Reply page를 불러오지 못했습니다.' },

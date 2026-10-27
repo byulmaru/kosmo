@@ -1,30 +1,31 @@
 import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { graphql, useRelayEnvironment } from 'react-relay';
+import { QueryRenderer } from 'react-relay/legacy';
 import { PageHeader } from '@/components/PageHeader';
-import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
-import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import {
+  PostDetailConversationData,
+  PostDetailThreadProviders,
+  PostDetailThreadViewport,
+} from '@/components/post/PostDetailThread';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
+import type { PostDetailConversation_post$key } from '@/components/post/__generated__/PostDetailConversation_post.graphql';
+import type { PostDetailComposerQuery } from './__generated__/PostDetailComposerQuery.graphql';
+import type { PostDetailConversationQuery } from './__generated__/PostDetailConversationQuery.graphql';
 import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
   query PostDetailQuery($postId: ID!) {
-    currentSession {
-      id
-      selectedProfile {
-        id
-        ...ReplyComposerSurface_profile
-      }
-    }
     node(id: $postId) {
       __typename
       ... on Post {
@@ -46,17 +47,42 @@ const PostQuery = graphql`
             relativeHandle
           }
         }
-        ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
+        ...PostLayout_post @alias(as: "detail")
       }
     }
   }
 `;
 
+const ComposerQuery = graphql`
+  query PostDetailComposerQuery {
+    currentSession {
+      selectedProfile {
+        ...ReplyComposerSurface_profile
+      }
+    }
+  }
+`;
+
+const ConversationQuery = graphql`
+  query PostDetailConversationQuery($postId: ID!) {
+    node(id: $postId) {
+      __typename
+      ... on Post {
+        id
+        ...PostDetailConversation_post @alias(as: "conversation") @arguments(count: 20)
+      }
+    }
+  }
+`;
+
+type RelayRenderProps<TOperation extends { response: object }> = {
+  error: Error | null;
+  props: TOperation['response'] | null;
+  retry: (() => void) | null;
+};
+
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{
-    postId: string;
-    profileHandle: string;
-  }>();
+  const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
@@ -72,31 +98,12 @@ export default function PostDetailScreen() {
   );
 
   return (
-    <RouteBoundary
-      error={(retry) => (
-        <PostDetailFrame header={header}>
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            onAction={retry}
-            title="게시글을 불러오지 못했어요"
-          />
-        </PostDetailFrame>
-      )}
+    <PostDetailContent
+      header={header}
       key={`${routeRelativeHandle}:${postId}`}
-      loading={
-        <PostDetailFrame header={header}>
-          <StateView loading title="게시글을 불러오는 중입니다." />
-        </PostDetailFrame>
-      }
-      title="게시글을 불러오지 못했어요"
-    >
-      <PostDetailContent
-        header={header}
-        postId={postId}
-        routeRelativeHandle={routeRelativeHandle}
-      />
-    </RouteBoundary>
+      postId={postId}
+      routeRelativeHandle={routeRelativeHandle}
+    />
   );
 }
 
@@ -131,66 +138,232 @@ function PostDetailContent({
   postId: string;
   routeRelativeHandle: string;
 }) {
+  const environment = useRelayEnvironment();
   const router = useRouter();
-  const { fetchKey, refetch } = useRouteBoundary();
-  const [locallyDeleted, setLocallyDeleted] = useState(false);
-  const data = useLazyLoadQuery<PostDetailQuery>(
-    PostQuery,
-    { postId },
-    { fetchKey, fetchPolicy: 'store-and-network' },
-  );
   const { isHistoryEntryRestoration } = usePrimaryNavigationScroll();
-  const post = data.node?.__typename === 'Post' ? data.node : null;
-  const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
-  const pureRepostSourceHref: Href | null = pureRepostSource
-    ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
-    : null;
+  const [locallyDeleted, setLocallyDeleted] = useState(false);
 
   useEffect(() => {
     setLocallyDeleted(false);
-  }, [fetchKey]);
+  }, [postId]);
+
+  return (
+    <QueryRenderer<PostDetailQuery>
+      environment={environment}
+      fetchPolicy="store-and-network"
+      query={PostQuery}
+      variables={{ postId }}
+      render={(current) => (
+        <QueryRenderer<PostDetailComposerQuery>
+          environment={environment}
+          fetchPolicy="store-and-network"
+          query={ComposerQuery}
+          variables={{}}
+          render={(composer) => (
+            <QueryRenderer<PostDetailConversationQuery>
+              environment={environment}
+              fetchPolicy="store-and-network"
+              query={ConversationQuery}
+              variables={{ postId }}
+              render={(conversation) => (
+                <PostDetailRouteTree
+                  composer={composer}
+                  conversation={conversation}
+                  current={current}
+                  header={header}
+                  isHistoryEntryRestoration={isHistoryEntryRestoration}
+                  locallyDeleted={locallyDeleted}
+                  onPostDeleted={() => setLocallyDeleted(true)}
+                  postId={postId}
+                  routeRelativeHandle={routeRelativeHandle}
+                  router={router}
+                />
+              )}
+            />
+          )}
+        />
+      )}
+    />
+  );
+}
+
+function PostDetailRouteTree({
+  composer,
+  conversation,
+  current,
+  header,
+  isHistoryEntryRestoration,
+  locallyDeleted,
+  onPostDeleted,
+  postId,
+  routeRelativeHandle,
+  router,
+}: {
+  composer: RelayRenderProps<PostDetailComposerQuery>;
+  conversation: RelayRenderProps<PostDetailConversationQuery>;
+  current: RelayRenderProps<PostDetailQuery>;
+  header: ReactNode;
+  isHistoryEntryRestoration: () => boolean;
+  locallyDeleted: boolean;
+  onPostDeleted: () => void;
+  postId: string;
+  routeRelativeHandle: string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const lastCurrentPropsRef = useRef<PostDetailQuery['response'] | null>(null);
+  const lastComposerPropsRef = useRef<PostDetailComposerQuery['response'] | null>(null);
+  const lastConversationKeyRef = useRef<PostDetailConversation_post$key | null>(null);
+  if (current.props) {
+    lastCurrentPropsRef.current = current.props.node?.__typename === 'Post' ? current.props : null;
+  }
+  if (composer.props) {
+    lastComposerPropsRef.current = composer.props;
+  }
+  const currentProps = current.props ?? lastCurrentPropsRef.current;
+  const composerProps = composer.props ?? lastComposerPropsRef.current;
+  const currentPost = currentProps?.node?.__typename === 'Post' ? currentProps.node : null;
+  const conversationPost =
+    conversation.props?.node?.__typename === 'Post' ? conversation.props.node : null;
+  const conversationKey = conversationPost?.conversation ?? null;
+  const conversationResolved = conversation.error === null && conversation.props !== null;
+  if (conversationResolved) {
+    lastConversationKeyRef.current = conversationKey;
+  }
+  const effectiveConversationKey = conversationResolved
+    ? conversationKey
+    : lastConversationKeyRef.current;
+  const conversationStructuralError = conversation.props != null && !conversationPost;
+  const pureRepostSource =
+    currentPost && !currentPost.content && !currentPost.replyParent
+      ? currentPost.repostSource
+      : null;
+  const pureRepostSourceHref: Href | null = pureRepostSource
+    ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
+    : null;
+  const onPostCreated = useCallback(() => conversation.retry?.(), [conversation.retry]);
 
   useEffect(() => {
     if (pureRepostSourceHref) {
       router.replace(pureRepostSourceHref);
-    } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
-      router.replace(`/${post.profile.relativeHandle}/${postId}`);
+    } else if (currentPost && currentPost.profile.relativeHandle !== routeRelativeHandle) {
+      router.replace(`/${currentPost.profile.relativeHandle}/${postId}`);
     }
-  }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
+  }, [currentPost, postId, pureRepostSourceHref, routeRelativeHandle, router]);
 
-  return pureRepostSourceHref ? null : locallyDeleted ? (
-    <PostDetailFrame header={header}>
-      <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
-    </PostDetailFrame>
-  ) : !post ? (
-    <PostDetailFrame header={header}>
-      <StateView
-        description="이미 삭제되었거나 존재하지 않는 게시글이에요."
-        title="게시글을 찾을 수 없어요"
-      />
-    </PostDetailFrame>
-  ) : post.state === 'DELETED' ? (
-    <PostDetailFrame header={header}>
-      <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
-    </PostDetailFrame>
-  ) : !post.thread ? (
-    <PostDetailFrame header={header}>
-      <StateView
-        description="게시글 데이터를 다시 불러와 주세요."
-        title="게시글을 표시할 수 없어요"
-      />
-    </PostDetailFrame>
-  ) : (
-    <PostDetailThread
-      header={header}
-      identity={postId}
-      onPostDeleted={() => setLocallyDeleted(true)}
-      onReplyCreated={refetch}
-      post={post.thread}
-      preserveScrollPosition={isHistoryEntryRestoration}
-      replyProfile={data.currentSession?.selectedProfile ?? null}
+  return (
+    <PostDetailThreadProviders
+      onPostCreated={onPostCreated}
+      profile={composerProps?.currentSession?.selectedProfile ?? null}
+    >
+      <PostDetailThreadViewport header={header} preserveScrollPosition={isHistoryEntryRestoration}>
+        {!currentPost ? (
+          <PostDetailCurrentStatus
+            error={current.error}
+            loading={!currentProps && !current.error}
+            missing={Boolean(currentProps)}
+            onRetry={current.retry ?? undefined}
+          />
+        ) : locallyDeleted || currentPost.state === 'DELETED' ? (
+          <StateView
+            description={
+              currentPost
+                ? '작성자가 이 게시글을 삭제했어요.'
+                : '이미 삭제되었거나 존재하지 않는 게시글이에요.'
+            }
+            title={currentPost ? '삭제된 게시글이에요' : '게시글을 찾을 수 없어요'}
+          />
+        ) : pureRepostSourceHref ? null : (
+          <>
+            {current.error ? <PostDetailQueryStatus onRetry={current.retry ?? undefined} /> : null}
+            <PostDetailComposerStatus
+              error={composer.error}
+              loading={!composerProps && !composer.error}
+              onRetry={composer.retry ?? undefined}
+            />
+            <PostDetailConversationData
+              conversationError={Boolean(conversation.error) || conversationStructuralError}
+              conversationKey={effectiveConversationKey}
+              conversationLoading={!conversation.props && !conversation.error}
+              currentDetail={currentPost.detail ?? null}
+              currentId={currentPost.id}
+              currentPostReplyAvailable
+              onConversationRetry={conversation.retry ?? undefined}
+              onPostDeleted={onPostDeleted}
+              presentation="route"
+            />
+          </>
+        )}
+      </PostDetailThreadViewport>
+    </PostDetailThreadProviders>
+  );
+}
+
+function PostDetailCurrentStatus({
+  error,
+  loading,
+  missing,
+  onRetry,
+}: {
+  error: Error | null;
+  loading: boolean;
+  missing: boolean;
+  onRetry?: () => void;
+}) {
+  return (
+    <StateView
+      actionLabel={error ? '다시 시도' : undefined}
+      alert={Boolean(error)}
+      description={missing && !error ? '이미 삭제되었거나 존재하지 않는 게시글이에요.' : undefined}
+      loading={loading && !error}
+      onAction={onRetry}
+      title={
+        error
+          ? '게시글을 불러오지 못했어요'
+          : missing
+            ? '게시글을 찾을 수 없어요'
+            : '게시글을 불러오는 중입니다.'
+      }
     />
   );
+}
+
+function PostDetailQueryStatus({ onRetry }: { onRetry?: () => void }) {
+  const theme = useTheme();
+  return (
+    <View accessibilityRole="alert">
+      <Text style={{ color: theme.text }}>게시글을 새로 불러오지 못했어요</Text>
+      <Button onPress={onRetry} tone="secondary">
+        다시 시도
+      </Button>
+    </View>
+  );
+}
+
+function PostDetailComposerStatus({
+  error,
+  loading,
+  onRetry,
+}: {
+  error: Error | null;
+  loading: boolean;
+  onRetry?: () => void;
+}) {
+  const theme = useTheme();
+  if (error) {
+    return (
+      <View accessibilityRole="alert">
+        <Text style={{ color: theme.text }}>답글 작성을 준비하지 못했어요</Text>
+        <Button onPress={onRetry} tone="secondary">
+          다시 시도
+        </Button>
+      </View>
+    );
+  }
+  return loading ? (
+    <Text accessibilityLiveRegion="polite" style={{ color: theme.text }}>
+      답글 작성을 준비하는 중입니다.
+    </Text>
+  ) : null;
 }
 
 const styles = StyleSheet.create({
