@@ -389,13 +389,19 @@ for (const reduced of [false, true]) {
         __typename: 'Profile',
         id: 'owner',
         instance: { kind: 'ACTIVITYPUB' },
-        posts: connection(['chronology-1']),
+        posts: connection(['chronology-1'], false, false, 'ACTIVITYPUB'),
       },
     });
 
     assert.deepEqual(
       cards(),
       [...pins, 'chronology-0', 'chronology-1'].map((id, index) => [id, index < pins.length]),
+    );
+    assert.deepEqual(
+      all('PostListItem')
+        .filter((node) => node.props.pinned)
+        .flatMap((node) => node.props.pinOrder.items),
+      [],
     );
     assert.equal(all('InfiniteList')[0]!.props.isLoadingNext, false);
     assert.equal(all('ActivityIndicator').length, 0);
