@@ -272,7 +272,7 @@ function payload(field: string, ids: string[], hasNextPage = true) {
       id: 'account',
       name: 'Author',
       profiles: [{ id: profile.id }],
-      seenCoachmarks: [],
+      metadata: [],
     },
     [field]: {
       edges: ids.map((id) => ({

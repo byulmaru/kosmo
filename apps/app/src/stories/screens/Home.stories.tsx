@@ -32,7 +32,7 @@ const selectedProfileData = {
     id: 'home-account',
     name: 'home-account',
     profiles: [{ id: 'home-profile' }],
-    seenCoachmarks: [],
+    metadata: [],
   },
 };
 const cachedHomeProfile = profile({
@@ -292,7 +292,7 @@ export const OnboardingCompact: Story = {
           data: {
             currentSession: { id: 'home-session', selectedProfile: null },
             homeTimeline: emptyHomeTimeline,
-            me: { id: 'home-account', name: 'home-account', profiles: [], seenCoachmarks: [] },
+            me: { id: 'home-account', name: 'home-account', profiles: [], metadata: [] },
           },
         },
       },

@@ -81,7 +81,7 @@ function localPageData(localTimeline = localConnection([firstPost, secondPost]))
     me: {
       id: 'local-story-account',
       profiles: [{ id: selectedProfile.id }],
-      seenCoachmarks: [],
+      metadata: [],
     },
   };
 }
