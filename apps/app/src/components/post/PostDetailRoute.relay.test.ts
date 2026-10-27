@@ -5,9 +5,9 @@ import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { post, profile } from '@/stories/fixtures';
-import PostComposerQuery from './(tabs)/(post)/[profileHandle]/__generated__/PostDetailComposerQuery.graphql';
-import PostConversationQuery from './(tabs)/(post)/[profileHandle]/__generated__/PostDetailConversationQuery.graphql';
-import PostQuery from './(tabs)/(post)/[profileHandle]/__generated__/PostDetailQuery.graphql';
+import PostComposerQuery from '../../app/(tabs)/(post)/[profileHandle]/__generated__/PostDetailComposerQuery.graphql';
+import PostConversationQuery from '../../app/(tabs)/(post)/[profileHandle]/__generated__/PostDetailConversationQuery.graphql';
+import PostQuery from '../../app/(tabs)/(post)/[profileHandle]/__generated__/PostDetailQuery.graphql';
 import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -121,7 +121,8 @@ let renderer: ReactTestRenderer | null = null;
 let pending: PendingRequest[] = [];
 
 before(async () => {
-  ({ default: PostDetailScreen } = await import('./(tabs)/(post)/[profileHandle]/[postId]'));
+  ({ default: PostDetailScreen } =
+    await import('../../app/(tabs)/(post)/[profileHandle]/[postId]'));
 });
 
 afterEach(async () => {
