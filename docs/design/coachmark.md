@@ -137,3 +137,9 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 - 세로 스크롤이 있는 768×720·1280×720에서 밝은·어두운 테마별 4단계 진행·재시작·포커스 복귀를 확인했다. Web 안내의 lifecycle은 스크롤바 유무에 따라 바뀌는 콘텐츠 폭 대신 실제 viewport 폭을 사용하며, 실제 창 크기가 breakpoint를 넘으면 기존 취소 경계를 유지한다.
 - 내장 Browser에서 로컬 테스트 인증으로 새 계정과 프로필을 만들고 최초 자동 안내, 4단계 완료, 로컬 이동 후 수동 재시작을 확인했다. 이 기록은 운영 인증·Native 실기기·보조기술 발화 검증을 포함하지 않는다.
 - PROD-1200의 확정된 진행 표시 커밋 `9bb179220`을 로컬 스택 기반으로 반영했다. PROD-1201의 새 구현 원격 반영과 PROD-1206의 작성 안내 제공 시점은 별도 통합 확인 대상이다.
+
+### 홈·로컬 Account metadata 통합 검증 · 2026-10-27
+
+- PROD-1200 `54bc55fdf` 위로 리베이스하고 타임라인의 Relay·Storybook·E2E fixture를 `Account.metadata`와 `createAccountMetadata`에 맞췄다. `onEnter`·`onExit`과 drawer 정리 동작을 보존했다.
+- App Relay·TypeScript, Web TypeScript, 관련 단위 테스트 31개와 Shell Storybook 17개를 통과했다. 격리 DB의 타임라인·프로필 전환 E2E 9개에서 최초 표시 metadata 기록과 수동 재시작 후 최초 값·생성 시각 보존을 확인했다.
+- Native 실기기와 운영 DB는 검증하지 않았다.

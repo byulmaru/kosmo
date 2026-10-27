@@ -1895,7 +1895,17 @@ const universalParameters = {
 
 const timelineStoryQuery = {
   ...query,
-  me: { ...query.me, seenCoachmarks: ['TIMELINE'] },
+  me: {
+    ...query.me,
+    metadata: [
+      {
+        id: 'timeline-shown',
+        key: 'coachmark.timeline.shown',
+        value: 'true',
+        createdAt: '2026-10-23T00:00:00.000Z',
+      },
+    ],
+  },
 };
 const timelineStoryPost = {
   ...post({
@@ -1927,8 +1937,8 @@ function timelineStoryParameters(
       operationResponses: {
         SessionProviderQuery: { data: timelineStoryQuery },
         UniversalShellQuery: { data: timelineStoryQuery },
-        CoachmarkControllerRecordMutation: {
-          data: { recordCoachmarkShown: { account: timelineStoryQuery.me } },
+        CoachmarkControllerCreateMetadataMutation: {
+          data: { createAccountMetadata: { account: timelineStoryQuery.me } },
         },
         [operationName]: { data },
       },
@@ -2388,8 +2398,8 @@ export const UniversalMobileTimelineNoSelectedProfile: Story = {
         currentSession: { ...timelineLocalQuery.currentSession, selectedProfile: null },
       },
       operationResponses: {
-        CoachmarkControllerRecordMutation: {
-          data: { recordCoachmarkShown: { account: timelineStoryQuery.me } },
+        CoachmarkControllerCreateMetadataMutation: {
+          data: { createAccountMetadata: { account: timelineStoryQuery.me } },
         },
       },
     },

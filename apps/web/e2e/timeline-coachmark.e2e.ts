@@ -1,5 +1,4 @@
-import { AccountCoachmarks, db } from '@kosmo/core/db';
-import { CoachmarkGuide } from '@kosmo/core/enums';
+import { AccountMetadata, db } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
@@ -14,17 +13,17 @@ for (const width of [390, 1440]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const viewer = await createE2ESession({ seenCoachmarks: [] });
+    const viewer = await createE2ESession({ timelineGuideShown: false });
     await setE2ESessionCookie(context, viewer.token);
     const shownRows = () =>
-      db.select().from(AccountCoachmarks).where(eq(AccountCoachmarks.accountId, viewer.account.id));
+      db.select().from(AccountMetadata).where(eq(AccountMetadata.accountId, viewer.account.id));
 
     await page.goto('/home');
     const homeGuide = page.getByRole('dialog', { name: '팔로우한 사람들의 소식' });
     await expect(homeGuide).toBeVisible();
     await expect
-      .poll(async () => (await shownRows()).map(({ guide }) => guide))
-      .toEqual([CoachmarkGuide.TIMELINE]);
+      .poll(async () => (await shownRows()).map(({ key, value }) => ({ key, value })))
+      .toEqual([{ key: 'coachmark.timeline.shown', value: 'true' }]);
     const [firstShown] = await shownRows();
     await homeGuide.getByRole('button', { name: '다음', exact: true }).click();
     const localGuide = page.getByRole('dialog', {

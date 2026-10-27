@@ -409,7 +409,7 @@ function payload(
       id: 'account',
       name: 'Author',
       profiles: [{ id: profile.id }],
-      seenCoachmarks: [],
+      metadata: [],
     },
     [field]: {
       edges: ids.map((id) => ({
