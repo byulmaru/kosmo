@@ -256,6 +256,7 @@ export function PostDetailThreadViewport({
   const nativeScrollGenerationRef = useRef(0);
   const nativePreservationRequestRef = useRef(0);
   const lastProgrammaticScrollOffsetRef = useRef<number | null>(null);
+  const previousPreserveScrollPositionRef = useRef<boolean | null>(null);
   const initialScrollFrameRef = useRef<number | null>(null);
   const nativeScrollPropsRef = useRef<
     Pick<ScrollViewProps, 'onContentSizeChange' | 'onLayout' | 'onScroll'>
@@ -450,7 +451,11 @@ export function PostDetailThreadViewport({
   );
 
   useEffect(() => {
-    if (preserveScrollPosition?.()) {
+    const preservingScrollPosition = preserveScrollPosition?.() ?? false;
+    const wasPreservingScrollPosition = previousPreserveScrollPositionRef.current;
+    previousPreserveScrollPositionRef.current = preservingScrollPosition;
+    // A forward route can mount before the browser replaces the prior POP identity.
+    if (preservingScrollPosition && wasPreservingScrollPosition === false) {
       cancelInitialScroll();
       return;
     }

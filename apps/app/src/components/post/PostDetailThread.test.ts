@@ -747,6 +747,50 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     assert.equal(scrollTo.mock.callCount(), 0);
   });
 
+  it('초기 history 복원이 끝나면 같은 route 인스턴스의 positioning을 재개한다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    let preservingScrollPosition = true;
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-forward-route',
+          preserveScrollPosition: () => preservingScrollPosition,
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              const current =
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current';
+              done(0, current ? 1200 : 0, 390, current ? 200 : 64);
+            },
+          }),
+        },
+      );
+    });
+    assert.equal(scrollTo.mock.callCount(), 0);
+
+    preservingScrollPosition = false;
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const header = scroll.findAllByType('View' as never).find((node) => node.props.onLayout)!;
+    await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(scrollTo.mock.callCount(), 1);
+  });
+
   it('editable 입력의 Space는 초기 anchor를 취소하지 않는다', async () => {
     const frames: FrameRequestCallback[] = [];
     const scrollTo = mock.fn();

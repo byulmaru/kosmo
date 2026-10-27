@@ -584,7 +584,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await expect(sourceRow).toBeInViewport();
     await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
-    const nextPageResponse = waitForGraphQLOperation(page, 'PostDetailThreadNextPageQuery');
+    const nextPageResponse = waitForGraphQLOperation(page, 'PostDetailConversationNextPageQuery');
     const beforeManualScroll = await page.evaluate(() => window.scrollY);
     await page.mouse.wheel(0, 10_000);
     await expect
