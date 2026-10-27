@@ -5132,7 +5132,7 @@ export const PostMediaViewerWide: Story = {
     const thread = await viewer.findByTestId('post-thread');
     const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
     expect(wideDetail.getBoundingClientRect().width).toBe(320);
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
       'post-thread-item-route-parent',
@@ -5606,7 +5606,7 @@ export const ReplyThreadPresentation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
 
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-thread-root',

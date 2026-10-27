@@ -452,7 +452,7 @@ export const WideRailCompositionContract: Story = {
     const canvas = within(canvasElement);
     const rail = await canvas.findByTestId('post-media-viewer-context-rail');
     const thread = await within(rail).findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
     const currentRow = within(thread).getByTestId('post-thread-current-wide-rail-current');
 
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
