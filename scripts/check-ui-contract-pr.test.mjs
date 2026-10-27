@@ -55,7 +55,7 @@ async function createCustomIconFixture({
     await writeRepositoryFile(
       root,
       'apps/app/src/stories/components/CustomBadge.stories.tsx',
-      `import { CustomBadge } from '${iconImport}';\nexport default { component: CustomBadge };\n`,
+      `import { CustomBadge } from '${iconImport}';\nconst CustomBadgeCatalog = () => <CustomBadge />;\nexport default { component: CustomBadgeCatalog };\n`,
     );
   }
   commit(root, 'custom icon admission');
@@ -226,6 +226,41 @@ describe('check-ui-contract-pr', () => {
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.categories, ['ui']);
+  });
+
+  it('catalogs a production component rendered by a local story wrapper', async () => {
+    const root = await createRepository({ 'README.md': 'fixture\n' });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/Checkbox.tsx',
+      "export const Checkbox = () => <div style={{ color: 'blue' }} />;\n",
+    );
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/components/Checkbox.stories.tsx',
+      "import { Checkbox } from '@/components/Checkbox';\nconst CheckboxCatalog = () => <Checkbox />;\nexport default { component: CheckboxCatalog };\n",
+    );
+    commit(root, 'local wrapper story catalog');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, ['ui']);
+  });
+
+  it('does not catalog an imported component that a local story wrapper does not render', async () => {
+    const root = await createRepository({ 'README.md': 'fixture\n' });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/Checkbox.tsx',
+      "export const Checkbox = () => <div style={{ color: 'blue' }} />;\n",
+    );
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/components/Checkbox.stories.tsx',
+      "import { Checkbox } from '@/components/Checkbox';\nconst CheckboxCatalog = ({ Checkbox }) => { const unused = <Checkbox />; return <span />; };\nexport default { component: CheckboxCatalog };\n",
+    );
+    commit(root, 'fake wrapper story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no component/pattern story catalog')));
   });
 
   it('requires a story catalog entry for a new ui source', async () => {

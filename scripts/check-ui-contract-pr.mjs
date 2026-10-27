@@ -489,9 +489,13 @@ function resolveImportPath(importer, specifier, available) {
 function storyTargets(source, storyPath, available) {
   const ast = parseSource(source, storyPath);
   const imports = new Map();
+  const localWrappers = new Map();
   let productionImport = false;
   for (const statement of ast.body) {
     if (statement.type !== 'ImportDeclaration') {
+      continue;
+    }
+    if (statement.importKind === 'type') {
       continue;
     }
     const resolved = resolveImportPath(storyPath, statement.source.value, available);
@@ -499,19 +503,160 @@ function storyTargets(source, storyPath, available) {
       continue;
     }
     for (const specifier of statement.specifiers) {
-      if (specifier.local?.name) {
+      if (specifier.local?.name && specifier.importKind !== 'type') {
         imports.set(specifier.local.name, resolved);
       }
     }
   }
+
+  const collectRenderedNames = (functionNode) => {
+    const bindingNames = (pattern) => {
+      if (!pattern) {
+        return [];
+      }
+      if (pattern.type === 'Identifier') {
+        return [pattern.name];
+      }
+      if (pattern.type === 'RestElement') {
+        return bindingNames(pattern.argument);
+      }
+      if (pattern.type === 'AssignmentPattern') {
+        return bindingNames(pattern.left);
+      }
+      if (pattern.type === 'ArrayPattern') {
+        return pattern.elements.flatMap(bindingNames);
+      }
+      if (pattern.type === 'ObjectPattern') {
+        return pattern.properties.flatMap((property) =>
+          property.type === 'Property'
+            ? bindingNames(property.value)
+            : bindingNames(property.argument),
+        );
+      }
+      return [];
+    };
+    const names = new Set();
+    const shadowed = new Set((functionNode.params ?? []).flatMap(bindingNames));
+    const visitStatic = (node, visitor, isRoot = true) => {
+      if (!node || typeof node !== 'object') {
+        return;
+      }
+      if (
+        !isRoot &&
+        (node.type === 'FunctionDeclaration' ||
+          node.type === 'FunctionExpression' ||
+          node.type === 'ArrowFunctionExpression')
+      ) {
+        return;
+      }
+      visitor(node);
+      for (const [key, value] of Object.entries(node)) {
+        if (
+          key === 'parent' ||
+          key === 'tokens' ||
+          key === 'comments' ||
+          key === 'loc' ||
+          key === 'range'
+        ) {
+          continue;
+        }
+        if (Array.isArray(value)) {
+          for (const child of value) {
+            if (child?.type) {
+              visitStatic(child, visitor, false);
+            }
+          }
+        } else if (value?.type) {
+          visitStatic(value, visitor, false);
+        }
+      }
+    };
+    visitStatic(functionNode, (node) => {
+      if (node.type === 'VariableDeclarator') {
+        for (const name of bindingNames(node.id)) {
+          shadowed.add(name);
+        }
+      }
+    });
+    const returnedRoots = [];
+    if (
+      functionNode.type === 'ArrowFunctionExpression' &&
+      functionNode.body?.type !== 'BlockStatement'
+    ) {
+      returnedRoots.push(functionNode.body);
+    } else {
+      visitStatic(functionNode, (node) => {
+        if (node.type === 'ReturnStatement' && node.argument) {
+          returnedRoots.push(node.argument);
+        }
+      });
+    }
+    for (const root of returnedRoots) {
+      visitStatic(root, (node) => {
+        if (node.type === 'JSXOpeningElement') {
+          const name = jsxName(node.name);
+          if (name && !shadowed.has(name)) {
+            names.add(name);
+          }
+        }
+      });
+    }
+    return names;
+  };
+
+  for (const statement of ast.body) {
+    const functionDeclaration =
+      statement.type === 'FunctionDeclaration'
+        ? statement
+        : statement.type === 'ExportNamedDeclaration' &&
+            statement.declaration?.type === 'FunctionDeclaration'
+          ? statement.declaration
+          : undefined;
+    if (functionDeclaration?.id?.name) {
+      localWrappers.set(functionDeclaration.id.name, collectRenderedNames(functionDeclaration));
+    }
+    const declaration =
+      statement.type === 'VariableDeclaration'
+        ? statement
+        : statement.type === 'ExportNamedDeclaration' &&
+            statement.declaration?.type === 'VariableDeclaration'
+          ? statement.declaration
+          : undefined;
+    for (const item of declaration?.declarations ?? []) {
+      if (
+        item.id?.type === 'Identifier' &&
+        (item.init?.type === 'ArrowFunctionExpression' || item.init?.type === 'FunctionExpression')
+      ) {
+        localWrappers.set(item.id.name, collectRenderedNames(item.init));
+      }
+    }
+  }
+
+  const resolveTarget = (name, seen = new Set()) => {
+    if (seen.has(name)) {
+      return [];
+    }
+    if (imports.has(name)) {
+      return [imports.get(name)];
+    }
+    const rendered = localWrappers.get(name);
+    if (!rendered) {
+      return [];
+    }
+    const nextSeen = new Set(seen).add(name);
+    return [...rendered].flatMap((renderedName) => resolveTarget(renderedName, nextSeen));
+  };
+
   const targets = new Set();
   walk(ast, (node) => {
     if (node.type !== 'Property' || propertyName(node) !== 'component') {
       return;
     }
     const value = unwrap(node.value);
-    if (value?.type === 'Identifier' && imports.has(value.name)) {
-      targets.add(imports.get(value.name));
+    if (value?.type === 'Identifier') {
+      for (const target of resolveTarget(value.name)) {
+        targets.add(target);
+      }
     }
   });
   productionImport = [...targets].some((target) => target.startsWith('apps/app/src/components/'));
