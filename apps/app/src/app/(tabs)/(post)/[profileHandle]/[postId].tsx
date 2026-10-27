@@ -95,21 +95,20 @@ export default function PostDetailScreen() {
 function PostDetailHeader() {
   const { status } = useSession();
   const { width } = useWindowDimensions();
-  const guestMobileWeb =
-    Platform.OS === 'web' && getShellLayout(true, width) === 'mobile' && status === 'guest';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
   const theme = useTheme();
   const router = useRouter();
 
   return (
     <PageHeader
       leading={
-        guestMobileWeb ? (
+        mobileWeb && status === 'guest' ? (
           <NavigationDrawerTrigger />
         ) : (
           <IconButton
             accessibilityLabel="뒤로 가기"
             onPress={() => router.back()}
-            style={styles.back}
+            style={mobileWeb ? undefined : styles.back}
             targetSize={44}
             visualSize={44}
           >
