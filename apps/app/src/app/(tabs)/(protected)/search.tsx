@@ -14,7 +14,6 @@ import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
-import { NativeSearchHeader } from '@/components/search/NativeSearchHeader';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -229,7 +228,6 @@ export default function SearchScreen() {
   const query = typeof params.q === 'string' ? params.q.trim() : '';
   const activeTab = parseSearchTab(params.tab ?? null);
   const inputRef = useRef<TextInput>(null);
-  const [input, setInput] = useState(query);
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -334,11 +332,6 @@ export default function SearchScreen() {
     },
     [],
   );
-  useEffect(() => {
-    if (!focused) {
-      setInput(query);
-    }
-  }, [focused, query]);
   const remember = (term: string) => {
     setRecent((current) => {
       const next = addRecentSearch(current, term);
@@ -392,16 +385,15 @@ export default function SearchScreen() {
   };
 
   const clearSearch = () => {
-    setInput('');
     keepSearchFocused();
     if (query) {
       preserveQueryNavigationPosition();
       router.setParams({ q: undefined });
     }
-    inputRef.current?.focus();
   };
 
   const phase = focused ? 'input' : query ? 'results' : 'before';
+  const leadingAction = phase === 'before' ? (web && !mobileWeb ? 'none' : 'menu') : 'back';
   const renderLeadingControl = ({ children }: SearchToolbarRenderLeadingControlProps) => {
     const linkControl = cloneElement(
       children as ReactElement<{
@@ -413,24 +405,28 @@ export default function SearchScreen() {
     return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
   };
 
-  const nativeSearchHeader = !web ? (
-    <PageHeader>
-      <NativeSearchHeader
-        backHref={searchHref('', activeTab)}
-        focused={focused}
-        inputRef={inputRef}
-        onBackPress={() => {
-          preserveQueryNavigationPosition(false);
-          setFocused(false);
-        }}
-        onBlur={leaveSearchFocus}
-        onClear={clearSearch}
-        onFocus={keepSearchFocused}
-        onSubmit={navigate}
-        query={query}
-      />
-    </PageHeader>
-  ) : null;
+  const searchToolbar = (
+    <SearchToolbar
+      focused={focused}
+      inputRef={inputRef}
+      leadingAction={leadingAction}
+      leadingControlAriaControls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
+      leadingControlExpanded={shellChrome?.navigationDrawerOpen ?? false}
+      leadingControlRef={shellChrome?.navigationDrawerTriggerRef}
+      onBackPress={() => {
+        preserveQueryNavigationPosition(false);
+        setFocused(false);
+      }}
+      onBlur={leaveSearchFocus}
+      onClear={clearSearch}
+      onFocus={keepSearchFocused}
+      onMenuPress={shellChrome?.openNavigationDrawer}
+      onSubmit={navigate}
+      renderLeadingControl={renderLeadingControl}
+      query={query}
+    />
+  );
+  const nativeSearchHeader = !web ? <PageHeader>{searchToolbar}</PageHeader> : null;
 
   return (
     <PaginationScrollView
@@ -443,29 +439,7 @@ export default function SearchScreen() {
     >
       {nativeSearchHeader}
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
-        {web ? (
-          <SearchToolbar
-            inputRef={inputRef}
-            leadingAction={phase === 'before' ? (mobileWeb ? 'menu' : 'none') : 'back'}
-            leadingControlAriaControls={
-              mobileWeb && shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined
-            }
-            leadingControlExpanded={shellChrome?.navigationDrawerOpen ?? false}
-            leadingControlRef={shellChrome?.navigationDrawerTriggerRef}
-            onBackPress={() => {
-              preserveQueryNavigationPosition(false);
-              setInput('');
-              setFocused(false);
-            }}
-            onChangeText={setInput}
-            onClear={clearSearch}
-            onMenuPress={shellChrome?.openNavigationDrawer}
-            onSubmit={navigate}
-            platform="web"
-            renderLeadingControl={renderLeadingControl}
-            value={input}
-          />
-        ) : null}
+        {web ? searchToolbar : null}
 
         {phase === 'input' ? (
           <View style={styles.recent}>
