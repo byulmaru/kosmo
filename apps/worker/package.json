@@ -14,7 +14,7 @@
     "test:workflow": "TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=test node --import tsx --test src/workflows.test.ts src/child-workflow.test.ts src/following-accounts-import.workflow.test.ts src/hashtag-mute-rule.workflow.test.ts"
   },
   "dependencies": {
-    "@fedify/vocab": "2.4.0",
+    "@fedify/vocab": "2.4.5",
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
     "@temporalio/activity": "^1.22.0",
@@ -29,7 +29,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fedify/fedify": "^2.4.0",
+    "@fedify/fedify": "^2.4.5",
     "@temporalio/nexus": "1.22.0",
     "@temporalio/testing": "^1.22.0"
   }

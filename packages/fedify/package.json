@@ -10,9 +10,9 @@
     "test:unit": "tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/*.test.ts"
   },
   "dependencies": {
-    "@fedify/fedify": "^2.4.0",
+    "@fedify/fedify": "^2.4.5",
     "@fedify/postgres": "2.4.0",
-    "@fedify/vocab": "2.4.0",
+    "@fedify/vocab": "2.4.5",
     "@kosmo/core": "workspace:*",
     "@logtape/logtape": "2.2.1",
     "@logtape/sentry": "2.2.1",
@@ -22,7 +22,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fedify/vocab-runtime": "2.4.0",
+    "@fedify/vocab-runtime": "2.4.5",
     "tsx": "^4.22.4"
   }
 }
