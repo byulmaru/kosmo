@@ -681,30 +681,29 @@ test(
 
 test('Remote Profile Activity는 기본 Instance actor로 서명하고 actor metadata 결손을 거부한다', async (t) => {
   const origins: string[] = [];
+  const lookupOrigins: string[] = [];
   const lookupUris: Array<string | URL> = [];
   const lookupDocumentLoaders: unknown[] = [];
   const documentLoaderIdentifiers: string[] = [];
   const documentLoaders: unknown[] = [];
-  const actorDomains = [
-    'fallback-target.example',
-    'context-target.example',
-    'local-target.example',
-    'remote-target.example',
-  ];
+  const documentLoaderOrigins: string[] = [];
   t.mock.method(federation, 'createContext', (origin: URL) => {
     origins.push(origin.origin);
-    const actorDomain = actorDomains[origins.length - 1]!;
     return {
+      canonicalOrigin: publicOrigin,
+      host: origin.host,
       getDocumentLoader: async ({ identifier }: { identifier: string }) => {
         documentLoaderIdentifiers.push(identifier);
         const documentLoader = async () => ({}) as never;
         documentLoaders.push(documentLoader);
+        documentLoaderOrigins.push(origin.origin);
         return documentLoader;
       },
       lookupObject: async (identifier: string | URL, options?: { documentLoader?: unknown }) => {
+        lookupOrigins.push(origin.origin);
         lookupUris.push(identifier);
         lookupDocumentLoaders.push(options?.documentLoader);
-        return createActor({ id: new URL(`https://${actorDomain}/users/alice`) });
+        return createActor({ id: identifier instanceof URL ? identifier : new URL(identifier) });
       },
     } as never;
   });
@@ -767,7 +766,14 @@ test('Remote Profile Activity는 기본 Instance actor로 서명하고 actor met
     },
   );
 
-  assert.deepEqual(origins, [publicOrigin, contextOrigin, publicOrigin, sourceOrigin]);
+  assert.deepEqual(origins, [
+    publicOrigin,
+    contextOrigin,
+    publicOrigin,
+    sourceOrigin,
+    publicOrigin,
+  ]);
+  assert.deepEqual(lookupOrigins, [publicOrigin, contextOrigin, publicOrigin, sourceOrigin]);
   assert.deepEqual(lookupUris.map(String), [
     'https://fallback-target.example/users/alice',
     'https://context-target.example/users/alice',
@@ -778,13 +784,15 @@ test('Remote Profile Activity는 기본 Instance actor로 서명하고 actor met
     localInstanceActorIdentifier,
     localInstanceActorIdentifier,
     localProfile.id,
+    localInstanceActorIdentifier,
   ]);
-  assert.deepEqual(lookupDocumentLoaders, [
-    documentLoaders[0],
-    documentLoaders[1],
-    documentLoaders[2],
-    undefined,
+  assert.deepEqual(documentLoaderOrigins, [
+    publicOrigin,
+    contextOrigin,
+    publicOrigin,
+    publicOrigin,
   ]);
+  assert.deepEqual(lookupDocumentLoaders, documentLoaders);
   assert.equal(await db.$count(Profiles), profileCount);
 });
 

@@ -217,11 +217,10 @@ export const fetchRemoteProfileActorActivity = async (
     await ensureRemoteProfileLookupAllowed(actorUri);
 
     let origin: string;
-    let signingActorIdentifier: string | undefined;
+    let signingProfileId: string | undefined;
 
     if (!input.profileId) {
       origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
-      signingActorIdentifier = localInstanceActorIdentifier;
     } else {
       const selected = await db
         .select({
@@ -250,7 +249,7 @@ export const fetchRemoteProfileActorActivity = async (
           );
         }
         origin = localOrigin;
-        signingActorIdentifier = input.profileId;
+        signingProfileId = input.profileId;
       } else {
         if (selected.instanceKind !== InstanceKind.ACTIVITYPUB || !selected.actorUri) {
           throw new InitiatorOriginMaterializationError(
@@ -281,9 +280,19 @@ export const fetchRemoteProfileActorActivity = async (
     }
 
     const context = federation.createContext(new URL(origin), undefined);
-    const documentLoader = signingActorIdentifier
-      ? await context.getDocumentLoader({ identifier: signingActorIdentifier })
-      : undefined;
+    let signingContext = context;
+    if (!signingProfileId) {
+      const localInstance = await resolveConfiguredLocalInstance();
+      if (new URL(origin).origin !== localInstance.canonicalOrigin) {
+        signingContext = federation.createContext(
+          new URL(localInstance.canonicalOrigin),
+          undefined,
+        );
+      }
+    }
+    const documentLoader = await signingContext.getDocumentLoader({
+      identifier: signingProfileId ?? localInstanceActorIdentifier,
+    });
 
     return {
       actorJsonLd: await fetchRemoteProfileActorDocument(context, actorUri, documentLoader).catch(
