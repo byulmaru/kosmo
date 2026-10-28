@@ -136,6 +136,8 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   추가하지 않는다.
 - Web Push도 위의 Recipient 자격과 현재 Profile membership 확인, 설치별 fan-out, visibility·Mute·Block 및
   preview privacy, no-backlog, Notification 생성 시각 기준 24시간 만료, read state 독립성을 따른다.
+- Web Push target은 실제 browser notification click에서만 유래해야 하며, 임의 URL 입력으로 Profile을 선택하거나
+  외부 주소를 열지 않는다.
 - 탭한 target은 현재 인증 상태와 기존 route 규칙으로 검증한다. Guest는 target을 버리고 일반 로그인 흐름으로
   이동하며, 로그인 뒤 target으로 복귀하지 않는다. Social Push의 Recipient Profile이 현재 Profile과 다르면 현재
   Account의 membership를 확인하고 기존 Profile 전환을 거쳐 검증된 내부 경로를 연다. Operational Push는 Profile을

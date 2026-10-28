@@ -13,6 +13,7 @@ const config = {
   projectId: 'project-id',
   messagingSenderId: 'sender-id',
 };
+const tapId = 'c56a4180-65aa-42ec-a945-5fd21dec0538';
 
 type NotificationClickEvent = {
   notification: { data: unknown; close(): void };
@@ -20,7 +21,17 @@ type NotificationClickEvent = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
-function startWorker(firebaseConfig?: string, failOnImport = false) {
+function startWorker(
+  firebaseConfig?: string,
+  failOnImport = false,
+  options: {
+    failCacheOpen?: boolean;
+    failCachePut?: boolean;
+    failRandomUUID?: boolean;
+    firstWindowResult?: unknown;
+    rejectFirstWindow?: boolean;
+  } = {},
+) {
   const location = new URL('https://kosmo.example/firebase-messaging-sw.js');
   if (firebaseConfig !== undefined) {
     location.searchParams.set('firebase', firebaseConfig);
@@ -30,6 +41,23 @@ function startWorker(firebaseConfig?: string, failOnImport = false) {
   const imports: string[] = [];
   const notifications: Array<{ title: string; options: Record<string, unknown> }> = [];
   const openedWindows: string[] = [];
+  const cacheHadTapAtWindowOpen: boolean[] = [];
+  const cacheEntries = new Map<string, string>();
+  const cache = {
+    async put(key: string, response: Response) {
+      if (options.failCachePut) {
+        throw new Error('CacheStorage write failed');
+      }
+      cacheEntries.set(key, await response.text());
+    },
+    async match(key: string) {
+      const value = cacheEntries.get(key);
+      return value === undefined ? undefined : new Response(value);
+    },
+    async delete(key: string) {
+      return cacheEntries.delete(key);
+    },
+  };
   let initializedConfig: Record<string, unknown> | undefined;
   let backgroundMessageHandler: ((payload: unknown) => unknown) | undefined;
 
@@ -58,6 +86,22 @@ function startWorker(firebaseConfig?: string, failOnImport = false) {
       }
     },
     firebase,
+    crypto: {
+      randomUUID() {
+        if (options.failRandomUUID) {
+          throw new Error('secure random ID unavailable');
+        }
+        return tapId;
+      },
+    },
+    caches: {
+      async open() {
+        if (options.failCacheOpen) {
+          throw new Error('CacheStorage unavailable');
+        }
+        return cache;
+      },
+    },
     registration: {
       showNotification(title: string, options: Record<string, unknown>) {
         notifications.push({ title, options: JSON.parse(JSON.stringify(options)) });
@@ -67,13 +111,28 @@ function startWorker(firebaseConfig?: string, failOnImport = false) {
     clients: {
       openWindow(url: string) {
         openedWindows.push(url);
-        return Promise.resolve();
+        const requestedTap = new URL(url).searchParams.get('tap');
+        cacheHadTapAtWindowOpen.push(
+          requestedTap !== null &&
+            cacheEntries.has(`https://kosmo.example/__kosmo-push-taps/${requestedTap}`),
+        );
+        if (
+          openedWindows.length === 1 &&
+          (options.firstWindowResult !== undefined || options.rejectFirstWindow)
+        ) {
+          if (options.rejectFirstWindow) {
+            return Promise.reject(new Error('window opening failed'));
+          }
+          return Promise.resolve(options.firstWindowResult);
+        }
+        return Promise.resolve({});
       },
     },
   };
 
   runInNewContext(source, {
     URL,
+    Response,
     self,
     console,
   });
@@ -83,6 +142,8 @@ function startWorker(firebaseConfig?: string, failOnImport = false) {
     imports,
     notifications,
     openedWindows,
+    cacheHadTapAtWindowOpen,
+    cacheEntries,
     initializedConfig,
     getBackgroundMessageHandler: () => backgroundMessageHandler,
   };
@@ -123,7 +184,7 @@ test('handles a data-only FCM message with one tagged notification and route dat
   });
 });
 
-test('notification clicks open only the same-origin push route with encoded route fields', async () => {
+test('notification clicks cache only routing fields before opening a nonce-only same-origin route', async () => {
   const worker = startWorker(JSON.stringify(config));
   const handleBackgroundMessage = worker.getBackgroundMessageHandler();
   assert.ok(handleBackgroundMessage);
@@ -147,7 +208,12 @@ test('notification clicks open only the same-origin push route with encoded rout
   let waitUntil: Promise<unknown> | undefined;
   worker.listeners.get('notificationclick')?.({
     notification: {
-      data: notification.options.data,
+      data: {
+        ...(notification.options.data as Record<string, unknown>),
+        title: 'private title',
+        body: 'private body',
+        credential: 'must not persist',
+      },
       close() {
         closed = true;
       },
@@ -167,18 +233,22 @@ test('notification clicks open only the same-origin push route with encoded rout
   const url = new URL(worker.openedWindows[0]);
   assert.equal(url.origin, 'https://kosmo.example');
   assert.equal(url.pathname, '/push');
-  assert.deepEqual([...url.searchParams.keys()].sort(), [
-    'href',
-    'notificationId',
-    'recipientAccountId',
-    'recipientProfileId',
-  ]);
-  assert.equal(url.searchParams.get('notificationId'), 'notice &=1');
-  assert.equal(url.searchParams.get('recipientProfileId'), 'profile/id');
-  assert.equal(url.searchParams.get('recipientAccountId'), 'account?x=1');
-  assert.equal(url.searchParams.get('href'), 'https://elsewhere.example/post?id=1&title=private');
+  assert.deepEqual([...url.searchParams.keys()], ['tap']);
+  assert.equal(url.searchParams.get('tap'), tapId);
   assert.equal(url.searchParams.has('title'), false);
   assert.equal(url.searchParams.has('body'), false);
+  assert.deepEqual(worker.cacheHadTapAtWindowOpen, [true]);
+  assert.deepEqual(
+    JSON.parse(
+      worker.cacheEntries.get(`https://kosmo.example/__kosmo-push-taps/${tapId}`) ?? 'null',
+    ),
+    {
+      notificationId: 'notice &=1',
+      recipientProfileId: 'profile/id',
+      recipientAccountId: 'account?x=1',
+      href: 'https://elsewhere.example/post?id=1&title=private',
+    },
+  );
 });
 
 test('ignores malformed notification text and opens the push fallback for malformed click data', async () => {
@@ -202,7 +272,7 @@ test('ignores malformed notification text and opens the push fallback for malfor
   });
   await waitUntil;
 
-  assert.deepEqual(worker.openedWindows, ['https://kosmo.example/push']);
+  assert.deepEqual(worker.openedWindows, [`https://kosmo.example/push?tap=${tapId}`]);
 });
 
 test('keeps the click fallback when Firebase configuration is missing or malformed', async () => {
@@ -221,7 +291,53 @@ test('keeps the click fallback when Firebase configuration is missing or malform
   });
   await waitUntil;
 
-  assert.deepEqual(worker.openedWindows, ['https://kosmo.example/push']);
+  assert.deepEqual(worker.openedWindows, [`https://kosmo.example/push?tap=${tapId}`]);
+});
+
+test('falls back to Notifications when secure randomness or CacheStorage fails', async (context) => {
+  for (const options of [
+    { failRandomUUID: true },
+    { failCacheOpen: true },
+    { failCachePut: true },
+  ]) {
+    await context.test(JSON.stringify(options), async () => {
+      const worker = startWorker(undefined, false, options);
+      let waitUntil: Promise<unknown> | undefined;
+      worker.listeners.get('notificationclick')?.({
+        notification: { data: { href: '/@alice/post-1' }, close() {} },
+        stopImmediatePropagation() {},
+        waitUntil(promise: Promise<unknown>) {
+          waitUntil = promise;
+        },
+      });
+      await waitUntil;
+      assert.deepEqual(worker.openedWindows, ['https://kosmo.example/notifications']);
+      assert.equal(worker.cacheEntries.size, 0);
+    });
+  }
+});
+
+test('deletes a cached target when opening the tap route fails and falls back to Notifications', async (context) => {
+  for (const options of [{ firstWindowResult: null }, { rejectFirstWindow: true }]) {
+    await context.test(JSON.stringify(options), async () => {
+      const worker = startWorker(undefined, false, options);
+      let waitUntil: Promise<unknown> | undefined;
+      worker.listeners.get('notificationclick')?.({
+        notification: { data: { href: '/@alice/post-1' }, close() {} },
+        stopImmediatePropagation() {},
+        waitUntil(promise: Promise<unknown>) {
+          waitUntil = promise;
+        },
+      });
+      await waitUntil;
+
+      assert.deepEqual(worker.openedWindows, [
+        `https://kosmo.example/push?tap=${tapId}`,
+        'https://kosmo.example/notifications',
+      ]);
+      assert.equal(worker.cacheEntries.size, 0);
+    });
+  }
 });
 
 test('propagates external Firebase SDK import failures during worker setup', () => {
