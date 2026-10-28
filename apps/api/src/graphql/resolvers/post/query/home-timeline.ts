@@ -1,8 +1,8 @@
-import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, PostMentions, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, not, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
@@ -79,6 +79,41 @@ builder.queryField('homeTimeline', (t) =>
           replyParentIsViewerPost,
           and(followeeWhere, replyParentAuthorIsFollowee),
         );
+        const homeMentionTargetWhere = or(
+          eq(Posts.profileId, ctx.session.profile.id),
+          not(
+            exists(
+              db
+                .select({ postContentId: PostMentions.postContentId })
+                .from(PostMentions)
+                .where(eq(PostMentions.postContentId, Posts.currentContentId)),
+            ),
+          ),
+          exists(
+            db
+              .select({ postContentId: PostMentions.postContentId })
+              .from(PostMentions)
+              .where(
+                and(
+                  eq(PostMentions.postContentId, Posts.currentContentId),
+                  or(
+                    eq(PostMentions.profileId, ctx.session.profile.id),
+                    exists(
+                      db
+                        .select({ id: ProfileFollows.id })
+                        .from(ProfileFollows)
+                        .where(
+                          and(
+                            eq(ProfileFollows.followerProfileId, ctx.session.profile.id),
+                            eq(ProfileFollows.followeeProfileId, PostMentions.profileId),
+                          ),
+                        ),
+                    ),
+                  ),
+                ),
+              ),
+          ),
+        );
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
@@ -93,6 +128,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   homeCandidateWhere,
+                  homeMentionTargetWhere,
                   postAccessWhere({ ctx, profileMute: 'exclude' }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
