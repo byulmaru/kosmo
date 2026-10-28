@@ -62,7 +62,7 @@ import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
-const localInstanceActorIdentifier = '~instance';
+export const localInstanceActorIdentifier = '~instance';
 const localInstanceActorHandle = 'kosmo.instance';
 
 export const federation: Federation<void> = createFederation<void>({

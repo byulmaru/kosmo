@@ -47,7 +47,7 @@ const [
   activities,
   migrationActivities,
   { prepareProfileMigration, unregisterProfileMigrationSource },
-  { federation, setInboundObservabilityReporter },
+  { federation, localInstanceActorIdentifier, setInboundObservabilityReporter },
 ] = await Promise.all([
   import('@kosmo/core/db'),
   import('@kosmo/core/db/seed'),
@@ -202,10 +202,17 @@ const executeMoveWorkflow = (sourceActorUri: string, targetActorUri: string) =>
 const runPreparationActivity = async (
   input: { sourceActorUri: string; targetActorUri: string },
   lookupObject: (identifier: string | URL) => Promise<unknown>,
+  signingActorIdentifiers: string[] = [],
 ) => {
   const contextCreation = mock.method(federation, 'createContext', (origin: URL) => {
     assert.equal(origin.origin, process.env.PUBLIC_ORIGIN);
-    return { lookupObject } as never;
+    return {
+      getDocumentLoader: async ({ identifier }: { identifier: string }) => {
+        signingActorIdentifiers.push(identifier);
+        return (() => ({})) as never;
+      },
+      lookupObject,
+    } as never;
   });
   try {
     return await runWithWorker(() =>
@@ -425,6 +432,7 @@ test('remote Move target is materialized before the source after alias validatio
   const sourceActorUri = 'https://source.example/users/alice';
   const targetActorUri = 'https://target.example/users/alice';
   const lookups: string[] = [];
+  const signingActorIdentifiers: string[] = [];
   const result = await runPreparationActivity(
     { sourceActorUri, targetActorUri },
     async (identifier) => {
@@ -434,10 +442,15 @@ test('remote Move target is materialized before the source after alias validatio
         ? createMoveGroup(targetActorUri, [sourceActorUri])
         : createMoveActor(sourceActorUri);
     },
+    signingActorIdentifiers,
   );
 
   assert.ok(result);
   assert.deepEqual(lookups, [targetActorUri, targetActorUri, sourceActorUri]);
+  assert.deepEqual(signingActorIdentifiers, [
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+  ]);
   assert.equal(await db.$count(Profiles), 2);
   assert.equal(
     await db
@@ -460,6 +473,7 @@ test('remote Move target lookup returning null stays retryable', async () => {
 
   await assert.rejects(result, (error: unknown) => {
     assert.ok(error instanceof Error);
+    assert.equal(error.message, 'Remote lookup did not return an actor.');
     assert.equal('nonRetryable' in error && error.nonRetryable === true, false);
     return true;
   });
@@ -470,6 +484,7 @@ test('remote target materialization lookup retries a null result before source m
   const sourceActorUri = 'https://source.example/users/alice';
   const targetActorUri = 'https://target.example/users/alice';
   const lookups: string[] = [];
+  const signingActorIdentifiers: string[] = [];
   let targetLookups = 0;
   const result = await runPreparationActivity(
     { sourceActorUri, targetActorUri },
@@ -482,10 +497,16 @@ test('remote target materialization lookup retries a null result before source m
       }
       return createMoveActor(sourceActorUri);
     },
+    signingActorIdentifiers,
   );
 
   assert.ok(result);
   assert.deepEqual(lookups, [targetActorUri, targetActorUri, targetActorUri, sourceActorUri]);
+  assert.deepEqual(signingActorIdentifiers, [
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+  ]);
   assert.equal(await db.$count(Profiles), 2);
   assert.equal(await db.$count(ActivityPubActors), 2);
 });
@@ -494,6 +515,7 @@ test('source materialization lookup retries a null result after target materiali
   const sourceActorUri = 'https://source.example/users/alice';
   const targetActorUri = 'https://target.example/users/alice';
   const lookups: string[] = [];
+  const signingActorIdentifiers: string[] = [];
   let sourceLookups = 0;
   const result = await runPreparationActivity(
     { sourceActorUri, targetActorUri },
@@ -506,10 +528,16 @@ test('source materialization lookup retries a null result after target materiali
       sourceLookups += 1;
       return sourceLookups === 1 ? null : createMoveActor(sourceActorUri);
     },
+    signingActorIdentifiers,
   );
 
   assert.ok(result);
   assert.deepEqual(lookups, [targetActorUri, targetActorUri, sourceActorUri, sourceActorUri]);
+  assert.deepEqual(signingActorIdentifiers, [
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+    localInstanceActorIdentifier,
+  ]);
   assert.equal(await db.$count(Profiles), 2);
   assert.equal(await db.$count(ActivityPubActors), 2);
 });
