@@ -202,6 +202,14 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 | Quote         | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님의 게시글을 인용했습니다.`           |
 | Mention       | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님을 언급했습니다.`                    |
 
+## Web Push 권한과 표시 · PROD-1215
+
+- Web Push는 지원 조건을 충족하는 Android·Desktop browser/PWA와 iOS/iPadOS 홈 화면 앱에서 제공한다.
+- Web에서는 앱 시작·로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 직접 활성화할 때만
+  OS 권한 요청을 시작한다.
+- Foreground와 background 모두 OS 알림을 표시하며 custom in-app Push banner를 추가하지 않는다. 알림 대상,
+  본문 privacy, 만료와 이동은 [Push 정책](../domain/decisions/0029-native-push-notification-policy.md)을 따른다.
+
 ## 표시와 합성
 
 - Follow/FollowRequest/Reaction/Repost는 48px kind rail 안에 32px 아이콘을 표시한다. 원형 배경을

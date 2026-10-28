@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -62,13 +62,20 @@ let fetch = vi.fn<typeof globalThis.fetch>();
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
+const SERVICE_WORKER_NAME = 'firebase-messaging-sw.js';
+let serviceWorkerSource: string;
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
+  serviceWorkerSource = await readFile(
+    new URL('../../../app/public/firebase-messaging-sw.js', import.meta.url),
+    'utf8',
+  );
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
+  await writeFile(join(staticRoot, SERVICE_WORKER_NAME), serviceWorkerSource);
   await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
   await writeFile(join(staticRoot, 'robots.txt'), 'User-agent: *\nDisallow: /private\n');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
@@ -686,6 +693,18 @@ describe('runtime routing', () => {
     expect(await unknownPath.text()).toBe('404 Not Found');
     expect(missingAsset.status).toBe(404);
     expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
+  test('serves the Firebase worker as an uncached JavaScript asset and keeps missing workers as 404', async () => {
+    const worker = await app.request(`/${SERVICE_WORKER_NAME}?firebase=%7B%7D`);
+    const missingWorker = await app.request('/missing-firebase-messaging-sw.js');
+
+    expect(worker.status).toBe(200);
+    expect(worker.headers.get('content-type')).toContain('text/javascript');
+    expect(worker.headers.get('cache-control')).toBe('no-cache');
+    expect(await worker.text()).toBe(serviceWorkerSource);
+    expect(missingWorker.status).toBe(404);
+    expect(await missingWorker.text()).toBe('404 Not Found');
   });
 
   test('preserves public document cache variation for revalidation and compression', async () => {
