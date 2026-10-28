@@ -102,6 +102,7 @@ resource "google_firebase_apple_app" "kosmo" {
 
   display_name    = "Kosmo iOS"
   bundle_id       = local.app_identifier
+  team_id         = "848V8UCH45"
   deletion_policy = "PREVENT"
 }
 

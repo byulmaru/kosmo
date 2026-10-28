@@ -17,6 +17,9 @@ import { StoryArgsUpdaterContext } from './StoryArgsUpdater';
 import type { Preview } from '@storybook/react-vite';
 import type { PropsWithChildren } from 'react';
 
+// Storybook does not load the BFF channel script.
+Object.assign(globalThis, { __KOSMO_CHANNEL__: 'dev' });
+
 sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 sb.mock(import('../src/auth/webLogin.ts'), { spy: true });
 sb.mock(import('../src/buildVersion.ts'), { spy: true });

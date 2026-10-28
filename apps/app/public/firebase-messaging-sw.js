@@ -29,17 +29,17 @@ if (firebaseConfigValue) {
       (key) => typeof input[key] === 'string' && input[key].length > 0,
     )
   ) {
-    importScripts('https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js');
-    importScripts('https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js');
+    self.importScripts('https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js');
+    self.importScripts('https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js');
 
-    firebase.initializeApp({
+    self.firebase.initializeApp({
       apiKey: input.apiKey,
       appId: input.appId,
       projectId: input.projectId,
       messagingSenderId: input.messagingSenderId,
     });
 
-    firebase.messaging().onBackgroundMessage((payload) => {
+    self.firebase.messaging().onBackgroundMessage((payload) => {
       const data = payload?.data;
       if (typeof data?.title !== 'string' || typeof data.body !== 'string') {
         return;

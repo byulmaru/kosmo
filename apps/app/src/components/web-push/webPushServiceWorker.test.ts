@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(
   new URL('../../../public/firebase-messaging-sw.js', import.meta.url),
@@ -14,24 +14,50 @@ const config = {
   messagingSenderId: 'sender-id',
 };
 
+type NotificationClickEvent = {
+  notification: { data: unknown; close(): void };
+  stopImmediatePropagation(): void;
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 function startWorker(firebaseConfig?: string, failOnImport = false) {
   const location = new URL('https://kosmo.example/firebase-messaging-sw.js');
   if (firebaseConfig !== undefined) {
     location.searchParams.set('firebase', firebaseConfig);
   }
 
-  const listeners = new Map<string, (event: any) => void>();
+  const listeners = new Map<string, (event: NotificationClickEvent) => void>();
   const imports: string[] = [];
   const notifications: Array<{ title: string; options: Record<string, unknown> }> = [];
   const openedWindows: string[] = [];
   let initializedConfig: Record<string, unknown> | undefined;
   let backgroundMessageHandler: ((payload: unknown) => unknown) | undefined;
 
+  const firebase = {
+    initializeApp(input: Record<string, unknown>) {
+      initializedConfig = JSON.parse(JSON.stringify(input));
+    },
+    messaging() {
+      return {
+        onBackgroundMessage(handler: (payload: unknown) => unknown) {
+          backgroundMessageHandler = handler;
+        },
+      };
+    },
+  };
   const self = {
     location,
-    addEventListener(type: string, listener: (event: any) => void) {
+    addEventListener(type: string, listener: (event: NotificationClickEvent) => void) {
       listeners.set(type, listener);
     },
+    importScripts(url: string) {
+      assert.equal(typeof listeners.get('notificationclick'), 'function');
+      imports.push(url);
+      if (failOnImport) {
+        throw new Error('external SDK import failed');
+      }
+    },
+    firebase,
     registration: {
       showNotification(title: string, options: Record<string, unknown>) {
         notifications.push({ title, options: JSON.parse(JSON.stringify(options)) });
@@ -45,31 +71,11 @@ function startWorker(firebaseConfig?: string, failOnImport = false) {
       },
     },
   };
-  const firebase = {
-    initializeApp(input: Record<string, unknown>) {
-      initializedConfig = JSON.parse(JSON.stringify(input));
-    },
-    messaging() {
-      return {
-        onBackgroundMessage(handler: (payload: unknown) => unknown) {
-          backgroundMessageHandler = handler;
-        },
-      };
-    },
-  };
 
   runInNewContext(source, {
     URL,
     self,
     console,
-    importScripts(url: string) {
-      assert.equal(typeof listeners.get('notificationclick'), 'function');
-      imports.push(url);
-      if (failOnImport) {
-        throw new Error('external SDK import failed');
-      }
-    },
-    firebase,
   });
 
   return {
