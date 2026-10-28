@@ -6,6 +6,10 @@
 
 Web 개발용 Storybook의 고정 fixture에서 누적 응답 반영 비용을 비교했다. **네트워크 pagination, 실제 route 왕복, production 빌드 또는 Native 성능 측정 결과가 아니다. PROD-1222 전체 완료 근거로 사용하지 않는다.**
 
+## 측정 코드 보관
+
+일회성 `WebBaselineMeasurement` story와 전역 collector는 상시 Storybook에서 제거했다. 당시 코드는 [측정 커밋의 Posts.stories.tsx](https://github.com/byulmaru/kosmo/blob/cfcb3275400a6a26851dec98369861fcbed2a5f7/apps/app/src/stories/patterns/Posts.stories.tsx)에 보관되어 있다. 아래 조건은 당시 측정 기록이며 현재 story 실행 안내가 아니다. 실제 Relay pagination의 기존 행 렌더 보존, 비활성 목록 자동 조회 중단, 클릭·드래그 취소 회귀 테스트는 유지한다.
+
 ## 재현 조건
 
 - 기준 revision: `3ef05382958ff766ac736b4e55277659ed5c3fbe`; 후보는 이 revision에 PostListItem 기본 memo만 추가한 제품 코드다.
