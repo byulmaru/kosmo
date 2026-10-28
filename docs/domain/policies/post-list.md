@@ -34,6 +34,9 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - viewer Profile의 Post에 달린 Reply, viewer Profile이 작성한 Reply, viewer Profile이 팔로우한 Profile의
   Post에 viewer Profile이 팔로우한 Profile이 작성한 Reply를 포함한다.
 - viewer Profile 또는 viewer Profile이 팔로우한 Active/Normal Profile이 작성한 Repost를 포함한다.
+- viewer Profile이 작성한 Home 후보는 기존 정책을 유지한다. 다른 Profile이 작성한 후보의 Current Content에
+  Mentioned Profile 관계가 하나 이상 있으면, 그중 하나 이상이 viewer Profile이거나 viewer가 현재 팔로우하는
+  Profile일 때만 포함한다. Mentioned Profile 관계가 없는 Post와 Content 없는 Repost는 기존 후보 정책을 유지한다.
 - Author 또는 Mentioned Profile이 아닌 viewer Profile은 Author Profile과 현재 Follow Relationship이 없을 때
   Followee가 작성한 Followers Only Post의 후보가 될 수 없다. 기존 Post Visibility가 Author 또는 Mentioned
   Profile에 부여한 접근은 유지한다.
