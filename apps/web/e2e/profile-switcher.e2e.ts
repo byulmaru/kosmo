@@ -523,7 +523,9 @@ function composerProfileHandle(page: Page, handle: string) {
 }
 
 function sidebarProfileHandle(page: Page, handle: string) {
-  return page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${handle}` });
+  return page
+    .getByRole('group', { name: '활성 프로필', exact: true })
+    .getByText(`@${handle}`, { exact: true });
 }
 
 function waitForGraphQLOperation(page: Page, operationName: string) {

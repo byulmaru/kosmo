@@ -27,8 +27,9 @@ export function Form({
   };
 
   return (
-    <View accessibilityLabel={accessibilityLabel} style={style}>
+    <View style={style}>
       <form
+        aria-label={accessibilityLabel}
         onKeyDownCapture={submitOnModEnter ? handleKeyDown : undefined}
         onSubmit={handleSubmit}
         style={{ display: 'contents' }}
