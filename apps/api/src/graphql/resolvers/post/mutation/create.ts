@@ -1,11 +1,18 @@
-import { db, Instances, Profiles } from '@kosmo/core/db';
+import { db, firstOrThrow, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, InstanceKind, PostVisibility } from '@kosmo/core/enums';
-import { ValidationError } from '@kosmo/core/error';
+import {
+  ConflictError,
+  NotFoundError,
+  PermissionDeniedError,
+  ValidationError,
+} from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
-import { createPost } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { localPostCreateWorkflow } from '@kosmo/core/temporal/local-post-create';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
+import { ApplicationFailure } from '@temporalio/client';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
@@ -17,6 +24,27 @@ import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
 import { extractPostMentionCandidates } from './mention-candidates';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
+import type { LocalPostCreateInput } from '@kosmo/core/temporal/local-post-create';
+
+const rethrowLocalPostCreateFailure = (error: unknown): never => {
+  if (!(error instanceof ApplicationFailure)) {
+    throw error;
+  }
+
+  const field = typeof error.details?.[0] === 'string' ? error.details[0] : undefined;
+  switch (error.type) {
+    case 'CONFLICT':
+      throw new ConflictError({ message: error.message, field });
+    case 'NOT_FOUND':
+      throw new NotFoundError(error.message);
+    case 'PERMISSION_DENIED':
+      throw new PermissionDeniedError(error.message);
+    case 'VALIDATION':
+      throw new ValidationError(error.message, { field });
+    default:
+      throw error;
+  }
+};
 
 const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
@@ -263,24 +291,39 @@ builder.mutationField('createPost', (t) =>
         }
       }
 
-      const result = await createPost({
-        accountId: ctx.session.accountId,
-        bodyText,
-        contentWarning: contentWarning || null,
-        media: media.map(({ altText, mediaId }) => ({
-          altText: altText ?? null,
-          mediaId: mediaId.id,
-        })),
-        mentions: mentionReferences,
-        origin: 'LOCAL',
-        profileId,
-        replyParentId: input.replyParentId?.id,
-        repostSourceId: input.repostSourceId?.id,
-        sensitiveMedia: input.sensitiveMedia ?? false,
-        visibility: input.visibility,
-      });
+      const result = await runWorkflow(localPostCreateWorkflow, {
+        args: [{ requestId: crypto.randomUUID() }],
+        mode: 'update-with-start',
+        updateArgs: [
+          {
+            accountId: ctx.session.accountId,
+            bodyText,
+            contentWarning: contentWarning || null,
+            media: media.map(({ altText, mediaId }) => ({
+              altText: altText ?? null,
+              mediaId: mediaId.id,
+            })),
+            mentions: mentionReferences,
+            origin: 'LOCAL',
+            profileId,
+            replyParentId: input.replyParentId?.id,
+            repostSourceId: input.repostSourceId?.id,
+            sensitiveMedia: input.sensitiveMedia ?? false,
+            visibility: input.visibility,
+          } satisfies LocalPostCreateInput,
+        ],
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }).catch(rethrowLocalPostCreateFailure);
 
-      return { post: result.post };
+      const post = await db
+        .select()
+        .from(Posts)
+        .where(and(eq(Posts.id, result.postId), eq(Posts.profileId, profileId)))
+        .limit(1)
+        .then(firstOrThrow);
+
+      return { post };
     },
   }),
 );

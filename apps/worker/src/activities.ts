@@ -12,6 +12,10 @@ export {
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
+export {
+  createLocalPostActivity,
+  generateLocalPostIdActivity,
+} from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { createNotificationActivity } from './activities/notification';
 export {
