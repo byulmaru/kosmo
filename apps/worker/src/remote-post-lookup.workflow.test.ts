@@ -17,6 +17,7 @@ import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { eq } from 'drizzle-orm';
 import { RemoteDocumentLoaderTypeError } from './activities/remote-document';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type { DocumentLoader } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -183,7 +184,7 @@ test(
     );
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;

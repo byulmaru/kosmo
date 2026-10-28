@@ -22,6 +22,7 @@ import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporal
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { operation, service, serviceHandler } from 'nexus-rpc';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import {
   MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL,
   MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL,
@@ -147,7 +148,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
@@ -374,7 +375,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-replay-${process.pid}`;
@@ -441,7 +442,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-reaction-effects-test-${process.pid}`;
@@ -570,7 +571,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-effects-${process.pid}`;
@@ -713,7 +714,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-replay-${process.pid}`;
@@ -782,7 +783,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
@@ -883,7 +884,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-replay-${process.pid}`;
@@ -920,7 +921,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-repost-effects-${process.pid}`;
@@ -963,7 +964,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-notification-legacy-replay-${process.pid}`;
@@ -1086,7 +1087,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-push-delivery-retry-${process.pid}`;
@@ -1133,7 +1134,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-push-detached-${process.pid}`;
@@ -1234,7 +1235,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-profile-update-test-${process.pid}`;
@@ -1280,7 +1281,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -1417,7 +1418,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -1514,7 +1515,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -1746,7 +1747,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -1985,7 +1986,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -2144,7 +2145,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -2232,7 +2233,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -2323,7 +2324,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-orphan-' + process.pid;
@@ -2361,7 +2362,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-validation-' + process.pid;
@@ -2504,7 +2505,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-' + process.pid;
@@ -2655,7 +2656,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-failure-' + process.pid;
@@ -2735,7 +2736,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-test-${process.pid}`;
@@ -2769,7 +2770,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-database-counts-test-${process.pid}`;
@@ -2839,7 +2840,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-account-deletion-test-${process.pid}`;
@@ -2887,7 +2888,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -3064,7 +3065,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -3128,7 +3129,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -3185,7 +3186,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-profile-migration-' + process.pid;
@@ -3335,7 +3336,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
@@ -3461,7 +3462,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 

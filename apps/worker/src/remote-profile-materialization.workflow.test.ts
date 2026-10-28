@@ -15,6 +15,7 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type {
@@ -132,7 +133,7 @@ test(
     );
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-${process.pid}`;
@@ -215,7 +216,7 @@ test(
     });
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-retry-${process.pid}`;
@@ -284,7 +285,7 @@ test(
     });
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-invalid-${process.pid}`;
@@ -425,7 +426,7 @@ test(
     );
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-retry-${process.pid}`;
@@ -479,7 +480,7 @@ test(
     t.mock.method(federation, 'createContext', () => ({ lookupWebFinger }) as never);
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-no-match-${process.pid}`;
@@ -539,7 +540,7 @@ test(
     t.mock.method(federation, 'createContext', () => ({ lookupWebFinger }) as never);
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-webfinger-${process.pid}`;
@@ -645,7 +646,7 @@ test(
     );
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-rejection-${process.pid}`;
@@ -1845,7 +1846,7 @@ test(
     let applyCalls = 0;
     let recoverCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-fresh-${process.pid}`;
@@ -1917,7 +1918,7 @@ test(
     let fetchCalls = 0;
     let recoveryCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-receipt-${process.pid}`;
@@ -1998,7 +1999,7 @@ test(
       releaseFetch = resolve;
     });
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-stale-${process.pid}`;
@@ -2091,7 +2092,7 @@ test(
     });
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-fresh-${process.pid}`;
@@ -2175,7 +2176,7 @@ test(
     );
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-stale-${process.pid}`;
@@ -2310,7 +2311,7 @@ test(
     const recoveryCalls: string[] = [];
 
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-failure-${process.pid}`;
@@ -2404,7 +2405,7 @@ test(
     );
     let fetchCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-missing-${process.pid}`;
@@ -2542,7 +2543,7 @@ test(
   async (t) => {
     let lookupActivityCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-input-${process.pid}`;
@@ -2642,7 +2643,7 @@ type PersonOptions = ConstructorParameters<typeof Person>[0];
 
 const runRemoteProfileUpdateWorkflow = async (input: RemoteProfileUpdateInput) => {
   const environment = await TestWorkflowEnvironment.createLocal({
-    server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    server: { executable: temporalTestExecutable },
   });
   const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-update-${crypto.randomUUID()}`;
 
