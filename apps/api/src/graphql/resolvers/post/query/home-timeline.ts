@@ -80,6 +80,7 @@ builder.queryField('homeTimeline', (t) =>
           and(followeeWhere, replyParentAuthorIsFollowee),
         );
         const homeMentionTargetWhere = or(
+          isNull(Posts.replyParentId),
           eq(Posts.profileId, ctx.session.profile.id),
           not(
             exists(
