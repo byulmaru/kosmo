@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { SidebarNavigation } from '@/components/ui/SidebarNavigation';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -8,10 +9,6 @@ import type {
   SidebarNavigationProps,
   SidebarPresentation,
 } from '@/components/ui/SidebarNavigation';
-
-type CatalogProps = Omit<SidebarNavigationProps, 'profile'> & {
-  profileAvailable: boolean;
-};
 
 const profile = {
   imageUri: null,
@@ -52,10 +49,13 @@ function SidebarNavigationCatalog({
   onMenuOpenChange,
   onNavigate,
   presentation = 'full',
-  profileAvailable,
+  profile,
   showFeedback = true,
   unreadNotificationCount = null,
-}: CatalogProps) {
+  updateArgs,
+}: SidebarNavigationProps & {
+  updateArgs?: (update: Partial<SidebarNavigationProps>) => void;
+}) {
   const [destination, setDestination] = useState<NavigationDestination | null>(currentDestination);
 
   useEffect(() => setDestination(currentDestination), [currentDestination]);
@@ -76,9 +76,10 @@ function SidebarNavigationCatalog({
         onNavigate={(nextDestination) => {
           onNavigate(nextDestination);
           setDestination(nextDestination);
+          updateArgs?.({ currentDestination: nextDestination });
         }}
         presentation={presentation}
-        profile={profileAvailable ? profile : null}
+        profile={profile}
         showFeedback={showFeedback}
         unreadNotificationCount={unreadNotificationCount}
       />
@@ -157,7 +158,7 @@ const meta = {
     onMenuOpenChange: fn(),
     onNavigate: fn(),
     presentation: 'full',
-    profileAvailable: true,
+    profile,
     showFeedback: true,
     unreadNotificationCount: null,
   },
@@ -170,7 +171,7 @@ const meta = {
       control: 'inline-radio',
       options: ['full', 'compact', 'drawer'],
     },
-    profileAvailable: { control: 'boolean' },
+    profile: { control: 'object' },
     unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
   },
   component: SidebarNavigationCatalog,
@@ -304,6 +305,10 @@ async function expectNavigationBasics(
 
 export const Playground: Story = {
   args: { unreadNotificationCount: 3 },
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+    return <SidebarNavigationCatalog {...args} updateArgs={updateArgs} />;
+  },
   parameters: {
     controls: {
       disable: false,
@@ -312,7 +317,7 @@ export const Playground: Story = {
         'logoutError',
         'logoutPending',
         'presentation',
-        'profileAvailable',
+        'profile',
         'unreadNotificationCount',
       ],
     },
@@ -333,7 +338,7 @@ export const Playground: Story = {
         canvasElement,
         presentation,
         args.currentDestination ?? null,
-        args.profileAvailable,
+        Boolean(args.profile),
         unreadNotificationCount,
       );
       expectRect(
@@ -402,7 +407,7 @@ export const InteractionContract: Story = {
     });
 
     await step('프로필이 있으면 프로필 destination을 활성화', async () => {
-      if (args.profileAvailable) {
+      if (args.profile) {
         expect(profileButton).toBeEnabled();
         profileButton.focus();
         await userEvent.keyboard('{Enter}');
@@ -447,7 +452,7 @@ export const Compact: Story = {
         canvasElement,
         'compact',
         args.currentDestination ?? null,
-        args.profileAvailable,
+        Boolean(args.profile),
         args.unreadNotificationCount,
       );
       expectRect(feedback, 44, 44);
@@ -531,7 +536,7 @@ async function playInlineUtility({
     canvasElement,
     'drawer',
     args.currentDestination ?? null,
-    args.profileAvailable,
+    Boolean(args.profile),
     args.unreadNotificationCount,
   );
 
@@ -686,7 +691,7 @@ export const NarrowDrawerLayoutContract: Story = {
 };
 
 export const ProfileUnavailable: Story = {
-  args: { currentDestination: 'profile', profileAvailable: false },
+  args: { currentDestination: 'profile', profile: null },
   play: async ({ canvasElement }) => {
     const navigation = getNavigation(canvasElement);
     const profileButton = getButton(navigation, 'profile');
