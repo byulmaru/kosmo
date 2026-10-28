@@ -38,6 +38,17 @@
 
 앱 production source(`apps/app/src/**/*.{js,jsx,ts,tsx}`)에서는 새 `react-native-svg` value import·re-export와 intrinsic `<svg>`를 막는다. 기존 canonical geometry/asset owner인 `ui/StateView.tsx`, `ui/BottomTabBarIcon.tsx`, `ui/RadioGroup.tsx`, `ui/ColorPickerPanel.tsx`, `reaction/ReactionPendingSpinner.tsx`, `post/PostComposer.tsx` 여섯 파일만 SVG value import를 유지할 수 있으며, 이 예외도 raw `<svg>`와 Lucide custom API까지 면제하지 않는다.
 
+`svgOwnerFiles`는 consumer visual override의 기존 사용 횟수를 기록한 legacy snapshot과 별개의, 현재 ESLint `no-restricted-imports` 설정에서 사용하는 파일 단위 SVG value import 허용 목록이다. 여섯 owner의 근거와 역할은 다음과 같다.
+
+- `ui/BottomTabBarIcon.tsx`: 제품 전용 custom glyph
+- `ui/StateView.tsx`: loading shimmer
+- `ui/RadioGroup.tsx`: 선택 indicator
+- `ui/ColorPickerPanel.tsx`: color gradient/picker surface
+- `reaction/ReactionPendingSpinner.tsx`: reaction loading indicator
+- `post/PostComposer.tsx`: composer progress ring
+
+현재 `no-restricted-imports` 설정은 파일 단위로 import를 허용하므로, 이 목록은 기존 내부 SVG 사용을 보존하는 경계다. 새 geometry·새 owner·새 예외를 승인하는 목록은 아니다. owner 내부의 geometry 변경, CSS drawing, 외부 asset binary의 의미는 별도 리뷰 책임으로 남고, raw `<svg>`와 Lucide custom API 제한은 계속 적용된다. 새 custom icon의 등록·canonical component·대표 Story를 같은 UI-only PR에서 다루는 규칙과 실제 runtime consumer를 후속 PR로 분리하는 규칙은 위 legacy snapshot과 독립적이다.
+
 Lucide의 일반 glyph와 type-only import는 허용하고, builtin `no-restricted-imports`의 value import/re-export 제한으로 `createLucideIcon`·`Icon` custom API를 막는다. 이 builtin 경계에서는 namespace import도 custom API와 구분하지 않으므로 일반 named glyph import를 사용한다. Story/test fixture는 production 규칙에서 제외해 inline SVG placeholder를 허용한다. 크기·stroke·color·문자 glyph, 여섯 owner 내부 geometry 변경, CSS drawing과 외부 asset binary의 의미 판정은 이 guardrail이 검사하지 않으며 리뷰에서 확인한다.
 
 새 custom icon은 owner 등록, canonical UI component와 component/pattern representative story를 같은 UI-only PR에서 함께 admission할 수 있다. 별도의 icon-only PR이나 icon-only story는 요구하지 않지만, 해당 PR은 실제 runtime consumer·Relay·route·feature flag 연결을 포함하지 않아야 하며 후속 feature/runtime PR에서 연결한다. 등록 배열은 기존 literal entry를 보존한 채 정확한 `components/*` 경로만 추가할 수 있고, 해당 source의 SVG value import와 변경된 대표 story의 직접 또는 one-hop component import가 함께 있어야 한다. 새 owner 등록 PR과 등록된 custom owner source 변경은 PR 본문에 `고려한 Lucide 대안:`과 `미채택 이유:`를 각각 비어 있지 않게 적어야 한다. 다섯 canonical SVG owner의 기존 geometry 변경에는 이 본문 요구를 적용하지 않는다. 이 검사기는 대안의 의미·승인 품질을 판정하지 않는다.

@@ -14,6 +14,7 @@ const appFixtureFiles = [
   'apps/app/src/**/*.stories.{js,jsx,ts,tsx}',
   'apps/app/src/stories/**',
 ];
+// Existing canonical SVG geometry/asset owners keep file-level value-import access; this does not approve new geometry.
 const svgOwnerFiles = [
   'apps/app/src/components/ui/StateView.tsx',
   'apps/app/src/components/ui/BottomTabBarIcon.tsx',
