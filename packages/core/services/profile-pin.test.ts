@@ -4,7 +4,6 @@ import { asc, eq, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
-  generateProfilePinKey,
   Instances,
   pg,
   PostContents,
@@ -22,6 +21,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
+import { generateProfilePinKey } from '../profile-pin-key';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { pinProfilePost, reorderProfilePost, unpinProfilePost } from './profile-pin';

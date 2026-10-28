@@ -3,7 +3,6 @@ import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   db,
   first,
-  generateProfilePinKey,
   Instances,
   isUniqueViolation,
   Posts,
@@ -13,6 +12,7 @@ import {
 } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { generateProfilePinKey } from '../profile-pin-key';
 import { postVisibilityCondition } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
 import { startProfileUpdateEffects } from './profile-update';

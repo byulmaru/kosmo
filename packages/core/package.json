@@ -18,6 +18,7 @@
     "./polyfill": "./polyfill.ts",
     "./visibility": "./visibility/index.ts",
     "./profile": "./profile.ts",
+    "./profile-pin-key": "./profile-pin-key.ts",
     "./search": "./search.ts",
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
