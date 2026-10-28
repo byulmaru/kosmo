@@ -2,6 +2,7 @@
 {{- $featureFlagName := printf "%s-flags" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $featureFlagSourceName := printf "%s-flag-source" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $flagdName := printf "%s-flagd" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $flagdResources := dict "requests" (dict "cpu" "10m" "memory" "32Mi") "limits" (dict "cpu" "100m" "memory" "64Mi") -}}
 {{- $labels := dict "helm.sh/chart" (include "kosmo.chart" .) "app.kubernetes.io/name" "flagd" "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/managed-by" .Release.Service -}}
 apiVersion: core.openfeature.dev/v1beta1
 kind: FeatureFlag
@@ -89,6 +90,8 @@ spec:
   sources:
     - source: {{ printf "%s/%s" .Release.Namespace $featureFlagName | quote }}
       provider: kubernetes
+  resources:
+{{ toYaml $flagdResources | indent 4 }}
   cors:
     - https://kos.moe
     - https://dev.kos.moe
@@ -100,6 +103,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
 {{ toYaml $labels | indent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    checksum/feature-flag-source-resources: {{ toYaml $flagdResources | sha256sum | quote }}
 spec:
   featureFlagSource: {{ $featureFlagSourceName }}
   serviceType: ClusterIP
