@@ -4,7 +4,6 @@ import { asc, eq, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
-  generateProfilePinKey,
   Instances,
   pg,
   PostContents,
@@ -24,7 +23,12 @@ import {
 import { NotFoundError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
-import { pinProfilePost, reorderProfilePost, unpinProfilePost } from './profile-pin';
+import {
+  generateProfilePinKey,
+  pinProfilePost,
+  reorderProfilePost,
+  unpinProfilePost,
+} from './profile-pin';
 
 after(async () => {
   await pg.end();
