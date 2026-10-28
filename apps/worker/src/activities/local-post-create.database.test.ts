@@ -37,7 +37,10 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { temporalTestExecutable } from '../temporal-test-executable.js';
 import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
 import { createPostActivity, generatePostIdActivity } from './post-create';
-import type { LocalPostCreateResult } from '@kosmo/core/temporal/local-post-create';
+import type {
+  LocalPostCreateInput,
+  LocalPostCreateResult,
+} from '@kosmo/core/temporal/local-post-create';
 import type {
   ActivityPubPostCreateInput,
   PostCreateActivityInput,
@@ -96,7 +99,7 @@ const createRemoteAuthor = async (name: string) => {
     .insert(Instances)
     .values({
       domain: `${suffix}.example`,
-      kind: InstanceKind.REMOTE,
+      kind: InstanceKind.ACTIVITYPUB,
       state: InstanceState.ACTIVE,
     })
     .returning()

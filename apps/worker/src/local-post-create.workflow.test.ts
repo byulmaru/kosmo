@@ -82,7 +82,7 @@ const createWorker = (
   environment: TestWorkflowEnvironment,
   sendLocalPostCreateActivity: typeof activities.sendLocalPostCreateActivity,
   onCreate: () => void,
-  createResult?: LocalPostCreateExecution,
+  createResult?: PostCreateActivityResult,
 ) =>
   Worker.create({
     activities: workerActivities(sendLocalPostCreateActivity, onCreate, createResult),

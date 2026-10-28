@@ -16,7 +16,7 @@ import type { ActivityPubPostCreateInput } from '@kosmo/core/temporal/post-creat
 import type {
   RemotePostCreateWorkflowArgs,
   RemotePostCreateWorkflowResult,
-} from '@kosmo/core/temporal/remote-post';
+} from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const httpUriSchema = z.url({ protocol: /^https?$/ });

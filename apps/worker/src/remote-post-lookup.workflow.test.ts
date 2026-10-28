@@ -339,7 +339,7 @@ test(
       const expectedBytes = new TextEncoder().encode(JSON.stringify(noteDocument)).byteLength;
       const created = (await run(input, 'created')) as Extract<
         RemotePostLookupResult,
-        { status: 'created' }
+        { status: 'created' | 'duplicate' }
       >;
       assert.deepEqual(created, {
         authorProfileId: author.id,
