@@ -97,3 +97,4 @@ patchedDependencies:
   # TODO(PROD-1103): Remove after verifying a compatible upstream release.
   # See patches/expo-router.md for rationale and removal checks.
   expo-router@56.2.13: patches/expo-router@56.2.13.patch
+  react-native@0.85.3: patches/react-native@0.85.3.patch
