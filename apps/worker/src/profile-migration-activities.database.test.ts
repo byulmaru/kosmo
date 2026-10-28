@@ -16,13 +16,14 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.PUBLIC_ORIGIN = publicOrigin;
 
 const environment = await TestWorkflowEnvironment.createLocal({
-  server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+  server: { executable: temporalTestExecutable },
 });
 process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';

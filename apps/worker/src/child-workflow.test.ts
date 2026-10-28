@@ -3,6 +3,7 @@ import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type { ChildWorkflowInput, ChildWorkflowResult } from './test-fixtures/child-workflow';
 
 const workflowsPath = new URL('./test-fixtures/child-workflow.ts', import.meta.url).pathname;
@@ -23,7 +24,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-execute-${process.pid}`;
@@ -55,7 +56,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-start-${process.pid}`;
@@ -92,7 +93,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-failure-${process.pid}`;

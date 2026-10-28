@@ -23,6 +23,7 @@ import {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflows';
 import type { SQL } from 'drizzle-orm';
 import type * as activities from './activities';
@@ -158,7 +159,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
 
