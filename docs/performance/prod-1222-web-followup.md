@@ -67,3 +67,5 @@ Web form 이름에 현재 작성 프로필의 핸들을 포함해 구분한다. 
 Posts 전체·Composer tests·Composer ProfileSwitcher Storybook **165개 통과**. 최종 선택자로 실패 테스트 단독 재실행, 앱 TypeScript와 변경 파일 ESLint·Prettier도 통과했다. 앞선 Web runtime 결과의 `게시글 작성` form 이름은 이 변경 이후 `게시글 작성 (@handle)`이 된다. 이 후속 수정에서는 production Web QA와 실제 스크린리더·Native runtime을 재실행하지 않았다.
 
 이전 head의 Web E2E shard 2는 테스트 시작 전 `config.webServer` 준비가 120초를 초과해 실패했다. 로그만으로 어느 서버가 지연됐는지는 확정할 수 없으며 폼 이름 회귀와 구분한다.
+
+후속 CI에서 기존 이름과 정확히 일치하도록 찾던 E2E 선택자 누락도 확인했다. 게시·온보딩·프로필 전환·인증의 기존 helper를 새 form role/name에 맞췄다. 최신 production build와 격리 DB에서 관련 E2E는 **29개 통과, 1개 실패**했고, 실패한 프로필 viewerState 테스트는 코드 변경 없이 격리 재실행에서 **1개 통과**했다. 최초 실패 화면에는 새 프로필 delta 확인 뒤 route 이동 시 gamma가 활성 프로필로 표시되어 있었다. 전환 시점의 일시적 문제 가능성은 남으며 전체 30개가 한 실행에서 통과한 것으로 표현하지 않는다. Web TypeScript·변경 파일 ESLint·Prettier도 통과했다. 로컬 원본은 `test-results/prod-1222/unique-form-e2e/`에 보관한다.
