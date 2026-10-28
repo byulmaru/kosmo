@@ -620,8 +620,16 @@ describe('check-ui-contract-pr', () => {
 
   it('requires both custom icon review fields and rejects missing or placeholder bodies', async () => {
     const fixture = await createCustomIconFixture();
+    const emptyFirstField = '- 고려한 Lucide 대안:\n- 미채택 이유: 실제 이유\n';
+    const directResult = checkPullRequest({
+      ...fixture,
+      cwd: fixture.root,
+      prBody: emptyFirstField,
+    });
+    assert.ok(directResult.errors.some((error) => error.includes('고려한 Lucide 대안')));
     for (const body of [
       '',
+      emptyFirstField,
       '- 고려한 Lucide 대안: 없음\n- 미채택 이유: 해당 없음\n',
       '<!-- - 고려한 Lucide 대안: 실제 대안 -->\n<!-- - 미채택 이유: 실제 이유 -->',
     ]) {

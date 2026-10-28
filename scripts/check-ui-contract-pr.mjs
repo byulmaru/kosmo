@@ -1110,7 +1110,9 @@ function sourceImportsValue(source, filePath, packagePrefix) {
 
 function bodyFieldIsMeaningful(body, label) {
   const withoutComments = String(body ?? '').replace(/<!--[\s\S]*?-->/g, '');
-  const pattern = new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${label}\\s*[:：]\\s*([^\\n]*)`);
+  const pattern = new RegExp(
+    `(?:^|\\n)[ \\t]*(?:[-*][ \\t]*)?${label}[ \\t]*[:：][ \\t]*([^\\n]*)`,
+  );
   const match = withoutComments.match(pattern);
   if (!match) {
     return false;
