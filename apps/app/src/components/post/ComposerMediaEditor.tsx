@@ -495,6 +495,7 @@ function ComposerMediaThumbnailVisual({
       <Animated.View style={{ opacity: animatedOpacity }}>
         <Image
           accessibilityIgnoresInvertColors
+          fadeDuration={0}
           source={{ uri }}
           style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
         />

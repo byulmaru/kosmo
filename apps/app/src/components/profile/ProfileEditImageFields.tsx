@@ -271,6 +271,7 @@ function ImageEditControlVisual({
       {draft.previewUri ? (
         <Image
           accessibilityIgnoresInvertColors
+          fadeDuration={0}
           resizeMode="cover"
           source={{ uri: draft.previewUri }}
           style={StyleSheet.absoluteFill}
