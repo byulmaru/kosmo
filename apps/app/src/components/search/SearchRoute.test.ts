@@ -130,10 +130,9 @@ mockModule('@/components/shell/PrimaryNavigationScrollContext', {
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('@/components/shell/shellLayout', { getShellLayout: () => 'mobile' });
 mockModule('@/components/ui/Button', { Button: () => null });
-mockModule('@/components/ui/IconButton', {
+mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
   IconButton: (props: object) => createElement('IconButton', props),
 });
-mockModule('@/components/ui/SearchToolbar', { SearchToolbar: () => null });
 mockModule('@/components/ui/StateView', { StateView: () => null });
 mockModule('@/components/ui/Tabs', {
   Tab: () => null,
@@ -153,7 +152,20 @@ mockModule('@/lib/recentSearches', {
   writeRecentSearches: async () => undefined,
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ surface: '#fff', text: '#111', textSecondary: '#777' }),
+  useTheme: () => ({
+    backgroundCanvas: '#fff',
+    backgroundSurface: '#fff',
+    border: '#ddd',
+    borderSubtle: '#ddd',
+    foregroundPrimary: '#111',
+    foregroundSecondary: '#777',
+    stateDisabledForeground: '#999',
+    stateDisabledSurface: '#eee',
+    stateFocusRing: '#06f',
+    surface: '#fff',
+    text: '#111',
+    textSecondary: '#777',
+  }),
 });
 
 let SearchScreen: ComponentType;
@@ -189,7 +201,10 @@ afterEach(async () => {
 
 const input = () => renderer.root.findByType(host('TextInput'));
 const focusSearch = async () => {
-  await act(async () => renderer.root.findByProps({ accessibilityLabel: '검색' }).props.onFocus());
+  await act(async () => {
+    input().props.onFocus();
+    renderer.root.findByProps({ accessibilityLabel: '검색' }).props.onFocus();
+  });
 };
 const typeText = async (text: string) => {
   await act(async () => input().props.onChangeText(text));
@@ -231,6 +246,24 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
     1,
   );
   assert.equal(header.findByProps({ accessibilityLabel: '뒤로' }).props.feedbackTone, undefined);
+
+  await typeText('초안 검색어');
+  header = renderer!.root.findByType(host('NativeStackHeader'));
+  await act(async () => {
+    const back = header.findByProps({ accessibilityLabel: '뒤로' });
+    back.props.onPressIn?.();
+    back.props.onPress();
+    searchParams.q = undefined;
+    renderer?.update(createElement(NativeStackHarness));
+  });
+  assert.equal(input().props.value, '');
+  header = renderer!.root.findByType(host('NativeStackHeader'));
+  assert.equal(
+    header
+      .findAllByType(host('IconButton'))
+      .filter(({ props }) => props.accessibilityLabel === '메뉴 열기').length,
+    1,
+  );
 
   await act(async () => renderer?.unmount());
   searchParams.q = 'kosmo';
@@ -298,9 +331,13 @@ test('Native 검색 지우기는 q를 비우고 같은 입력에 포커스를 �
   await focusSearch();
   await typeText('한글 검색');
   const originalInput = input();
-  await act(async () =>
-    renderer.root.findByProps({ accessibilityLabel: '검색 지우기' }).props.onPress(),
-  );
+  const clear = renderer.root.findByProps({ accessibilityLabel: '검색 지우기' });
+  assert.ok(renderer.root.findAllByProps({ children: '최근 검색' }).length > 0);
+  await act(async () => clear.props.onPressIn());
+  assert.equal(input().props.value, '한글 검색');
+  assert.ok(renderer.root.findAllByProps({ children: '최근 검색' }).length > 0);
+  assert.deepEqual(routerActions, []);
+  await act(async () => clear.props.onPress());
   assert.equal(input().props.value, '');
   assert.equal(input(), originalInput);
   assert.ok(inputFocusCount > 0);
