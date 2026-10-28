@@ -59,7 +59,7 @@ async function openComposer(page: Page) {
     await open.click();
   }
 
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = page.getByRole('form', { name: /^게시글 작성 \(@/ });
   await expect(composer).toBeVisible();
   return composer;
 }
