@@ -80,10 +80,10 @@ class AnimatedValueMock {
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|fragment) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
     return require(
-      `${name.startsWith('PostList') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
+      `${name.startsWith('PostList') || name.startsWith('ProfilePinOrder') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
     ).default;
   },
 });
@@ -94,8 +94,16 @@ mockModule('expo-router', {
   }),
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('lucide-react-native', {
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
+mockModule(require.resolve('lucide-react-native'), {
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 mockModule('react-native', {
   Platform: platform,
   Animated: {

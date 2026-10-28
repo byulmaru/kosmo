@@ -5,6 +5,7 @@ import postgres from 'postgres';
 import * as enums from './enums';
 import * as tables from './tables';
 
+export * from './profile-pin-order';
 export * from './tables';
 export * from './utils';
 

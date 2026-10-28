@@ -58,6 +58,7 @@ let PostContents: typeof CoreDb.PostContents;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
+let profilePinOrderKey: typeof CoreDb.profilePinOrderKey;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
@@ -88,6 +89,7 @@ describe('remote actor materialization', () => {
       ProfileMedia,
       ProfileFollows,
       ProfilePinnedPosts,
+      profilePinOrderKey,
       Profiles,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
@@ -1015,7 +1017,7 @@ describe('remote actor materialization', () => {
 
     await db.insert(ProfilePinnedPosts).values([
       { position: 0, postId: remotePin!.id, profileId: stored.profile.id },
-      { postId: manualPin!.id, profileId: stored.profile.id },
+      { orderKey: Buffer.from([128, 0]), postId: manualPin!.id, profileId: stored.profile.id },
       { position: 0, postId: otherPin!.id, profileId: otherProfile.id },
     ]);
 
@@ -1082,7 +1084,7 @@ describe('remote actor materialization', () => {
       observedAt: withoutFeaturedAt,
     });
 
-    assert.deepEqual(await readPins(stored.profile.id), [[null, manualPin!.id]]);
+    assert.deepEqual(await readPins(stored.profile.id), []);
     assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
 
     await db.insert(ProfilePinnedPosts).values({
@@ -1098,10 +1100,7 @@ describe('remote actor materialization', () => {
       actorJsonLd: olderDocument,
       observedAt: Temporal.Instant.from('2026-07-10T23:59:59Z'),
     });
-    assert.deepEqual(await readPins(stored.profile.id), [
-      [1, stalePin!.id],
-      [null, manualPin!.id],
-    ]);
+    assert.deepEqual(await readPins(stored.profile.id), [[1, stalePin!.id]]);
 
     await db.insert(ProfilePinnedPosts).values({
       position: 2,
@@ -1116,7 +1115,6 @@ describe('remote actor materialization', () => {
     assert.deepEqual(await readPins(stored.profile.id), [
       [1, stalePin!.id],
       [2, equalPin!.id],
-      [null, manualPin!.id],
     ]);
 
     for (const observedAt of [Temporal.Instant.from('2026-07-10T23:59:59Z'), withoutFeaturedAt]) {
@@ -1128,7 +1126,6 @@ describe('remote actor materialization', () => {
       assert.deepEqual(await readPins(stored.profile.id), [
         [1, stalePin!.id],
         [2, equalPin!.id],
-        [null, manualPin!.id],
       ]);
       assert.equal(start.mock.callCount(), 1);
     }
@@ -1353,10 +1350,14 @@ describe('remote actor materialization', () => {
 
     const readPins = () =>
       db
-        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .select({
+          position: ProfilePinnedPosts.position,
+          postId: ProfilePinnedPosts.postId,
+          orderKey: ProfilePinnedPosts.orderKey,
+        })
         .from(ProfilePinnedPosts)
         .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
-        .orderBy(ProfilePinnedPosts.position, ProfilePinnedPosts.id);
+        .orderBy(profilePinOrderKey, ProfilePinnedPosts.id);
 
     await replaceRemoteFeaturedSnapshot({
       postIds: [posts[0]!.id, posts[1]!.id],
@@ -1369,6 +1370,10 @@ describe('remote actor materialization', () => {
         [1, posts[1]!.id],
       ],
     );
+
+    const binaryPins = await readPins();
+    assert.ok(binaryPins.every((pin) => Buffer.isBuffer(pin.orderKey)));
+    assert.ok(Buffer.compare(binaryPins[0]!.orderKey!, binaryPins[1]!.orderKey!) < 0);
 
     await assert.rejects(
       replaceRemoteFeaturedSnapshot({
@@ -1383,6 +1388,8 @@ describe('remote actor materialization', () => {
         [1, posts[1]!.id],
       ],
     );
+    await replaceRemoteFeaturedSnapshot({ postIds: [], profileId: stored.profile.id });
+    assert.deepEqual(await readPins(), []);
   });
 
   test('collects ordered Followers Only Featured Notes before replacing pins', async () => {

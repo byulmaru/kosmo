@@ -1148,6 +1148,78 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('reorder uses selected Member authority and returns persisted ordered Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const posts = await Promise.all(
+      Array.from({ length: 3 }, () => createContentfulPost({ profileId: auth.profile.id })),
+    );
+    for (const post of posts) {
+      await db.insert(ProfilePinnedPosts).values({ profileId: auth.profile.id, postId: post.id });
+    }
+    const rows = await db
+      .select()
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
+      .orderBy(asc(ProfilePinnedPosts.id));
+    const operation = `mutation Reorder($input: ReorderProfilePostInput!) { reorderProfilePost(input: $input) { changed profile { id pinnedPosts { id } } } }`;
+    const input = {
+      postId: globalId('Post', rows[2].postId),
+      beforePostId: globalId('Post', rows[0].postId),
+    };
+    const owner = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(owner);
+    assert.equal(owner.data?.reorderProfilePost.changed, true);
+    const restore = await requestGraphQL(
+      operation,
+      { input: { postId: input.postId } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(restore);
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+    const result = await requestGraphQL<{
+      reorderProfilePost: {
+        changed: boolean;
+        profile: { id: string; pinnedPosts: { id: string }[] };
+      };
+    }>(operation, { input }, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.reorderProfilePost.changed, true);
+    assert.deepEqual(
+      result.data?.reorderProfilePost.profile.pinnedPosts.map((post) => post.id),
+      [rows[2], rows[0], rows[1]].map((row) => globalId('Post', row.postId)),
+    );
+    const again = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(again);
+    assert.equal(again.data?.reorderProfilePost.changed, false);
+    const anonymous = await requestGraphQL(operation, { input });
+    assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
+    const wrongType = await requestGraphQL(
+      operation,
+      { input: { ...input, beforePostId: globalId('Profile', auth.profile.id) } },
+      auth.token,
+    );
+    assert.ok(wrongType.errors?.length);
+    const foreign = await createAuthenticatedSession();
+    const forbidden = await requestGraphQL(operation, { input }, foreign.token);
+    assertGraphQLErrorCode(forbidden, 'NOT_FOUND');
+  });
+
   test('profile pin mutations use the selected profile and concrete Post Relay IDs', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createContentfulPost({ profileId: auth.profile.id });

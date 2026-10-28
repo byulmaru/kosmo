@@ -46,7 +46,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. Local first-party UI는
   조회 가능한 고정 Post 전체를 이 순서대로 별도 pinned segment에 표시하고 개별 관리한다. Remote inbound UI도 검증된
   Featured collection 전체를 원격 순서의 pinned segment로 표시한다.
-- pin 관계가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. visibility filtering은 남은 visible pin의 상대 순서를
+- 고정 관계와 저장 순서가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. Local 순서 변경 성공 후에는 현재 고정 목록과
+  이후 조회에 저장된 순서를 반영한다. 고정 관계의 구성과 기존 chronology에는 영향을 주지 않는다. visibility filtering은 남은 visible pin의 상대 순서를
   바꾸지 않는다.
 - Local pin/unpin 성공 뒤에도 이미 표시 중인 pinned segment는 이전 목록 구성과 순서를 유지할 수 있다. 이후 Profile 목록을 다시
   조회할 때 서버에 저장된 목록과 순서를 반영한다. 고정 목록은 페이지네이션 없이 조회 가능한 전체를 반환하며, 기존 chronology의
