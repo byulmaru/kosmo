@@ -39,7 +39,7 @@ const wideRailAncestorPost = {
   ...post({ bodyText: '오늘도 별을 보며 나누고 싶은 이야기를 남겨요.', id: 'wide-rail-ancestor' }),
   viewerReactions: [],
 };
-const wideRailCurrentPost = {
+export const wideRailCurrentPost = {
   ...post({
     bodyText: '코스모에서 함께 나누고 싶은 오늘의 이야기입니다.',
     id: 'wide-rail-current',
@@ -318,7 +318,7 @@ const meta = {
   },
   component: PostMediaViewerCatalog,
   decorators: [withViewerProviders],
-  excludeStories: ['PostMediaViewerCatalog', 'PostMediaViewerPlayground'],
+  excludeStories: ['PostMediaViewerCatalog', 'PostMediaViewerPlayground', 'wideRailCurrentPost'],
   parameters: {
     controls: { disable: true },
     layout: 'fullscreen',
