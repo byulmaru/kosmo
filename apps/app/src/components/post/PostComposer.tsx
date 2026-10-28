@@ -649,7 +649,7 @@ export function PostComposer({
 
   return (
     <View
-      accessibilityLabel={copy.title}
+      accessibilityLabel={Platform.OS === 'web' ? undefined : copy.title}
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
@@ -998,7 +998,7 @@ export function MobileFullscreenComposerShellCandidate({
   );
   return (
     <View
-      accessibilityLabel={copy.title}
+      accessibilityLabel={Platform.OS === 'web' ? undefined : copy.title}
       style={[
         styles.mobileShell,
         fillContainer ? styles.mobileShellFill : null,
