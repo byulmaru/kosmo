@@ -19,8 +19,8 @@
 자동 안내 이력은 다음 Account metadata를 사용한다.
 
 - 안내 이름은 `timeline`, `search`, `tag`, `profile`, `post`, `composer`로 두고 각각 `coachmark.<guide>.shown` 키를 사용한다.
-- 첫 단계가 실제로 표시된 뒤 해당 키에 문자열 `true`를 한 번 기록한다. 이미 값이 있으면 기존 값과 최초 시각을 유지한다.
-- metadata 조회·생성은 현재 로그인한 Account에만 허용하며, metadata 전체 목록·초기화·수정·삭제 API는 제공하지 않는다.
+- 첫 단계가 실제로 표시된 뒤 해당 키에 문자열 `true`를 설정한다. 같은 키를 다시 설정하면 해당 값이 갱신된다.
+- metadata 조회·설정은 현재 로그인한 Account에만 허용하며, metadata 전체 목록·초기화·삭제 API는 제공하지 않는다.
 
 PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단계·문구·실제 대상·도움말 위치와 해당 화면의 Web·iOS·Android 통합 검증은 PROD-1201~1206에서 연결한다.
 
@@ -99,3 +99,8 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 - 빈 임시 DB에 마이그레이션을 적용한 뒤 API 통합 테스트 5개와 마이그레이션 재실행을 통과했다. 본인 계정 접근, 일반 문자열 key/value 조회, 입력 경계와 동시 중복 생성의 최초 값·시각 보존을 검증했다.
 - 관련 앱 단위 테스트 32개, Coachmark Storybook 19개, API 스키마·TypeScript와 앱 Relay·TypeScript 검사를 통과했다. Native 실기기와 운영 환경은 별도 검증 대상이다.
+
+### Account metadata 설정 계약 검증 · 2026-10-28
+
+- 값 갱신을 허용하는 계약으로 변경한 뒤, 빈 임시 DB 마이그레이션과 API 통합 테스트 5개 및 마이그레이션 재실행을 통과했다. 본인 계정 접근 제한, 기본 빈 객체, 요청한 키만 조회, 같은 키 덮어쓰기와 서로 다른 키의 동시 갱신 보존을 확인했다.
+- 관련 앱 단위 테스트 32개, API 스키마·TypeScript, 앱 Relay·TypeScript, ESLint·Prettier 검사를 통과했다. 이번 변경에서 Storybook·Native 실기기·운영 환경 검증은 수행하지 않았다.

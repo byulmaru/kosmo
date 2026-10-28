@@ -32,10 +32,8 @@ type GraphQLResult<T> = {
 };
 
 type Metadata = {
-  id: string;
   key: string;
   value: string;
-  createdAt: string;
 };
 
 before(async () => {
@@ -61,12 +59,12 @@ after(async () => {
   await pg.end();
 });
 
-test('비인증 요청은 metadata 생성과 조회를 거부한다', async () => {
+test('비인증 요청은 metadata 설정과 조회를 거부한다', async () => {
   const mutation = await request<unknown>(
-    `mutation { createAccountMetadata(input: { key: "client.theme", value: "dark" }) { account { id } } }`,
+    `mutation { setAccountMetadata(input: { key: "client.theme", value: "dark" }) { key value account { id } } }`,
   );
   const query = await request<unknown>(
-    'query { me { metadata(keys: ["client.theme"]) { id key value createdAt } } }',
+    'query { me { metadata(keys: ["client.theme"]) { key value } } }',
   );
 
   assert.equal(mutation.data, null);
@@ -75,32 +73,47 @@ test('비인증 요청은 metadata 생성과 조회를 거부한다', async () =
   assert.equal(query.errors, undefined);
 });
 
-test('metadata는 현재 Account에만 보이고 Node도 다른 Account에서 숨겨진다', async () => {
+test('metadata는 현재 Account에만 보이고 Account Node도 다른 Account에서 숨겨진다', async () => {
   const first = await createSession();
   const second = await createSession();
-  const created = await createMetadata(first.token, 'client.theme', 'dark');
+  const updated = await setMetadata(first.token, 'client.theme', 'dark');
 
-  assert.equal(created.id, encodeGlobalId('Account', first.account.id));
-  assert.equal(created.metadata[0]?.key, 'client.theme');
+  assert.deepEqual(updated, {
+    account: {
+      id: encodeGlobalId('Account', first.account.id),
+      metadata: [{ key: 'client.theme', value: 'dark' }],
+    },
+    key: 'client.theme',
+    value: 'dark',
+  });
   assert.equal((await readMetadata(first.token, ['client.theme']))[0]?.value, 'dark');
   assert.deepEqual(await readMetadata(second.token, ['client.theme']), []);
 
-  const node = await request<{ node: Metadata | null }>(
-    `query($id: ID!) { node(id: $id) { ... on AccountMetadata { id key value createdAt } } }`,
-    { id: created.metadata[0]?.id },
+  const ownNode = await request<{ node: { metadata: Metadata[] } | null }>(
+    'query($id: ID!) { node(id: $id) { ... on Account { metadata(keys: ["client.theme"]) { key value } } } }',
+    { id: encodeGlobalId('Account', first.account.id) },
+    first.token,
+  );
+  assert.equal(ownNode.errors, undefined, JSON.stringify(ownNode.errors));
+  assert.deepEqual(ownNode.data?.node?.metadata, [{ key: 'client.theme', value: 'dark' }]);
+
+  const otherNode = await request<{ node: { metadata: Metadata[] } | null }>(
+    'query($id: ID!) { node(id: $id) { ... on Account { metadata(keys: ["client.theme"]) { key value } } } }',
+    { id: encodeGlobalId('Account', first.account.id) },
     second.token,
   );
-  assert.equal(node.errors, undefined, JSON.stringify(node.errors));
-  assert.equal(node.data?.node, null);
+  assert.equal(otherNode.errors, undefined, JSON.stringify(otherNode.errors));
+  assert.equal(otherNode.data?.node, null);
 });
 
-test('generic key/value와 filtered read를 저장하고 Account 삭제 시 cascade한다', async () => {
+test('generic key/value와 filtered read를 JSONB에 저장한다', async () => {
   const fixture = await createSession();
+  assert.deepEqual(await accountMetadataRow(fixture.account.id), {});
 
-  await createMetadata(fixture.token, 'custom.key', '');
-  await createMetadata(fixture.token, 'coachmark.timeline.shown', 'true');
+  await setMetadata(fixture.token, 'custom.key', '');
+  await setMetadata(fixture.token, 'coachmark.timeline.shown', 'true');
   const longUtf8Value = '가'.repeat(1365);
-  await createMetadata(fixture.token, 'utf8.value', longUtf8Value);
+  await setMetadata(fixture.token, 'utf8.value', longUtf8Value);
 
   const metadata = await readMetadata(fixture.token, ['custom.key', 'missing.key', 'utf8.value']);
   assert.deepEqual(
@@ -110,32 +123,43 @@ test('generic key/value와 filtered read를 저장하고 Account 삭제 시 casc
       { key: 'utf8.value', value: longUtf8Value },
     ],
   );
+  assert.deepEqual(await readMetadata(fixture.token, ['custom.key', 'custom.key']), [
+    { key: 'custom.key', value: '' },
+  ]);
 
-  const rows = await metadataRows(fixture.account.id);
-  assert.equal(rows.length, 3);
-
-  await db.delete(Sessions).where(sql`account_id = ${fixture.account.id}`);
-  await db.delete(Accounts).where(sql`id = ${fixture.account.id}`);
-  assert.equal((await metadataRows(fixture.account.id)).length, 0);
+  assert.deepEqual(await accountMetadataRow(fixture.account.id), {
+    'coachmark.timeline.shown': 'true',
+    'custom.key': '',
+    'utf8.value': longUtf8Value,
+  });
 });
 
-test('중복 생성은 첫 값과 createdAt을 보존하고 동시 생성도 한 행만 만든다', async () => {
+test('기존 key는 덮어쓰고 서로 다른 key의 동시 갱신을 보존한다', async () => {
   const fixture = await createSession();
-  const first = await createMetadata(fixture.token, 'client.locale', 'ko');
-  const firstMetadata = first.metadata[0];
-  assert.ok(firstMetadata);
+  const first = await setMetadata(fixture.token, 'client.locale', 'ko');
+  assert.equal(first.value, 'ko');
 
-  const duplicate = await createMetadata(fixture.token, 'client.locale', 'en');
-  assert.deepEqual(duplicate.metadata[0], firstMetadata);
-  assert.deepEqual(await readMetadata(fixture.token, ['client.locale']), [firstMetadata]);
+  const overwritten = await setMetadata(fixture.token, 'client.locale', 'en');
+  assert.deepEqual(overwritten, {
+    account: {
+      id: encodeGlobalId('Account', fixture.account.id),
+      metadata: [{ key: 'client.locale', value: 'en' }],
+    },
+    key: 'client.locale',
+    value: 'en',
+  });
+  assert.deepEqual(await readMetadata(fixture.token, ['client.locale']), [
+    { key: 'client.locale', value: 'en' },
+  ]);
 
   await Promise.all([
-    createMetadata(fixture.token, 'race.key', 'left'),
-    createMetadata(fixture.token, 'race.key', 'right'),
+    setMetadata(fixture.token, 'race.left', 'left'),
+    setMetadata(fixture.token, 'race.right', 'right'),
   ]);
-  const raceRows = await metadataRows(fixture.account.id, 'race.key');
-  assert.equal(raceRows.length, 1);
-  assert.ok(['left', 'right'].includes(raceRows[0]?.value ?? ''));
+  assert.deepEqual(await readMetadata(fixture.token, ['race.left', 'race.right']), [
+    { key: 'race.left', value: 'left' },
+    { key: 'race.right', value: 'right' },
+  ]);
 });
 
 test('key와 value의 승인된 경계를 벗어난 입력을 거부한다', async () => {
@@ -144,19 +168,19 @@ test('key와 value의 승인된 경계를 벗어난 입력을 거부한다', asy
 
   for (const key of invalidKeys) {
     await assertValidation(
-      `mutation($input: CreateAccountMetadataInput!) { createAccountMetadata(input: $input) { account { id } } }`,
+      `mutation($input: SetAccountMetadataInput!) { setAccountMetadata(input: $input) { key } }`,
       { input: { key, value: 'value' } },
       fixture.token,
     );
   }
 
   await assertValidation(
-    `mutation($input: CreateAccountMetadataInput!) { createAccountMetadata(input: $input) { account { id } } }`,
+    `mutation($input: SetAccountMetadataInput!) { setAccountMetadata(input: $input) { key } }`,
     { input: { key: 'nul.value', value: 'bad\u0000value' } },
     fixture.token,
   );
   await assertValidation(
-    `mutation($input: CreateAccountMetadataInput!) { createAccountMetadata(input: $input) { account { id } } }`,
+    `mutation($input: SetAccountMetadataInput!) { setAccountMetadata(input: $input) { key } }`,
     { input: { key: 'too.long', value: '가'.repeat(1366) } },
     fixture.token,
   );
@@ -187,25 +211,31 @@ const request = async <T>(
   return (await response.json()) as GraphQLResult<T>;
 };
 
-const createMetadata = async (token: string, key: string, value: string) => {
+const setMetadata = async (token: string, key: string, value: string) => {
   const result = await request<{
-    createAccountMetadata: { account: { id: string; metadata: Metadata[] } };
+    setAccountMetadata: {
+      account: { id: string; metadata: Metadata[] };
+      key: string;
+      value: string;
+    };
   }>(
-    `mutation($input: CreateAccountMetadataInput!, $key: String!) {
-      createAccountMetadata(input: $input) {
-        account { id metadata(keys: [$key]) { id key value createdAt } }
+    `mutation($input: SetAccountMetadataInput!, $key: String!) {
+      setAccountMetadata(input: $input) {
+        key
+        value
+        account { id metadata(keys: [$key]) { key value } }
       }
     }`,
     { input: { key, value }, key },
     token,
   );
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
-  return result.data!.createAccountMetadata.account;
+  return result.data!.setAccountMetadata;
 };
 
 const readMetadata = async (token: string, keys: string[]) => {
   const result = await request<{ me: { metadata: Metadata[] } | null }>(
-    'query($keys: [String!]!) { me { metadata(keys: $keys) { id key value createdAt } } }',
+    'query($keys: [String!]!) { me { metadata(keys: $keys) { key value } } }',
     { keys },
     token,
   );
@@ -223,12 +253,12 @@ const assertValidation = async (
   assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
 };
 
-const metadataRows = async (accountId: string, key?: string) =>
-  db.execute(
-    key
-      ? sql`SELECT id, key, value, created_at AS "createdAt" FROM account_metadata WHERE account_id = ${accountId} AND key = ${key}`
-      : sql`SELECT id, key, value, created_at AS "createdAt" FROM account_metadata WHERE account_id = ${accountId}`,
-  ) as Promise<Array<{ id: string; key: string; value: string; createdAt: unknown }>>;
+const accountMetadataRow = async (accountId: string) =>
+  db
+    .execute(sql`SELECT metadata FROM account WHERE id = ${accountId}`)
+    .then(
+      (rows) => (rows[0] as { metadata: Record<string, string> } | undefined)?.metadata ?? null,
+    );
 
 const createSession = async () => {
   const suffix = crypto.randomUUID();

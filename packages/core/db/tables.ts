@@ -39,23 +39,10 @@ export const Accounts = pgTable('account', {
   oidcSubject: text('oidc_subject').unique().notNull(),
   displayName: text('display_name').notNull(),
   featureFlags: text('feature_flags').array().notNull().default([]),
+  metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
   state: Enum.accountState('state').notNull(),
   createdAt: createdAt(),
 });
-
-export const AccountMetadata = pgTable(
-  'account_metadata',
-  {
-    id: id(),
-    accountId: uuid('account_id')
-      .notNull()
-      .references(() => Accounts.id, { onDelete: 'cascade' }),
-    key: text('key').notNull(),
-    value: text('value').notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [unique().on(table.accountId, table.key)],
-);
 
 export const AccountProfiles = pgTable(
   'account_profile',

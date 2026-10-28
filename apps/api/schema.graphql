@@ -6,9 +6,7 @@ type Account implements Node {
   profiles: [Profile!]!
 }
 
-type AccountMetadata implements Node {
-  createdAt: DateTime!
-  id: ID!
+type AccountMetadata {
   key: String!
   value: String!
 }
@@ -110,15 +108,6 @@ enum ContentReportReason {
 enum ContentReportTargetType {
   POST
   PROFILE
-}
-
-input CreateAccountMetadataInput {
-  key: String!
-  value: String!
-}
-
-type CreateAccountMetadataPayload {
-  account: Account!
 }
 
 input CreateBookmarkInput {
@@ -360,7 +349,6 @@ type Mutation {
   blockProfile(input: BlockProfileInput!): BlockProfilePayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
-  createAccountMetadata(input: CreateAccountMetadataInput!): CreateAccountMetadataPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createHashtagMuteRule(input: CreateHashtagMuteRuleInput!): CreateHashtagMuteRulePayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
@@ -384,6 +372,7 @@ type Mutation {
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
+  setAccountMetadata(input: SetAccountMetadataInput!): SetAccountMetadataPayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
@@ -786,6 +775,17 @@ type Session implements Node {
   account: Account!
   id: ID!
   selectedProfile: Profile
+}
+
+input SetAccountMetadataInput {
+  key: String!
+  value: String!
+}
+
+type SetAccountMetadataPayload {
+  account: Account!
+  key: String!
+  value: String!
 }
 
 input SubmitContentReportInput {

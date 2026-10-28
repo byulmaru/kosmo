@@ -7,7 +7,7 @@ import { useCoachmark } from './CoachmarkProvider';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { CoachmarkController_account$key } from './__generated__/CoachmarkController_account.graphql';
-import type { CoachmarkControllerCreateMetadataMutation } from './__generated__/CoachmarkControllerCreateMetadataMutation.graphql';
+import type { CoachmarkControllerSetMetadataMutation } from './__generated__/CoachmarkControllerSetMetadataMutation.graphql';
 import type { CoachmarkGuide } from './CoachmarkGuide';
 import type { CoachmarkRequestHandle, CoachmarkStep } from './CoachmarkProvider';
 
@@ -27,17 +27,17 @@ const accountFragment = graphql`
         "coachmark.composer.shown"
       ]
     ) {
-      id
       key
       value
-      createdAt
     }
   }
 `;
 
-const createAccountMetadataMutation = graphql`
-  mutation CoachmarkControllerCreateMetadataMutation($input: CreateAccountMetadataInput!) {
-    createAccountMetadata(input: $input) {
+const setAccountMetadataMutation = graphql`
+  mutation CoachmarkControllerSetMetadataMutation($input: SetAccountMetadataInput!) {
+    setAccountMetadata(input: $input) {
+      key
+      value
       account {
         ...CoachmarkController_account
       }
@@ -69,8 +69,8 @@ export function useCoachmarkController({
   const { request } = useCoachmark();
   const session = useSession();
   const reportUnexpectedError = useUnexpectedErrorReporter();
-  const [commitMetadata] = useMutation<CoachmarkControllerCreateMetadataMutation>(
-    createAccountMetadataMutation,
+  const [commitMetadata] = useMutation<CoachmarkControllerSetMetadataMutation>(
+    setAccountMetadataMutation,
   );
 
   const onShown = useCallback(() => {

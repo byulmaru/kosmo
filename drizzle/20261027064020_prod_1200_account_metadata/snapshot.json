@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d01c57ef-b509-4c3b-a9be-7fdff5e12c03",
+  "id": "7db0f06f-016c-4a3a-bb3e-a003dc6f9fb4",
   "prevIds": ["d4980e0c-c8a0-45d6-af39-242de120aa66"],
   "ddl": [
     {
@@ -143,12 +143,6 @@
       "values": ["ACTIVE", "REVOKED", "EXPIRED"],
       "name": "session_state",
       "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "account_metadata",
-      "entityType": "tables",
       "schema": "public"
     },
     {
@@ -360,71 +354,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "account_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "value",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "account_profile"
     },
     {
@@ -527,6 +456,19 @@
       "generated": null,
       "identity": null,
       "name": "feature_flags",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "metadata",
       "entityType": "columns",
       "schema": "public",
       "table": "account"
@@ -4403,19 +4345,6 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "account_metadata_account_id_account_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "account_metadata"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
       "name": "account_profile_account_id_account_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -5220,14 +5149,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "account_metadata_pkey",
-      "schema": "public",
-      "table": "account_metadata",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "account_profile_pkey",
       "schema": "public",
       "table": "account_profile",
@@ -5472,15 +5393,6 @@
       "schema": "public",
       "table": "session",
       "entityType": "pks"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["account_id", "key"],
-      "nullsNotDistinct": false,
-      "name": "account_metadata_account_id_key_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "account_metadata"
     },
     {
       "nameExplicit": false,

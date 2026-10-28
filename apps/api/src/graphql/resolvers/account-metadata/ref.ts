@@ -1,31 +1,13 @@
-import { AccountMetadata as AccountMetadataTable, db } from '@kosmo/core/db';
-import { and, eq, inArray } from 'drizzle-orm';
-import { createObjectRef } from '@/graphql/utils';
+import { builder } from '@/graphql/builder';
 
-export type AccountMetadataRow = typeof AccountMetadataTable.$inferSelect;
+export type AccountMetadata = Readonly<{
+  key: string;
+  value: string;
+}>;
 
-export const AccountMetadata = createObjectRef<AccountMetadataRow>(
-  'AccountMetadata',
-  (ids, ctx) => {
-    const accountId = ctx.session?.accountId;
-    return accountId
-      ? db
-          .select()
-          .from(AccountMetadataTable)
-          .where(
-            and(
-              inArray(AccountMetadataTable.id, ids),
-              eq(AccountMetadataTable.accountId, accountId),
-            ),
-          )
-      : Promise.resolve([]);
-  },
-);
-
-AccountMetadata.implement({
+export const AccountMetadata = builder.simpleObject('AccountMetadata', {
   fields: (t) => ({
-    key: t.exposeString('key'),
-    value: t.exposeString('value'),
-    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    key: t.string(),
+    value: t.string(),
   }),
 });
