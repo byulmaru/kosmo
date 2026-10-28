@@ -1,0 +1,15 @@
+{{- if eq .Values.env "prod" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-fedify-dashboard" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    grafana_dashboard: "1"
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: fedify-dashboard
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  fedify.json: |
+{{ .Files.Get "files/fedify-dashboard.json" | nindent 4 }}
+{{- end }}

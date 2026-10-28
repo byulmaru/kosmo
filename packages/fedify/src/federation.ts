@@ -57,6 +57,7 @@ import {
 } from './local-profile-featured';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
+import { fedifyMeterProvider } from './metrics';
 import { fedifyKv, fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
@@ -68,6 +69,7 @@ const localInstanceActorHandle = 'kosmo.instance';
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
   kv: fedifyKv ?? new MemoryKvStore(),
+  meterProvider: fedifyMeterProvider,
   ...(fedifyQueue
     ? {
         // Producer and consumer processes share one durable queue.  Queue

@@ -1,7 +1,13 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg, pgRead } from '@kosmo/core/db';
-import { closeFedifyQueue, configureFedifyInboxLogging, federation } from '@kosmo/fedify';
+import {
+  closeFedifyMetrics,
+  closeFedifyQueue,
+  configureFedifyInboxLogging,
+  federation,
+  startFedifyMetrics,
+} from '@kosmo/fedify';
 import { Sentry } from './sentry';
 import type { Server } from 'node:http';
 
@@ -63,6 +69,7 @@ async function run(): Promise<void> {
   process.once('SIGINT', stop);
 
   try {
+    await startFedifyMetrics();
     server.listen(port, host);
     await once(server, 'listening');
     listening = true;
@@ -88,7 +95,11 @@ async function run(): Promise<void> {
       try {
         await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
       } finally {
-        await closeHttpServer(server, listening);
+        try {
+          await closeHttpServer(server, listening);
+        } finally {
+          await closeFedifyMetrics();
+        }
       }
     }
   }
