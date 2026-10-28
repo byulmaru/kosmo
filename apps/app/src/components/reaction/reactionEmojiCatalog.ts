@@ -7,7 +7,6 @@ export type ReactionEmojiCatalogOption = Readonly<{
   id: string;
   keywords: ReadonlyArray<string>;
   label: string;
-  labelEn: string;
   quick: boolean;
   quickOrder?: number;
 }>;
