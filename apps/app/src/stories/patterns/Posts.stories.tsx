@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { act, Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { act, Profiler, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import {
   graphql,
@@ -1226,6 +1226,461 @@ function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
     throw new Error(`Missing post fixture ${id}.`);
   }
   return result;
+}
+
+type PostsWebBaselineAction = 'initial' | 'append20' | 'refresh' | 'update-row' | 'detail-return';
+type PostsWebBaselineProfilerCommit = {
+  action: PostsWebBaselineAction | 'idle';
+  actualDuration: number;
+  baseDuration: number;
+  commitTime: number;
+  mountedRows: number;
+  phase: 'mount' | 'update' | 'nested-update';
+  startTime: number;
+};
+type PostsWebBaselineMemory = {
+  jsHeapSizeLimit: number;
+  totalJSHeapSize: number;
+  usedJSHeapSize: number;
+} | null;
+type PostsWebBaselineResult = {
+  actions: Array<{
+    action: PostsWebBaselineAction;
+    memory: PostsWebBaselineMemory;
+    mountedRows: number;
+    time: number;
+  }>;
+  jsStalls: Array<{ duration: number; startTime: number }>;
+  memory: PostsWebBaselineMemory;
+  mountedRows: number;
+  profilerCommits: PostsWebBaselineProfilerCommit[];
+  runtime: { longtaskSupported: boolean; memorySupported: boolean; userAgent: string };
+  storyId: 'KOSMO/Patterns/Post/Catalog/WebBaselineMeasurement';
+};
+type PostsWebBaselineMetricsApi = {
+  reset: () => void;
+  readonly result: PostsWebBaselineResult;
+};
+
+declare global {
+  interface Window {
+    __KOSMO_POSTS_WEB_BASELINE__?: PostsWebBaselineMetricsApi;
+  }
+}
+
+const postsWebBaselineStoryId = 'KOSMO/Patterns/Post/Catalog/WebBaselineMeasurement' as const;
+const postsWebBaselineBody =
+  'Web baseline에서 반복 렌더링 비용을 측정하기 위한 고정 본문입니다.\n\n두 번째 문단과 미디어를 포함합니다.';
+const postsWebBaselineProfile = profile({
+  displayName: 'Web baseline 작성자',
+  handle: 'web-baseline-author',
+  id: 'profile-web-baseline',
+  relativeHandle: '@web-baseline-author',
+});
+const postsWebBaselineMedia = {
+  __typename: 'Media' as const,
+  altText: 'Web baseline 고정 미디어',
+  id: 'media-web-baseline',
+  url: postMediaImageUri,
+};
+
+function createPostsWebBaselinePosts() {
+  return Array.from({ length: 200 }, (_, index) =>
+    withReactionViewerState(
+      post({
+        bodyText: postsWebBaselineBody,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        id: `web-baseline-post-${index + 1}`,
+        media: [postsWebBaselineMedia],
+        profile: postsWebBaselineProfile,
+        reactionCounts: [{ count: 3, type: '❤️' }],
+        repostCount: 2,
+        replyCount: 1,
+        visibility: 'PUBLIC',
+      }),
+    ),
+  );
+}
+
+const postsWebBaselinePosts = createPostsWebBaselinePosts();
+
+function postsWebBaselineTimeline(posts: ReadonlyArray<StoryPost>) {
+  const connection = timeline(...posts);
+  return {
+    ...connection,
+    pageInfo: {
+      ...connection.pageInfo,
+      endCursor: posts.at(-1)?.id ?? null,
+      hasNextPage: posts.length < postsWebBaselinePosts.length,
+      startCursor: posts[0]?.id ?? null,
+    },
+  };
+}
+
+function postsWebBaselineQueryData(
+  count: number,
+  posts: ReadonlyArray<StoryPost> = postsWebBaselinePosts,
+) {
+  return {
+    ...postsStoryRelayData,
+    homeTimeline: postsWebBaselineTimeline(posts.slice(0, count)),
+    nodes: posts.slice(0, count).map(withReactionViewerState),
+  };
+}
+
+function createPostsWebBaselineCollector(storyWindow: Window) {
+  let actionResults: PostsWebBaselineResult['actions'] = [];
+  let jsStalls: PostsWebBaselineResult['jsStalls'] = [];
+  let memory: PostsWebBaselineMemory = null;
+  let profilerCommits: PostsWebBaselineProfilerCommit[] = [];
+  const Observer: typeof PerformanceObserver | undefined =
+    typeof PerformanceObserver === 'undefined' ? undefined : PerformanceObserver;
+  const longtaskSupported = Boolean(Observer?.supportedEntryTypes?.includes('longtask'));
+  const browserPerformance = storyWindow.performance as Performance & {
+    memory?: PostsWebBaselineMemory;
+  };
+
+  const mountedRows = () =>
+    storyWindow.document.querySelectorAll('[data-testid="post-list-standard-row"]').length;
+  const readMemory = (): PostsWebBaselineMemory =>
+    browserPerformance.memory
+      ? {
+          jsHeapSizeLimit: browserPerformance.memory.jsHeapSizeLimit,
+          totalJSHeapSize: browserPerformance.memory.totalJSHeapSize,
+          usedJSHeapSize: browserPerformance.memory.usedJSHeapSize,
+        }
+      : null;
+  const result = (): PostsWebBaselineResult => ({
+    actions: [...actionResults],
+    jsStalls: [...jsStalls],
+    memory,
+    mountedRows: mountedRows(),
+    profilerCommits: [...profilerCommits],
+    runtime: {
+      longtaskSupported,
+      memorySupported: Boolean(browserPerformance.memory),
+      userAgent: storyWindow.navigator.userAgent,
+    },
+    storyId: postsWebBaselineStoryId,
+  });
+  const reset = (actionRef?: { current: PostsWebBaselineAction | 'idle' }) => {
+    actionResults = [];
+    jsStalls = [];
+    memory = readMemory();
+    profilerCommits = [];
+    if (actionRef) {
+      actionRef.current = 'idle';
+    }
+  };
+  const recordAction = (action: PostsWebBaselineAction) => {
+    memory = readMemory();
+    actionResults.push({
+      action,
+      memory,
+      mountedRows: mountedRows(),
+      time: storyWindow.performance.now(),
+    });
+  };
+  const recordProfiler = (
+    action: PostsWebBaselineAction | 'idle',
+    phase: 'mount' | 'update' | 'nested-update',
+    actualDuration: number,
+    baseDuration: number,
+    startTime: number,
+    commitTime: number,
+  ) => {
+    profilerCommits.push({
+      action,
+      actualDuration,
+      baseDuration,
+      commitTime,
+      mountedRows: mountedRows(),
+      phase,
+      startTime,
+    });
+  };
+  const mount = (actionRef: { current: PostsWebBaselineAction | 'idle' }) => {
+    const previousApi = storyWindow.__KOSMO_POSTS_WEB_BASELINE__;
+    let observer: PerformanceObserver | null = null;
+    memory = readMemory();
+    if (Observer && longtaskSupported) {
+      try {
+        const nextObserver = new Observer((list) => {
+          for (const entry of list.getEntries()) {
+            jsStalls.push({ duration: entry.duration, startTime: entry.startTime });
+          }
+        });
+        nextObserver.observe({ type: 'longtask' } as PerformanceObserverInit);
+        observer = nextObserver;
+      } catch {
+        observer = null;
+      }
+    }
+    const api: PostsWebBaselineMetricsApi = {
+      get result() {
+        return result();
+      },
+      reset: () => reset(actionRef),
+    };
+    storyWindow.__KOSMO_POSTS_WEB_BASELINE__ = api;
+    return () => {
+      observer?.disconnect();
+      if (previousApi) {
+        storyWindow.__KOSMO_POSTS_WEB_BASELINE__ = previousApi;
+      } else {
+        delete storyWindow.__KOSMO_POSTS_WEB_BASELINE__;
+      }
+    };
+  };
+
+  return { mount, recordAction, recordProfiler, reset, result };
+}
+
+function WebBaselineMeasurementStory() {
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      const environment = new Environment({
+        network: Network.create((request: RequestParameters) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  id: 'session-web-baseline',
+                  selectedProfile: { id: selectedProfileId ?? postsWebBaselineProfile.id },
+                },
+                me: { id: 'account-web-baseline', name: 'Web baseline account' },
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({ data: postsWebBaselineQueryData(20) } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      });
+      environment.commitPayload(postsStoriesOperation, postsWebBaselineQueryData(20));
+      return environment;
+    },
+    [],
+  );
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <SessionProvider>
+        <RelayActorBoundary>
+          <Suspense fallback={<Text>Web baseline fixture를 불러오는 중입니다.</Text>}>
+            <WebBaselineMeasurementContents />
+          </Suspense>
+        </RelayActorBoundary>
+      </SessionProvider>
+    </RelayActorProvider>
+  );
+}
+
+function WebBaselineMeasurementContents() {
+  const data = usePostsStoryData();
+  const environment = useRelayEnvironment();
+  const actionRef = useRef<PostsWebBaselineAction | 'idle'>('initial');
+  const collectorRef = useRef<ReturnType<typeof createPostsWebBaselineCollector> | null>(null);
+  if (!collectorRef.current) {
+    collectorRef.current = createPostsWebBaselineCollector(window);
+  }
+  const collector = collectorRef.current;
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [targetRows, setTargetRows] = useState(20);
+  const [metrics, setMetrics] = useState<PostsWebBaselineResult>(() => collector.result());
+  const visibleCountRef = useRef(20);
+
+  useEffect(() => {
+    const cleanup = collector.mount(actionRef);
+    return () => {
+      cleanup();
+    };
+  }, [collector]);
+
+  const handleProfilerRender = useCallback(
+    (
+      _id: string,
+      phase: 'mount' | 'update' | 'nested-update',
+      actualDuration: number,
+      baseDuration: number,
+      startTime: number,
+      commitTime: number,
+    ) => {
+      collector.recordProfiler(
+        actionRef.current,
+        phase,
+        actualDuration,
+        baseDuration,
+        startTime,
+        commitTime,
+      );
+    },
+    [collector],
+  );
+
+  const runAction = useCallback(
+    (action: PostsWebBaselineAction, update: () => void) => {
+      actionRef.current = action;
+      update();
+      window.requestAnimationFrame(() => {
+        collector.recordAction(action);
+      });
+    },
+    [collector],
+  );
+
+  const appendTwenty = useCallback(() => {
+    const currentCount = visibleCountRef.current;
+    const nextCount = Math.min(currentCount + 20, postsWebBaselinePosts.length);
+    if (nextCount === currentCount) {
+      return;
+    }
+    runAction('append20', () => {
+      environment.commitPayload(postsStoriesOperation, postsWebBaselineQueryData(nextCount));
+      visibleCountRef.current = nextCount;
+      setTargetRows(nextCount);
+    });
+  }, [environment, runAction]);
+
+  const refresh = useCallback(() => {
+    const count = visibleCountRef.current;
+    runAction('refresh', () => {
+      environment.commitPayload(
+        postsStoriesOperation,
+        postsWebBaselineQueryData(count, createPostsWebBaselinePosts()),
+      );
+    });
+  }, [environment, runAction]);
+
+  const updateRow = useCallback(() => {
+    runAction('update-row', () => {
+      const count = visibleCountRef.current;
+      const updatedBodyText = `${postsWebBaselineBody} 한 행이 갱신되었습니다.`;
+      const updatedPosts: StoryPost[] = createPostsWebBaselinePosts().map((postNode, index) => {
+        if (index !== 0 || !postNode.content) {
+          return postNode;
+        }
+        return {
+          ...postNode,
+          content: {
+            ...postNode.content,
+            bodyText: updatedBodyText,
+            document: {
+              ...postNode.content.document,
+              body: {
+                ...postNode.content.document.body,
+                content: [
+                  {
+                    content: [{ text: updatedBodyText, type: 'text' as const }],
+                    type: 'paragraph' as const,
+                  },
+                ],
+              },
+            },
+          },
+        };
+      });
+      environment.commitPayload(
+        postsStoriesOperation,
+        postsWebBaselineQueryData(count, updatedPosts),
+      );
+    });
+  }, [environment, runAction]);
+
+  const detailReturn = useCallback(() => {
+    if (detailOpen) {
+      return;
+    }
+    setDetailOpen(true);
+    window.setTimeout(() => {
+      runAction('detail-return', () => setDetailOpen(false));
+    }, 0);
+  }, [detailOpen, runAction]);
+
+  const resetMetrics = useCallback(() => {
+    collector.reset(actionRef);
+    setMetrics(collector.result());
+  }, [collector]);
+
+  return (
+    <View style={{ gap: 8, width: '100%' }}>
+      <Text>
+        Web baseline 측정 전용 story입니다. detail-return는 route/router가 없는 목록 unmount/remount
+        시뮬레이션입니다.
+      </Text>
+      <Text>
+        append20은 다음 20개까지의 고정 query payload를 Relay Store에 publish하는 append 진단입니다.
+        refresh는 같은 값을 다시 publish하는 진단입니다.
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Pressable
+          accessibilityLabel="append20"
+          accessibilityRole="button"
+          onPress={appendTwenty}
+          testID="posts-web-baseline-append20"
+        >
+          <Text>append20</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="refresh"
+          accessibilityRole="button"
+          onPress={refresh}
+          testID="posts-web-baseline-refresh"
+        >
+          <Text>refresh (same-value republish)</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="update-row"
+          accessibilityRole="button"
+          onPress={updateRow}
+          testID="posts-web-baseline-update-row"
+        >
+          <Text>update-row</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="detail-return"
+          accessibilityRole="button"
+          onPress={detailReturn}
+          testID="posts-web-baseline-detail-return"
+        >
+          <Text>detail-return (unmount/remount simulation)</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="reset metrics"
+          accessibilityRole="button"
+          onPress={resetMetrics}
+          testID="posts-web-baseline-reset"
+        >
+          <Text>reset metrics</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="snapshot metrics"
+          accessibilityRole="button"
+          onPress={() => setMetrics(collector.result())}
+          testID="posts-web-baseline-snapshot"
+        >
+          <Text>snapshot metrics</Text>
+        </Pressable>
+      </View>
+      <Text testID="posts-web-baseline-status">
+        target rows: {targetRows} · last snapshot mounted rows: {metrics.mountedRows}
+      </Text>
+      <Text selectable testID="post-list-performance-results">
+        {JSON.stringify(metrics)}
+      </Text>
+      <Profiler id="posts-web-baseline-list" onRender={handleProfilerRender}>
+        {detailOpen ? (
+          <View testID="posts-web-baseline-detail-simulation">
+            <Text>상세 화면 unmount/remount 시뮬레이션 중</Text>
+          </View>
+        ) : (
+          <PostList home={data.home} />
+        )}
+      </Profiler>
+    </View>
+  );
 }
 
 function PostCatalog(_args: PostsStoryArgs) {
@@ -3214,6 +3669,14 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const WebBaselineMeasurement: Story = {
+  parameters: {
+    controls: { disable: true },
+    layout: 'fullscreen',
+  },
+  render: () => <WebBaselineMeasurementStory />,
+};
 
 export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },

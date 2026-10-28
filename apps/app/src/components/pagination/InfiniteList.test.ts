@@ -32,6 +32,11 @@ mock.module('react-native', {
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('expo-router', {
+  exports: {
+    useIsFocused: () => true,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
   ({ PaginationScrollView } = await import('./PaginationScrollView'));

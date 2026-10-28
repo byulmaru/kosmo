@@ -9,7 +9,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import { isGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 const minute = 60_000;
@@ -531,6 +531,68 @@ test('쿠키 없는 루트는 Local 다음 페이지를 최신순으로 누적�
   );
   expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
   await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
+});
+
+test('쿠키 없는 루트는 상세 이동 중 pagination을 멈추고 복귀 후 끝 스크롤을 재개한다', async ({
+  page,
+}) => {
+  const author = await createE2EProfile({ handle: 'e2e-focus-pagination-author' });
+  const posts = [];
+  for (let index = 0; index < 41; index += 1) {
+    posts.push(
+      await createE2EPost({
+        body: `E2E focus pagination ${index.toString().padStart(2, '0')}\n첫째 줄\n둘째 줄\n셋째 줄`,
+        profileId: author.id,
+        visibility: PostVisibility.PUBLIC,
+      }),
+    );
+  }
+
+  let nextPageRequests = 0;
+  page.on('request', (request) => {
+    if (isGraphQLOperation(request.postData(), 'PostListLocalNextPageQuery')) {
+      nextPageRequests += 1;
+    }
+  });
+
+  await page.goto('/');
+  const rows = page.getByTestId('post-list-standard-row');
+  await expect(rows).toHaveCount(20);
+  const detailRowIndex = 10;
+  const detailRow = rows.nth(detailRowIndex);
+  await detailRow.scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const listOffset = await page.evaluate(() => window.scrollY);
+  await expect(rows).toHaveCount(20);
+  expect(nextPageRequests).toBe(0);
+  const detailPost = posts[posts.length - 1 - detailRowIndex]!;
+  const detailGlobalId = toGlobalId('Post', detailPost.id);
+
+  await detailRow.getByTestId('post-list-row-body').click();
+  await expect(page).toHaveURL(`/@${author.handle}/${detailGlobalId}`);
+  await expect(page.getByTestId(`post-thread-current-${detailGlobalId}`)).toBeVisible();
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+  });
+  await page.waitForTimeout(100);
+  expect(nextPageRequests).toBe(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(rows).toHaveCount(20);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThanOrEqual(Math.max(0, listOffset - 2));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(listOffset + 2);
+  expect(nextPageRequests).toBe(0);
+
+  const nextPageResponse = waitForGraphQLOperation(page, 'PostListLocalNextPageQuery');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const response = await nextPageResponse;
+  expect(response.ok()).toBe(true);
+  await expect(rows).toHaveCount(40);
+  expect(nextPageRequests).toBe(1);
 });
 
 for (const width of [390, 1440]) {

@@ -25,6 +25,7 @@ type HookResult = {
 };
 
 const platform = { OS: 'web' };
+let focused = true;
 const listeners = new Map<string, Set<EventListener>>();
 const animationFrames = new Map<number, FrameRequestCallback>();
 const loadRequests: Array<{
@@ -65,6 +66,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', { Platform: platform });
+mockModule('expo-router', { useIsFocused: () => focused });
 
 let useAutomaticPagination: (options: HookOptions) => HookResult;
 
@@ -73,6 +75,7 @@ before(async () => {
 });
 
 beforeEach(() => {
+  focused = true;
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     writable: true,
@@ -175,6 +178,60 @@ async function completeRequest(index: number, error: Error | null) {
 }
 
 describe('useAutomaticPagination', () => {
+  it('Web inactive mount and queued scroll work do not auto-request', async () => {
+    focused = false;
+    await renderHook(options());
+    await dispatchWindowEvent('scroll');
+    await dispatchWindowEvent('resize');
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 0);
+  });
+
+  it('Web blur ignores stale scroll, resize, and RAF callbacks', async () => {
+    await renderHook(options());
+    const staleListeners = [...(listeners.get('scroll') ?? []), ...(listeners.get('resize') ?? [])];
+    const staleFrames = [...animationFrames.values()];
+
+    focused = false;
+    await updateHook(options());
+    await act(async () => {
+      staleListeners.forEach((listener) => listener(new Event('scroll')));
+      staleFrames.forEach((callback) => callback(0));
+    });
+
+    assert.equal(loadRequests.length, 0);
+  });
+
+  it('Web completion while blurred does not schedule a follow-up until focus returns', async () => {
+    await renderHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+
+    focused = false;
+    await updateHook(options({ isLoadingNext: true }));
+    await completeRequest(0, null);
+    await updateHook(options({ isLoadingNext: false, itemCount: 40 }));
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+
+    focused = true;
+    await updateHook(options({ isLoadingNext: false, itemCount: 40 }));
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 2);
+  });
+
+  it('Web focus return rechecks a near-end document', async () => {
+    focused = false;
+    await renderHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 0);
+
+    focused = true;
+    await updateHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+  });
+
   it('Web near-end에서 한 번 요청하고 짧은 성공 page 뒤 다시 측정한다', async () => {
     await renderHook(options());
     await runAnimationFrame();
@@ -312,6 +369,32 @@ describe('useAutomaticPagination', () => {
 
     await updateHook(options({ isLoadingNext: true, webScrollTarget: 'container' }));
     await completeRequest(0, null);
+    await updateHook(
+      options({ isLoadingNext: false, itemCount: 40, webScrollTarget: 'container' }),
+    );
+    assert.equal(loadRequests.length, 2);
+  });
+
+  it('Web container는 blur 중 완료된 page를 focus 복귀 뒤에만 재측정한다', async () => {
+    await renderHook(options({ webScrollTarget: 'container' }));
+
+    await act(async () => {
+      currentResult().nativeScrollProps.onLayout({
+        nativeEvent: { layout: { height: 800 } },
+      });
+      currentResult().nativeScrollProps.onContentSizeChange(0, 1200);
+    });
+    assert.equal(loadRequests.length, 1);
+
+    focused = false;
+    await updateHook(options({ isLoadingNext: true, webScrollTarget: 'container' }));
+    await completeRequest(0, null);
+    await updateHook(
+      options({ isLoadingNext: false, itemCount: 40, webScrollTarget: 'container' }),
+    );
+    assert.equal(loadRequests.length, 1);
+
+    focused = true;
     await updateHook(
       options({ isLoadingNext: false, itemCount: 40, webScrollTarget: 'container' }),
     );

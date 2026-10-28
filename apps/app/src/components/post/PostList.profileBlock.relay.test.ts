@@ -32,6 +32,7 @@ const requests: Array<{
   sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 }> = [];
 const toastRetryActions: Array<() => void> = [];
+const postBodyRenderCounts = new Map<string, number>();
 const animationFrames = new Map<number, FrameRequestCallback>();
 const originalWindow = globalThis.window;
 const originalDocument = globalThis.document;
@@ -108,6 +109,7 @@ stub('react-native', {
 });
 stub('expo-router', {
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
+  useIsFocused: () => true,
   usePathname: () => '/home',
   useRouter: () => ({ push: () => undefined }),
 });
@@ -175,8 +177,10 @@ stub(new URL('./PostMediaViewerHost.tsx', import.meta.url), {
 });
 stub(new URL('./PostActionSurface.tsx', import.meta.url), { PostActionSurface: () => null });
 stub(new URL('./PostBody.tsx', import.meta.url), {
-  PostBody: ({ post }: { post: { content?: { bodyText?: string | null } | null; id: string } }) =>
-    createElement('Text', { testID: `body-${post.id}` }, post.content?.bodyText),
+  PostBody: ({ post }: { post: { content?: { bodyText?: string | null } | null; id: string } }) => {
+    postBodyRenderCounts.set(post.id, (postBodyRenderCounts.get(post.id) ?? 0) + 1);
+    return createElement('Text', { testID: `body-${post.id}` }, post.content?.bodyText);
+  },
 });
 stub(new URL('./PostReplySurface.tsx', import.meta.url), {
   usePostReplySurface: () => ({ reply: undefined, replySurface: null }),
@@ -208,6 +212,7 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  postBodyRenderCounts.clear();
   toastRetryActions.length = 0;
   animationFrames.clear();
   if (originalWindow) {
@@ -541,6 +546,50 @@ test('the web list loads another page when blocking filters every loaded row', a
   await act(async () => mock.timers.tick(0));
   await act(async () => flushAnimationFrames());
   assert.deepEqual(visibleBodies(), ['body-post-next']);
+});
+
+test('web pagination preserves retained row renders while showing the appended row', async () => {
+  documentHeight = 800;
+  const retainedRows = [
+    postNode('post-retained-a', 'author-a'),
+    postNode('post-retained-b', 'author-b'),
+  ];
+  await start('home', retainedRows, true);
+  const initialBodyRenderCounts = new Map(postBodyRenderCounts);
+  assert.deepEqual([...initialBodyRenderCounts.keys()].sort(), [
+    'post-retained-a',
+    'post-retained-b',
+  ]);
+
+  const nextPage = requests.find((item) => item.name === 'PostListHomeNextPageQuery');
+  assert.ok(nextPage, 'web near-end pagination should request the next page');
+  assert.equal(nextPage.variables.cursor, 'post-retained-b');
+
+  await act(async () => {
+    nextPage.sink.next({
+      data: {
+        homeTimeline: feedConnection([postNode('post-appended', 'author-appended')], false),
+      },
+    });
+    nextPage.sink.complete();
+  });
+  await act(async () => mock.timers.tick(0));
+  await act(async () => flushAnimationFrames());
+
+  assert.deepEqual(visibleBodies(), [
+    'body-post-appended',
+    'body-post-retained-a',
+    'body-post-retained-b',
+  ]);
+  assert.equal(
+    postBodyRenderCounts.get('post-retained-a'),
+    initialBodyRenderCounts.get('post-retained-a'),
+  );
+  assert.equal(
+    postBodyRenderCounts.get('post-retained-b'),
+    initialBodyRenderCounts.get('post-retained-b'),
+  );
+  assert.equal(postBodyRenderCounts.get('post-appended'), 1);
 });
 
 test('hashtag pagination keeps loaded rows and retries the same cursor after a page failure', async () => {

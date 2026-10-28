@@ -30,7 +30,7 @@ function setup() {
     () => {
       presses += 1;
     },
-    { width: 100, height: 100 },
+    { current: { width: 100, height: 100 } },
   );
   return { responder, presses: () => presses };
 }
@@ -146,7 +146,7 @@ test('feedback clears immediately on movement or termination and stays cleared a
     () => {
       presses += 1;
     },
-    { width: 100, height: 100 },
+    { current: { width: 100, height: 100 } },
     (pressed) => states.push(pressed),
   );
   responder.onResponderGrant?.(touch());

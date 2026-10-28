@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -88,7 +88,7 @@ const PostListItemFragment = graphql`
   }
 `;
 
-export function PostListItem({
+export const PostListItem = memo(function PostListItem({
   pinned = false,
   post: postKey,
   presentation,
@@ -297,7 +297,7 @@ export function PostListItem({
       </PostDetailBackground>
     </PostListItemCard>,
   );
-}
+});
 
 function PostListItemCard({
   article = false,
