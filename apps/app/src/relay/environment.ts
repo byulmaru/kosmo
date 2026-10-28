@@ -1,11 +1,27 @@
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, RecordSource, ROOT_TYPE, Store } from 'relay-runtime';
 import { captureHandledMessage } from '@/observability/sentry';
 import { executeGraphQLRequest } from './network';
-import type { RelayFieldLogger } from 'relay-runtime';
+import type { MissingFieldHandler, RelayFieldLogger } from 'relay-runtime';
 
 const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
 const RELAY_MISSING_EXPECTED_DATA_MESSAGE = 'Relay missing expected data';
 type RelayFieldLoggerEvent = Parameters<RelayFieldLogger>[0];
+
+const postNodeMissingFieldHandler: MissingFieldHandler = {
+  kind: 'linked',
+  handle(field, parentRecord, args, store) {
+    const id = args.id;
+    if (
+      parentRecord?.getType() !== ROOT_TYPE ||
+      field.name !== 'node' ||
+      typeof id !== 'string' ||
+      store.get(id)?.getType() !== 'Post'
+    ) {
+      return undefined;
+    }
+    return id;
+  },
+};
 
 export function createRelayEnvironment(
   token: string | null,
@@ -37,6 +53,7 @@ export function createRelayEnvironment(
     network: Network.create((request, variables) =>
       executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
     ),
+    missingFieldHandlers: [postNodeMissingFieldHandler],
     relayFieldLogger,
     store: new Store(new RecordSource()),
   });
