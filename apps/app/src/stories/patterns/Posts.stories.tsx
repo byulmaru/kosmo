@@ -970,7 +970,11 @@ const composerUnavailableProfile = {
   defaultPostVisibility: null,
   private: null,
 } as unknown as typeof composerProfile;
-const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
+const alternateComposerProfile = profile({
+  id: 'profile-composer-alternate',
+  handle: 'alternate',
+  relativeHandle: '@alternate',
+});
 
 type PostComposerCreatePostInput = PostComposerCreatePostMutation$variables['input'];
 
@@ -7655,8 +7659,8 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const primary = within(canvas.getByTestId('primary-composer'));
-    const secondary = within(canvas.getByTestId('secondary-composer'));
+    const primary = within(canvas.getByRole('form', { name: '게시글 작성 (@kosmo)' }));
+    const secondary = within(canvas.getByRole('form', { name: '게시글 작성 (@alternate)' }));
     const { originalFetch, upload } = installImageUploadFetch(
       async () => new Response(null, { status: 200 }),
     );

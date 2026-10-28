@@ -57,3 +57,13 @@ history back 직후의 프로그램 `scrollTo`는 진행 중인 복원과 경쟁
 수정한 production export와 동일한 격리 DB·번들 Chromium 조건에서 Following 및 지연 이미지·미디어 시나리오 **2개 통과**. 실제 페이지에서 `활성 프로필` group과 `게시글 작성` form을 접근 가능한 이름으로 찾을 수 있고, 잘못된 일반 div label은 사라졌음을 확인했다. axe의 ARIA 수동 검토 항목은 **4→0곳**이다. Following에는 승인된 대비 위반 1건과 대비 수동 검토 2곳, 모바일에는 위반 0건과 대비 수동 검토 3곳이 남는다.
 
 Shell·Composer Storybook **109개**, Web Form의 이름 전달·IME 및 제출 단축키 단위 테스트 **1개**, 앱 TypeScript·변경 파일 ESLint·Prettier·production Web build를 통과했다. 원본은 로컬 비추적 `test-results/prod-1222/aria-followup/`에 보관한다. 실제 VoiceOver/NVDA 낭독과 Native runtime은 실행하지 않았으며 자동 검사 통과를 이를 대신하는 증거로 사용하지 않는다.
+
+## 중복 Form 이름 회귀 수정 — 2026-10-28
+
+CI의 `Composer Clipboard Failure And Scope Interaction`은 서로 다른 프로필의 작성 폼 두 개를 동시에 렌더한다. 이름을 실제 form으로 옮긴 뒤 두 landmark의 이름이 모두 `게시글 작성`이 되어 axe `landmark-unique` 검사가 실패했고, 동일 head에서 로컬 재현했다.
+
+Web form 이름에 현재 작성 프로필의 핸들을 포함해 구분한다. Native 이름은 유지한다. 서로 다른 ID에 같은 핸들을 사용하던 alternate fixture를 실제 서로 다른 프로필 조건에 맞추고, 기존 붙여넣기·업로드 재시도·입력 범위 검증이 각 form의 접근 가능한 이름으로 대상을 찾게 했다. 새 prop이나 의존성은 추가하지 않았다.
+
+Posts 전체·Composer tests·Composer ProfileSwitcher Storybook **165개 통과**. 최종 선택자로 실패 테스트 단독 재실행, 앱 TypeScript와 변경 파일 ESLint·Prettier도 통과했다. 앞선 Web runtime 결과의 `게시글 작성` form 이름은 이 변경 이후 `게시글 작성 (@handle)`이 된다. 이 후속 수정에서는 production Web QA와 실제 스크린리더·Native runtime을 재실행하지 않았다.
+
+이전 head의 Web E2E shard 2는 테스트 시작 전 `config.webServer` 준비가 120초를 초과해 실패했다. 로그만으로 어느 서버가 지연됐는지는 확정할 수 없으며 폼 이름 회귀와 구분한다.
