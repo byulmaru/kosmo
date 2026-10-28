@@ -39,6 +39,7 @@ mockModule('react-native', {
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
 });
+mockModule('expo-router', { useIsFocused: () => true });
 mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   usePaginationScrollRegistration: (props: typeof scrollProps) => {
     scrollProps = props;

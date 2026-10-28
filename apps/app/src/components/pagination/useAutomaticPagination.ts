@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import {
@@ -42,6 +43,7 @@ export function useAutomaticPagination({
   pageSize,
   webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
+  const isFocused = useIsFocused();
   const [loadError, setLoadError] = useState(false);
   const endRef = useRef<View>(null);
   const [containerPageRevision, setContainerPageRevision] = useState(0);
@@ -61,6 +63,7 @@ export function useAutomaticPagination({
     nativePagination,
     pageSize,
     webScrollTarget,
+    isFocused,
   });
   latestOptionsRef.current = {
     hasNext,
@@ -69,6 +72,7 @@ export function useAutomaticPagination({
     nativePagination,
     pageSize,
     webScrollTarget,
+    isFocused,
   };
 
   const loadNextPage = useCallback(() => {
@@ -96,7 +100,9 @@ export function useAutomaticPagination({
           if (Platform.OS === 'web' && latestOptionsRef.current.webScrollTarget === 'document') {
             window.requestAnimationFrame(() => {
               requestInFlightRef.current = false;
-              webNearEndCheckRef.current?.();
+              if (latestOptionsRef.current.isFocused) {
+                webNearEndCheckRef.current?.();
+              }
             });
           } else if (latestOptionsRef.current.nativePagination === 'metrics') {
             setContainerPageRevision((revision) => revision + 1);
@@ -123,6 +129,9 @@ export function useAutomaticPagination({
 
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
+      if (Platform.OS === 'web' && !latestOptionsRef.current.isFocused) {
+        return;
+      }
       if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
         loadNextPage();
       }
@@ -138,6 +147,7 @@ export function useAutomaticPagination({
   useEffect(() => {
     if (
       (Platform.OS === 'web' && webScrollTarget === 'document') ||
+      (Platform.OS === 'web' && !isFocused) ||
       nativePagination === 'endReached' ||
       containerPageRevision === 0 ||
       isLoadingNext ||
@@ -147,18 +157,26 @@ export function useAutomaticPagination({
     }
     handledContainerPageRevisionRef.current = containerPageRevision;
     resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
-  }, [containerPageRevision, isLoadingNext, maybeLoadNextPage, nativePagination, webScrollTarget]);
+  }, [
+    containerPageRevision,
+    isFocused,
+    isLoadingNext,
+    maybeLoadNextPage,
+    nativePagination,
+    webScrollTarget,
+  ]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || webScrollTarget !== 'document') {
+    if (Platform.OS !== 'web' || webScrollTarget !== 'document' || !isFocused) {
       return;
     }
-    const check = () =>
+    const check = () => {
       maybeLoadNextPage({
         contentLength: document.documentElement.scrollHeight,
         offset: window.scrollY,
         viewportLength: window.innerHeight,
       });
+    };
     webNearEndCheckRef.current = check;
     const frame = window.requestAnimationFrame(check);
     window.addEventListener('scroll', check, { passive: true });
@@ -171,11 +189,12 @@ export function useAutomaticPagination({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [itemCount, maybeLoadNextPage, webScrollTarget]);
+  }, [isFocused, itemCount, maybeLoadNextPage, webScrollTarget]);
 
   useEffect(() => {
     if (
       Platform.OS !== 'web' ||
+      !isFocused ||
       !endRef.current ||
       !hasNext ||
       isLoadingNext ||
@@ -186,7 +205,11 @@ export function useAutomaticPagination({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && !pageErrorRef.current) {
+        if (
+          latestOptionsRef.current.isFocused &&
+          entries[0]?.isIntersecting &&
+          !pageErrorRef.current
+        ) {
           loadNextPage();
         }
       },
@@ -194,7 +217,7 @@ export function useAutomaticPagination({
     );
     observer.observe(endRef.current as unknown as Element);
     return () => observer.disconnect();
-  }, [hasNext, isLoadingNext, itemCount, loadError, loadNextPage]);
+  }, [hasNext, isFocused, isLoadingNext, itemCount, loadError, loadNextPage]);
 
   return { endRef, loadError, loadNextPage, nativeScrollProps, onEndReached, resetError };
 }
