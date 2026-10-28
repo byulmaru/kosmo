@@ -5202,7 +5202,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(allPosts.data?.profile?.posts), includedProfileIds);
   });
 
-  test('filters Home candidates by current-content mentions before pagination', async () => {
+  test('filters Reply Home candidates by current-content mentions before pagination', async () => {
     const auth = await createAuthenticatedSession();
     const author = await createProfile({
       handle: 'home-mention-author',
@@ -5255,30 +5255,47 @@ describe('GraphQL remote profile boundary', () => {
     const createMentionedPost = async (
       profileId: string,
       targets: readonly { handle: string; id: string }[],
-      id?: string,
+      { id, replyParentId }: { id?: string; replyParentId?: string } = {},
     ) => {
-      const post = await createContentfulPost({ id, profileId });
+      const post = await createContentfulPost({ id, profileId, replyParentId });
       await addMentionRevision(post.id, targets);
       return post;
     };
 
     const noMention = await createContentfulPost({ profileId: author.id });
-    const viewerMention = await createMentionedPost(author.id, [auth.profile]);
-    const followedMentionPost = await createMentionedPost(author.id, [followedMention]);
-    const mixedMention = await createMentionedPost(author.id, [unrelatedMention, followedMention]);
-    const historicalMention = await createContentfulPost({ profileId: author.id });
+    const viewerParent = await createContentfulPost({ profileId: auth.profile.id });
+    const standaloneUnrelatedMention = await createMentionedPost(author.id, [unrelatedMention]);
+    const viewerMention = await createMentionedPost(author.id, [auth.profile], {
+      replyParentId: viewerParent.id,
+    });
+    const followedMentionPost = await createMentionedPost(author.id, [followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const mixedMention = await createMentionedPost(author.id, [unrelatedMention, followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const historicalMention = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
     await addMentionRevision(historicalMention.id, [auth.profile]);
     await addMentionRevision(historicalMention.id, [unrelatedMention]);
-    const ownUnrelatedMention = await createMentionedPost(auth.profile.id, [unrelatedMention]);
-    const pageBoundaryExcluded = await createMentionedPost(
-      author.id,
-      [unrelatedMention],
-      'ffffffff-ffff-7fff-bfff-ffffffffffff',
-    );
+    const noMentionReply = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
+    const ownUnrelatedReply = await createMentionedPost(auth.profile.id, [unrelatedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const pageBoundaryExcluded = await createMentionedPost(author.id, [unrelatedMention], {
+      id: 'ffffffff-ffff-7fff-bfff-ffffffffffff',
+      replyParentId: viewerParent.id,
+    });
     const quote = await createContentfulPost({
       profileId: author.id,
       repostSourceId: pageBoundaryExcluded.id,
     });
+    await addMentionRevision(quote.id, [unrelatedMention]);
     const contentlessRepost = await db
       .insert(Posts)
       .values({
@@ -5322,10 +5339,13 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(allPosts.data?.homeTimeline),
       expectedHomeIds([
         noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
         viewerMention,
         followedMentionPost,
         mixedMention,
-        ownUnrelatedMention,
+        noMentionReply,
+        ownUnrelatedReply,
         quote,
         contentlessRepost,
         firstEligible,
@@ -5351,8 +5371,11 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(afterUnfollow.data?.homeTimeline),
       expectedHomeIds([
         noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
         viewerMention,
-        ownUnrelatedMention,
+        noMentionReply,
+        ownUnrelatedReply,
         quote,
         contentlessRepost,
         firstEligible,
