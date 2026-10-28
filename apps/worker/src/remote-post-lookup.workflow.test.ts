@@ -12,7 +12,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
+import { ActivityFailure, ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { eq } from 'drizzle-orm';
@@ -23,11 +23,21 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
 import type {
+  RemotePostCreateWorkflowArgs,
   RemotePostLookupInput,
+  RemotePostLookupResult,
   RemoteProfileLookupInput,
 } from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
-import type { lookupRemotePostActivity as LookupRemotePostActivity } from './activities/remote-post-lookup';
+import type { createNotificationActivity as CreateNotificationActivity } from './activities/notification';
+import type {
+  createPostActivity as CreatePostActivity,
+  generatePostIdActivity as GeneratePostIdActivity,
+} from './activities/post-create';
+import type {
+  lookupRemotePostActivity as LookupRemotePostActivity,
+  prepareRemotePostActivity as PrepareRemotePostActivity,
+} from './activities/remote-post-lookup';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -43,6 +53,7 @@ process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const {
   REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+  remotePostCreateWorkflow,
   remotePostLookupWorkflow,
   remoteProfileLookupWorkflow,
 } = await import('@kosmo/core/temporal/workflows');
@@ -57,6 +68,10 @@ let Profiles: typeof CoreDb.Profiles;
 let federation: typeof Fedify.federation;
 let temporalClient: typeof TemporalClient;
 let lookupRemotePostActivity: typeof LookupRemotePostActivity;
+let prepareRemotePostActivity: typeof PrepareRemotePostActivity;
+let createPostActivity: typeof CreatePostActivity;
+let generatePostIdActivity: typeof GeneratePostIdActivity;
+let createNotificationActivity: typeof CreateNotificationActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 
 before(async () => {
@@ -65,12 +80,63 @@ before(async () => {
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ federation } = await import('@kosmo/fedify'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
-  ({ lookupRemotePostActivity } = await import('./activities/remote-post-lookup'));
+  ({ createPostActivity, generatePostIdActivity } = await import('./activities/post-create'));
+  ({ createNotificationActivity } = await import('./activities/notification'));
+  ({ lookupRemotePostActivity, prepareRemotePostActivity } =
+    await import('./activities/remote-post-lookup'));
 });
 
 after(async () => {
   await pg.end();
 });
+
+test(
+  'Oversized prepare results fail the lookup without retrying the Activity',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: temporalTestExecutable },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-payload-${process.pid}`;
+    let prepareAttempts = 0;
+    const worker = await Worker.create({
+      activities: {
+        lookupRemotePostActivity: async () => {
+          throw new Error('The legacy lookup path must not run');
+        },
+        prepareRemotePostActivity: async () => {
+          prepareAttempts += 1;
+          throw ApplicationFailure.retryable(
+            'Activity result exceeds the payload limit',
+            'PayloadsTooLarge',
+          );
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await assert.rejects(
+        environment.client.workflow.execute(remotePostLookupWorkflow.workflow, {
+          args: [{ objectUri: 'https://objects.example/notes/oversized' }],
+          taskQueue,
+          workflowId: `${taskQueue}:oversized`,
+        }),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ActivityFailure &&
+          error.cause.retryState === 'NON_RETRYABLE_FAILURE' &&
+          error.cause.cause instanceof ApplicationFailure &&
+          error.cause.cause.type === 'PayloadsTooLarge',
+      );
+      assert.equal(prepareAttempts, 1);
+    });
+  },
+);
 
 test(
   'Remote Post Workflow validates manual input and bounds fetched Note materialization',
@@ -177,11 +243,6 @@ test(
         return undefined;
       },
     );
-    const postCreateEffectsStart = t.mock.method(
-      temporalClient.workflow,
-      'start',
-      async () => undefined as never,
-    );
 
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: temporalTestExecutable },
@@ -189,11 +250,40 @@ test(
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
+    let remoteCreateArgs: RemotePostCreateWorkflowArgs | undefined;
+    const effectStarted = Promise.withResolvers<void>();
+    const effectReleased = Promise.withResolvers<void>();
+    t.after(() => effectReleased.resolve());
+    let blockFirstEffect = true;
+    let effectActivityCalls = 0;
     const worker = await Worker.create({
       activities: {
         lookupRemotePostActivity: async (input: Parameters<typeof lookupRemotePostActivity>[0]) => {
           activityInputs.push(input);
           return lookupRemotePostActivity(input);
+        },
+        prepareRemotePostActivity: async (
+          input: Parameters<typeof prepareRemotePostActivity>[0],
+        ) => {
+          activityInputs.push(input);
+          const prepared = await prepareRemotePostActivity(input);
+          if (prepared.status === 'prepared') {
+            remoteCreateArgs = { input: prepared.input, requestId: prepared.requestId };
+          }
+          return prepared;
+        },
+        createPostActivity,
+        generatePostIdActivity,
+        createNotificationActivity: async (
+          input: Parameters<typeof createNotificationActivity>[0],
+        ) => {
+          effectActivityCalls += 1;
+          if (blockFirstEffect) {
+            blockFirstEffect = false;
+            effectStarted.resolve();
+            await effectReleased.promise;
+          }
+          return createNotificationActivity(input);
         },
       },
       connection: environment.nativeConnection,
@@ -247,14 +337,29 @@ test(
         advertisingActorUri: authorUri.href,
       } satisfies RemotePostLookupInput;
       const expectedBytes = new TextEncoder().encode(JSON.stringify(noteDocument)).byteLength;
-      const created = await run(input, 'created');
+      const created = (await run(input, 'created')) as Extract<
+        RemotePostLookupResult,
+        { status: 'created' }
+      >;
       assert.deepEqual(created, {
         authorProfileId: author.id,
         documentBytes: expectedBytes,
-        postId: (created as { postId: string }).postId,
+        postId: created.postId,
         status: 'created',
       });
-      assert.equal(postCreateEffectsStart.mock.callCount(), 1);
+      assert.ok(remoteCreateArgs);
+      assert.deepEqual(
+        await environment.client.workflow
+          .getHandle(remotePostCreateWorkflow.workflowIdFromArgs(remoteCreateArgs))
+          .result(),
+        { authorProfileId: author.id, postId: created.postId, status: 'created' },
+      );
+      await effectStarted.promise;
+      assert.equal(await db.$count(Posts), 1);
+      effectReleased.resolve();
+      await environment.client.workflow.getHandle(`post-create-effects:${created.postId}`).result();
+      const effectActivityCallsAfterCreate = effectActivityCalls;
+      assert.ok(effectActivityCallsAfterCreate > 0);
       assert.equal(activityInputs[0]?.maxDocumentBytes, REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES);
       assert.deepEqual(signerLoaderIdentifiers, [signer.id]);
       assert.deepEqual(authorLookupInputs, [
@@ -265,11 +370,11 @@ test(
       assert.deepEqual(duplicate, {
         authorProfileId: author.id,
         documentBytes: expectedBytes,
-        postId: (created as { postId: string }).postId,
+        postId: created.postId,
         status: 'duplicate',
       });
       assert.equal(await db.$count(Posts), 1);
-      assert.equal(postCreateEffectsStart.mock.callCount(), 1);
+      assert.equal(effectActivityCalls, effectActivityCallsAfterCreate);
 
       const loadsBeforeInvalidSigner = loaderCalls.length;
       await assert.rejects(
@@ -428,6 +533,9 @@ test(
         { objectUri: directObjectUri.href, signingProfileId: signer.id },
         'signed-direct',
       )) as { authorProfileId: string; documentBytes: number; postId: string; status: string };
+      await environment.client.workflow
+        .getHandle(`post-create-effects:${directResult.postId}`)
+        .result();
       assert.equal(directResult.status, 'created');
       assert.equal(directResult.authorProfileId, author.id);
       assert.equal(directResult.documentBytes, directDocumentBytes);
@@ -440,7 +548,6 @@ test(
       assert.deepEqual(await db.select({ profileId: PostMentions.profileId }).from(PostMentions), [
         { profileId: recipient.id },
       ]);
-      assert.equal(postCreateEffectsStart.mock.callCount(), 2);
       assert.deepEqual(authorLookupInputs.at(-1), {
         actorUri: authorUri.href,
         contextOrigin: publicOrigin,
@@ -474,7 +581,6 @@ test(
       assert.deepEqual(await db.select({ profileId: PostMentions.profileId }).from(PostMentions), [
         { profileId: recipient.id },
       ]);
-      assert.equal(postCreateEffectsStart.mock.callCount(), 2);
       assert.deepEqual(authorLookupInputs.at(-1), {
         actorUri: authorUri.href,
         contextOrigin: publicOrigin,
@@ -510,7 +616,6 @@ test(
       ).byteLength;
       const postCountBeforePortableMention = await db.$count(Posts);
       const postMentionCountBeforePortableMention = await db.$count(PostMentions);
-      const postCreateEffectsBeforePortableMention = postCreateEffectsStart.mock.callCount();
       assert.deepEqual(
         await run(
           { objectUri: portableMentionObjectUri.href, signingProfileId: signer.id },
@@ -524,7 +629,6 @@ test(
       );
       assert.equal(await db.$count(Posts), postCountBeforePortableMention);
       assert.equal(await db.$count(PostMentions), postMentionCountBeforePortableMention);
-      assert.equal(postCreateEffectsStart.mock.callCount(), postCreateEffectsBeforePortableMention);
 
       const directActivityInput = {
         objectUri: 'https://objects.example/notes/network-error',

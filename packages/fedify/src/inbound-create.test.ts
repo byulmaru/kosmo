@@ -37,10 +37,12 @@ import {
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
+  remotePostCreateWorkflow,
   remoteProfileLookupWorkflow,
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne, sql } from 'drizzle-orm';
+import { uniqueHref } from './activitypub-uri';
 import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -65,6 +67,7 @@ const createObservation = { activityType: 'Create', handler: 'create' } as const
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
+const nativeWorkflowExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
 
 type RemoteProfileRefreshOptions = {
   args?: readonly { actorUri: string }[];
@@ -126,6 +129,10 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
         return execution;
       }
 
+      if (workflow === remotePostCreateWorkflow.workflow) {
+        return nativeWorkflowExecute(workflow as never, options as never);
+      }
+
       const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
       assert.ok(typeof actorUri === 'string');
       assertRemoteProfileRefreshCall(workflow, options, actorUri);
@@ -156,11 +163,41 @@ let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let createMentionNotification: typeof CoreServices.createMentionNotification;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
-let handleInboundCreate: typeof handleInboundCreateType;
+let runInboundCreate: typeof handleInboundCreateType;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
 let ensureDrizzleLocalProfileActor: typeof ensureDrizzleLocalProfileActorType;
 let localInstanceId: string;
+
+const handleInboundCreate = async (
+  context: Parameters<typeof handleInboundCreateType>[0],
+  create: Parameters<typeof handleInboundCreateType>[1],
+  receivedAt?: Parameters<typeof handleInboundCreateType>[2],
+): Promise<void> => {
+  await runInboundCreate(context, create, receivedAt);
+
+  const objectUri = uniqueHref(create.objectIds);
+  if (objectUri === undefined) {
+    return;
+  }
+  const post = await db
+    .select({ postId: ActivityPubPosts.postId })
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, objectUri))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (post === undefined) {
+    return;
+  }
+
+  try {
+    await temporalClient.workflow.getHandle(`post-create-effects:${post.postId}`).result();
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'WorkflowNotFoundError')) {
+      throw error;
+    }
+  }
+};
 
 describe('inbound Create dispatch', () => {
   before(async () => {
@@ -190,7 +227,7 @@ describe('inbound Create dispatch', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createMentionNotification, createPost } = await import('@kosmo/core/services'));
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
-    ({ handleInboundCreate } = await import('./inbound-create'));
+    ({ handleInboundCreate: runInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
     ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ ensureDrizzleLocalProfileActor } = await import('./local-actor-store'));
@@ -3461,7 +3498,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when effects Workflow start fails', async (t) => {
+  test('materializes an inbound Reply through the remote Post Workflow', async () => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -3482,26 +3519,16 @@ describe('inbound Create dispatch', () => {
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    const errorLog = mock.method(console, 'error', () => undefined);
-    t.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-
-    try {
-      await handleInboundCreate(
-        createContext(),
-        createRemoteCreate({
-          objectUri: replyUri,
-          replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
-        }),
-        receivedAt,
-      );
-    } finally {
-      errorLog.mock.restore();
-    }
+    await handleInboundCreate(
+      createContext(),
+      createRemoteCreate({
+        objectUri: replyUri,
+        replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
+      }),
+      receivedAt,
+    );
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
-    assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {

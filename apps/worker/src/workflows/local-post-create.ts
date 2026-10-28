@@ -5,14 +5,14 @@ import {
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
-import { postCreateEffectsWorkflow } from './create';
-import type { WorkflowDefinition } from '@kosmo/core/temporal/client';
+import { postCreateEffectsDefinition } from './create';
 import type {
   LocalPostCreateInput,
   LocalPostCreateResult,
@@ -45,13 +45,12 @@ const postCreateInputSchema = z.strictObject({
   visibility: z.enum(PostVisibility),
 });
 
-const { createLocalPostActivity, generateLocalPostIdActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
-
-const postCreateEffectsDefinition: WorkflowDefinition<typeof postCreateEffectsWorkflow> = {
-  workflow: postCreateEffectsWorkflow,
-  workflowIdFromArgs: ({ postId }) => `post-create-effects:${postId}`,
-};
+const {
+  createLocalPostActivity,
+  createPostActivity,
+  generateLocalPostIdActivity,
+  generatePostIdActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const parsePostCreateInput = (value: unknown): LocalPostCreateInput => {
   const result = postCreateInputSchema.safeParse(value);
@@ -72,6 +71,8 @@ export async function localPostCreateWorkflow(input: LocalPostCreateWorkflowArgs
       'VALIDATION',
     );
   }
+
+  const useCommonPostCreateActivity = patched('local-post-create-common-activity-v1');
 
   let updateInputJson: string | undefined;
   let createPromise: Promise<LocalPostCreateResult> | undefined;
@@ -94,8 +95,12 @@ export async function localPostCreateWorkflow(input: LocalPostCreateWorkflowArgs
       createPromise = (async () => {
         const parsedInput = parsePostCreateInput(value);
         updateInputJson = JSON.stringify(parsedInput);
-        const postId = await generateLocalPostIdActivity();
-        const execution = await createLocalPostActivity(parsedInput, postId);
+        const postId = useCommonPostCreateActivity
+          ? await generatePostIdActivity()
+          : await generateLocalPostIdActivity();
+        const execution = useCommonPostCreateActivity
+          ? await createPostActivity({ input: parsedInput, postId })
+          : await createLocalPostActivity(parsedInput, postId);
         if (!execution.ok) {
           throw ApplicationFailure.nonRetryable(
             execution.error.message,
@@ -103,7 +108,7 @@ export async function localPostCreateWorkflow(input: LocalPostCreateWorkflowArgs
             ...(execution.error.field === undefined ? [] : [execution.error.field]),
           );
         }
-        return execution.result;
+        return { postId: execution.result.postId };
       })();
       return createPromise;
     },

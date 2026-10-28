@@ -22,6 +22,7 @@ export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
+export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
@@ -30,7 +31,10 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
-export { lookupRemotePostActivity } from './activities/remote-post-lookup';
+export {
+  lookupRemotePostActivity,
+  prepareRemotePostActivity,
+} from './activities/remote-post-lookup';
 export {
   collectRemoteFeaturedActivity,
   collectRemoteFeaturedItemsActivity,

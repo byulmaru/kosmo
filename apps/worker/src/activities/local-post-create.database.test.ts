@@ -5,6 +5,7 @@ import { after, afterEach, test } from 'node:test';
 import {
   AccountProfiles,
   Accounts,
+  ActivityPubPosts,
   db,
   firstOrThrow,
   Instances,
@@ -12,6 +13,7 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlocks,
   Profiles,
 } from '@kosmo/core/db';
 import {
@@ -34,10 +36,13 @@ import { Worker } from '@temporalio/worker';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { temporalTestExecutable } from '../temporal-test-executable.js';
 import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
+import { createPostActivity, generatePostIdActivity } from './post-create';
+import type { LocalPostCreateResult } from '@kosmo/core/temporal/local-post-create';
 import type {
-  LocalPostCreateInput,
-  LocalPostCreateResult,
-} from '@kosmo/core/temporal/local-post-create';
+  ActivityPubPostCreateInput,
+  PostCreateActivityInput,
+  PostCreateActivityResult,
+} from '@kosmo/core/temporal/post-create';
 
 const profileIds = new Set<string>();
 const accountIds = new Set<string>();
@@ -83,6 +88,34 @@ const createAuthor = async (name: string) => {
     role: AccountProfileRole.MEMBER,
   });
   return { account, profile };
+};
+
+const createRemoteAuthor = async (name: string) => {
+  const suffix = `${name}-${crypto.randomUUID()}`;
+  const instance = await db
+    .insert(Instances)
+    .values({
+      domain: `${suffix}.example`,
+      kind: InstanceKind.REMOTE,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  instanceIds.add(instance.id);
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: suffix,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: suffix,
+      instanceId: instance.id,
+      normalizedHandle: suffix,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  profileIds.add(profile.id);
+  return { instance, profile };
 };
 
 const createParentPost = async (profileId: string, visibility: PostVisibility) => {
@@ -141,6 +174,23 @@ const localInput = (
   ...overrides,
 });
 
+const remoteInput = (
+  profileId: string,
+  overrides: Partial<ActivityPubPostCreateInput> = {},
+): ActivityPubPostCreateInput => ({
+  document: postContentDocumentFromText('Remote post'),
+  hashtagNames: [],
+  media: [],
+  mentionProfileIds: [],
+  objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+  origin: 'ACTIVITYPUB',
+  profileId,
+  publishedAt: '2026-10-27T23:59:00Z',
+  receivedAt: '2026-10-28T00:00:00Z',
+  visibility: PostVisibility.PUBLIC,
+  ...overrides,
+});
+
 afterEach(async () => {
   if (postIds.size > 0) {
     const ids = [...postIds];
@@ -162,6 +212,15 @@ afterEach(async () => {
         .where(inArray(PostContents.id, [...contentIds]));
     }
     await db.delete(Posts).where(inArray(Posts.id, ids));
+  }
+  if (profileIds.size > 0) {
+    const media = await db
+      .select({ id: Media.id })
+      .from(Media)
+      .where(inArray(Media.profileId, [...profileIds]));
+    for (const item of media) {
+      mediaIds.add(item.id);
+    }
   }
   if (contentIds.size > 0) {
     await db.delete(PostContents).where(inArray(PostContents.id, [...contentIds]));
@@ -213,12 +272,14 @@ test(
       worker = await Worker.create({
         activities: {
           ...activities,
-          createLocalPostActivity: async (input: LocalPostCreateInput, postId: string) => {
-            attemptPostIds.push(postId);
-            const result = await activities.createLocalPostActivity(input, postId);
+          createPostActivity: async (
+            input: PostCreateActivityInput,
+          ): Promise<PostCreateActivityResult> => {
+            attemptPostIds.push(input.postId);
+            const result = await activities.createPostActivity(input);
             if (result.ok && attemptPostIds.length === 1) {
-              firstPostId = postId;
-              postIds.add(postId);
+              firstPostId = input.postId;
+              postIds.add(input.postId);
               throw ApplicationFailure.retryable('Activity completion response was lost');
             }
             return result;
@@ -503,5 +564,270 @@ test('Local Post Activity rejects a claimed ID owned by another account or profi
       .where(eq(Posts.id, postId))
       .then((rows) => rows.length),
     1,
+  );
+});
+
+test('Post Activity retries a committed ActivityPub Post before revalidating parent and keeps timestamps and media', async () => {
+  const author = await createRemoteAuthor('remote-retry');
+  const parentAuthor = await createAuthor('remote-retry-parent');
+  const parentPostId = await createParentPost(parentAuthor.profile.id, PostVisibility.PUBLIC);
+  const postId = await generatePostIdActivity();
+  postIds.add(postId);
+  const input = remoteInput(author.profile.id, {
+    media: [
+      {
+        altText: 'Remote cover',
+        mediaType: 'image/webp',
+        url: `https://remote.example/media/${crypto.randomUUID()}.webp`,
+      },
+    ],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    replyParentId: parentPostId,
+  });
+
+  const committed = await createPostActivity({ input, postId });
+  assert.deepEqual(committed, {
+    ok: true,
+    result: { authorProfileId: author.profile.id, postId, status: 'created' },
+  });
+  const storedPost = await db
+    .select({ createdAt: Posts.createdAt, replyParentId: Posts.replyParentId })
+    .from(Posts)
+    .where(eq(Posts.id, postId))
+    .then(firstOrThrow);
+  const storedContent = await db
+    .select({ createdAt: PostContents.createdAt, document: PostContents.document })
+    .from(PostContents)
+    .where(eq(PostContents.postId, postId))
+    .then(firstOrThrow);
+  const media = await db.select().from(Media).where(eq(Media.profileId, author.profile.id));
+  for (const item of media) {
+    mediaIds.add(item.id);
+  }
+  assert.equal(
+    storedPost.createdAt.toString(),
+    Temporal.Instant.from(input.publishedAt!).toString(),
+  );
+  assert.equal(storedPost.replyParentId, parentPostId);
+  assert.equal(
+    storedContent.createdAt.toString(),
+    Temporal.Instant.from(input.receivedAt).toString(),
+  );
+  assert.equal(media.length, 1);
+  assert.equal(media[0]?.altText, 'Remote cover');
+  assert.ok(storedContent.document.body.content.some((node) => node.type === 'media'));
+  assert.equal(
+    await db
+      .select()
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.uri, input.objectUri))
+      .then((rows) => rows.length),
+    1,
+  );
+
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, parentPostId));
+  assert.deepEqual(await createPostActivity({ input, postId }), committed);
+  assert.equal(
+    await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, postId))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(eq(Media.profileId, author.profile.id))
+      .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('Post Activity rolls back a fresh URI duplicate and returns the persisted owner and Post ID', async () => {
+  const author = await createRemoteAuthor('remote-uri-owner');
+  const otherAuthor = await createRemoteAuthor('remote-uri-duplicate');
+  const postId = await generatePostIdActivity();
+  const duplicatePostId = await generatePostIdActivity();
+  postIds.add(postId);
+  postIds.add(duplicatePostId);
+  const uri = `https://remote.example/notes/${crypto.randomUUID()}`;
+  const media = {
+    altText: 'Original media',
+    mediaType: 'image/png',
+    url: `https://remote.example/media/${crypto.randomUUID()}.png`,
+  };
+  const input = remoteInput(author.profile.id, { media: [media], objectUri: uri });
+
+  assert.deepEqual(await createPostActivity({ input, postId }), {
+    ok: true,
+    result: { authorProfileId: author.profile.id, postId, status: 'created' },
+  });
+  const identityConflict = await createPostActivity({
+    input: remoteInput(otherAuthor.profile.id, { objectUri: uri }),
+    postId,
+  });
+  assert.equal(identityConflict.ok, false);
+  if (identityConflict.ok) {
+    assert.fail('Expected a reused Post ID with a different ActivityPub identity to conflict');
+  }
+  assert.equal(identityConflict.error.code, 'CONFLICT');
+  const firstMedia = await db.select().from(Media).where(eq(Media.profileId, author.profile.id));
+  for (const item of firstMedia) {
+    mediaIds.add(item.id);
+  }
+
+  const duplicateInput = remoteInput(otherAuthor.profile.id, {
+    document: postContentDocumentFromText('Changed duplicate content'),
+    media: [media],
+    objectUri: uri,
+    visibility: PostVisibility.UNLISTED,
+  });
+  assert.deepEqual(await createPostActivity({ input: duplicateInput, postId: duplicatePostId }), {
+    ok: true,
+    result: { authorProfileId: author.profile.id, postId, status: 'duplicate' },
+  });
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, duplicatePostId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, duplicatePostId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(eq(Media.profileId, otherAuthor.profile.id))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(eq(Media.profileId, author.profile.id))
+      .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('Post Activity falls back for an invalid remote Reply Parent but rejects a blocked parent', async () => {
+  const author = await createRemoteAuthor('remote-reply');
+  const parentAuthor = await createAuthor('remote-reply-parent');
+  const invalidParentId = await createParentPost(parentAuthor.profile.id, PostVisibility.PUBLIC);
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, invalidParentId));
+  const postId = await generatePostIdActivity();
+  postIds.add(postId);
+  const input = remoteInput(author.profile.id, {
+    media: [
+      {
+        altText: null,
+        mediaType: 'image/png',
+        url: `https://remote.example/media/${crypto.randomUUID()}.png`,
+      },
+    ],
+    replyParentId: invalidParentId,
+  });
+
+  const fallback = await createPostActivity({ input, postId });
+  assert.deepEqual(fallback, {
+    ok: true,
+    result: {
+      authorProfileId: author.profile.id,
+      postId,
+      replyParentFallback: true,
+      status: 'created',
+    },
+  });
+  assert.equal(
+    await db
+      .select({ replyParentId: Posts.replyParentId })
+      .from(Posts)
+      .where(eq(Posts.id, postId))
+      .then(firstOrThrow)
+      .then(({ replyParentId }) => replyParentId),
+    null,
+  );
+  assert.deepEqual(await createPostActivity({ input, postId }), fallback);
+  const media = await db.select().from(Media).where(eq(Media.profileId, author.profile.id));
+  for (const item of media) {
+    mediaIds.add(item.id);
+  }
+  assert.equal(media.length, 1);
+
+  const blockedAuthor = await createRemoteAuthor('remote-blocked-reply');
+  const blockedParentAuthor = await createAuthor('remote-blocked-parent');
+  const blockedParentId = await createParentPost(
+    blockedParentAuthor.profile.id,
+    PostVisibility.PUBLIC,
+  );
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, blockedParentId));
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: blockedAuthor.profile.id,
+    targetProfileId: blockedParentAuthor.profile.id,
+  });
+  const blockedPostId = await generatePostIdActivity();
+  postIds.add(blockedPostId);
+  const blocked = await createPostActivity({
+    input: remoteInput(blockedAuthor.profile.id, { replyParentId: blockedParentId }),
+    postId: blockedPostId,
+  });
+  assert.equal(blocked.ok, false);
+  if (blocked.ok) {
+    assert.fail('Expected a blocked remote Reply to be rejected');
+  }
+  assert.equal(blocked.error.kind, 'reply_profile_blocked');
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, blockedPostId))
+      .then((rows) => rows.length),
+    0,
+  );
+
+  const rejectedPostId = await generatePostIdActivity();
+  postIds.add(rejectedPostId);
+  const mediaRejected = await createPostActivity({
+    input: remoteInput(blockedAuthor.profile.id, {
+      media: Array.from({ length: 5 }, () => ({
+        altText: null,
+        mediaType: 'image/png',
+        url: `https://remote.example/media/${crypto.randomUUID()}.png`,
+      })),
+    }),
+    postId: rejectedPostId,
+  });
+  assert.equal(mediaRejected.ok, false);
+  if (mediaRejected.ok) {
+    assert.fail('Expected too many Remote Media candidates to be rejected');
+  }
+  assert.equal(mediaRejected.error.kind, 'note_media_validation_rejected');
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, rejectedPostId))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(eq(Media.profileId, blockedAuthor.profile.id))
+      .then((rows) => rows.length),
+    0,
   );
 });

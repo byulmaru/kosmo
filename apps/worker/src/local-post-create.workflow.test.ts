@@ -20,8 +20,8 @@ import type {
   LocalPostCreateInput,
   LocalPostCreateResult,
 } from '@kosmo/core/temporal/local-post-create';
+import type { PostCreateActivityResult } from '@kosmo/core/temporal/post-create';
 import type * as activities from './activities';
-import type { LocalPostCreateExecution } from './activities/local-post-create';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const postId = '00000000-0000-4000-8000-000000000003';
@@ -57,17 +57,24 @@ const startUpdate = (
 const workerActivities = (
   sendLocalPostCreateActivity: typeof activities.sendLocalPostCreateActivity,
   onCreate: () => void,
-  createResult: LocalPostCreateExecution = { ok: true, result: { postId } },
+  createResult?: PostCreateActivityResult,
 ) => ({
-  createLocalPostActivity: async () => {
+  createPostActivity: async ({
+    input: postInput,
+  }: Parameters<typeof activities.createPostActivity>[0]): Promise<PostCreateActivityResult> => {
     onCreate();
-    return createResult;
+    return (
+      createResult ?? {
+        ok: true,
+        result: { authorProfileId: postInput.profileId, postId, status: 'created' },
+      }
+    );
   },
   createMentionNotificationActivity: async () => {},
   createNotificationActivity: async () => {},
   createQuoteNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => {},
-  generateLocalPostIdActivity: async () => postId,
+  generatePostIdActivity: async () => postId,
   sendLocalPostCreateActivity,
 });
 

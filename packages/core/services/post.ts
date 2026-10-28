@@ -67,7 +67,7 @@ export type LocalPostInput = {
   visibility: PostVisibility;
 };
 
-type ActivityPubPostInput = {
+export type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   hashtagNames?: readonly string[];
   media?: readonly RemoteMediaCandidate[];
@@ -81,11 +81,13 @@ type ActivityPubPostInput = {
   visibility: PostVisibility;
 };
 
-type RemoteMediaCandidate = {
+export type RemoteMediaCandidate = {
   altText: string | null;
   mediaType: string | null;
   url: string;
 };
+
+export type PostCreateInput = LocalPostInput | ActivityPubPostInput;
 
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
@@ -203,7 +205,7 @@ const resolveRemotePostHashtags = async (
   };
 };
 
-const isActivityPubPostUriConflict = (error: unknown): boolean => {
+export const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
     return false;
   }
@@ -685,15 +687,11 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
-const createPostInTransaction = async (
+export const createPostInTransaction = async (
   tx: Transaction,
-  input: LocalPostInput | ActivityPubPostInput,
+  input: PostCreateInput,
   postId?: string,
 ): Promise<CreatedPost> => {
-  if (postId !== undefined && input.origin !== 'LOCAL') {
-    throw new TypeError('Only Local Post creation accepts a preclaimed Post ID');
-  }
-
   let document: PostContentDocumentV1;
   let postContentHashtagIds: string[] = [];
   if (input.origin === 'LOCAL') {
@@ -873,6 +871,7 @@ const createPostInTransaction = async (
           .update(Posts)
           .set({
             currentContentId: content.id,
+            ...(createdAt === undefined ? {} : { createdAt }),
             quoteConsentStatus:
               input.origin === 'LOCAL' && input.repostSourceId !== undefined
                 ? PostQuoteConsentStatus.APPROVED
@@ -927,17 +926,9 @@ const createPostInTransaction = async (
   return { content: linkedContent, created: true, post: linkedPost };
 };
 
-export const createLocalPostInTransaction = (
-  tx: Transaction,
-  input: LocalPostInput,
-  postId: string,
-): Promise<CreatedPost> => createPostInTransaction(tx, input, postId);
-
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
-export async function createPost(
-  input: LocalPostInput | ActivityPubPostInput,
-): Promise<CreatedPost | DuplicatePost> {
+export async function createPost(input: PostCreateInput): Promise<CreatedPost | DuplicatePost> {
   let result: CreatedPost;
   try {
     result = await db.transaction((tx) => createPostInTransaction(tx, input));

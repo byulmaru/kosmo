@@ -1,11 +1,28 @@
-import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
-import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
+import {
+  REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+  remotePostCreateWorkflow,
+} from '@kosmo/core/temporal/workflows';
+import {
+  ApplicationFailure,
+  patched,
+  proxyActivities,
+  WorkflowIdReusePolicy,
+} from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import { runChildWorkflow } from './child';
 import type { RemotePostLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const { lookupRemotePostActivity } = proxyActivities<typeof activities>(workflowActivityOptions);
+// Temporal Core reports oversized Activity results as retryable failures by default.
+const { prepareRemotePostActivity } = proxyActivities<typeof activities>({
+  ...workflowActivityOptions,
+  retry: {
+    ...workflowActivityOptions.retry,
+    nonRetryableErrorTypes: ['PayloadsTooLarge'],
+  },
+});
 
 const httpUriSchema = z.url({ protocol: /^https?$/ });
 
@@ -39,5 +56,34 @@ const parseInput = (
 };
 
 export async function remotePostLookupWorkflow(input: RemotePostLookupInput) {
-  return lookupRemotePostActivity(parseInput(input));
+  const parsedInput = parseInput(input);
+  if (!patched('remote-post-create-child-v1')) {
+    return lookupRemotePostActivity(parsedInput);
+  }
+
+  const prepared = await prepareRemotePostActivity(parsedInput);
+  if (prepared.status === 'rejected') {
+    return prepared.result;
+  }
+
+  // The prepared Activity result payload bounds this smaller native child input.
+  const created = await runChildWorkflow(remotePostCreateWorkflow, {
+    args: [{ input: prepared.input, requestId: prepared.requestId }],
+    mode: 'execute',
+    workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+  });
+  if (created.status === 'rejected') {
+    return {
+      documentBytes: prepared.documentBytes,
+      reason: 'invalid_note',
+      status: 'rejected',
+    } as const;
+  }
+
+  return {
+    authorProfileId: created.authorProfileId,
+    documentBytes: prepared.documentBytes,
+    postId: created.postId,
+    status: created.status,
+  } as const;
 }

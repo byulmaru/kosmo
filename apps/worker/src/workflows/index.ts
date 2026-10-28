@@ -17,6 +17,7 @@ export { profileUpdateEffectsWorkflow } from './profile-update';
 export { pushNotificationDeliveryWorkflow } from './push-notification';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
+export { remotePostCreateWorkflow } from './remote-post-create';
 export { remotePostLookupWorkflow } from './remote-post-lookup';
 export { remoteProfileFeaturedWorkflow } from './remote-profile-featured';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
