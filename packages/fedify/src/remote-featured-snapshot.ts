@@ -1,6 +1,6 @@
 import { db, first, Instances, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
-import { generateProfilePinKey } from '@kosmo/core/profile-pin-key';
+import { generateProfilePinKey } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 
 export type RemoteFeaturedSnapshotInput = {

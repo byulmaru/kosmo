@@ -21,10 +21,14 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
-import { generateProfilePinKey } from '../profile-pin-key';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
-import { pinProfilePost, reorderProfilePost, unpinProfilePost } from './profile-pin';
+import {
+  generateProfilePinKey,
+  pinProfilePost,
+  reorderProfilePost,
+  unpinProfilePost,
+} from './profile-pin';
 
 after(async () => {
   await pg.end();
