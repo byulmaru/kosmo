@@ -44,19 +44,21 @@ minimumReleaseAgeExclude:
   - '@temporalio/proto@1.22.0'
   - '@temporalio/worker@1.22.0'
   - '@temporalio/workflow@1.22.0'
-  # Allow only the requested Fedify 2.4.0 upgrade past the release-age gate.
-  - '@fedify/fedify@2.4.0'
+  # Allow only the requested Fedify security releases past the release-age gate.
+  - '@fedify/fedify@2.4.5'
   - '@fedify/postgres@2.4.0'
-  - '@fedify/uri-template@2.4.0'
-  - '@fedify/vocab-runtime@2.4.0'
-  - '@fedify/vocab-tools@2.4.0'
-  - '@fedify/vocab@2.4.0'
-  - '@fedify/webfinger@2.4.0'
+  - '@fedify/uri-template@2.4.5'
+  - '@fedify/vocab-runtime@2.4.5'
+  - '@fedify/vocab-tools@2.4.5'
+  - '@fedify/vocab@2.4.5'
+  - '@fedify/webfinger@2.4.5'
 overrides:
   # source-map-js 1.2.2 fixes CVE-2026-93749 within consumers' 1.x range.
   'source-map-js@<1.2.2': ^1.2.2
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   'undici@': 6.29.1
+  # Fedify 2.4.5 requires Undici 7 for its pinned-address request path.
+  '@fedify/vocab-runtime@2.4.5>undici': 7.30.1
   # Zod 4.6.7 includes the CVE-2023-54404 fix and aligns Drizzle Zod peers.
   'zod@>=4.0.0 <4.6.7': 4.6.7
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
