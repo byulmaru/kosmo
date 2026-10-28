@@ -30,12 +30,21 @@ Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 
 초과하거나 문법에 맞지 않는 occurrence는 잘라내거나 작성 전체를 거부하지 않고 원래 본문 text 그대로 남긴다.
 같은 identity가 본문에 반복되면 각 occurrence의 표기와 위치를 보존하고, revision에는 해당 identity와의 관계를 한 번만 둔다.
 
+기존 활성 Local Post의 Hashtag 재처리는 현재 Post Content revision을 입력으로 사용하고 같은 인식·정규화 규칙을
+적용한다. 원본 revision은 바꾸거나 삭제하지 않는다. 재처리 결과는 원래 body text와 Hashtag가 아닌 모든
+document node, 기존 Mention node·관계, Content Warning, Sensitive Media와 Media 참조를 보존하는 새 immutable
+revision이다. 최종 Hashtag 관계 집합은 결과 document의 기존·신규 Hashtag node에서만 계산하며 document에 없는
+기존 관계는 새 revision에 복사하지 않는다. revision 생성 시각은 재처리 시각으로 기록한다. 새 revision, source의
+Mention 관계 복사, Hashtag 관계와 Post의 currentContentId 교체는 한 transaction으로 원자적으로 반영한다.
+실행 시점에 입력된 source revision이 더 이상 현재 revision이 아니면 덮어쓰지 않는다. 이미 변환된 현재
+revision을 다시 처리해도 새 revision을 만들지 않는다. Post ID, Post.createdAt, author, visibility와 관계는 바뀌지 않는다.
+
 Remote Note 수신은 embedded typed ActivityPub `Hashtag`의 `name`과 projected body의 `#` token이 공통
 Hashtag 정규화 identity로 일치하는 occurrence만 Hashtag node와 관계로 저장한다. 본문 표기만으로는 연결하지 않으며,
 typed tag의 `href`는 identity 입력으로 사용하거나 fetch하지 않는다. 원격 name에는 Local 작성의 64 code point와 문자
 문법 제한을 적용하지 않고, 연결한 node는 본문 occurrence의 정확한 token을 보존한다. 같은 identity가 반복되면 각
 occurrence를 보존하고 관계는 한 번만 저장한다. 같은 Remote object URI의 duplicate Create는 처음 저장한 Content와
-관계를 유지하고 새 revision을 만들지 않는다. 이 동작은 새 Remote Note revision 생성에만 적용하며 `Update(Note)`와 기존
+관계를 유지하고 새 revision을 만들지 않는다. 이 동작은 새 Remote Note revision 생성에만 적용하며 `Update(Note)`와 Remote
 revision backfill은 포함하지 않는다.
 
 500자 작성 제한은 Local Post의 작성 내용에만 적용하며, Content Warning summary와 body Plain Text의 합계를
@@ -56,8 +65,9 @@ qualified handle의 `@domain` 부분은 이 64자 username 상한에 포함하�
 validation error로 거부한다. Inbound Note가 17번째 matched Mention node를 만들거나 snapshot username이 64자를
 넘으면 부분 저장이나 자르기 없이 Note 전체를 거부한다. 일치하지 않은 authored token이나 inbound anchor는 기존처럼
 일반 text 또는 link로 남고 한도에 세지 않는다. Inbound typed Mention identity relation은 body node와 독립적으로
-유지하며, 이 한도는 새로 저장하는 body node에만 적용한다. 기존 revision 조회 결과는 바꾸지 않으며 기존 revision을
-backfill하지 않는다.
+유지하며, 이 한도는 새로 저장하는 body node에만 적용한다. 기존 Mention node와 관계를 Hashtag-only 재처리로
+변경하거나 다시 resolve하지 않는다. Hashtag-only 재처리는 원래 저장된 Mention node와 관계를 새 revision에 그대로
+복사할 뿐 Mention data를 backfill하지 않는다.
 
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
 link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로
@@ -219,8 +229,9 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 - Post Visibility 수정은 Post Content 수정에 포함하지 않는다.
 - 현재 Post Composer 이미지 업로드는 새 Post의 첫 Post Content만 만들며 기존 Post 수정은 포함하지 않는다.
-- Hashtag 본문 작성·보존은 새 Local Post·Reply·Quote 및 새 Remote Note 수신에 적용한다. 기존 Post 수정·revision 추출·backfill과
-  inbound `Update(Note)`는 포함하지 않는다.
+- Hashtag 본문 작성·보존은 새 Local Post·Reply·Quote 및 새 Remote Note 수신에 적용한다. 기존 Local Post의 현재
+  revision은 위의 Hashtag-only 재처리로 보완할 수 있다. 사용자용 Post 수정, Remote revision backfill과 inbound
+  `Update(Note)`는 포함하지 않는다.
 - 기존 Media의 crop, filter 등 이미지 byte나 파생 표현을 편집하는 기능은 포함하지 않는다. 새 Post에 첨부할
   이미지의 선택적 Nightshade 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
   기능은 포함한다.

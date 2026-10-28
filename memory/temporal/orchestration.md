@@ -7,9 +7,10 @@
 
 ## Ownership And Flow
 
-- 새 Temporal-first capability의 state transition, transaction, persistence와 멱등성 판정은 Worker Activity가
-  소유한다. Workflow는 결정론적 orchestration만 수행하고, Activity가 필요한 기존 transport-neutral core
-  policy나 service를 내부에서 재사용할 수는 있지만 state-changing core service는 필수가 아니다.
+- 새 Temporal-first capability의 domain policy, state transition과 commit 시점 재검증, transaction, persistence와
+  멱등성 판정은 Worker Activity가 소유한다. Workflow는 결정론적 orchestration만 수행한다. Activity는 필요한
+  기존 transport-neutral core policy나 service를 내부에서 재사용할 수 있지만 state-changing core service는 필수가
+  아니다.
 - Temporal-first caller는 caller 검증 뒤 generic `runWorkflow`에 exported `WorkflowDefinition`, serializable
   input과 capability별 `mode`·conflict·reuse 옵션을 한 번 전달한다. GraphQL·HTTP·ActivityPub caller가
   state-changing core service를 직접 호출하거나 task queue·deadline·native Temporal 호출을 반복 조합하지

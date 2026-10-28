@@ -24,6 +24,10 @@ export {
 } from './activities/operational-notification';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export {
+  loadLocalPostsForHashtagReprocessingActivity,
+  reprocessLocalPostContentActivity,
+} from './activities/post-content-reprocessing';
+export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
