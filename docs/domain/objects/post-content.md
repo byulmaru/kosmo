@@ -23,6 +23,23 @@ Media 첨부 기능이 아직 배포되지 않은 출시 전 단계에서 제거
 
 Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
 
+### 원격 본문 커스텀 이모지
+
+새로 수집하는 Remote Note의 본문 커스텀 이모지는 해당 Note에 포함된 이모지 정보와 본문 표현을 연결해 보존한다.
+이름이 같아도 다른 서버 또는 다른 Note의 이모지로 대체하지 않으며, 해당 Note가 제공한 원격 이미지 URL을 직접 사용한다.
+자격 증명이 없는 절대 HTTPS URL만 이미지 대상으로 사용한다. 같은 Note에서 하나의 이름에 서로 다른 이미지 URL이
+연결되거나 필요한 정보가 없으면 임의의 이미지를 고르지 않고 원래 shortcode 또는 사용 가능한 대체 텍스트를 유지한다.
+
+이미지가 로딩 중이거나 실패하면 텍스트를 표시하고, 로드에 성공하면 같은 본문 위치에 이모지 이미지를 표시한다.
+이모지만 있는 본문도 읽을 수 있어야 하며 Plain Text 표현에는 shortcode를 보존한다. Content Warning으로 가려진
+본문의 이모지는 공개 전까지 이미지를 요청하지 않는다. 이모지의 유효성이나 이미지 서버의 실패가 본문 전체의
+표시 또는 다른 정상 콘텐츠의 수집을 실패시키지 않아야 한다.
+
+이미지 자산을 서버에서 복제하거나 proxy하지 않으므로 독자의 네트워크 정보가 원격 이미지 제공 서버에 전달될 수 있다.
+저장된 본문 참조는 revision에 남지만 원격 이미지 자체는 이후 변경되거나 삭제될 수 있다. 조회 시 원격 Note를
+fetch하거나 refresh하지 않으며, 기존 게시물의 재수집·backfill, inbound Update, 닉네임 이모지, 로컬 이모지 등록·관리와
+EmojiReact/Like 반응 프로토콜은 이 범위에 포함하지 않는다. 기존 CW·공개 범위·Mention·Hashtag·Media 정책을 유지한다.
+
 로컬 Post 본문에서 Hashtag는 본문 text를 보존한 채 해당 occurrence와 공통 Hashtag identity를 연결한다. Post·Reply·Quote 작성은
 바깥 공백 제거 → 선택적 앞 `#` 하나 제거 → Unicode NFKC → locale 비종속 소문자화한 이름이 Unicode Letter (`L`)·Number (`N`)
 또는 `_`로만 이루어지고 Unicode code point 기준 1–64자일 때 Hashtag로 인식한다. `#`는 이 이름 길이에 포함하지 않으며 숫자만 있는
