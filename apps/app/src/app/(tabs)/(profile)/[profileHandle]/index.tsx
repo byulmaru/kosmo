@@ -1,7 +1,8 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { graphql, usePreloadedQuery } from 'react-relay';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { graphql, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
+import ProfileLayout from '@/components/profile/ProfileLayout';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
@@ -36,7 +37,47 @@ export default function ProfilePostListPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
-  const { chrome, postsQueryReference, retryPosts, scrollKey } = useProfileRoute();
+  const scrollKey = `/@${handle}`;
+
+  return <ProfilePostsQueryOwner handle={handle} key={handle} scrollKey={scrollKey} />;
+}
+
+function ProfilePostsQueryOwner({ handle, scrollKey }: { handle: string; scrollKey: string }) {
+  const [queryReference, loadPosts, disposePosts] =
+    useQueryLoader<ProfilePostListPageQueryType>(ProfilePostListPageQuery);
+  const retryPosts = useCallback(
+    () => loadPosts({ handle }, { fetchPolicy: 'network-only' }),
+    [handle, loadPosts],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPosts({ handle }, { fetchPolicy: 'store-and-network' });
+      return disposePosts;
+    }, [disposePosts, handle, loadPosts]),
+  );
+
+  return (
+    <ProfileLayout connectionKind={null} handle={handle} scrollKey={scrollKey}>
+      <ProfilePostListPageContent
+        handle={handle}
+        queryReference={queryReference ?? null}
+        retryPosts={retryPosts}
+      />
+    </ProfileLayout>
+  );
+}
+
+function ProfilePostListPageContent({
+  handle,
+  queryReference,
+  retryPosts,
+}: {
+  handle: string;
+  queryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
+  retryPosts: () => void;
+}) {
+  const { chrome, scrollKey } = useProfileRoute();
 
   return (
     <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
@@ -51,31 +92,31 @@ export default function ProfilePostListPage() {
             }}
           />
         )}
-        key={handle}
+        key={`${handle}:${queryReference?.fetchKey ?? 'empty'}`}
         loading={<PostList loading />}
         title="게시글 목록을 불러오지 못했어요"
       >
-        <ProfilePostListPageContent handle={handle} postsQueryReference={postsQueryReference} />
+        <ProfilePostListPageData handle={handle} queryReference={queryReference} />
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
-function ProfilePostListPageContent({
+function ProfilePostListPageData({
   handle,
-  postsQueryReference,
+  queryReference,
 }: {
   handle: string;
-  postsQueryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
+  queryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
 }) {
-  if (!postsQueryReference) {
+  if (!queryReference) {
     return <PostList loading />;
   }
 
-  return <ProfilePostListPageData handle={handle} queryReference={postsQueryReference} />;
+  return <ProfilePostListPageDataContent handle={handle} queryReference={queryReference} />;
 }
 
-function ProfilePostListPageData({
+function ProfilePostListPageDataContent({
   handle,
   queryReference,
 }: {

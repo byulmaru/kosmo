@@ -109,35 +109,6 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
   return useContext(RouterContext).params as T;
 }
 
-export function useNavigation() {
-  const { params, pathname } = useContext(RouterContext);
-  return useMemo(() => {
-    const segments = pathname.split('/').filter(Boolean);
-    const isProfileRoute = segments[0]?.startsWith('@') === true;
-    const childName =
-      segments[1] === 'followers' || segments[1] === 'following' ? segments[1] : 'index';
-    const parentName = isProfileRoute ? '[profileHandle]' : (segments.at(-1) ?? 'home');
-
-    return {
-      getState: () => ({
-        index: 0,
-        routes: [
-          {
-            key: isProfileRoute ? '[profileHandle]' : parentName,
-            name: parentName,
-            params: isProfileRoute
-              ? { profileHandle: params.profileHandle ?? segments[0] }
-              : params,
-            ...(isProfileRoute
-              ? { state: { index: 0, routes: [{ key: childName, name: childName }] } }
-              : {}),
-          },
-        ],
-      }),
-    };
-  }, [params, pathname]);
-}
-
 export function useRouter() {
   const { back, canGoBack, replacePathname, setPathname } = useContext(RouterContext);
   return useMemo(

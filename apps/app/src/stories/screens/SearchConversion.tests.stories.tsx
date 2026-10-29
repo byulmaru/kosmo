@@ -2,8 +2,8 @@ import { Text } from 'react-native';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
-import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
+import ProfileLayout from '@/components/profile/ProfileLayout';
 import { useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
@@ -97,7 +97,13 @@ function Routes() {
     <>
       <AnalyticsSessionBridge />
       <Button onPress={() => router.push('/search')}>검색으로 돌아가기</Button>
-      {pathname.startsWith('/@') ? <ProfileLayout /> : <SearchScreen />}
+      {pathname.startsWith('/@') ? (
+        <ProfileLayout connectionKind={null} handle="conversion" scrollKey="/@conversion">
+          <ProfileContent />
+        </ProfileLayout>
+      ) : (
+        <SearchScreen />
+      )}
     </>
   );
 }
@@ -107,7 +113,6 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
     <RouterMockProvider
       params={{ q: 'conversion', tab: 'people', profileHandle: '@conversion' }}
       pathname={startPath}
-      slot={<ProfileContent />}
     >
       <ShellChromeProvider
         navigationDrawerOpen={false}

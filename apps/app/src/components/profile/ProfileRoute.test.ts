@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createContext, createElement, useCallback, useContext, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -185,32 +185,8 @@ mockModule('expo-router', {
     ),
   useGlobalSearchParams: () => globalParams,
   useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
+  useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
   useLocalSearchParams: () => useContext(LocalParamsContext),
-  useNavigation: () => ({
-    getState: () => ({
-      index: 0,
-      routes: [
-        {
-          key: 'profile',
-          name: '[profileHandle]',
-          params: { profileHandle: globalParams.profileHandle },
-          state: {
-            index: 0,
-            routes: [
-              {
-                key: 'profile-child',
-                name: pathname.endsWith('/followers')
-                  ? 'followers'
-                  : pathname.endsWith('/following')
-                    ? 'following'
-                    : 'index',
-              },
-            ],
-          },
-        },
-      ],
-    }),
-  }),
   usePathname: () => pathname,
   useRouter: () => ({
     back: () => (routerBackCount += 1),

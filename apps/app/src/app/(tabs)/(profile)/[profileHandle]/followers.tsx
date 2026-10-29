@@ -4,6 +4,7 @@ import {
   ProfileConnectionList,
   ProfileConnectionListState,
 } from '@/components/profile/ProfileConnectionList';
+import ProfileLayout from '@/components/profile/ProfileLayout';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -23,6 +24,16 @@ export default function ProfileFollowersPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
+  const scrollKey = `/@${handle}/followers`;
+
+  return (
+    <ProfileLayout connectionKind="followers" handle={handle} scrollKey={scrollKey}>
+      <ProfileFollowersPageContent handle={handle} />
+    </ProfileLayout>
+  );
+}
+
+function ProfileFollowersPageContent({ handle }: { handle: string }) {
   const { chrome, scrollKey } = useProfileRoute();
 
   return (
@@ -36,13 +47,13 @@ export default function ProfileFollowersPage() {
         loading={<ProfileConnectionListState kind="followers" state="loading" />}
         title="팔로워 목록을 불러오지 못했어요"
       >
-        <ProfileFollowersPageContent handle={handle} />
+        <ProfileFollowersPageQueryContent handle={handle} />
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
-function ProfileFollowersPageContent({ handle }: { handle: string }) {
+function ProfileFollowersPageQueryContent({ handle }: { handle: string }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileFollowersPageQueryType>(
     ProfileFollowersPageQuery,

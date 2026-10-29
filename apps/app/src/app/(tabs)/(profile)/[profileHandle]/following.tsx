@@ -4,6 +4,7 @@ import {
   ProfileConnectionList,
   ProfileConnectionListState,
 } from '@/components/profile/ProfileConnectionList';
+import ProfileLayout from '@/components/profile/ProfileLayout';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -23,6 +24,16 @@ export default function ProfileFollowingPage() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
+  const scrollKey = `/@${handle}/following`;
+
+  return (
+    <ProfileLayout connectionKind="following" handle={handle} scrollKey={scrollKey}>
+      <ProfileFollowingPageContent handle={handle} />
+    </ProfileLayout>
+  );
+}
+
+function ProfileFollowingPageContent({ handle }: { handle: string }) {
   const { chrome, scrollKey } = useProfileRoute();
 
   return (
@@ -36,13 +47,13 @@ export default function ProfileFollowingPage() {
         loading={<ProfileConnectionListState kind="following" state="loading" />}
         title="팔로잉 목록을 불러오지 못했어요"
       >
-        <ProfileFollowingPageContent handle={handle} />
+        <ProfileFollowingPageQueryContent handle={handle} />
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
-function ProfileFollowingPageContent({ handle }: { handle: string }) {
+function ProfileFollowingPageQueryContent({ handle }: { handle: string }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileFollowingPageQueryType>(
     ProfileFollowingPageQuery,

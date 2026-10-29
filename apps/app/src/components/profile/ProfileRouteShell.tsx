@@ -2,14 +2,10 @@ import { createContext, useContext } from 'react';
 import { StyleSheet } from 'react-native';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import type { ReactNode } from 'react';
-import type { PreloadedQuery } from 'react-relay';
-import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from '@/app/(tabs)/(profile)/[profileHandle]/__generated__/ProfilePostListPageQuery.graphql';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 
 type ProfileRouteContextValue = Readonly<{
   chrome: ReactNode;
-  postsQueryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
-  retryPosts: () => void;
   scrollKey: string;
 }>;
 
@@ -18,12 +14,10 @@ const ProfileRouteContext = createContext<ProfileRouteContextValue | null>(null)
 export function ProfileRouteProvider({
   children,
   chrome,
-  postsQueryReference,
-  retryPosts,
   scrollKey,
 }: ProfileRouteContextValue & { children: ReactNode }) {
   return (
-    <ProfileRouteContext.Provider value={{ chrome, postsQueryReference, retryPosts, scrollKey }}>
+    <ProfileRouteContext.Provider value={{ chrome, scrollKey }}>
       {children}
     </ProfileRouteContext.Provider>
   );

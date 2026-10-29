@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, StrictMode } from 'react';
+import { createElement, StrictMode, useEffect } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
@@ -26,12 +26,43 @@ const requests: Request[] = [];
 const generation = { current: 0 };
 let renderer: ReactTestRenderer | null = null;
 let ProfileLayout: React.ComponentType;
+let ProfileFollowersPage: React.ComponentType;
+let ProfileFollowingPage: React.ComponentType;
 let ProfilePostListPage: React.ComponentType | null = null;
 let routeHandle = '@target';
 let routePath = '/@target';
 let globalPath = '/@target';
-let navigationScreenHint: string | undefined;
-let omitNestedNavigationState = false;
+let activeFocusEffect: (() => void | (() => void)) | undefined;
+let activeFocusCleanup: (() => void) | undefined;
+let routeFocused = true;
+
+function useFocusEffect(effect: () => void | (() => void)) {
+  useEffect(() => {
+    activeFocusEffect = effect;
+    if (routeFocused) {
+      activeFocusCleanup = effect() ?? undefined;
+    }
+
+    return () => {
+      activeFocusCleanup?.();
+      activeFocusCleanup = undefined;
+      if (activeFocusEffect === effect) {
+        activeFocusEffect = undefined;
+      }
+    };
+  }, [effect]);
+}
+
+function blurRoute() {
+  routeFocused = false;
+  activeFocusCleanup?.();
+  activeFocusCleanup = undefined;
+}
+
+function focusRoute() {
+  routeFocused = true;
+  activeFocusCleanup = activeFocusEffect?.() ?? undefined;
+}
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -41,7 +72,14 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
-    if (name === 'ProfileLayoutQuery' || name === 'ProfilePostListPageQuery') {
+    if (name === 'ProfileLayoutQuery') {
+      return require(`./__generated__/${name}.graphql.ts`).default;
+    }
+    if (
+      name === 'ProfileFollowersPageQuery' ||
+      name === 'ProfileFollowingPageQuery' ||
+      name === 'ProfilePostListPageQuery'
+    ) {
       return require(`../../app/(tabs)/(profile)/[profileHandle]/__generated__/${name}.graphql.ts`)
         .default;
     }
@@ -49,48 +87,19 @@ mockModule('react-relay', {
   },
 });
 mockModule('expo-router', {
-  Slot: () =>
-    routePath.endsWith('/followers')
-      ? null
-      : ProfilePostListPage
-        ? createElement(ProfilePostListPage)
-        : null,
+  Slot: () => {
+    const Route = routePath.endsWith('/followers')
+      ? ProfileFollowersPage
+      : routePath.endsWith('/following')
+        ? ProfileFollowingPage
+        : ProfilePostListPage;
+    return Route ? createElement(Route) : null;
+  },
   Stack: () => null,
   useGlobalSearchParams: () => ({ profileHandle: routeHandle }),
   useCurrentRouteInfo: () => ({ params: { profileHandle: routeHandle }, pathname: routePath }),
+  useFocusEffect,
   useLocalSearchParams: () => ({ profileHandle: routeHandle }),
-  useNavigation: () => ({
-    getState: () => ({
-      index: 0,
-      routes: [
-        {
-          key: 'profile',
-          name: '[profileHandle]',
-          params: {
-            profileHandle: routeHandle,
-            ...(navigationScreenHint ? { screen: navigationScreenHint } : {}),
-          },
-          ...(omitNestedNavigationState
-            ? {}
-            : {
-                state: {
-                  index: 0,
-                  routes: [
-                    {
-                      key: 'profile-child',
-                      name: routePath.endsWith('/followers')
-                        ? 'followers'
-                        : routePath.endsWith('/following')
-                          ? 'following'
-                          : 'index',
-                    },
-                  ],
-                },
-              }),
-        },
-      ],
-    }),
-  }),
   usePathname: () => globalPath,
   useRouter: () => ({ back: () => undefined, replace: () => undefined }),
 });
@@ -123,6 +132,7 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
 mockModule(new URL('./ProfileConnectionList.tsx', import.meta.url), {
+  ProfileConnectionList: (props: object) => createElement('ProfileConnectionList', props),
   ProfileConnectionListState: (props: object) => createElement('ProfileConnectionListState', props),
 });
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
@@ -196,6 +206,10 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 
 before(async () => {
   ({ default: ProfileLayout } = await import('../../app/(tabs)/(profile)/[profileHandle]/_layout'));
+  ({ default: ProfileFollowersPage } =
+    await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
+  ({ default: ProfileFollowingPage } =
+    await import('../../app/(tabs)/(profile)/[profileHandle]/following'));
   ({ default: ProfilePostListPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/index'));
 });
@@ -211,8 +225,9 @@ afterEach(async () => {
   routeHandle = '@target';
   routePath = '/@target';
   globalPath = '/@target';
-  navigationScreenHint = undefined;
-  omitNestedNavigationState = false;
+  activeFocusEffect = undefined;
+  activeFocusCleanup = undefined;
+  routeFocused = true;
 });
 
 function createEnvironment(environmentId = 'default') {
@@ -339,6 +354,74 @@ describe('Profile route with real Relay', () => {
 
     assert.equal(one('PostList').props.loading, undefined);
     assert.ok(one('PostList').props.profile);
+  });
+
+  it('same-mounted Native blur disposes posts and focus starts a fresh posts request', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: emptyPostsProfile(),
+    });
+    await respond(latestRequest('ProfileLayoutQuery'), {
+      profileByHandle: blockedProfile(null),
+    });
+
+    const initialPostRequestCount = requests.filter(
+      ({ name }) => name === 'ProfilePostListPageQuery',
+    ).length;
+    const initialLayoutRequestCount = requests.filter(
+      ({ name }) => name === 'ProfileLayoutQuery',
+    ).length;
+
+    await act(async () => blurRoute());
+    assert.equal(
+      requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length,
+      initialPostRequestCount,
+    );
+
+    await act(async () => focusRoute());
+    assert.equal(
+      requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length,
+      initialPostRequestCount + 1,
+    );
+    assert.equal(
+      requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
+      initialLayoutRequestCount,
+    );
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: emptyPostsProfile(),
+    });
+    assert.ok(one('PostList').props.profile);
+  });
+
+  it('retained posts error recovers after blur and focus loads a successful reference', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      const environment = createEnvironment();
+      await render(environment);
+      await fail(latestRequest('ProfilePostListPageQuery'));
+      await respond(latestRequest('ProfileLayoutQuery'), {
+        profileByHandle: blockedProfile(null),
+      });
+      assert.equal(one('PostList').props.error, true);
+
+      await act(async () => {
+        blurRoute();
+        focusRoute();
+      });
+      await respond(latestRequest('ProfilePostListPageQuery'), {
+        currentSession: null,
+        profileByHandle: emptyPostsProfile(),
+      });
+
+      assert.equal(one('PostList').props.error, undefined);
+      assert.ok(one('PostList').props.profile);
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   it('layout이 pending이어도 posts 요청을 시작하고 layout gate를 우회하지 않는다', async () => {
@@ -536,27 +619,6 @@ describe('Profile route with real Relay', () => {
     const environment = createEnvironment();
     await render(environment);
 
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery'],
-    );
-  });
-
-  it('nested navigation state가 없어도 parent screen hint로 posts route를 판정한다', async () => {
-    omitNestedNavigationState = true;
-    navigationScreenHint = 'index';
-    const environment = createEnvironment();
-    await render(environment);
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery', 'ProfilePostListPageQuery'],
-    );
-
-    await act(async () => renderer?.unmount());
-    renderer = null;
-    requests.length = 0;
-    navigationScreenHint = 'following';
-    await render(createEnvironment('following-hint'));
     assert.deepEqual(
       requests.map(({ name }) => name),
       ['ProfileLayoutQuery'],
