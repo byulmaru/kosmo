@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View as NativeView } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
 import { RouteScrollContainer } from '../ui/RouteScrollContainer';
@@ -68,7 +68,7 @@ export function ProfileEditScreen({
   submitState = { kind: 'idle' },
   value,
 }: ProfileEditScreenProps) {
-  const Root = Platform.OS === 'android' ? KeyboardAvoidingView : View;
+  const View = Platform.OS === 'android' ? KeyboardAvoidingView : NativeView;
   const theme = useTheme();
   const errors = mergeFieldErrors(validateProfileEditDraft(value, initialValue), serverErrors);
   const saving = submitState.kind === 'saving';
@@ -101,7 +101,7 @@ export function ProfileEditScreen({
     </>
   );
   return (
-    <Root
+    <View
       behavior={Platform.OS === 'android' ? 'padding' : undefined}
       testID="profile-edit-screen"
       style={[
@@ -131,7 +131,7 @@ export function ProfileEditScreen({
       >
         {content}
       </RouteScrollContainer>
-    </Root>
+    </View>
   );
 }
 
