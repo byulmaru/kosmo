@@ -10,7 +10,7 @@ import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { temporalTestExecutable } from './temporal-test-executable.js';
-import type { LocalPostInput } from '@kosmo/core/services/post';
+import type { LocalPostInput } from '@kosmo/core/services';
 import type {
   ActivityPubPostCreateInput,
   PostCreateActivityInput,
@@ -69,7 +69,7 @@ const runPostCreate = (
 const isWorkflowFailureType = (error: unknown, type: string): boolean =>
   error instanceof WorkflowFailedError &&
   error.cause instanceof ApplicationFailure &&
-  error.cause.nonRetryable &&
+  error.cause.nonRetryable === true &&
   error.cause.type === type;
 
 test(

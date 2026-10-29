@@ -282,7 +282,9 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
     const remoteCreateActivityInputs: Array<Parameters<typeof createPostActivity>[0]> = [];
-    let remoteCreateArgs: PostCreateWorkflowArgs | undefined;
+    let remoteCreateArgs:
+      | (PostCreateWorkflowArgs & { input: ActivityPubPostCreateInput })
+      | undefined;
     const effectStarted = Promise.withResolvers<void>();
     const effectReleased = Promise.withResolvers<void>();
     t.after(() => effectReleased.resolve());
