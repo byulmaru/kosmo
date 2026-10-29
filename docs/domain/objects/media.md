@@ -79,6 +79,15 @@ Local 업로드 완료는 클라이언트가 명시적으로 보내는 공개 �
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
 
+게시글 첨부는 파일 선택 시 `issueMediaUploadUrl`과 업로드 `PUT`으로 private staging까지만 진행한다. 등록 제출 시
+현재 첨부된 Media만 `completeMediaUpload`로 완료하고 모두 Ready가 된 뒤 Post를 저장한다. 제거했거나 등록을 포기한
+첨부는 완료하지 않으며, Profile avatar/header 업로드의 기존 완료 시점은 유지한다.
+
+Post Composer에서 새 Local Media마다 Nightshade 처리를 선택할 수 있으며 기본값은 off다. 선택한 이미지는 Media
+Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다. 처리가
+실패하면 해당 Media는 Ready가 되지 않고 Post 저장을 막으며, 초안과 실패한 첨부를 유지해 제거하거나 다시 올릴 수
+있게 한다. 선택한 처리가 실패한 이미지를 처리 전 원본으로 대신 공개하지 않는다.
+
 클라이언트는 기존 `issueMediaUploadUrl` → 업로드 `PUT` → `completeMediaUpload` 흐름을 유지하며 파일 크기를
 별도로 제출하지 않는다. 새 업로드는 모두 같은 Media 업로드 경로를 사용하고, 서버가 실제 수신 byte를 기준으로
 파일당 16 MiB 제한을 적용한 뒤 private staging에 저장한다. staging byte는 공개되지 않으며, `completeMediaUpload`는

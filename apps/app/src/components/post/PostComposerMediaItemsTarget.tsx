@@ -7,17 +7,9 @@ import {
   XIcon,
 } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
@@ -140,6 +132,7 @@ export function PostComposerMediaItemsTarget({
                     accessibilityIgnoresInvertColors
                     accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                     accessibilityRole="image"
+                    fadeDuration={0}
                     source={{ uri: item.asset.uri }}
                     style={styles.preview}
                   />
@@ -149,6 +142,7 @@ export function PostComposerMediaItemsTarget({
                   accessibilityIgnoresInvertColors
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                   accessibilityRole="image"
+                  fadeDuration={0}
                   source={{ uri: item.asset.uri }}
                   style={[
                     styles.preview,
@@ -189,7 +183,7 @@ export function PostComposerMediaItemsTarget({
                 <View
                   style={[styles.uploadingIndicator, { backgroundColor: theme.backgroundSurface }]}
                 >
-                  <ActivityIndicator
+                  <LoadingIndicator
                     accessibilityLabel={`첨부 이미지 ${itemNumber} 업로드 중`}
                     color={theme.foregroundPrimary}
                   />

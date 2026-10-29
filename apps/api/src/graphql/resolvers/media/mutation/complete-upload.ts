@@ -1,6 +1,6 @@
 import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
-import { NotFoundError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
@@ -26,8 +26,10 @@ builder.mutationField('completeMediaUpload', (t) =>
     }),
     input: {
       id: t.input.globalID({ for: Media }),
+      applyNightshade: t.input.boolean({ required: false, defaultValue: false }),
     },
     resolve: async (_, { input }, ctx) => {
+      const applyNightshade = input.applyNightshade ?? false;
       const media = await db
         .select()
         .from(MediaTable)
@@ -66,7 +68,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (isNexusMediaUpload(media.storageReference)) {
         try {
           await runWorkflow(mediaUploadWorkflow, {
-            args: [{ mediaId: media.id, accountId: ctx.session.accountId }],
+            args: [{ mediaId: media.id, accountId: ctx.session.accountId, applyNightshade }],
             mode: 'execute',
             workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
             workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
@@ -86,6 +88,10 @@ builder.mutationField('completeMediaUpload', (t) =>
         return {
           media: readyMedia,
         };
+      }
+
+      if (applyNightshade) {
+        throw new ConflictError({ message: '이미지를 다시 첨부해 주세요' });
       }
 
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;

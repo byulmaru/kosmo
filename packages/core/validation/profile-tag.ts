@@ -1,10 +1,10 @@
 import { z } from 'zod';
+import { normalizeHashtag } from './hashtag';
 
 const profileTagNamePattern = /^[\p{Letter}\p{Number}_]+$/u;
 
 const normalizedProfileTagSchema = z.string().transform((value, context) => {
-  const displayName = value.trim().replace(/^#/, '').normalize('NFKC');
-  const name = displayName.toLowerCase();
+  const { displayName, name } = normalizeHashtag(value);
 
   if (name.length === 0 || [...name].length > 20 || !profileTagNamePattern.test(name)) {
     context.addIssue({

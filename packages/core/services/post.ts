@@ -4,9 +4,11 @@ import {
   db,
   first,
   firstOrThrow,
+  Hashtags,
   Instances,
   isUniqueViolation,
   Media,
+  PostContentHashtags,
   PostContents,
   PostMentions,
   Posts,
@@ -25,40 +27,49 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { normalizePostContentPlainText } from '../post-content';
 import {
+  applyRemotePostContentHashtags,
   canonicalizePostContentDocument,
+  findRemotePostContentHashtags,
+  postContentDocumentFromTextAndMedia,
+  postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
+import { normalizeHashtag } from '../validation/hashtag';
 import { postVisibilityCondition } from '../visibility/post';
 import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
+import type {
+  PostContentHashtagReference,
+  PostContentMentionReference,
+} from '../post-content/server';
 
-type LocalPostInput = {
+export type LocalPostInput = {
   accountId?: string;
-  /**
-   * Normalized authored body paired with `document`, supplied by the API after validating the
-   * selected mention ranges. GraphQL clients send body text and ranges, never this value or a doc.
-   */
-  authoredBodyText?: string;
-  document: PostContentDocumentV1;
+  bodyText: string;
+  contentWarning?: string | null;
   media?: readonly {
     altText: string | null;
     mediaId: string;
   }[];
+  mentions?: readonly PostContentMentionReference[];
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  sensitiveMedia?: boolean;
   visibility: PostVisibility;
 };
 
-type ActivityPubPostInput = {
+export type ActivityPubPostInput = {
   document: PostContentDocumentV1;
+  hashtagNames?: readonly string[];
   media?: readonly RemoteMediaCandidate[];
   mentionProfileIds: readonly string[];
   objectUri: string;
@@ -70,11 +81,13 @@ type ActivityPubPostInput = {
   visibility: PostVisibility;
 };
 
-type RemoteMediaCandidate = {
+export type RemoteMediaCandidate = {
   altText: string | null;
   mediaType: string | null;
   url: string;
 };
+
+export type PostCreateInput = LocalPostInput | ActivityPubPostInput;
 
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
@@ -109,7 +122,90 @@ type CreatedPost = {
 
 type DuplicatePost = { created: false };
 
-const isActivityPubPostUriConflict = (error: unknown): boolean => {
+const upsertHashtags = async (
+  tx: Transaction,
+  namesAndDisplayNames: ReadonlyMap<string, string>,
+) => {
+  if (namesAndDisplayNames.size === 0) {
+    return new Map<string, string>();
+  }
+
+  const names = [...namesAndDisplayNames.keys()];
+  await tx
+    .insert(Hashtags)
+    .values(
+      [...namesAndDisplayNames]
+        .map(([name, displayName]) => ({ displayName, name }))
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+    )
+    .onConflictDoNothing({ target: Hashtags.name });
+
+  const hashtagRows = await tx
+    .select({ id: Hashtags.id, name: Hashtags.name })
+    .from(Hashtags)
+    .where(inArray(Hashtags.name, names));
+  return new Map(hashtagRows.map(({ id, name }) => [name, id]));
+};
+
+const resolveLocalPostHashtags = async (
+  tx: Transaction,
+  bodyText: string,
+  mentions: readonly PostContentMentionReference[],
+) => {
+  const candidates = postContentHashtagCandidatesFromText(bodyText, mentions);
+  if (candidates.length === 0) {
+    return { hashtagIds: [], references: [] as PostContentHashtagReference[] };
+  }
+
+  const namesAndDisplayNames = new Map<string, string>();
+  for (const { end, start } of candidates) {
+    const { displayName, name } = normalizeHashtag(bodyText.slice(start, end));
+    if (!namesAndDisplayNames.has(name)) {
+      namesAndDisplayNames.set(name, displayName);
+    }
+  }
+  const hashtagIdsByName = await upsertHashtags(tx, namesAndDisplayNames);
+  const references = candidates.map(({ end, start }) => {
+    const { name } = normalizeHashtag(bodyText.slice(start, end));
+    return { end, hashtagId: hashtagIdsByName.get(name)!, start };
+  });
+
+  return {
+    hashtagIds: [...new Set(references.map(({ hashtagId }) => hashtagId))],
+    references,
+  };
+};
+
+const resolveRemotePostHashtags = async (
+  tx: Transaction,
+  document: PostContentDocumentV1,
+  hashtagNames: readonly string[],
+) => {
+  const matches = findRemotePostContentHashtags(document, hashtagNames);
+  if (matches.length === 0) {
+    return { document, hashtagIds: [] as string[] };
+  }
+
+  const namesAndDisplayNames = new Map<string, string>();
+  for (const { name: typedName } of matches) {
+    const { displayName, name } = normalizeHashtag(typedName);
+    if (!namesAndDisplayNames.has(name)) {
+      namesAndDisplayNames.set(name, displayName);
+    }
+  }
+  const hashtagIdsByName = await upsertHashtags(tx, namesAndDisplayNames);
+  const matchesWithIds = matches.map((match) => ({
+    ...match,
+    hashtagId: hashtagIdsByName.get(normalizeHashtag(match.name).name)!,
+  }));
+
+  return {
+    document: applyRemotePostContentHashtags(document, matchesWithIds),
+    hashtagIds: [...new Set(matchesWithIds.map(({ hashtagId }) => hashtagId))],
+  };
+};
+
+export const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
     return false;
   }
@@ -591,217 +687,251 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
+export const createPostInTransaction = async (
+  tx: Transaction,
+  input: PostCreateInput,
+  postId?: string,
+): Promise<CreatedPost> => {
+  let document: PostContentDocumentV1;
+  let postContentHashtagIds: string[] = [];
+  if (input.origin === 'LOCAL') {
+    const bodyText = normalizePostContentPlainText(input.bodyText);
+    const mentions = input.mentions ?? [];
+    const { hashtagIds, references } = await resolveLocalPostHashtags(tx, bodyText, mentions);
+    postContentHashtagIds = hashtagIds;
+    document = validateLocalPostContentDocument(
+      postContentDocumentFromTextAndMedia(
+        bodyText,
+        (input.media ?? []).map(({ mediaId }) => ({ mediaId })),
+        input.sensitiveMedia ?? false,
+        input.contentWarning ?? null,
+        mentions,
+        references,
+      ),
+      bodyText,
+    );
+  } else {
+    const resolved = await resolveRemotePostHashtags(tx, input.document, input.hashtagNames ?? []);
+    document = resolved.document;
+    postContentHashtagIds = resolved.hashtagIds;
+  }
+  const mentionProfileIds = new Set(
+    input.origin === 'ACTIVITYPUB'
+      ? input.mentionProfileIds
+      : (input.mentions ?? []).map(({ profileId }) => profileId),
+  );
+  if (
+    input.origin === 'LOCAL' &&
+    input.replyParentId !== undefined &&
+    input.repostSourceId !== undefined
+  ) {
+    throw new ValidationError('Post cannot have a Reply Parent and Quote Source', {
+      field: 'repostSourceId',
+    });
+  }
+
+  if (input.origin === 'LOCAL') {
+    const media = input.media ?? [];
+    const mediaIds = media.map(({ mediaId }) => mediaId);
+    if (new Set(mediaIds).size !== mediaIds.length) {
+      throw new ValidationError('Media cannot be attached', { field: 'media' });
+    }
+    if (mediaIds.length > 0) {
+      if (!input.accountId) {
+        throw new ValidationError('Media cannot be attached', { field: 'media' });
+      }
+      const attachableMedia = await tx
+        .select({ id: Media.id })
+        .from(Media)
+        .where(
+          and(
+            inArray(Media.id, mediaIds),
+            eq(Media.accountId, input.accountId),
+            eq(Media.source, MediaSource.LOCAL),
+            eq(Media.state, MediaState.READY),
+          ),
+        );
+      if (attachableMedia.length !== mediaIds.length) {
+        throw new ValidationError('Media cannot be attached', { field: 'media' });
+      }
+      for (const { altText, mediaId } of media) {
+        await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+      }
+    }
+  }
+
+  if (input.replyParentId !== undefined) {
+    const parent =
+      input.origin === 'LOCAL'
+        ? await findVisiblePost(tx, {
+            actorProfileId: input.profileId,
+            postId: input.replyParentId,
+          })
+        : await tx
+            .select({
+              currentContentId: Posts.currentContentId,
+              id: Posts.id,
+              profileId: Posts.profileId,
+            })
+            .from(Posts)
+            .where(and(eq(Posts.id, input.replyParentId), eq(Posts.state, PostState.ACTIVE)))
+            .limit(1)
+            .then(first);
+    if (!parent) {
+      throw new NotFoundError('Post not found');
+    }
+    await assertProfilePairIsNotBlocked(tx, {
+      notFoundMessage: 'Post not found',
+      firstProfileId: input.profileId,
+      secondProfileId: parent.profileId,
+    });
+    if (parent.currentContentId === null) {
+      throw new ValidationError('Reply Parent must have content', {
+        field: 'replyParentId',
+      });
+    }
+  }
+
+  if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
+    await validateQuoteSource(tx, {
+      actorProfileId: input.profileId,
+      postId: input.repostSourceId,
+    });
+  }
+
+  const createdAt =
+    input.origin === 'ACTIVITYPUB' &&
+    input.publishedAt &&
+    Temporal.Instant.compare(input.publishedAt, input.receivedAt) < 0
+      ? input.publishedAt
+      : input.origin === 'ACTIVITYPUB'
+        ? input.receivedAt
+        : undefined;
+  if (input.origin === 'ACTIVITYPUB') {
+    const media = await materializeRemoteMedia(tx, {
+      candidates: input.media ?? [],
+      profileId: input.profileId,
+    });
+    if (media.length > 0) {
+      document = canonicalizePostContentDocument({
+        ...document,
+        body: {
+          ...document.body,
+          content: [
+            ...document.body.content,
+            ...media.map(({ mediaId }) => ({
+              attrs: { mediaId },
+              type: 'media' as const,
+            })),
+          ],
+        },
+      });
+    }
+  }
+
+  const content = await tx
+    .insert(PostContents)
+    .values({
+      createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
+      document,
+      postId: null,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  if (postContentHashtagIds.length > 0) {
+    await tx.insert(PostContentHashtags).values(
+      postContentHashtagIds.map((hashtagId) => ({
+        hashtagId,
+        postContentId: content.id,
+      })),
+    );
+  }
+
+  const post =
+    postId === undefined
+      ? await tx
+          .insert(Posts)
+          .values({
+            actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
+            createdAt,
+            currentContentId: content.id,
+            profileId: input.profileId,
+            repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
+            quoteConsentStatus:
+              input.origin === 'LOCAL' && input.repostSourceId !== undefined
+                ? PostQuoteConsentStatus.APPROVED
+                : undefined,
+            state: PostState.ACTIVE,
+            visibility: input.visibility,
+          })
+          .returning()
+          .then(firstOrThrow)
+      : await tx
+          .update(Posts)
+          .set({
+            currentContentId: content.id,
+            ...(createdAt === undefined ? {} : { createdAt }),
+            quoteConsentStatus:
+              input.origin === 'LOCAL' && input.repostSourceId !== undefined
+                ? PostQuoteConsentStatus.APPROVED
+                : null,
+            repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : null,
+          })
+          .where(eq(Posts.id, postId))
+          .returning()
+          .then(firstOrThrow);
+
+  if (input.origin === 'ACTIVITYPUB') {
+    await tx.insert(ActivityPubPosts).values({
+      postId: post.id,
+      publishedAt: input.publishedAt,
+      receivedAt: input.receivedAt,
+      uri: input.objectUri,
+    });
+  }
+
+  if (mentionProfileIds.size > 0) {
+    await tx.insert(PostMentions).values(
+      [...mentionProfileIds].map((profileId) => ({
+        postContentId: content.id,
+        profileId,
+      })),
+    );
+  }
+
+  validatePostStructure({
+    currentContentId: post.currentContentId,
+    id: post.id,
+    replyParentId: input.replyParentId ?? null,
+    repostSourceId: post.repostSourceId,
+  });
+
+  const linkedPost =
+    input.replyParentId === undefined
+      ? post
+      : await tx
+          .update(Posts)
+          .set({ replyParentId: input.replyParentId })
+          .where(eq(Posts.id, post.id))
+          .returning()
+          .then(firstOrThrow);
+  const linkedContent = await tx
+    .update(PostContents)
+    .set({ postId: post.id })
+    .where(eq(PostContents.id, content.id))
+    .returning()
+    .then(firstOrThrow);
+
+  return { content: linkedContent, created: true, post: linkedPost };
+};
+
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
-export async function createPost(
-  input: LocalPostInput | ActivityPubPostInput,
-): Promise<CreatedPost | DuplicatePost> {
+export async function createPost(input: PostCreateInput): Promise<CreatedPost | DuplicatePost> {
   let result: CreatedPost;
   try {
-    result = await db.transaction(async (tx) => {
-      let document =
-        input.origin === 'LOCAL'
-          ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
-          : input.document;
-      const mentionProfileIds = new Set(
-        input.origin === 'ACTIVITYPUB'
-          ? input.mentionProfileIds
-          : document.body.content.flatMap((block) =>
-              block.type === 'paragraph'
-                ? (block.content ?? []).flatMap((node) =>
-                    node.type === 'mention' ? [node.attrs.profileId] : [],
-                  )
-                : [],
-            ),
-      );
-      if (
-        input.origin === 'LOCAL' &&
-        input.replyParentId !== undefined &&
-        input.repostSourceId !== undefined
-      ) {
-        throw new ValidationError('Post cannot have a Reply Parent and Quote Source', {
-          field: 'repostSourceId',
-        });
-      }
-
-      if (input.origin === 'LOCAL') {
-        const mediaIds = document.body.content.flatMap((block) =>
-          block.type === 'media' ? [block.attrs.mediaId] : [],
-        );
-        const media = input.media ?? [];
-        if (
-          media.length !== mediaIds.length ||
-          media.some(({ mediaId }, index) => mediaId !== mediaIds[index])
-        ) {
-          throw new ValidationError('Media cannot be attached', { field: 'media' });
-        }
-        if (new Set(mediaIds).size !== mediaIds.length) {
-          throw new ValidationError('Media cannot be attached', { field: 'media' });
-        }
-        if (mediaIds.length > 0) {
-          if (!input.accountId) {
-            throw new ValidationError('Media cannot be attached', { field: 'media' });
-          }
-          const attachableMedia = await tx
-            .select({ id: Media.id })
-            .from(Media)
-            .where(
-              and(
-                inArray(Media.id, mediaIds),
-                eq(Media.accountId, input.accountId),
-                eq(Media.source, MediaSource.LOCAL),
-                eq(Media.state, MediaState.READY),
-              ),
-            );
-          if (attachableMedia.length !== mediaIds.length) {
-            throw new ValidationError('Media cannot be attached', { field: 'media' });
-          }
-          for (const { altText, mediaId } of media) {
-            await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
-          }
-        }
-      }
-
-      if (input.replyParentId !== undefined) {
-        const parent =
-          input.origin === 'LOCAL'
-            ? await findVisiblePost(tx, {
-                actorProfileId: input.profileId,
-                postId: input.replyParentId,
-              })
-            : await tx
-                .select({
-                  currentContentId: Posts.currentContentId,
-                  id: Posts.id,
-                  profileId: Posts.profileId,
-                })
-                .from(Posts)
-                .where(and(eq(Posts.id, input.replyParentId), eq(Posts.state, PostState.ACTIVE)))
-                .limit(1)
-                .then(first);
-        if (!parent) {
-          throw new NotFoundError('Post not found');
-        }
-        await assertProfilePairIsNotBlocked(tx, {
-          notFoundMessage: 'Post not found',
-          firstProfileId: input.profileId,
-          secondProfileId: parent.profileId,
-        });
-        if (parent.currentContentId === null) {
-          throw new ValidationError('Reply Parent must have content', {
-            field: 'replyParentId',
-          });
-        }
-      }
-
-      if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
-          actorProfileId: input.profileId,
-          postId: input.repostSourceId,
-        });
-      }
-
-      const createdAt =
-        input.origin === 'ACTIVITYPUB' &&
-        input.publishedAt &&
-        Temporal.Instant.compare(input.publishedAt, input.receivedAt) < 0
-          ? input.publishedAt
-          : input.origin === 'ACTIVITYPUB'
-            ? input.receivedAt
-            : undefined;
-      if (input.origin === 'ACTIVITYPUB') {
-        const media = await materializeRemoteMedia(tx, {
-          candidates: input.media ?? [],
-          profileId: input.profileId,
-        });
-        if (media.length > 0) {
-          document = canonicalizePostContentDocument({
-            ...document,
-            body: {
-              ...document.body,
-              content: [
-                ...document.body.content,
-                ...media.map(({ mediaId }) => ({
-                  attrs: { mediaId },
-                  type: 'media' as const,
-                })),
-              ],
-            },
-          });
-        }
-      }
-
-      const content = await tx
-        .insert(PostContents)
-        .values({
-          createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
-          document,
-          postId: null,
-        })
-        .returning()
-        .then(firstOrThrow);
-
-      const post = await tx
-        .insert(Posts)
-        .values({
-          actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
-          createdAt,
-          currentContentId: content.id,
-          profileId: input.profileId,
-          repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
-          quoteConsentStatus:
-            input.origin === 'LOCAL' && input.repostSourceId !== undefined
-              ? PostQuoteConsentStatus.APPROVED
-              : undefined,
-          state: PostState.ACTIVE,
-          visibility: input.visibility,
-        })
-        .returning()
-        .then(firstOrThrow);
-
-      if (input.origin === 'ACTIVITYPUB') {
-        await tx.insert(ActivityPubPosts).values({
-          postId: post.id,
-          publishedAt: input.publishedAt,
-          receivedAt: input.receivedAt,
-          uri: input.objectUri,
-        });
-      }
-
-      if (mentionProfileIds.size > 0) {
-        await tx.insert(PostMentions).values(
-          [...mentionProfileIds].map((profileId) => ({
-            postContentId: content.id,
-            profileId,
-          })),
-        );
-      }
-
-      validatePostStructure({
-        currentContentId: post.currentContentId,
-        id: post.id,
-        replyParentId: input.replyParentId ?? null,
-        repostSourceId: post.repostSourceId,
-      });
-
-      const linkedPost =
-        input.replyParentId === undefined
-          ? post
-          : await tx
-              .update(Posts)
-              .set({ replyParentId: input.replyParentId })
-              .where(eq(Posts.id, post.id))
-              .returning()
-              .then(firstOrThrow);
-      const linkedContent = await tx
-        .update(PostContents)
-        .set({ postId: post.id })
-        .where(eq(PostContents.id, content.id))
-        .returning()
-        .then(firstOrThrow);
-
-      return { content: linkedContent, created: true, post: linkedPost };
-    });
+    result = await db.transaction((tx) => createPostInTransaction(tx, input));
   } catch (error) {
     if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
       throw error;

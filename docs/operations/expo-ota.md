@@ -147,6 +147,19 @@ Native는 `Updates.channel`을 현재 channel source로 읽고 `expo-updates` pe
 last-known-good 또는 embedded fallback을 유지한다. Native code·module·SDK·permission 변경은 새 Store
 binary로 전달한다.
 
+## 다운로드 완료 로컬 알림 확인
+
+Native 기기에서 새 OTA 다운로드가 완료되면, 앱의 `ON_LOAD` 확인으로 관찰된 완료에 따라 기존 OS 알림 권한과
+foreground 알림 표시 동작을 사용해 `업데이트가 준비되었어요.` / `누르면 앱을 재시작해 적용합니다.` 로컬 OS 알림을
+표시한다. 이는 publish 완료 알림이 아니고 앱이 종료된 동안의 다운로드를 보장하지 않는다. 알림을 누르면 대기
+중인 update를 바로 적용하도록 앱이 재시작되며 현재 작업이 중단될 수 있다.
+
+Android와 iOS의 호환 Store binary에서 기기별로 확인하고, 기존 OS 권한이 허용된 상태에서는 다운로드 후 알림이
+표시되고 탭 뒤 OTA bundle이 적용되는지 기록한다. 기존 OS 알림 설정이 차단된 경우에는 추가 권한 요청 없이 그
+설정을 따르는지 확인한다. 이미 적용된 update 또는 일치하는 대기 update가 없는 오래된 알림을 눌렀을 때 추가
+재시작이나 social navigation 없이 처리되는지도 확인한다. 로컬 알림은 canonical Notification 목록이나 unread
+count를 만들지 않는다. 이 확인은 workflow publish 성공과 별개의 Native device evidence다.
+
 ## 사전 조건과 credential 경계
 
 - 두 caller workflow는 `main`에서 source를 선택하고, Deploy Dev는 성공한 Docker Build의

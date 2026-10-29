@@ -179,6 +179,11 @@ mock.module('@/theme/ThemeProvider', {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/useOverlayMotion', {
   exports: {

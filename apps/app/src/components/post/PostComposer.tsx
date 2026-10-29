@@ -1496,7 +1496,7 @@ const styles = StyleSheet.create({
   toolVisual: { borderRadius: radius[8] },
   visibilityControl: { position: 'relative', zIndex: 12 },
   visibilityDescription: textStyles.uiCopyS,
-  visibilityLabel: { width: 66, ...textStyles.uiLabelM },
+  visibilityLabel: textStyles.uiLabelM,
   visibilityMenu: {
     borderRadius: radius[12],
     borderWidth: borderWidths[1],
@@ -1529,6 +1529,6 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     paddingHorizontal: space[16],
-    width: 120,
+    minWidth: 120,
   },
 });

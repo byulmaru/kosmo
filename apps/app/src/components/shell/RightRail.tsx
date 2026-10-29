@@ -3,7 +3,7 @@ import { graphql, useFragment } from 'react-relay';
 import { PostComposerHost } from '@/components/post/PostComposerHost';
 import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, fontWeights, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
 import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
@@ -74,7 +74,12 @@ export function RightRailFooter() {
             accessibilityRole="link"
             style={styles.privacyLink}
           >
-            <Text style={[styles.footerText, { color: theme.textSecondary }]}>
+            <Text
+              style={[
+                styles.footerText,
+                { color: theme.textSecondary, fontWeight: fontWeights.bold },
+              ]}
+            >
               개인정보 처리방침
             </Text>
           </Pressable>

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ColorPickerPanel } from '@/components/ui/ColorPickerPanel';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -7,8 +8,13 @@ import type { ColorPickerPanelProps, ColorPickerValue } from '@/components/ui/Co
 
 const initialValue: ColorPickerValue = { brightness: 76, hue: 210, saturation: 64 };
 
-function ColorPickerPanelCatalog(props: ColorPickerPanelProps) {
+type ColorPickerPanelCatalogProps = ColorPickerPanelProps & {
+  updateArgs?: (update: Partial<Pick<ColorPickerPanelProps, 'value'>>) => void;
+};
+
+function ColorPickerPanelCatalog({ updateArgs, ...props }: ColorPickerPanelCatalogProps) {
   const [value, setValue] = useState(props.value);
+  useEffect(() => setValue(props.value), [props.value]);
 
   return (
     <ColorPickerPanel
@@ -16,26 +22,14 @@ function ColorPickerPanelCatalog(props: ColorPickerPanelProps) {
       onChange={(nextValue) => {
         setValue(nextValue);
         props.onChange(nextValue);
+        updateArgs?.({ value: nextValue });
       }}
       value={value}
     />
   );
 }
 
-const renderControlled = (args: ColorPickerPanelProps) => (
-  <ColorPickerPanelCatalog
-    key={JSON.stringify([
-      args.title,
-      args.value,
-      args.contrastWarning,
-      args.disabled,
-      args.surfaceAccessibilityLabel,
-      args.hueAccessibilityLabel,
-      args.hexAccessibilityLabel,
-    ])}
-    {...args}
-  />
-);
+const renderControlled = (args: ColorPickerPanelProps) => <ColorPickerPanelCatalog {...args} />;
 
 function RepresentativeStatesStory() {
   const callbacks = {
@@ -248,6 +242,10 @@ const colorPickerPlay: Story['play'] = async ({ args, canvasElement, step }) => 
 };
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<ColorPickerPanelProps>();
+    return <ColorPickerPanelCatalog {...args} updateArgs={updateArgs} />;
+  },
   parameters: {
     controls: {
       disable: false,
@@ -262,12 +260,12 @@ export const Playground: Story = {
       ],
     },
   },
-  render: renderControlled,
 };
 
 export const InteractionContract: Story = {
   ...Playground,
   parameters: { controls: { disable: true } },
+  render: renderControlled,
   play: colorPickerPlay,
 };
 
@@ -291,6 +289,7 @@ export const ReducedMotionContract: Story = {
   ...Playground,
   globals: { reduceMotion: true },
   parameters: { controls: { disable: true } },
+  render: renderControlled,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const surface = canvas.getByTestId('color-picker-surface');

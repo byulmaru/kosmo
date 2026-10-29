@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { formatPostActionCount } from './postActionCount';
@@ -156,7 +157,8 @@ export function PostActionControl({
           return (
             <>
               {isPending ? (
-                <ActivityIndicator
+                <LoadingIndicator
+                  accessibilityLabel={`${accessibilityLabel} 처리 중`}
                   accessible={false}
                   aria-hidden
                   color={foregroundColor}

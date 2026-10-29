@@ -33,10 +33,12 @@ let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
 });
+let completeUploadsImpl: () => Promise<void> = async () => undefined;
 const mediaValue = {
   hasPendingMedia: false,
   items: [{ altText: '대체 텍스트', mediaId: 'media-1' }],
   sensitiveMedia: true,
+  completeUploads: () => completeUploadsImpl(),
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
 let refreshMedia: (() => void) | undefined;
@@ -68,6 +70,7 @@ let targetProps:
       ) => void;
       onSubmit: () => void;
       onVisibilityChange: (value: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
+      remaining: number;
       selection: { end: number; start: number };
       selectionToApply?: { end: number; start: number };
       submitting?: boolean;
@@ -258,7 +261,12 @@ mockModule('./PostComposerProfileSwitcher', {
   },
 });
 mockModule('./PostComposerMediaControls', {
-  emptyPostComposerMediaValue: { hasPendingMedia: false, items: [], sensitiveMedia: false },
+  emptyPostComposerMediaValue: {
+    completeUploads: async () => undefined,
+    hasPendingMedia: false,
+    items: [],
+    sensitiveMedia: false,
+  },
   PostComposerMediaControls: ({
     onValueChange,
     render,
@@ -351,6 +359,7 @@ afterEach(async () => {
   });
   platform.OS = 'web';
   mediaState = 'ready';
+  completeUploadsImpl = async () => undefined;
   refreshMedia = undefined;
   switcherProps = undefined;
   targetProps = undefined;
@@ -427,6 +436,137 @@ describe('PostComposer initial body', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'PUBLIC',
     );
+  });
+});
+
+describe('PostComposer character count', () => {
+  it('counts the combined body and Content Warning in Unicode code points', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      targetProps?.onBodyChange('가'.repeat(500));
+      targetProps?.onContentWarningChange('😀');
+    });
+    assert.equal(targetProps?.remaining, -1);
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls.length, 0);
+
+    await act(async () => targetProps?.onBodyChange('가'.repeat(499)));
+    assert.equal(targetProps?.remaining, 0);
+    await act(async () => targetProps?.onSubmit());
+
+    assert.equal(mutationCalls.length, 1);
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '가'.repeat(499));
+    assert.equal(mutationCalls[0]?.variables.input.contentWarning, '😀');
+  });
+});
+
+describe('PostComposer media completion', () => {
+  it('waits for retained images before creating the Post', async () => {
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    completeUploadsImpl = () => completion;
+    const props = {
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('본문을 보존합니다'));
+    await act(async () => {
+      targetProps?.onSubmit();
+    });
+
+    assert.equal(mutationCalls.length, 0);
+    assert.equal(targetProps?.submitting, true);
+    assert.equal(targetProps?.body, '본문을 보존합니다');
+
+    await act(async () => {
+      resolveCompletion();
+      await completion;
+    });
+
+    assert.equal(mutationCalls.length, 1);
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.items);
+  });
+
+  it('keeps the draft and skips Post creation when media completion fails', async () => {
+    let rejectCompletion!: (error: Error) => void;
+    const completion = new Promise<void>((_resolve, reject) => {
+      rejectCompletion = reject;
+    });
+    completeUploadsImpl = () => completion;
+
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('재시도할 본문'));
+    await act(async () => {
+      targetProps?.onSubmit();
+    });
+    assert.equal(mutationCalls.length, 0);
+
+    await act(async () => {
+      rejectCompletion(new Error('Media completion failed'));
+      await completion.catch(() => undefined);
+    });
+
+    assert.equal(mutationCalls.length, 0);
+    assert.equal(targetProps?.submitting, false);
+    assert.equal(targetProps?.body, '재시도할 본문');
+  });
+
+  it('does not create a Post after the Relay Environment changes during completion', async () => {
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    completeUploadsImpl = () => completion;
+    const props = {
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('오래된 actor의 본문'));
+    await act(async () => {
+      targetProps?.onSubmit();
+    });
+    assert.equal(mutationCalls.length, 0);
+
+    relayEnvironment = createRelayEnvironment();
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, props));
+    });
+    await act(async () => {
+      resolveCompletion();
+      await completion;
+    });
+
+    assert.equal(mutationCalls.length, 0);
   });
 });
 

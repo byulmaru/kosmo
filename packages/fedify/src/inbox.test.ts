@@ -16,7 +16,9 @@ import {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './inbound-observability';
+import { configureFedifyInboxLogging } from './logging';
 import type { InboxContext } from '@fedify/fedify';
+import type { SentryNamespace } from '@logtape/sentry';
 
 type FollowHandler = (context: InboxContext<void>, activity: Follow) => void | Promise<void>;
 type ReactionHandler = (
@@ -211,6 +213,86 @@ describe('Fedify inbox routes', () => {
     }
   });
 
+  test('rejects an invalid inbox signature with 401 and logs its native reason and context', async (t) => {
+    const output: string[] = [];
+    const reporterCaptures: unknown[] = [];
+    const sentryIssues: Array<{ message: string; context: unknown }> = [];
+    const sentryLogs: Array<{ message: string; attributes: Record<string, unknown> }> = [];
+    const sentry = {
+      captureMessage: (message, context) => {
+        sentryIssues.push({ message: String(message), context });
+        return 'event-id';
+      },
+      captureException: () => 'event-id',
+      getActiveSpan: () => undefined,
+      getClient: () => ({ getOptions: () => ({ enableLogs: true }) }),
+      getIsolationScope: () => undefined,
+      logger: {
+        error: (message, attributes) => sentryLogs.push({ message: String(message), attributes }),
+      },
+    } satisfies SentryNamespace;
+    const capture = (...args: unknown[]) => output.push(String(args[0]));
+    t.mock.method(console, 'debug', capture);
+    t.mock.method(console, 'info', capture);
+    t.mock.method(console, 'warn', capture);
+    t.mock.method(console, 'error', capture);
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error) => reporterCaptures.push(error),
+      log: () => undefined,
+    });
+    configureFedifyInboxLogging(sentry);
+
+    try {
+      const fixture = await createInboxFixture(async () => undefined);
+      const response = await fixture.federation.fetch(
+        await fixture.createInvalidSignatureFollowRequest('/inbox', 'invalid-signature'),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 401);
+      assert.equal(reporterCaptures.length, 0);
+      const record = output
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find(
+          ({ logger: category, message }) =>
+            category === 'fedify.federation.inbox' &&
+            message === "Failed to verify the request's HTTP Signatures.",
+        );
+      assert.equal(record?.level, 'ERROR');
+      assert.equal(record?.logger, 'fedify.federation.inbox');
+      assert.deepEqual(record?.properties, {
+        keyId: remoteKeyUri.href,
+        recipient: null,
+        reason: 'invalidSignature',
+      });
+      assert.deepEqual(
+        sentryLogs.map(({ message, attributes }) => ({
+          keyId: attributes.keyId,
+          message,
+          reason: attributes.reason,
+          recipient: attributes.recipient,
+        })),
+        [
+          {
+            keyId: remoteKeyUri.href,
+            message: "Failed to verify the request's HTTP Signatures.",
+            reason: 'invalidSignature',
+            recipient: null,
+          },
+        ],
+      );
+      assert.deepEqual(
+        sentryIssues.map(({ message, context }) => ({
+          level: (context as { level: string }).level,
+          message,
+        })),
+        [{ level: 'error', message: "Failed to verify the request's HTTP Signatures." }],
+      );
+    } finally {
+      restoreReporter();
+    }
+  });
+
   test('does not capture a remote listener failure', async () => {
     const captures: unknown[] = [];
     const logs: unknown[] = [];
@@ -327,7 +409,7 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
       });
     });
 
-  const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
+  const createFollowRequest = async (path: string, id: string): Promise<Request> => {
     const activity = new Follow({
       actor: remoteActorUri,
       id: new URL(`/activities/${id}`, remoteActorUri),
@@ -338,11 +420,21 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
       headers: { 'content-type': 'application/activity+json' },
       method: 'POST',
     });
-
-    return signRequest(request, remoteKeyPair.privateKey, remoteKeyUri);
+    return request;
   };
 
-  return { createSignedFollowRequest, federation };
+  const createSignedFollowRequest = async (path: string, id: string): Promise<Request> =>
+    signRequest(await createFollowRequest(path, id), remoteKeyPair.privateKey, remoteKeyUri);
+
+  const createInvalidSignatureFollowRequest = async (
+    path: string,
+    id: string,
+  ): Promise<Request> => {
+    const otherKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    return signRequest(await createFollowRequest(path, id), otherKeyPair.privateKey, remoteKeyUri);
+  };
+
+  return { createInvalidSignatureFollowRequest, createSignedFollowRequest, federation };
 };
 
 const createReactionInboxFixture = async (onReaction: ReactionHandler) => {

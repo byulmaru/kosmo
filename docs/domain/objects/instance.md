@@ -57,6 +57,9 @@ Remote Instance를 구분하고, safety 정책, 통신 실패 관측, 서비스 
 Instance 하나로 결정한다. 모든 Profile은 Instance 하나와 연결되며 Profile Origin은 연결된 Instance Type과 같다.
 Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생한다.
 
+Configured Local Instance는 Profile과 독립적인 ActivityPub server actor와 서명 키를 소유한다. 이 actor는 공용 inbox
+처리에 필요한 인증된 공개키 조회의 서명 주체다. 서명 키는 공개 Instance 조회 결과나 GraphQL 응답에 포함하지 않는다.
+
 ## 행동
 
 | 행동                 | 행동 주체      | 대상 객체 | 입력값    | 권한                                 | 조건                                                                | 결과                                                                                     |

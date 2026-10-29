@@ -29,10 +29,16 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
+import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createStagingR2Fixture } from './staging-r2.fixture';
+import {
+  trackLocalPostCreateWorkflows,
+  waitForLocalPostCreateWorkflows,
+} from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
@@ -54,6 +60,7 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
@@ -72,9 +79,11 @@ let projectLocalPostNote: typeof ProjectLocalPostNote;
 let app: Hono<Env>;
 let localInstanceId: string;
 let stagingR2: Awaited<ReturnType<typeof createStagingR2Fixture>>;
+let restoreLocalPostCreateWorkflowTracking: (() => void) | undefined;
 
 describe('Post Reply GraphQL 경계', () => {
   before(async () => {
+    restoreLocalPostCreateWorkflowTracking = trackLocalPostCreateWorkflows();
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     stagingR2 = await createStagingR2Fixture();
@@ -88,6 +97,7 @@ describe('Post Reply GraphQL 경계', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
@@ -121,21 +131,29 @@ describe('Post Reply GraphQL 경계', () => {
   });
 
   beforeEach(async () => {
+    await waitForLocalPostCreateWorkflows();
     stagingR2.reset();
     await resetFixtures();
   });
 
   after(async () => {
-    await pg.end();
-    await stagingR2.close();
+    try {
+      await waitForLocalPostCreateWorkflows();
+    } finally {
+      restoreLocalPostCreateWorkflowTracking?.();
+      await pg.end();
+      await stagingR2.close();
+    }
   });
 
   test('replyParentId 생략은 기존 일반 Post 계약을 유지한다', async () => {
     const auth = await createAuthenticatedSession();
+    const hashtagName = `tag${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const bodyText = `일반 게시글 #${hashtagName}`;
 
     const result = await requestCreatePost(
       {
-        bodyText: '일반 게시글',
+        bodyText,
         contentWarning: '통합 검증 경고',
         visibility: PostVisibility.UNLISTED,
       },
@@ -159,6 +177,49 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
     assert.equal(content.document.summary, '통합 검증 경고');
+
+    const hashtag = await db
+      .select({ id: Hashtags.id })
+      .from(Hashtags)
+      .where(eq(Hashtags.name, hashtagName))
+      .then(firstOrThrow);
+    const projected = await requestGraphQL<{
+      node: { content: { bodyText: string; document: unknown } } | null;
+    }>(
+      `query CreatedHashtagPost($postId: ID!) {
+        node(id: $postId) {
+          ... on Post {
+            content { bodyText document }
+          }
+        }
+      }`,
+      { postId: encodeGlobalId('Post', stored.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(projected);
+    assert.equal(projected.data?.node?.content.bodyText, bodyText);
+    assert.deepEqual(projected.data?.node?.content.document, {
+      body: {
+        content: [
+          {
+            content: [
+              { text: '일반 게시글 ', type: 'text' },
+              {
+                attrs: {
+                  hashtagId: encodeGlobalId('Hashtag', hashtag.id),
+                  token: `#${hashtagName}`,
+                },
+                type: 'hashtag',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'doc',
+      },
+      summary: '통합 검증 경고',
+      version: 1,
+    });
   });
 
   test('createPost combines selected and typed Mentions into Profile relations', async () => {
@@ -557,7 +618,11 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(execute.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
+    const [workflow, options] = execute.mock.calls[0]!.arguments;
+    assert.equal(workflow, POST_CREATE_WORKFLOW_TYPE);
+    const workflowArgs = options.args?.[0] as { input: { origin: string } };
+    assert.equal(workflowArgs.input.origin, 'LOCAL');
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -732,10 +797,10 @@ describe('Post Reply GraphQL 경계', () => {
     });
 
     const result = await requestGraphQL<{
-      createPost: { post: { id: string; profile: { id: string } } };
+      createPost: { post: { id: string; profile: { id: string }; visibility: PostVisibility } };
     }>(
       `mutation CreatePost($input: CreatePostInput!) {
-        createPost(input: $input) { post { id profile { id } } }
+        createPost(input: $input) { post { id profile { id } visibility } }
       }`,
       {
         input: {
@@ -752,6 +817,7 @@ describe('Post Reply GraphQL 경계', () => {
       result.data?.createPost.post.profile.id,
       encodeGlobalId('Profile', composerProfile.id),
     );
+    assert.equal(result.data?.createPost.post.visibility, PostVisibility.FOLLOWERS);
     assert.equal(
       (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
         .activeProfileId,
@@ -1269,13 +1335,27 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(await uploadedResponse.json(), { id: session.id });
     assert.equal(stagingR2.objects.get(session.sourceKey)?.contentLength, onePixelPng.length);
 
+    const originalExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
     const execute = t.mock.method(
       temporalClient.workflow,
       'execute',
       async (
-        _workflow: Parameters<typeof temporalClient.workflow.execute>[0],
+        workflow: Parameters<typeof temporalClient.workflow.execute>[0],
         options: Parameters<typeof temporalClient.workflow.execute>[1],
       ) => {
+        if (workflow !== MEDIA_UPLOAD_WORKFLOW_TYPE) {
+          if (workflow === POST_CREATE_WORKFLOW_TYPE) {
+            const workflowInput = (
+              options.args?.[0] as {
+                input: { accountId?: string; media?: { mediaId: string }[] };
+              }
+            ).input;
+            assert.equal(workflowInput.accountId, auth.account.id);
+            assert.equal(workflowInput.media?.[0]?.mediaId, storedMedia.id);
+          }
+          return originalExecute(workflow, options);
+        }
+
         const { accountId, mediaId: workflowMediaId } = options.args?.[0] as {
           accountId: string;
           mediaId: string;
@@ -1302,7 +1382,19 @@ describe('Post Reply GraphQL 경계', () => {
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
-    assert.equal(execute.mock.callCount(), 1);
+    assert.equal(
+      execute.mock.calls.filter((call) => call.arguments[0] === MEDIA_UPLOAD_WORKFLOW_TYPE).length,
+      1,
+    );
+
+    const selectedMedia = await db
+      .select()
+      .from(Media)
+      .where(eq(Media.id, storedMedia.id))
+      .then(firstOrThrow);
+    assert.equal(selectedMedia.accountId, auth.account.id);
+    assert.equal(selectedMedia.source, MediaSource.LOCAL);
+    assert.equal(selectedMedia.state, MediaState.READY);
 
     const created = await requestCreatePost(
       {
@@ -1368,7 +1460,7 @@ describe('Post Reply GraphQL 경계', () => {
   test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const uploading = await createUploadingMedia(auth.account.id, auth.profile.id);
-    const before = await db.$count(Posts);
+    const before = { contents: await db.$count(PostContents), posts: await db.$count(Posts) };
 
     const wrongType = await requestCreatePost(
       {
@@ -1390,7 +1482,16 @@ describe('Post Reply GraphQL 경계', () => {
     );
     assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media');
-    assert.equal(await db.$count(Posts), before);
+    assert.deepEqual(
+      { contents: await db.$count(PostContents), posts: await db.$count(Posts) },
+      before,
+    );
+    const unchangedMedia = await db
+      .select()
+      .from(Media)
+      .where(eq(Media.id, uploading.id))
+      .then(firstOrThrow);
+    assert.equal(unchangedMedia.altText, uploading.altText);
   });
 
   test('조회 가능한 일반 Post·Reply·Quote를 Parent로 하고 독립 Visibility를 저장한다', async () => {
@@ -1458,32 +1559,6 @@ describe('Post Reply GraphQL 경계', () => {
     }
 
     assert.equal(await db.$count(Posts), before);
-    assert.equal(createContext.mock.callCount(), 0);
-  });
-
-  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
-    const auth = await createAuthenticatedSession();
-    const createContext = t.mock.method(localOutboundFederation, 'createContext');
-    t.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-
-    const result = await requestCreatePost(
-      {
-        bodyText: 'committed root post',
-        visibility: PostVisibility.PUBLIC,
-      },
-      auth.token,
-    );
-
-    assertNoGraphQLErrors(result);
-
-    const committed = await db
-      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-      .from(Posts)
-      .then(firstOrThrow);
-    assert.equal(committed.state, PostState.ACTIVE);
-    assert.ok(committed.currentContentId);
     assert.equal(createContext.mock.callCount(), 0);
   });
 

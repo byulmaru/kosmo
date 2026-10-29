@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { Pressable, Text } from 'react-native';
-import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
+import { useRef, useState } from 'react';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { PostMediaViewer } from '@/components/post/PostMediaViewer';
+import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import ogImage from '../../../public/og-default.png?url';
 import { post } from '../fixtures';
-import baseMeta, { PostMediaViewerCatalog } from './PostMediaViewer.stories';
+import baseMeta, {
+  PostMediaViewerCatalog,
+  PostMediaViewerPlayground,
+  wideRailCurrentPost,
+} from './PostMediaViewer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { StoryArgs } from './PostMediaViewer.stories';
 
@@ -28,6 +34,168 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const PlaygroundNavigationUpdatesIndex: Story = {
+  args: {
+    currentIndex: 4,
+    mediaItems: Array.from({ length: 5 }, (_, index) => ({
+      altText: `${index + 1}번째 이미지`,
+      id: `playground-media-${index + 1}`,
+      url: ogImage,
+    })),
+    onIndexChange: fn(),
+    onNext: fn(),
+    onPrevious: fn(),
+    presentation: 'compact',
+    viewState: 'ready',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: (args) => {
+    return PostMediaViewerPlayground(args);
+  },
+  play: async ({ args, canvasElement }) => {
+    args.onNext.mockClear();
+    args.onPrevious.mockClear();
+    const canvas = within(canvasElement);
+    await expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('5 / 5');
+
+    await userEvent.click(canvas.getByRole('button', { name: '이전 이미지' }));
+    await expect(args.onPrevious).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 5'),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '다음 이미지' }));
+    await expect(args.onNext).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(canvas.getByTestId('post-media-viewer-counter')).toHaveTextContent('5 / 5'),
+    );
+  },
+};
+
+export const PlaygroundClampsIndexToMediaLength: Story = {
+  args: {
+    currentIndex: 4,
+    mediaItems: Array.from({ length: 3 }, (_, index) => ({
+      altText: `${index + 1}번째 이미지`,
+      id: `playground-short-media-${index + 1}`,
+      url: ogImage,
+    })),
+    presentation: 'compact',
+    viewState: 'ready',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: (args) => {
+    return PostMediaViewerPlayground(args);
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByTestId('post-media-viewer-counter')).toHaveTextContent(
+      '3 / 3',
+    );
+  },
+};
+
+const repostId = 'post-media-viewer-repost';
+const repostMutationResponse = {
+  repostPost: {
+    repost: {
+      __typename: 'Post',
+      id: repostId,
+      repostSource: {
+        ...wideRailCurrentPost,
+        repostCount: 4,
+        viewerRepost: { __typename: 'Post', id: repostId },
+      },
+    },
+  },
+};
+
+function HostedPostMediaViewer(args: StoryArgs) {
+  const { height } = useWindowDimensions();
+  const originControl = useRef<View>(null);
+  const [open, setOpen] = useState(true);
+
+  return (
+    <View style={{ height: height + 240, width: '100%' }}>
+      <ActionMenuPresentationProvider presentation="platform">
+        {open ? (
+          <PostMediaViewer
+            onClose={() => setOpen(false)}
+            originControl={originControl}
+            selectedIndex={args.currentIndex}
+          >
+            <PostMediaViewerCatalog {...args} />
+          </PostMediaViewer>
+        ) : null}
+      </ActionMenuPresentationProvider>
+    </View>
+  );
+}
+
+async function clickAtHitTarget(element: HTMLElement, ownerDocument: Document) {
+  const bounds = element.getBoundingClientRect();
+  const coords = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+  const hitTarget = ownerDocument.elementFromPoint(coords.x, coords.y);
+
+  expect(hitTarget).not.toBeNull();
+  expect(element.contains(hitTarget)).toBe(true);
+  await userEvent.pointer({ coords, keys: '[MouseLeft]', target: hitTarget! });
+}
+
+async function hostedRepostMenuInteraction(
+  canvasElement: HTMLElement,
+  presentation: StoryArgs['presentation'],
+) {
+  const ownerDocument = canvasElement.ownerDocument;
+  const storyWindow = ownerDocument.defaultView!;
+  const previousScroll = { x: storyWindow.scrollX, y: storyWindow.scrollY };
+
+  try {
+    storyWindow.scrollTo(0, 120);
+    await waitFor(() => expect(storyWindow.scrollY).toBe(120));
+
+    const viewer = await screen.findByRole('dialog', { name: '이미지 뷰어' });
+    const actionOwner =
+      presentation === 'compact'
+        ? await within(viewer).findByTestId('post-media-viewer-compact-detail')
+        : await within(viewer).findByTestId('post-thread-current-wide-rail-current');
+    const repostTrigger = within(actionOwner).getByRole('button', { name: '재게시' });
+    await clickAtHitTarget(repostTrigger, ownerDocument);
+
+    let menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    expect(menu).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+    expect(screen.getByRole('dialog', { name: '이미지 뷰어' })).toBe(viewer);
+    await waitFor(() => expect(repostTrigger).toHaveFocus());
+
+    await clickAtHitTarget(repostTrigger, ownerDocument);
+    menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    expect(menu).toBeVisible();
+    await clickAtHitTarget(
+      within(menu).getByRole('menuitem', { name: '재게시하기' }),
+      ownerDocument,
+    );
+
+    await waitFor(() => {
+      expect(within(viewer).getByRole('button', { name: '재게시 취소' })).toHaveTextContent(/^4$/);
+    });
+    const viewerClose = within(viewer).getByTestId('post-media-viewer-close');
+    viewerClose.focus();
+    expect(viewerClose).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '이미지 뷰어' })).toBeNull());
+  } finally {
+    const close = ownerDocument.querySelector<HTMLElement>(
+      '[data-testid="post-media-viewer-close"]',
+    );
+    if (close) {
+      await userEvent.click(close);
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: '이미지 뷰어' })).toBeNull());
+    }
+    storyWindow.scrollTo(previousScroll.x, previousScroll.y);
+  }
+}
 
 function RevisionSurface(args: StoryArgs) {
   const [revision, setRevision] = useState('content-a');
@@ -269,6 +437,30 @@ export const CompactProductionActionSurfaceContract: Story = {
       await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
     });
   },
+};
+
+export const CompactHostedRepostMenuInteraction: Story = {
+  args: { currentIndex: 0, mediaCount: 4, presentation: 'compact', viewState: 'ready' },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    layout: 'fullscreen',
+    relay: { ...baseMeta.parameters.relay, mutationResponse: repostMutationResponse },
+  },
+  render: (args) => <HostedPostMediaViewer {...args} />,
+  play: async ({ args, canvasElement }) =>
+    hostedRepostMenuInteraction(canvasElement, args.presentation),
+};
+
+export const WideHostedRepostMenuInteraction: Story = {
+  args: { currentIndex: 0, mediaCount: 4, presentation: 'wide', viewState: 'ready' },
+  globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMediaViewerWide' } },
+  parameters: {
+    layout: 'fullscreen',
+    relay: { ...baseMeta.parameters.relay, mutationResponse: repostMutationResponse },
+  },
+  render: (args) => <HostedPostMediaViewer {...args} />,
+  play: async ({ args, canvasElement }) =>
+    hostedRepostMenuInteraction(canvasElement, args.presentation),
 };
 
 export const CompactLongBodyContract: Story = {

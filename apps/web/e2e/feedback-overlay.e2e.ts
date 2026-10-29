@@ -12,7 +12,7 @@ test('shell action으로 URL을 바꾸지 않고 overlay를 열며 direct route 
   const viewer = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, viewer.token);
 
-  await page.goto('/home?context=notifications');
+  await page.goto('/local?context=notifications');
   const feedbackButton = page
     .getByTestId('universal-shell-root')
     .getByRole('button', { name: '피드백 보내기' });
@@ -21,13 +21,13 @@ test('shell action으로 URL을 바꾸지 않고 overlay를 열며 direct route 
 
   const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
   await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL(/\/home\?context=notifications$/u);
+  await expect(page).toHaveURL(/\/local\?context=notifications$/u);
 
   await dialog.getByRole('button', { name: '피드백 닫기' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/home\?context=notifications$/u);
+  await expect(page).toHaveURL(/\/local\?context=notifications$/u);
 
-  await page.goto('/home?context=notifications&feedback=open');
+  await page.goto('/local?context=notifications&feedback=open');
   await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
 
   await page.goto('/feedback?feedback=open');
@@ -51,7 +51,7 @@ test('성공 후 같은 overlay에서 연속 입력한다', async ({ context, pa
   const viewer = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, viewer.token);
 
-  await page.goto('/home');
+  await page.goto('/local');
   await page
     .getByTestId('universal-shell-root')
     .getByRole('button', { name: '피드백 보내기' })
@@ -64,7 +64,7 @@ test('성공 후 같은 overlay에서 연속 입력한다', async ({ context, pa
   await submit.click();
   await expect(dialog.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
   await expect(body).toHaveValue('');
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(/\/local$/u);
 
   await body.fill('바로 이어서 보내는 두 번째 피드백');
   await expect(submit).toBeEnabled();
@@ -75,7 +75,7 @@ test('overlay가 focus와 document scroll을 복원한다', async ({ context, pa
   await setE2ESessionCookie(context, viewer.token);
 
   await page.setViewportSize({ height: 800, width: 900 });
-  await page.goto('/home');
+  await page.goto('/local');
   await page.evaluate(() => {
     document.body.style.minHeight = '2000px';
     window.scrollTo(0, 420);
@@ -105,7 +105,7 @@ test('keyboard trap, Escape와 clean backdrop을 한 close 경계로 처리한�
   await setE2ESessionCookie(context, viewer.token);
 
   await page.setViewportSize({ height: 800, width: 900 });
-  await page.goto('/home');
+  await page.goto('/local');
   const feedbackButton = page
     .getByTestId('universal-shell-root')
     .getByRole('button', { name: '피드백 보내기' });
@@ -122,14 +122,14 @@ test('keyboard trap, Escape와 clean backdrop을 한 close 경계로 처리한�
   await expect(close).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(/\/local$/u);
   await expect(feedbackButton).toBeFocused();
 
   await feedbackButton.click();
   await expect(dialog).toBeVisible();
   await page.mouse.click(10, 10);
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(/\/local$/u);
 });
 
 test('dirty backdrop은 확인과 폐기 뒤에만 overlay를 닫는다', async ({ context, page }) => {
@@ -137,7 +137,7 @@ test('dirty backdrop은 확인과 폐기 뒤에만 overlay를 닫는다', async 
   await setE2ESessionCookie(context, viewer.token);
 
   await page.setViewportSize({ height: 800, width: 900 });
-  await page.goto('/home');
+  await page.goto('/local');
   await page
     .getByTestId('universal-shell-root')
     .getByRole('button', { name: '피드백 보내기' })
@@ -166,7 +166,7 @@ test('dirty backdrop은 확인과 폐기 뒤에만 overlay를 닫는다', async 
   await expect(discardButton).toBeFocused();
   await discardButton.click();
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(/\/local$/u);
 });
 
 test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 유지한다', async ({
@@ -177,7 +177,7 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
   await setE2ESessionCookie(context, viewer.token);
 
   await page.setViewportSize({ height: 568, width: 390 });
-  await page.goto('/home');
+  await page.goto('/local');
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   await page.locator('#mobile-sidebar').getByRole('button', { name: '피드백 보내기' }).click();
   const surface = page.getByTestId('feedback-overlay-surface');
@@ -232,7 +232,7 @@ test('첨부 draft를 보호하고 Sentry 피드백 성공 후 입력을 초기�
     mimeType: 'image/png',
     name: `feedback-${index}.png`,
   }));
-  await page.goto('/home');
+  await page.goto('/local');
   await page
     .getByTestId('universal-shell-root')
     .getByRole('button', { name: '피드백 보내기' })

@@ -23,6 +23,7 @@ if (enabled) {
     beforeBreadcrumb: () => null,
     dsn,
     enableAutoSessionTracking: false,
+    enableTombstone: true,
     environment: channel,
     initialScope: { tags: { runtime: 'native' } },
     release,

@@ -3,6 +3,7 @@ import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import {
@@ -24,7 +25,10 @@ import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
 import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ComposerMediaEditorMobileState } from '@/components/post/ComposerMediaEditor';
+import type {
+  ComposerMediaEditorMobileState,
+  ComposerMediaEditorTool,
+} from '@/components/post/ComposerMediaEditor';
 import type { PostComposerProps } from '@/components/post/PostComposer';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type {
@@ -54,6 +58,11 @@ export const composerMedia: readonly ComposerMediaItem[] = [
 
 const readyComposerMedia = composerMedia.filter((item) => item.state === 'ready');
 const onMobileClose = fn();
+
+type InteractiveComposerArgs = Pick<
+  PostComposerProps,
+  'body' | 'contentWarning' | 'contentWarningExpanded' | 'sensitiveMedia' | 'visibility'
+>;
 
 const reactionOptions = [
   {
@@ -213,7 +222,10 @@ export const Playground: Story = {
       ],
     },
   },
-  render: (args) => <InteractiveComposer {...args} showPollAction={false} />,
+  render: (args) => {
+    const [, updateArgs] = useArgs<PostComposerProps>();
+    return <InteractiveComposer {...args} showPollAction={false} updateArgs={updateArgs} />;
+  },
 };
 
 export const RailEmptyPublic: Story = {
@@ -347,8 +359,13 @@ function SubmitFailureComposer(props: PostComposerProps) {
 function InteractiveComposer({
   keyboard = false,
   mobile = false,
+  updateArgs,
   ...props
-}: PostComposerProps & { keyboard?: boolean; mobile?: boolean }) {
+}: PostComposerProps & {
+  keyboard?: boolean;
+  mobile?: boolean;
+  updateArgs?: (args: Partial<InteractiveComposerArgs>) => void;
+}) {
   const theme = useTheme();
   const [draft, setDraft] = useState<PostComposerDraft>(() => {
     const caret = props.body.length;
@@ -360,6 +377,7 @@ function InteractiveComposer({
       selection,
     };
   });
+  const bodyValueRef = useRef(props.body);
   const { body, selection } = draft;
   const composerProps = {
     ...props,
@@ -381,7 +399,7 @@ function InteractiveComposer({
   const [editor, setEditor] = useState<{
     key: string;
     mobileState: ComposerMediaEditorMobileState;
-    tool: 'alt' | 'sensitive';
+    tool: ComposerMediaEditorTool;
   } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
@@ -393,8 +411,8 @@ function InteractiveComposer({
   });
   const remaining =
     postBodyMaxLength -
-    normalizePostContentPlainText(body).length -
-    normalizePostContentPlainText(contentWarning).length;
+    [...normalizePostContentPlainText(body)].length -
+    [...normalizePostContentPlainText(contentWarning)].length;
   const closePicker = useCallback(() => {
     setPickerOpen(false);
     pickerTriggerRef.current?.focus();
@@ -408,7 +426,41 @@ function InteractiveComposer({
     }
   };
 
+  const changeBody = (value: string, selection?: PostComposerTextSelection) => {
+    bodyValueRef.current = value;
+    setDraft((previous) => {
+      const next = updatePostComposerDraftBody(previous, value);
+      return selection ? { ...next, previousSelection: selection, selection } : next;
+    });
+    props.onBodyChange(value);
+    updateArgs?.({ body: value });
+  };
+  const changeContentWarning = (value: string) => {
+    setContentWarning(value);
+    props.onContentWarningChange(value);
+    updateArgs?.({ contentWarning: value });
+  };
+  const toggleContentWarning = () => {
+    const expanded = !contentWarningExpanded;
+    setContentWarningExpanded(expanded);
+    props.onContentWarningToggle();
+    updateArgs?.({ contentWarningExpanded: expanded });
+  };
+  const changeVisibility = (value: PostComposerProps['visibility']) => {
+    setVisibility(value);
+    props.onVisibilityChange(value);
+    updateArgs?.({ visibility: value });
+  };
+  const changeSensitiveMedia = (value: boolean) => {
+    setSensitiveMedia(value);
+    updateArgs?.({ sensitiveMedia: value });
+  };
+
   useEffect(() => {
+    if (props.body === bodyValueRef.current) {
+      return;
+    }
+    bodyValueRef.current = props.body;
     const caret = props.body.length;
     const selection = { start: caret, end: caret };
     setDraft({ body: props.body, mentionRanges: [], previousSelection: selection, selection });
@@ -481,15 +533,8 @@ function InteractiveComposer({
           return;
         }
         const value = `${body}${option.emoji}`;
-        props.onBodyChange(value);
-        setDraft((previous) => {
-          const caret = { start: value.length, end: value.length };
-          return {
-            ...updatePostComposerDraftBody(previous, value),
-            previousSelection: caret,
-            selection: caret,
-          };
-        });
+        const caret = { start: value.length, end: value.length };
+        changeBody(value, caret);
         closePicker();
       }}
       options={reactionOptions}
@@ -543,6 +588,13 @@ function InteractiveComposer({
         <ComposerMediaEditor
           media={items.filter((item) => item.state === 'ready')}
           mobileState={editor.mobileState}
+          onApplyNightshadeChange={(key, value) => {
+            setItems((current) =>
+              current.map((item) =>
+                item.key === key ? { ...item, applyNightshade: value } : item,
+              ),
+            );
+          }}
           onAltTextChange={(key, altText) => {
             setItems((current) =>
               current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -560,7 +612,7 @@ function InteractiveComposer({
               : undefined
           }
           onSelectMedia={(key) => setEditor((current) => (current ? { ...current, key } : current))}
-          onSensitiveMediaChange={setSensitiveMedia}
+          onSensitiveMediaChange={changeSensitiveMedia}
           onToolChange={(tool) =>
             setEditor((current) => {
               if (!current) {
@@ -569,11 +621,11 @@ function InteractiveComposer({
               return {
                 ...current,
                 mobileState:
-                  tool === 'sensitive'
-                    ? 'sensitive'
-                    : current.mobileState === 'altKeyboard'
+                  tool === 'alt'
+                    ? current.mobileState === 'altKeyboard'
                       ? 'default'
-                      : 'altKeyboard',
+                      : 'altKeyboard'
+                    : tool,
                 tool,
               };
             })
@@ -599,18 +651,9 @@ function InteractiveComposer({
           items={items}
           remaining={remaining}
           keyboard={keyboard}
-          onBodyChange={(value) => {
-            props.onBodyChange(value);
-            setDraft((previous) => updatePostComposerDraftBody(previous, value));
-          }}
-          onContentWarningChange={(value) => {
-            props.onContentWarningChange(value);
-            setContentWarning(value);
-          }}
-          onContentWarningToggle={() => {
-            props.onContentWarningToggle();
-            setContentWarningExpanded((expanded) => !expanded);
-          }}
+          onBodyChange={changeBody}
+          onContentWarningChange={changeContentWarning}
+          onContentWarningToggle={toggleContentWarning}
           onEmojiAction={togglePicker}
           onMediaEdit={(key, tool) => {
             props.onMediaEdit(key, tool);
@@ -626,10 +669,7 @@ function InteractiveComposer({
           }}
           onMediaRetry={(key) => props.onMediaRetry(key)}
           onOverlayClose={onMobileClose}
-          onVisibilityChange={(value) => {
-            props.onVisibilityChange(value);
-            setVisibility(value);
-          }}
+          onVisibilityChange={changeVisibility}
           sensitiveMedia={sensitiveMedia}
           visibility={visibility}
         />
@@ -642,18 +682,9 @@ function InteractiveComposer({
             contentWarningExpanded={contentWarningExpanded}
             items={items}
             remaining={remaining}
-            onBodyChange={(value) => {
-              props.onBodyChange(value);
-              setDraft((previous) => updatePostComposerDraftBody(previous, value));
-            }}
-            onContentWarningChange={(value) => {
-              props.onContentWarningChange(value);
-              setContentWarning(value);
-            }}
-            onContentWarningToggle={() => {
-              props.onContentWarningToggle();
-              setContentWarningExpanded((expanded) => !expanded);
-            }}
+            onBodyChange={changeBody}
+            onContentWarningChange={changeContentWarning}
+            onContentWarningToggle={toggleContentWarning}
             onEmojiAction={togglePicker}
             onExpand={() => {
               props.onExpand();
@@ -673,10 +704,7 @@ function InteractiveComposer({
               setItems((current) => current.filter((item) => item.key !== key));
             }}
             onMediaRetry={(key) => props.onMediaRetry(key)}
-            onVisibilityChange={(value) => {
-              props.onVisibilityChange(value);
-              setVisibility(value);
-            }}
+            onVisibilityChange={changeVisibility}
             sensitiveMedia={sensitiveMedia}
             surface={props.surface}
             visibility={visibility}
@@ -694,6 +722,13 @@ function InteractiveComposer({
           {editor ? (
             <ComposerMediaEditor
               media={items.filter((item) => item.state === 'ready')}
+              onApplyNightshadeChange={(key, value) => {
+                setItems((current) =>
+                  current.map((item) =>
+                    item.key === key ? { ...item, applyNightshade: value } : item,
+                  ),
+                );
+              }}
               onAltTextChange={(key, altText) => {
                 setItems((current) =>
                   current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -705,7 +740,7 @@ function InteractiveComposer({
               onSelectMedia={(key) =>
                 setEditor((current) => (current ? { ...current, key } : current))
               }
-              onSensitiveMediaChange={setSensitiveMedia}
+              onSensitiveMediaChange={changeSensitiveMedia}
               onToolChange={(tool) =>
                 setEditor((current) => (current ? { ...current, tool } : current))
               }
@@ -740,18 +775,9 @@ function InteractiveComposer({
                 contentWarningExpanded={contentWarningExpanded}
                 items={items}
                 remaining={remaining}
-                onBodyChange={(value) => {
-                  props.onBodyChange(value);
-                  setDraft((previous) => updatePostComposerDraftBody(previous, value));
-                }}
-                onContentWarningChange={(value) => {
-                  props.onContentWarningChange(value);
-                  setContentWarning(value);
-                }}
-                onContentWarningToggle={() => {
-                  props.onContentWarningToggle();
-                  setContentWarningExpanded((expanded) => !expanded);
-                }}
+                onBodyChange={changeBody}
+                onContentWarningChange={changeContentWarning}
+                onContentWarningToggle={toggleContentWarning}
                 onEmojiAction={togglePicker}
                 onMediaEdit={(key, tool) => {
                   props.onMediaEdit(key, tool);
@@ -766,10 +792,7 @@ function InteractiveComposer({
                   setItems((current) => current.filter((item) => item.key !== key));
                 }}
                 onMediaRetry={(key) => props.onMediaRetry(key)}
-                onVisibilityChange={(value) => {
-                  props.onVisibilityChange(value);
-                  setVisibility(value);
-                }}
+                onVisibilityChange={changeVisibility}
                 sensitiveMedia={sensitiveMedia}
                 surface="overlay"
                 visibility={visibility}
@@ -1158,6 +1181,7 @@ export const MobileRuntimeAltEditorContract: Story = {
         media={readyComposerMedia}
         mobileState="alt"
         onAltTextChange={fn()}
+        onApplyNightshadeChange={fn()}
         onBack={fn()}
         onClose={fn()}
         onDone={fn()}

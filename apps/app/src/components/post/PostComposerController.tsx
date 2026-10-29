@@ -37,6 +37,7 @@ import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -349,7 +350,7 @@ function PostComposerContents({
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
-    tool: 'alt' | 'sensitive';
+    tool: ComposerMediaEditorTool;
   } | null>(null);
   if (!expanded && mediaEditor !== null) {
     setMediaEditor(null);
@@ -375,7 +376,7 @@ function PostComposerContents({
     media.items.length > 0 ||
     media.hasPendingMedia;
   const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
-  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
+  const remaining = postBodyMaxLength - [...bodyText].length - [...contentWarningText].length;
   const disabled =
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
@@ -432,7 +433,7 @@ function PostComposerContents({
     };
   }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
 
-  const submit = () => {
+  const submit = async () => {
     if (disabled) {
       return;
     }
@@ -442,6 +443,24 @@ function PostComposerContents({
     const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
+    const isCurrentSubmission = () =>
+      mountedRef.current &&
+      contextGenerationRef.current === submissionGeneration &&
+      environmentGenerationRef?.current === submissionEnvironmentGeneration &&
+      contextGuard?.current === submissionGuardGeneration;
+
+    try {
+      await media.completeUploads();
+    } catch {
+      if (isCurrentSubmission()) {
+        setSubmitting(false);
+      }
+      return;
+    }
+    if (!isCurrentSubmission()) {
+      return;
+    }
+
     commit({
       variables: {
         prependToHome: profile.id === globalProfileId,
@@ -464,12 +483,7 @@ function PostComposerContents({
         },
       },
       onCompleted: (response) => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+        if (!isCurrentSubmission()) {
           return;
         }
         setSubmitting(false);
@@ -501,12 +515,7 @@ function PostComposerContents({
         submittedCallback?.(createdPost);
       },
       onError: () => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+        if (!isCurrentSubmission()) {
           return;
         }
         setSubmitting(false);
@@ -620,6 +629,7 @@ function PostComposerContents({
               render={({
                 items,
                 onAltTextChange,
+                onApplyNightshadeChange,
                 onMediaAction,
                 onMediaRemove,
                 onMediaRetry,
@@ -653,8 +663,9 @@ function PostComposerContents({
                 const mediaEditorContent = mediaEditor ? (
                   <ComposerMediaEditor
                     media={items}
-                    mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
+                    mobileState={mediaEditor.tool}
                     onAltTextChange={onAltTextChange}
+                    onApplyNightshadeChange={onApplyNightshadeChange}
                     onBack={closeMediaEditor}
                     onClose={() => {
                       setMediaEditor(null);
@@ -671,7 +682,7 @@ function PostComposerContents({
                   />
                 ) : null;
 
-                const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
+                const openMediaEditor = (key: string, tool: ComposerMediaEditorTool) => {
                   editor.current?.blur();
                   setMediaEditor({ key, tool });
                   if (resolvedPresentation === 'rail') {

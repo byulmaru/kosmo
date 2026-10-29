@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMediaItemsTarget';
 import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ComposerMediaEditorTool } from '@/components/post/ComposerMediaEditor';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostComposerUploadedMediaItemsTargetProps } from '@/components/post/PostComposerMediaItemsTarget';
 
@@ -63,11 +65,22 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+type InteractiveMediaItemsProps = PostComposerUploadedMediaItemsTargetProps & {
+  updateArgs?: (
+    update: Partial<Pick<PostComposerUploadedMediaItemsTargetProps, 'media' | 'sensitiveMedia'>>,
+  ) => void;
+};
 
 export const Playground: Story = {
-  render: (args) => (
-    <InteractiveMediaItems {...(args as PostComposerUploadedMediaItemsTargetProps)} />
-  ),
+  render: (args) => {
+    const [, updateArgs] = useArgs<PostComposerUploadedMediaItemsTargetProps>();
+    return (
+      <InteractiveMediaItems
+        {...(args as PostComposerUploadedMediaItemsTargetProps)}
+        updateArgs={updateArgs}
+      />
+    );
+  },
 };
 
 export const Uploading: Story = {
@@ -82,12 +95,12 @@ export const Failed: Story = {
   args: { media: [mixedMedia[2]], sensitiveMedia: false },
 };
 
-function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps) {
+function InteractiveMediaItems({ updateArgs, ...props }: InteractiveMediaItemsProps) {
   const [media, setMedia] = useState(props.media);
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
   const [editorOpen, setEditorOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(props.media[0]?.key ?? '');
-  const [tool, setTool] = useState<'alt' | 'sensitive'>('alt');
+  const [tool, setTool] = useState<ComposerMediaEditorTool>('alt');
 
   useEffect(() => setMedia(props.media), [props.media]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
@@ -105,7 +118,9 @@ function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps)
         }}
         onRemove={(key) => {
           props.onRemove(key);
-          setMedia((current) => current.filter((item) => item.key !== key));
+          const nextMedia = media.filter((item) => item.key !== key);
+          setMedia(nextMedia);
+          updateArgs?.({ media: nextMedia });
         }}
         onRetry={props.onRetry}
         sensitiveMedia={sensitiveMedia}
@@ -120,16 +135,28 @@ function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps)
         {editorOpen ? (
           <ComposerMediaEditor
             media={media.filter((item) => item.state === 'ready')}
-            onAltTextChange={(key, altText) => {
-              setMedia((current) =>
-                current.map((item) => (item.key === key ? { ...item, altText } : item)),
+            onApplyNightshadeChange={(key, value) => {
+              const nextMedia = media.map((item) =>
+                item.key === key ? { ...item, applyNightshade: value } : item,
               );
+              setMedia(nextMedia);
+              updateArgs?.({ media: nextMedia });
+            }}
+            onAltTextChange={(key, altText) => {
+              const nextMedia = media.map((item) =>
+                item.key === key ? { ...item, altText } : item,
+              );
+              setMedia(nextMedia);
+              updateArgs?.({ media: nextMedia });
             }}
             onBack={() => setEditorOpen(false)}
             onClose={() => setEditorOpen(false)}
             onDone={() => setEditorOpen(false)}
             onSelectMedia={(key) => setSelectedKey(key)}
-            onSensitiveMediaChange={setSensitiveMedia}
+            onSensitiveMediaChange={(value) => {
+              setSensitiveMedia(value);
+              updateArgs?.({ sensitiveMedia: value });
+            }}
             onToolChange={setTool}
             presentation="web"
             selectedKey={selectedKey}
@@ -193,7 +220,17 @@ export const InteractionContract: Story = {
     );
     expect(args.onEdit).toHaveBeenLastCalledWith('ready-with-alt', 'sensitive');
     dialog = page.getByRole('dialog', { name: '미디어 편집' });
-    expect(within(dialog).getByRole('switch', { name: '민감한 이미지' })).toBeVisible();
+    let sensitiveMedia = within(dialog).getByRole('switch', { name: '민감한 이미지' });
+    expect(sensitiveMedia).toBeChecked();
+    await userEvent.click(sensitiveMedia);
+    expect(sensitiveMedia).not.toBeChecked();
+    await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
+    expect(page.queryByRole('dialog', { name: '미디어 편집' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 편집' }));
+    dialog = page.getByRole('dialog', { name: '미디어 편집' });
+    await userEvent.click(within(dialog).getByRole('tab', { name: '민감도' }));
+    sensitiveMedia = within(dialog).getByRole('switch', { name: '민감한 이미지' });
+    expect(sensitiveMedia).not.toBeChecked();
     await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
     expect(page.queryByRole('dialog', { name: '미디어 편집' })).toBeNull();
 
@@ -202,6 +239,8 @@ export const InteractionContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
     expect(args.onRemove).toHaveBeenLastCalledWith('uploading');
+    expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 중')).toBeNull();
+    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
   },
   render: (args) => (
     <InteractiveMediaItems {...(args as PostComposerUploadedMediaItemsTargetProps)} />

@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -234,6 +235,10 @@ function HomeContentView({
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+
+  if (data.currentSession && data.me && data.me.profiles.length === 0) {
+    return <Redirect href="/first-profile/handle" />;
+  }
 
   if (!selectedProfile) {
     return (

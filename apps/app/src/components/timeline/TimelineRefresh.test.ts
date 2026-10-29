@@ -83,6 +83,9 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
   };
 };
 
+mockModule('expo-router', {
+  Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
+});
 mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
 mockModule('react-native', {
@@ -135,6 +138,7 @@ mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () =>
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });

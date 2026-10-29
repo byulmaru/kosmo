@@ -433,6 +433,10 @@ test('Follow Request approval copies the requester Account onto the Follow sourc
       ? approved.result.profileFollowId
       : undefined;
   assert.ok(followId);
+  assert.equal(
+    approved.effectPlan.some((effect) => effect.kind === 'ACCEPT_INBOUND_FOLLOW'),
+    false,
+  );
   const follow = await db
     .select()
     .from(ProfileFollows)
@@ -444,6 +448,7 @@ test('Follow Request approval copies the requester Account onto the Follow sourc
     pair,
     pendingRequestId: requestId,
     command: approvalCommand,
+    acceptInboundFollow: true,
   });
   assert.equal(retry.ok, true);
   if (!retry.ok) {
@@ -457,6 +462,98 @@ test('Follow Request approval copies the requester Account onto the Follow sourc
     .where(eq(ProfileFollows.id, followId))
     .then(firstOrThrow);
   assert.equal(followAfterRetry.actorAccountId, requester.id);
+});
+
+test('remote Follow approval plans Accept for the exact request, including a commit-response retry', async () => {
+  for (const acceptInboundFollow of [false, true]) {
+    const follower = await createRemoteProfile(InstanceState.ACTIVE);
+    const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+    const pair = { followerProfileId: follower.id, followeeProfileId: followee.id };
+    const pending = await executeProfileFollowPairTransition({
+      pair,
+      command: {
+        kind: 'FOLLOW',
+        origin: 'ACTIVITYPUB',
+      },
+    });
+    assert.equal(pending.ok, true);
+    if (!pending.ok || pending.result.commandKind !== 'FOLLOW') {
+      return;
+    }
+    const requestId = pending.result.profileFollowRequestId;
+    assert.ok(requestId);
+
+    const approvalCommand = {
+      kind: 'APPROVE' as const,
+      actorProfileId: followee.id,
+      expectedRowId: requestId,
+      origin: 'LOCAL' as const,
+    };
+    const approved = await executeProfileFollowPairTransition({
+      pair,
+      pendingRequestId: requestId,
+      command: approvalCommand,
+      ...(acceptInboundFollow ? { acceptInboundFollow: true as const } : {}),
+    });
+    assert.equal(approved.ok, true);
+    if (!approved.ok || approved.result.commandKind !== 'APPROVE') {
+      return;
+    }
+    const profileFollowId = approved.result.profileFollowId;
+    assert.ok(profileFollowId);
+
+    const expectedPlan = [
+      {
+        kind: 'DELETE' as const,
+        input: {
+          sourceId: requestId,
+          followerProfileId: follower.id,
+          followeeProfileId: followee.id,
+          sourceKind: 'FOLLOW_REQUEST' as const,
+        },
+      },
+      {
+        kind: 'CREATE' as const,
+        input: { sourceId: profileFollowId, sourceKind: 'FOLLOW' as const },
+      },
+      ...(acceptInboundFollow
+        ? [
+            {
+              kind: 'ACCEPT_INBOUND_FOLLOW' as const,
+              input: {
+                ...pair,
+                pendingRequestId: requestId,
+                profileFollowId,
+              },
+            },
+          ]
+        : []),
+    ];
+    assert.deepEqual(approved.effectPlan, expectedPlan);
+
+    if (acceptInboundFollow) {
+      const retriedApproval = await executeProfileFollowPairTransition({
+        pair,
+        pendingRequestId: requestId,
+        command: approvalCommand,
+        acceptInboundFollow: true,
+      });
+      assert.equal(retriedApproval.ok, true);
+      if (!retriedApproval.ok) {
+        return;
+      }
+      assert.deepEqual(retriedApproval.effectPlan, [
+        {
+          kind: 'ACCEPT_INBOUND_FOLLOW',
+          input: {
+            ...pair,
+            pendingRequestId: requestId,
+            profileFollowId,
+          },
+        },
+      ]);
+    }
+  }
 });
 
 test('open-policy promotion copies the original Follow Request actor', async () => {

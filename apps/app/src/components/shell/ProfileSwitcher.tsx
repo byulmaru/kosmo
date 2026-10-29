@@ -465,7 +465,29 @@ export function ProfileSwitcher({
         </>
       }
       menuFooter={
-        !creating ? (
+        !creating && profiles.length === 0 ? (
+          <NavigationLink
+            href="/first-profile/handle"
+            onNavigate={() => {
+              dismissPicker();
+              onNavigate?.();
+            }}
+          >
+            <Pressable
+              accessibilityLabel="첫 프로필 만들기"
+              accessibilityRole="link"
+              disabled={busy}
+              style={styles.addProfile}
+            >
+              <View style={styles.addIcon}>
+                <PlusIcon color={theme.foregroundPrimary} size={18} strokeWidth={2.25} />
+              </View>
+              <Text style={[styles.addLabel, { color: theme.foregroundPrimary }]}>
+                프로필 만들기
+              </Text>
+            </Pressable>
+          </NavigationLink>
+        ) : !creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
             accessibilityRole="button"
@@ -620,6 +642,7 @@ export function ProfileSwitcher({
         {active?.header?.url ? (
           <Image
             accessible={false}
+            fadeDuration={0}
             resizeMode="cover"
             source={{ uri: active.header.url }}
             style={styles.coverImage}

@@ -27,10 +27,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '../post-content/server';
+import { postContentDocumentFromText } from '../post-content/server';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
@@ -87,7 +84,7 @@ const createContentPost = async (
   visibility: PostVisibility = PostVisibility.PUBLIC,
 ) =>
   createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId,
     visibility,
@@ -186,8 +183,8 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
   const followersSource = await createContentPost(author.profile.id, PostVisibility.FOLLOWERS);
   const directRecipientHandle = `@${author.profile.handle}`;
   const directSource = await createPost({
-    authoredBodyText: directRecipientHandle,
-    document: postContentDocumentFromTextAndMedia(directRecipientHandle, [], false, null, [
+    bodyText: directRecipientHandle,
+    mentions: [
       {
         end: directRecipientHandle.length,
         handle: directRecipientHandle,
@@ -195,7 +192,7 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
         relativeHandle: directRecipientHandle,
         start: 0,
       },
-    ]),
+    ],
     origin: 'LOCAL',
     profileId: actor.profile.id,
     visibility: PostVisibility.DIRECT,
@@ -459,7 +456,7 @@ test('Reply·Quote·Reply Quote delete도 Post Delete Workflow를 시작한다',
   const parent = await createContentPost(actor.profile.id);
   const source = await createContentPost(actor.profile.id);
   const reply = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: actor.profile.id,
     replyParentId: parent.id,
@@ -468,7 +465,7 @@ test('Reply·Quote·Reply Quote delete도 Post Delete Workflow를 시작한다',
   const quote = await createContentPost(actor.profile.id);
   await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, quote.id));
   const replyQuote = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: actor.profile.id,
     replyParentId: parent.id,

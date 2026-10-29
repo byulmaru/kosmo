@@ -21,10 +21,7 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '@kosmo/core/enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '@kosmo/core/post-content/server';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
   ApplicationFailure,
@@ -902,13 +899,13 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -929,13 +926,13 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Combined source'),
+    bodyText: 'Combined source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Combined quote'),
+    bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -960,14 +957,14 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   const replyRecipient = await createProfile();
   const author = await createProfile();
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote and reply'),
+    bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: quoteSource.id,
@@ -1181,7 +1178,7 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1215,11 +1212,11 @@ test('Post deletion Notification Activity removes exact related rows and is idem
   const actor = await createProfile();
   const mentionContent = (profile: { handle: string; id: string }) => {
     const relativeHandle = `@${profile.handle}`;
-    const authoredBodyText = `Mention ${relativeHandle}`;
-    const start = authoredBodyText.indexOf(relativeHandle);
+    const bodyText = `Mention ${relativeHandle}`;
+    const start = bodyText.indexOf(relativeHandle);
     return {
-      authoredBodyText,
-      document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+      bodyText,
+      mentions: [
         {
           end: start + relativeHandle.length,
           handle: relativeHandle,
@@ -1227,7 +1224,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
           relativeHandle,
           start,
         },
-      ]),
+      ],
     };
   };
   const { post } = await createCorePost({
@@ -1249,7 +1246,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: post.id,
@@ -1356,33 +1353,33 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
   const repostRecipient = await createProfile();
   const actor = await createProfile();
   const { post: replyParent } = await createCorePost({
-    document: postContentDocumentFromText('Reply parent'),
+    bodyText: 'Reply parent',
     origin: 'LOCAL',
     profileId: replyRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: reply } = await createCorePost({
-    document: postContentDocumentFromText('Reply body'),
+    bodyText: 'Reply body',
     origin: 'LOCAL',
     profileId: actor.id,
     replyParentId: replyParent.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: quoteSource.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: repostSource } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: repostRecipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1440,7 +1437,7 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Deleted Repost source'),
+    bodyText: 'Deleted Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1705,6 +1702,12 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(Profiles)
       .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
       .where(eq(Profiles.id, actor.id));
+    const { post } = await createCorePost({
+      bodyText: 'Read the article',
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
     const document = {
       version: 1,
       summary: null,
@@ -1725,12 +1728,6 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         ],
       },
     } as const;
-    const { post } = await createCorePost({
-      document,
-      origin: 'LOCAL',
-      profileId: recipient.id,
-      visibility: PostVisibility.PUBLIC,
-    });
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
@@ -1770,7 +1767,9 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const nativeInstallationId = installationIds[0]!;
+    const webInstallationId = installationIds[1]!;
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     const payload = sent[0];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
@@ -1783,10 +1782,40 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
       href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.ok('token' in payload);
+    assert.equal('fid' in payload, false);
+    assert.equal(
+      payload.token,
+      installationRows.find(({ id }) => id === nativeInstallationId)?.token,
+    );
     assert.equal(payload.android?.priority, undefined);
     assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-reaction' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    const webPayload = sent[1];
+    assert.ok(webPayload);
+    assert.ok('fid' in webPayload);
+    assert.equal(webPayload.fid, 'web-fid-reaction');
+    assert.equal('token' in webPayload, false);
+    assert.equal(webPayload.notification, undefined);
+    assert.equal(webPayload.android, undefined);
+    assert.equal(webPayload.apns, undefined);
+    assert.deepEqual(webPayload.data, {
+      notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      title: '혜주',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
+    });
+    const webTtl = webPayload.webpush?.headers?.TTL;
+    assert.match(webTtl ?? '', /^\d+$/);
+    assert.ok(Number(webTtl) <= 24 * 60 * 60);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
@@ -1809,18 +1838,18 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         },
       })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[1]?.notification?.body,
+      sent[2]?.notification?.body,
       `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
     );
     assert.ok(
       new TextEncoder().encode(
         JSON.stringify({
-          android: sent[1]?.android,
-          apns: sent[1]?.apns,
-          data: sent[1]?.data,
-          notification: sent[1]?.notification,
+          android: sent[2]?.android,
+          apns: sent[2]?.apns,
+          data: sent[2]?.data,
+          notification: sent[2]?.notification,
         }),
       ).byteLength < 4096,
     );
@@ -1829,12 +1858,15 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[2]?.notification?.body,
+      sent[3]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
+    assert.equal(sent[3]?.notification?.body.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[4]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[4]?.data?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1844,16 +1876,20 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[3]?.notification?.body,
+      sent[5]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
+    assert.equal(sent[5]?.notification?.body.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[6]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[6]?.data?.body.includes('Read the article'), false);
 
     await db.delete(AccountProfiles).where(eq(AccountProfiles.profileId, recipient.id));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent.length, 4);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent.length, 7);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
@@ -1888,14 +1924,14 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       .where(eq(Profiles.id, actor.id));
 
     const { post: target } = await createCorePost({
-      document: postContentDocumentFromText('target'),
+      bodyText: 'target',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
     postIds.push(target.id);
     const { post: reply } = await createCorePost({
-      document: postContentDocumentFromText('reply'),
+      bodyText: 'reply',
       origin: 'LOCAL',
       profileId: actor.id,
       replyParentId: target.id,
@@ -1903,7 +1939,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
-      document: postContentDocumentFromText('quote'),
+      bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
       repostSourceId: target.id,
@@ -2359,7 +2395,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
   }
 });
 
-test('Push Notification Activity는 등록되지 않은 token만 정확히 제거한다', async (t) => {
+test('Push Notification Activity는 등록되지 않은 FID만 제거하고 invalid-argument는 보존한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
@@ -2369,7 +2405,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
     const { post } = await createCorePost({
-      document: postContentDocumentFromText('Token cleanup'),
+      bodyText: 'Token cleanup',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
@@ -2393,24 +2429,37 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
         projectId: process.env.FIREBASE_PROJECT_ID,
       });
     const messaging = getMessaging(app);
+    let providerCode = 'messaging/installation-id-not-registered';
     t.mock.method(messaging, 'send', async () => {
       throw new FirebaseError({
-        code: 'messaging/registration-token-not-registered',
-        message: 'Registration token is no longer registered',
+        code: providerCode,
+        message: 'Push target is no longer registered',
       });
     });
 
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    const invalidInstallationId = installationIds[0]!;
-    await sendPushNotificationActivity(notificationId, invalidInstallationId);
+    const webInstallationId = installationIds[0]!;
+    const nativeInstallationId = installationIds[1]!;
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-stale' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
     assert.equal(
-      await db.$count(PushInstallations, eq(PushInstallations.id, invalidInstallationId)),
+      await db.$count(PushInstallations, eq(PushInstallations.id, webInstallationId)),
       0,
     );
     assert.equal(
       await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
+      1,
+    );
+
+    providerCode = 'messaging/invalid-argument';
+    await assert.rejects(() => sendPushNotificationActivity(notificationId, nativeInstallationId));
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.id, nativeInstallationId)),
       1,
     );
   } finally {
@@ -2669,7 +2718,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2679,7 +2731,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const retriedReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2689,6 +2744,32 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
+    );
+
+    const nightshade = await createUploadingMedia();
+    const nightshadeResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: nightshade.remoteUploadId,
+      url: 'https://media.example/nightshade.webp',
+    };
+    const nightshadeInput = {
+      mediaId: nightshade.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: nightshade.remoteUploadId,
+      applyNightshade: true,
+      result: nightshadeResult,
+    };
+    assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
+    const nightshadeReady = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, nightshade.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
+      nightshadeResult,
     );
 
     const concurrent = await createUploadingMedia();

@@ -1,18 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useArgs } from 'storybook/preview-api';
+import { fn } from 'storybook/test';
 import { ReactionPeopleFilter } from '@/components/reaction/ReactionPeopleFilter';
 import { Catalog, Section } from '../StoryFrame';
 import { canonicalReactionEntries } from './ReactionSummary.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactionSummaryEntry } from '@/components/reaction/ReactionSummary';
 
-function ReactionPeopleFilterPlayground() {
-  const [value, setValue] = useState<string>(canonicalReactionEntries[0]!.type);
+export type ReactionPeopleFilterPlaygroundArgs = {
+  entries: ReadonlyArray<ReactionSummaryEntry>;
+  onValueChange: (value: string) => void;
+  value: string;
+};
+
+function ReactionPeopleFilterPlayground({
+  entries,
+  onValueChange,
+  value,
+}: ReactionPeopleFilterPlaygroundArgs) {
+  const [selectedType, setSelectedType] = useState(value);
+  useEffect(() => setSelectedType(value), [value]);
 
   return (
     <Catalog width={600}>
       <ReactionPeopleFilter
-        entries={canonicalReactionEntries}
-        onValueChange={setValue}
-        value={value}
+        entries={entries}
+        onValueChange={(nextValue) => {
+          setSelectedType(nextValue);
+          onValueChange(nextValue);
+        }}
+        value={selectedType}
       />
     </Catalog>
   );
@@ -57,7 +74,30 @@ export function ReactionPeopleFilterInteraction() {
 }
 
 const meta = {
+  args: {
+    entries: canonicalReactionEntries,
+    onValueChange: fn(),
+    value: canonicalReactionEntries[0]!.type,
+  },
+  argTypes: {
+    entries: { control: 'object' },
+    onValueChange: { action: 'valueChange', control: false },
+    value: { control: 'text' },
+  },
   component: ReactionPeopleFilterPlayground,
+  excludeStories: ['filterContractEntries', 'ReactionPeopleFilterInteraction'],
+  render: (args) => {
+    const [, updateArgs] = useArgs<ReactionPeopleFilterPlaygroundArgs>();
+    return (
+      <ReactionPeopleFilterPlayground
+        {...args}
+        onValueChange={(value) => {
+          args.onValueChange(value);
+          updateArgs({ value });
+        }}
+      />
+    );
+  },
   title: 'KOSMO/Patterns/Reaction/People Filter',
 } satisfies Meta<typeof ReactionPeopleFilterPlayground>;
 

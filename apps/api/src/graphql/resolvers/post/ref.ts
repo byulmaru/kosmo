@@ -110,17 +110,27 @@ function projectPostContentDocument(
 
         return {
           ...block,
-          content: block.content?.map((node) =>
-            node.type === 'mention'
-              ? {
-                  ...node,
-                  attrs: {
-                    ...node.attrs,
-                    profileId: encodeGlobalId('Profile', node.attrs.profileId),
-                  },
-                }
-              : node,
-          ),
+          content: block.content?.map((node) => {
+            if (node.type === 'mention') {
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  profileId: encodeGlobalId('Profile', node.attrs.profileId),
+                },
+              };
+            }
+            if (node.type === 'hashtag') {
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  hashtagId: encodeGlobalId('Hashtag', node.attrs.hashtagId),
+                },
+              };
+            }
+            return node;
+          }),
         };
       }),
     },

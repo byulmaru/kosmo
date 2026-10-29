@@ -1,9 +1,10 @@
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { motion, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 import { getInteractionTargetSize } from './interactionTarget';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { ReactNode, Ref } from 'react';
-import type { PressableProps, ViewStyle } from 'react-native';
+import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
 export function getIconButtonHitSlop(
   renderedTargetSize: number,
@@ -103,6 +104,67 @@ export type IconButtonProps = Omit<
   visualStyle?: PressableProps['style'];
 } & IconButtonSizeProps;
 
+type IconButtonVisualProps = {
+  children: ReactNode;
+  disabled: boolean;
+  feedbackRadius?: ViewStyle['borderRadius'];
+  feedbackTone?: 'inverse';
+  hovered: boolean;
+  pressed: boolean;
+  visualDimensions?: ViewStyle;
+  visualStyle?: StyleProp<ViewStyle>;
+};
+
+function IconButtonVisual({
+  children,
+  disabled,
+  feedbackRadius,
+  feedbackTone,
+  hovered,
+  pressed,
+  visualDimensions,
+  visualStyle,
+}: IconButtonVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const feedbackBackground = disabled
+    ? 'transparent'
+    : pressed
+      ? feedbackTone === 'inverse'
+        ? 'rgba(255, 255, 255, 0.24)'
+        : theme.statePressed
+      : hovered
+        ? feedbackTone === 'inverse'
+          ? 'rgba(255, 255, 255, 0.16)'
+          : theme.stateHover
+        : 'transparent';
+  const animatedFeedback = useAnimatedColorTransition({
+    color: feedbackBackground,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'interaction',
+  });
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.visual, visualDimensions, visualStyle]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.feedbackSurface,
+          visualDimensions,
+          feedbackRadius === undefined ? undefined : { borderRadius: feedbackRadius },
+          { backgroundColor: animatedFeedback } as unknown as ViewStyle,
+        ]}
+      />
+      {children}
+    </View>
+  );
+}
+
 export function IconButton({
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -119,8 +181,6 @@ export function IconButton({
   visualStyle,
   ...props
 }: IconButtonProps): ReactNode {
-  const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const buttonDisabled = disabled === true;
   const flattenedStyle =
     targetSize === undefined && visualSize === undefined && typeof style !== 'function'
@@ -159,54 +219,23 @@ export function IconButton({
         const content = typeof children === 'function' ? children(state) : children;
 
         const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
-        const feedbackBackground = buttonDisabled
-          ? 'transparent'
-          : state.pressed
-            ? feedbackTone === 'inverse'
-              ? 'rgba(255, 255, 255, 0.24)'
-              : theme.statePressed
-            : hovered
-              ? feedbackTone === 'inverse'
-                ? 'rgba(255, 255, 255, 0.16)'
-                : theme.stateHover
-              : 'transparent';
         const visualDimensions =
-          visualSize === undefined && visualStyle === undefined
+          visualSize === undefined
             ? { height: requestedTargetSize, width: requestedTargetSize }
-            : visualSize === undefined
-              ? undefined
-              : { height: visualSize, width: visualSize };
+            : { height: visualSize, width: visualSize };
 
         return (
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={[
-              styles.visual,
-              visualDimensions,
-              typeof visualStyle === 'function' ? visualStyle(state) : visualStyle,
-            ]}
+          <IconButtonVisual
+            disabled={buttonDisabled}
+            feedbackRadius={feedbackRadius}
+            feedbackTone={feedbackTone}
+            hovered={hovered}
+            pressed={state.pressed}
+            visualDimensions={visualDimensions}
+            visualStyle={typeof visualStyle === 'function' ? visualStyle(state) : visualStyle}
           >
-            <View
-              pointerEvents="none"
-              style={[
-                styles.feedbackSurface,
-                visualSize === undefined
-                  ? styles.feedbackFill
-                  : { height: visualSize, width: visualSize },
-                feedbackRadius === undefined ? undefined : { borderRadius: feedbackRadius },
-                Platform.OS === 'web'
-                  ? ({
-                      transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-                      transitionProperty: 'background-color',
-                      transitionTimingFunction: motion.easing.standard,
-                    } as unknown as ViewStyle)
-                  : undefined,
-                { backgroundColor: feedbackBackground },
-              ]}
-            />
             {content}
-          </View>
+          </IconButtonVisual>
         );
       }}
     </Pressable>

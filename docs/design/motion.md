@@ -42,6 +42,36 @@ Underline Tabs에서는 64px 선택 바의 양 끝이 새 위치까지 서로 �
 
 상태의 의미와 accessible state는 motion 완료를 기다리지 않고 즉시 갱신한다. focus 이동·복원과 `requestAnimationFrame` scheduling은 시각 transition으로 분류하지 않는다.
 
+## 공용 컨트롤의 상태 전이
+
+hover·pressed의 진입과 해제는 모두 `fast` 120ms, selected·checked의 선택과 해제는 모두
+`standard` 200ms를 사용한다. 도착 상태가 선택되지 않았다는 이유로 선택 해제를 120ms로 줄이지 않는다.
+같은 속성에서 여러 상태가 겹치면 아래의 기존 시각 우선순위를 유지한다. hover·pressed 표현으로
+들어가거나 그 표현에서 복귀하는 전이는 120ms이고, 선택 표현만 바뀌는 전이는 200ms다.
+선택 상태가 hover를 가리는 컴포넌트에서는 가려진 hover 변화만으로 선택색을 바꾸지 않는다.
+
+| 컨트롤              | Hover·Pressed 120ms                                | Selected·Checked 200ms                              | 즉시 반영·겹침 규칙                                                                                                    |
+| ------------------- | -------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Button              | 기존 surface·opacity feedback                      | 없음                                                | disabled·busy 의미와 disabled 표현은 즉시 반영한다.                                                                    |
+| IconButton          | 원형 feedback surface                              | 없음                                                | 일회성 action에 selected 상태를 추가하지 않는다. disabled opacity는 즉시 반영한다.                                     |
+| ListboxOption       | hover·active·pressed surface                       | 선택 surface·border                                 | surface는 disabled > pressed > selected > active·hover 순서다. focus ring은 즉시 반영한다.                             |
+| BottomTabBar        | feedback surface·기존 pressed scale                | 선택 label·icon 색상                                | feedback과 선택 의미는 독립이다. 선택 glyph·unread 표시는 즉시 반영한다.                                               |
+| SidebarNavigation   | feedback surface·기존 pressed scale                | 선택 surface·label·icon 색상                        | 기본 surface는 disabled > pressed > hover > selected 순서다. 선택 font weight는 즉시 반영한다.                         |
+| SettingsLinkRow     | hover·pressed surface                              | 선택 surface·border                                 | surface는 pressed > hover > selected 순서이며, 선택 border는 유지한다. focus outline은 즉시 반영한다.                  |
+| ProfileMoreButton   | IconButton의 feedback surface                      | 없음                                                | expanded·busy 의미와 disabled surface·border는 즉시 반영한다.                                                          |
+| Tabs                | hover·pressed feedback                             | 기존 underline 이동·label 색상, pill surface·border | 선택 표시와 feedback은 독립이며 focus ring은 즉시 반영한다. pill label 색상은 선택 여부와 무관하게 유지한다.           |
+| Checkbox            | hover·pressed feedback                             | checked surface·border                              | checked·mixed 의미와 mark 형태는 즉시 반영한다. 기존 checked·interaction 색상 우선순위를 유지한다.                     |
+| RadioOption         | hover·pressed surface                              | 선택 indicator                                      | 선택 indicator와 interaction surface는 독립이며 checked 의미는 즉시 반영한다.                                          |
+| SelectTrigger       | 기존 hover surface                                 | 없음                                                | expanded 의미·focus ring·오류 border·disabled 표현은 즉시 반영한다. 새 pressed 표현은 추가하지 않는다.                 |
+| SegmentedControl    | hover·pressed feedback                             | 기존 선택 pill 이동                                 | 선택 pill의 60ms 늘림·140ms 정착을 유지한다. label 색상은 선택 여부와 무관하며 선택 의미와 focus ring은 즉시 반영한다. |
+| MultiSelectCombobox | 결과 행의 ListboxOption·지우기 IconButton feedback | 결과 행의 ListboxOption 선택 surface·border         | 선택 결과와 token 추가·제거는 즉시 반영하며 별도 layout motion을 추가하지 않는다.                                      |
+
+이 매핑은 Web과 KOSMO가 소유한 iOS·Android presentation에 동일하게 적용한다. 초기 표시, theme 변경,
+focus·오류·disabled 표현에는 새 전이를 추가하지 않는다. 빠른 연속 입력은 진행 중인 전이를 대기열에
+쌓지 않고 현재 표시에서 최신 상태로 이어진다. reduced-motion이 켜지면 진행 중인 전이도 중지하고
+최종 색상·위치를 즉시 반영하며, hover·pressed scale은 제거한다. 접근성 상태와 action·navigation·focus
+lifecycle은 이 시각 전이의 완료를 기다리지 않는다.
+
 ## 현행 표현 판정과 이관
 
 DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래 판정이 DSN-19·21의 migration 입력이며, 후속 구현은 duration·easing·reduced-motion 동작을 다시 결정하지 않는다.
@@ -55,25 +85,65 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 | Reaction       | `ReactionPendingSpinner` 820ms linear loop와 즉시 selected·count feedback | 수정      | pending spinner는 800ms `linear`, 유한 reaction feedback은 300ms `standard`            | DSN-19 helper, DSN-21/Product consumer    |
 | Reduced motion | OS setting adapter와 component별 대체 규칙이 아직 중앙화되지 않음         | 수정      | OS setting을 단일 입력으로 사용하고 아래 대체표대로 비필수 이동을 제거                 | DSN-19 adapter, DSN-21/Product consumer   |
 
+### PROD-1043 loading ownership
+
+`LoadingIndicator`는 정상 모드의 `ActivityIndicator`와 reduced-motion의 정적 fallback만 공통화한다. 각 consumer는 기존 accessible name, `busy`, live-region, 실패·성공 의미와 레이아웃을 소유한다. 아래 표에서 Storybook presentation은 표시·name·busy·live-region을 확인하는 분류된 증거이며, Native runtime·실기기·OS timing·VoiceOver·TalkBack 증거로 해석하지 않는다.
+
+| Owner                                  | Normal                                                                                                 | OS reduced-motion                                                                                       | Exception and evidence                                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/Button`                            | `LoadingIndicator`가 플랫폼 `ActivityIndicator`를 사용하고 Button의 accessible name·`busy`를 유지한다. | 정적 `···`를 표시하고, 지정된 `loadingText`가 있으면 기존 Button label 색·타이포그래피로 함께 표시한다. | Button의 disabled·busy state와 지정된 loading 문구를 유지한다. 접근성 이름만으로 visible copy를 만들지 않는다.                      |
+| `ui/ActionMenu`                        | busy item 안에서 플랫폼 indicator를 사용하고 menu item의 label·`busy`를 유지한다.                      | item label 옆에 정적 `···`를 표시하고 busy semantics를 유지한다.                                        | icon slot은 기존 geometry와 hidden semantics를 유지하며 Native sheet enter/exit timing은 ActionMenu의 기존 overlay 계약이 소유한다. |
+| `ui/StateView`                         | title을 accessible name으로 가진 플랫폼 indicator를 사용한다.                                          | 기존 title과 함께 정적 `···`를 표시한다.                                                                | 이미 component-local reduced fallback을 소유하므로 shared helper로 일반화하지 않는다.                                               |
+| `ui/SidebarNavigation`                 | logout control의 플랫폼 indicator와 label·`busy`를 유지한다.                                           | hidden icon slot 안에서 정적 `···`로 바꾸고 control label·`busy`를 유지한다.                            | compact visual slot과 접근성 숨김 범위를 보존한다.                                                                                  |
+| `post/PostActionControl`               | compact action slot의 플랫폼 indicator와 outer action의 name·`busy`를 유지한다.                        | 기존 compact slot에서 정적 `···`를 사용하며 outer action semantics를 유지한다.                          | count·icon geometry와 pending hidden semantics는 기존 Post Action Bar 계약이 소유한다.                                              |
+| `post/PostComposerMediaControls`       | 업로드 overlay의 플랫폼 indicator와 기존 이미지 업로드 label을 유지한다.                               | overlay indicator를 정적 `···`로 바꾸고 기존 label을 유지한다.                                          | Composer media overlay와 그 실패·재시도 상태가 consumer 의미를 소유한다.                                                            |
+| `post/PostComposerMediaItemsTarget`    | 업로드 tile의 플랫폼 indicator와 기존 이미지 업로드 label을 유지한다.                                  | tile indicator를 정적 `···`로 바꾸고 tile geometry를 유지한다.                                          | gallery scroll은 아래 app-requested scroll 행의 명시적 계약을 따른다.                                                               |
+| `post/PostList`                        | next-page 플랫폼 indicator와 기존 live-region 문구를 유지한다.                                         | indicator를 정적 `···`로 바꾸고 기존 live-region 문구를 유지한다.                                       | pagination lifecycle과 list footer geometry는 PostList가 소유한다.                                                                  |
+| `pagination/PaginationSurface`         | platform indicator와 `loadingLabel` live-region을 유지한다.                                            | indicator를 정적 `···`로 바꾸고 `loadingLabel` live-region을 유지한다.                                  | pagination sentinel과 loading/error lifecycle은 PaginationSurface가 소유한다.                                                       |
+| `follow-request/FollowRequestListItem` | IconButton 안에서 플랫폼 indicator와 outer request action의 name·`busy`를 유지한다.                    | indicator를 정적 `···`로 바꾸고 outer action semantics를 유지한다.                                      | iOS·Android target과 action geometry는 기존 Follow Request row 계약을 따른다.                                                       |
+| `profile/ProfileTagMuteAction`         | pending·retry `IconButton`의 플랫폼 indicator와 기존 contextual label·outer `busy` 상태를 유지한다.    | 같은 label의 정적 `···`를 사용하고 outer `busy`·disabled 상태를 유지한다.                               | mute/refetch lifecycle과 IconButton geometry는 consumer가 소유한다.                                                                 |
+| `settings/SettingsNavigationList`      | Native notification action의 플랫폼 indicator와 기존 disabled/name 상태를 유지한다.                    | indicator를 정적 `···`로 바꾸고 OS notification flow의 label·disabled 상태를 유지한다.                  | OS permission prompt timing과 결과는 플랫폼 API가 소유한다.                                                                         |
+| `Splash`                               | 기존 label을 name으로 가진 플랫폼 indicator와 visible splash label을 유지한다.                         | indicator를 정적 `···`로 바꾸고 기존 visible label을 유지한다.                                          | suspense/bootstrap lifecycle은 Splash consumer가 소유한다.                                                                          |
+| `post/PostMediaViewerSurface`          | 기존 viewer status의 platform indicator와 status live-region을 유지한다.                               | 기존 viewer status의 component-local 정적 `···` fallback을 유지한다.                                    | Viewer paging·custom spinner·zoom 규칙은 기존 예외이며 이 helper consumer 일반화 대상이 아니다.                                     |
+
+작은 visual slot을 가진 upload tile과 icon action은 loading 문구로 slot을 밀어내지 않는다. 이 경로의 reduced static dots가 기존 `accessibilityLabel`을 소유하고 outer action의 name·`busy` 또는 parent live-region을 유지한다. Consumer가 이미 표시하는 문구는 그대로 두며, 접근성 이름만으로 visible copy를 추가하지 않는다.
+
+### Navigation·scroll ownership
+
+| Owner                                    | Normal                                                                                                                                                                                 | OS reduced-motion                                                        | Exception and evidence                                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Expo Router framework default navigation | framework default route transition을 사용한다.                                                                                                                                         | 앱이 새로운 navigation animation override를 적용하지 않는다.             | Router default timing은 이 loading 변경의 소유 범위가 아니다. Web/Native runtime에서 별도로 관찰한다.                                     |
+| User gesture scroll                      | React Native Web/Native `ScrollView`·list의 user gesture scroll을 사용한다.                                                                                                            | 앱이 gesture scroll timing을 새 duration으로 덮어쓰지 않는다.            | OS·framework gesture behavior는 loading consumer 증거로 대체하지 않는다.                                                                  |
+| App-requested viewer scroll              | `PostMediaViewerSurface`의 pager는 `scrollTo(animated: previous.width === width && !reducedMotion)`을 사용하고, iOS `ZoomableImage`는 zoom/reset/scroll에 `!reducedMotion`을 전달한다. | 앱이 요청한 viewer paging·zoom 이동은 `animated: false`로 즉시 처리한다. | Viewer paging/custom spinner는 기존 예외다. 이 행은 앱이 직접 호출하는 scroll의 ownership을 명시한다.                                     |
+| App-requested Composer scroll            | `PostComposer` body와 `PostComposerMediaItemsTarget` gallery의 직접 호출은 기존 `animated: false`를 사용한다.                                                                          | 이미 즉시 이동하는 계약을 유지한다.                                      | Composer focus/keyboard 보정과 media gallery geometry를 보존하며 새 animation override를 추가하지 않는다.                                 |
+| Web query/navigation scroll restore      | `UniversalShell`, `PrimaryNavigationScrollContext`, search query restore의 `window.scrollTo({ behavior: 'auto' })`를 사용한다.                                                         | 기존 `auto` restore를 유지한다.                                          | 앱이 직접 요청한 restore는 앱이 소유하지만 user gesture/framework default와 섞지 않는다.                                                  |
+| PROD-952 Native shell drawer             | `react-native-drawer-layout@4.2.10`의 built-in spring을 사용한다.                                                                                                                      | 현재 built-in spring이 실행될 수 있다.                                   | Native shell drawer에만 적용되는 기존 PROD-952 예외다. 별도 결정·실기기 검증 범위이며 일반 reduced-motion loading 계약을 완화하지 않는다. |
+
+Loading 변경은 위 navigation·scroll 소유권과 timing을 바꾸지 않는다.
+
 ## Reduced motion
 
 프로덕션 계약은 Web의 `prefers-reduced-motion`과 Android·iOS의 OS reduced-motion 설정만 입력으로 사용한다. `ThemeProvider`가 React Native `AccessibilityInfo`를 단일 입력 adapter로 제공하며, Storybook의 override는 검증 전용이다. 앱 내부 사용자 설정은 이번 범위에서 제공하지 않고, 장기 후속은 [PROD-745](https://linear.app/byulmaru/issue/PROD-745/kosmo-앱-내-motion-축소-사용자-설정-지원)가 소유한다.
 
 `ThemeProvider`는 최초 OS 설정 확인 전까지 reduced-motion을 유지한다. 현재 OS 입력에서 관찰한 최신 변경은 늦게 도착한 초기 조회보다 우선하며, 구독 해제 뒤 도착한 초기 조회 응답은 현재 preference를 갱신하지 않는다. 명시적 Storybook override의 `true`·`false` 값은 OS 입력을 사용하지 않으며, override를 해제하면 OS 설정을 다시 따른다.
 
-| 일반 표현                | OS reduced-motion에서의 대체                      |
-| ------------------------ | ------------------------------------------------- |
-| hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영        |
-| selected indicator 이동  | 최종 위치·surface·border를 즉시 반영              |
-| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※      |
-| toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지      |
-| reaction scale·ripple    | 즉시 color·count·selected 상태로 대체             |
-| spinner rotation loop    | spinner를 숨기고 정적 `···`와 loading 문구를 표시 |
-| skeleton                 | 정적 placeholder 유지                             |
+| 일반 표현                | OS reduced-motion에서의 대체                                     |
+| ------------------------ | ---------------------------------------------------------------- |
+| hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영                       |
+| selected indicator 이동  | 최종 위치·surface·border를 즉시 반영                             |
+| modal·drawer slide·scale | 이동 제거, 최종 surface와 scrim을 즉시 표시※                     |
+| toast translate·fade     | 최종 toast를 즉시 표시·제거, 체류시간은 유지                     |
+| reaction scale·ripple    | 즉시 color·count·selected 상태로 대체                            |
+| spinner rotation loop    | spinner를 숨기고 정적 `···`를 표시하며 기존 consumer 문구는 유지 |
+| skeleton                 | 정적 placeholder 유지                                            |
 
 ※ 현재 Native shell drawer의 built-in spring 예외는 아래 PROD-952 Native drawer 규칙을 따른다.
 
 motion을 제거해도 focus, loading, success, error, selected와 announcement 의미는 제거하지 않는다.
+
+## PROD-1041 이미지 표시 범위
+
+PROD-1041의 범위는 Android의 `Avatar`, `ProfileHero`, `ProfileEditImageFields`, `PostMediaImage`, `ViewerImage`, `PostComposerMediaItemsTarget`, `ComposerMediaEditor`, `PostComposerMediaControls`, `ProfileSwitcher` 이미지 surface다. 이 범위에서는 일반·reduced-motion 모두 이미지 로딩 완료 후 이미지를 즉시 표시하고 별도 fade를 사용하지 않는다. 기존 loading placeholder와 error/retry 상태는 유지한다. iOS·Web의 기존 이미지 표시, `Skeleton`의 2000ms wave·2000ms 대기와 reduced-motion 정적 placeholder, Viewer의 reduced-motion paging 동작은 유지한다.
 
 ## 플랫폼과 예외
 

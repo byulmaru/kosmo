@@ -110,7 +110,7 @@ export function ProfileEditForm({
               value={value.bio}
             />
             <Text style={[styles.counter, { color: theme.foregroundSecondary }]}>
-              {value.bio.trim().length}/500
+              {countCodePoints(value.bio.trim())}/500
             </Text>
           </View>
         </View>

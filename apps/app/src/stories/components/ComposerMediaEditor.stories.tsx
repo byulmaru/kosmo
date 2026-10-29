@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { Pressable, Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
+import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import ogImage from '../../../public/og-default.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { PropsWithChildren } from 'react';
 import type { ComposerMediaEditorProps } from '@/components/post/ComposerMediaEditor';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 
 export const editorMedia: readonly ComposerMediaItem[] = [
   {
+    applyNightshade: false,
     altText: '노을빛 밤하늘 아래 모인 사람들',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-1',
@@ -16,6 +20,7 @@ export const editorMedia: readonly ComposerMediaItem[] = [
     state: 'ready',
   },
   {
+    applyNightshade: false,
     altText: '',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-2',
@@ -29,6 +34,7 @@ const meta = {
     media: editorMedia,
     mobileState: undefined,
     onAltTextChange: fn(),
+    onApplyNightshadeChange: fn(),
     onBack: fn(),
     onClose: fn(),
     onDone: fn(),
@@ -46,9 +52,10 @@ const meta = {
     media: { control: 'object' },
     mobileState: {
       control: 'select',
-      options: ['default', 'alt', 'altKeyboard', 'sensitive'],
+      options: ['default', 'alt', 'altKeyboard', 'sensitive', 'nightshade'],
     },
     onAltTextChange: { action: 'altTextChange', control: false },
+    onApplyNightshadeChange: { action: 'applyNightshadeChange', control: false },
     onBack: { action: 'back', control: false },
     onClose: { action: 'close', control: false },
     onDone: { action: 'done', control: false },
@@ -57,13 +64,13 @@ const meta = {
     onSensitiveMediaChange: { action: 'sensitiveMediaChange', control: false },
     onToolChange: { action: 'toolChange', control: false },
     presentation: { control: 'inline-radio', options: ['web', 'mobile'] },
-    selectedKey: { control: 'select', options: editorMedia.map(({ key }) => key) },
+    selectedKey: { control: 'text' },
     sensitiveMedia: { control: 'boolean' },
     showImageEditPreview: {
       control: 'boolean',
       name: '미래 이미지 편집 미리보기',
     },
-    tool: { control: 'inline-radio', options: ['alt', 'sensitive'] },
+    tool: { control: 'inline-radio', options: ['alt', 'sensitive', 'nightshade'] },
   },
   component: ComposerMediaEditor,
   excludeStories: [
@@ -72,7 +79,13 @@ const meta = {
     'MobileAltKeyboardGeometryContract',
     'MobileDefaultGeometryContract',
     'MobileSensitiveGeometryContract',
+    'MobileNightshadeGeometryContract',
     'MobileToolInteractionContract',
+    'FeatureFlagOffContract',
+    'MobileFeatureFlagOffContract',
+    'StaleFeatureFlagDropContract',
+    'MobileStaleFeatureFlagDropContract',
+    'AltTextCodePointLimitContract',
     'editorMedia',
   ],
   parameters: {
@@ -94,10 +107,53 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+type StoryStateArgs = Pick<
+  ComposerMediaEditorProps,
+  'media' | 'mobileState' | 'selectedKey' | 'sensitiveMedia' | 'tool'
+>;
+type InteractiveEditorProps = ComposerMediaEditorProps & {
+  updateArgs?: (update: Partial<StoryStateArgs>) => void;
+};
+
+function NightshadeFlagScope({
+  children,
+  enabled,
+}: PropsWithChildren<{ readonly enabled: boolean }>) {
+  return (
+    <FeatureFlagsContext.Provider value={(key) => key === 'post-composer-nightshade' && enabled}>
+      {children}
+    </FeatureFlagsContext.Provider>
+  );
+}
+
+function NightshadeFlagToggleFixture({ children }: PropsWithChildren) {
+  const [enabled, setEnabled] = useState(true);
+
+  return (
+    <NightshadeFlagScope enabled={enabled}>
+      <Pressable
+        accessibilityLabel={enabled ? 'Nightshade 플래그 끄기' : 'Nightshade 플래그 켜기'}
+        accessibilityRole="button"
+        onPress={() => setEnabled((current) => !current)}
+      >
+        <Text>{enabled ? 'Nightshade 플래그 끄기' : 'Nightshade 플래그 켜기'}</Text>
+      </Pressable>
+      {children}
+    </NightshadeFlagScope>
+  );
+}
+
 export const Playground: Story = {
-  render: (args, context) => (
-    <ViewportAwareEditor {...args} mobile={context.globals.viewport?.value === 'kosmoMobile'} />
-  ),
+  render: (args, context) => {
+    const [, updateArgs] = useArgs<ComposerMediaEditorProps>();
+    return (
+      <ViewportAwareEditor
+        {...args}
+        mobile={context.globals.viewport?.value === 'kosmoMobile'}
+        updateArgs={updateArgs}
+      />
+    );
+  },
 };
 
 export const Sensitive: Story = {
@@ -139,7 +195,19 @@ export const MobileSensitive: Story = {
   render: (args) => <InteractiveEditor {...args} />,
 };
 
-function InteractiveEditor(props: ComposerMediaEditorProps) {
+export const MobileNightshade: Story = {
+  args: {
+    mobileState: 'nightshade',
+    presentation: 'mobile',
+    tool: 'nightshade',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  render: (args) => <InteractiveEditor {...args} />,
+};
+
+function InteractiveEditor(props: InteractiveEditorProps) {
+  const { updateArgs, ...editorProps } = props;
   const [media, setMedia] = useState(props.media);
   const [mobileState, setMobileState] = useState(props.mobileState);
   const [selectedKey, setSelectedKey] = useState(props.selectedKey);
@@ -154,21 +222,33 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
 
   const editor = (
     <ComposerMediaEditor
-      {...props}
+      {...editorProps}
       media={media}
       mobileState={mobileState}
       onAltTextChange={(key, altText) => {
         props.onAltTextChange(key, altText);
-        setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)));
+        const nextMedia = media.map((item) => (item.key === key ? { ...item, altText } : item));
+        setMedia(nextMedia);
+        updateArgs?.({ media: nextMedia });
+      }}
+      onApplyNightshadeChange={(key, value) => {
+        props.onApplyNightshadeChange(key, value);
+        const nextMedia = media.map((item) =>
+          item.key === key ? { ...item, applyNightshade: value } : item,
+        );
+        setMedia(nextMedia);
+        updateArgs?.({ media: nextMedia });
       }}
       onSelectMedia={(key) => {
         props.onSelectMedia(key);
         setSelectedKey(key);
+        updateArgs?.({ selectedKey: key });
       }}
       onPreviewPress={
         props.presentation === 'mobile' && mobileState === 'altKeyboard'
           ? () => {
               setMobileState('default');
+              updateArgs?.({ mobileState: 'default' });
               props.onPreviewPress?.();
             }
           : undefined
@@ -176,18 +256,22 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
       onSensitiveMediaChange={(value) => {
         props.onSensitiveMediaChange(value);
         setSensitiveMedia(value);
+        updateArgs?.({ sensitiveMedia: value });
       }}
       onToolChange={(value) => {
         props.onToolChange(value);
         setTool(value);
         if (props.presentation === 'mobile') {
-          setMobileState((current) =>
-            value === 'alt' && current === 'altKeyboard'
+          const nextMobileState =
+            value === 'alt' && mobileState === 'altKeyboard'
               ? 'default'
               : value === 'alt'
                 ? 'altKeyboard'
-                : 'sensitive',
-          );
+                : value;
+          setMobileState(nextMobileState);
+          updateArgs?.({ tool: value, mobileState: nextMobileState });
+        } else {
+          updateArgs?.({ tool: value });
         }
       }}
       selectedKey={selectedKey}
@@ -208,7 +292,7 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
   );
 }
 
-function WebEditorStory(props: ComposerMediaEditorProps) {
+function WebEditorStory(props: InteractiveEditorProps) {
   return (
     <View style={{ height: 678, width: 920 }} testID="composer-media-editor-story-surface">
       <InteractiveEditor {...props} />
@@ -216,7 +300,7 @@ function WebEditorStory(props: ComposerMediaEditorProps) {
   );
 }
 
-function ViewportAwareEditor({ mobile, ...props }: ComposerMediaEditorProps & { mobile: boolean }) {
+function ViewportAwareEditor({ mobile, ...props }: InteractiveEditorProps & { mobile: boolean }) {
   return mobile ? (
     <InteractiveEditor {...props} presentation="mobile" />
   ) : (
@@ -227,6 +311,7 @@ function ViewportAwareEditor({ mobile, ...props }: ComposerMediaEditorProps & { 
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onAltTextChange.mockClear();
+    args.onApplyNightshadeChange.mockClear();
     args.onBack.mockClear();
     args.onClose.mockClear();
     args.onDone.mockClear();
@@ -276,12 +361,53 @@ export const InteractionContract: Story = {
     await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지' }));
     expect(args.onSensitiveMediaChange).toHaveBeenLastCalledWith(true);
 
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
+    const secondImageNightshade = canvas.getByRole('switch', {
+      name: '첨부 이미지 2 Nightshade 적용',
+    });
+    expect(secondImageNightshade).not.toBeChecked();
+    await userEvent.click(secondImageNightshade);
+    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-2', true);
+    expect(secondImageNightshade).toBeChecked();
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(args.onDone).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' }));
     expect(args.onBack).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole('button', { name: '미디어 편집 닫기' }));
     expect(args.onClose).toHaveBeenCalledOnce();
+  },
+  render: (args) => <WebEditorStory {...args} />,
+};
+
+export const AltTextCodePointLimitContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    args.onAltTextChange.mockClear();
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '이미지 설명' });
+    const atLimit = '😀'.repeat(1_000);
+
+    await userEvent.click(input);
+    await userEvent.clear(input);
+    await userEvent.paste(atLimit);
+    await waitFor(() => {
+      expect(input).toHaveValue(atLimit);
+      expect(canvas.getByText('1000 / 1000')).toBeVisible();
+    });
+    expect(args.onAltTextChange).toHaveBeenLastCalledWith('media-1', atLimit);
+
+    fireEvent.change(input, { target: { value: `${atLimit}😀` } });
+    await waitFor(() => {
+      expect(input).toHaveValue(atLimit);
+      expect(canvas.getByText('1000 / 1000')).toBeVisible();
+    });
+    expect(args.onAltTextChange).toHaveBeenLastCalledWith('media-1', atLimit);
   },
   render: (args) => <WebEditorStory {...args} />,
 };
@@ -339,10 +465,22 @@ export const MobileSensitiveGeometryContract: Story = {
   },
 };
 
+export const MobileNightshadeGeometryContract: Story = {
+  ...MobileNightshade,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('mobile-composer-media-editor-tool-sheet')).toHaveStyle({
+      height: '184px',
+    });
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+  },
+};
+
 export const MobileToolInteractionContract: Story = {
   ...MobileDefault,
   play: async ({ args, canvasElement }) => {
     args.onPreviewPress?.mockClear();
+    args.onApplyNightshadeChange.mockClear();
     args.onToolChange.mockClear();
     const canvas = within(canvasElement);
 
@@ -371,7 +509,135 @@ export const MobileToolInteractionContract: Story = {
     expect(canvas.queryByTestId('mobile-composer-media-editor-keyboard')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue('작성한 설명');
+
+    await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
+    const nightshadeSwitch = canvas.getByRole('switch', {
+      name: '첨부 이미지 1 Nightshade 적용',
+    });
+    expect(nightshadeSwitch).not.toBeChecked();
+    await userEvent.click(nightshadeSwitch);
+    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-1', true);
+    expect(nightshadeSwitch).toBeChecked();
   },
+};
+
+export const FeatureFlagOffContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.queryByRole('tab', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
+    expect(canvas.queryByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).toBeNull();
+    expect(canvas.getByRole('tab', { name: '대체 텍스트' })).toBeVisible();
+    expect(canvas.getByRole('tab', { name: '민감도' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('tab', { name: '민감도' }));
+    const sensitiveMedia = canvas.getByRole('switch', { name: '민감한 이미지' });
+    await userEvent.click(sensitiveMedia);
+    expect(sensitiveMedia).toBeChecked();
+
+    await userEvent.click(canvas.getByRole('tab', { name: '대체 텍스트' }));
+    const altText = canvas.getByRole('textbox', { name: '이미지 설명' });
+    await userEvent.type(altText, ' 추가 설명');
+    expect(altText).toHaveValue('노을빛 밤하늘 아래 모인 사람들 추가 설명');
+  },
+  render: (args) => (
+    <NightshadeFlagScope enabled={false}>
+      <WebEditorStory {...args} />
+    </NightshadeFlagScope>
+  ),
+};
+
+export const MobileFeatureFlagOffContract: Story = {
+  args: { mobileState: 'default', presentation: 'mobile', tool: 'alt' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.queryByRole('button', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
+    expect(canvas.queryByTestId('mobile-composer-media-editor-tool-sheet')).toBeNull();
+    expect(canvas.queryByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '민감도 편집' }));
+    const sensitiveMedia = canvas.getByRole('switch', { name: '민감한 이미지' });
+    await userEvent.click(sensitiveMedia);
+    expect(sensitiveMedia).toBeChecked();
+  },
+  render: (args) => (
+    <NightshadeFlagScope enabled={false}>
+      <InteractiveEditor {...args} />
+    </NightshadeFlagScope>
+  ),
+};
+
+export const StaleFeatureFlagDropContract: Story = {
+  args: { selectedKey: 'media-2', tool: 'nightshade' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const nightshadeSwitch = canvas.getByRole('switch', {
+      name: '첨부 이미지 2 Nightshade 적용',
+    });
+
+    await userEvent.click(nightshadeSwitch);
+    expect(nightshadeSwitch).toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 끄기' }));
+    expect(canvas.queryByRole('tab', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
+    expect(canvas.queryByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeNull();
+    expect(canvas.getByRole('tab', { name: '대체 텍스트' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 켜기' }));
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+  },
+  render: (args) => (
+    <NightshadeFlagToggleFixture>
+      <WebEditorStory {...args} />
+    </NightshadeFlagToggleFixture>
+  ),
+};
+
+export const MobileStaleFeatureFlagDropContract: Story = {
+  args: {
+    mobileState: 'nightshade',
+    presentation: 'mobile',
+    selectedKey: 'media-2',
+    tool: 'nightshade',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const nightshadeSwitch = canvas.getByRole('switch', {
+      name: '첨부 이미지 2 Nightshade 적용',
+    });
+
+    await userEvent.click(nightshadeSwitch);
+    expect(nightshadeSwitch).toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 끄기' }));
+    expect(canvas.queryByRole('button', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
+    expect(canvas.queryByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeNull();
+    expect(canvas.queryByTestId('mobile-composer-media-editor-tool-sheet')).toBeNull();
+    expect(canvas.getByRole('button', { name: '대체 텍스트 편집' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '민감도 편집' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 켜기' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+  },
+  render: (args) => (
+    <NightshadeFlagToggleFixture>
+      <InteractiveEditor {...args} />
+    </NightshadeFlagToggleFixture>
+  ),
 };
 
 export const WideImagePreviewContract: Story = {

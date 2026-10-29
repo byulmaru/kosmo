@@ -8,6 +8,7 @@ import baseMeta, {
   PlacementContract as placementContract,
   SharedAnchorContract as sharedAnchorContract,
   StepsInteraction as stepsInteraction,
+  Tests as tests,
   TextScaleContract as textScaleContract,
   ViewportContract as viewportContract,
 } from './Coachmark.stories';
@@ -28,6 +29,7 @@ export const PlacementContract: Story = placementContract;
 export const StepsInteraction: Story = stepsInteraction;
 export const ViewportContract: Story = viewportContract;
 export const CompactViewportContract: Story = compactViewportContract;
+export const Tests: Story = tests;
 
 export const CompactContentContract: Story = compactContentContract;
 
