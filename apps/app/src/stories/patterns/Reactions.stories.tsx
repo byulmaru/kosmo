@@ -34,6 +34,11 @@ const quickReactionOptions = [
   { emoji: '🌈', id: '🌈', label: '🌈' },
 ] satisfies ReadonlyArray<ReactionOption>;
 
+export const emptyReactionSummaryPost = {
+  ...post({ id: 'post-empty', reactionCounts: [] }),
+  viewerReactions: [],
+} as const;
+
 const storyProfiles = [
   profile({
     avatar: {
@@ -161,7 +166,13 @@ function ReactionProfileConnectionStory() {
   );
 }
 
-function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: string }) {
+function PostReactionSummaryStory({
+  onReady,
+  postId = 'reaction-post',
+}: {
+  onReady?: () => void;
+  postId?: string;
+}) {
   const data = useLazyLoadQuery<ReactionsIntegrationStoriesQuery>(
     ReactionsIntegrationStoriesQueryNode,
     { postId },
@@ -171,7 +182,17 @@ function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: strin
   }
   const controller = usePostReactionController(data.node.reactionController);
 
-  return <PostReactionSummary controller={controller} />;
+  return <PostReactionSummary controller={controller} onReady={onReady} />;
+}
+
+export function EmptyReactionSummaryReadyStory() {
+  const [ready, setReady] = useState(false);
+  return (
+    <>
+      <PostReactionSummaryStory postId="post-empty" onReady={() => setReady(true)} />
+      <Text testID="reaction-summary-ready">{ready ? 'ready' : 'waiting'}</Text>
+    </>
+  );
 }
 
 function ReactionProfileListCatalog() {
@@ -340,6 +361,7 @@ async function assertReactionViewport(canvasElement: HTMLElement, expectedWidth:
 
 const meta = {
   component: QuickPickerInteractionCatalog,
+  excludeStories: ['EmptyReactionSummaryReadyStory', 'emptyReactionSummaryPost'],
   parameters: {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/@kosmo' },
@@ -422,7 +444,7 @@ export const ZeroCountSummaryIsNotRendered: Story = {
       operationResponses: {
         ReactionsIntegrationStoriesQuery: {
           data: {
-            node: { ...post({ id: 'post-empty', reactionCounts: [] }), viewerReactions: [] },
+            node: emptyReactionSummaryPost,
           },
         },
       },
