@@ -89,8 +89,14 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) });
-mockModule('@/components/ui/ActionMenuPortal', {
-  ActionMenuPortal: ({ children }: { children: unknown }) => children,
+mockModule('@/components/ui/Dropdown', {
+  Dropdown: ({
+    children,
+    onRequestClose,
+  }: {
+    children: (maxHeight: number) => unknown;
+    onRequestClose: (reason: string) => void;
+  }) => createElement('Dropdown', { onRequestClose }, children(430) as never),
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
@@ -787,7 +793,9 @@ test('Web ActionMenu preserves focus when its parent refreshes equivalent items'
   assert.equal(focused, 1);
   assert.ok(onKeyDown);
   exitMounted = true;
-  await act(async () => onKeyDown!({ key: 'Escape', preventDefault() {} }));
+  await act(async () =>
+    renderer.root.findByType('Dropdown' as unknown as ElementType).props.onRequestClose('escape'),
+  );
   assert.equal(renderer!.root.findByProps({ role: 'menu' }).props['aria-hidden'], true);
   assert.deepEqual(
     renderer!.root.findAllByType(TextHost).map((node) => node.props.children),
