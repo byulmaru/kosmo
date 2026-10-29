@@ -410,10 +410,10 @@ test('PostRequest Node returns null silently for missing, non-owner, and unauthe
 
   const ownerResult = await execute(requestId, ownerAccountId);
   assert.deepEqual(ownerResult.errors, undefined);
-  assert.deepEqual(ownerResult.data?.node, {
-    id: encodeGlobalId('PostRequest', requestId),
-    requestId,
-  });
+  const ownerNode = ownerResult.data?.node as { id: string; requestId: string } | null | undefined;
+  assert.ok(ownerNode);
+  assert.equal(ownerNode.id, encodeGlobalId('PostRequest', requestId));
+  assert.equal(ownerNode.requestId, requestId);
 
   const missingResult = await execute(missingRequestId, ownerAccountId);
   assert.deepEqual(missingResult.errors, undefined);
