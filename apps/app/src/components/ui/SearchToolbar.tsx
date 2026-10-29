@@ -4,7 +4,7 @@ import { Platform, StyleSheet, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, fontSizes, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
-import type { ReactElement, RefObject } from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
 import type { TextInput as NativeTextInput, View as NativeView, ViewStyle } from 'react-native';
 
 export type SearchToolbarLeadingAction = 'back' | 'menu' | 'none';
@@ -22,6 +22,8 @@ export type SearchToolbarProps = {
   leadingControlAriaControls?: string;
   leadingControlExpanded?: boolean;
   leadingControlRef?: RefObject<NativeView | null>;
+  inputAnchorRef?: RefObject<NativeView | null>;
+  onInputAnchorLayout?: () => void;
   onBackPress?: () => void;
   onBlur: () => void;
   onClear: () => void;
@@ -32,6 +34,7 @@ export type SearchToolbarProps = {
   inputRef?: RefObject<NativeTextInput | null>;
   placeholder?: string;
   query: string;
+  children?: ReactNode;
 };
 
 export function SearchToolbar({
@@ -41,6 +44,8 @@ export function SearchToolbar({
   leadingControlAriaControls,
   leadingControlExpanded = false,
   leadingControlRef,
+  inputAnchorRef,
+  onInputAnchorLayout,
   onBackPress,
   onBlur,
   onClear,
@@ -51,17 +56,18 @@ export function SearchToolbar({
   inputRef,
   placeholder = '검색어를 입력하세요',
   query,
+  children,
 }: SearchToolbarProps) {
   const theme = useTheme();
   const internalInputRef = useRef<NativeTextInput>(null);
   const resolvedInputRef = inputRef ?? internalInputRef;
   // Keep the draft beside TextInput; Stack options otherwise replay the route's previous value.
-  const [draft, setDraft] = useState({ focused, query, text: query });
+  const [draft, setDraft] = useState({ query, text: query });
   const [inputFocused, setInputFocused] = useState(false);
   const [focusVisibleControl, setFocusVisibleControl] = useState<'leading' | 'clear' | null>(null);
 
-  if (draft.query !== query || draft.focused !== focused) {
-    setDraft({ focused, query, text: focused ? draft.text : query });
+  if (draft.query !== query) {
+    setDraft({ query, text: focused ? draft.text : query });
   }
 
   const showMenu = leadingAction === 'menu';
@@ -166,6 +172,8 @@ export function SearchToolbar({
         : null}
 
       <View
+        ref={inputAnchorRef}
+        onLayout={onInputAnchorLayout}
         testID="search-input-shell"
         style={[
           styles.inputShell,
@@ -251,6 +259,7 @@ export function SearchToolbar({
           </IconButton>
         ) : null}
       </View>
+      {children}
     </View>
   );
 }
