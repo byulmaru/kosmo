@@ -70,14 +70,14 @@ before(async () => {
 });
 
 afterEach(async () => {
-  autoStartAccounts.length = 0;
-  manualOpenAccounts.length = 0;
-  autoStartCancellations = 0;
-  manualCancellations = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  autoStartAccounts.length = 0;
+  manualOpenAccounts.length = 0;
+  autoStartCancellations = 0;
+  manualCancellations = 0;
 });
 
 function targets({ reactionSummary = true } = {}): PostDetailCoachmarkTargets {
@@ -91,10 +91,19 @@ function targets({ reactionSummary = true } = {}): PostDetailCoachmarkTargets {
   };
 }
 
-function CoachmarkProbe({ ready = true, version }: { ready?: boolean; version: number }) {
+function CoachmarkProbe({
+  ready = true,
+  summaryAvailable = true,
+  version,
+}: {
+  ready?: boolean;
+  summaryAvailable?: boolean;
+  version: number;
+}) {
   return createElement(PostDetailCoachmark, {
     account: { id: `account-${version}` } as never,
     ready,
+    summaryAvailable,
     targets: targets(),
   });
 }
@@ -178,4 +187,19 @@ test('starts automatically after the current detail targets become ready', async
     renderer?.update(createElement(CoachmarkProbe, { ready: true, version: 0 }));
   });
   assert.deepEqual(autoStartAccounts, ['account-0']);
+});
+
+test('cancels the active guide when the reaction summary becomes unavailable', async () => {
+  await act(async () => {
+    renderer = create(createElement(CoachmarkProbe, { summaryAvailable: true, version: 0 }));
+  });
+
+  assert.deepEqual(autoStartAccounts, ['account-0']);
+  assert.equal(autoStartCancellations, 0);
+
+  await act(async () => {
+    renderer?.update(createElement(CoachmarkProbe, { summaryAvailable: false, version: 0 }));
+  });
+
+  assert.equal(autoStartCancellations, 1);
 });

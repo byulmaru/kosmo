@@ -119,3 +119,9 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 - 앱·Web TypeScript 검사, 변경 파일 targeted ESLint·Prettier 검사와 Relay compiler를 통과했다. Storybook Web에서 게시글 도움말 진입, 다섯 단계 완료 후 다시 보기, 반응 없음 4단계 자동 안내, 첫 실제 반응 이모지 anchor와 종료 후 도움말 trigger focus 복귀를 확인했다. 내장 Browser의 390px Light·Dark viewport에서 `1/5 → 2/5` 이동과 첫 실제 반응 이모지 anchor도 확인했다.
 - 비활성·처리 중인 액션을 안내 대상에서 제외하고 기존 picker·menu·답글 focus ref를 보존한다. 최종 앱 단위 테스트 1,331개와 기존 Posts Storybook 117개가 통과했다. Web export와 정적 Storybook 빌드도 통과했다.
 - 이번 변경에서는 Native 실기기, VoiceOver/TalkBack, 운영 환경 검증을 수행하지 않았다. Web Storybook 결과를 Native runtime 통과로 간주하지 않는다.
+
+### 게시글 대상 전이 검증 · 2026-10-29
+
+- 게시글 상세의 실제 Relay Store에서 반응 count를 0으로 갱신하는 `Posts / PostDetailThreadRouteCoachmarkSummaryDisappears` 회귀를 추가했다. 반응 요약 단계 표시 중 안내가 닫히고, 도움말을 다시 열었을 때 현재 대상 기준 4단계가 시작되는 동작을 확인했다.
+- 앱 단위 테스트 1,386개, Relay compiler·TypeScript, 변경 파일 ESLint·Prettier와 전체 Storybook Web 테스트 1,055개가 통과했다. 새 회귀 Story 단독 재실행과 정적 Storybook 빌드도 통과했으며, 기존 metadata rerender lifecycle 테스트를 유지했다.
+- Native 실기기·VoiceOver/TalkBack·운영 환경 검증은 수행하지 않았다. Web 결과를 Native runtime 검증으로 간주하지 않는다.
