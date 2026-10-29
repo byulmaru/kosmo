@@ -3,10 +3,11 @@
 ## Activity Registration And Adapters
 
 - `apps/worker/src/activities.ts`는 production Activity registry다.
-- 새 Temporal-first mutation의 state transition은 Worker Activity가 소유한다. Activity가 transaction,
-  persistence와 retry/idempotency 판정을 수행하고, GraphQL·HTTP·ActivityPub caller는 capability별 `mode`·conflict·reuse
-  옵션과 함께 exported `WorkflowDefinition`, serializable input을 generic `runWorkflow`에 한 번 전달할 뿐
-  state-changing core service나 task queue·deadline·native Temporal 호출을 직접 조합하지 않는다.
+- 새 Temporal-first mutation의 domain policy, state transition과 commit 시점 재검증은 Worker Activity가 소유한다.
+  Activity가 transaction, persistence와 retry/idempotency 판정을 수행하고, GraphQL·HTTP·ActivityPub caller는
+  capability별 `mode`·conflict·reuse 옵션과 함께 exported `WorkflowDefinition`, serializable input을 generic
+  `runWorkflow`에 한 번 전달할 뿐 state-changing core service나 task queue·deadline·native Temporal 호출을 직접
+  조합하지 않는다.
 - 기존 non-Temporal/shared core service는 별도 migration 범위로 유지한다. Temporal Activity가 migration 중
   기존 transport-neutral policy나 service를 내부에서 재사용할 수는 있지만, 새 mutation의 필수 public layer나
   caller-facing adapter로 승격하지 않는다.
