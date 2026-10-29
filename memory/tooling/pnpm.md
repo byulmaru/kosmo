@@ -34,3 +34,4 @@
 - test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
 - workspace package의 기본 `test`는 CI에서 해당 package의 전체 테스트를 실행한다. API integration처럼 DB가 필요한 suite는 package 단위 aggregate script 하나가 격리 DB를 준비해 전체 suite를 실행하며, 개별 테스트 파일 선택용 root script를 추가하지 않는다.
 - 특정 API integration 파일만 디버깅할 때는 package manifest에 파일별 alias를 늘리지 말고 준비된 test DB에서 Node test runner에 파일 경로를 직접 전달한다.
+- Worker tests are recursively discovered from `apps/worker/src/**/*.test.ts`: `.native-database.test.ts` selects native database, then `.database.test.ts` selects standard database, then `.workflow.test.ts` selects workflow; other test files enter unit. Standard database files run serially with the Temporal test-client preload and `KOSMO_TEST_TEMPORAL_RUNTIME=0`; native database files run serially with the native Temporal runtime.

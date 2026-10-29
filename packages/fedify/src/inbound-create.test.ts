@@ -36,8 +36,8 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
-  remotePostCreateWorkflow,
   remoteProfileLookupWorkflow,
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
@@ -138,7 +138,20 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
         return execution;
       }
 
-      if (workflow === remotePostCreateWorkflow.workflow) {
+      if (workflow === postCreateWorkflow.workflow) {
+        const workflowOptions = options as {
+          args?: readonly { requestId: string; input: { origin: string } }[];
+          workflowId?: string;
+          workflowIdConflictPolicy?: string;
+          workflowIdReusePolicy?: string;
+        };
+        const args = workflowOptions.args?.[0];
+        assert.ok(args);
+        assert.equal(workflowOptions.args?.length, 1);
+        assert.equal(args.input.origin, 'ACTIVITYPUB');
+        assert.equal(workflowOptions.workflowId, 'post-create:' + args.requestId);
+        assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+        assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
         return nativeWorkflowExecute(workflow as never, options as never);
       }
 

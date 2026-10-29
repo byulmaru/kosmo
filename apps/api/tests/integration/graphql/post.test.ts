@@ -29,6 +29,8 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
+import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -616,7 +618,11 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(execute.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
+    const [workflow, options] = execute.mock.calls[0]!.arguments;
+    assert.equal(workflow, POST_CREATE_WORKFLOW_TYPE);
+    const workflowArgs = options.args?.[0] as { input: { origin: string } };
+    assert.equal(workflowArgs.input.origin, 'LOCAL');
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -1329,13 +1335,27 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(await uploadedResponse.json(), { id: session.id });
     assert.equal(stagingR2.objects.get(session.sourceKey)?.contentLength, onePixelPng.length);
 
+    const originalExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
     const execute = t.mock.method(
       temporalClient.workflow,
       'execute',
       async (
-        _workflow: Parameters<typeof temporalClient.workflow.execute>[0],
+        workflow: Parameters<typeof temporalClient.workflow.execute>[0],
         options: Parameters<typeof temporalClient.workflow.execute>[1],
       ) => {
+        if (workflow !== MEDIA_UPLOAD_WORKFLOW_TYPE) {
+          if (workflow === POST_CREATE_WORKFLOW_TYPE) {
+            const workflowInput = (
+              options.args?.[0] as {
+                input: { accountId?: string; media?: { mediaId: string }[] };
+              }
+            ).input;
+            assert.equal(workflowInput.accountId, auth.account.id);
+            assert.equal(workflowInput.media?.[0]?.mediaId, storedMedia.id);
+          }
+          return originalExecute(workflow, options);
+        }
+
         const { accountId, mediaId: workflowMediaId } = options.args?.[0] as {
           accountId: string;
           mediaId: string;
@@ -1362,7 +1382,19 @@ describe('Post Reply GraphQL 경계', () => {
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
-    assert.equal(execute.mock.callCount(), 1);
+    assert.equal(
+      execute.mock.calls.filter((call) => call.arguments[0] === MEDIA_UPLOAD_WORKFLOW_TYPE).length,
+      1,
+    );
+
+    const selectedMedia = await db
+      .select()
+      .from(Media)
+      .where(eq(Media.id, storedMedia.id))
+      .then(firstOrThrow);
+    assert.equal(selectedMedia.accountId, auth.account.id);
+    assert.equal(selectedMedia.source, MediaSource.LOCAL);
+    assert.equal(selectedMedia.state, MediaState.READY);
 
     const created = await requestCreatePost(
       {
