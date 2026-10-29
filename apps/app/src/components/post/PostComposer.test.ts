@@ -496,6 +496,35 @@ describe('PostComposer initial body', () => {
   });
 });
 
+describe('PostComposer submit handler', () => {
+  it('ignores a native press event and submits the current composer state', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('버튼에서 제출할 본문'));
+
+    const pressEvent = {
+      nativeEvent: {
+        actorProfileId: 'event-actor',
+        bodyText: '이벤트 본문',
+        requestId: 'event-request-id',
+      },
+    };
+    const onSubmit = targetProps?.onSubmit;
+    assert.ok(onSubmit);
+    await act(async () => {
+      Reflect.apply(onSubmit, undefined, [pressEvent]);
+    });
+
+    const submittedInput = mutationCalls[0]?.variables.input;
+    assert.equal(mutationCalls.length, 1);
+    assert.equal(typeof submittedInput?.requestId, 'string');
+    assert.notEqual(submittedInput?.requestId, pressEvent.nativeEvent.requestId);
+    assert.equal(submittedInput?.bodyText, '버튼에서 제출할 본문');
+    assert.equal(submittedInput?.actorProfileId, profileA.id);
+  });
+});
+
 describe('PostComposer character count', () => {
   it('counts the combined body and Content Warning in Unicode code points', async () => {
     await act(async () => {

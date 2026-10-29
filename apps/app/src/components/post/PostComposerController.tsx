@@ -830,7 +830,7 @@ function PostComposerContents({
             ? '인용 게시글 작성'
             : '게시글 작성'
       }
-      onSubmit={submit}
+      onSubmit={() => submit()}
       style={[
         presentation !== undefined ? styles.productionForm : styles.standaloneForm,
         (resolvedPresentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
@@ -985,7 +985,7 @@ function PostComposerContents({
                     }
                   },
                   onPollAction: () => undefined,
-                  onSubmit: submit,
+                  onSubmit: () => submit(),
                   onVisibilityChange: setVisibility,
                   remaining,
                   sensitiveMedia,

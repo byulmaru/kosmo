@@ -167,6 +167,11 @@ function mount() {
   });
 }
 
+function readRenderer(): ReactTestRenderer {
+  assert.ok(renderer);
+  return renderer;
+}
+
 function readComposerProps(): ComposerProps | undefined {
   return composerProps;
 }
@@ -365,7 +370,7 @@ test('missing author and missing quote source both block restoration', async () 
   });
   mount();
   assert.equal(
-    renderer?.root.findAllByProps({ accessibilityRole: 'alert' })[0]?.props.children,
+    readRenderer().root.findAllByProps({ accessibilityRole: 'alert' })[0]?.props.children,
     '인용 게시글을 불러올 수 없어요.',
   );
   pressButton('다시 확인');

@@ -9,7 +9,6 @@ import type { PostRequestCardStoriesQuery as Query } from './__generated__/PostR
 
 const author = profile({
   avatar: {
-    __typename: 'Media',
     id: 'post-request-card-author-avatar',
     url: appleTouchIconUrl,
   },
