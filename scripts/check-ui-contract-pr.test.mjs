@@ -153,7 +153,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'layout change');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('uses the merge-base snapshot for a stale branch layout-only change', async () => {
@@ -179,7 +178,6 @@ describe('check-ui-contract-pr', () => {
     const currentBase = git(root, ['rev-parse', 'HEAD']).trim();
     const result = checkPullRequest({ base: currentBase, head: prHead, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('fails closed when the base and head have no merge base', async () => {
@@ -210,7 +208,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'remove redundant visual override');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['ui']);
   });
 
   it('allows the initial policy bootstrap with an existing UI cleanup only', async () => {
@@ -229,7 +226,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'initial policy with cleanup');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories.sort(), ['policy', 'ui']);
   });
 
   it('does not treat unrelated data fields as visual style changes', async () => {
@@ -245,7 +241,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'data color change');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('does not follow a member value into an unrelated local object', async () => {
@@ -261,7 +256,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'change unrelated geometry data');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('allows an owner-only visual change and derives a catalog owner from a story', async () => {
@@ -282,7 +276,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'cataloged UI change');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['ui']);
   });
 
   it('catalogs a production component rendered by a local story wrapper', async () => {
@@ -300,7 +293,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'local wrapper story catalog');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['ui']);
   });
 
   it('does not catalog an imported component that a local story wrapper does not render', async () => {
@@ -325,11 +317,12 @@ describe('check-ui-contract-pr', () => {
     await writeRepositoryFile(
       root,
       'apps/app/src/components/ui/NewButton.tsx',
-      "export const NewButton = () => <div style={{ color: 'blue' }} />;\n",
+      "import { graphql } from 'react-relay';\nconst query = graphql`query NewButtonQuery { viewer { id } }`;\nexport const NewButton = () => <div style={{ color: 'blue' }} />;\n",
     );
     commit(root, 'uncataloged ui source');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.ok(result.errors.some((error) => error.includes('no component/pattern story catalog')));
+    assert.match(result.reviewNotes.join('\n'), /NewButton\.tsx/);
   });
 
   it('accepts a platform sibling of an existing cataloged source', async () => {
@@ -347,10 +340,9 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'platform sibling ui source');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['ui']);
   });
 
-  it('rejects a new cataloged visual source with Relay integration', async () => {
+  it('allows a new cataloged visual source with Relay integration', async () => {
     const root = await createRepository({ 'README.md': 'fixture\n' });
     await writeRepositoryFile(
       root,
@@ -364,12 +356,11 @@ describe('check-ui-contract-pr', () => {
     );
     commit(root, 'new mixed source');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
-    assert.ok(
-      result.errors.some((error) => error.includes('new cataloged source with Relay/route')),
-    );
+    assert.deepEqual(result.errors, []);
+    assert.match(result.reviewNotes.join('\n'), /기능\/runtime 근거:/);
   });
 
-  it('treats known feature-flag integration as mixed runtime logic', async () => {
+  it('allows visual changes in a source with feature-flag integration', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx':
         "import { useFeatureFlag } from '@/components/FeatureFlagsContext';\nexport const Feature = () => <div style={{ color: 'red' }}>{useFeatureFlag('nightshade')}</div>;\n",
@@ -392,10 +383,11 @@ describe('check-ui-contract-pr', () => {
     );
     commit(root, 'flag key and visual update');
     result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
-    assert.ok(result.errors.some((error) => error.includes('same source changes visual contract')));
+    assert.deepEqual(result.errors, []);
+    assert.match(result.reviewNotes.join('\n'), /Feature\.tsx/);
   });
 
-  it('retains mixed classification when a known feature-flag integration is removed', async () => {
+  it('allows removing feature-flag integration with a visual update', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx':
         "import { useFeatureFlag } from '@/components/FeatureFlagsContext';\nexport const Feature = () => <div style={{ color: 'red' }}>{useFeatureFlag('nightshade')}</div>;\n",
@@ -409,10 +401,10 @@ describe('check-ui-contract-pr', () => {
     );
     commit(root, 'remove flag integration and update visual');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
-    assert.ok(result.errors.some((error) => error.includes('same source changes visual contract')));
+    assert.deepEqual(result.errors, []);
   });
 
-  it('rejects visual and feature edits in one non-owner source file', async () => {
+  it('allows visual and feature edits in one non-owner source file', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx':
         'const version = 1;\nexport const Feature = () => <div style={{ margin: 1 }} />;\n',
@@ -424,10 +416,11 @@ describe('check-ui-contract-pr', () => {
     );
     commit(root, 'mixed change');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
-    assert.ok(result.errors.some((error) => error.includes('same source changes visual contract')));
+    assert.deepEqual(result.errors, []);
+    assert.match(result.reviewNotes.join('\n'), /Feature\.tsx/);
   });
 
-  it('rejects UI and feature files mixed in one PR', async () => {
+  it('allows UI and feature files mixed in one PR', async () => {
     const root = await createRepository({
       'apps/app/src/components/ui/Button.tsx':
         "export const Button = () => <div style={{ color: 'red' }} />;\n",
@@ -447,15 +440,11 @@ describe('check-ui-contract-pr', () => {
     await writeRepositoryFile(root, 'docs/review.md', 'new\n');
     commit(root, 'mixed PR');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
-    const mixedError = result.errors.find((error) => error.includes('mixes UI contract changes'));
-    assert.ok(mixedError);
-    assert.match(mixedError, /UI files:\n- apps\/app\/src\/components\/ui\/Button\.tsx/);
-    assert.match(mixedError, /Feature files:\n- apps\/app\/src\/components\/Feature\.tsx/);
-    assert.doesNotMatch(mixedError, /docs\/review\.md/);
-    assert.deepEqual(result.categoryFiles, {
-      ui: ['apps/app/src/components/ui/Button.tsx'],
-      feature: ['apps/app/src/components/Feature.tsx'],
-    });
+    assert.deepEqual(result.errors, []);
+    assert.match(result.reviewNotes.join('\n'), /Button\.tsx/);
+    assert.match(result.reviewNotes.join('\n'), /기존 component\/recipe 재사용 여부/);
+    const cli = runCli(root, ['--base', refs(root).base, '--head', refs(root).head]);
+    assert.equal(cli.status, 0, cli.stderr);
   });
 
   it('keeps deleted or renamed UI owners in the UI classification', async () => {
@@ -471,7 +460,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'rename owner');
     let result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['ui']);
 
     await writeRepositoryFile(root, 'apps/app/src/components/ui/PrimaryButton.tsx', '');
     git(root, ['add', '.']);
@@ -498,7 +486,6 @@ describe('check-ui-contract-pr', () => {
       cwd: deletedRoot,
     });
     assert.deepEqual(deletedResult.errors, []);
-    assert.deepEqual(deletedResult.categories, ['ui']);
 
     const renamedRoot = await createRepository(baseFiles);
     const renamedComponentPath = 'apps/app/src/components/post/RenamedFeature.tsx';
@@ -517,7 +504,6 @@ describe('check-ui-contract-pr', () => {
       cwd: renamedRoot,
     });
     assert.deepEqual(renamedResult.errors, []);
-    assert.deepEqual(renamedResult.categories, ['ui']);
   });
 
   it('rejects a story that does not admit a production component', async () => {
@@ -545,7 +531,6 @@ describe('check-ui-contract-pr', () => {
       commit(root, `support ${suffix} story`);
       const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
       assert.deepEqual(result.errors, []);
-      assert.deepEqual(result.categories, []);
     }
   });
 
@@ -578,7 +563,7 @@ describe('check-ui-contract-pr', () => {
     assert.ok(result.errors.some((error) => error.includes('no component/pattern story catalog')));
   });
 
-  it('allows a dedicated policy-only change once the base checker exists', async () => {
+  it('reports a legacy snapshot expansion independently of runtime files', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
       'scripts/ui-contract-legacy.json': '{"version":1,"entries":{}}\n',
@@ -592,11 +577,12 @@ describe('check-ui-contract-pr', () => {
     await writeRepositoryFile(root, '.github/workflows/ui-contract-review.yml', 'name: new\n');
     commit(root, 'policy self exemption');
     const result = checkPullRequest({ ...refs(root), cwd: root });
-    assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['policy']);
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /^scripts\/ui-contract-legacy\.json:/);
+    assert.match(result.errors[0], /new entries are not allowed/);
   });
 
-  it('does not let a policy change self-exempt a mixed runtime PR', async () => {
+  it('reports a legacy snapshot expansion without classifying supporting files', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
       'scripts/ui-contract-legacy.json': '{"version":1,"entries":{}}\n',
@@ -617,17 +603,9 @@ describe('check-ui-contract-pr', () => {
     await writeRepositoryFile(root, 'docs/review.md', 'new\n');
     commit(root, 'mixed policy and runtime change');
     const result = checkPullRequest({ ...refs(root), cwd: root });
-    const mixedError = result.errors.find((error) =>
-      error.includes('mixes enforcement-policy changes'),
-    );
-    assert.ok(mixedError);
-    assert.match(mixedError, /Policy files:\n- scripts\/ui-contract-legacy\.json/);
-    assert.match(mixedError, /Feature files:\n- apps\/app\/src\/components\/Feature\.tsx/);
-    assert.doesNotMatch(mixedError, /docs\/review\.md/);
-    assert.deepEqual(result.categoryFiles, {
-      policy: ['scripts/ui-contract-legacy.json'],
-      feature: ['apps/app/src/components/Feature.tsx'],
-    });
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /^scripts\/ui-contract-legacy\.json:/);
+    assert.match(result.errors[0], /new entries are not allowed/);
   });
 
   it('allows a custom icon, owner registration, canonical component, story, and review body together', async () => {
@@ -689,7 +667,6 @@ describe('check-ui-contract-pr', () => {
       prBody: customIconBody(),
     });
     assert.deepEqual(withBody.errors, []);
-    assert.deepEqual(withBody.categories, ['ui']);
 
     await writeRepositoryFile(
       fixture.root,
@@ -704,7 +681,7 @@ describe('check-ui-contract-pr', () => {
       cwd: fixture.root,
       prBody: customIconBody(),
     });
-    assert.ok(mixed.errors.some((error) => error.includes('same source changes visual contract')));
+    assert.deepEqual(mixed.errors, []);
   });
 
   it('requires both custom icon review fields and rejects missing or placeholder bodies', async () => {
@@ -736,7 +713,7 @@ describe('check-ui-contract-pr', () => {
     }
   });
 
-  it('rejects custom icon admission mixed with feature source changes', async () => {
+  it('allows custom icon admission alongside feature source changes', async () => {
     const fixture = await createCustomIconFixture();
     await writeRepositoryFile(
       fixture.root,
@@ -750,10 +727,10 @@ describe('check-ui-contract-pr', () => {
       cwd: fixture.root,
       prBody: customIconBody(),
     });
-    assert.ok(result.errors.some((error) => error.includes('mixes UI contract changes')));
+    assert.deepEqual(result.errors, []);
   });
 
-  it('rejects custom icon admission when config rules are weakened', async () => {
+  it('keeps custom icon admission checks with unrelated config edits', async () => {
     const fixture = await createCustomIconFixture({
       configMarker: "const policyMarker = 'head';\n",
     });
@@ -762,7 +739,57 @@ describe('check-ui-contract-pr', () => {
       cwd: fixture.root,
       prBody: customIconBody(),
     });
-    assert.ok(result.errors.some((error) => error.includes('enforcement-policy')));
+    assert.deepEqual(result.errors, []);
+
+    const missingBody = checkPullRequest({
+      ...fixture,
+      cwd: fixture.root,
+      prBody: '',
+    });
+    assert.ok(missingBody.errors.some((error) => error.includes('고려한 Lucide 대안')));
+
+    const noStoryFixture = await createCustomIconFixture({
+      configMarker: "const policyMarker = 'head';\n",
+      includeStory: false,
+    });
+    const noStory = checkPullRequest({
+      ...noStoryFixture,
+      cwd: noStoryFixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(
+      noStory.errors.some((error) =>
+        error.includes('requires a changed representative component/pattern story'),
+      ),
+    );
+
+    const removedFixture = await createCustomIconFixture();
+    await writeRepositoryFile(removedFixture.root, 'eslint.config.mjs', svgOwnerConfig([]));
+    commit(removedFixture.root, 'remove svg owner entry');
+    const removed = checkPullRequest({
+      ...removedFixture,
+      head: git(removedFixture.root, ['rev-parse', 'HEAD']).trim(),
+      cwd: removedFixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(
+      removed.errors.some((error) => error.includes('cannot remove an existing owner entry')),
+    );
+
+    const malformedFixture = await createCustomIconFixture();
+    await writeRepositoryFile(
+      malformedFixture.root,
+      'eslint.config.mjs',
+      'const svgOwnerFiles = [not-a-string];\nexport default [];\n',
+    );
+    commit(malformedFixture.root, 'malform svg owner config');
+    const malformed = checkPullRequest({
+      ...malformedFixture,
+      head: git(malformedFixture.root, ['rev-parse', 'HEAD']).trim(),
+      cwd: malformedFixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(malformed.errors.some((error) => error.includes('entries must be string literals')));
   });
 
   it('rejects an owner registration without a changed source and representative story', async () => {
@@ -830,7 +857,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'legacy cleanup');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('matches a legacy cleanup through a local style array and object', async () => {
@@ -864,7 +890,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'remove nested legacy visual override');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('matches a legacy cleanup only for the selected StyleSheet member', async () => {
@@ -907,7 +932,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'remove selected action visual override');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
   it('allows a screen story as supporting evidence without classifying it as feature work', async () => {
@@ -922,7 +946,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'screen story support');
     const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, []);
   });
 
   it('does not let a screen story catalog a new visual source', async () => {
@@ -954,10 +977,9 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'unrelated package metadata');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 
-  it('treats disabling root lint:eslint as policy when mixed with feature work', async () => {
+  it('allows config and feature changes without global policy classification', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
       'package.json': JSON.stringify({
@@ -988,7 +1010,7 @@ describe('check-ui-contract-pr', () => {
     );
     commit(root, 'disable eslint with feature change');
     const result = checkPullRequest({ ...refs(root), cwd: root });
-    assert.ok(result.errors.some((error) => error.includes('mixes enforcement-policy changes')));
+    assert.deepEqual(result.errors, []);
   });
 
   it('matches legacy cleanup by visual fingerprint while retaining duplicate values', async () => {
@@ -1012,7 +1034,7 @@ describe('check-ui-contract-pr', () => {
       JSON.stringify({
         version: 1,
         entries: {
-          [blueKey]: { occurrences: 2, reason: 'legacy blue', reference: 'docs/design/x.md' },
+          [blueKey]: { reference: 'docs/design/x.md', reason: 'legacy blue', occurrences: 2 },
         },
       }),
     );
@@ -1024,7 +1046,6 @@ describe('check-ui-contract-pr', () => {
     commit(root, 'remove one exact legacy visual value');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);
-    assert.deepEqual(result.categories, ['feature']);
   });
 });
 

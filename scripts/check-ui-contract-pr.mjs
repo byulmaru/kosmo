@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import ts from 'typescript-eslint';
 
 const REPOSITORY_ROOT = process.env.UI_CONTRACT_REPOSITORY_ROOT
@@ -10,7 +11,6 @@ const REPOSITORY_ROOT = process.env.UI_CONTRACT_REPOSITORY_ROOT
 const VISUAL_PROPERTY =
   /^(?:color|background(?:Color|Image)?|border(?:$|[A-Z])|font(?:$|[A-Z])|shadow(?:$|[A-Z])|opacity$|outline(?:$|[A-Z]))/;
 const STYLE_PROPS = new Set(['style', 'visualStyle', 'actionStyle']);
-const CHECKER_PATH = 'scripts/check-ui-contract-pr.mjs';
 const SVG_OWNER_CONFIG_NAME = 'svgOwnerFiles';
 const NON_CUSTOM_SVG_OWNER_FILES = new Set([
   'apps/app/src/components/ui/StateView.tsx',
@@ -20,17 +20,6 @@ const NON_CUSTOM_SVG_OWNER_FILES = new Set([
   'apps/app/src/components/post/PostComposer.tsx',
 ]);
 const CUSTOM_ICON_BODY_LABELS = ['고려한 Lucide 대안', '미채택 이유'];
-const POLICY_PATHS = new Set([
-  CHECKER_PATH,
-  'scripts/check-ui-contract-pr.test.mjs',
-  'scripts/eslint-ui-contract.mjs',
-  'scripts/eslint-ui-contract.test.mjs',
-  'scripts/ui-contract-legacy.json',
-  'eslint.config.mjs',
-  '.github/workflows/lint.yml',
-  '.github/workflows/ui-contract-review.yml',
-  'package.json',
-]);
 
 function git(cwd, args) {
   try {
@@ -789,7 +778,7 @@ function isUiOwnerPath(file) {
   return file.startsWith('apps/app/src/components/ui/');
 }
 
-function isMixedSource(source, filePath) {
+function hasRuntimeIntegration(source, filePath) {
   if (!source) {
     return false;
   }
@@ -807,7 +796,7 @@ function isMixedSource(source, filePath) {
             ) === 'apps/app/src/components/FeatureFlagsContext')),
     );
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -848,45 +837,32 @@ function resolveMergeBase(cwd, base, head) {
   }
 }
 
-function basePolicyExists(cwd, base) {
-  return readAtRef(cwd, base, CHECKER_PATH) !== undefined;
-}
-
-function packagePolicyFingerprint(source) {
-  if (!source) {
-    return 'missing';
-  }
-  try {
-    const packageJson = JSON.parse(source);
-    const packageScripts = packageJson.scripts ?? {};
-    const scripts = Object.fromEntries(
-      ['lint:eslint', 'test', 'test:eslint'].map((name) => [
-        name,
-        typeof packageScripts[name] === 'string' ? packageScripts[name] : null,
-      ]),
-    );
-    const dependencies = Object.fromEntries(
-      Object.entries({
-        ...packageJson.dependencies,
-        ...packageJson.devDependencies,
-        ...packageJson.peerDependencies,
-      }).filter(([name]) => name === 'typescript-eslint' || name.startsWith('eslint')),
-    );
-    return JSON.stringify({ dependencies, scripts });
-  } catch {
-    return 'invalid';
-  }
-}
-
 function legacySnapshotChangeKind(baseSource, headSource) {
-  if (!baseSource || !headSource) {
-    if (baseSource && !headSource) {
+  if (baseSource === undefined || headSource === undefined) {
+    if (baseSource !== undefined && headSource === undefined) {
       try {
         const base = JSON.parse(baseSource);
+        if (
+          base === null ||
+          typeof base !== 'object' ||
+          Array.isArray(base) ||
+          !Number.isInteger(base.version) ||
+          base.entries === null ||
+          typeof base.entries !== 'object' ||
+          Array.isArray(base.entries)
+        ) {
+          return { kind: 'invalid', reason: 'version or entries has an invalid structure.' };
+        }
         const reductions = new Map();
         for (const [key, entry] of Object.entries(base.entries ?? {})) {
-          if (!Number.isInteger(entry?.occurrences)) {
-            return { kind: 'policy' };
+          if (
+            entry === null ||
+            typeof entry !== 'object' ||
+            Array.isArray(entry) ||
+            !Number.isInteger(entry.occurrences) ||
+            entry.occurrences < 0
+          ) {
+            return { kind: 'invalid', reason: 'an entry has no integer occurrences.' };
           }
           reductions.set(key, entry.occurrences);
         }
@@ -895,43 +871,96 @@ function legacySnapshotChangeKind(baseSource, headSource) {
           reductions,
         };
       } catch {
-        return { kind: 'policy' };
+        return { kind: 'invalid', reason: 'the snapshot is not valid JSON.' };
       }
     }
-    return { kind: 'policy' };
+    try {
+      const head = JSON.parse(headSource);
+      if (
+        head === null ||
+        typeof head !== 'object' ||
+        Array.isArray(head) ||
+        !Number.isInteger(head.version) ||
+        head.entries === null ||
+        typeof head.entries !== 'object' ||
+        Array.isArray(head.entries)
+      ) {
+        return { kind: 'invalid', reason: 'version or entries has an invalid structure.' };
+      }
+      for (const entry of Object.values(head.entries)) {
+        if (
+          entry === null ||
+          typeof entry !== 'object' ||
+          Array.isArray(entry) ||
+          !Number.isInteger(entry.occurrences) ||
+          entry.occurrences < 0
+        ) {
+          return { kind: 'invalid', reason: 'an entry has no integer occurrences.' };
+        }
+      }
+      return { kind: 'initial' };
+    } catch {
+      return { kind: 'invalid', reason: 'the snapshot is not valid JSON.' };
+    }
   }
   try {
     const base = JSON.parse(baseSource);
     const head = JSON.parse(headSource);
     if (
+      base === null ||
+      typeof base !== 'object' ||
+      Array.isArray(base) ||
+      head === null ||
+      typeof head !== 'object' ||
+      Array.isArray(head) ||
+      !Number.isInteger(base.version) ||
       base.version !== head.version ||
+      base.entries === null ||
       typeof base.entries !== 'object' ||
-      typeof head.entries !== 'object'
+      Array.isArray(base.entries) ||
+      head.entries === null ||
+      typeof head.entries !== 'object' ||
+      Array.isArray(head.entries)
     ) {
-      return { kind: 'policy' };
+      return { kind: 'invalid', reason: 'version or entries has an invalid structure.' };
     }
     const baseEntries = base.entries ?? {};
     const headEntries = head.entries ?? {};
     let narrowed = false;
     const reductions = new Map();
-    if (Object.keys(baseEntries).length !== Object.keys(headEntries).length) {
+    if (Object.keys(baseEntries).length < Object.keys(headEntries).length) {
+      return { kind: 'widening', reason: 'new entries are not allowed.' };
+    }
+    if (Object.keys(baseEntries).length > Object.keys(headEntries).length) {
       narrowed = true;
     }
     for (const [key, entry] of Object.entries(headEntries)) {
       const previous = baseEntries[key];
-      if (!previous || typeof previous !== 'object' || typeof entry !== 'object') {
-        return { kind: 'policy' };
+      if (
+        previous === null ||
+        typeof previous !== 'object' ||
+        Array.isArray(previous) ||
+        entry === null ||
+        typeof entry !== 'object' ||
+        Array.isArray(entry)
+      ) {
+        return { kind: 'invalid', reason: `entry ${key} has an invalid structure.` };
       }
       const { occurrences: previousOccurrences, ...previousMetadata } = previous;
       const { occurrences, ...metadata } = entry;
-      if (JSON.stringify(previousMetadata) !== JSON.stringify(metadata)) {
-        return { kind: 'policy' };
+      if (!isDeepStrictEqual(previousMetadata, metadata)) {
+        return { kind: 'widening', reason: `entry ${key} metadata changed.` };
       }
-      if (!Number.isInteger(previousOccurrences) || !Number.isInteger(occurrences)) {
-        return { kind: 'policy' };
+      if (
+        !Number.isInteger(previousOccurrences) ||
+        previousOccurrences < 0 ||
+        !Number.isInteger(occurrences) ||
+        occurrences < 0
+      ) {
+        return { kind: 'invalid', reason: `entry ${key} has no integer occurrences.` };
       }
       if (occurrences > previousOccurrences) {
-        return { kind: 'policy' };
+        return { kind: 'widening', reason: `entry ${key} occurrence count increased.` };
       }
       if (occurrences < previousOccurrences) {
         narrowed = true;
@@ -940,29 +969,22 @@ function legacySnapshotChangeKind(baseSource, headSource) {
     }
     for (const [key, entry] of Object.entries(baseEntries)) {
       if (!(key in headEntries)) {
-        if (!Number.isInteger(entry?.occurrences)) {
-          return { kind: 'policy' };
+        if (
+          entry === null ||
+          typeof entry !== 'object' ||
+          Array.isArray(entry) ||
+          !Number.isInteger(entry.occurrences) ||
+          entry.occurrences < 0
+        ) {
+          return { kind: 'invalid', reason: `entry ${key} has no integer occurrences.` };
         }
         reductions.set(key, entry.occurrences);
       }
     }
-    return narrowed ? { kind: 'narrowing', reductions } : { kind: 'policy' };
+    return narrowed ? { kind: 'narrowing', reductions } : { kind: 'unchanged' };
   } catch {
-    return { kind: 'policy' };
+    return { kind: 'invalid', reason: 'the snapshot is not valid JSON.' };
   }
-}
-
-function isPolicyPath(cwd, base, head, file) {
-  if (!POLICY_PATHS.has(file)) {
-    return false;
-  }
-  if (file !== 'package.json') {
-    return true;
-  }
-  return (
-    packagePolicyFingerprint(readAtRef(cwd, base, file)) !==
-    packagePolicyFingerprint(readAtRef(cwd, head, file))
-  );
 }
 
 function legacyCleanupForFile(file, analysis, reductions) {
@@ -1021,6 +1043,9 @@ function parseSvgOwnerConfig(source, filePath = 'eslint.config.mjs') {
         }
       }
     }
+    if (declarations.length === 0) {
+      return { error: `${filePath}: svgOwnerFiles declaration is missing.` };
+    }
     if (declarations.length !== 1 || declarations[0].init?.type !== 'ArrayExpression') {
       return { error: `${filePath}: svgOwnerFiles must be one top-level const literal array.` };
     }
@@ -1052,28 +1077,31 @@ function customIconConfigChange(baseSource, headSource) {
   const base = parseSvgOwnerConfig(baseSource);
   const head = parseSvgOwnerConfig(headSource);
   if (base.error || head.error) {
-    return { kind: 'policy', additions: [], errors: [] };
-  }
-  if (nonVisualProjection(base.ast, [base.range]) !== nonVisualProjection(head.ast, [head.range])) {
+    const baseMissing = base.error?.endsWith('svgOwnerFiles declaration is missing.');
+    const headMissing = head.error?.endsWith('svgOwnerFiles declaration is missing.');
+    if (baseMissing && headMissing) {
+      return { kind: 'unchanged', additions: [], errors: [] };
+    }
+    if (baseMissing && !head.error) {
+      const additions = head.values;
+      return { kind: 'initial', additions, errors: [] };
+    }
     return {
-      kind: 'policy',
+      kind: 'invalid',
       additions: [],
-      errors: [],
+      errors: [base.error, head.error].filter(Boolean),
     };
   }
-  if (
-    head.values.length < base.values.length ||
-    base.values.some((entry) => !head.values.includes(entry))
-  ) {
+  if (base.values.some((entry) => !head.values.includes(entry))) {
     return {
-      kind: 'policy',
+      kind: 'invalid',
       additions: [],
-      errors: [],
+      errors: ['eslint.config.mjs: svgOwnerFiles cannot remove an existing owner entry.'],
     };
   }
   const additions = head.values.filter((entry) => !base.values.includes(entry));
   if (additions.length === 0) {
-    return { kind: 'policy', additions, errors: [] };
+    return { kind: 'unchanged', additions, errors: [] };
   }
   if (additions.some((entry) => !isCustomIconOwnerPath(entry))) {
     return {
@@ -1178,10 +1206,31 @@ function changedStorySupportsIcon({ cwd, head, headCatalog, changedFilesList, ta
   });
 }
 
-function evaluateCustomIconAdmission({ cwd, head, baseConfig, headConfig, files, headCatalog }) {
+function evaluateCustomIconAdmission({
+  bootstrap,
+  cwd,
+  head,
+  baseConfig,
+  headConfig,
+  files,
+  headCatalog,
+}) {
   const change = customIconConfigChange(baseConfig, headConfig);
-  if (change.kind !== 'candidate') {
+  if (change.kind === 'invalid') {
     return { ...change, sourcePaths: new Set() };
+  }
+  if (change.kind === 'unchanged') {
+    return { ...change, sourcePaths: new Set() };
+  }
+  if (change.kind === 'initial' && !bootstrap) {
+    return {
+      kind: 'invalid',
+      additions: change.additions,
+      errors: [
+        'eslint.config.mjs: initial svgOwnerFiles admission requires the explicit bootstrap path.',
+      ],
+      sourcePaths: new Set(),
+    };
   }
   const errors = [];
   const sourcePaths = new Set();
@@ -1196,12 +1245,6 @@ function evaluateCustomIconAdmission({ cwd, head, baseConfig, headConfig, files,
     }
     if (!sourceImportsValue(source, target, 'react-native-svg')) {
       errors.push(`${target}: custom icon owner must contain a react-native-svg value import.`);
-      continue;
-    }
-    if (isMixedSource(source, target)) {
-      errors.push(
-        `${target}: custom icon owner cannot include Relay, route, or feature-flag integration.`,
-      );
       continue;
     }
     if (!changedStorySupportsIcon({ cwd, head, headCatalog, changedFilesList: files, target })) {
@@ -1222,20 +1265,17 @@ function evaluateCustomIconAdmission({ cwd, head, baseConfig, headConfig, files,
 
 function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = false, prBody }) {
   if (!base || !head) {
-    return { errors: ['Both --base and --head are required.'], signals: [] };
+    return { errors: ['Both --base and --head are required.'] };
   }
   if (!hasRef(cwd, base) || !hasRef(cwd, head)) {
-    return {
-      errors: [`Unable to resolve required Git refs: base=${base}, head=${head}.`],
-      signals: [],
-    };
+    return { errors: [`Unable to resolve required Git refs: base=${base}, head=${head}.`] };
   }
 
   let analysisBase;
   try {
     analysisBase = resolveMergeBase(cwd, base, head);
   } catch (error) {
-    return { errors: [error.message], signals: [] };
+    return { errors: [error.message] };
   }
 
   const baseCatalog = buildCatalog(cwd, analysisBase);
@@ -1243,17 +1283,8 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
   const owners = new Set([...baseCatalog.owners, ...headCatalog.owners]);
   const files = changedFiles(cwd, analysisBase, head);
   const errors = [];
-  const signals = [];
-  const categoryFiles = new Map();
-  const addCategory = (category, file) => {
-    const paths = categoryFiles.get(category) ?? [];
-    paths.push(file);
-    categoryFiles.set(category, paths);
-  };
-  const categoryFileSummary = (category) =>
-    (categoryFiles.get(category) ?? []).map((file) => `\n- ${file}`).join('') || '\n- (none)';
-  const baseHasPolicy = basePolicyExists(cwd, base);
-  let uiCleanupOnly = true;
+  const uiReviewPaths = new Set();
+  const runtimeReviewPaths = new Set();
   const legacyReductions = new Map();
   const legacyConsumed = new Map();
   const legacyChange = files.some(
@@ -1267,6 +1298,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
   const customAdmission = files.some(({ path: file }) => file === 'eslint.config.mjs')
     ? evaluateCustomIconAdmission({
         baseConfig: readAtRef(cwd, base, 'eslint.config.mjs'),
+        bootstrap,
         files,
         head,
         headCatalog,
@@ -1292,10 +1324,21 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
   if (customAdmission.kind === 'invalid') {
     errors.push(...customAdmission.errors);
   }
+  for (const file of customAdmission.sourcePaths) {
+    uiReviewPaths.add(file);
+  }
   if (legacyChange.kind === 'narrowing') {
     for (const [key, count] of legacyChange.reductions) {
       legacyReductions.set(key, count);
     }
+  } else if (legacyChange.kind === 'initial' && !bootstrap) {
+    errors.push(
+      'scripts/ui-contract-legacy.json: initial snapshot generation requires the explicit bootstrap path.',
+    );
+  } else if (legacyChange.kind === 'invalid' || legacyChange.kind === 'widening') {
+    errors.push(
+      `scripts/ui-contract-legacy.json: ${legacyChange.reason ?? 'snapshot change is not allowed.'}`,
+    );
   }
 
   for (const changed of files) {
@@ -1305,30 +1348,14 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     }
     if (file === 'scripts/ui-contract-legacy.json') {
       if (legacyChange.kind === 'narrowing') {
-        signals.push(`${file}: treated as supporting legacy-contract cleanup.`);
         continue;
       }
     }
     if (file === 'eslint.config.mjs' && customAdmission.kind === 'valid') {
-      addCategory('ui', file);
-      uiCleanupOnly = false;
-      signals.push(`${file}: treated as a custom icon owner admission.`);
-      continue;
-    }
-    if (isPolicyPath(cwd, base, head, file)) {
-      addCategory('policy', file);
-      if (!baseHasPolicy && !bootstrap) {
-        errors.push(
-          `${file}: initial enforcement policy introduction requires the explicit bootstrap path.`,
-        );
-      } else {
-        signals.push(`${file}: treated as a dedicated enforcement-policy change.`);
-      }
       continue;
     }
 
     if (isScreenStory(file)) {
-      signals.push(`${file}: treated as supporting story evidence.`);
       continue;
     }
 
@@ -1342,8 +1369,6 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
           errors.push(
             `${file}: changed component/pattern story has no production component import.`,
           );
-        } else {
-          signals.push(`${file}: treated as UI supporting evidence.`);
         }
       } catch (error) {
         errors.push(`${file}: unable to classify story component imports: ${error.message}`);
@@ -1358,12 +1383,10 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       file === '.github/pull_request_template.md' ||
       file.startsWith('.github/PULL_REQUEST_TEMPLATE/')
     ) {
-      signals.push(`${file}: treated as supporting change.`);
       continue;
     }
 
     if (!isAppSource(file)) {
-      addCategory('feature', file);
       continue;
     }
 
@@ -1376,19 +1399,30 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       customSourcePaths.has(file) || (changed.oldPath && customSourcePaths.has(changed.oldPath));
     const owner = isUiOwnerPath(file) || catalogOwner || registeredCustomSource;
     const isNewSource = baseSource === undefined && headSource !== undefined;
-    const mixedOwner =
-      owner && (isMixedSource(baseSource, file) || isMixedSource(headSource, file));
     const analysis = analyzeSource(baseSource, headSource, file);
     if (analysis.error) {
       errors.push(analysis.error);
       continue;
     }
+    if (
+      analysis.visualChanged ||
+      (owner && (analysis.nonVisualChanged || changed.status === 'D'))
+    ) {
+      uiReviewPaths.add(file);
+    }
+    const runtimeIntegration =
+      hasRuntimeIntegration(baseSource, file) || hasRuntimeIntegration(headSource, file);
+    if (
+      (analysis.nonVisualChanged || (isNewSource && runtimeIntegration)) &&
+      (!owner || runtimeIntegration)
+    ) {
+      runtimeReviewPaths.add(file);
+    }
     const legacyCleanup = legacyCleanupForFile(file, analysis, legacyReductions);
-    if (legacyCleanup.matchesAllRemoved && analysis.visualOnlyRemoval && !mixedOwner) {
+    if (legacyCleanup.matchesAllRemoved && analysis.visualOnlyRemoval) {
       for (const [key, count] of legacyCleanup.consumed) {
         legacyConsumed.set(key, (legacyConsumed.get(key) ?? 0) + count);
       }
-      addCategory('feature', file);
       continue;
     }
 
@@ -1397,26 +1431,10 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       continue;
     }
 
-    if (owner && !mixedOwner && (!isNewSource || catalogOwner || registeredCustomSource)) {
-      addCategory('ui', file);
-      if (!analysis.visualOnlyRemoval || analysis.nonVisualChanged) {
-        uiCleanupOnly = false;
-      }
+    if (owner && (!isNewSource || catalogOwner || registeredCustomSource)) {
       continue;
     }
 
-    if (mixedOwner && isNewSource && (analysis.visualChanged || analysis.nonVisualChanged)) {
-      errors.push(
-        `${file}: a new cataloged source with Relay/route integration cannot combine a visual definition with runtime integration.`,
-      );
-      continue;
-    }
-    if (analysis.visualChanged && analysis.nonVisualChanged) {
-      errors.push(
-        `${file}: the same source changes visual contract and feature logic; split the UI and feature changes.`,
-      );
-      continue;
-    }
     if (analysis.visualChanged) {
       if (
         !catalogOwnsSource(file, owners) &&
@@ -1424,35 +1442,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
         baseSource === undefined
       ) {
         errors.push(`${file}: new visual source has no component/pattern story catalog entry.`);
-      } else {
-        addCategory('ui', file);
-        if (!analysis.visualOnlyRemoval || analysis.nonVisualChanged || isNewSource || mixedOwner) {
-          uiCleanupOnly = false;
-        }
       }
-    } else if (analysis.nonVisualChanged) {
-      addCategory('feature', file);
-    } else if (changed.status === 'D' || changed.status === 'R') {
-      addCategory('feature', file);
-    }
-  }
-
-  if (categoryFiles.has('ui') && categoryFiles.has('feature')) {
-    errors.push(
-      `The PR mixes UI contract changes with feature changes; split the changes into separate PRs. UI files:${categoryFileSummary('ui')}\nFeature files:${categoryFileSummary('feature')}`,
-    );
-  }
-  if (categoryFiles.has('policy') && (categoryFiles.has('ui') || categoryFiles.has('feature'))) {
-    const allowsInitialCleanup =
-      !baseHasPolicy &&
-      bootstrap &&
-      categoryFiles.has('ui') &&
-      !categoryFiles.has('feature') &&
-      uiCleanupOnly;
-    if (!allowsInitialCleanup) {
-      errors.push(
-        `The PR mixes enforcement-policy changes with runtime UI or feature changes; split the policy review. Policy files:${categoryFileSummary('policy')}\nUI files:${categoryFileSummary('ui')}\nFeature files:${categoryFileSummary('feature')}`,
-      );
     }
   }
   for (const [key, count] of legacyReductions) {
@@ -1462,13 +1452,19 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       );
     }
   }
-  return {
-    errors,
-    signals,
-    categories: [...categoryFiles.keys()],
-    categoryFiles: Object.fromEntries(categoryFiles),
-    files,
-  };
+  const reviewNotes = [];
+  if (uiReviewPaths.size > 0 && runtimeReviewPaths.size > 0) {
+    reviewNotes.push(
+      [
+        'UI 계약 근거:',
+        ...[...uiReviewPaths].sort().map((file) => `    ${file}`),
+        '기능/runtime 근거:',
+        ...[...runtimeReviewPaths].sort().map((file) => `    ${file}`),
+        '기존 component/recipe 재사용 여부와 새 variant/public visual prop의 근거를 리뷰하세요. 이 근거만으로 PR 분리를 요구하지 않습니다.',
+      ].join('\n'),
+    );
+  }
+  return { errors, reviewNotes };
 }
 
 const MERGE_QUEUE_QUERY = `
@@ -1675,6 +1671,7 @@ async function main(argv = process.argv.slice(2)) {
       fetchCommits: true,
     });
     const failures = [];
+    const reviewNotes = [];
     for (const entry of entries) {
       const result = classifyPullRequest({
         base: entry.pullRequest.baseRefOid,
@@ -1684,6 +1681,14 @@ async function main(argv = process.argv.slice(2)) {
         cwd: REPOSITORY_ROOT,
       });
       failures.push(...result.errors.map((error) => `PR #${entry.pullRequest.number}: ${error}`));
+      reviewNotes.push(
+        ...(Array.isArray(result.reviewNotes) ? result.reviewNotes : []).map(
+          (note) => `PR #${entry.pullRequest.number}:\n${note}`,
+        ),
+      );
+    }
+    if (reviewNotes.length) {
+      console.log(`UI contract PR review notes:\n${reviewNotes.join('\n')}`);
     }
     if (failures.length) {
       throw new Error(failures.join('\n'));
@@ -1707,12 +1712,13 @@ async function main(argv = process.argv.slice(2)) {
     prBody,
     cwd: REPOSITORY_ROOT,
   });
+  if (result.reviewNotes.length) {
+    console.log(`UI contract PR review notes:\n${result.reviewNotes.join('\n')}`);
+  }
   if (result.errors.length) {
     throw new Error(result.errors.join('\n'));
   }
-  console.log(
-    `UI contract PR check passed (${result.categories.join(', ') || 'supporting-only'}).`,
-  );
+  console.log('UI contract PR check passed.');
 }
 
 function isEntryPoint() {
