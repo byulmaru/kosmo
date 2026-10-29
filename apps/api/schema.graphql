@@ -670,6 +670,7 @@ type ProfileViewerState {
 enum PushInstallationPlatform {
   ANDROID
   IOS
+  WEB
 }
 
 type Query {
