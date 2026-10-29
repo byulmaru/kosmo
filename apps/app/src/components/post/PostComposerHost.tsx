@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
@@ -51,6 +52,8 @@ export function PostComposerHost({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
+  const [uncertainRequest, setUncertainRequest] = useState<{ retry?: () => void } | null>(null);
+  const [uncertainCloseOpen, setUncertainCloseOpen] = useState(false);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -68,9 +71,14 @@ export function PostComposerHost({
       if (reason !== 'created' && submitting) {
         return;
       }
+      if (reason !== 'created' && uncertainRequest !== null) {
+        setUncertainCloseOpen(true);
+        return;
+      }
+      setUncertainCloseOpen(false);
       onRequestClose(reason === 'created' ? 'created' : 'dismiss');
     },
-    [onRequestClose, submitting],
+    [onRequestClose, submitting, uncertainRequest],
   );
   const requestNativeBack = useCallback(() => {
     if (submitting) {
@@ -92,6 +100,47 @@ export function PostComposerHost({
     preferredFocusRef: expandControlRef,
     triggerFocusRef,
   });
+
+  const uncertainCloseConfirmation = uncertainCloseOpen ? (
+    <View style={[styles.uncertainCloseBackdrop, { backgroundColor: theme.overlayScrim }]}>
+      <View
+        accessibilityLabel="접수 결과 확인"
+        accessibilityViewIsModal
+        role="alertdialog"
+        style={[
+          styles.uncertainCloseDialog,
+          elevation.overlay,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
+      >
+        <Text style={[styles.uncertainCloseText, { color: theme.foregroundPrimary }]}>
+          접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.
+        </Text>
+        <View style={styles.uncertainCloseActions}>
+          <Button
+            disabled={submitting || uncertainRequest?.retry === undefined}
+            onPress={() => {
+              const retry = uncertainRequest?.retry;
+              setUncertainCloseOpen(false);
+              retry?.();
+            }}
+            tone="secondary"
+          >
+            다시 확인
+          </Button>
+          <Button
+            onPress={() => {
+              setUncertainCloseOpen(false);
+              onRequestClose('dismiss');
+            }}
+            tone="danger"
+          >
+            닫기
+          </Button>
+        </View>
+      </View>
+    </View>
+  ) : null;
 
   const header =
     mode === 'overlay' ? (
@@ -117,7 +166,10 @@ export function PostComposerHost({
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
-        onPostCreated={() => requestClose('created')}
+        onPostRequestAccepted={() => requestClose('created')}
+        onPostRequestUncertainChange={(uncertain, retry) =>
+          setUncertainRequest(uncertain ? { retry } : null)
+        }
         onSubmittingChange={setSubmitting}
         profile={profile}
         profiles={profiles}
@@ -168,6 +220,7 @@ export function PostComposerHost({
                 </KeyboardAvoidingView>
               </OverlayPortalProvider>
             </View>
+            {uncertainCloseConfirmation}
           </View>
         )}
         {...(mode === 'rail'
@@ -258,7 +311,7 @@ const styles = StyleSheet.create({
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
   nativeMobileSurface: { flex: 1 },
   // Only the visual surface clips; dropdown portals stay in the existing dialog focus scope.
-  dialog: { minHeight: 0, overflow: 'visible' },
+  dialog: { minHeight: 0, overflow: 'visible', position: 'relative' },
   clippedSurface: { minHeight: 0, flexShrink: 1, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
@@ -284,4 +337,21 @@ const styles = StyleSheet.create({
   title: textStyles.uiHeadingS,
   composerFrame: { flexShrink: 1, minHeight: 0 },
   composerFrameFill: { flex: 1 },
+  uncertainCloseBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    zIndex: 10,
+  },
+  uncertainCloseDialog: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    maxWidth: 420,
+    padding: spacing.xl,
+    width: '100%',
+  },
+  uncertainCloseText: textStyles.uiCopyM,
+  uncertainCloseActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });

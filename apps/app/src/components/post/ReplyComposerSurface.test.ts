@@ -15,6 +15,8 @@ let composerProps:
   | {
       initialBodyText?: string;
       onRequestClose?: (event?: unknown) => void;
+      onPostRequestAccepted?: () => void;
+      onPostRequestUncertainChange?: (uncertain: boolean, retry?: () => void) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
       replyParentId?: string;
@@ -282,6 +284,72 @@ test('닫기 버튼 이벤트는 작성 취소 후 실행할 콜백으로 취급
   assert.ok(discard);
   await act(async () => discard.props.onPress());
 
+  assert.equal(closeCount, 1);
+});
+
+test('게시 요청 접수는 작성 취소 확인 없이 답글/인용 surface를 닫는다', async () => {
+  let closeCount = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(ReplyComposerSurface, {
+        mode: 'quote',
+        onRequestClose: () => closeCount++,
+        open: true,
+        parent: { id: 'post-1' } as never,
+        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+      }),
+    );
+  });
+
+  await act(async () => composerProps?.onPostRequestAccepted?.());
+
+  assert.equal(closeCount, 1);
+  assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
+});
+
+test('불확실한 접수의 닫기 확인은 같은 요청을 재확인하거나 닫는다', async () => {
+  let closeCount = 0;
+  let retryCount = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(ReplyComposerSurface, {
+        mode: 'reply',
+        onRequestClose: () => closeCount++,
+        open: true,
+        parent: { id: 'post-1' } as never,
+        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+      }),
+    );
+  });
+  await act(async () => composerProps?.onPostRequestUncertainChange?.(true, () => retryCount++));
+  await act(async () => composerProps?.onRequestClose?.());
+
+  let confirmation = renderer?.root.findByProps({ role: 'alertdialog' });
+  assert.equal(confirmation?.props.accessibilityLabel, '게시 요청 결과');
+  assert.ok(
+    renderer?.root
+      .findAllByType('Text' as ElementType)
+      .some(
+        (text) => text.props.children === '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.',
+      ),
+  );
+  const retry = renderer?.root
+    .findAllByType('Button' as ElementType)
+    .find((button) => button.props.children === '다시 확인');
+  assert.ok(retry);
+  await act(async () => retry.props.onPress());
+  assert.equal(retryCount, 1);
+  assert.equal(closeCount, 0);
+  assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
+
+  await act(async () => composerProps?.onRequestClose?.());
+  confirmation = renderer?.root.findByProps({ role: 'alertdialog' });
+  assert.ok(confirmation);
+  const close = renderer?.root
+    .findAllByType('Button' as ElementType)
+    .find((button) => button.props.children === '닫기');
+  assert.ok(close);
+  await act(async () => close.props.onPress());
   assert.equal(closeCount, 1);
 });
 

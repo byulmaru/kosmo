@@ -1,11 +1,18 @@
-import { Redirect } from 'expo-router';
+import { Link, Redirect, useRouter } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
+import { POST_REQUEST_HOME_ACTIVE_STATUSES } from '@/components/post/postRequestConnection';
+import {
+  PostRequestHomeSummaryFallback,
+  PostRequestHomeSummaryLoading,
+  PostRequestListSummary,
+} from '@/components/post/PostRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -23,6 +30,7 @@ import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
+import type { HomePostRequestSummaryQuery } from './__generated__/HomePostRequestSummaryQuery.graphql';
 
 const HomeQuery = graphql`
   query HomePageQuery {
@@ -41,6 +49,15 @@ const HomeQuery = graphql`
       }
     }
     ...PostList_home @arguments(count: 20)
+  }
+`;
+
+const HomePostRequestSummary = graphql`
+  query HomePostRequestSummaryQuery($profileId: ID!, $statuses: [PostRequestStatus!]!) {
+    me {
+      id
+      ...PostRequestList_account @arguments(profileId: $profileId, statuses: $statuses)
+    }
   }
 `;
 
@@ -262,10 +279,19 @@ function HomeContentView({
     );
   }
 
+  const postRequestHeader = data.me ? (
+    <HomePostRequestSummaryHeader
+      accountId={data.me.id}
+      key={`${data.me.id}:${selectedProfile.id}`}
+      profileId={selectedProfile.id}
+    />
+  ) : null;
+
   return (
     <View style={styles.timeline}>
       <HomePushPermissionBanner />
       <PostList
+        header={postRequestHeader}
         home={data}
         identityKey={`home:${selectedProfile.id}`}
         onRefresh={onRefresh}
@@ -276,6 +302,83 @@ function HomeContentView({
   );
 }
 
+function HomePostRequestSummaryHeader({
+  accountId,
+  profileId,
+}: {
+  accountId: string;
+  profileId: string;
+}) {
+  const router = useRouter();
+  const theme = useTheme();
+  const [fetchKey, setFetchKey] = useState(0);
+  const onRewrite = useCallback(
+    (requestId: string) =>
+      router.push({
+        pathname: '/post-requests',
+        params: { edit: '1', profileId, requestId },
+      }),
+    [profileId, router],
+  );
+
+  return (
+    <View style={[styles.postRequestHeader, { borderBottomColor: theme.borderSubtle }]}>
+      <Link asChild href={{ pathname: '/post-requests', params: { profileId } }}>
+        <Pressable accessibilityRole="link" style={styles.postRequestLink}>
+          <Text style={[styles.postRequestLinkText, { color: theme.actionPrimaryBase }]}>
+            게시 요청
+          </Text>
+        </Pressable>
+      </Link>
+      <ErrorBoundary
+        fallbackRender={({ resetErrorBoundary }) => (
+          <PostRequestHomeSummaryFallback
+            onRetry={() => {
+              setFetchKey((current) => current + 1);
+              resetErrorBoundary();
+            }}
+          />
+        )}
+        resetKeys={[fetchKey]}
+      >
+        <Suspense fallback={<PostRequestHomeSummaryLoading />}>
+          <HomePostRequestSummaryContent
+            accountId={accountId}
+            fetchKey={String(fetchKey)}
+            onRewrite={onRewrite}
+            profileId={profileId}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    </View>
+  );
+}
+
+function HomePostRequestSummaryContent({
+  accountId,
+  fetchKey,
+  onRewrite,
+  profileId,
+}: {
+  accountId: string;
+  fetchKey: string;
+  onRewrite: (requestId: string) => void;
+  profileId: string;
+}) {
+  const data = useLazyLoadQuery<HomePostRequestSummaryQuery>(
+    HomePostRequestSummary,
+    { profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
+    {
+      fetchKey,
+      fetchPolicy: fetchKey === '0' ? 'store-or-network' : 'network-only',
+    },
+  );
+
+  return data.me?.id === accountId && data.me ? (
+    <PostRequestListSummary account={data.me} onRewrite={onRewrite} profileId={profileId} />
+  ) : null;
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -283,6 +386,13 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
+  postRequestHeader: { borderBottomWidth: 1, gap: spacing.sm, padding: spacing.md },
+  postRequestLink: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44 },
+  postRequestLinkText: {
+    fontFamily: fontFamilies.ui,
+    fontWeight: '600',
+    ...typography.sm,
+  },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',

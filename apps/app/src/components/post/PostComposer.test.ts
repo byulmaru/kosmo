@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
@@ -6,8 +7,10 @@ import { act, create } from 'react-test-renderer';
 import * as RelayRuntime from 'relay-runtime';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import PostComposerMentionSuggestionsQueryNode from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import SubmitPostRequestMutation from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
+import type { PostComposerSubmitPostRequestMutation } from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
 import type { PostComposerController as PostComposerComponent } from './PostComposerController';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -33,14 +36,21 @@ let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
 });
-let completeUploadsImpl: () => Promise<void> = async () => undefined;
 const mediaValue = {
   hasPendingMedia: false,
   items: [{ altText: '대체 텍스트', mediaId: 'media-1' }],
   sensitiveMedia: true,
-  completeUploads: () => completeUploadsImpl(),
+  getPostRequestMedia: () => {
+    if (mediaState !== 'ready') {
+      throw new Error('Media is unavailable');
+    }
+    return [{ altText: '대체 텍스트', applyNightshade: false, mediaId: 'media-1' }];
+  },
+  requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
+  restorePostRequestMedia: () => undefined,
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
+let reselectionMediaIds: string[] = [];
 let refreshMedia: (() => void) | undefined;
 let switcherProps:
   | {
@@ -78,7 +88,7 @@ let targetProps:
   | undefined;
 let mutationCalls: Array<{
   onCompleted: (
-    response: { createPost: { post: { id: string } | null } } | null,
+    response: { submitPostRequest: { request: { requestId: string } | null } | null } | null,
     errors?: Array<{ extensions?: { code?: unknown; field?: unknown }; message: string }> | null,
   ) => void;
   onError: (error: Error) => void;
@@ -87,6 +97,15 @@ let mutationCalls: Array<{
     input: Record<string, unknown>;
   };
 }> = [];
+let sessionAccountId: string | null = 'account-1';
+let accountQueryCalls: Array<{ fetchPolicy: string }> = [];
+const acceptedRequestResponse = (callIndex: number) => ({
+  submitPostRequest: {
+    request: {
+      requestId: String(mutationCalls[callIndex]?.variables.input.requestId),
+    },
+  },
+});
 let renderer: ReactTestRenderer | null = null;
 type PendingMentionSearchRequest = {
   complete: () => void;
@@ -98,6 +117,7 @@ type PendingMentionSearchRequest = {
 };
 let requests: PendingMentionSearchRequest[] = [];
 let relayEnvironment: Environment;
+let relayEnvironmentGeneration: { current: number } | null = null;
 let textInputMountCount = 0;
 let textInputUnmountCount = 0;
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
@@ -166,6 +186,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('expo-crypto', { randomUUID });
 mockModule('react-native', {
   AppState: {
     addEventListener: (_eventType: string, listener: (nextState: string) => void) => {
@@ -197,17 +218,31 @@ mockModule('react-relay', {
       : {};
   },
   useFragment: (_fragment: unknown, key: typeof profileA) => key,
+  useLazyLoadQuery: (_query: unknown, _variables: unknown, options: { fetchPolicy: string }) => {
+    accountQueryCalls.push(options);
+    return { me: { id: 'account-1' } };
+  },
   useMutation: () => [
     (config: (typeof mutationCalls)[number]) => {
       mutationCalls.push(config);
     },
+    false,
   ],
   useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('relay-runtime', {
   ...RelayRuntime,
-  ConnectionHandler: { getConnectionID: () => 'home-connection' },
+  ConnectionHandler: {
+    getConnectionID: (
+      accountId: string,
+      key: string,
+      filters: { profileId: string; statuses: unknown },
+    ) => `${accountId}:${key}:${filters.profileId}:${filters.statuses === null ? 'all' : 'home'}`,
+  },
   ROOT_ID: 'root',
+});
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId: sessionAccountId }),
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
 mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
@@ -224,7 +259,9 @@ mockModule('@/components/ui/ToastProvider', {
   }),
 });
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
-mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => relayEnvironmentGeneration,
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
   useTheme: () => ({
@@ -262,10 +299,12 @@ mockModule('./PostComposerProfileSwitcher', {
 });
 mockModule('./PostComposerMediaControls', {
   emptyPostComposerMediaValue: {
-    completeUploads: async () => undefined,
+    getPostRequestMedia: () => [],
     hasPendingMedia: false,
     items: [],
     sensitiveMedia: false,
+    requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
+    restorePostRequestMedia: () => undefined,
   },
   PostComposerMediaControls: ({
     onValueChange,
@@ -343,6 +382,9 @@ beforeEach(() => {
   keyboardDismissCount = 0;
   requests = [];
   relayEnvironment = createRelayEnvironment();
+  relayEnvironmentGeneration = null;
+  sessionAccountId = 'account-1';
+  accountQueryCalls = [];
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
@@ -359,15 +401,30 @@ afterEach(async () => {
   });
   platform.OS = 'web';
   mediaState = 'ready';
-  completeUploadsImpl = async () => undefined;
   refreshMedia = undefined;
   switcherProps = undefined;
   targetProps = undefined;
   mutationCalls = [];
+  reselectionMediaIds = [];
   mock.restoreAll();
 });
 
 describe('PostComposer initial body', () => {
+  it('loads the Account owner when session context does not provide it for request connections', async () => {
+    sessionAccountId = null;
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('게시 요청'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.deepEqual(accountQueryCalls, [{ fetchPolicy: 'store-or-network' }]);
+    assert.deepEqual(mutationCalls[0]?.variables.connections, [
+      'account-1:PostRequestList_postRequests:profile-a:all',
+      'account-1:PostRequestList_postRequests:profile-a:home',
+    ]);
+  });
+
   it('seeds an editable reply and submits its plain text when mention search is off', async () => {
     mentionSearchEnabled = false;
     const seed = '@parent @remote@remote.example ';
@@ -470,47 +527,109 @@ describe('PostComposer character count', () => {
   });
 });
 
-describe('PostComposer media completion', () => {
-  it('waits for retained images before creating the Post', async () => {
-    let resolveCompletion!: () => void;
-    const completion = new Promise<void>((resolve) => {
-      resolveCompletion = resolve;
+describe('PostComposer request acknowledgement cache projection', () => {
+  it('inserts the acknowledged request with card preview data in both request connections', () => {
+    const requestId = 'request-acknowledged';
+    const requestNodeId = 'post-request-node';
+    const connectionIds = ['request-connection-all', 'request-connection-home'];
+    const source = new RecordSource();
+    for (const connectionId of connectionIds) {
+      source.set(connectionId, {
+        __id: connectionId,
+        __typename: 'PostRequestConnection',
+        edges: { __refs: [] },
+      });
+    }
+    const environment = new Environment({
+      network: Network.create(() =>
+        Observable.create<GraphQLResponse>((sink) => {
+          sink.next({
+            data: {
+              submitPostRequest: {
+                request: {
+                  authorProfile: {
+                    avatar: null,
+                    displayName: '작성자',
+                    handle: '@writer',
+                    id: 'profile-a',
+                    relativeHandle: '@writer',
+                  },
+                  draft: {
+                    bodyText: '접수된 본문',
+                    contentWarning: '접수된 경고',
+                    media: [],
+                    sensitiveMedia: true,
+                  },
+                  id: requestNodeId,
+                  post: null,
+                  requestId,
+                  status: 'QUEUED',
+                },
+              },
+            },
+          });
+          sink.complete();
+        }),
+      ),
+      store: new Store(source),
     });
-    completeUploadsImpl = () => completion;
-    const props = {
-      onRequestClose: () => undefined,
-      presentation: 'overlay' as const,
-      profile: profileA as never,
-    };
+    let acknowledgedRequestId: string | undefined;
 
+    ReactRelay.commitMutation<PostComposerSubmitPostRequestMutation>(environment, {
+      mutation: SubmitPostRequestMutation,
+      variables: {
+        connections: connectionIds,
+        input: {
+          actorProfileId: 'profile-a',
+          bodyText: '접수된 본문',
+          contentWarning: '접수된 경고',
+          media: [],
+          requestId,
+          sensitiveMedia: true,
+          visibility: 'PUBLIC',
+        },
+      },
+      onCompleted: (response) => {
+        acknowledgedRequestId = response.submitPostRequest?.request?.requestId;
+      },
+    });
+
+    const normalizedSource = environment.getStore().getSource();
+    assert.equal(acknowledgedRequestId, requestId);
+    for (const connectionId of connectionIds) {
+      const edges = normalizedSource.get(connectionId)?.edges?.__refs ?? [];
+      assert.equal(edges.length, 1);
+      assert.equal(normalizedSource.get(edges[0]!)?.node?.__ref, requestNodeId);
+    }
+
+    const draftId = normalizedSource.get(requestNodeId)?.draft?.__ref;
+    assert.ok(draftId);
+    assert.equal(normalizedSource.get(draftId)?.bodyText, '접수된 본문');
+    assert.equal(normalizedSource.get(draftId)?.contentWarning, '접수된 경고');
+    assert.equal(normalizedSource.get(draftId)?.sensitiveMedia, true);
+  });
+});
+
+describe('PostComposer media submission', () => {
+  it('submits ready image references and metadata', async () => {
     await act(async () => {
-      renderer = create(createElement(PostComposer, props));
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
     });
     await act(async () => targetProps?.onBodyChange('본문을 보존합니다'));
-    await act(async () => {
-      targetProps?.onSubmit();
-    });
-
-    assert.equal(mutationCalls.length, 0);
-    assert.equal(targetProps?.submitting, true);
-    assert.equal(targetProps?.body, '본문을 보존합니다');
-
-    await act(async () => {
-      resolveCompletion();
-      await completion;
-    });
+    await act(async () => targetProps?.onSubmit());
 
     assert.equal(mutationCalls.length, 1);
-    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.items);
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.getPostRequestMedia());
   });
 
-  it('keeps the draft and skips Post creation when media completion fails', async () => {
-    let rejectCompletion!: (error: Error) => void;
-    const completion = new Promise<void>((_resolve, reject) => {
-      rejectCompletion = reject;
-    });
-    completeUploadsImpl = () => completion;
-
+  it('keeps the draft when media references cannot be submitted', async () => {
+    mediaState = 'failed';
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
@@ -521,52 +640,14 @@ describe('PostComposer media completion', () => {
       );
     });
     await act(async () => targetProps?.onBodyChange('재시도할 본문'));
-    await act(async () => {
-      targetProps?.onSubmit();
-    });
-    assert.equal(mutationCalls.length, 0);
-
-    await act(async () => {
-      rejectCompletion(new Error('Media completion failed'));
-      await completion.catch(() => undefined);
-    });
+    await act(async () => targetProps?.onSubmit());
 
     assert.equal(mutationCalls.length, 0);
-    assert.equal(targetProps?.submitting, false);
     assert.equal(targetProps?.body, '재시도할 본문');
-  });
-
-  it('does not create a Post after the Relay Environment changes during completion', async () => {
-    let resolveCompletion!: () => void;
-    const completion = new Promise<void>((resolve) => {
-      resolveCompletion = resolve;
-    });
-    completeUploadsImpl = () => completion;
-    const props = {
-      onRequestClose: () => undefined,
-      presentation: 'overlay' as const,
-      profile: profileA as never,
-    };
-
-    await act(async () => {
-      renderer = create(createElement(PostComposer, props));
-    });
-    await act(async () => targetProps?.onBodyChange('오래된 actor의 본문'));
-    await act(async () => {
-      targetProps?.onSubmit();
-    });
-    assert.equal(mutationCalls.length, 0);
-
-    relayEnvironment = createRelayEnvironment();
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, props));
-    });
-    await act(async () => {
-      resolveCompletion();
-      await completion;
-    });
-
-    assert.equal(mutationCalls.length, 0);
+    assert.equal(
+      toastCalls[0]?.[0],
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
+    );
   });
 });
 
@@ -701,9 +782,7 @@ describe('PostComposer Reply visibility seed', () => {
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls[0]?.variables.input.visibility, 'PUBLIC');
 
-    await act(async () =>
-      mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'post-reply' } } }),
-    );
+    await act(async () => mutationCalls[0]?.onCompleted(acceptedRequestResponse(0)));
     assert.equal(targetProps?.body, '');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
@@ -829,24 +908,28 @@ describe('PostComposer local author', () => {
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
-    assert.deepEqual(mutationCalls[0]?.variables, {
-      connections: [],
-      input: {
-        bodyText: '보존할 본문',
-        contentWarning: '보존할 CW',
-        media: mediaValue.items,
-        actorProfileId: profileB.id,
-        sensitiveMedia: true,
-        visibility: 'DIRECT',
-      },
-      prependToHome: false,
+    assert.deepEqual(mutationCalls[0]?.variables.connections, [
+      'account-1:PostRequestList_postRequests:profile-b:all',
+      'account-1:PostRequestList_postRequests:profile-b:home',
+    ]);
+    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
+    assert.equal(typeof requestId, 'string');
+    assert.deepEqual(submittedInput, {
+      bodyText: '보존할 본문',
+      contentWarning: '보존할 CW',
+      media: mediaValue.getPostRequestMedia(),
+      actorProfileId: profileB.id,
+      sensitiveMedia: true,
+      visibility: 'DIRECT',
     });
 
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
-    assert.deepEqual(toastCalls[0], [
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-      { tone: 'danger' },
-    ]);
+    assert.equal(toastCalls.length, 0);
+    assert.ok(
+      renderer?.root
+        .findAllByType('Button' as never)
+        .some((button) => button.props.children === '접수 다시 확인'),
+    );
     assert.equal(targetProps?.body, '보존할 본문');
     assert.equal(targetProps?.contentWarning, '보존할 CW');
     assert.equal(
@@ -933,7 +1016,7 @@ describe('PostComposer local author', () => {
     assert.deepEqual(mutationCalls[0]?.variables.input, {
       actorProfileId: profileB.id,
       bodyText: '😀 @alice !',
-      media: mediaValue.items,
+      media: mediaValue.getPostRequestMedia(),
       mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
       sensitiveMedia: true,
       visibility: 'UNLISTED',
@@ -970,7 +1053,7 @@ describe('PostComposer local author', () => {
 
     assert.deepEqual(mutationCalls[0]?.variables.input, {
       bodyText: '@alice',
-      media: mediaValue.items,
+      media: mediaValue.getPostRequestMedia(),
       mentions: [{ profileId: 'profile-alice', start: 0, end: 6 }],
       sensitiveMedia: true,
       visibility: 'DIRECT',
@@ -996,9 +1079,7 @@ describe('PostComposer local author', () => {
     assert.equal(mutationCalls[0]?.variables.input.bodyText, '작성자만 읽을 수 있는 글');
     assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
-    await act(async () =>
-      mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'post-author-only' } } }),
-    );
+    await act(async () => mutationCalls[0]?.onCompleted(acceptedRequestResponse(0)));
     assert.equal(targetProps?.body, '');
   });
 
@@ -1044,9 +1125,41 @@ describe('PostComposer local author', () => {
       'DIRECT',
     );
     assert.deepEqual(toastCalls[0], [
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
       { tone: 'danger' },
     ]);
+  });
+
+  it('requires media reselection only for an exact missing media slot field', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('게시 요청'));
+
+    await act(async () => targetProps?.onSubmit());
+    await act(async () =>
+      mutationCalls[0]?.onCompleted(null, [
+        { message: 'Media slot is missing.', extensions: { code: 'NOT_FOUND', field: 'media.0' } },
+      ]),
+    );
+    assert.deepEqual(reselectionMediaIds, ['media-1']);
+
+    await act(async () => targetProps?.onSubmit());
+    await act(async () =>
+      mutationCalls[1]?.onCompleted(null, [
+        {
+          message: 'Unrelated media field error.',
+          extensions: { code: 'VALIDATION', field: 'media.0.extra' },
+        },
+      ]),
+    );
+    assert.deepEqual(reselectionMediaIds, ['media-1']);
   });
 
   it('submits typed mentions as text with DIRECT while mention search is off', async () => {
@@ -1071,7 +1184,7 @@ describe('PostComposer local author', () => {
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
   });
 
-  it('restores the original author only after a successful post', async () => {
+  it('keeps the original actor, request ID, and connections when retrying after an unknown outcome', async () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
@@ -1083,30 +1196,218 @@ describe('PostComposer local author', () => {
         }),
       );
     });
-    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
     await act(async () => targetProps?.onBodyChange('첫 글'));
     await act(async () => targetProps?.onSubmit());
+    const originalSubmission = mutationCalls[0]?.variables;
+    assert.equal(originalSubmission?.input.actorProfileId, profileA.id);
+    assert.deepEqual(originalSubmission?.connections, [
+      'account-1:PostRequestList_postRequests:profile-a:all',
+      'account-1:PostRequestList_postRequests:profile-a:home',
+    ]);
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
-    assert.equal(switcherProps?.selectedProfileId, profileB.id);
-
-    await act(async () => targetProps?.onSubmit());
-    const toastCountBeforeSuccess = toastCalls.length;
-    await act(async () =>
-      mutationCalls[1]?.onCompleted({ createPost: { post: { id: 'post-1' } } }, [
-        { message: 'ignored field error', extensions: { code: 'VALIDATION', field: 'mentions' } },
-      ]),
+    assert.equal(reselectionMediaIds.length, 0);
+    assert.ok(
+      renderer?.root
+        .findAllByType('Button' as never)
+        .some((button) => button.props.children === '접수 다시 확인'),
     );
-    assert.equal(toastCalls.length, toastCountBeforeSuccess);
-    assert.equal(switcherProps?.selectedProfileId, profileA.id);
+
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileB as never,
+          profiles: candidates as never,
+        }),
+      );
+    });
+    const retry = renderer?.root
+      .findAllByType('Button' as never)
+      .find((button) => button.props.children === '접수 다시 확인');
+    assert.ok(retry);
+    await act(async () => retry.props.onPress());
+    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
+    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission?.input.requestId);
+
+    const retryRequestId = String(originalSubmission?.input.requestId);
+    await act(async () =>
+      mutationCalls[1]?.onCompleted(
+        { submitPostRequest: { request: { requestId: retryRequestId } } },
+        [{ message: 'ignored field error', extensions: { code: 'VALIDATION', field: 'mentions' } }],
+      ),
+    );
+    assert.deepEqual(toastCalls.at(-1), ['게시 요청을 접수했어요', { tone: 'success' }]);
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
-      'UNLISTED',
+      'PUBLIC',
     );
 
     await act(async () => targetProps?.onBodyChange('다음 글'));
     await act(async () => targetProps?.onSubmit());
-    assert.equal(mutationCalls[2]?.variables.input.actorProfileId, undefined);
-    assert.equal(mutationCalls[2]?.variables.input.visibility, 'UNLISTED');
+    assert.equal(mutationCalls[2]?.variables.input.actorProfileId, profileB.id);
+    assert.equal(mutationCalls[2]?.variables.input.visibility, 'PUBLIC');
+    assert.deepEqual(mutationCalls[2]?.variables.connections, [
+      'account-1:PostRequestList_postRequests:profile-b:all',
+      'account-1:PostRequestList_postRequests:profile-b:home',
+    ]);
+  });
+
+  it('blocks an uncertain request recheck under another account and allows it after switching back', async () => {
+    let currentRetry: (() => void) | undefined;
+    let acceptedCount = 0;
+    const props = {
+      onPostRequestAccepted: () => acceptedCount++,
+      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
+        currentRetry = uncertain ? retry : undefined;
+      },
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('계정 A에 남겨 둘 본문'));
+    await act(async () => targetProps?.onSubmit());
+    const originalSubmission = mutationCalls[0]?.variables;
+    assert.ok(originalSubmission);
+    await act(async () => mutationCalls[0]?.onError(new Error('결과 확인 불가')));
+
+    const staleRetry = currentRetry;
+    assert.ok(staleRetry);
+    const retryButton = () =>
+      renderer?.root
+        .findAllByType('Button' as never)
+        .find((button) => button.props.children === '접수 다시 확인');
+    assert.equal(retryButton()?.props.disabled, false);
+
+    sessionAccountId = 'account-2';
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, props));
+    });
+
+    assert.equal(retryButton()?.props.disabled, true);
+    assert.equal(currentRetry, undefined);
+    assert.ok(
+      renderer?.root
+        .findAllByType('Text' as never)
+        .some((text) => text.props.children === '요청을 제출한 계정으로 전환해 주세요.'),
+    );
+    assert.ok(
+      renderer?.root
+        .findAllByType('View' as never)
+        .some((view) => view.props.accessibilityElementsHidden && view.props['aria-hidden']),
+    );
+
+    await act(async () => staleRetry?.());
+    await act(async () => retryButton()?.props.onPress());
+    assert.equal(mutationCalls.length, 1);
+
+    sessionAccountId = 'account-1';
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, props));
+    });
+
+    assert.equal(retryButton()?.props.disabled, false);
+    assert.ok(currentRetry);
+    await act(async () => currentRetry?.());
+    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
+    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission.input.requestId);
+
+    sessionAccountId = 'account-2';
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, props));
+    });
+    await act(async () =>
+      mutationCalls[1]?.onCompleted({
+        submitPostRequest: { request: { requestId: originalSubmission.input.requestId } },
+      }),
+    );
+    assert.equal(acceptedCount, 0);
+    assert.equal(retryButton()?.props.disabled, true);
+    assert.equal(currentRetry, undefined);
+
+    sessionAccountId = 'account-1';
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, props));
+    });
+    assert.equal(retryButton()?.props.disabled, false);
+    assert.ok(currentRetry);
+    await act(async () => currentRetry?.());
+    assert.deepEqual(mutationCalls[2]?.variables, originalSubmission);
+    await act(async () =>
+      mutationCalls[2]?.onCompleted({
+        submitPostRequest: { request: { requestId: originalSubmission.input.requestId } },
+      }),
+    );
+    assert.equal(acceptedCount, 1);
+  });
+
+  it('marks a remounted request uncertain and ignores its stale actor response before rechecking', async () => {
+    let retryUncertainRequest: (() => void) | undefined;
+    let acceptedCount = 0;
+    relayEnvironmentGeneration = { current: 0 };
+    const props = {
+      onPostRequestAccepted: () => acceptedCount++,
+      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
+        if (uncertain) {
+          retryUncertainRequest = retry;
+        }
+      },
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('첫 글'));
+    await act(async () => targetProps?.onSubmit());
+    const originalSubmission = mutationCalls[0]?.variables;
+    assert.ok(originalSubmission);
+
+    await act(async () => {
+      relayEnvironment = createRelayEnvironment();
+      relayEnvironmentGeneration!.current += 1;
+      renderer?.update(createElement(PostComposer, { ...props, profile: profileB as never }));
+    });
+
+    assert.ok(retryUncertainRequest);
+    await act(async () =>
+      mutationCalls[0]?.onCompleted({
+        submitPostRequest: {
+          request: { requestId: String(originalSubmission.input.requestId) },
+        },
+      }),
+    );
+    assert.equal(acceptedCount, 0);
+    assert.ok(
+      renderer?.root
+        .findAllByType('Button' as never)
+        .some((button) => button.props.children === '접수 다시 확인'),
+    );
+
+    await act(async () => retryUncertainRequest?.());
+    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
+    assert.equal(mutationCalls[1]?.variables.input.actorProfileId, profileA.id);
+    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission.input.requestId);
+    assert.deepEqual(mutationCalls[1]?.variables.connections, [
+      'account-1:PostRequestList_postRequests:profile-a:all',
+      'account-1:PostRequestList_postRequests:profile-a:home',
+    ]);
+
+    await act(async () =>
+      mutationCalls[1]?.onCompleted({
+        submitPostRequest: {
+          request: { requestId: String(originalSubmission.input.requestId) },
+        },
+      }),
+    );
+    assert.equal(acceptedCount, 1);
   });
 });
 

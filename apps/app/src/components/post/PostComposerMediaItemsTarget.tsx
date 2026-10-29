@@ -97,17 +97,40 @@ export function PostComposerMediaItemsTarget({
           const itemNumber = index + 1;
           const ready = item.state === 'ready';
           const failed = item.state === 'failed';
+          const canEdit = ready || item.requiresReselection;
+          const previewUri = item.previewUri ?? item.asset?.uri ?? null;
+          const previewStyle = [
+            styles.preview,
+            item.state === 'uploading' ? styles.pendingPreview : null,
+          ];
+          const preview = previewUri ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
+              accessibilityRole="image"
+              fadeDuration={0}
+              source={{ uri: previewUri }}
+              style={previewStyle}
+            />
+          ) : (
+            <View
+              accessibilityElementsHidden
+              style={[...previewStyle, { backgroundColor: theme.backgroundElevated }]}
+            />
+          );
 
           return (
             <View
               accessibilityLabel={`첨부 이미지 ${itemNumber}, ${
-                item.state === 'uploading'
-                  ? '업로드 중'
-                  : ready
-                    ? '업로드 완료'
-                    : failed
-                      ? '업로드 실패'
-                      : '선택됨'
+                item.requiresReselection
+                  ? '원본 다시 선택 필요'
+                  : item.state === 'uploading'
+                    ? '업로드 중'
+                    : ready
+                      ? '업로드 완료'
+                      : failed
+                        ? '업로드 실패'
+                        : '선택됨'
               }`}
               key={item.key}
               style={[
@@ -119,7 +142,7 @@ export function PostComposerMediaItemsTarget({
                 },
               ]}
             >
-              {ready && onEdit ? (
+              {canEdit && onEdit ? (
                 <Pressable
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 대체 텍스트 편집`}
                   accessibilityRole="button"
@@ -128,27 +151,10 @@ export function PostComposerMediaItemsTarget({
                   onPress={() => onEdit(item.key, 'alt')}
                   style={({ pressed }) => [styles.previewTarget, pressed && styles.pressed]}
                 >
-                  <Image
-                    accessibilityIgnoresInvertColors
-                    accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
-                    accessibilityRole="image"
-                    fadeDuration={0}
-                    source={{ uri: item.asset.uri }}
-                    style={styles.preview}
-                  />
+                  {preview}
                 </Pressable>
               ) : (
-                <Image
-                  accessibilityIgnoresInvertColors
-                  accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
-                  accessibilityRole="image"
-                  fadeDuration={0}
-                  source={{ uri: item.asset.uri }}
-                  style={[
-                    styles.preview,
-                    item.state === 'uploading' ? styles.pendingPreview : null,
-                  ]}
-                />
+                preview
               )}
 
               <IconButton
@@ -165,7 +171,7 @@ export function PostComposerMediaItemsTarget({
                 <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
               </IconButton>
 
-              {ready && onEdit ? (
+              {canEdit && onEdit ? (
                 <IconButton
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 편집`}
                   disabled={disabled}
@@ -188,9 +194,15 @@ export function PostComposerMediaItemsTarget({
                     color={theme.foregroundPrimary}
                   />
                 </View>
-              ) : failed && onRetry ? (
+              ) : null}
+
+              {failed && onRetry ? (
                 <IconButton
-                  accessibilityLabel={`${itemNumber}번째 이미지 업로드 다시 시도`}
+                  accessibilityLabel={
+                    item.requiresReselection
+                      ? `첨부 이미지 ${itemNumber} 다시 선택`
+                      : `${itemNumber}번째 이미지 업로드 다시 시도`
+                  }
                   disabled={disabled}
                   onPress={() => onRetry(item)}
                   style={styles.retryAction}
@@ -204,7 +216,7 @@ export function PostComposerMediaItemsTarget({
                 </IconButton>
               ) : null}
 
-              {ready && (item.altText.trim() || sensitiveMedia) ? (
+              {canEdit && (item.altText.trim() || sensitiveMedia) ? (
                 <View style={styles.statuses}>
                   {item.altText.trim() ? (
                     <StatusButton
@@ -243,7 +255,7 @@ export function PostComposerMediaItemsTarget({
                   ]}
                 >
                   <Text style={[styles.statusText, { color: theme.feedbackDangerOnSubtle }]}>
-                    업로드 실패
+                    {item.requiresReselection ? '원본 다시 선택 필요' : '업로드 실패'}
                   </Text>
                 </View>
               ) : null}

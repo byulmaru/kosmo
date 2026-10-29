@@ -64,6 +64,7 @@ mockModule(require.resolve('lucide-react-native'), {
   Bookmark: 'Bookmark',
   ChevronDown: 'ChevronDown',
   ChevronUp: 'ChevronUp',
+  ClipboardList: 'ClipboardList',
   Ellipsis: 'Ellipsis',
   House: 'House',
   LogIn: 'LogIn',
@@ -163,6 +164,24 @@ describe('guest public-content sidebar', () => {
     assert.ok(!labels.includes('홈'));
     assert.ok(!labels.includes('설정 및 기타'));
     assert.ok(!labels.includes('로그아웃'));
+  });
+
+  it('shows the protected post request destination in primary navigation', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(SidebarNavigation, {
+          onLogout: () => undefined,
+          onNavigate: () => undefined,
+          presentation: 'full',
+        }),
+      );
+    });
+    assert.ok(renderer);
+    const request = renderer.root
+      .findAllByType('Pressable' as never)
+      .find((node) => node.props.accessibilityLabel === '작성 요청');
+
+    assert.ok(request);
   });
 
   it('keeps both compact actions discoverable by their accessible names', async () => {

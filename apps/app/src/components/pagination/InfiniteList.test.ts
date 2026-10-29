@@ -79,6 +79,29 @@ async function update(nextProps: InfiniteListProps<Item>) {
 }
 
 describe('InfiniteList', () => {
+  it('native FlatList owns a feed header ahead of its rows', async () => {
+    const header = createElement('FeedHeader');
+
+    await act(async () => {
+      renderer = create(createElement(InfiniteList, props({ header })));
+    });
+
+    assert.equal(flatList().props.ListHeaderComponent, header);
+  });
+
+  it('web document flow places the feed header before empty and row content', async () => {
+    platform.OS = 'web';
+    const header = createElement('FeedHeader');
+    const empty = createElement('Empty');
+
+    await act(async () => {
+      renderer = create(createElement(InfiniteList, props({ data: [], empty, header })));
+    });
+
+    assert.equal(renderer?.root.findByType('View').children[0]?.type, 'FeedHeader');
+    assert.equal(renderer?.root.findByType('View').children[1]?.type, 'Empty');
+  });
+
   it('native FlatList가 footer와 endReached pagination을 소유한다', async () => {
     const empty = createElement('Empty');
     const footer = createElement('LoadingFooter');

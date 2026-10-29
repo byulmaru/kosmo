@@ -1,18 +1,25 @@
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
+import { randomUUID } from 'expo-crypto';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { AppState, Keyboard, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  graphql,
+  useFragment,
+  useLazyLoadQuery,
+  useMutation,
+  useRelayEnvironment,
+} from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
-import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
-import { trackAnalytics } from '@/analytics/client';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
 import { Form } from '@/components/ui/Form';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
-import { spacing } from '@/theme/tokens';
+import { useSession } from '@/session/SessionProvider';
+import { fontFamilies, spacing, textStyles } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
 import {
@@ -31,21 +38,24 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
+import { getPostRequestConnectionIds } from './postRequestConnection';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
+import type { PostComposerAccountQuery } from './__generated__/PostComposerAccountQuery.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { PostComposerSubmitPostRequestMutation } from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
 import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
-import type { PostComposerMediaValue } from './PostComposerMediaControls';
+import type { PostComposerMediaValue, RestoredPostRequestMedia } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type {
   PostComposerDraft,
   PostComposerMentionCandidate,
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
+  PostComposerMentionRange,
   PostComposerMentionSearchState,
   PostComposerTextSelection,
 } from './postComposerState';
@@ -53,7 +63,44 @@ import type {
 type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
-const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const submitFailureMessage = '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.';
+const postRequestUncertainMessage = '접수 결과를 확인하지 못했어요.';
+
+function postRequestSubmissionError(error: unknown): { code: string; field?: string } | null {
+  if (typeof error !== 'object' || error === null || !('extensions' in error)) {
+    return null;
+  }
+  const extensions = error.extensions;
+  if (typeof extensions !== 'object' || extensions === null || !('code' in extensions)) {
+    return null;
+  }
+  return {
+    code: String(extensions.code),
+    ...('field' in extensions && typeof extensions.field === 'string'
+      ? { field: extensions.field }
+      : {}),
+  };
+}
+
+export type PostComposerInitialDraft = Readonly<{
+  bodyText: string;
+  contentWarning: string | null;
+  media: readonly RestoredPostRequestMedia[];
+  mentions: readonly PostComposerMentionRange[];
+  requestId: string;
+  sensitiveMedia: boolean;
+  visibility: Visibility;
+}>;
+
+type PostRequestSubmission = Readonly<{
+  connections: readonly string[];
+  contextGeneration: number;
+  environmentGeneration: number | null;
+  input: PostComposerSubmitPostRequestMutation['variables']['input'];
+  ownerAccountId: string | null;
+  requestId: string;
+  uncertain: boolean;
+}>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -71,21 +118,25 @@ const PostComposerFragment = graphql`
   }
 `;
 
-const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation(
-    $input: CreatePostInput!
+const SubmitPostRequestMutation = graphql`
+  mutation PostComposerSubmitPostRequestMutation(
+    $input: SubmitPostRequestInput!
     $connections: [ID!]!
-    $prependToHome: Boolean!
   ) {
-    createPost(input: $input) {
-      post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
+    submitPostRequest(input: $input) {
+      request @prependNode(connections: $connections, edgeTypeName: "PostRequestConnectionEdge") {
         id
-        replyParent {
-          id
-          replyCount
-        }
-        ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
+        requestId
+        ...PostRequestCard_request
       }
+    }
+  }
+`;
+
+const PostComposerAccountQuery = graphql`
+  query PostComposerAccountQuery {
+    me {
+      id
     }
   }
 `;
@@ -123,8 +174,11 @@ type PostComposerBaseProps = {
   focusOnMount?: boolean;
   initialBodyText?: string;
   initialContentWarning?: string | null;
+  initialDraft?: PostComposerInitialDraft;
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
+  onPostRequestAccepted?: () => void;
+  onPostRequestUncertainChange?: (uncertain: boolean, retry?: () => void) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
@@ -175,6 +229,9 @@ export function PostComposerController({
 }: PostComposerControllerProps) {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
+  const { accountId } = useSession();
+  const currentAccountIdRef = useRef<string | null>(accountId);
+  currentAccountIdRef.current = accountId;
   const environmentRef = useRef(environment);
   const contextGenerationRef = useRef(0);
   if (!environmentGenerationRef && environmentRef.current !== environment) {
@@ -189,46 +246,82 @@ export function PostComposerController({
     contextKeyRef.current = contextKey;
     contextGenerationRef.current += 1;
   }
-  const relationshipProps: PostComposerRelationshipProps = replyParentId
-    ? { replyParentId, replyParentVisibility }
-    : repostSourceId
-      ? { repostSourceId }
-      : {};
+  const [pendingSubmission, setPendingSubmission] = useState<PostRequestSubmission | null>(null);
 
-  return (
-    <PostComposerContents
-      {...props}
-      {...relationshipProps}
-      contextGenerationRef={contextGenerationRef}
-      environmentGenerationRef={environmentGenerationRef}
-      key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
-      globalProfileId={profile.id}
-      mentionCandidates={props.mentionCandidates}
-      profileKey={profileKey}
-      profiles={profiles}
-    />
+  const contentsKey = [
+    contextGenerationRef.current,
+    environmentGenerationRef?.current ?? 0,
+    props.initialDraft?.requestId ?? '',
+  ].join(':');
+  const contentsCommonProps: PostComposerContentsCommonProps = {
+    ...props,
+    contextGenerationRef,
+    currentAccountIdRef,
+    environmentGenerationRef,
+    mentionCandidates: props.mentionCandidates,
+    pendingSubmission,
+    profileKey,
+    profiles,
+    setPendingSubmission,
+  };
+  const contentsProps: PostComposerContentsInputProps = replyParentId
+    ? { ...contentsCommonProps, replyParentId, replyParentVisibility }
+    : repostSourceId
+      ? { ...contentsCommonProps, repostSourceId }
+      : contentsCommonProps;
+
+  return accountId ? (
+    <PostComposerContents {...contentsProps} accountId={accountId} key={contentsKey} />
+  ) : (
+    <PostComposerAccountQueryFallback contentsProps={contentsProps} key={contentsKey} />
   );
 }
 
-type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
-  PostComposerRelationshipProps & {
-    contextGenerationRef: RefObject<number>;
-    environmentGenerationRef: RefObject<number> | null;
-    onExpand?: () => void;
-    onRequestClose?: () => void;
-    presentation?: 'mobile' | 'overlay' | 'rail';
-    globalProfileId: string;
-    mentionCandidates?: PostComposerMentionCandidateResults;
-    profileKey: PostComposer_profile$key;
-    profiles: readonly PostComposerProfileRef[];
-    replyContext?: ReactNode;
-  };
+function PostComposerAccountQueryFallback({
+  contentsProps,
+}: {
+  contentsProps: PostComposerContentsInputProps;
+}) {
+  const data = useLazyLoadQuery<PostComposerAccountQuery>(
+    PostComposerAccountQuery,
+    {},
+    { fetchPolicy: 'store-or-network' },
+  );
+  const accountId = data.me?.id ?? null;
+  contentsProps.currentAccountIdRef.current = accountId;
+  return <PostComposerContents {...contentsProps} accountId={accountId} />;
+}
+
+type CurrentAccountIdRef = { current: string | null };
+
+type PostComposerContentsCommonProps = Omit<PostComposerBaseProps, 'profile' | 'profiles'> & {
+  contextGenerationRef: RefObject<number>;
+  currentAccountIdRef: CurrentAccountIdRef;
+  environmentGenerationRef: RefObject<number> | null;
+  onExpand?: () => void;
+  onRequestClose?: () => void;
+  presentation?: 'mobile' | 'overlay' | 'rail';
+  profileKey: PostComposer_profile$key;
+  profiles: readonly PostComposerProfileRef[];
+  replyContext?: ReactNode;
+  pendingSubmission: PostRequestSubmission | null;
+  setPendingSubmission: (submission: PostRequestSubmission | null) => void;
+};
+
+type PostComposerContentsRelationshipProps =
+  | Extract<PostComposerRelationshipProps, { replyParentId: string }>
+  | Extract<PostComposerRelationshipProps, { repostSourceId: string }>
+  | Extract<PostComposerRelationshipProps, { replyParentId?: never; repostSourceId?: never }>;
+type PostComposerContentsInputProps = PostComposerContentsCommonProps &
+  PostComposerContentsRelationshipProps;
+type PostComposerContentsProps = PostComposerContentsInputProps & { accountId: string | null };
 
 function PostComposerContents({
   beforeEditor,
   children,
   contextGuard,
   contextGenerationRef,
+  currentAccountIdRef,
   editorRef,
   expanded = true,
   expandControlRef,
@@ -236,12 +329,15 @@ function PostComposerContents({
   focusOnMount = false,
   initialBodyText,
   initialContentWarning,
-  onPostCreated,
+  initialDraft,
+  onPostRequestAccepted,
+  onPostRequestUncertainChange,
+  pendingSubmission,
+  accountId,
   onRequestClose,
   onSubmittingChange,
   onExpand,
   presentation,
-  globalProfileId,
   mentionCandidates,
   profileKey,
   profiles,
@@ -251,6 +347,7 @@ function PostComposerContents({
   replyParentVisibility,
   repostSourceId,
   renderSurface,
+  setPendingSubmission,
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
@@ -264,10 +361,11 @@ function PostComposerContents({
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
   const [draft, setDraft] = useState<PostComposerDraft>(() => {
-    const end = initialBodyText?.length ?? 0;
+    const initialBody = initialDraft?.bodyText ?? initialBodyText ?? '';
+    const end = initialBody.length;
     return {
-      body: initialBodyText ?? '',
-      mentionRanges: [],
+      body: initialBody,
+      mentionRanges: initialDraft?.mentions.map((mention) => ({ ...mention })) ?? [],
       previousSelection: { start: end, end },
       selection: { start: end, end },
       selectionToApply: { start: end, end },
@@ -335,19 +433,34 @@ function PostComposerContents({
     [profile.id],
   );
   const [contentWarning, setContentWarning] = useState(() =>
-    normalizePostContentPlainText(initialContentWarning ?? ''),
+    normalizePostContentPlainText(initialDraft?.contentWarning ?? initialContentWarning ?? ''),
   );
-  const [contentWarningExpanded, setContentWarningExpanded] = useState(
-    () => initialContentWarning !== null && initialContentWarning !== undefined,
+  const [contentWarningExpanded, setContentWarningExpanded] = useState(() =>
+    initialDraft?.contentWarning !== null && initialDraft?.contentWarning !== undefined
+      ? initialDraft.contentWarning.length > 0
+      : initialContentWarning !== null && initialContentWarning !== undefined,
   );
   const defaultVisibility = resolvePostComposerVisibility(
     profile.private?.defaultPostVisibility,
     replyParentVisibility,
   );
-  const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
+  const [visibility, setVisibility] = useState<Visibility>(
+    () => initialDraft?.visibility ?? defaultVisibility,
+  );
   const defaultVisibilityRef = useRef(defaultVisibility);
   const visibilityProfileIdRef = useRef(profile.id);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
+  const restoredMediaRequestIdRef = useRef<string | null>(null);
+  const onMediaValueChange = useCallback(
+    (value: PostComposerMediaValue) => {
+      if (initialDraft && restoredMediaRequestIdRef.current !== initialDraft.requestId) {
+        restoredMediaRequestIdRef.current = initialDraft.requestId;
+        value.restorePostRequestMedia(initialDraft.media, initialDraft.sensitiveMedia);
+      }
+      setMedia(value);
+    },
+    [initialDraft],
+  );
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
     tool: ComposerMediaEditorTool;
@@ -362,8 +475,8 @@ function PostComposerContents({
     setProfilePickerOpen(dismiss !== null);
   }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const [commit, submitting] =
+    useMutation<PostComposerSubmitPostRequestMutation>(SubmitPostRequestMutation);
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
@@ -382,6 +495,16 @@ function PostComposerContents({
     (bodyText.length === 0 && media.items.length === 0) ||
     media.hasPendingMedia ||
     remaining < 0;
+  const canRecheckSubmission =
+    pendingSubmission !== null &&
+    accountId !== null &&
+    accountId === pendingSubmission.ownerAccountId;
+  const notifiedUncertainContextRef = useRef<{
+    accountId: string | null;
+    contextGeneration: number;
+    environmentGeneration: number | null;
+    requestId: string;
+  } | null>(null);
 
   useEffect(() => {
     if (visibilityProfileIdRef.current !== profile.id) {
@@ -433,96 +556,231 @@ function PostComposerContents({
     };
   }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
 
-  const submit = async () => {
-    if (disabled) {
+  const submit = (retrySnapshot?: PostRequestSubmission) => {
+    const retryCandidate = retrySnapshot ?? pendingSubmission;
+    if (
+      retryCandidate &&
+      (currentAccountIdRef.current === null ||
+        currentAccountIdRef.current !== retryCandidate.ownerAccountId)
+    ) {
       return;
     }
-    setSubmitting(true);
+
+    const wasUncertain = retryCandidate?.uncertain ?? false;
+    if (!retryCandidate && disabled) {
+      return;
+    }
+    const submissionOwnerAccountId = retryCandidate ? retryCandidate.ownerAccountId : accountId;
     const submissionGeneration = contextGenerationRef.current;
-    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
+    const submissionEnvironmentGeneration = environmentGenerationRef?.current ?? null;
     const submissionGuardGeneration = contextGuard?.current;
-    const submittedCallback = onPostCreated;
-    const submissionReplyMode = replyMode;
+    const submittedCallback = onPostRequestAccepted;
     const isCurrentSubmission = () =>
       mountedRef.current &&
       contextGenerationRef.current === submissionGeneration &&
-      environmentGenerationRef?.current === submissionEnvironmentGeneration &&
-      contextGuard?.current === submissionGuardGeneration;
+      (environmentGenerationRef?.current ?? null) === submissionEnvironmentGeneration &&
+      contextGuard?.current === submissionGuardGeneration &&
+      currentAccountIdRef.current === submissionOwnerAccountId;
 
-    try {
-      await media.completeUploads();
-    } catch {
-      if (isCurrentSubmission()) {
-        setSubmitting(false);
+    let submission = retryCandidate;
+    if (!submission) {
+      try {
+        const requestId = randomUUID();
+        const submittedMedia = media.getPostRequestMedia();
+        const frozenMentions = Object.freeze(
+          mentions.map((mention) => Object.freeze({ ...mention })),
+        );
+        submission = Object.freeze({
+          connections: Object.freeze(getPostRequestConnectionIds(accountId, profile.id)),
+          contextGeneration: submissionGeneration,
+          environmentGeneration: submissionEnvironmentGeneration,
+          input: Object.freeze({
+            requestId,
+            ...createPostComposerMutationInput(
+              bodyText,
+              visibility,
+              replyParentId,
+              contentWarningText,
+              repostSourceId,
+              frozenMentions,
+            ),
+            actorProfileId: profile.id,
+            media: submittedMedia,
+            sensitiveMedia: media.sensitiveMedia,
+          }),
+          ownerAccountId: accountId,
+          requestId,
+          uncertain: false,
+        });
+      } catch {
+        if (isCurrentSubmission()) {
+          showToast(submitFailureMessage, { tone: 'danger' });
+        }
+        return;
       }
-      return;
     }
-    if (!isCurrentSubmission()) {
-      return;
-    }
+
+    const finalSubmission = Object.freeze({
+      ...submission,
+      uncertain: wasUncertain || submission.uncertain,
+    });
+    setPendingSubmission(finalSubmission);
 
     commit({
       variables: {
-        prependToHome: profile.id === globalProfileId,
-        connections:
-          profile.id === globalProfileId
-            ? [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')]
-            : [],
-        input: {
-          ...createPostComposerMutationInput(
-            bodyText,
-            visibility,
-            replyParentId,
-            contentWarningText,
-            repostSourceId,
-            mentions,
-          ),
-          media: media.items,
-          ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
-          sensitiveMedia: media.sensitiveMedia,
-        },
+        connections: finalSubmission.connections,
+        input: finalSubmission.input,
       },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         if (!isCurrentSubmission()) {
           return;
         }
-        setSubmitting(false);
-        const createdPost = response?.createPost?.post;
-        if (!createdPost) {
+        const acceptedRequest = response?.submitPostRequest?.request;
+        if (acceptedRequest?.requestId === finalSubmission.requestId) {
+          setPendingSubmission(null);
+          onPostRequestUncertainChange?.(false);
+          onBodyReset();
+          setContentWarning('');
+          setContentWarningExpanded(false);
+          setMedia(emptyPostComposerMediaValue);
+          setMediaGeneration((generation) => generation + 1);
+          setSelectedProfileKey(null);
+          setVisibility(
+            resolvePostComposerVisibility(
+              globalProfile.private?.defaultPostVisibility,
+              replyParentVisibility,
+            ),
+          );
+          showToast('게시 요청을 접수했어요', { tone: 'success' });
+          submittedCallback?.();
+          return;
+        }
+
+        const submissionErrors =
+          errors?.flatMap((error) => {
+            const submissionError = postRequestSubmissionError(error);
+            return submissionError ? [submissionError] : [];
+          }) ?? [];
+        const definiteDenial = submissionErrors.some(({ code }) =>
+          [
+            'CONFLICT',
+            'NOT_FOUND',
+            'PERMISSION_DENIED',
+            'PROFILE_LIMIT_EXCEEDED',
+            'VALIDATION',
+          ].includes(code),
+        );
+        if (definiteDenial && !wasUncertain) {
+          const unavailableMediaIndex = submissionErrors
+            .filter(
+              (error) =>
+                (error.code === 'NOT_FOUND' || error.code === 'VALIDATION') &&
+                /^media\.\d+$/.test(error.field ?? ''),
+            )
+            .map((error) => Number(error.field?.match(/^media\.(\d+)$/)?.[1]))
+            .find((index) => Number.isInteger(index) && index >= 0);
+          const unavailableMediaId =
+            unavailableMediaIndex === undefined
+              ? undefined
+              : finalSubmission.input.media?.[unavailableMediaIndex]?.mediaId;
+          if (unavailableMediaId) {
+            media.requirePostRequestMediaReselection(unavailableMediaId);
+          }
+          setPendingSubmission(null);
+          onPostRequestUncertainChange?.(false);
           showToast(submitFailureMessage, { tone: 'danger' });
           return;
         }
 
-        trackAnalytics('post_created', {
-          selected_profile_id: profile.id,
-          visibility,
-        });
-        onBodyReset();
-        if (!submissionReplyMode) {
-          setContentWarning('');
-          setContentWarningExpanded(false);
-        }
-        setMedia(emptyPostComposerMediaValue);
-        setMediaGeneration((generation) => generation + 1);
-        setSelectedProfileKey(null);
-        setVisibility(
-          resolvePostComposerVisibility(
-            globalProfile.private?.defaultPostVisibility,
-            replyParentVisibility,
-          ),
-        );
-        editor.current?.focus();
-        submittedCallback?.(createdPost);
+        const uncertainSubmission = Object.freeze({ ...finalSubmission, uncertain: true });
+        setPendingSubmission(uncertainSubmission);
+        notifyUncertainSubmission(uncertainSubmission);
       },
       onError: () => {
         if (!isCurrentSubmission()) {
           return;
         }
-        setSubmitting(false);
-        showToast(submitFailureMessage, { tone: 'danger' });
+        const uncertainSubmission = Object.freeze({ ...finalSubmission, uncertain: true });
+        setPendingSubmission(uncertainSubmission);
+        notifyUncertainSubmission(uncertainSubmission);
       },
     });
   };
+
+  const notifyUncertainSubmission = (submission: PostRequestSubmission) => {
+    const currentContext = {
+      accountId: currentAccountIdRef.current,
+      contextGeneration: contextGenerationRef.current,
+      environmentGeneration: environmentGenerationRef?.current ?? null,
+      requestId: submission.requestId,
+    };
+    notifiedUncertainContextRef.current = currentContext;
+    onPostRequestUncertainChange?.(
+      true,
+      currentContext.accountId !== null && currentContext.accountId === submission.ownerAccountId
+        ? () => void submit(submission)
+        : undefined,
+    );
+  };
+
+  useEffect(() => {
+    if (
+      pendingSubmission === null ||
+      pendingSubmission.uncertain ||
+      (pendingSubmission.contextGeneration === contextGenerationRef.current &&
+        pendingSubmission.environmentGeneration === (environmentGenerationRef?.current ?? null) &&
+        currentAccountIdRef.current === pendingSubmission.ownerAccountId)
+    ) {
+      return;
+    }
+
+    const uncertainSubmission = Object.freeze({ ...pendingSubmission, uncertain: true });
+    setPendingSubmission(uncertainSubmission);
+    notifyUncertainSubmission(uncertainSubmission);
+  }, [
+    accountId,
+    contextGenerationRef,
+    environmentGenerationRef,
+    notifyUncertainSubmission,
+    onPostRequestUncertainChange,
+    pendingSubmission,
+    submit,
+  ]);
+
+  const contextGeneration = contextGenerationRef.current;
+  const currentEnvironmentGeneration = environmentGenerationRef?.current ?? null;
+  useLayoutEffect(() => {
+    if (pendingSubmission === null || !pendingSubmission.uncertain) {
+      notifiedUncertainContextRef.current = null;
+      return;
+    }
+
+    const currentContext = {
+      accountId: currentAccountIdRef.current,
+      contextGeneration,
+      environmentGeneration: currentEnvironmentGeneration,
+      requestId: pendingSubmission.requestId,
+    };
+    const previousContext = notifiedUncertainContextRef.current;
+    if (
+      previousContext?.accountId === currentContext.accountId &&
+      previousContext.contextGeneration === currentContext.contextGeneration &&
+      previousContext.environmentGeneration === currentContext.environmentGeneration &&
+      previousContext.requestId === currentContext.requestId
+    ) {
+      return;
+    }
+
+    notifyUncertainSubmission(pendingSubmission);
+  }, [
+    accountId,
+    contextGeneration,
+    currentEnvironmentGeneration,
+    notifyUncertainSubmission,
+    onPostRequestUncertainChange,
+    pendingSubmission,
+    submit,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -625,7 +883,7 @@ function PostComposerContents({
               editorRef={editor}
               key={mediaGeneration}
               profileId={profile.id}
-              onValueChange={setMedia}
+              onValueChange={onMediaValueChange}
               render={({
                 items,
                 onAltTextChange,
@@ -777,7 +1035,52 @@ function PostComposerContents({
     </Form>
   );
 
-  return renderSurface ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null }) : form;
+  const requestRecoveryForm = pendingSubmission ? (
+    <Form
+      accessibilityLabel="게시 요청 확인"
+      onSubmit={() => void submit(pendingSubmission)}
+      style={[styles.productionForm, styles.requestRecoveryForm]}
+    >
+      <View style={styles.requestRecoveryContent}>
+        <Text accessibilityLiveRegion="polite" style={styles.requestRecoveryText}>
+          {submitting
+            ? '게시 요청을 보내고 있어요.'
+            : canRecheckSubmission
+              ? postRequestUncertainMessage
+              : '요청을 제출한 계정으로 전환해 주세요.'}
+        </Text>
+        <Button
+          disabled={submitting || !canRecheckSubmission}
+          loading={submitting}
+          onPress={() => void submit(pendingSubmission)}
+        >
+          {submitting ? '확인 중' : '접수 다시 확인'}
+        </Button>
+      </View>
+    </Form>
+  ) : null;
+  const visibleForm = pendingSubmission ? (
+    <>
+      <View
+        accessibilityElementsHidden
+        aria-hidden
+        pointerEvents="none"
+        style={styles.hiddenPresentation}
+      >
+        {form}
+      </View>
+      {requestRecoveryForm}
+    </>
+  ) : (
+    form
+  );
+
+  return renderSurface
+    ? renderSurface({
+        form: visibleForm,
+        mediaEditorOpen: mediaEditor !== null && !pendingSubmission,
+      })
+    : visibleForm;
 }
 
 const styles = StyleSheet.create({
@@ -787,4 +1090,7 @@ const styles = StyleSheet.create({
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   surfaceRoot: { flex: 1, minHeight: 0 },
   editorScroll: { flexShrink: 1, minHeight: 0 },
+  requestRecoveryForm: { flex: 1, justifyContent: 'center' },
+  requestRecoveryContent: { alignItems: 'center', gap: spacing.md, padding: spacing.lg },
+  requestRecoveryText: { ...textStyles.uiCopyM, fontFamily: fontFamilies.ui, textAlign: 'center' },
 });

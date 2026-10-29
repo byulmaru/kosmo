@@ -449,6 +449,7 @@ export const SharedNavigation: Story = {
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    const postRequests = canvas.getByRole('link', { name: '작성 요청' });
     const searchVisual = within(search).getByTestId('sidebar-control-feedback');
     const utility = canvas.getByRole('button', { name: '설정 및 기타' });
     const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
@@ -459,8 +460,8 @@ export const SharedNavigation: Story = {
     const profileEditRect = profileEdit.getBoundingClientRect();
     const profileLeft = activeProfileRect.left + 24;
     const navigationLeft = activeProfileRect.left + 16;
-    const navigationVisuals = [bookmarks, search, profile, followRequests].map((link) =>
-      within(link).getByTestId('sidebar-control-visual'),
+    const navigationVisuals = [bookmarks, search, profile, followRequests, postRequests].map(
+      (link) => within(link).getByTestId('sidebar-control-visual'),
     );
     const navigationLeadingContent = navigationVisuals.map((visual) =>
       visual.querySelector<HTMLElement>('[aria-hidden="true"]'),
@@ -501,6 +502,7 @@ export const SharedNavigation: Story = {
       width: '72px',
     });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(postRequests).toHaveAttribute('href', '/post-requests');
     expect(utility).toHaveAttribute('aria-expanded', 'false');
     expect(utilityIcons).toHaveLength(2);
     expect(utilityIcons[0]).toHaveAttribute('width', '20');
@@ -531,6 +533,12 @@ export const SharedNavigation: Story = {
     expect(
       followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      followRequests.compareDocumentPosition(postRequests) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(postRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     expect(bookmarks.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -614,10 +622,12 @@ export const CompactSidebar: Story = {
     const navigationArea = navigation.parentElement?.parentElement;
     const profile = canvas.getByRole('link', { name: '프로필' });
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    const postRequests = canvas.getByRole('link', { name: '작성 요청' });
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
     expect(profile).toHaveAttribute('href', '/@selected');
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(postRequests).toHaveAttribute('href', '/post-requests');
     const utility = canvas.getByRole('button', { name: '설정 및 기타' });
     await userEvent.click(utility);
     const menu = await canvasElement.ownerDocument.body.querySelector<HTMLElement>('[role="menu"]');

@@ -10,6 +10,7 @@ export type NavigationDestination =
   | 'followRequests'
   | 'home'
   | 'notifications'
+  | 'postRequests'
   | 'profile'
   | 'search'
   | 'settings';
