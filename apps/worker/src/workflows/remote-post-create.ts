@@ -21,12 +21,12 @@ import type * as activities from '../activities';
 
 const httpUriSchema = z.url({ protocol: /^https?$/ });
 const objectUriSchema = z.url();
-const postCreateInputSchema = z.strictObject({
+const postCreateInputSchema = z.object({
   document: z.custom<ActivityPubPostCreateInput['document']>(isPostContentDocumentV1),
   hashtagNames: z.array(z.string()).optional(),
   media: z
     .array(
-      z.strictObject({
+      z.object({
         altText: z.string().nullable(),
         mediaType: z.string().nullable(),
         url: httpUriSchema,
@@ -42,7 +42,7 @@ const postCreateInputSchema = z.strictObject({
   replyParentId: z.uuid().optional(),
   visibility: z.enum(PostVisibility),
 });
-const workflowArgsSchema = z.strictObject({
+const workflowArgsSchema = z.object({
   input: postCreateInputSchema,
   requestId: z.uuid(),
 });

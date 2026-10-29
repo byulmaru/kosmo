@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { Mention, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
@@ -61,6 +62,7 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
 let PostMentions: typeof CoreDb.PostMentions;
@@ -75,7 +77,7 @@ let createNotificationActivity: typeof CreateNotificationActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 
 before(async () => {
-  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Posts, PostMentions, Profiles } =
+  ({ ActivityPubActors, db, firstOrThrow, Instances, Media, pg, Posts, PostMentions, Profiles } =
     await import('@kosmo/core/db'));
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ federation } = await import('@kosmo/fedify'));
@@ -250,6 +252,7 @@ test(
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
+    const remoteCreateActivityInputs: Array<Parameters<typeof createPostActivity>[0]> = [];
     let remoteCreateArgs: RemotePostCreateWorkflowArgs | undefined;
     const effectStarted = Promise.withResolvers<void>();
     const effectReleased = Promise.withResolvers<void>();
@@ -272,7 +275,10 @@ test(
           }
           return prepared;
         },
-        createPostActivity,
+        createPostActivity: async (activityInput: Parameters<typeof createPostActivity>[0]) => {
+          remoteCreateActivityInputs.push(activityInput);
+          return createPostActivity(activityInput);
+        },
         generatePostIdActivity,
         createNotificationActivity: async (
           input: Parameters<typeof createNotificationActivity>[0],
@@ -365,6 +371,56 @@ test(
       assert.deepEqual(authorLookupInputs, [
         { actorUri: authorUri.href, contextOrigin: publicOrigin, profileId: signer.id },
       ]);
+
+      const mediaUrl = 'https://media.example/image.jpg';
+      const media = {
+        altText: null,
+        futureField: true,
+        mediaType: 'image/jpeg',
+        url: mediaUrl,
+      };
+      const futureInput = { ...remoteCreateArgs.input, futureField: true, media: [media] };
+      const invalidArgs = {
+        futureField: true,
+        input: { ...futureInput, media: [{ ...media, url: 'ftp://media.example/image.jpg' }] },
+        requestId: randomUUID(),
+      };
+      const activityCallsBeforeInvalidInput = remoteCreateActivityInputs.length;
+      await assert.rejects(
+        environment.client.workflow.execute(remotePostCreateWorkflow.workflow, {
+          args: [invalidArgs],
+          taskQueue,
+          workflowId: `${taskQueue}:${remotePostCreateWorkflow.workflowIdFromArgs(invalidArgs)}`,
+          workflowExecutionTimeout: '30 seconds',
+        }),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ApplicationFailure &&
+          error.cause.nonRetryable &&
+          error.cause.type === 'RemotePostCreateInputInvalid',
+      );
+      assert.equal(remoteCreateActivityInputs.length, activityCallsBeforeInvalidInput);
+
+      const futureArgs = { ...invalidArgs, input: futureInput, requestId: randomUUID() };
+      const postsBeforeFutureInput = await db.$count(Posts);
+      const mediaBeforeFutureInput = await db.$count(Media);
+      const effectsBeforeFutureInput = effectActivityCalls;
+      assert.deepEqual(
+        await environment.client.workflow.execute(remotePostCreateWorkflow.workflow, {
+          args: [futureArgs],
+          taskQueue,
+          workflowId: `${taskQueue}:${remotePostCreateWorkflow.workflowIdFromArgs(futureArgs)}`,
+          workflowExecutionTimeout: '30 seconds',
+        }),
+        { authorProfileId: author.id, postId: created.postId, status: 'duplicate' },
+      );
+      assert.deepEqual(remoteCreateActivityInputs.at(-1)?.input, {
+        ...remoteCreateArgs.input,
+        media: [{ altText: null, mediaType: 'image/jpeg', url: mediaUrl }],
+      });
+      assert.equal(await db.$count(Posts), postsBeforeFutureInput);
+      assert.equal(await db.$count(Media), mediaBeforeFutureInput);
+      assert.equal(effectActivityCalls, effectsBeforeFutureInput);
 
       const duplicate = await run(input, 'duplicate');
       assert.deepEqual(duplicate, {

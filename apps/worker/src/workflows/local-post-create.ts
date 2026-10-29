@@ -20,15 +20,15 @@ import type {
 } from '@kosmo/core/temporal/local-post-create';
 import type * as activities from '../activities';
 
-const workflowArgsSchema = z.strictObject({ requestId: z.uuid() });
-const postCreateInputSchema = z.strictObject({
+const workflowArgsSchema = z.object({ requestId: z.uuid() });
+const postCreateInputSchema = z.object({
   accountId: z.uuid().optional(),
   bodyText: z.string(),
   contentWarning: z.string().nullable().optional(),
-  media: z.array(z.strictObject({ altText: z.string().nullable(), mediaId: z.uuid() })).optional(),
+  media: z.array(z.object({ altText: z.string().nullable(), mediaId: z.uuid() })).optional(),
   mentions: z
     .array(
-      z.strictObject({
+      z.object({
         end: z.number().int(),
         handle: z.string(),
         profileId: z.uuid(),

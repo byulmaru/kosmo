@@ -38,8 +38,9 @@ const startUpdate = (
   requestId: string,
   updateId: string,
   updateInput: unknown = input,
+  additionalWorkflowArgs: Record<string, unknown> = {},
 ): Promise<LocalPostCreateResult> => {
-  const workflowArgs = { requestId };
+  const workflowArgs = { requestId, ...additionalWorkflowArgs };
   const workflowId = localPostCreateWorkflow.workflowIdFromArgs(workflowArgs);
   return environment.client.workflow.executeUpdateWithStart(LOCAL_POST_CREATE_UPDATE_NAME, {
     args: [updateInput],
@@ -56,13 +57,15 @@ const startUpdate = (
 
 const workerActivities = (
   sendLocalPostCreateActivity: typeof activities.sendLocalPostCreateActivity,
-  onCreate: () => void,
+  onCreate: (input: LocalPostCreateInput) => void,
   createResult?: PostCreateActivityResult,
 ) => ({
   createPostActivity: async ({
     input: postInput,
   }: Parameters<typeof activities.createPostActivity>[0]): Promise<PostCreateActivityResult> => {
-    onCreate();
+    if (postInput.origin === 'LOCAL') {
+      onCreate(postInput);
+    }
     return (
       createResult ?? {
         ok: true,
@@ -81,7 +84,7 @@ const workerActivities = (
 const createWorker = (
   environment: TestWorkflowEnvironment,
   sendLocalPostCreateActivity: typeof activities.sendLocalPostCreateActivity,
-  onCreate: () => void,
+  onCreate: (input: LocalPostCreateInput) => void,
   createResult?: PostCreateActivityResult,
 ) =>
   Worker.create({
@@ -105,6 +108,7 @@ test(
     const effectReleased = Promise.withResolvers<void>();
     let effectCompleted = false;
     let createCalls = 0;
+    let createdInput: LocalPostCreateInput | undefined;
     const worker = await createWorker(
       environment,
       async () => {
@@ -112,18 +116,49 @@ test(
         await effectReleased.promise;
         effectCompleted = true;
       },
-      () => {
+      (postInput) => {
         createCalls += 1;
+        createdInput = postInput;
       },
     );
     const workerRun = worker.run();
     const requestId = randomUUID();
     const workflowId = localPostCreateWorkflow.workflowIdFromArgs({ requestId });
+    const futureInput = {
+      ...input,
+      futureField: true,
+      media: [{ altText: null, futureField: true, mediaId: randomUUID() }],
+      mentions: [
+        {
+          end: 5,
+          futureField: true,
+          handle: '@alice',
+          profileId: randomUUID(),
+          relativeHandle: 'alice',
+          start: 0,
+        },
+      ],
+    };
 
     try {
-      const updateResult = startUpdate(environment, requestId, randomUUID());
+      const updateResult = startUpdate(environment, requestId, randomUUID(), futureInput, {
+        futureField: true,
+      });
       await effectStarted.promise;
       assert.deepEqual(await updateResult, { postId });
+      assert.deepEqual(createdInput, {
+        ...input,
+        media: [{ altText: null, mediaId: futureInput.media[0]?.mediaId }],
+        mentions: [
+          {
+            end: 5,
+            handle: '@alice',
+            profileId: futureInput.mentions[0]?.profileId,
+            relativeHandle: 'alice',
+            start: 0,
+          },
+        ],
+      });
       assert.equal(effectCompleted, false);
 
       effectReleased.resolve();
