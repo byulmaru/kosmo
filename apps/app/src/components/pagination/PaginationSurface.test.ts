@@ -31,6 +31,7 @@ mockModule('react-native', {
 });
 mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast }) });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({ foregroundSecondary: '#777' }),
 });
 

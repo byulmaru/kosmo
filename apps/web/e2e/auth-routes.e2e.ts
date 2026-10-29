@@ -4,6 +4,7 @@ import { AccountState, SessionState } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
   createE2EPost,
+  createE2EProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
@@ -126,79 +127,254 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 본다', async ({ page }) => {
+test('쿠키 없는 루트 직접 진입과 새로고침은 공개 Local 게시글을 유지한다', async ({
+  context,
+  page,
+}) => {
+  const author = await createE2EProfile({ handle: 'guest_root_author' });
+  const body = 'E2E guest root public post';
+  await createE2EPost({ body, profileId: author.id });
+  await page.setViewportSize({ height: 900, width: 1440 });
+
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
   await page.goto('/');
 
-  await expect(
-    page.getByRole('heading', { name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS' }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('가입할 때는 이메일만 수집하고, 이메일 인증으로 로그인해요.', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');
-  await expect(page.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
+  await expect(page).toHaveURL((url) => url.pathname === '/');
+  await expect(page.getByRole('heading', { name: '타임라인 둘러보기', exact: true })).toBeVisible();
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '홈', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toHaveAttribute(
     'href',
-    '/privacy',
+    '/login',
   );
-  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+
+  await page.reload();
+
+  await expect(page).toHaveURL((url) => url.pathname === '/');
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
 });
 
 for (const viewport of [
-  { centered: false, height: 812, padding: 24, width: 375 },
-  { centered: true, height: 900, padding: 128, width: 1024 },
-  { centered: true, height: 900, padding: 256, width: 1440 },
-]) {
-  test(`Welcome logo와 Hero가 ${viewport.width}px viewport에서 정렬된다`, async ({ page }) => {
+  { height: 844, layout: 'mobile', width: 390 },
+  { height: 900, layout: 'compact', width: 768 },
+  { height: 900, layout: 'compact', width: 1024 },
+  { height: 900, layout: 'full', width: 1440 },
+] as const) {
+  test(`공개 루트·Profile·Post는 ${viewport.layout} (${viewport.width}px) 공용 로고와 가입·로그인 진입을 유지한다`, async ({
+    page,
+  }) => {
+    const author = await createE2EProfile({ handle: 'guest_shell_author' });
+    const post = await createE2EPost({ body: 'E2E guest shared shell post', profileId: author.id });
+    const paths = [
+      '/',
+      '/@guest_shell_author',
+      `/@guest_shell_author/${toGlobalId('Post', post.id)}`,
+    ];
     await page.setViewportSize({ height: viewport.height, width: viewport.width });
-    await page.goto('/');
 
-    const logo = page.getByLabel('KOSMO 로고', { exact: true });
-    const heading = page.getByRole('heading', {
-      name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS',
-    });
+    for (const path of paths) {
+      await page.goto(path);
+      await expect(page.getByText('E2E guest shared shell post', { exact: true })).toBeVisible();
+      await expect(page.getByRole('region', { name: '가입 안내', exact: true })).toBeVisible();
+      const bottomNavigation = page.getByRole('navigation', { name: '하단 탐색' });
+      if (viewport.layout === 'mobile' && path !== '/') {
+        await expect(bottomNavigation).toBeVisible();
+      } else {
+        await expect(bottomNavigation).toHaveCount(0);
+      }
+      await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
 
-    await expect(logo).toBeVisible();
-    await expect
-      .poll(async () => {
-        const box = await logo.boundingBox();
-        return box
-          ? {
-              height: Math.round(box.height),
-              width: Math.round(box.width),
-              x: Math.round(box.x),
-            }
-          : null;
-      })
-      .toEqual({ height: 101, width: 160, x: viewport.padding });
-    await expect(heading).toBeVisible();
-    await expect
-      .poll(async () => {
-        const box = await heading.boundingBox();
-        return box ? Math.round(box.x) : null;
-      })
-      .toBe(viewport.padding);
+      const menu = page.getByRole('button', { name: '메뉴 열기' });
+      if (viewport.layout === 'mobile') {
+        await menu.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('dialog', { name: '메뉴', exact: true })).toBeVisible();
+      }
 
-    const [logoBox, headingBox] = await Promise.all([logo.boundingBox(), heading.boundingBox()]);
-    expect(logoBox).not.toBeNull();
-    expect(headingBox).not.toBeNull();
-    expect(headingBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height);
+      const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
+      const signup = navigation.getByRole('link', { name: '가입하기', exact: true });
+      const login = navigation.getByRole('link', { name: '로그인', exact: true });
+      await expect(signup).toHaveAttribute('href', '/login');
+      await expect(login).toHaveAttribute('href', '/login');
+      await expect(navigation.getByRole('link', { name: /^(홈|검색|알림|프로필)$/ })).toHaveCount(
+        0,
+      );
+      await expect(navigation.getByRole('button', { name: '설정 및 기타' })).toHaveCount(0);
 
-    if (viewport.centered) {
-      const acknowledgement = page.getByText(/^이 성과는 2026년도/);
-      await expect(acknowledgement).toBeVisible();
-      const acknowledgementBox = await acknowledgement.boundingBox();
-      expect(acknowledgementBox).not.toBeNull();
-
-      const contentCenter = (logoBox!.y + acknowledgementBox!.y + acknowledgementBox!.height) / 2;
-      expect(Math.abs(contentCenter - viewport.height / 2)).toBeLessThanOrEqual(2);
-    } else {
-      expect(Math.round(logoBox!.y)).toBe(44);
+      const logo = navigation.getByLabel('KOSMO 로고', { exact: true });
+      await expect(logo).toBeVisible();
       await expect
-        .poll(() => heading.evaluate((element) => getComputedStyle(element).wordBreak))
-        .toBe('keep-all');
+        .poll(async () => {
+          const box = await logo.boundingBox();
+          return box ? { height: Math.round(box.height), width: Math.round(box.width) } : null;
+        })
+        .toEqual(
+          viewport.layout === 'compact' ? { height: 48, width: 48 } : { height: 101, width: 160 },
+        );
+      await expect
+        .poll(() =>
+          logo.evaluate((element) => {
+            const image =
+              element instanceof HTMLImageElement ? element : element.querySelector('img');
+            return image ? { height: image.naturalHeight, width: image.naturalWidth } : null;
+          }),
+        )
+        .toEqual(
+          viewport.layout === 'compact'
+            ? { height: 1024, width: 1024 }
+            : { height: 1050, width: 1665 },
+        );
+      const logoBox = await logo.boundingBox();
+      const navigationBox = await navigation.boundingBox();
+      const signupBox = await signup.boundingBox();
+      expect(logoBox).not.toBeNull();
+      expect(navigationBox).not.toBeNull();
+      expect(signupBox).not.toBeNull();
+      expect(logoBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
+      expect(logoBox!.x + logoBox!.width).toBeLessThanOrEqual(
+        navigationBox!.x + navigationBox!.width,
+      );
+      expect(logoBox!.y + logoBox!.height).toBeLessThanOrEqual(signupBox!.y);
+
+      await signup.focus();
+      await page.keyboard.press('Tab');
+      await expect(login).toBeFocused();
+      if (viewport.layout === 'mobile') {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog', { name: '메뉴', exact: true })).toHaveCount(0);
+        await expect(menu).toBeFocused();
+      }
     }
   });
 }
+
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 320, height: 480 },
+  { width: 767, height: 844 },
+]) {
+  test(`guest root pins the entire invitation without tabs at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    const author = await createE2EProfile({ handle: 'pinned_guest_author' });
+    for (let index = 0; index < 8; index++) {
+      await createE2EPost({ body: `Pinned guest timeline item ${index}`, profileId: author.id });
+    }
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    const panel = page.getByRole('region', { name: '가입 안내', exact: true });
+    const tabs = page.getByRole('navigation', { name: '하단 탐색' });
+    await expect(panel).toBeVisible();
+    await expect(tabs).toHaveCount(0);
+    await page.reload();
+    await expect(panel).toBeVisible();
+    await expect(tabs).toHaveCount(0);
+    const expectPanelAtBottom = async () => {
+      await expect
+        .poll(async () => {
+          const box = await panel.boundingBox();
+          return box ? Math.round(box.y + box.height) : null;
+        })
+        .toBe(viewport.height);
+      await expect
+        .poll(() =>
+          panel.evaluate((element) => {
+            const reserved = Number.parseFloat(
+              getComputedStyle(element.parentElement!).paddingBottom,
+            );
+            return Math.abs(reserved - element.getBoundingClientRect().height);
+          }),
+        )
+        .toBeLessThan(2);
+    };
+    await expectPanelAtBottom();
+    const lastPost = page
+      .getByTestId('post-list-standard-row')
+      .filter({ hasText: 'Pinned guest timeline item 0' });
+    await expect(lastPost).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    await expectPanelAtBottom();
+    const lastBox = await lastPost.boundingBox();
+    const panelBox = await panel.boundingBox();
+    expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(panelBox!.y);
+    await expect(panel.getByRole('link', { name: '팀 별마루 소개' })).toHaveAttribute(
+      'href',
+      'https://byulmaru.co/about-us',
+    );
+    await expect(panel.getByRole('link', { name: '개인정보처리방침' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    await expect(panel.getByRole('link', { name: 'KOSMO에서 계속하기' })).toHaveAttribute(
+      'href',
+      '/login',
+    );
+    await panel.getByRole('button', { name: '가입 안내 닫기' }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(tabs).toHaveCount(0);
+    await expect(page.getByTestId('universal-shell-content')).toHaveCSS('padding-bottom', '0px');
+    await page.getByRole('button', { name: '메뉴 열기' }).click();
+    const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
+    await expect(navigation.getByRole('link', { name: '가입하기', exact: true })).toHaveAttribute(
+      'href',
+      '/login',
+    );
+    await expect(navigation.getByRole('link', { name: '로그인', exact: true })).toHaveAttribute(
+      'href',
+      '/login',
+    );
+  });
+}
+
+test('하단 CTA 닫힘은 공개 링크 이동과 새로고침에서 유지되고 다른 탭과 분리된다', async ({
+  context,
+  page,
+}) => {
+  const author = await createE2EProfile({
+    displayName: 'Guest Reader Author',
+    handle: 'guest_reader_author',
+  });
+  const post = await createE2EPost({ body: 'E2E guest reading path', profileId: author.id });
+  const postPath = `/@guest_reader_author/${toGlobalId('Post', post.id)}`;
+  const postRow = page.getByRole('article').filter({
+    has: page.getByText('E2E guest reading path', { exact: true }),
+  });
+  const invitation = page.getByRole('region', { name: '가입 안내', exact: true });
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto('/');
+  await expect(page.getByText('E2E guest reading path', { exact: true })).toBeVisible();
+
+  await invitation.getByRole('button', { name: '가입 안내 닫기' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(invitation).toHaveCount(0);
+
+  await postRow
+    .locator('a[href="/@guest_reader_author"]')
+    .filter({ hasText: 'Guest Reader Author' })
+    .click();
+  await expect(page).toHaveURL((url) => url.pathname === '/@guest_reader_author');
+  await expect(page.getByRole('link', { name: '가입하기', exact: true })).toBeVisible();
+  await expect(invitation).toHaveCount(0);
+  await postRow.locator(`a[href="${postPath}"]`).click();
+  await expect(page).toHaveURL((url) => url.pathname === postPath);
+  await expect(invitation).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByText('E2E guest reading path', { exact: true })).toBeVisible();
+  await expect(invitation).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '로그인', exact: true })).toBeVisible();
+
+  const anotherTab = await context.newPage();
+  try {
+    await anotherTab.goto('/');
+    await expect(anotherTab.getByRole('region', { name: '가입 안내', exact: true })).toBeVisible();
+  } finally {
+    await anotherTab.close();
+  }
+});
 
 for (const route of publicPolicyRoutes) {
   test(`${route.path}는 로그인 없이 공개되고 문서 heading을 표시한다`, async ({ page }) => {
@@ -209,12 +385,12 @@ for (const route of publicPolicyRoutes) {
   });
 }
 
-test('공개 정책 문서에서 landing으로 돌아갈 수 있다', async ({ page }) => {
+test('공개 정책 문서에서 공개 Local로 돌아갈 수 있다', async ({ page }) => {
   await page.goto('/privacy');
 
   await page.getByRole('link', { name: 'KOSMO로 돌아가기' }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
 });
 
 test('로그인 후 full shell에서도 개인정보 처리방침으로 이동한다', async ({ context, page }) => {
@@ -246,7 +422,11 @@ test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다',
   await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
 });
 
-test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
+test('루트 세션 오류는 guest 안내 대신 오류를 표시하고 재시도로 공개 Local을 복구한다', async ({
+  page,
+}) => {
+  const author = await createE2EProfile({ handle: 'guest_retry_author' });
+  await createE2EPost({ body: 'E2E guest session retry post', profileId: author.id });
   await page.route('**/graphql', async (route) => {
     if (isGraphQLOperation(route.request().postData(), 'SessionProviderQuery')) {
       await route.fulfill({
@@ -256,16 +436,20 @@ test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 �
       });
       return;
     }
-
     await route.continue();
   });
 
   await page.goto('/');
 
-  await expect(
-    page.getByRole('heading', { name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS' }),
-  ).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');
+  await expect(page.getByRole('alert')).toContainText('로그인 상태를 확인하지 못했어요');
+  await expect(page.getByRole('region', { name: '가입 안내', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+
+  await page.unroute('**/graphql');
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click();
+
+  await expect(page.getByText('E2E guest session retry post', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: '가입 안내', exact: true })).toBeVisible();
 });
 
 test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유지된다', async ({ page }) => {
@@ -297,35 +481,42 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   });
 
   await page.goto('/');
-  await page.getByRole('link', { name: '시작하기' }).click();
+  await page.getByRole('link', { name: 'KOSMO에서 계속하기' }).click();
 
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
   const historyPaths = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem('kosmo-e2e-history-paths') ?? '[]'),
   );
   expect(historyPaths).not.toContain('pushState:/undefined/undefined');
   expect(historyPaths).not.toContain('replaceState:/undefined/undefined');
   expect(historyPaths).not.toContain('document:/undefined/undefined');
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
-  await page.getByRole('button', { name: '프로필 만들기' }).click();
-  await expect(page.getByLabel('프로필 전환')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
 
   await page.goto('/');
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 });
 
-for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
+for (const { entry, publicRoute } of [
+  { entry: '가입하기', publicRoute: 'root' },
+  { entry: '로그인', publicRoute: 'root' },
+  { entry: 'KOSMO에서 계속하기', publicRoute: 'root' },
+  { entry: '가입하기', publicRoute: 'profile' },
+  { entry: 'KOSMO에서 계속하기', publicRoute: 'post' },
+]) {
   for (const newTab of [false, true]) {
-    test(`공개 콘텐츠의 ${entry}는 ${newTab ? '새 탭에서' : '현재 탭에서'} 바로 인증을 시작한다`, async ({
+    test(`공개 ${publicRoute}의 ${entry}는 ${newTab ? '새 탭에서' : '현재 탭에서'} 바로 인증을 시작한다`, async ({
       context,
       page,
     }) => {
       const author = await createE2ESession({ handle: 'guest_entry_author' });
       const post = await createE2EPost({ body: 'guest entry', profileId: author.profile!.id });
       const publicPath =
-        entry === '가입하기'
-          ? '/@guest_entry_author'
-          : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
+        publicRoute === 'root'
+          ? '/'
+          : publicRoute === 'profile'
+            ? '/@guest_entry_author'
+            : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(publicPath);
       const entryLink = page.getByRole('link', { name: entry, exact: true });
@@ -339,9 +530,9 @@ for (const entry of ['가입하기', 'KOSMO에서 계속하기']) {
       const signupTab = await destination;
       try {
         await loginRequest;
-        await expect(signupTab).toHaveURL(/\/home$/);
+        await expect(signupTab).toHaveURL(/\/first-profile\/handle$/);
         await expect(
-          signupTab.getByRole('heading', { name: '프로필을 만들어 시작하세요' }),
+          signupTab.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ }),
         ).toBeVisible();
         if (newTab) {
           await expect(page).toHaveURL((url) => url.pathname === publicPath);
@@ -372,9 +563,9 @@ test('Deleted Account의 Web OIDC callback은 같은 Account에 새 Session을 �
   const response = await page.goto('/login');
 
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '프로필 만들기' })).toBeVisible();
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
+  await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
 
   const account = await db
     .select({ id: Accounts.id, state: Accounts.state })
@@ -571,7 +762,7 @@ test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 
 
   await setE2ESessionCookie(context, token);
   await page.goto('/home');
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 
   const response = await page.evaluate(async (profileHandle) => {
     const graphqlResponse = await fetch('/graphql', {
@@ -630,7 +821,7 @@ test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동�
   await navigation;
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
 });
 
 for (const scenario of invalidSessionCases) {
@@ -639,8 +830,8 @@ for (const scenario of invalidSessionCases) {
     await page.goto('/home');
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '홈', exact: true })).toHaveCount(0);
   });
 }
 
@@ -1085,3 +1276,31 @@ test.describe('로그인 사용자 보호 라우트', () => {
     expect(drawerState.scrollHeight).toBeGreaterThan(drawerState.scrollClientHeight);
   });
 });
+
+for (const action of ['답글', '북마크']) {
+  test(`공개 루트의 ${action} 참여는 쿠키 없는 방문자에게 기존 인증을 시작한다`, async ({
+    context,
+    page,
+  }) => {
+    const author = await createE2EProfile({ handle: 'guest_action_author' });
+    await createE2EPost({ body: 'E2E guest participation post', profileId: author.id });
+    await page.goto('/');
+    const post = page.getByRole('article').filter({
+      has: page.getByText('E2E guest participation post', { exact: true }),
+    });
+    await expect(post).toBeVisible();
+    expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
+
+    const loginRequest = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === '/login' && request.isNavigationRequest(),
+    );
+    await post.getByRole('button', { name: action, exact: true }).click();
+    await loginRequest;
+
+    await expect(page).toHaveURL(/\/first-profile\/handle$/);
+    await expect(page.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: '핸들', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: '가입 안내', exact: true })).toHaveCount(0);
+    expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(true);
+  });
+}

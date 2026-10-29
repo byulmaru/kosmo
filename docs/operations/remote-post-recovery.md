@@ -34,13 +34,15 @@ The ID must identify an active local Profile on the configured active local Inst
 
 A standalone lookup uses a 2 MiB parsed-document budget. Featured syncs count collection pages and each Note against the same cumulative budget.
 
+The serialized Post-create input also uses Temporal's configured per-payload limit, 2 MiB by default. If the prepared Activity result exceeds that limit, the lookup fails before starting the Post-create child; it does not save the payload elsewhere. See Temporal's [payload limit](https://docs.temporal.io/best-practices/worker) and [child input size failure](https://docs.temporal.io/references/workflow-task-errors).
+
 ## Interpret the result
 
 - `created` means the Note was materialized as a Post. The result includes its Post ID, author Profile ID, and parsed-document byte count.
 - `duplicate` means the Note already maps to a Post. The result returns that Post and its stored owner without creating another one.
 - `rejected` means the fetched object or Note did not pass the existing materialization checks. The result includes a reason such as an invalid Note or exceeded document budget.
 
-The Workflow uses the existing remote Note materializer. A signing Profile authenticates retrieval only; it does not authorize a `DIRECT` Note. A `DIRECT` Note still requires an eligible local Mention. The standalone lookup does not replace a Profile's Featured pins, run a bulk import, expose a new API or UI, or apply remote Post Updates.
+The lookup prepares the fetched Note and creates the Post through a native child Workflow. A newly created Post starts its effects in a detached child; duplicates skip those effects. A signing Profile authenticates retrieval only; it does not authorize a `DIRECT` Note. A `DIRECT` Note still requires an eligible local Mention. The standalone lookup does not replace a Profile's Featured pins, run a bulk import, expose a new API or UI, or apply remote Post Updates.
 
 The lookup can only materialize a Note the remote server currently serves. A deleted, invalid, or unavailable Note cannot be reconstructed by this operation; transient request failures may retry before the Workflow fails. During a Featured sync, an earlier child may already have materialized its Note if a later child fails, while the previous Featured pin snapshot remains until the full sync succeeds.
 

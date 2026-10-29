@@ -78,6 +78,38 @@ test('pair transition caller uses fresh SDK Update IDs and active-run policies',
   }
 });
 
+test('inbound Follow envelope is passed as a separate second Update argument', async () => {
+  const command = { kind: 'FOLLOW' as const, origin: 'ACTIVITYPUB' as const };
+  const inboundFollow = {
+    actorUri: 'https://remote.example/users/actor',
+    objectUri: 'https://local.example/ap/actor/followee',
+    activityUri: 'https://remote.example/activities/follow',
+    published: '2026-09-29T00:05:00Z',
+  };
+  const failure = new Error('stop after inspecting Update arguments');
+  const update = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+    throw failure;
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      executeProfileFollowPairTransition({ pair, command, inboundFollow }),
+      (error: unknown) => error === failure,
+    );
+    const options = update.mock.calls[0]?.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [command, inboundFollow]);
+  } finally {
+    deadline.mock.restore();
+    update.mock.restore();
+  }
+});
+
 test('terminal pair transition lets Temporal assign a fresh Update ID per attempt', async () => {
   const requestId = '00000000-0000-8000-8000-000000000003';
   const command = {

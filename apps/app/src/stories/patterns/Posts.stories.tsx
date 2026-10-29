@@ -195,13 +195,23 @@ const linkedPost = post({
   bodyText: '일반 텍스트와 안전한 외부 링크\n강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
   id: 'linked',
 });
-const unsupportedDocumentPost = post({
+const unknownNodesPost = post({
   bodyDocument: {
     type: 'doc',
-    content: [{ type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] }],
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 첫 문단입니다.' }],
+      },
+      { type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 다음 문단입니다.' }],
+      },
+    ],
   } as never,
-  bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
-  id: 'unsupported-document',
+  bodyText: '지원되는 첫 문단입니다.\n\n실행하면 안 되는 구조\n\n지원되는 다음 문단입니다.',
+  id: 'unknown-nodes',
 });
 const mediaTextPost = post({
   bodyDocument: {
@@ -883,7 +893,7 @@ const storyPosts = [
   ...visibilityPosts,
   remoteAuthorPost,
   linkedPost,
-  unsupportedDocumentPost,
+  unknownNodesPost,
   ...threadStoryPosts,
   sourcePost,
   pureRepost,
@@ -2121,9 +2131,31 @@ function ContentWarningRevealStory() {
   return (
     <Catalog>
       <PostContentRenderer
-        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        bodyText="가림 해제 뒤 표시되는 #원문 본문입니다."
         contentWarning="민감한 내용이 포함되어 있습니다."
-        document={null}
+        document={{
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '가림 해제 뒤 표시되는 ' },
+                  {
+                    type: 'hashtag',
+                    attrs: {
+                      hashtagId: '019f6678-86fa-709b-984e-1520766b8447',
+                      token: '#원문',
+                    },
+                  },
+                  { type: 'text', text: ' 본문입니다.' },
+                ],
+              },
+            ],
+          },
+        }}
         media={[
           {
             altText: '가림 해제 뒤 표시되는 이미지',
@@ -3158,8 +3190,9 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(canvasElement.textContent).toContain(
       '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
     );
-    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
-    expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    expect(canvas.getByText('지원되는 첫 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvas.getByText('지원되는 다음 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvasElement.textContent).not.toContain('실행하면 안 되는 구조');
     const mediaText = within(canvas.getByTestId('media-text'));
     expect(mediaText.getByText('document text')).toBeVisible();
     const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');
@@ -4889,6 +4922,7 @@ export const QuoteListItemInternalBackground: Story = {
     const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
     const target = document.elementFromPoint(x, y)!;
     expect(target).toBe(root);
+    expect(getComputedStyle(target).cursor).toBe('pointer');
     const coords = (offset: number) => ({
       clientX: x + offset,
       clientY: y,
@@ -6738,7 +6772,8 @@ export const ContentWarningRevealInteraction: Story = {
   ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
     const toggle = canvas.getByRole('button', {
@@ -6755,12 +6790,19 @@ export const ContentWarningRevealInteraction: Story = {
     toggle.focus();
     expect(toggle).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
+    const body = canvas.getByText(/가림 해제 뒤 표시되는/);
+    expect(body).toBeVisible();
+    expect(body).toHaveTextContent('가림 해제 뒤 표시되는 #원문 본문입니다.');
+    expect(canvas.getByRole('link', { name: '#원문, 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/hashtags/[hashtagId]/posts',
+    );
     const gallery = canvas.getByTestId('post-media-gallery');
     expect(gallery).toBeVisible();
 
     await userEvent.keyboard('{Enter}');
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
 };
@@ -6805,6 +6847,8 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const pathname = canvas.getByTestId('content-warning-list-pathname');
     const initialPath = pathname.textContent;
     const card = listSurface.getByTestId('post-list-item-card');
+    expect(getComputedStyle(card).cursor).toBe('pointer');
+    expect(getComputedStyle(row).cursor).toBe('pointer');
     await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
     const cardBounds = card.getBoundingClientRect();
     const cardCoords = (x: number) => ({

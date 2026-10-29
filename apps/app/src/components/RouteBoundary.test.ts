@@ -26,9 +26,14 @@ type RouteBoundaryProps = {
 let RouteBoundary: ForwardRefExoticComponent<
   RouteBoundaryProps & RefAttributes<RouteBoundaryHandle>
 >;
-let useRouteBoundary: () => { fetchKey: string; refetch: () => void };
+let useRouteBoundary: () => {
+  fetchKey: string;
+  fetchPolicy: 'store-or-network' | 'network-only';
+  refetch: () => void;
+};
 let queryShouldThrow = false;
 let observedFetchKey = '';
+let observedFetchPolicy: 'store-or-network' | 'network-only' = 'store-or-network';
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -43,13 +48,14 @@ afterEach(async () => {
 });
 
 function QueryProbe() {
-  const { fetchKey, refetch } = useRouteBoundary();
+  const { fetchKey, fetchPolicy, refetch } = useRouteBoundary();
   observedFetchKey = fetchKey;
+  observedFetchPolicy = fetchPolicy;
   if (queryShouldThrow) {
     throw new Error('route query failed');
   }
 
-  return createElement('QueryProbe', { fetchKey, refetch });
+  return createElement('QueryProbe', { fetchKey, fetchPolicy, refetch });
 }
 
 function renderBoundary(
@@ -78,12 +84,14 @@ describe('RouteBoundary local query lifecycle', () => {
     });
 
     const initialFetchKey = queryProbe().props.fetchKey;
+    assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
 
     await act(async () => {
       renderer?.update(renderBoundary());
     });
 
     assert.equal(queryProbe().props.fetchKey, initialFetchKey);
+    assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
   });
 
   it('assigns a new fetch key for an explicit refetch in the same millisecond', async () => {
@@ -100,10 +108,12 @@ describe('RouteBoundary local query lifecycle', () => {
 
       const initialFetchKey = queryProbe().props.fetchKey;
       assert.equal(typeof initialFetchKey, 'string');
+      assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
       await act(async () => queryProbe().props.refetch());
 
       const refetchedKey = queryProbe().props.fetchKey;
       assert.notEqual(refetchedKey, initialFetchKey);
+      assert.equal(queryProbe().props.fetchPolicy, 'network-only');
     } finally {
       Date.now = originalDateNow;
       Math.random = originalRandom;
@@ -120,6 +130,7 @@ describe('RouteBoundary local query lifecycle', () => {
       });
 
       const failedFetchKey = observedFetchKey;
+      assert.equal(observedFetchPolicy, 'store-or-network');
       assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
       const fallback = renderer?.root.findAll((node) => String(node.type) === 'StateView')[0];
       assert.ok(fallback);
@@ -129,6 +140,7 @@ describe('RouteBoundary local query lifecycle', () => {
 
       const retriedFetchKey = queryProbe().props.fetchKey;
       assert.notEqual(retriedFetchKey, failedFetchKey);
+      assert.equal(queryProbe().props.fetchPolicy, 'network-only');
     } finally {
       console.error = originalConsoleError;
     }
@@ -140,6 +152,7 @@ describe('RouteBoundary local query lifecycle', () => {
     });
 
     const firstMountKey = queryProbe().props.fetchKey;
+    assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
 
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -150,5 +163,6 @@ describe('RouteBoundary local query lifecycle', () => {
 
     const remountedKey = queryProbe().props.fetchKey;
     assert.notEqual(remountedKey, firstMountKey);
+    assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
   });
 });

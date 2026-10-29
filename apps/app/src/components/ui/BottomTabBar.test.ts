@@ -15,16 +15,40 @@ const mockModule = (specifier: string | URL, exports: object) =>
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type PressableProps = {
-  children?: ReactNode;
+  children?: ReactNode | ((state: { hovered: boolean; pressed: boolean }) => ReactNode);
   [key: string]: unknown;
 };
 
 const PressableHost = ({ children, ...props }: PressableProps) =>
-  createElement('Pressable', props, typeof children === 'function' ? null : children);
+  createElement(
+    'Pressable',
+    props,
+    typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+  );
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
 
 mockModule('react-native', {
+  processColor: () => undefined,
+  Animated: {
+    Color: AnimatedColorMock,
+    Value: AnimatedColorMock,
+    Text: 'AnimatedText',
+    View: 'AnimatedView',
+    timing: () => ({ start: () => undefined, stop: () => undefined }),
+  },
+  Easing: { bezier: () => () => 0 },
   Pressable: PressableHost,
   StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
     flatten: (style: unknown) =>
       Object.assign({}, ...(Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style])),
@@ -32,22 +56,30 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+const theme = {
+  accent: 'accent',
+  backgroundCanvas: 'canvas',
+  borderSubtle: 'subtle',
+  foregroundPrimary: 'primary',
+  foregroundSecondary: 'secondary',
+  stateDisabledForeground: 'disabled',
+  stateFocusRing: 'focus',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+};
+
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => false,
-  useTheme: () => ({
-    accent: 'accent',
-    backgroundCanvas: 'canvas',
-    borderSubtle: 'subtle',
-    foregroundPrimary: 'primary',
-    foregroundSecondary: 'secondary',
-    stateDisabledForeground: 'disabled',
-    stateFocusRing: 'focus',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-  }),
+  useThemeMode: () => 'light',
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { full: 999 },
   space: { 4: 4 },
   textStyles: { uiLabelS: {} },

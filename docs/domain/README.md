@@ -87,6 +87,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 
 ## 조회 정책
 
+- [First Profile Onboarding Policy](./policies/first-profile-onboarding.md): 첫 단계의 Profile 생성·선택과 선택 정보의 단계별 저장·생략.
+
 - [Post List Policy](./policies/post-list.md): Home, Local, Profile, Hashtag Post List의 후보와 제어 결정.
 - [Admin Console Read Policy](./policies/admin-console-read.md): Admin Console Viewer의 Account, Profile,
   Account-Profile Membership 교차 객체 조회 범위와 필드.
@@ -97,6 +99,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [Profile Hashtag 탐색 지표](./policies/profile-hashtag-exploration-analytics.md): 사용자 Funnel·최초 결과 Empty의 집계와 개인정보 경계.
 
 - [Public Content Onboarding Policy](./policies/public-content-onboarding.md): 공개 방문자의 안내와 인증·Profile 준비 후 콘텐츠 복귀.
+
+- [첫 Profile 태그 기반 사람 찾기](./policies/first-profile-tag-discovery.md): 저장 태그 기반 탐색과 개별 팔로우·후속 진행.
 
 ## 결정과 기록
 

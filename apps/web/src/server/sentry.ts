@@ -10,6 +10,7 @@ if (enabled) {
   Sentry.init({
     beforeBreadcrumb: () => null,
     dsn,
+    enableLogs: true,
     environment,
     initialScope: { tags: { runtime: 'web-bff' } },
     release,

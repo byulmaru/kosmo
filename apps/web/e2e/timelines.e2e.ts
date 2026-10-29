@@ -105,7 +105,7 @@ test('홈 타임라인은 본인 글과 팔로우한 프로필 글만 최신순�
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
 });
 
-test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만 보여주고 재선택 시 갱신한다', async ({
+test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만 보여준다', async ({
   context,
   page,
 }) => {
@@ -220,9 +220,6 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
   ).toHaveAttribute('aria-current', 'page');
 
   expect(localQueryCount).toBe(1);
-  const localRefetchResponse = waitForGraphQLOperation(page, 'LocalContentRefetchQuery');
-  await timelineTabs.getByRole('tab', { name: '로컬' }).click();
-  await localRefetchResponse;
 
   await page.getByRole('link', { name: 'E2E Local Writer 프로필 보기' }).click();
   await expect(page).toHaveURL(/\/@e2e-local-writer$/);
@@ -276,7 +273,10 @@ test('Local 재조회 실패에도 열린 답글 작성 상태와 입력 내용�
     });
     await expect(post).toBeVisible();
 
-    await page.getByRole('tab', { name: '로컬' }).click();
+    await page
+      .getByRole('navigation', { name: '주요 메뉴' })
+      .getByRole('link', { name: '홈', exact: true })
+      .click();
     await refetchStarted;
 
     await post.getByRole('button', { name: '답글' }).click();
@@ -502,3 +502,88 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => profilePostsRequestCount).toBeGreaterThan(previousCount);
 });
+
+test('쿠키 없는 루트는 Local 다음 페이지를 최신순으로 누적한다', async ({ context, page }) => {
+  const author = await createE2EProfile({ handle: 'e2e-guest-page-writer' });
+  for (let index = 0; index < 21; index += 1) {
+    await createE2EPost({
+      body: `E2E guest page ${index.toString().padStart(2, '0')}`,
+      profileId: author.id,
+    });
+  }
+
+  await page.goto('/');
+  const posts = page.getByText(/^E2E guest page/, { exact: true });
+  await expect(posts).toHaveCount(20);
+  await expect(posts.first()).toHaveText('E2E guest page 20');
+  await expect(posts.last()).toHaveText('E2E guest page 01');
+
+  const nextPageResponse = waitForGraphQLOperation(page, 'PostListLocalNextPageQuery');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const response = await nextPageResponse;
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).errors).toBeUndefined();
+  await expect(posts).toHaveText(
+    Array.from(
+      { length: 21 },
+      (_, index) => `E2E guest page ${(20 - index).toString().padStart(2, '0')}`,
+    ),
+  );
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
+  await expect(page.getByRole('tablist', { name: '타임라인' })).toHaveCount(0);
+});
+
+for (const width of [390, 1440]) {
+  for (const timeline of ['home', 'local'] as const) {
+    test(`${width}px ${timeline}: 상단 현재 탭의 pointer·keyboard 재선택은 조회 없이 맨 위로 이동한다`, async ({
+      context,
+      page,
+    }) => {
+      const viewer = await createE2ESession({ handle: `e2e-reselect-${timeline}-${width}` });
+      for (let index = 0; index < 10; index += 1) {
+        await createE2EPost({
+          body: `E2E scroll-only post ${index}\n첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄`,
+          profileId: viewer.profile!.id,
+        });
+      }
+      await setE2ESessionCookie(context, viewer.token);
+      await page.setViewportSize({ width, height: 720 });
+      let timelineRequests = 0;
+      page.on('request', (request) => {
+        if (
+          [
+            'HomePageQuery',
+            'LocalPageQuery',
+            'LocalContentRefetchQuery',
+            'PostListHomeNextPageQuery',
+            'PostListLocalNextPageQuery',
+          ].some((name) => isGraphQLOperation(request.postData(), name))
+        ) {
+          timelineRequests += 1;
+        }
+      });
+      await page.goto(`/${timeline}`);
+      await expect(page.getByRole('article')).toHaveCount(10);
+      const tab = page
+        .getByRole('tablist', { name: '타임라인' })
+        .getByRole('tab', { name: timeline === 'home' ? '홈' : '로컬', exact: true });
+      const before = timelineRequests;
+      for (const input of ['pointer', 'Enter', 'Space', 'pointer']) {
+        await tab.focus();
+        await page.evaluate(() => window.scrollTo(0, 480));
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+        if (input === 'pointer') {
+          await tab.click();
+        } else {
+          await page.keyboard.press(input);
+        }
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+        await expect(page).toHaveURL(new RegExp(`/${timeline}$`));
+        await expect(tab).toHaveAttribute('aria-selected', 'true');
+        await expect(tab).toBeFocused();
+        expect(timelineRequests).toBe(before);
+      }
+      await expect(page.getByRole('article')).toHaveCount(10);
+    });
+  }
+}

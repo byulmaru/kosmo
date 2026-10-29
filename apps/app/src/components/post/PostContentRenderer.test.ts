@@ -204,6 +204,104 @@ describe('PostContentRenderer', () => {
     );
   });
 
+  it('skips unknown V1 nodes while keeping known body siblings and warning/media metadata', async () => {
+    const media = [{ altText: '설명', id: 'media-1', url: 'https://media.example/1.webp' }];
+    await render({
+      bodyText: 'known linked @alice hidden inline hidden block',
+      contentWarning: '민감한 내용',
+      document: {
+        version: 1,
+        summary: '민감한 내용',
+        body: {
+          type: 'doc',
+          attrs: { sensitiveMedia: true },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'known ' },
+                {
+                  type: 'text',
+                  text: 'linked',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/' } }],
+                },
+                { type: 'text', text: ' ' },
+                { type: 'mention', attrs: { profileId: 'profile-alice' } },
+                { type: 'future_inline', content: [{ type: 'text', text: 'hidden inline' }] },
+              ],
+            },
+            {
+              type: 'future_block',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hidden block' }] }],
+            },
+          ],
+        },
+      },
+      media,
+      mentionedProfiles: [
+        {
+          displayName: 'Alice',
+          id: 'profile-alice',
+          relativeHandle: '@alice',
+        },
+      ],
+      postId: 'post-unknown-nodes',
+    });
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning'),
+      true,
+    );
+    assert.equal(rendered('PostMediaGallery').length, 0);
+
+    const warning = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning',
+    );
+    assert.ok(warning);
+    await act(async () => warning.props.onPress({ stopPropagation: () => undefined }));
+
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@alice'],
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.accessibilityRole === 'link'),
+      true,
+    );
+    const bodyText = rendered('Text').map(renderedText).join('');
+    assert.match(bodyText, /known linked @alice/);
+    assert.doesNotMatch(bodyText, /hidden inline|hidden block/);
+    assert.deepEqual(rendered('PostMediaGallery')[0]?.props.media, media);
+    assert.equal(rendered('PostMediaGallery')[0]?.props.sensitive, true);
+  });
+
+  it('falls back to Plain Text when the document schema version is unsupported', async () => {
+    await render({
+      bodyText: '지원되지 않는 버전은 Plain Text로 표시합니다.',
+      contentWarning: null,
+      document: {
+        version: 2,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '실행하면 안 되는 새 형식' }],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-unsupported-version',
+    });
+
+    const bodyText = rendered('Text').map(renderedText).join('');
+    assert.match(bodyText, /지원되지 않는 버전은 Plain Text로 표시합니다\./);
+    assert.doesNotMatch(bodyText, /실행하면 안 되는 새 형식/);
+  });
+
   it('content warning metadata counts only the canonical post media passed to the renderer', async () => {
     await render({
       bodyText: '원문 본문',
@@ -559,6 +657,76 @@ describe('PostContentRenderer', () => {
       ['/@profile'],
     );
     assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
+  });
+
+  it('links Hashtag occurrences by Global ID and keeps noninteractive previews static', async () => {
+    const bodyText = 'Topic #MiXeD and #mixed';
+    const hashtagId = 'SGFzaHRhZy0x';
+    const document = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Topic ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId, token: '#MiXeD' },
+              },
+              { type: 'text', text: ' and ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId, token: '#mixed' },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    for (const interactive of [true, false]) {
+      let stoppedEvents = 0;
+      await render({
+        bodyText,
+        contentWarning: null,
+        document,
+        interactive,
+        media: [],
+        mentionedProfiles: [],
+        ...(interactive ? { onBodyPress: () => assert.fail('post press must not run') } : {}),
+        postId: `post-hashtag-${interactive}`,
+      });
+
+      assert.equal(
+        rendered('Text').some((node) => renderedText(node) === bodyText),
+        true,
+      );
+      const links = rendered('Text').filter((node) => node.props.accessibilityRole === 'link');
+      if (interactive) {
+        assert.deepEqual(
+          rendered('NavigationLink').map(({ props }) => props.href),
+          [
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+          ],
+        );
+        assert.deepEqual(
+          links.map(({ props }) => props.accessibilityLabel),
+          ['#MiXeD, 게시글 보기', '#mixed, 게시글 보기'],
+        );
+        for (const link of links) {
+          link.props.onPress({ stopPropagation: () => stoppedEvents++ });
+        }
+        assert.equal(stoppedEvents, 2);
+      } else {
+        assert.equal(links.length, 0);
+        assert.deepEqual(rendered('NavigationLink'), []);
+      }
+      assert.equal(rendered('Pressable').length, interactive ? 1 : 0);
+    }
   });
 });
 

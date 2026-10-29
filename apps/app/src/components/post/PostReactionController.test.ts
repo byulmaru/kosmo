@@ -4,6 +4,11 @@ import { commitMutation } from 'react-relay';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import AddReactionMutation from './__generated__/PostReactionControllerAddReactionMutation.graphql';
 import DeleteReactionMutation from './__generated__/PostReactionControllerDeleteReactionMutation.graphql';
+import {
+  createReactionDeleteUpdater,
+  createReactionOptimisticUpdater,
+} from './PostReactionController.optimistic';
+import type { RecordSourceSelectorProxy } from 'relay-runtime';
 import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
 import type { PostReactionControllerDeleteReactionMutation } from './__generated__/PostReactionControllerDeleteReactionMutation.graphql';
 
@@ -11,6 +16,7 @@ const postId = 'post-content';
 
 type NetworkSink = {
   complete(): void;
+  error(error: unknown): void;
   next(payload: unknown): void;
 };
 
@@ -49,11 +55,11 @@ function createEnvironment() {
     },
   });
 
-  let sink: NetworkSink | undefined;
+  const sinks: NetworkSink[] = [];
   const environment = new Environment({
     network: Network.create(() =>
       Observable.create((nextSink) => {
-        sink = nextSink;
+        sinks.push(nextSink);
       }),
     ),
     store: new Store(source),
@@ -62,15 +68,25 @@ function createEnvironment() {
   return {
     environment,
     respond(payload: unknown) {
+      const sink = sinks.shift();
       assert.ok(sink, 'commitMutation must subscribe to the Relay network');
       sink.next(payload);
       sink.complete();
+    },
+    fail(error: unknown = new Error('network failure')) {
+      const sink = sinks.shift();
+      assert.ok(sink, 'commitMutation must subscribe to the Relay network');
+      sink.error(error);
     },
   };
 }
 
 function viewerReactionIds(environment: Environment) {
   return environment.getStore().getSource().get(postId)?.viewerReactions?.__refs;
+}
+
+function reactionCountIds(environment: Environment) {
+  return environment.getStore().getSource().get(postId)?.reactionCounts?.__refs;
 }
 
 function reactionCounts(environment: Environment) {
@@ -86,7 +102,17 @@ function commitAdd(
   environment: Environment,
   respond: (payload: unknown) => void,
   payload: unknown,
-  errors?: ReadonlyArray<{ message: string }>,
+  errors?: ReadonlyArray<{ message: string; path?: ReadonlyArray<string | number> }>,
+  type = 'PARTY',
+) {
+  const completion = startAdd(environment, undefined, type);
+  respond({ data: payload, ...(errors ? { errors } : {}) });
+  return completion;
+}
+
+function startAdd(
+  environment: Environment,
+  optimisticUpdater?: (store: RecordSourceSelectorProxy) => void,
   type = 'PARTY',
 ) {
   return new Promise<void>((resolve, reject) => {
@@ -94,9 +120,9 @@ function commitAdd(
       mutation: AddReactionMutation,
       onCompleted: () => resolve(),
       onError: reject,
+      optimisticUpdater,
       variables: { postId, type },
     });
-    respond({ data: payload, ...(errors ? { errors } : {}) });
   });
 }
 
@@ -104,15 +130,31 @@ function commitDelete(
   environment: Environment,
   respond: (payload: unknown) => void,
   payload: unknown,
+  errors?: ReadonlyArray<{ message: string; path?: ReadonlyArray<string | number> }>,
+) {
+  const completion = startDelete(environment);
+  respond({ data: payload, ...(errors ? { errors } : {}) });
+  return completion;
+}
+
+function startDelete(
+  environment: Environment,
+  optimisticUpdater?: (store: RecordSourceSelectorProxy) => void,
+  type = 'HEART',
+  updater?: (
+    store: RecordSourceSelectorProxy,
+    data: PostReactionControllerDeleteReactionMutation['response'] | null | undefined,
+  ) => void,
 ) {
   return new Promise<void>((resolve, reject) => {
     commitMutation<PostReactionControllerDeleteReactionMutation>(environment, {
       mutation: DeleteReactionMutation,
       onCompleted: () => resolve(),
       onError: reject,
-      variables: { postId, type: 'HEART' },
+      optimisticUpdater,
+      updater,
+      variables: { postId, type },
     });
-    respond({ data: payload });
   });
 }
 
@@ -231,6 +273,58 @@ describe('PostReactionController Relay cache contract', () => {
     ]);
   });
 
+  it('unlinks a server-confirmed deleted reaction when delete returns no Post', async () => {
+    const { environment, respond } = createEnvironment();
+    environment.commitUpdate((store) => {
+      const post = store.get(postId);
+      post?.setLinkedRecords(
+        [null, store.get('reaction-heart') ?? null, store.get('reaction-eyes') ?? null],
+        'viewerReactions',
+      );
+    });
+
+    const completion = startDelete(
+      environment,
+      undefined,
+      'HEART',
+      createReactionDeleteUpdater({ postId, type: 'HEART' }),
+    );
+    respond({
+      data: {
+        deleteReaction: { post: null, reactionId: 'reaction-heart' },
+      },
+    });
+    await completion;
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
+  it('unlinks the requested Type when the server delete ID differs from the cached ID', async () => {
+    const { environment, respond } = createEnvironment();
+    const completion = startDelete(
+      environment,
+      undefined,
+      'HEART',
+      createReactionDeleteUpdater({ postId, type: 'HEART' }),
+    );
+    respond({
+      data: {
+        deleteReaction: { post: null, reactionId: 'reaction-heart-server' },
+      },
+    });
+    await completion;
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
   it('uses the re-add payload order after a Type reaches zero and reappears', async () => {
     const { environment, respond } = createEnvironment();
 
@@ -279,6 +373,265 @@ describe('PostReactionController Relay cache contract', () => {
     assert.deepEqual(viewerReactionIds(actorA.environment), ['reaction-eyes', 'reaction-party']);
     assert.deepEqual(viewerReactionIds(actorB.environment), ['reaction-heart', 'reaction-eyes']);
     assert.deepEqual(reactionCounts(actorB.environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
+  it('applies an add only once from the current viewer membership and rolls it back on failure', async () => {
+    const { environment, fail } = createEnvironment();
+    const optimisticUpdater = createReactionOptimisticUpdater({
+      nextSelected: true,
+      postId,
+      type: 'PARTY',
+    });
+
+    const first = startAdd(environment, optimisticUpdater);
+    const firstReactionId = viewerReactionIds(environment)?.[2];
+    const firstCountId = reactionCountIds(environment)?.[2];
+    assert.ok(firstReactionId);
+    assert.ok(firstCountId);
+
+    const second = startAdd(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: true,
+        postId,
+        type: 'PARTY',
+      }),
+    );
+
+    assert.deepEqual(viewerReactionIds(environment), [
+      'reaction-heart',
+      'reaction-eyes',
+      firstReactionId,
+    ]);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+      { count: 1, type: 'PARTY' },
+    ]);
+
+    fail();
+    await assert.rejects(first);
+    const secondReactionId = viewerReactionIds(environment)?.[2];
+    const secondCountId = reactionCountIds(environment)?.[2];
+    assert.ok(secondReactionId);
+    assert.ok(secondCountId);
+    assert.notEqual(secondReactionId, firstReactionId);
+    assert.notEqual(secondCountId, firstCountId);
+    assert.deepEqual(viewerReactionIds(environment), [
+      'reaction-heart',
+      'reaction-eyes',
+      secondReactionId,
+    ]);
+    assert.deepEqual(reactionCountIds(environment), ['count-heart', 'count-eyes', secondCountId]);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+      { count: 1, type: 'PARTY' },
+    ]);
+
+    fail();
+    await assert.rejects(second);
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-heart', 'reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
+  it('replays a pending add over refreshed base data without duplicating it or dropping other Types', async () => {
+    const { environment, respond } = createEnvironment();
+    const completion = startAdd(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: true,
+        postId,
+        type: 'PARTY',
+      }),
+    );
+    const optimisticReactionId = viewerReactionIds(environment)?.[2];
+    const optimisticCountId = reactionCountIds(environment)?.[2];
+    assert.ok(optimisticReactionId);
+    assert.ok(optimisticCountId);
+
+    environment.commitUpdate((store) => {
+      const post = store.get(postId);
+      const eyesCount = store.get('count-eyes');
+      eyesCount?.setValue(4, 'count');
+
+      const refreshedReaction = store.create('reaction-refreshed-smile', 'Reaction');
+      refreshedReaction.setValue('reaction-refreshed-smile', 'id');
+      refreshedReaction.setValue('SMILE', 'type');
+      const refreshedCount = store.create('count-refreshed-smile', 'ReactionCount');
+      refreshedCount.setValue(5, 'count');
+      refreshedCount.setValue('SMILE', 'type');
+
+      post?.setLinkedRecords(
+        [...(post.getLinkedRecords('viewerReactions') ?? []), refreshedReaction],
+        'viewerReactions',
+      );
+      post?.setLinkedRecords(
+        [...(post.getLinkedRecords('reactionCounts') ?? []), refreshedCount],
+        'reactionCounts',
+      );
+    });
+
+    assert.deepEqual(viewerReactionIds(environment), [
+      'reaction-heart',
+      'reaction-eyes',
+      'reaction-refreshed-smile',
+      optimisticReactionId,
+    ]);
+    assert.deepEqual(reactionCountIds(environment), [
+      'count-heart',
+      'count-eyes',
+      'count-refreshed-smile',
+      optimisticCountId,
+    ]);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 4, type: 'EYES' },
+      { count: 5, type: 'SMILE' },
+      { count: 1, type: 'PARTY' },
+    ]);
+
+    respond({ data: addPayload });
+    await completion;
+  });
+
+  it('removes a zero delete count optimistically and restores it on failure', async () => {
+    const { environment, fail } = createEnvironment();
+    const completion = startDelete(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: false,
+        postId,
+        type: 'HEART',
+      }),
+    );
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [{ count: 1, type: 'EYES' }]);
+
+    fail();
+    await assert.rejects(completion);
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-heart', 'reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
+  it('rebases another Type after one optimistic request fails', async () => {
+    const { environment, fail, respond } = createEnvironment();
+    const add = startAdd(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: true,
+        postId,
+        type: 'PARTY',
+      }),
+    );
+    const remove = startDelete(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: false,
+        postId,
+        type: 'HEART',
+      }),
+    );
+
+    fail();
+    await assert.rejects(add);
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [{ count: 1, type: 'EYES' }]);
+
+    respond({
+      data: {
+        deleteReaction: {
+          post: {
+            __typename: 'Post',
+            id: postId,
+            reactionCounts: [{ __typename: 'ReactionCount', count: 3, type: 'EYES' }],
+            viewerReactions: [{ __typename: 'Reaction', id: 'reaction-eyes', type: 'EYES' }],
+          },
+          reactionId: null,
+        },
+      },
+    });
+    await remove;
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [{ count: 3, type: 'EYES' }]);
+  });
+
+  it('converges an optimistic add to server identity, count, and order', async () => {
+    const { environment, respond } = createEnvironment();
+    const completion = startAdd(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: true,
+        postId,
+        type: 'PARTY',
+      }),
+    );
+    const optimisticReactionId = viewerReactionIds(environment)?.[2];
+    const optimisticCountId = reactionCountIds(environment)?.[2];
+    assert.ok(optimisticReactionId);
+    assert.ok(optimisticCountId);
+
+    assert.ok(environment.getStore().getSource().get(optimisticReactionId));
+    respond({
+      data: {
+        addReaction: {
+          post: {
+            __typename: 'Post',
+            id: postId,
+            reactionCounts: [
+              { __typename: 'ReactionCount', count: 7, type: 'PARTY' },
+              { __typename: 'ReactionCount', count: 4, type: 'EYES' },
+            ],
+            viewerReactions: [
+              { __typename: 'Reaction', id: 'reaction-party-server', type: 'PARTY' },
+              { __typename: 'Reaction', id: 'reaction-eyes', type: 'EYES' },
+            ],
+          },
+          reaction: { __typename: 'Reaction', id: 'reaction-party-server', type: 'PARTY' },
+        },
+      },
+    });
+    await completion;
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-party-server', 'reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 7, type: 'PARTY' },
+      { count: 4, type: 'EYES' },
+    ]);
+    assert.equal(environment.getStore().getSource().get(optimisticReactionId), undefined);
+    assert.equal(environment.getStore().getSource().get(optimisticCountId), undefined);
+  });
+
+  it('accepts a nullable delete payload with GraphQL errors without guessing counts', async () => {
+    const { environment, respond } = createEnvironment();
+    const completion = startDelete(
+      environment,
+      createReactionOptimisticUpdater({
+        nextSelected: false,
+        postId,
+        type: 'HEART',
+      }),
+    );
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    respond({
+      data: { deleteReaction: { post: null, reactionId: null } },
+      errors: [{ message: 'partial delete response', path: ['deleteReaction', 'post'] }],
+    });
+    await completion;
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-heart', 'reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
       { count: 1, type: 'HEART' },
       { count: 1, type: 'EYES' },
     ]);

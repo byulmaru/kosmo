@@ -57,11 +57,16 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
           args:
             - web
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            - name: METRICS_PORT
+              value: "9464"
             - name: INTERNAL_API_ORIGIN
               value: {{ printf "http://%s" $apiServiceName | quote }}
             - name: PGPASSWORD

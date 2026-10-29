@@ -63,7 +63,9 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 
 - 자동으로 시작되고 5초를 넘으며 다른 content와 병렬로 표시되는 moving·blinking·scrolling information은 Level A인 [SC 2.2.2 Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html)에 따라 일시정지·중지·숨김 수단을 제공해야 한다. 자동으로 시작되고 다른 content와 병렬로 표시되는 auto-updating information은 같은 수단이나 갱신 빈도 제어를 제공해야 한다. 해당 움직임·갱신이 essential이면 공식 예외를 적용한다.
 - KOSMO의 duration, easing과 component별 대체 규칙은 [motion.md](./motion.md)를 따른다. 프로덕션 계약은 OS reduced-motion 설정만 입력으로 사용하며, 구현 전환은 DSN-19가 소유한다. slide·scale·ripple·rotation loop를 제거하되 focus, loading, success, error, selected와 announcement 의미는 유지한다.
-- reduced-motion loading은 회전 spinner를 정지 화면으로 남기지 않는다. spinner를 숨기고 정적 `···`와 loading 문구로 대체한다.
+- reduced-motion loading은 회전 spinner를 정지 화면으로 남기지 않고 정적 `···`로 대체한다. 기존에 보이던 consumer 문구는 그대로 유지하며, 접근성 이름만으로 새 문구를 만들지 않는다.
+
+PROD-1043의 loading consumer는 정상 모드에서 플랫폼 `ActivityIndicator`의 accessible name과 busy 상태를 유지하고, OS reduced-motion에서는 호출자가 숨기지 않은 경우 정적 `···`가 같은 accessible name을 유지한다. 기존에 보이던 consumer 문구와 live-region은 그대로 유지하고, 접근성 이름만으로 새 visible copy를 만들지 않는다. 작은 upload tile·icon action은 slot geometry를 유지하고, outer action name·busy 또는 parent live-region을 유지한다. Storybook presentation과 React test renderer는 표시·name·busy·live-region 계약을 확인하는 자동화 증거로 분류하며, 실제 iOS·Android timing, VoiceOver·TalkBack announcement와 Native navigation·scroll 동작은 별도 runtime 증거로 기록한다. 앱이 직접 요청하는 Viewer·Composer scroll은 각 호출의 `animated` 값과 reduced-motion 분기를 앱 코드가 소유하고, user gesture와 framework default navigation은 이 loading 증거로 대체하지 않는다.
 
 ### 6. Visual geometry와 interactive target
 

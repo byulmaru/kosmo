@@ -68,15 +68,18 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {};
 
 export const Mobile390Clean: Story = {
+  parameters: { controls: { disable: true } },
   render: () => <ProfileEditStory />,
 };
 
 export const Compact1024Clean: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoProfileCompact' } },
+  parameters: { controls: { disable: true } },
   render: () => <ProfileEditStory />,
 };
 
 export const Full1440DarkDirty: Story = {
   globals: { theme: 'dark', viewport: { isRotated: false, value: 'kosmoProfileFull' } },
+  parameters: { controls: { disable: true } },
   render: () => <ProfileEditStory startingValue={{ ...initialDraft, bio: '바뀐 소개입니다.' }} />,
 };

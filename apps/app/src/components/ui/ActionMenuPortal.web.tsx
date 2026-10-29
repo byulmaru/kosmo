@@ -1,6 +1,6 @@
-import { createPortal } from 'react-dom';
+import { OverlayPortal } from '@/components/ui/OverlayPortal';
 import type { ReactNode } from 'react';
 
 export function ActionMenuPortal({ children }: { children: ReactNode }): ReactNode {
-  return createPortal(children, document.body);
+  return <OverlayPortal>{children}</OverlayPortal>;
 }

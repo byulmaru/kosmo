@@ -31,13 +31,6 @@ const PostListRowFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      media {
-        id
-        altText
-        url
-      }
-      contentWarning
     }
     repostSource {
       ...PostSourcePreview_source
@@ -64,14 +57,6 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      contentWarning
-      document
-      media {
-        id
-        altText
-        url
-      }
     }
     profile {
       avatar {
@@ -338,7 +323,7 @@ function PostListItemCard({
           }
         }}
         role={article ? 'article' : undefined}
-        style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
+        style={[style, Platform.OS === 'web' ? { cursor: 'pointer' } : undefined]}
         tabIndex={-1}
         testID="post-list-item-card"
       >

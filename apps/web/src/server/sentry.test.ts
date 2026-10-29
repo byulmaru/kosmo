@@ -50,6 +50,7 @@ describe('Web BFF Sentry configuration', () => {
 
     expect(sentry.init).toHaveBeenCalledWith(
       expect.objectContaining({
+        enableLogs: true,
         environment: 'production',
         initialScope: { tags: { runtime: 'web-bff' } },
         release: 'kosmo@abc123',

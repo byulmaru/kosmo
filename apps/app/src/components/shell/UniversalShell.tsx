@@ -26,7 +26,7 @@ import { useNativeStartupRecovery } from '@/relay/NativeStartupRecoveryContext';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { breakpoints, spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
@@ -198,12 +198,18 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
   const publicContentRoute =
+    pathname === '/' ||
     routeSegments.at(-1) === '[profileHandle]' ||
-    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]');
+    (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') ||
+    (routeSegments.at(-3) === 'hashtags' &&
+      routeSegments.at(-2) === '[hashtagId]' &&
+      routeSegments.at(-1) === 'posts');
   const guestPublicContent = web && status === 'guest' && publicContentRoute;
+  const guestMobileRoot = guestPublicContent && pathname === '/' && width < breakpoints.compact;
   const invitationVisible = guestPublicContent && !invitationDismissed;
   const invitationPlacement = getPublicContentInvitationPlacement({
     height,
+    pinToBottom: guestMobileRoot,
     safeAreaBottom: insets.bottom,
     width,
   });
@@ -492,12 +498,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
               ? {
                   ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
                   paddingBottom:
-                    getBottomTabBarContentHeight(Platform.OS) +
                     invitationReservedHeight +
-                    insets.bottom,
+                    (guestMobileRoot
+                      ? 0
+                      : getBottomTabBarContentHeight(Platform.OS) + insets.bottom),
                 }
               : null,
           ]}
+          testID="universal-shell-content"
         >
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
             <RelayActorBoundary>
@@ -519,10 +527,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
                 Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
               );
             }}
+            pinToBottom={guestMobileRoot}
             visible={invitationVisible}
           />
         </View>
-        {mobile ? (
+        {mobile && !guestMobileRoot ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar onComposeOpen={openComposer} profile={profile} />
           </View>

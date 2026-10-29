@@ -81,11 +81,11 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
 
 - Post에 하나 이상의 Reaction이 있을 때만 요약 row를 표시한다. Reaction이 없으면 별도 빈 영역이나 zero-count Type을 표시하지 않는다.
 - standalone `반응` 제목은 표시하지 않는다.
-- count는 server가 제공한 양수 값을 사용하고 조회된 Profile 수로 다시 계산하지 않는다. 표시 순서는 Product가 공급한 ordered Type을 그대로 사용하며 Design System이나 `ReactionSummary`가 server 순서, count 내림차순, viewer 선택 여부 중 하나를 임의로 적용하지 않는다.
+- count는 server가 제공한 양수 값을 기준으로 표시하고 조회된 Profile 수로 다시 계산하지 않는다. mutation pending 중에는 사용자의 즉시 선택과 실패 시 복구를 보여 주기 위한 provisional count를 표시할 수 있으며, mutation이 끝나면 server count와 순서로 수렴한다. 표시 순서는 Product가 공급한 ordered Type을 그대로 사용하며 Design System이나 `ReactionSummary`가 server 순서, count 내림차순, viewer 선택 여부 중 하나를 임의로 적용하지 않는다.
 - Figma private source `__ReactionSummaryItem`은 `Platform=Web | iOS | Android`, `Item=Reaction | Selected | Overflow`를 제공한다. Web은 32px, iOS는 44pt, Android는 48dp 높이이며 모두 radius 12, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px을 사용한다. 현재 production runtime 반영은 연결된 Product 이슈가 별도로 소유한다.
 - 요약 row의 token은 Profile 목록을 여는 control이 아니라 해당 Type의 Reaction을 추가·삭제하는 toggle이다. 선택 상태, pending, error와 disabled 상태는 Quick Picker와 동일한 controller에서 공급한다.
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
-- 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. mutation이 성공하기 전에는 count나 선택 상태를 바꾸지 않는다.
+- 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. 조작 직후 선택 상태와 count를 반영하고, 해당 조작이 실패하면 그 조작만 복구한다.
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
 - 양수 count Type이 하나라도 있으면 token 뒤에 Reaction People 진입 control을 항상 한 개 표시한다. 모든 Type token과 `Ellipsis`가 한 줄에 완전히 들어가면 canonical `Ellipsis` icon을 사용하고 접근성 이름은 `반응한 프로필 보기`로 제공한다. 이 control의 hover·pressed surface는 바깥 둥근 사각형과 같은 radius를 사용한다. 이 control은 selected Profile이 없어도 사용할 수 있다.
 - 모든 Type token과 `Ellipsis`가 들어가지 않으면 같은 item geometry의 `+N` control로 trailing control을 교체한다. `N`은 숨겨진 Reaction Type 수이며 숨겨진 Reaction count의 합이 아니다. 접근성 이름은 `숨겨진 반응 유형 N개, 반응한 프로필 보기`로 제공한다.
@@ -126,14 +126,12 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
 ## Mutation과 공유 상태
 
 - private `PostReactionController`가 한 `reactionTarget`의 `viewerReactions`, Type별 pending·error, mutation과 Relay cache 갱신을 소유한다. generic context나 공용 mock infrastructure로 일반화하지 않는다.
-- Full Picker option과 요약 token은 같은 controller 상태와 toggle 동작을 사용한다. 한쪽에서 성공한 변경은 같은 surface의 다른쪽에 즉시 같은 server-confirmed 상태로 보인다.
-- 선택 상태와 count는 optimistic하게 바꾸지 않는다. mutation payload가 성공을 확인한 뒤에만 해당 Type의 상태를 반영한다.
-- add/delete mutation payload는 대상 Post의 현재 `viewerReactions`와 `reactionCounts`를 함께 반환한다. Relay가 이 Post를 정규화한 결과를 선택 상태와 count의 authoritative 상태로 사용하며, client에서 count delta를 계산하거나 별도 refetch로 보정하지 않는다.
-- 요청한 Type만 pending으로 막고 다른 Type은 계속 조작할 수 있다. 같은 Type의 연속 입력은 하나의 operation만 만들지만 서로 다른 Type은 동시에 진행할 수 있다.
-- mutation 실패는 해당 Type에 기존 inline `오류, 다시 시도` 상태를 표시하며 전역 toast를 추가하지 않는다. 실패 전 선택 상태와 count를 유지하고 재시도는 해당 Type의 오류만 지운다.
-- 필요한 mutation payload가 있으면 GraphQL `errors`가 함께 있어도 해당 Reaction 결과는 성공으로 처리한다. payload가 없거나 network가 실패하면 기존 선택 상태와 count를 유지한다.
-- mutation과 Relay cache 갱신은 요청을 시작한 selected Profile의 Relay Environment 안에서 끝낸다. 이전 actor의 늦은 성공·실패 callback은 새 actor의 popover, pending, error, 선택 또는 count UI를 변경하지 않는다.
-- 같은 actor의 여러 화면에서 동시에 보낸 요청을 client 전역에서 직렬화하지 않는다. 서로 다른 Type의 응답 순서는 보존되지만 같은 Type의 cross-surface 응답 순서는 server 결과에 따른다.
+- Full Picker option과 요약 token은 같은 controller 상태와 toggle 동작을 사용한다. 한쪽 surface에서 조작한 선택 상태와 count는 같은 actor와 Post를 보는 다른 surface에도 즉시 일치하고, mutation 완료 뒤 server 결과로 수렴한다.
+- 사용자 조작 직후 선택 상태와 count를 반영하며, mutation 성공 뒤에는 대상 Post가 제공한 server 선택 상태·count·순서로 최종 상태를 수렴한다.
+- 요청한 Type만 pending으로 막고 다른 Type은 계속 조작할 수 있다. 같은 controller 안에서 같은 Type의 연속 입력은 하나의 operation만 만들지만 서로 다른 Type은 동시에 진행할 수 있다. surface 간 동일 Type 경합 방어와 응답 순서 조정은 이 범위에 포함하지 않는다.
+- mutation 실패는 해당 Type의 조작만 복구하고 기존 inline `오류, 다시 시도` 상태를 표시하며 전역 toast를 추가하지 않는다. 재시도는 해당 Type의 오류만 지운다.
+- 필요한 mutation payload가 있으면 GraphQL `errors`가 함께 있어도 해당 Reaction 결과는 성공으로 처리한다. payload가 없거나 network가 실패하면 실패한 조작을 복구한다. delete payload의 `post:null` 또는 `reactionId:null`은 durable 성공으로 인정하되 count를 추정하지 않는다.
+- 이전 actor의 늦은 성공·실패 결과는 새 actor의 popover, pending, error, 선택 또는 count UI를 변경하지 않는다.
 
 ## 컴포넌트 경계
 
@@ -154,7 +152,7 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
 - Full Picker는 8 source variants, Web dialog와 Mobile 480·720 sheet geometry, 검색 결과 없음과 spinner-only Loading, reduced-motion 정적 대체를 검증한다. 실제 focus·dismiss·safe area·keyboard·screen reader 동작은 Figma 완료와 분리해 runtime에서 검증한다.
 - Reaction 요약은 Web 32px·iOS 44pt·Android 48dp item geometry, standalone 제목 제거, Quick Picker와 공유하는 selected·pending·error 상태를 검증한다.
 - 타임라인 `PostListItem`의 실제 content column인 Mobile 298px과 Center Web 524px에서 모든 Type과 `Ellipsis`가 들어가면 전체 token과 `Ellipsis`를 표시하는지, 그렇지 않으면 `+N` 폭을 먼저 예약한 뒤 완전히 들어가는 token만 Product 순서로 표시하는지 검증한다. `N`이 숨겨진 Type 수인지, wrap·horizontal scroll·부분 clipping이 없는지도 함께 확인한다. detail `PostLayout`의 390px·600px full-width row는 별도 consumer로 확인한다. viewer-selected 저빈도 Type 표본은 후보 표시일 뿐 정렬 규칙이나 표시 상한으로 해석하지 않는다.
-- mutation 성공 전 상태 불변, 성공 payload Post의 authoritative 선택·count·순서 정규화, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
+- mutation pending 중 선택·count의 즉시 반영, 0→1·1→0 전이와 zero-count row 제거, 성공 payload Post의 server 선택·count·순서 수렴, 실패한 조작만 복구, Type별 동시성·재시도, actor 전환 시 이전 결과 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
 - Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 trailing People control과 Profile 목록 조회는 가능해야 한다.
 - Reaction People route의 Back header, 양수 count pill 순서, 기본 선택, collapsed `앞 6개 + +N`, selected-outside-top-six 보존, expanded 전체 Type, item emoji, `ProfileListItem`의 팔로우·팔로잉·요청됨 상태, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다.

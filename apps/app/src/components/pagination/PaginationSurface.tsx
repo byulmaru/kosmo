@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { RefObject } from 'react';
@@ -49,7 +50,7 @@ export function PaginationSurface({
 
   return (
     <View ref={endRef} style={style}>
-      <ActivityIndicator accessibilityLabel={loadingLabel} color={theme.foregroundSecondary} />
+      <LoadingIndicator accessibilityLabel={loadingLabel} color={theme.foregroundSecondary} />
       <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
         {loadingLabel}
       </Text>

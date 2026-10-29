@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  bytea,
   check,
   index,
   integer,
@@ -39,6 +40,7 @@ export const Accounts = pgTable('account', {
   oidcSubject: text('oidc_subject').unique().notNull(),
   displayName: text('display_name').notNull(),
   featureFlags: text('feature_flags').array().notNull().default([]),
+  metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
   state: Enum.accountState('state').notNull(),
   createdAt: createdAt(),
 });
@@ -217,6 +219,10 @@ export const Instances = pgTable(
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    activityPubKeyPairs:
+      jsonb('activitypub_key_pairs').$type<
+        { publicKeyJwk: JsonWebKeyRecord; privateKeyJwk: JsonWebKeyRecord }[]
+      >(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -437,6 +443,22 @@ export const PostContents = pgTable(
   (table) => [index().on(table.postId)],
 );
 
+export const PostContentHashtags = pgTable(
+  'post_content_hashtag',
+  {
+    postContentId: uuid('post_content_id')
+      .notNull()
+      .references(() => PostContents.id, { onDelete: 'cascade' }),
+    hashtagId: uuid('hashtag_id')
+      .notNull()
+      .references(() => Hashtags.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.postContentId, table.hashtagId] }),
+    index().on(table.hashtagId, table.postContentId),
+  ],
+);
+
 export const PostMentions = pgTable(
   'post_mentions',
   {
@@ -643,10 +665,12 @@ export const ProfilePinnedPosts = pgTable(
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
     position: integer('position'),
+    orderKey: bytea('order_key'),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
     unique().on(table.profileId, table.position),
+    unique().on(table.profileId, table.orderKey),
     index().on(table.profileId, table.id),
     check(
       'profile_pinned_post_position_nonnegative',
@@ -654,6 +678,12 @@ export const ProfilePinnedPosts = pgTable(
     ),
   ],
 );
+
+// A positive, twenty-one-byte fraci integer: legacy rank, null flag, then UUID.
+// This virtual initialization is stable, idempotent and includes old writers.
+// NULL sorts after every integer, matching PostgreSQL position ASC NULLS LAST.
+// All legacy Local ranks are NULL, so their UUID ordering is unchanged.
+export const profilePinOrderKey = sql<Buffer>`coalesce(${ProfilePinnedPosts.orderKey}, decode('94', 'hex') || int4send(coalesce(${ProfilePinnedPosts.position}, 2147483647)) || case when ${ProfilePinnedPosts.position} is null then decode('01', 'hex') else decode('00', 'hex') end || uuid_send(${ProfilePinnedPosts.id}))`;
 
 export const Reactions = pgTable(
   'reaction',

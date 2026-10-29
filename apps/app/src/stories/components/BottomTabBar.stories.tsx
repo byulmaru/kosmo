@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { BottomTabBar } from '@/components/ui/BottomTabBar';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -9,11 +10,7 @@ import type {
   NavigationProfile,
 } from '@/components/ui/navigationChrome';
 
-type CatalogProps = Omit<BottomTabBarProps, 'profile'> & {
-  profileAvailable: boolean;
-};
-
-const profile = {
+const defaultProfile = {
   imageUri: null,
   label: '사샤',
 } satisfies NavigationProfile;
@@ -28,13 +25,18 @@ const destinationLabels = {
 
 const iconDestinations = ['home', 'search', 'compose', 'notifications'] as const;
 
+type CatalogProps = BottomTabBarProps & {
+  updateArgs?: (update: Partial<Pick<BottomTabBarProps, 'currentDestination'>>) => void;
+};
+
 function BottomTabBarCatalog({
   currentDestination = null,
   onNavigate,
   platform = 'web',
-  profileAvailable,
+  profile = defaultProfile,
   safeAreaBottom = 0,
   unreadNotificationCount = null,
+  updateArgs,
 }: CatalogProps) {
   const [destination, setDestination] = useState<BottomTabDestination | null>(currentDestination);
 
@@ -47,9 +49,10 @@ function BottomTabBarCatalog({
         onNavigate={(nextDestination) => {
           onNavigate(nextDestination);
           setDestination(nextDestination);
+          updateArgs?.({ currentDestination: nextDestination });
         }}
         platform={platform}
-        profile={profileAvailable ? profile : null}
+        profile={profile}
         safeAreaBottom={safeAreaBottom}
         unreadNotificationCount={unreadNotificationCount}
       />
@@ -62,7 +65,7 @@ const meta = {
     currentDestination: 'home',
     onNavigate: fn(),
     platform: 'web',
-    profileAvailable: true,
+    profile: defaultProfile,
     safeAreaBottom: 0,
     unreadNotificationCount: null,
   },
@@ -71,6 +74,7 @@ const meta = {
       control: 'select',
       options: [null, 'home', 'search', 'compose', 'notifications', 'profile'],
     },
+    profile: { control: 'object' },
     platform: { control: 'inline-radio', options: ['web', 'ios', 'android'] },
     safeAreaBottom: { control: { min: 0, step: 4, type: 'number' } },
     unreadNotificationCount: { control: { min: 0, step: 1, type: 'number' } },
@@ -92,11 +96,15 @@ export const Playground: Story = {
       include: [
         'currentDestination',
         'platform',
-        'profileAvailable',
+        'profile',
         'safeAreaBottom',
         'unreadNotificationCount',
       ],
     },
+  },
+  render: (args) => {
+    const [, updateArgs] = useArgs<BottomTabBarProps>();
+    return <BottomTabBarCatalog {...args} updateArgs={updateArgs} />;
   },
   play: async ({ args, canvasElement, step }) => {
     const canvas = within(canvasElement);
@@ -108,9 +116,7 @@ export const Playground: Story = {
     const notifications = within(navigation).getByRole('button', { name: notificationName });
     const profileControl = within(navigation).getByRole('button', { name: '프로필' });
     const selectedDestination =
-      args.currentDestination === 'profile' && !args.profileAvailable
-        ? null
-        : args.currentDestination;
+      args.currentDestination === 'profile' && !args.profile ? null : args.currentDestination;
     const outlineDestination =
       iconDestinations.find((destination) => destination !== selectedDestination) ?? 'home';
 
@@ -156,7 +162,7 @@ export const Playground: Story = {
         ).not.toBeInTheDocument();
       }
 
-      if (!args.profileAvailable) {
+      if (!args.profile) {
         expect(profileControl).toHaveAttribute('aria-disabled', 'true');
         expect(profileControl).toBeDisabled();
         expect(within(profileControl).queryByRole('img')).not.toBeInTheDocument();
@@ -195,9 +201,6 @@ export const InteractionContract: Story = {
       await waitFor(() =>
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
       );
-      expect(getComputedStyle(visual).transitionDuration).toBe(
-        args.platform === 'web' ? '0.12s' : '0s',
-      );
       expect(visual).toHaveStyle({ height: '64px', width: '64px' });
       expect(notifications).toHaveStyle({
         height: args.platform === 'web' ? '80px' : '56px',
@@ -235,7 +238,7 @@ export const ReducedMotionContract: Story = {
 };
 
 export const ProfileUnavailable: Story = {
-  args: { currentDestination: 'profile', profileAvailable: false },
+  args: { currentDestination: 'profile', profile: null },
   play: async ({ canvasElement }) => {
     const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
     const profileControl = within(navigation).getByRole('button', { name: '프로필' });

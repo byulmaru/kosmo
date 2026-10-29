@@ -6,7 +6,7 @@ export type ProfileEditImageDraft =
   | {
       kind: 'replacement';
       previewUri: string | null;
-      uploadState: 'ready' | 'uploading' | 'error';
+      uploadState: 'selected' | 'ready' | 'uploading' | 'error';
       failure?: ImageUploadFailure;
     }
   | { kind: 'removed'; previewUri: null };

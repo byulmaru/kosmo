@@ -1,5 +1,6 @@
 export * from './content-report';
 export * from './feedback';
+export * from './hashtag';
 export * from './post';
 export * from './profile';
 export * from './profile-tag';

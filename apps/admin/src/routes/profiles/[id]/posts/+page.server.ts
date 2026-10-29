@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { getProfileSummary, listProfilePosts, profileIdSchema } from '$lib/server/profiles';
+import { getProfileSummary, listProfilePosts, profileIdSchema } from '#lib/server/profiles.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url }) => {

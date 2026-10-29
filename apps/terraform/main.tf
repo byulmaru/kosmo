@@ -102,7 +102,22 @@ resource "google_firebase_apple_app" "kosmo" {
 
   display_name    = "Kosmo iOS"
   bundle_id       = local.app_identifier
+  team_id         = "848V8UCH45"
   deletion_policy = "PREVENT"
+}
+
+resource "google_firebase_web_app" "kosmo" {
+  provider = google-beta
+  project  = google_firebase_project.kosmo.project
+
+  display_name    = "Kosmo Web"
+  deletion_policy = "PREVENT"
+}
+
+data "google_firebase_web_app_config" "kosmo" {
+  provider   = google-beta
+  project    = google_firebase_project.kosmo.project
+  web_app_id = google_firebase_web_app.kosmo.app_id
 }
 
 # Deprecated: no repository workflow consumes Firebase App Distribution. Remove with a reviewed two-phase state retirement.

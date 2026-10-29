@@ -60,6 +60,14 @@ apps/app/src/stories/
 - 공용 Theme, Safe Area, Toast, Content Warning, Relay와 Router 환경은 `.storybook/preview.tsx`의 decorator와 mock을 재사용한다. component가 직접 소유하지 않는 provider를 일반 story마다 중복하지 않는다. 두 theme의 semantic style을 한 번에 비교하는 자동화 전용 `Tests` fixture만 명시적인 `ThemeProvider`를 중첩할 수 있다.
 - route·Relay·platform mock은 해당 story를 실행하는 데 필요한 최소 경계만 제공한다. mock 성공은 Production route, network, cache나 platform integration의 증거가 아니다.
 
+### UI 계약 변경과 consumer 경계
+
+- 기존 컴포넌트가 공개한 named prop·variant와 기존 조합 지점을 재사용하는 consumer 변경은 해당 Production source와 story 근거를 함께 제시하는 기능 PR에서 진행할 수 있다. 배치·간격 같은 caller-owned layout 조정도 이 경계에 속한다.
+- 새 component·variant·public visual prop을 만들거나 작은 시각 계약을 바꾸는 변경은 canonical Production component와 대표 story만 다루는 UI-only PR로 분리한다. route·data·Relay·API·mutation·cache·권한·feature flag 같은 runtime 통합은 후속 또는 별도 Product PR에서 연결한다.
+- Custom icon 예외 등록, canonical UI component와 대표 component/pattern story는 같은 UI-only PR에서 함께 진행할 수 있다. 별도 icon-only story는 필요하지 않으며 대표 component story로 검증한다. 실제 runtime consumer·Relay/route/data와 feature-flag 통합은 별도 feature/runtime PR로 분리하고, Storybook 검증만으로 해당 경로의 완료를 추론하지 않는다.
+- 기존 Production component의 state·variant·callback·interaction 지원을 실제로 보강하는 변경은 해당 DSN Storybook 이슈의 UI-only PR에서 진행한다. Story를 추가했다는 사실만으로 새로운 public 계약이나 runtime 완료를 추론하지 않는다.
+- `style`의 시각 override는 배치 조정과 다르다. color·background·border·font·shadow·opacity·outline 같은 component-owned visual 계약을 바꿀 때는 canonical component/recipe의 근거와 예외 책임을 명시하고, 기존 recipe를 유지하는 경우에도 새 디자인 승인으로 기록하지 않는다.
+
 ## Story 종류
 
 ### 재사용 UI
@@ -73,6 +81,8 @@ apps/app/src/stories/
 같은 기본 검토 표면을 `Default`, `Base`, `Playground`로 나누거나 같은 상태 조합을 Playground와 개별 story에 중복하지 않는다.
 
 모든 일반 story는 render 검토 표면이다. 자동화가 렌더 결과를 읽기만 하거나 수동 입력과 겹치지 않는 setup만 수행하면 같은 story에 둘 수 있지만, `userEvent`, `fireEvent`, 직접 click·focus, timer와 callback 실행처럼 상태나 Actions 기록을 바꾸는 검증은 component의 `Tests` 하위 title로 분리한다. Tests story는 결정적인 args와 비활성화된 Controls를 사용하고, main story에서는 `excludeStories`로 숨긴 뒤 얇은 `*.tests.stories.tsx` wrapper에서 한 번만 노출한다. viewport collision, fallback tab stop, timer·교체·cleanup, 환경 전환 뒤 늦은 완료 같은 전용 fixture나 lifecycle 검증도 같은 Tests 경계를 사용한다.
+
+`*.test.stories.*`와 `*.tests.stories.*`는 UI 계약 classifier의 component·pattern story 검사, 새 UI owner catalog, custom icon 대표 story 증거에서 제외되는 보조 테스트 표면이다. main `*.stories.*`가 Production component 대표 story를 담당하며, 이 classifier 제외는 Tests story에서 Production UI를 복제해도 된다는 뜻이 아니고 실제 Storybook test 실행을 끄지도 않는다.
 
 ### Page와 Screen
 
@@ -119,7 +129,8 @@ Storybook a11y는 `.storybook/preview.tsx`에서 `color-contrast`를 제외한�
 
 ## 범위 확대 기준
 
-- 기존 Production 컴포넌트가 이미 소유하는 상태·variant·callback·interaction 보강은 해당 DSN Storybook 이슈에서 진행할 수 있다.
+- 기존 Production 컴포넌트가 이미 소유하는 상태·variant·callback·interaction 보강은 해당 DSN Storybook 이슈의 UI-only PR에서 진행할 수 있다. 기존 named prop·variant를 재사용하는 consumer 조합과는 구분한다.
+- 새 Production component·variant·public visual prop 또는 작은 시각 계약 변경은 canonical component와 story를 먼저 갱신하는 UI-only PR로 분리하고, runtime feature 통합은 별도 Product PR로 연결한다.
 - route, data, Relay, API, mutation, cache, 권한과 제품 정책은 대응 Product 이슈로 보낸다.
 - 새 Production 컴포넌트, 제품 동작, dependency나 Storybook 설정이 필요하면 현재 이슈에서 조용히 확장하지 않고 대상 이슈·estimate·검증 책임을 먼저 확인한다.
 - Storybook static·browser 증거와 Web·iOS·Android runtime 증거를 PR과 이슈에서 분리해 보고한다.

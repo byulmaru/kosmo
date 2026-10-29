@@ -1,10 +1,20 @@
 # Local Timeline
 
-Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` canonical route를 사용한다. 공통 상단 탭의
+인증 사용자의 Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` canonical route를 사용한다. 공통 상단 탭의
 표시 문구는 `홈`, `로컬` 순서이고 최초 진입의 기본 route는 `/home`이다. Local을 별도 사이드바나 하단 탭 항목으로
 추가하지 않으며, `/local`에서도 기존 홈 내비게이션 항목을 현재 화면군의 active 진입점으로 유지한다.
 
+## 비로그인 Web 첫 화면
+
+PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 콘텐츠에 Local 목록을 표시한다. 로그인과 선택 Profile 없이 첫 조회·다음 페이지 조회와 공개 Profile·Post 탐색을 제공한다. 방문자 메뉴·긴 로고·하단 CTA는 [public-content-onboarding.md](./public-content-onboarding.md)를 따른다.
+
+비로그인 첫 화면의 헤더는 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다.
+
+공개 첫 화면에는 인증용 Home·Local 탭을 추가하지 않는다. 모바일 메뉴 헤더와 기존 목록의 로딩·빈 결과·오류·재시도 표현을 재사용하며, Profile이 없다는 이유로 공개 읽기를 Profile 준비 화면으로 바꾸지 않는다. 인증 `/local`과 Native의 Profile 준비·로그인 흐름은 그대로 유지한다.
+
 ## 화면 구조
+
+아래 Home·Local 탭과 재선택 규칙은 인증 타임라인에 적용한다.
 
 - 모바일과 Web 모두 기존 `PageHeader` 아래에 공용 `TabList`와 underline `Tab`을 배치한다.
 - 선택된 underline 탭은 하단 중앙의 `action/primary/base` 64×4px 채움 인디케이터로 표시한다. 인디케이터는
@@ -26,7 +36,10 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - Web에서 비활성 탭을 선택하면 해당 canonical route로 전환한다. Android/iOS에서는 현재 타임라인
   부모 route의 `timeline` 파라미터와 자식 콘텐츠만 바꾸며 새 Stack 화면이나 전환 animation을 만들지 않는다.
   `/home`과 `/local`은 Native 직접 진입의 canonical route로도 계속 동작한다.
-- 이미 선택된 Local 탭을 다시 선택하면 현재 목록의 최신 데이터를 다시 요청한다.
+- 이미 선택된 상단 홈 또는 로컬 탭을 다시 선택하면 현재 타임라인 맨 위로 스크롤한다. 이 입력으로 데이터를
+  다시 요청하거나 새로고침하지 않으며, 현재 탭과 route를 유지한다. 연속 입력이나 다른 경로의 새로고침 진행
+  중에도 스크롤만 수행한다. 이는 PROD-1162의 2026-10-22 사용자 결정이다.
+- 비활성 탭 선택은 기존 타임라인 진입 동작을 따른다. 이 재선택 정책으로 전환에 별도 새로고침을 추가하지 않는다.
 - Web의 sidebar·mobile drawer·하단 탭 바에서 `/local`의 active 홈 항목을 다시 실행하면 `/home`으로 이동하지
   않고 document scroll을 최상단으로 이동한 뒤 같은 Local 새로고침 경로를 실행한다.
 - compact·full Web의 Local 헤더 브랜드 마크도 현재 Local 타임라인을 재선택한다. 실제 link 대상은 `/home`으로
@@ -38,22 +51,22 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 
 ## 상태
 
-| 상태                    | 표시                                                                                                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 최초 로딩               | 공용 `StateView` loading으로 `로컬 타임라인을 불러오는 중입니다.`를 표시하고 보조 기술에 알린다                                                                                                              |
-| 빈 목록                 | `아직 게시글이 없어요` / `첫 게시글이 올라오면 여기에 표시돼요.`                                                                                                                                             |
-| 최초 오류 · Current     | 성공 목록을 렌더링한 적이 없으면 Web은 빈 목록 영역을, Android/iOS Native는 공통 2행 목록 skeleton을 표시하고 두 플랫폼군 모두 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다 |
-| 새로고침 중             | Web은 별도 상단 spinner를 표시하지 않는다. Android/iOS Native는 목록의 기본 당겨서 새로고침 진행 표시를 사용한다                                                                                             |
-| 새로고침 오류 · Current | 마지막 성공 목록을 유지하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다                                                                                                    |
-| 추가 로딩               | 기존 목록 아래 spinner와 `게시글을 더 불러오는 중입니다.` live status                                                                                                                                        |
-| 추가 오류 · Target      | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                                                                                                       |
-| Profile 없음            | Home과 같은 기존 Profile 생성·선택 흐름으로 이동하는 onboarding을 표시한다                                                                                                                                   |
+| 상태                      | 표시                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 최초 로딩                 | 공용 `StateView` loading으로 `로컬 타임라인을 불러오는 중입니다.`를 표시하고 보조 기술에 알린다                                                                                                              |
+| 빈 목록                   | `아직 게시글이 없어요` / `첫 게시글이 올라오면 여기에 표시돼요.`                                                                                                                                             |
+| 최초 오류 · Current       | 성공 목록을 렌더링한 적이 없으면 Web은 빈 목록 영역을, Android/iOS Native는 공통 2행 목록 skeleton을 표시하고 두 플랫폼군 모두 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다 |
+| 새로고침 중               | Web은 별도 상단 spinner를 표시하지 않는다. Android/iOS Native는 목록의 기본 당겨서 새로고침 진행 표시를 사용한다                                                                                             |
+| 새로고침 오류 · Current   | 마지막 성공 목록을 유지하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다                                                                                                    |
+| 추가 로딩                 | 기존 목록 아래 spinner와 `게시글을 더 불러오는 중입니다.` live status                                                                                                                                        |
+| 추가 오류 · Target        | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                                                                                                       |
+| 인증 Local의 Profile 없음 | Home과 같은 기존 Profile 생성·선택 흐름으로 이동하는 onboarding을 표시한다                                                                                                                                   |
 
 추가 로딩 spinner는 공용 secondary 전경 색상(`theme.foregroundSecondary`)을 사용한다.
 
-Local 탭 재선택과 Native pull-to-refresh의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는
+Local의 shell 홈 항목 재선택과 Native pull-to-refresh의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는
 동일 store에 적용하고, hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry
-toast를 표시한다. Web과 Native 모두 새로고침 요청이 진행 중이면 탭 재선택이나 당겨서 새로고침의 반복 입력을
+toast를 표시한다. Web과 Native 모두 새로고침 요청이 진행 중이면 새로고침을 실행하는 경로의 반복 입력을
 무시하고, 요청이 끝나면 다시 새로고침할 수 있다.
 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
 이탈·selected Profile 전환 때 stale toast를 정리한다.
