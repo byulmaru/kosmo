@@ -63,7 +63,7 @@ node scripts/check-ui-contract-pr.mjs --base <base-sha> --head <head-sha>
 
 검사 정책·config·legacy snapshot은 현재 PR base를 신뢰하고, changed paths와 source·catalog·visual/non-visual AST 비교는 base/head의 공통 조상부터 head까지의 변경만 분석한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 섞지 않는다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
 
-owner 판단은 `components/ui/**`와 실제 Production component를 import하는 `components`·`patterns` story에 한정한다. screen story만으로 새 canonical owner를 만들 수 없으며, platform sibling(`.native`/`.web`)은 같은 Production module 경계로 본다. `react-relay`, `expo-router`, `FeatureFlagsContext`와 같은 알려진 runtime 연결은 base/head 양쪽 source를 함께 보아 시각 변경과 feature 변경을 섞지 않는다.
+owner 판단은 `components/ui/**`와 실제 Production component를 import하는 `components`·`patterns` story에 한정한다. screen story만으로 새 canonical owner를 만들 수 없으며, platform sibling(`.native`/`.web`)은 같은 Production module 경계로 본다. `react-relay`, `expo-router`, `FeatureFlagsContext`와 같은 알려진 runtime 연결은 base/head 양쪽 source를 함께 보아 시각 변경과 feature 변경을 섞지 않는다. 이 판단은 실제 value·mixed·side-effect import만 runtime 연결로 보고, 선언형 `import type`와 named type-only import(`{ type X }`)는 제외한다.
 
 custom icon admission은 일반 enforcement-policy 완화와 구분한다. `eslint.config.mjs`의 top-level `svgOwnerFiles` literal array에 기존 entry를 그대로 두고 exact `apps/app/src/components/*` source path를 추가하는 경우만 후보가 되며, 다른 rule/config token 변경·glob·중복·traversal·runtime 혼합·catalog/story 누락은 거부한다. story와 source 관계는 현재 direct import와 bounded one-hop만 해석하고 임의의 re-export/whole-program dependency graph는 지원하지 않는다.
 

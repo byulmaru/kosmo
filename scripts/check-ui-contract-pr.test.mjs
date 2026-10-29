@@ -395,6 +395,35 @@ describe('check-ui-contract-pr', () => {
     assert.ok(result.errors.some((error) => error.includes('same source changes visual contract')));
   });
 
+  it('classifies type-only imports as UI while retaining runtime import classification', async () => {
+    const cases = [
+      { importSource: "import type { Href } from 'expo-router';", category: 'ui' },
+      { importSource: "import { type Href } from 'expo-router';", category: 'ui' },
+      { importSource: "import { useRouter } from 'expo-router';", category: 'feature' },
+      {
+        importSource: "import { useRouter, type Href } from 'expo-router';",
+        category: 'feature',
+      },
+      { importSource: "import 'expo-router';", category: 'feature' },
+    ];
+    for (const { importSource, category } of cases) {
+      const root = await createRepository({
+        'apps/app/src/components/Feature.tsx': `${importSource}\nexport const Feature = ({ href, onSelect }) => <div onClick={() => onSelect(href)} style={{ color: 'red' }} />;\n`,
+        'apps/app/src/stories/components/Feature.stories.tsx':
+          "import { Feature } from '@/components/Feature';\nexport default { component: Feature };\n",
+      });
+      await writeRepositoryFile(
+        root,
+        'apps/app/src/components/Feature.tsx',
+        `${importSource}\nexport const Feature = ({ href, onSelect }) => <div onClick={() => onOpen(href)} style={{ color: 'red' }} />;\n`,
+      );
+      commit(root, 'callback update');
+      const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(result.categories, [category]);
+    }
+  });
+
   it('retains mixed classification when a known feature-flag integration is removed', async () => {
     const root = await createRepository({
       'apps/app/src/components/Feature.tsx':

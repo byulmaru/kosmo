@@ -797,6 +797,9 @@ function isMixedSource(source, filePath) {
     return ast.body.some(
       (node) =>
         node.type === 'ImportDeclaration' &&
+        node.importKind !== 'type' &&
+        (node.specifiers.length === 0 ||
+          node.specifiers.some((specifier) => specifier.importKind !== 'type')) &&
         (node.source.value === 'react-relay' ||
           node.source.value === 'expo-router' ||
           node.source.value === '@/components/FeatureFlagsContext' ||
