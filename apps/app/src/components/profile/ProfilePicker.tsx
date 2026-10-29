@@ -171,11 +171,7 @@ function ProfilePickerOptionVisual({
         { backgroundColor: animatedBackground } as unknown as ViewStyle,
       ]}
     >
-      <Avatar
-        imageUri={profile.avatar?.url}
-        label={displayName}
-        size={selected ? 48 : 32}
-      />
+      <Avatar imageUri={profile.avatar?.url} label={displayName} size={selected ? 48 : 32} />
       <View style={styles.profileLabel}>
         <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
           {displayName}

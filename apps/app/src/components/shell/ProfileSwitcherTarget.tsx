@@ -131,7 +131,9 @@ export function ProfileSwitcherTarget({
               <View style={styles.compactAvatar}>
                 <Avatar
                   imageUri={selectedProfile?.avatar?.url}
-                  label={selectedProfile?.displayName ?? selectedProfile?.relativeHandle ?? '프로필'}
+                  label={
+                    selectedProfile?.displayName ?? selectedProfile?.relativeHandle ?? '프로필'
+                  }
                   size={40}
                 />
                 <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
@@ -219,11 +221,7 @@ export function ProfileSwitcherTarget({
                           aria-hidden
                           importantForAccessibility="no-hide-descendants"
                         >
-                          <Avatar
-                            imageUri={profile.avatar?.url}
-                            label={displayName}
-                            size={40}
-                          />
+                          <Avatar imageUri={profile.avatar?.url} label={displayName} size={40} />
                         </View>
                         <View style={styles.optionCopy}>
                           <Text
