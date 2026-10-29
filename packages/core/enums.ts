@@ -176,6 +176,7 @@ export type ProfileState = keyof typeof ProfileState;
 export const PushInstallationPlatform = {
   ANDROID: 'ANDROID',
   IOS: 'IOS',
+  WEB: 'WEB',
 } as const;
 export type PushInstallationPlatform = keyof typeof PushInstallationPlatform;
 

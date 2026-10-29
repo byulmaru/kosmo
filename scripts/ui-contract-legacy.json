@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "entries": {
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::TextArea::style::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::TextArea::style::outlineWidth::Numeric:0": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::IconButton::visualStyle::backgroundColor::Identifier:selected|Punctuator:?|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:actionPrimaryBase|Punctuator::|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:backgroundElevated": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::IconButton::visualStyle::borderColor::Identifier:selected|Punctuator:?|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:actionPrimaryBase|Punctuator::|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:borderDefault": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::IconButton::visualStyle::borderRadius::Identifier:radius|Punctuator:[|Numeric:12|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ComposerMediaEditor.tsx::IconButton::visualStyle::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing media editor surface recipe; preserve current target and focus visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextArea::style::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:0|Punctuator:]": {
+      "occurrences": 2,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextArea::style::outlineStyle::String:'solid'": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextArea::style::outlineWidth::Numeric:0": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextField::style::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]": {
+      "occurrences": 2,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextField::style::outlineWidth::Numeric:0": {
+      "occurrences": 2,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextArea::style::backgroundColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:backgroundElevated": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextArea::style::color::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:foregroundPrimary": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::IconButton::visualStyle::backgroundColor::Identifier:selected|Punctuator:?|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:stateSelectedSurface|Punctuator::|String:'transparent'": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::TextField::style::borderRadius::Identifier:radius|Punctuator:[|Numeric:0|Punctuator:]": {
+      "occurrences": 2,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposer.tsx::IconButton::visualStyle::borderRadius::Identifier:radius|Punctuator:[|Numeric:8|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing composer input/focus recipe; preserve current editor interaction visuals.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaControls.tsx::IconButton::visualStyle::borderRadius::Identifier:radii|Punctuator:.|Identifier:sm": {
+      "occurrences": 1,
+      "reason": "Existing composer media-tool recipe; preserve current action affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaControls.tsx::IconButton::visualStyle::backgroundColor::Identifier:colors|Punctuator:.|Identifier:light|Punctuator:.|Identifier:fixedBlack": {
+      "occurrences": 1,
+      "reason": "Existing composer media-tool recipe; preserve current action affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaControls.tsx::IconButton::visualStyle::borderRadius::Identifier:radii|Punctuator:.|Identifier:full": {
+      "occurrences": 1,
+      "reason": "Existing composer media-tool recipe; preserve current action affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaItemsTarget.tsx::IconButton::visualStyle::backgroundColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:backgroundSurface": {
+      "occurrences": 5,
+      "reason": "Existing media-item target recipe; preserve current media affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaItemsTarget.tsx::IconButton::visualStyle::borderColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:borderSubtle": {
+      "occurrences": 5,
+      "reason": "Existing media-item target recipe; preserve current media affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaItemsTarget.tsx::IconButton::visualStyle::borderRadius::Identifier:radius|Punctuator:.|Identifier:full": {
+      "occurrences": 5,
+      "reason": "Existing media-item target recipe; preserve current media affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/PostComposerMediaItemsTarget.tsx::IconButton::visualStyle::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]": {
+      "occurrences": 5,
+      "reason": "Existing media-item target recipe; preserve current media affordances.",
+      "reference": "docs/design/post-composer.md"
+    },
+    "apps/app/src/components/post/ReplyComposerSurface.tsx::IconButton::visualStyle::borderRadius::Identifier:radii|Punctuator:.|Identifier:full": {
+      "occurrences": 1,
+      "reason": "Existing reply composer action recipe; preserve current compact geometry.",
+      "reference": "docs/design/reply-composer.md"
+    },
+    "apps/app/src/components/profile/ProfileEditForm.tsx::TextField::style::color::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:foregroundMuted": {
+      "occurrences": 1,
+      "reason": "Existing profile-edit muted-input recipe; preserve current edit presentation.",
+      "reference": "docs/design/settings.md"
+    },
+    "apps/app/src/components/profile/ProfileEditForm.tsx::TextArea::style::color::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:foregroundMuted": {
+      "occurrences": 1,
+      "reason": "Existing profile-edit muted-input recipe; preserve current edit presentation.",
+      "reference": "docs/design/settings.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::style::borderRadius::JSXIdentifier:radius|Punctuator:.|JSXIdentifier:full": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::style::outlineWidth::Numeric:0": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::backgroundColor::Identifier:disabled|Punctuator:?|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:stateDisabledSurface|Punctuator::|String:'transparent'": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::borderColor::Identifier:disabled|Punctuator:?|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:borderDisabled|Punctuator::|JSXIdentifier:theme|Punctuator:.|JSXIdentifier:borderDefault": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::outlineColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:stateFocusRing": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::outlineOffset::Numeric:2": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::outlineStyle::Identifier:focusVisible|Punctuator:&&|Punctuator:!|Identifier:disabled|Punctuator:?|String:'solid'|Punctuator::|String:'none'": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::outlineWidth::Identifier:borderWidths|Punctuator:[|Numeric:2|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::borderRadius::Identifier:radius|Punctuator:.|Identifier:full": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileMoreButton.tsx::IconButton::visualStyle::borderWidth::Identifier:borderWidths|Punctuator:[|Numeric:1|Punctuator:]": {
+      "occurrences": 1,
+      "reason": "Existing profile overflow focus and circle recipe; preserve current accessibility geometry.",
+      "reference": "docs/design/accessibility.md"
+    },
+    "apps/app/src/components/profile/ProfileTagMuteAction.tsx::IconButton::style::borderRadius::Identifier:radius|Punctuator:.|Identifier:full": {
+      "occurrences": 2,
+      "reason": "Existing tag-mute action circle recipe; preserve current action geometry.",
+      "reference": "docs/design/profile-tags.md"
+    },
+    "apps/app/src/components/reaction/ReactionSummary.tsx::IconButton::visualStyle::backgroundColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:card": {
+      "occurrences": 1,
+      "reason": "Existing reaction summary trailing-action recipe; preserve current reaction geometry.",
+      "reference": "docs/design/reactions.md"
+    },
+    "apps/app/src/components/reaction/ReactionSummary.tsx::IconButton::visualStyle::borderColor::JSXIdentifier:theme|Punctuator:.|JSXIdentifier:border": {
+      "occurrences": 1,
+      "reason": "Existing reaction summary trailing-action recipe; preserve current reaction geometry.",
+      "reference": "docs/design/reactions.md"
+    },
+    "apps/app/src/components/reaction/ReactionSummary.tsx::IconButton::visualStyle::borderRadius::Identifier:radii|Punctuator:.|Identifier:md": {
+      "occurrences": 1,
+      "reason": "Existing reaction summary trailing-action recipe; preserve current reaction geometry.",
+      "reference": "docs/design/reactions.md"
+    },
+    "apps/app/src/components/reaction/ReactionSummary.tsx::IconButton::visualStyle::borderWidth::Numeric:1": {
+      "occurrences": 1,
+      "reason": "Existing reaction summary trailing-action recipe; preserve current reaction geometry.",
+      "reference": "docs/design/reactions.md"
+    },
+    "apps/app/src/components/shell/PublicContentInvitation.tsx::Button::style::borderRadius::Identifier:radius|Punctuator:.|Identifier:full": {
+      "occurrences": 1,
+      "reason": "Existing invitation CTA recipe; preserve current invitation geometry.",
+      "reference": "apps/app/src/components/shell/PublicContentInvitation.tsx"
+    }
+  }
+}

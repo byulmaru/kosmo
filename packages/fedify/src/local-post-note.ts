@@ -1,12 +1,14 @@
 import '@kosmo/core/polyfill';
 
-import { Image, Mention, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Hashtag, Image, Mention, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
   first,
+  Hashtags,
   Instances,
   Media,
+  PostContentHashtags,
   PostContents,
   PostMentions,
   Posts,
@@ -162,9 +164,10 @@ const projectLocalPostMentions = async (
       : [],
   );
   const mentionLinks = new Map<string, { readonly href: string; readonly label: string }>();
+  const remoteActorUris: URL[] = [];
   const tags: Mention[] = [];
   if (profileIds.length === 0) {
-    return { mentionLinks, tags };
+    return { mentionLinks, remoteActorUris, tags };
   }
 
   const rows = await db
@@ -210,9 +213,59 @@ const projectLocalPostMentions = async (
 
     mentionLinks.set(row.profileId, { href: profileUrl.href, label });
     tags.push(new Mention({ href: actorUri, name: label }));
+    if (!isLocal) {
+      remoteActorUris.push(actorUri);
+    }
   }
 
-  return { mentionLinks, tags };
+  return { mentionLinks, remoteActorUris, tags };
+};
+
+const projectLocalPostHashtags = async (
+  configuredLocalInstance: ConfiguredLocalInstance,
+  contentId: string,
+  document: PostContentDocumentV1,
+) => {
+  const hashtagIds = [
+    ...new Set(
+      document.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).flatMap((node) =>
+              node.type === 'hashtag' ? [node.attrs.hashtagId] : [],
+            )
+          : [],
+      ),
+    ),
+  ];
+  const hashtagLinks = new Map<string, string>();
+  const tags: Hashtag[] = [];
+  if (hashtagIds.length === 0) {
+    return { hashtagLinks, tags };
+  }
+
+  const rows = await db
+    .select({ displayName: Hashtags.displayName, id: Hashtags.id })
+    .from(PostContentHashtags)
+    .innerJoin(Hashtags, eq(Hashtags.id, PostContentHashtags.hashtagId))
+    .where(
+      and(
+        eq(PostContentHashtags.postContentId, contentId),
+        inArray(PostContentHashtags.hashtagId, hashtagIds),
+      ),
+    );
+  for (const { displayName, id } of rows) {
+    if (!displayName) {
+      continue;
+    }
+    const href = new URL(
+      `/hashtags/${encodeGlobalId('Hashtag', id)}/posts`,
+      configuredLocalInstance.canonicalOrigin,
+    );
+    hashtagLinks.set(id, href.href);
+    tags.push(new Hashtag({ href, name: `#${displayName}` }));
+  }
+
+  return { hashtagLinks, tags };
 };
 
 const projectLocalMediaAttachments = async (
@@ -359,18 +412,23 @@ export const projectLocalPostNote = async (
         ? PUBLIC_COLLECTION
         : undefined;
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
-  const { mentionLinks, tags } = await projectLocalPostMentions(
-    configuredLocalInstance,
-    note.contentId,
-    note.contentDocument,
-  );
+  const [mentions, hashtags] = await Promise.all([
+    projectLocalPostMentions(configuredLocalInstance, note.contentId, note.contentDocument),
+    projectLocalPostHashtags(configuredLocalInstance, note.contentId, note.contentDocument),
+  ]);
+  const tags = [...mentions.tags, ...hashtags.tags];
+  const ccs = cc && mentions.remoteActorUris.length > 0 ? [cc, ...mentions.remoteActorUris] : null;
 
   const object = new Note({
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
-    ...(cc ? { cc } : {}),
+    ...(ccs ? { ccs } : cc ? { cc } : {}),
     ...audience,
-    content: postContentDocumentToHtml(note.contentDocument, mentionLinks),
+    content: postContentDocumentToHtml(
+      note.contentDocument,
+      mentions.mentionLinks,
+      hashtags.hashtagLinks,
+    ),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
     emojiReactions: new URL(`/ap/note/${note.id}/emoji-reactions`, note.canonicalOrigin),

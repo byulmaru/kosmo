@@ -1,9 +1,10 @@
 import { RefreshCw, Volume2, VolumeOff } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { IconButton } from '@/components/ui/IconButton';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -309,7 +310,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
           visualSize={44}
         >
           {refreshing ? (
-            <ActivityIndicator
+            <LoadingIndicator
               accessibilityLabel={`${tagDisplayName} 뮤트 상태 확인 중`}
               color={theme.foregroundSecondary}
               size="small"
@@ -345,7 +346,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
           visualSize={44}
         >
           {pending || refreshing ? (
-            <ActivityIndicator
+            <LoadingIndicator
               accessibilityLabel={`${tagDisplayName} 뮤트 요청 처리 중`}
               color={theme.foregroundSecondary}
               size="small"

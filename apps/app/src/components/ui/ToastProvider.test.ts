@@ -142,6 +142,93 @@ test('다른 토스트가 잠시 표시된 뒤 지속 재시도 토스트를 복
   await act(async () => renderer.unmount());
 });
 
+test('실패 토스트 도중 도착한 지속 재시도는 기존 표시 시간이 끝난 뒤 복원된다', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+  mock.timers.enable({ apis: ['setTimeout'] });
+  entered = true;
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+    });
+    const hasMessage = (message: string) =>
+      renderer!.root.findAllByType(TextHost).some((node) => node.props.children === message);
+    await act(async () => {
+      api?.showToast('팔로우 실패', { tone: 'danger' });
+    });
+    await act(async () => mock.timers.tick(1000));
+    let dismissPersistent: (() => void) | undefined;
+    await act(async () => {
+      dismissPersistent = api?.showToast('페이지 재시도', {
+        action: { label: '다시 시도', onPress: () => undefined },
+        persistent: true,
+        tone: 'danger',
+      });
+    });
+    assert.equal(hasMessage('팔로우 실패'), true);
+    assert.equal(hasMessage('페이지 재시도'), false);
+    await act(async () => mock.timers.tick(1999));
+    assert.equal(hasMessage('팔로우 실패'), true);
+    await act(async () => mock.timers.tick(1));
+    assert.equal(hasMessage('팔로우 실패'), false);
+    assert.equal(hasMessage('페이지 재시도'), true);
+    await act(async () => mock.timers.tick(3000));
+    assert.equal(hasMessage('페이지 재시도'), true);
+    await act(async () => dismissPersistent?.());
+    assert.equal(renderer!.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  } finally {
+    await act(async () => renderer?.unmount());
+    mock.timers.reset();
+    entered = false;
+  }
+});
+
+test('복원 전 정리한 지속 재시도는 실패 토스트가 끝나도 다시 나타나지 않는다', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+  mock.timers.enable({ apis: ['setTimeout'] });
+  entered = true;
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+    });
+    await act(async () => {
+      api?.showToast('팔로우 실패', { tone: 'danger' });
+    });
+    await act(async () => mock.timers.tick(1000));
+    let dismissPersistent: (() => void) | undefined;
+    await act(async () => {
+      dismissPersistent = api?.showToast('페이지 재시도', {
+        persistent: true,
+        tone: 'danger',
+      });
+    });
+    await act(async () => dismissPersistent?.());
+    assert.equal(
+      renderer!.root.findAllByType(TextHost).some((node) => node.props.children === '팔로우 실패'),
+      true,
+    );
+    await act(async () => mock.timers.tick(2000));
+    assert.equal(renderer!.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  } finally {
+    await act(async () => renderer?.unmount());
+    mock.timers.reset();
+    entered = false;
+  }
+});
+
 test('toast dwell timer starts after its enter motion finishes', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
@@ -169,8 +256,9 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
     await act(async () => {
       renderer = create(createElement(ToastProvider, null, createElement(Harness)));
     });
+    let dismissTemporary: (() => void) | undefined;
     await act(async () => {
-      api?.showToast('저장했습니다.', { tone: 'success' });
+      dismissTemporary = api?.showToast('저장했습니다.', { tone: 'success' });
     });
     assert.deepEqual(delays, []);
 
@@ -179,6 +267,7 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
       renderer?.update(createElement(ToastProvider, null, createElement(Harness))),
     );
     assert.deepEqual(delays, [3000]);
+    await act(async () => dismissTemporary?.());
     let dismiss: (() => void) | undefined;
     await act(async () => {
       dismiss = api?.showToast('이미지를 불러오지 못했어요.', {

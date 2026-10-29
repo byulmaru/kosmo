@@ -1,3 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
@@ -18,7 +21,10 @@ import {
   readPushInstallationId,
   writePushInstallationId,
 } from './pushStorage';
-import { useNativePushNotificationResponses } from './useNativePushNotificationResponses.native';
+import {
+  OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX,
+  useNativePushNotificationResponses,
+} from './useNativePushNotificationResponses.native';
 import type { PropsWithChildren } from 'react';
 import type { NativePushRegisterInstallationMutation as NativePushRegisterInstallationMutationType } from './__generated__/NativePushRegisterInstallationMutation.graphql';
 import type { NativePushUnregisterInstallationMutation as NativePushUnregisterInstallationMutationType } from './__generated__/NativePushUnregisterInstallationMutation.graphql';
@@ -56,12 +62,19 @@ const NativePushUnregisterInstallationMutation = graphql`
 `;
 
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
+const LAST_NOTIFIED_OTA_UPDATE_ID_KEY = '@kosmo/native-updates/last-notified-update-id';
 
 export function NativePushProvider({ children }: PropsWithChildren) {
   const session = useSession();
+  const { downloadedUpdate, isUpdatePending } = Updates.useUpdates();
+  const pendingOtaUpdateId =
+    isUpdatePending && downloadedUpdate?.type === Updates.UpdateInfoType.NEW
+      ? downloadedUpdate.updateId
+      : null;
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const installationIdRef = useRef<string | null | undefined>(undefined);
+  const hasRunInitialPermissionSyncRef = useRef(false);
   const tokenSyncQueueRef = useRef(Promise.resolve());
   const [commitRegister] = useMutation<NativePushRegisterInstallationMutationType>(
     NativePushRegisterInstallationMutation,
@@ -169,12 +182,21 @@ export function NativePushProvider({ children }: PropsWithChildren) {
   );
 
   const syncPermissionAndToken = useCallback(
-    async (refreshedToken?: string) => {
+    async (refreshedToken?: string, requestIfUndetermined = false) => {
       if (sessionRef.current.status !== 'valid') {
         return;
       }
 
-      const status = await getNativeNotificationPermissionStatus();
+      let status = await getNativeNotificationPermissionStatus();
+      if (sessionRef.current.status !== 'valid') {
+        return;
+      }
+      if (status.status === 'undetermined' && requestIfUndetermined) {
+        status = await requestNativeNotificationPermission();
+        if (sessionRef.current.status !== 'valid') {
+          return;
+        }
+      }
       if (!status.granted) {
         if (status.status !== 'denied') {
           return;
@@ -214,6 +236,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (session.status !== 'valid') {
       installationIdRef.current = undefined;
+      hasRunInitialPermissionSyncRef.current = false;
       return;
     }
 
@@ -226,7 +249,9 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       }
     });
 
-    void syncPermissionAndToken().catch(() => undefined);
+    const requestIfUndetermined = !hasRunInitialPermissionSyncRef.current;
+    hasRunInitialPermissionSyncRef.current = true;
+    void syncPermissionAndToken(undefined, requestIfUndetermined).catch(() => undefined);
 
     return () => {
       unsubscribe();
@@ -234,7 +259,31 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     };
   }, [session.status, syncPermissionAndToken]);
 
-  useNativePushNotificationResponses();
+  useEffect(() => {
+    if (!pendingOtaUpdateId) {
+      return;
+    }
+
+    // This effect synchronizes Expo's native update snapshot with the OS notification center.
+    void AsyncStorage.getItem(LAST_NOTIFIED_OTA_UPDATE_ID_KEY)
+      .then(async (lastNotifiedUpdateId) => {
+        if (lastNotifiedUpdateId === pendingOtaUpdateId) {
+          return;
+        }
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '업데이트가 준비되었어요.',
+            body: '누르면 앱을 재시작해 적용합니다.',
+          },
+          identifier: `${OTA_UPDATE_NOTIFICATION_IDENTIFIER_PREFIX}${pendingOtaUpdateId}`,
+          trigger: null,
+        });
+        await AsyncStorage.setItem(LAST_NOTIFIED_OTA_UPDATE_ID_KEY, pendingOtaUpdateId);
+      })
+      .catch(() => undefined);
+  }, [pendingOtaUpdateId]);
+
+  useNativePushNotificationResponses(pendingOtaUpdateId);
 
   return (
     <NativePushPermissionActionContext.Provider value={requestPermissionAndSync}>

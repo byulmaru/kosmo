@@ -1,0 +1,13 @@
+diff --git a/Libraries/Components/Keyboard/KeyboardAvoidingView.js b/Libraries/Components/Keyboard/KeyboardAvoidingView.js
+index 4f1cd85848f09d77a7b1e0ddb647688a0e5026e6..3c5251f2935bf82d31da61c11e36858fed67436a 100644
+--- a/Libraries/Components/Keyboard/KeyboardAvoidingView.js
++++ b/Libraries/Components/Keyboard/KeyboardAvoidingView.js
+@@ -208,7 +208,7 @@ class KeyboardAvoidingView extends React.Component<
+       ];
+     } else {
+       this._subscriptions = [
+-        Keyboard.addListener('keyboardDidHide', this._onKeyboardChange),
++        Keyboard.addListener('keyboardDidHide', this._onKeyboardHide),
+         Keyboard.addListener('keyboardDidShow', this._onKeyboardChange),
+       ];
+     }

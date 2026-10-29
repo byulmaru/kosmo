@@ -1,4 +1,4 @@
-import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -491,6 +491,8 @@ function toPreview(post: {
     return null;
   }
 
+  const document = readPostContentDocumentV1(content.document);
+
   return {
     bodyText: content.bodyText,
     contentWarning: content.contentWarning ?? null,
@@ -500,8 +502,6 @@ function toPreview(post: {
         id,
         url: url ?? null,
       })) ?? null,
-    sensitiveMedia: isPostContentDocumentV1(content.document)
-      ? content.document.body.attrs?.sensitiveMedia === true
-      : false,
+    sensitiveMedia: document?.body.attrs?.sensitiveMedia === true,
   };
 }

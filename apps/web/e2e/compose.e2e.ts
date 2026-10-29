@@ -543,7 +543,10 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   await expect(page.getByText(body, { exact: true })).toBeVisible();
 
   const reselectResponsePromise = waitForGraphQLOperation(page, 'LocalContentRefetchQuery');
-  await page.getByRole('tab', { name: '로컬' }).click();
+  await page
+    .getByRole('navigation', { name: '주요 메뉴' })
+    .getByRole('link', { name: '홈', exact: true })
+    .click();
   const reselectResponse = await reselectResponsePromise;
   const reselectBody = (await reselectResponse.json()) as {
     data?: {
@@ -666,25 +669,21 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
     page,
     'PostComposerIssueMediaUploadUrlMutation',
   );
-  const completeMediaResponse = waitForGraphQLOperation(
-    page,
-    'PostComposerCompleteMediaUploadMutation',
-  );
   await pasteComposerImage(input);
   const issueMediaOperation = readGraphQLOperation((await issueMediaResponse).request().postData());
-  await completeMediaResponse;
+  await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
   expect(issueMediaOperation?.variables).toMatchObject({
     input: { actorProfileId: selectedProfileId },
   });
-  expect(completedMediaId).toBe(mediaId);
-  await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
   await expect(input).toHaveValue(body);
   await composer.getByRole('button', { name: '첨부 이미지 1 제거', exact: true }).click();
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toHaveCount(0);
 
+  expect(completedMediaId).toBeNull();
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   const response = await createPostResponse;
+  expect(completedMediaId).toBeNull();
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
@@ -938,15 +937,9 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
     page,
     'PostComposerIssueMediaUploadUrlMutation',
   );
-  const completeMediaResponse = waitForGraphQLOperation(
-    page,
-    'PostComposerCompleteMediaUploadMutation',
-  );
   await pasteComposerImage(input);
   await issueMediaResponse;
-  await completeMediaResponse;
   expect(issueMediaProfileId).toBe(firstProfileId);
-  expect(completedMediaId).toBe(mediaId);
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
 
   const edit = composer.getByRole('button', { name: '첨부 이미지 1 편집', exact: true });
@@ -985,8 +978,15 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   await expect(composer.getByRole('switch', { name: '민감한 이미지' })).toBeChecked();
   await composer.getByRole('button', { name: '완료', exact: true }).click();
 
+  expect(completedMediaId).toBeNull();
+  const completeMediaResponse = waitForGraphQLOperation(
+    page,
+    'PostComposerCompleteMediaUploadMutation',
+  );
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
+  await completeMediaResponse;
+  expect(completedMediaId).toBe(mediaId);
   await createPostResponse;
   expect(createPostVariables).toMatchObject({
     input: {

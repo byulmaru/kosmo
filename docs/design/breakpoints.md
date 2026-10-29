@@ -60,7 +60,7 @@ landing은 기존 개인정보 처리방침 링크만 제공하며, 인증 후 �
 `/settings/info`에 둔다. 기존 full Web 우측 레일의 개인정보 처리방침 footer도 유지하고, Sidebar·mobile
 drawer에는 정책 링크를 추가하지 않는다.
 
-- `≥ full`: 우측 레일 최하단에 `textSecondary` 색의 개인정보 처리방침 footer를 둔다. Production branch
+- `≥ full`: 우측 레일 최하단에 `textSecondary` 색과 bold 글씨의 개인정보 처리방침 footer를 둔다. Production branch
   전환 중에는 표시 tag 공급 방식이 정해지지 않았으므로 기존 `· 버전: <Git tag>` 정적 텍스트를 렌더링하지
   않는다. 선택한 Profile이 없어 컴포저가 표시되지 않아도 개인정보 처리방침 링크는 유지하며, 기존 위치보다
   viewport 하단에 가깝게 배치한다. 표시 tag 공급과 version label 재활성화는 후속 변경에서 결정한다.
@@ -70,7 +70,7 @@ drawer에는 정책 링크를 추가하지 않는다.
   one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다. Native channel
   row/selector는 [settings.md](./settings.md)의 Native channel 계약을 따른다.
   Web `정보` detail은 세 policy link만 유지한다.
-- PROD-836의 비로그인 공개 Profile·Post에서는 모든 Web 폭에서 닫을 수 있는 하단 가입 안내를 표시하고 full 우측 레일의 중복 가입하기·로그인 버튼과 별도의 가입·소개 안내 카드는 표시하지 않는다. 하단 가입 안내의 `KOSMO에서 계속하기` 버튼 아래에 `팀 별마루 소개`와 `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다. 팀 소개는 `https://byulmaru.co/about-us`, 개인정보처리방침은 기존 `/privacy`로 연결하며, sidebar·mobile drawer에는 정책 링크를 추가하지 않는다.
+- PROD-836의 비로그인 공개 Profile·Post에서는 모든 Web 폭에서 닫을 수 있는 하단 가입 안내를 표시하고 full 우측 레일의 중복 가입하기·로그인 버튼과 별도의 가입·소개 안내 카드는 표시하지 않는다. 하단 가입 안내의 `KOSMO에서 계속하기` 버튼 아래에 `팀 별마루 소개`와 bold `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다. 팀 소개는 `https://byulmaru.co/about-us`, 개인정보처리방침은 기존 `/privacy`로 연결하며, sidebar·mobile drawer에는 정책 링크를 추가하지 않는다.
 - 그 밖의 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지하며 Native channel selector나 복구 진입점은
   추가하지 않는다. 준비되지 않은 Account form,
   자동 삭제, 공통 신고 navigation은 추가하지 않는다.
@@ -239,7 +239,8 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 
 KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` thumb와 투명 track을 사용하는 얇은 scrollbar를 기본으로 한다. Overlay 내부 scroller는 stable gutter도 예약해 scrollbar가 content 위를 덮지 않게 한다. Rail은 header와 본문의 좌우 기준선을 유지하도록 gutter를 추가하지 않는다. document와 sticky rail 같은 바깥 scroll owner에도 gutter를 추가하지 않는다. 기능별로 시각적 scrollbar를 숨기는 horizontal gallery·tab scroller는 기존 navigation·swipe·keyboard 도달 계약과 함께 예외로 유지한다.
 
-- `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
+- 비로그인 모바일 Web의 정확한 `/`에서는 PROD-1232에 따라 하단 탭과 탭용 공간을 제거한다. 기존 방문자 안내 전체를 safe area를 고려해 화면 하단에 고정하고 실제 높이만큼 콘텐츠 공간을 확보한다. 안내를 닫으면 해당 공간도 제거하며 상단 메뉴 진입은 유지한다. 다른 route·인증 상태·Native에는 적용하지 않는다.
+- `< compact`에서는 위 예외를 제외하고 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `< compact` Web과 Android/iOS의 mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과
   `피드백 보내기`·`설정 및 기타`·`로그아웃` footer actions를 함께 스크롤한다. `설정 및 기타`를 열어 `설정`과
   `로그아웃` 하위 행이 추가되어도 같은 흐름을 유지한다. Profile summary는 drawer chrome으로 유지하고, profile

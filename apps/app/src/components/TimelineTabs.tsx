@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { RouteTabList } from '@/components/ui/RouteTabList';
 import { Tab } from '@/components/ui/Tabs';
 import type { TabOption } from '@/components/ui/Tabs';
@@ -9,18 +11,19 @@ const options: readonly TabOption<TimelineTab>[] = [
   { label: '로컬', value: 'local' },
 ];
 
-export function TimelineTabs({
-  onReselect,
-  value,
-}: {
-  onReselect?: () => void;
-  value: TimelineTab;
-}) {
+export function TimelineTabs({ value }: { value: TimelineTab }) {
+  const shellChrome = useShellChrome();
   return (
     <RouteTabList
       accessibilityLabel="타임라인"
       href={(nextValue) => (nextValue === 'home' ? '/home' : '/local')}
-      onReselect={onReselect}
+      onReselect={() => {
+        if (Platform.OS === 'web') {
+          window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
+        } else {
+          shellChrome?.reselectTab?.('home');
+        }
+      }}
       param="timeline"
       value={value}
       variant="underline"

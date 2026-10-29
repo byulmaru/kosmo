@@ -278,6 +278,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Home, Search, Detail, Profile 게시물 메뉴에서 같은 owner 고정·해제 action을 제공한다. Profile pinned segment는
   authoritative order를 따르며 chronology와 분리한다.
 
+### 고정글 순서 변경 · PROD-1234
+
+- 현재 선택한 Local Profile의 Owner와 Member는 Profile pinned segment의 각 게시글 더보기 메뉴에서 `위로 이동`과
+  `아래로 이동`을 선택할 수 있다. 첫 게시글에는 `위로 이동`, 마지막 게시글에는 `아래로 이동`을 표시하지 않는다.
+  조회 가능한 고정글이 하나뿐이면 두 항목을 모두 생략한다. 다른 Profile과 Remote Profile에는 순서 변경 항목을 제공하지 않는다.
+- 순서 변경 항목은 기존 고정·해제 항목 다음, `삭제` 앞에 둔다. `링크 복사`의 첫 행과 `삭제`의 마지막 행을 유지한다.
+  Home·Search·Detail 및 일반 chronology에는 순서 변경 항목을 추가하지 않는다.
+- 메뉴에서 이동을 선택하면 별도 확인창이나 편집 화면 없이 즉시 저장하고 메뉴를 닫는다. 저장 성공 후 현재 고정 목록에
+  저장된 순서를 표시한다. 기존 고정글의 구성과 일반 chronology는 유지한다.
+- 같은 고정 목록의 순서 저장 중에는 추가 이동을 막고 busy·disabled 상태를 전달한다. 실패하면 이전에 확인한 목록 순서를
+  유지하고 공용 한국어 오류 Toast로 알린다. 사용자는 메뉴를 다시 열어 재시도할 수 있다.
+- 메뉴가 닫히면 같은 게시글의 More trigger로 focus를 복원한다. Web keyboard와 Native touch·보조 기술에서 같은 이동을
+  제공하며, 기존 메뉴의 dismiss와 플랫폼별 입력 target을 유지한다. 드래그 전용 조작이나 새 성공 확인 단계는 추가하지 않는다.
+
 ### Storybook 이관 · PROD-863
 
 - 시각·상태 근거는 [DSN-55 handoff](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4827-6858)와

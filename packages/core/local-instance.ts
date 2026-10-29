@@ -13,7 +13,15 @@ let configuredLocalInstancePromise: Promise<ConfiguredLocalInstance> | undefined
 const loadConfiguredLocalInstance = async (options: LocalInstanceOptions = {}) => {
   const config = parseLocalInstanceConfig(options);
   const instance = await db
-    .select()
+    .select({
+      canonicalOrigin: Instances.canonicalOrigin,
+      createdAt: Instances.createdAt,
+      domain: Instances.domain,
+      id: Instances.id,
+      kind: Instances.kind,
+      state: Instances.state,
+      updatedAt: Instances.updatedAt,
+    })
     .from(Instances)
     .where(eq(Instances.domain, config.domain))
     .limit(1)

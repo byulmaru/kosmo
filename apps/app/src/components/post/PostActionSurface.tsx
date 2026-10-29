@@ -1,4 +1,5 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
+import { useContext } from 'react';
 import { graphql, useFragment } from 'react-relay';
 import {
   getContentReportBlockProfile,
@@ -16,6 +17,7 @@ import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
 import { useProfilePinAction } from './ProfilePinAction';
+import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
@@ -80,6 +82,8 @@ export function PostActionSurface({
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
   const profilePinAction = useProfilePinAction(target.profilePin!);
+  const pinOrder = useContext(ProfilePinOrderContext);
+  const pinOrderMenu = pinOrder?.postId === target.id ? pinOrder : null;
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
@@ -93,6 +97,7 @@ export function PostActionSurface({
   const moreItems = [
     copyLinkItem,
     ...(profilePinAction.item ? [profilePinAction.item] : []),
+    ...(pinOrderMenu?.items ?? []),
     ...(sessionId ? [reportItem] : []),
   ];
 
@@ -106,7 +111,7 @@ export function PostActionSurface({
           execution={authentication.execution}
           more={more}
           moreItems={moreItems}
-          morePending={profilePinAction.pending}
+          morePending={profilePinAction.pending || pinOrderMenu?.pending}
           moreSheetIconSize={profilePinAction.item ? 24 : undefined}
           onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
           onBookmarkError={onBookmarkError}

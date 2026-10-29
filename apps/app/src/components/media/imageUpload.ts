@@ -7,11 +7,7 @@ import {
 } from './imageUploadErrors';
 import type { ImageManipulatorContext, ImageRef, ImageResult } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import type {
-  ImageUploadFailure,
-  ImageUploadOperation,
-  ImageUploadStage,
-} from './imageUploadErrors';
+import type { ImageUploadOperation, ImageUploadStage } from './imageUploadErrors';
 
 type IssuedImageUpload = {
   readonly mediaId: string;
@@ -169,6 +165,65 @@ export function releaseImagePreview(
   }
 }
 
+function assertSupportedImageAsset(asset: ImagePickerAsset): void {
+  if (
+    asset.file &&
+    ([asset.mimeType, asset.file.type].some((mimeType) =>
+      ['image/heic', 'image/heif'].includes(mimeType?.toLowerCase() ?? ''),
+    ) ||
+      /\.(heic|heif)$/i.test(asset.file.name))
+  ) {
+    throw new ImageUploadError(
+      { reason: 'unsupported-format', stage: 'transfer' },
+      { operation: 'normalize' },
+    );
+  }
+}
+
+/** Transfers an already issued image; GraphQL actions retain their own lifecycle. */
+export async function transferImage(asset: ImagePickerAsset, uploadUrl: string): Promise<void> {
+  let operation: ImageUploadOperation = 'normalize';
+  try {
+    assertSupportedImageAsset(asset);
+    const normalizedImage = await createNormalizedImageBody(asset);
+    operation = 'put';
+    const response = await fetch(uploadUrl, {
+      body: normalizedImage.body,
+      headers: { 'content-type': normalizedImage.contentType },
+      method: 'PUT',
+    });
+    await assertImageUploadResponse(response);
+  } catch (error) {
+    throw asImageUploadError(error, 'transfer', operation);
+  }
+}
+
+export function reportImageUploadError(
+  error: ImageUploadError,
+  fallbackOperation?: ImageUploadOperation,
+): void {
+  try {
+    const { failure, observation } = error;
+    const context: Record<string, string | number> = {
+      operation:
+        observation?.operation ??
+        fallbackOperation ??
+        (failure.stage === 'transfer' ? 'put' : failure.stage),
+      reason: failure.reason,
+      stage: failure.stage,
+    };
+    if (typeof observation?.status === 'number' && Number.isFinite(observation.status)) {
+      context.status = observation.status;
+    }
+    if (observation?.code) {
+      context.code = observation.code;
+    }
+    captureHandledError(new ImageUploadError(failure, observation), context);
+  } catch {
+    // Observability must not change the upload result.
+  }
+}
+
 export async function uploadImage({
   asset,
   complete,
@@ -176,7 +231,7 @@ export async function uploadImage({
   issue,
 }: {
   readonly asset: ImagePickerAsset;
-  readonly complete: (mediaId: string) => Promise<void>;
+  readonly complete?: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
   readonly issue: () => Promise<IssuedImageUpload>;
 }): Promise<string | null> {
@@ -187,61 +242,28 @@ export async function uploadImage({
   let operation: ImageUploadOperation = 'issue';
   let issued: IssuedImageUpload;
   try {
-    if (
-      asset.file &&
-      ([asset.mimeType, asset.file.type].some((mimeType) =>
-        ['image/heic', 'image/heif'].includes(mimeType?.toLowerCase() ?? ''),
-      ) ||
-        /\.(heic|heif)$/i.test(asset.file.name))
-    ) {
-      operation = 'normalize';
-      throw new ImageUploadError(
-        { reason: 'unsupported-format', stage: 'transfer' },
-        { operation },
-      );
-    }
-
+    assertSupportedImageAsset(asset);
     issued = await issue();
     operation = 'normalize';
     if (!isActive()) {
       return null;
     }
-
-    const normalizedImage = await createNormalizedImageBody(asset);
-    operation = 'put';
-    const response = await fetch(issued.uploadUrl, {
-      body: normalizedImage.body,
-      headers: { 'content-type': normalizedImage.contentType },
-      method: 'PUT',
-    });
-    await assertImageUploadResponse(response);
-
+    await transferImage(asset, issued.uploadUrl);
     if (!isActive()) {
       return null;
     }
 
-    operation = 'complete';
-    await complete(issued.mediaId);
+    if (complete) {
+      operation = 'complete';
+      await complete(issued.mediaId);
+    }
   } catch (error) {
     const stage: ImageUploadStage =
       operation === 'issue' ? 'issue' : operation === 'complete' ? 'complete' : 'transfer';
     const uploadError = asImageUploadError(error, stage, operation);
     try {
       if (isActive()) {
-        const failure: ImageUploadFailure = uploadError.failure;
-        const observation = uploadError.observation;
-        const context: Record<string, string | number> = {
-          operation: observation?.operation ?? operation,
-          reason: failure.reason,
-          stage: failure.stage,
-        };
-        if (typeof observation?.status === 'number' && Number.isFinite(observation.status)) {
-          context.status = observation.status;
-        }
-        if (observation?.code) {
-          context.code = observation.code;
-        }
-        captureHandledError(new ImageUploadError(failure, observation), context);
+        reportImageUploadError(uploadError, operation);
       }
     } catch {
       // Observability must not change the upload result.

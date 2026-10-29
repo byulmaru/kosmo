@@ -27,6 +27,17 @@ type ProcessUploadInput = {
 
 const mediaService = service('media', {
   startUpload: operation<ProcessUploadInput, MediaUploadWorkflowResult>(),
+  applyHope: operation<
+    {
+      readonly id: string;
+      readonly hope: {
+        readonly algorithm: 'nightshade';
+        readonly iterations: number;
+        readonly intensity: number;
+      };
+    },
+    { readonly id: string }
+  >(),
   publishUpload: operation<{ readonly id: string }, { readonly id: string }>(),
 });
 
@@ -36,6 +47,7 @@ const { prepareMediaUploadActivity, finalizeMediaUploadActivity } =
 const inputSchema = z.strictObject({
   mediaId: z.uuid(),
   accountId: z.uuid(),
+  applyNightshade: z.boolean().default(false),
 });
 
 export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
@@ -58,6 +70,17 @@ export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
     },
     { scheduleToCloseTimeout: '25 hours' },
   );
+
+  if (parsed.data.applyNightshade) {
+    await client.executeOperation(
+      'applyHope',
+      {
+        id: prepared.id,
+        hope: { algorithm: 'nightshade', iterations: 562, intensity: 0.3 },
+      },
+      { scheduleToCloseTimeout: '25 hours' },
+    );
+  }
 
   await client.executeOperation(
     'publishUpload',

@@ -1,5 +1,5 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
+import { PostVisibility } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNotNull, isNull, lt } from 'drizzle-orm';
@@ -10,11 +10,10 @@ import { Post, PostConnection } from '../ref';
 type PostRow = typeof Posts.$inferSelect;
 
 builder.queryField('localTimeline', (t) =>
-  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
+  t.connection(
     {
       type: Post,
       nullable: true,
-      unauthorizedResolver: () => null,
       resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
 

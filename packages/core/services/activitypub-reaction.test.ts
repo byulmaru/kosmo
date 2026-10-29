@@ -75,7 +75,7 @@ const createLocalPost = async (
   visibility: PostVisibility = PostVisibility.PUBLIC,
 ) =>
   createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId,
     visibility,
