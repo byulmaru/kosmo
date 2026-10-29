@@ -10,6 +10,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 type Target = {
   content: { id: string };
   id: string;
+  state: 'ACTIVE' | 'DELETED';
   profile: {
     displayName: string;
     id: string;
@@ -41,6 +42,7 @@ const target: Target = {
   actionBar: {},
   content: { id: 'content:1' },
   id: 'post:1',
+  state: 'ACTIVE',
   profile: {
     displayName: '코스모 작가',
     id: 'profile:author',
@@ -53,6 +55,8 @@ const target: Target = {
 };
 const capturedMute = { value: null as MuteProps | null };
 const capturedReport = { value: null as ReportMenuInput | null };
+const routerPushes: string[] = [];
+let selectedProfileId = 'profile:viewer';
 let PostActionSurface: ComponentType<{ socialActionTarget: never }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -61,6 +65,9 @@ mock.module('react-relay', {
     graphql: (parts: TemplateStringsArray) => parts.join(''),
     useFragment: (_fragment: unknown, key: unknown) => key,
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('expo-router', {
+  exports: { useRouter: () => ({ push: (href: string) => routerPushes.push(href) }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: { View: (props: Record<string, unknown>) => createElement('View', props) },
@@ -86,20 +93,20 @@ mock.module('@/components/content-report/ContentReportContext', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/session/SessionProvider', {
-  exports: { useSession: () => ({ selectedProfileId: 'profile:viewer' }) },
+  exports: { useSession: () => ({ selectedProfileId }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostActionAuthentication', {
   exports: {
     usePostActionAuthentication: () => ({
       execution: { kind: 'enabled' },
       resolve: () => undefined,
-      selectedProfileId: 'profile:viewer',
+      selectedProfileId,
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostActionBar', {
   exports: {
-    PostActionBar: () => createElement('PostActionBar'),
+    PostActionBar: (props: object) => createElement('PostActionBar', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostBookmarkAction', {
@@ -168,6 +175,58 @@ describe('PostActionSurface mute wiring', () => {
     assert.equal(menuProps.disabled, false);
     assert.deepEqual(menuProps.items, [{ key: 'copy-link', label: '링크 복사' }, muteItem]);
   });
+
+  it('작성자의 ACTIVE contentful 게시글에만 게시 활동 메뉴를 추가하고 경로를 연다', async () => {
+    selectedProfileId = 'profile:author';
+
+    await act(async () => {
+      renderer = create(createElement(PostActionSurface, { socialActionTarget: target as never }));
+    });
+
+    const actionBar = renderer!.root.findAll((node) => String(node.type) === 'PostActionBar')[0]!;
+    const items = actionBar.props.moreItems as Array<{
+      key: string;
+      label: string;
+      onSelect: () => void;
+    }>;
+    assert.deepEqual(
+      items.map(({ key, label }) => ({ key, label })),
+      [
+        { key: 'copy-link', label: '링크 복사' },
+        { key: 'post-activity', label: '게시 활동 보기' },
+      ],
+    );
+
+    await act(async () => items[1]!.onSelect());
+    assert.deepEqual(routerPushes, ['/@author/post:1/activity']);
+  });
+
+  it('작성자 외 selected Profile과 삭제된 게시글에는 게시 활동 메뉴를 노출하지 않는다', async () => {
+    selectedProfileId = 'profile:viewer';
+
+    await act(async () => {
+      renderer = create(createElement(PostActionSurface, { socialActionTarget: target as never }));
+    });
+
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'PostActionBar').length, 0);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    selectedProfileId = 'profile:author';
+    target.state = 'DELETED';
+
+    await act(async () => {
+      renderer = create(createElement(PostActionSurface, { socialActionTarget: target as never }));
+    });
+
+    const actionBar = renderer!.root.findAll((node) => String(node.type) === 'PostActionBar')[0]!;
+    assert.equal(
+      (actionBar.props.moreItems as Array<{ key: string }>).some(
+        ({ key }) => key === 'post-activity',
+      ),
+      false,
+    );
+  });
 });
 
 afterEach(async () => {
@@ -175,4 +234,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  selectedProfileId = 'profile:viewer';
+  routerPushes.length = 0;
+  target.state = 'ACTIVE';
 });

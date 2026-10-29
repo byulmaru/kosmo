@@ -191,6 +191,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     pathname === '/' ||
     routeSegments.at(-1) === '[profileHandle]' ||
     (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') ||
+    (routeSegments.at(-3) === '[profileHandle]' &&
+      routeSegments.at(-2) === '[postId]' &&
+      routeSegments.at(-1) === 'activity') ||
     (routeSegments.at(-3) === 'hashtags' &&
       routeSegments.at(-2) === '[hashtagId]' &&
       routeSegments.at(-1) === 'posts');

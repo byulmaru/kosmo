@@ -344,6 +344,12 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(invitationProps?.visible, true);
     assert.equal(sidebarNavigationProps?.guestPublicContent, true);
 
+    pathname = '/@writer/post-id/activity';
+    routeSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]', 'activity'];
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    assert.equal(invitationProps?.visible, true);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, true);
+
     await act(async () => invitationProps?.onDismiss?.());
     assert.equal(invitationProps?.visible, false);
 

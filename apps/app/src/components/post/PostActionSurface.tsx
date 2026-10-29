@@ -1,4 +1,5 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
+import { useRouter } from 'expo-router';
 import { useContext } from 'react';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -19,6 +20,7 @@ import { usePostReactionController } from './PostReactionController';
 import { useProfilePinAction } from './ProfilePinAction';
 import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import { useRepostFailureToast } from './useRepostFailureToast';
+import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
@@ -35,7 +37,11 @@ type Props = Readonly<{
 const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
+    state
     visibility
+    content {
+      id
+    }
     ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
@@ -64,6 +70,7 @@ export function PostActionSurface({
   socialActionTarget,
 }: Props) {
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
+  const router = useRouter();
   const { sessionId } = useSession();
   const authentication = usePostActionAuthentication(true);
   const repostAuthentication = usePostActionAuthentication(
@@ -92,8 +99,21 @@ export function PostActionSurface({
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
+  const activityItem =
+    target.state === 'ACTIVE' &&
+    target.content &&
+    authentication.selectedProfileId === target.profile.id
+      ? {
+          accessibilityLabel: '게시 활동 보기',
+          key: 'post-activity',
+          label: '게시 활동 보기',
+          onSelect: () =>
+            router.push(`/${target.profile.relativeHandle}/${target.id}/activity` as Href),
+        }
+      : null;
   const moreItems = [
     copyLinkItem,
+    ...(activityItem ? [activityItem] : []),
     ...(profilePinAction.item ? [profilePinAction.item] : []),
     ...(pinOrderMenu?.items ?? []),
     ...(sessionId ? [reportItem] : []),
