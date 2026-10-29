@@ -56,11 +56,22 @@ spec:
                 --email "${TEMPORAL_NAMESPACE_OWNER_EMAIL}" \
                 --retention "${TEMPORAL_NAMESPACE_RETENTION}"; then
                 echo "Created Temporal namespace ${TEMPORAL_NAMESPACE}."
-                exit 0
+              else
+                echo "Temporal namespace create did not succeed; reconciling the existing namespace."
+                temporal operator namespace update \
+                  --address "${TEMPORAL_ADDRESS}" \
+                  --tls=false \
+                  --disable-config-env \
+                  --disable-config-file \
+                  --client-connect-timeout 10s \
+                  --command-timeout 20s \
+                  --namespace "${TEMPORAL_NAMESPACE}" \
+                  --email "${TEMPORAL_NAMESPACE_OWNER_EMAIL}" \
+                  --retention "${TEMPORAL_NAMESPACE_RETENTION}"
+                echo "Reconciled Temporal namespace ${TEMPORAL_NAMESPACE}."
               fi
 
-              echo "Temporal namespace create did not succeed; reconciling the existing namespace."
-              temporal operator namespace update \
+              temporal operator search-attribute create \
                 --address "${TEMPORAL_ADDRESS}" \
                 --tls=false \
                 --disable-config-env \
@@ -68,9 +79,13 @@ spec:
                 --client-connect-timeout 10s \
                 --command-timeout 20s \
                 --namespace "${TEMPORAL_NAMESPACE}" \
-                --email "${TEMPORAL_NAMESPACE_OWNER_EMAIL}" \
-                --retention "${TEMPORAL_NAMESPACE_RETENTION}"
-              echo "Reconciled Temporal namespace ${TEMPORAL_NAMESPACE}."
+                --name KosmoPostRequestOwnerAccountId \
+                --type Keyword \
+                --name KosmoPostRequestProfileId \
+                --type Keyword \
+                --name KosmoPostRequestStatus \
+                --type Keyword
+              echo "Reconciled Temporal search attributes in namespace ${TEMPORAL_NAMESPACE}."
           env:
             - name: TEMPORAL_ADDRESS
               value: {{ .Values.temporal.frontendAddress | quote }}

@@ -36,11 +36,20 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
-- Local GraphQL과 inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`를 공유하고 ID는
-  `post-create:${requestId}`로 만든다. Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에
-  `USE_EXISTING`, `REJECT_DUPLICATE`, `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction
-  Activity가 공통 결과를 commit한 뒤 Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다.
-  ID가 일치하는 `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
+- Local GraphQL의 Post·Reply·Quote 요청은 `postRequestWorkflow`가 immutable request snapshot과 stable `postId`를
+  소유한다. 입력 Media가 모두 READY가 되기 전에는 Post row나 Post Content를 생성하지 않는다. Workflow는 READY Media를
+  재사용하고 UPLOADING Media에 기존 upload child를 실행한다. 취소는 publication 시작 전에만 확정한다. publication
+  중 timeout이나 응답 유실이 있으면 exact `postId`를 조회해 정산하되, 아직 row가 없다는 결과만으로 FAILED를 확정하지
+  않는다. 이전 post Activity가 나중에 commit할 수 있기 때문이다. Publication은 stable `postId`와 현재 authorization
+  재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.
+  처리 실패나 publication 전 취소는 각각 `FAILED`·`CANCELLED`를 반환하고 Workflow를 닫는다. 상태와 상세는
+  Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
+  만들지 않는다.
+- inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.
+  Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에 `USE_EXISTING`, `REJECT_DUPLICATE`,
+  `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction Activity가 공통 결과를 commit한 뒤
+  Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다. ID가 일치하는
+  `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
 

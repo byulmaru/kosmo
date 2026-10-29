@@ -69,10 +69,12 @@ const workflowArgsSchema = z.object({
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
   ]),
+  postId: z.uuid().optional(),
+  revalidateAuthorization: z.boolean().optional(),
   requestId: z.uuid(),
 });
 
-const { createPostActivity, generatePostIdActivity } =
+const { createPostActivity, createPostActivityV2, generatePostIdActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 const parseInput = (value: unknown): PostCreateWorkflowArgs => {
@@ -116,9 +118,21 @@ export async function postCreateWorkflow(
   input: PostCreateWorkflowArgs,
 ): Promise<PostCreateWorkflowResult> {
   const parsed = parseInput(input);
-  const execution = await createPostActivity({
+  if (parsed.revalidateAuthorization && parsed.input.origin !== 'LOCAL') {
+    throw ApplicationFailure.nonRetryable(
+      'Authorization revalidation is only supported for local Post creation',
+      'VALIDATION',
+    );
+  }
+
+  const postId = parsed.postId ?? (await generatePostIdActivity());
+  const createPost = parsed.revalidateAuthorization ? createPostActivityV2 : createPostActivity;
+  const execution = await createPost({
     input: parsed.input,
-    postId: await generatePostIdActivity(),
+    postId,
+    ...(parsed.revalidateAuthorization === undefined
+      ? {}
+      : { revalidateAuthorization: parsed.revalidateAuthorization }),
   });
   if (!execution.ok) {
     if (

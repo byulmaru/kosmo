@@ -3,6 +3,8 @@ type Account implements Node {
   id: ID!
   metadata(keys: [String!]!): [AccountMetadata!]!
   name: String!
+  postRequest(profileId: ID!, requestId: String!): PostRequest
+  postRequests(after: String, first: Int!, profileId: ID!, statuses: [PostRequestStatus!]): PostRequestConnection!
   profiles: [Profile!]!
 }
 
@@ -72,6 +74,14 @@ type BookmarkConnection {
 type BookmarkConnectionEdge {
   cursor: String!
   node: Bookmark!
+}
+
+input CancelPostRequestInput {
+  requestId: String!
+}
+
+type CancelPostRequestPayload {
+  request: PostRequest!
 }
 
 input CancelProfileFollowRequestInput {
@@ -349,6 +359,7 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   blockProfile(input: BlockProfileInput!): BlockProfilePayload!
+  cancelPostRequest(input: CancelPostRequestInput!): CancelPostRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -377,6 +388,7 @@ type Mutation {
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   setAccountMetadata(input: SetAccountMetadataInput!): SetAccountMetadataPayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
+  submitPostRequest(input: SubmitPostRequestInput!): SubmitPostRequestPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
@@ -485,6 +497,71 @@ type PostContent implements Node {
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+type PostRequest implements Node {
+  authorProfile: Profile
+  draft: PostRequestDraft!
+  errorCode: String
+  errorMessage: String
+  id: ID!
+  post: Post
+  requestId: String!
+  status: PostRequestStatus!
+  submittedAt: DateTime!
+}
+
+type PostRequestConnection {
+  edges: [PostRequestConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type PostRequestConnectionEdge {
+  cursor: String!
+  node: PostRequest!
+}
+
+type PostRequestDraft {
+  bodyText: String!
+  contentWarning: String
+  media: [PostRequestDraftMedia!]!
+  mentions: [PostRequestDraftMention!]!
+  replyParent: Post
+  replyParentId: ID
+  repostSource: Post
+  repostSourceId: ID
+  sensitiveMedia: Boolean!
+  visibility: PostVisibility!
+}
+
+type PostRequestDraftMedia {
+  altText: String
+  applyNightshade: Boolean!
+  media: Media
+  mediaId: ID!
+}
+
+type PostRequestDraftMention {
+  end: Int!
+  profile: Profile
+  profileId: ID!
+  start: Int!
+}
+
+input PostRequestMediaInput {
+  altText: String
+  applyNightshade: Boolean!
+  mediaId: ID!
+}
+
+enum PostRequestStatus {
+  CANCELLED
+  CONFIRMING
+  FAILED
+  PROCESSING
+  PUBLISHED
+  PUBLISHING
+  QUEUED
+}
 
 enum PostState {
   ACTIVE
@@ -811,6 +888,23 @@ input SubmitContentReportInput {
 
 type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
+}
+
+input SubmitPostRequestInput {
+  actorProfileId: ID
+  bodyText: String!
+  contentWarning: String
+  media: [PostRequestMediaInput!]
+  mentions: [CreatePostMentionInput!]
+  replyParentId: ID
+  repostSourceId: ID
+  requestId: String!
+  sensitiveMedia: Boolean
+  visibility: PostVisibility!
+}
+
+type SubmitPostRequestPayload {
+  request: PostRequest!
 }
 
 input UnblockProfileInput {

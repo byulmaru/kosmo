@@ -24,6 +24,12 @@ export {
 } from './activities/operational-notification';
 export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
+export { createPostActivity as createPostActivityV2 } from './activities/post-create';
+export {
+  getPostRequestMediaStateActivity,
+  reconcilePostRequestActivity,
+  waitForPostRequestMediaUploadActivity,
+} from './activities/post-request';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,

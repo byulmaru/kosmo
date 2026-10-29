@@ -27,6 +27,18 @@
 - 단순히 같은 인자를 다음 함수에 전달하고 같은 Promise를 반환하는 Worker adapter 파일이나 async wrapper를 만들지 않는다.
 - adapter는 input 변환, dependency composition, retry 경계에 필요한 validation 또는 Activity 고유 관찰처럼 실제 책임이 있을 때만 둔다.
 - Activity 이름은 Workflow history와 운영 조회에 남는 public runtime identity이므로 rename은 호환성 영향을 검토한다.
+- Local Post request의 `getPostRequestMediaStateActivity`는 입력한 모든 Media ID가 해당 Account 소유의 Local Media이고
+  state가 UPLOADING 또는 READY인지 한 번 읽어 검증한 뒤, READY ID만 반환한다. Activity는 Media를 변경하거나 upload를
+  실행하지 않으며 Workflow는 READY ID를 재사용하고 나머지에 기존 upload child를 사용한다.
+- Local Post request publication은 기존 create transaction Activity를 `createPostActivityV2` history alias로 호출한다.
+  `revalidateAuthorization` 경로는 duplicate stable ID의 완성된 Post를 먼저 반환하고, 새 row를 만들기 전에 같은
+  transaction에서 Account ACTIVE, 현재 Account/Profile membership이 최소 MEMBER인지, Profile과 Instance가 현재
+  작성 가능한 상태인지 확인한다. 확인 실패 시 claimant insert와 transaction의 다른 변경을 rollback한다. 이 경로는
+  누락되거나 현재 이용할 수 없는 Local Reply Parent/Quote Source를 standalone Post로 바꾸지 않는다. 기존 Remote
+  ActivityPub Reply Parent fallback은 보존한다. 이 authorization recheck만을 위한 pessimistic lock은 추가하지 않는다.
+- `reconcilePostRequestActivity`는 stable `postId`가 같은 Account/Profile의 완전한 Local Post인지 확인한다. ABSENT는
+  조회 시점에 완성된 row가 없다는 뜻뿐이며, in-flight Activity가 이후 commit하지 않는다는 증거가 아니다. timeout 뒤
+  이 결과만으로 요청을 FAILED로 마감하지 않는다.
 
 - `getRemoteProfileActorStateActivity`는 usable Profile과 actor의 7일 freshness를 읽기 전용으로 반환하며 fetch나 상태 변경을 하지 않는다. `fetchRemoteProfileActorActivity`는 네트워크 전에 현재 저장 actor의 Profile 사용 가능 상태와 요청 URI·Instance 정책을 확인하고 origin/signing loader를 선택한 뒤 Fedify에서 actor를 가져와 expanded JSON-LD와 fetch 시작 시각을 반환한다. `applyRemoteProfileActorActivity`는 네트워크 없이 문서를 다시 검증하고 receipt/fetch timestamp를 써서 원자적으로 투영한다. `recoverRemoteProfileActorActivity`는 cached lookup의 verified receipt에만 쓰며 exact actor URI를 다시 확인해 Unresponsive Instance를 CAS 복구하되 freshness timestamp는 보존한다. Update Workflow는 state miss면 `null`이고 hit이면 supplied document를 receipt timestamp로 적용한다. 별도 receipt-only recovery Activity는 호출하지 않으며, apply가 동반하는 atomic recovery는 유지한다.
 - `lookupRemoteActorUriActivity`는 저장 actor URI를 우선하고 없을 때만 WebFinger를 실행한다. State, fetch, apply Activity를 Workflow가 순서화한다. Refresh Workflow는 state를 읽고 fresh면 반환하며 stale/missing이면 fetch와 apply를 수행한다. Actor fetch는 Fedify shared helper에서 하며 parsed protocol rejection은 `RemoteActorMaterializationError`가 된다.

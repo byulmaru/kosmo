@@ -1,65 +1,21 @@
-import { db, firstOrThrow, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, InstanceKind, PostVisibility } from '@kosmo/core/enums';
-import {
-  ConflictError,
-  NotFoundError,
-  PermissionDeniedError,
-  ValidationError,
-} from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { normalizePostContentPlainText } from '@kosmo/core/post-content';
+import { db, firstOrThrow, Posts } from '@kosmo/core/db';
+import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
-import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
-import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
-import { ApplicationFailure } from '@temporalio/client';
-import { and, eq, inArray, or } from 'drizzle-orm';
-import { z } from 'zod';
+import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
+import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { resolveComposerProfileId } from '@/profile/authorization';
-import { formatRelativeHandle } from '@/profile/identity';
-import { visibleProfileWhere } from '@/profile/visibility';
-import { Media } from '../../media/ref';
 import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
-import { extractPostMentionCandidates } from './mention-candidates';
-import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
+import { rethrowPostWorkflowFailure } from './errors';
+import {
+  CreatePostMediaInput,
+  CreatePostMentionInput,
+  localPostCreateInputSchema,
+  localPostMediaArraySchema,
+  prepareLocalPostInput,
+} from './prepare-local-input';
 import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
-
-const rethrowLocalPostCreateFailure = (error: unknown): never => {
-  if (!(error instanceof ApplicationFailure)) {
-    throw error;
-  }
-
-  const field = typeof error.details?.[0] === 'string' ? error.details[0] : undefined;
-  switch (error.type) {
-    case 'CONFLICT':
-      throw new ConflictError({ message: error.message, field });
-    case 'NOT_FOUND':
-      throw new NotFoundError(error.message);
-    case 'PERMISSION_DENIED':
-      throw new PermissionDeniedError(error.message);
-    case 'VALIDATION':
-      throw new ValidationError(error.message, { field });
-    default:
-      throw error;
-  }
-};
-
-const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
-  fields: (t) => ({
-    altText: t.string({ required: false }),
-    mediaId: t.globalID({ for: Media }),
-  }),
-});
-
-const CreatePostMentionInput = builder.inputType('CreatePostMentionInput', {
-  fields: (t) => ({
-    end: t.int(),
-    profileId: t.globalID({ for: Profile }),
-    start: t.int(),
-  }),
-});
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -68,40 +24,14 @@ builder.mutationField('createPost', (t) =>
         post: field.field({ type: Post }),
       }),
     }),
-    typeOptions: {
-      validate: z
-        .object({
-          bodyText: z.string(),
-          contentWarning: z.string().nullish(),
-          media: z.array(z.unknown()).nullish(),
-          mentions: z.array(z.unknown()).nullish(),
-        })
-        .passthrough()
-        .refine(({ bodyText, media }) => bodyText.length > 0 || (media?.length ?? 0) > 0, {
-          message: '본문 또는 이미지를 추가해주세요.',
-          path: ['bodyText'],
-        })
-        .refine(
-          ({ bodyText, contentWarning }) =>
-            [...normalizePostContentPlainText(bodyText)].length +
-              [...normalizePostContentPlainText(contentWarning ?? '')].length <=
-            postBodyMaxLength,
-          {
-            message:
-              '본문과 내용 경고는 ' +
-              postBodyMaxLength.toLocaleString('ko-KR') +
-              '자까지 작성할 수 있어요.',
-            path: ['contentWarning'],
-          },
-        ),
-    },
+    typeOptions: { validate: localPostCreateInputSchema },
     input: {
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({
         type: [CreatePostMediaInput],
         required: false,
-        validate: z.array(z.unknown()).max(4, { message: '이미지는 4개까지 첨부할 수 있어요.' }),
+        validate: localPostMediaArraySchema,
       }),
       mentions: t.input.field({
         type: [CreatePostMentionInput],
@@ -114,201 +44,10 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
-      const media = input.media ?? [];
-      const bodyText = normalizePostContentPlainText(input.bodyText);
-      const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
-      const profileId = await resolveComposerProfileId(ctx, input.actorProfileId?.id);
-      const mentions = input.mentions ?? [];
-      let mentionReferences: PostContentMentionReference[] = [];
-
-      if (mentions.length * 2 > input.bodyText.length) {
-        throw new ValidationError('Mention selection exceeds body text', { field: 'mentions' });
-      }
-
-      const configuredLocalInstance =
-        mentions.length > 0 || bodyText.includes('@')
-          ? await resolveConfiguredLocalInstance()
-          : undefined;
-      const mentionCandidates = configuredLocalInstance
-        ? extractPostMentionCandidates(bodyText, configuredLocalInstance.domain)
-        : [];
-      const selectedRanges = new Set(mentions.map(({ end, start }) => `${start}:${end}`));
-
-      for (const candidate of mentionCandidates) {
-        for (const mention of mentions) {
-          if (
-            candidate.start < mention.end &&
-            mention.start < candidate.end &&
-            (candidate.start !== mention.start || candidate.end !== mention.end)
-          ) {
-            throw new ValidationError('Mention selection overlaps a typed handle', {
-              field: 'mentions',
-            });
-          }
-        }
-      }
-
-      const automaticCandidates = mentionCandidates.filter(
-        ({ end, start }) => !selectedRanges.has(`${start}:${end}`),
-      );
-      const mentionedProfileIds = new Set(mentions.map(({ profileId }) => profileId.id));
-      const localCandidateHandles = [
-        ...new Set(
-          automaticCandidates.flatMap(({ handle }) =>
-            handle.kind === 'local' ? [handle.normalizedHandle] : [],
-          ),
-        ),
-      ];
-      const remoteCandidatePairs = [
-        ...new Map(
-          automaticCandidates.flatMap(({ handle }) =>
-            handle.kind === 'remote'
-              ? [[`${handle.domain}\0${handle.normalizedHandle}`, handle] as const]
-              : [],
-          ),
-        ).values(),
-      ];
-      const automaticTargetWhere = configuredLocalInstance
-        ? or(
-            localCandidateHandles.length > 0
-              ? and(
-                  eq(Profiles.instanceId, configuredLocalInstance.id),
-                  inArray(Profiles.normalizedHandle, localCandidateHandles),
-                )
-              : undefined,
-            remoteCandidatePairs.length > 0
-              ? and(
-                  eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-                  or(
-                    ...remoteCandidatePairs.map(({ domain, normalizedHandle }) =>
-                      and(
-                        eq(Instances.domain, domain),
-                        eq(Profiles.normalizedHandle, normalizedHandle),
-                      ),
-                    ),
-                  ),
-                )
-              : undefined,
-          )
-        : undefined;
-      const targetWhere = or(
-        mentionedProfileIds.size > 0 ? inArray(Profiles.id, [...mentionedProfileIds]) : undefined,
-        automaticTargetWhere,
-      );
-      const targets = targetWhere
-        ? await db
-            .select({
-              domain: Instances.domain,
-              handle: Profiles.handle,
-              id: Profiles.id,
-              instanceId: Instances.id,
-              kind: Instances.kind,
-              normalizedHandle: Profiles.normalizedHandle,
-            })
-            .from(Profiles)
-            .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-            .where(
-              and(
-                targetWhere,
-                visibleProfileWhere({ profile: Profiles, instance: Instances }),
-                profileBlockVisibilityWhere({
-                  database: db,
-                  ownerProfileId: profileId,
-                  targetProfileId: Profiles.id,
-                }),
-                profileBlockVisibilityWhere({
-                  database: db,
-                  ownerProfileId: Profiles.id,
-                  targetProfileId: profileId,
-                }),
-              ),
-            )
-        : [];
-
-      const selectedTargets = targets.filter(({ id }) => mentionedProfileIds.has(id));
-      if (selectedTargets.length !== mentionedProfileIds.size) {
-        throw new ValidationError('Mention target is unavailable', { field: 'mentions' });
-      }
-
-      const targetHandles = new Map(
-        targets.map((target) => [
-          target.id,
-          formatRelativeHandle(
-            { handle: target.handle, instanceId: target.instanceId },
-            {
-              configuredLocalInstance: configuredLocalInstance!,
-              profileInstance: { domain: target.domain, id: target.instanceId },
-            },
-          ),
-        ]),
-      );
-
-      if (mentions.length > 0) {
-        mentionReferences = mentions.map(({ end, profileId, start }) => {
-          const relativeHandle = targetHandles.get(profileId.id);
-          if (!relativeHandle) {
-            throw new ValidationError('Mention target is unavailable', { field: 'mentions' });
-          }
-          return {
-            end,
-            handle: relativeHandle,
-            profileId: profileId.id,
-            relativeHandle,
-            start,
-          };
-        });
-      }
-
-      if (automaticCandidates.length > 0) {
-        const candidateProfileIds = new Map<string, string>();
-        for (const target of targets) {
-          const key =
-            target.instanceId === configuredLocalInstance?.id
-              ? `local:${target.normalizedHandle}`
-              : target.kind === InstanceKind.ACTIVITYPUB
-                ? `remote:${target.domain}:${target.normalizedHandle}`
-                : undefined;
-          if (key) {
-            candidateProfileIds.set(key, target.id);
-          }
-        }
-
-        for (const candidate of automaticCandidates) {
-          const key =
-            candidate.handle.kind === 'local'
-              ? `local:${candidate.handle.normalizedHandle}`
-              : `remote:${candidate.handle.domain}:${candidate.handle.normalizedHandle}`;
-          const candidateProfileId = candidateProfileIds.get(key);
-          if (candidateProfileId) {
-            mentionReferences.push({
-              end: candidate.end,
-              handle: targetHandles.get(candidateProfileId)!,
-              profileId: candidateProfileId,
-              relativeHandle: candidate.relativeHandle,
-              start: candidate.start,
-            });
-          }
-        }
-      }
-
+      const localInput = await prepareLocalPostInput(input, ctx);
       const args: PostCreateWorkflowArgs = {
         requestId: crypto.randomUUID(),
-        input: {
-          accountId: ctx.session.accountId,
-          bodyText,
-          contentWarning: contentWarning || null,
-          media: media.map(({ altText, mediaId }) => ({
-            altText: altText ?? null,
-            mediaId: mediaId.id,
-          })),
-          mentions: mentionReferences,
-          origin: 'LOCAL',
-          profileId,
-          replyParentId: input.replyParentId?.id,
-          repostSourceId: input.repostSourceId?.id,
-          sensitiveMedia: input.sensitiveMedia ?? false,
-          visibility: input.visibility,
-        },
+        input: localInput,
       };
       const result = await runWorkflow(postCreateWorkflow, {
         args: [args],
@@ -316,7 +55,7 @@ builder.mutationField('createPost', (t) =>
         returnExistingResult: true,
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'REJECT_DUPLICATE',
-      }).catch(rethrowLocalPostCreateFailure);
+      }).catch(rethrowPostWorkflowFailure);
       if (result.status === 'rejected') {
         throw new Error('Local Post creation returned an ActivityPub-only rejection');
       }
@@ -324,7 +63,7 @@ builder.mutationField('createPost', (t) =>
       const post = await db
         .select()
         .from(Posts)
-        .where(and(eq(Posts.id, result.postId), eq(Posts.profileId, profileId)))
+        .where(and(eq(Posts.id, result.postId), eq(Posts.profileId, localInput.profileId)))
         .limit(1)
         .then(firstOrThrow);
 

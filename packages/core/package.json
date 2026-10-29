@@ -27,6 +27,7 @@
     "./temporal/operational-notification": "./temporal/operational-notification.ts",
     "./temporal/post-create": "./temporal/post-create.ts",
     "./temporal/post-content-reprocessing": "./temporal/post-content-reprocessing.ts",
+    "./temporal/post-request": "./temporal/post-request.ts",
     "./temporal/hashtag-mute": "./temporal/hashtag-mute.ts",
     "./temporal/push-notification": "./temporal/push-notification.ts",
     "./temporal/profile-block": "./temporal/profile-block.ts",

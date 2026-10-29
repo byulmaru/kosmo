@@ -4,7 +4,12 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { PostVisibility } from '@kosmo/core/enums';
-import { POST_CREATE_WORKFLOW_TYPE, postCreateWorkflow } from '@kosmo/core/temporal/post-create';
+import {
+  POST_CREATE_WORKFLOW_TYPE,
+  POST_CREATE_WORKFLOW_V2_TYPE,
+  postCreateWorkflow,
+  postCreateWorkflowV2,
+} from '@kosmo/core/temporal/post-create';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
@@ -495,6 +500,76 @@ test(
       } finally {
         effectReleased.resolve();
       }
+    });
+  },
+);
+
+test(
+  'Post Create Workflow uses a supplied stable ID and forwards authorization revalidation',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: temporalTestExecutable },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-post-create-stable-id-' + process.pid;
+    const postId = randomUUID();
+    const generatedIds: string[] = [];
+    const activityInputs: PostCreateActivityInput[] = [];
+    const createPostActivityStub = async (
+      activityInput: PostCreateActivityInput,
+    ): Promise<PostCreateActivityResult> => {
+      activityInputs.push(activityInput);
+      return {
+        ok: true,
+        result: {
+          authorProfileId: activityInput.input.profileId,
+          postId: activityInput.postId,
+          status: 'created',
+        },
+      };
+    };
+    const worker = await Worker.create({
+      activities: {
+        generatePostIdActivity: async () => {
+          generatedIds.push(postId);
+          return postId;
+        },
+        createPostActivity: createPostActivityStub,
+        createPostActivityV2: createPostActivityStub,
+        createNotificationActivity: async () => {},
+        sendLocalPostCreateActivity: async () => {},
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const args: PostCreateWorkflowArgs = {
+        input: localPostInput('Stable post request'),
+        postId,
+        revalidateAuthorization: true,
+        requestId: randomUUID(),
+      };
+      const result = (await environment.client.workflow.execute(POST_CREATE_WORKFLOW_V2_TYPE, {
+        args: [args],
+        taskQueue,
+        workflowId: postCreateWorkflowV2.workflowIdFromArgs(args),
+        workflowExecutionTimeout: '30 seconds',
+      })) as PostCreateWorkflowResult;
+
+      assert.deepEqual(result, {
+        authorProfileId: args.input.profileId,
+        postId,
+        status: 'created',
+      });
+      assert.deepEqual(generatedIds, []);
+      assert.deepEqual(activityInputs, [
+        { input: args.input, postId, revalidateAuthorization: true },
+      ]);
     });
   },
 );

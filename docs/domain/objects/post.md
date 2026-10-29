@@ -108,6 +108,12 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
+Post·Reply·Quote 요청은 Media 준비가 끝나기 전에 접수될 수 있지만, 접수만으로 Post나 Post Content가 생성되지는
+않는다. Media 처리 실패로 작성에 이르지 못해도 Post나 Post Content를 만들지 않는다. 실제 Post 생성 transaction은
+당시 Account가 Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 유효한지 다시 확인한다. 확인할 수
+없으면 Post를 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤
+저장 결과가 확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
+
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 
