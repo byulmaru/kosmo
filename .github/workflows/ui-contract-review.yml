@@ -12,6 +12,12 @@ jobs:
   ui-contract-review:
     name: UI Contract Review (advisory)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      outcome: ${{ steps.summary.outputs.outcome }}
+      report: ${{ steps.summary.outputs.report }}
     steps:
       - name: Checkout repository
         id: checkout
@@ -58,39 +64,185 @@ jobs:
             "${UI_CONTRACT_ARGS[@]}" 2>&1 | tee "$UI_CONTRACT_LOG"
 
       - name: Summarize UI contract review
+        id: summary
         if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           UI_CONTRACT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           UI_CONTRACT_LOG: ${{ runner.temp }}/ui-contract-review.log
-        run: |
-          set -euo pipefail
-          {
-            echo '## UI Contract Review (참고용)'
-            echo
-            echo '이 workflow는 required check가 아니며 merge를 차단하지 않습니다.'
-            echo
-            echo "- Base: \`$UI_CONTRACT_BASE_SHA\`"
-            echo "- Head: \`$UI_CONTRACT_HEAD_SHA\`"
-            echo "- Checkout: \`${{ steps.checkout.outcome }}\`"
-            echo "- Dependencies: \`${{ steps.dependencies.outcome }}\`"
-            echo "- Review: \`${{ steps.check.outcome }}\`"
-            echo
-            if [ '${{ steps.check.outcome }}' = 'success' ]; then
-              echo '정적 UI 계약 검토가 통과했습니다. 직접 ESLint 규칙과 별도의 참고 결과입니다.'
-            elif [ '${{ steps.check.outcome }}' = 'failure' ]; then
-              echo '정적 UI 계약 검토에서 오류가 발생했습니다. 아래 근거를 reviewer가 확인하세요.'
-            else
-              echo '검사 단계가 실행되지 않았습니다. checkout·도구·dependency 단계의 실패를 확인하세요.'
-            fi
-            echo
-            if [ -f "$UI_CONTRACT_LOG" ]; then
-              echo '<details><summary>검사 출력 (최대 200줄)</summary>'
-              echo
-              sed -n '1,200{s/`/\\`/g;s/^/    /;p;}' "$UI_CONTRACT_LOG"
-              echo
-              echo '</details>'
-            else
-              echo '검사 출력 파일이 없어 설치 또는 실행 단계의 실패를 별도로 확인해야 합니다.'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          UI_CONTRACT_CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          UI_CONTRACT_DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+          UI_CONTRACT_CHECK_OUTCOME: ${{ steps.check.outcome }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('node:fs');
+
+            const baseSha = process.env.UI_CONTRACT_BASE_SHA;
+            const headSha = process.env.UI_CONTRACT_HEAD_SHA;
+            const checkoutOutcome = process.env.UI_CONTRACT_CHECKOUT_OUTCOME;
+            const dependenciesOutcome = process.env.UI_CONTRACT_DEPENDENCIES_OUTCOME;
+            const checkOutcome = process.env.UI_CONTRACT_CHECK_OUTCOME;
+            const logPath = process.env.UI_CONTRACT_LOG;
+            const outcome = checkOutcome === 'success' || checkOutcome === 'failure'
+              ? checkOutcome
+              : 'skipped';
+            const runUrl = `${context.serverUrl}/${process.env.GITHUB_REPOSITORY}/actions/runs/${context.runId}`;
+            let logExcerpt = '';
+            let logTruncated = false;
+            if (logPath && fs.existsSync(logPath)) {
+              const rawLog = fs.readFileSync(logPath, 'utf8');
+              const lines = rawLog.split(/\r?\n/);
+              logTruncated = lines.length > 200;
+              logExcerpt = lines.slice(0, 200).join('\n');
+              if (logExcerpt.length > 30000) {
+                logExcerpt = logExcerpt.slice(0, 30000);
+                logTruncated = true;
+              }
+            }
+            const indentedLog = logExcerpt
+              .split('\n')
+              .map((line) => `    ${line}`)
+              .join('\n');
+
+            const diagnosis = outcome === 'success'
+              ? '정적 UI 계약 검토가 통과했습니다.'
+              : outcome === 'failure'
+                ? '정적 UI 계약 검토가 실패했습니다. 아래 원문 진단에서 실패한 파일 경로를 확인하세요.'
+                : '검사 단계가 실행되지 않았습니다. checkout·도구·dependency 단계의 원인을 확인하세요.';
+            const report = [
+              '## UI Contract Review (참고용)',
+              '',
+              '이 workflow는 required check가 아니며 merge를 차단하지 않습니다.',
+              '',
+              `- Base: \`${baseSha}\``,
+              `- Head: \`${headSha}\``,
+              `- Run: [workflow 실행 결과](${runUrl})`,
+              `- Checkout: \`${checkoutOutcome}\``,
+              `- Dependencies: \`${dependenciesOutcome}\``,
+              `- Review: \`${checkOutcome}\``,
+              '',
+              diagnosis,
+              '',
+              '직접 ESLint 규칙, 원격 CI/merge ruleset, Native·Storybook runtime 검증과 별도의 참고 결과입니다.',
+              '',
+              logExcerpt
+                ? `<details><summary>검사 원문 출력 (최대 200줄·30000자)</summary>\n\n${indentedLog}${logTruncated ? '\n\n    출력이 최대 200줄 또는 30000자에서 생략되었습니다.' : ''}\n\n</details>`
+                : '검사 원문 출력 파일이 없어 설치 또는 실행 단계의 실패를 별도로 확인해야 합니다.',
+            ].join('\n');
+
+            await core.summary.addRaw(report).write();
+            core.setOutput('outcome', outcome);
+            core.setOutput('report', report);
+
+  comment-ui-contract-review:
+    name: Report UI Contract Review on the PR
+    needs: ui-contract-review
+    concurrency:
+      group: ui-contract-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    if: >-
+      always() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.actor != 'dependabot[bot]' &&
+      (needs.ui-contract-review.outputs.outcome == 'success' ||
+      needs.ui-contract-review.outputs.outcome == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Create or resolve UI contract review comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          UI_CONTRACT_OUTCOME: ${{ needs.ui-contract-review.outputs.outcome }}
+          UI_CONTRACT_REPORT: ${{ needs.ui-contract-review.outputs.report }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const COMMENT_MARKER = '<!-- ui-contract-review -->';
+            const RUN_MARKER_PATTERN = /<!-- ui-contract-review-run:(\d+)-attempt:(\d+) -->/;
+            const report = process.env.UI_CONTRACT_REPORT;
+            const outcome = process.env.UI_CONTRACT_OUTCOME;
+            if (!report || (outcome !== 'success' && outcome !== 'failure')) {
+              throw new Error('UI contract review report or outcome was not provided.');
+            }
+
+            const { owner, repo } = context.repo;
+            const issueNumber = context.issue.number;
+            const eventPullRequest = context.payload.pull_request;
+            const currentPullRequest = await github.rest.pulls.get({ owner, repo, pull_number: issueNumber });
+            const current = currentPullRequest.data;
+            if (
+              current.state !== 'open' ||
+              current.head?.sha !== eventPullRequest.head?.sha ||
+              current.base?.sha !== eventPullRequest.base?.sha ||
+              (current.body ?? '') !== (eventPullRequest.body ?? '')
+            ) {
+              core.info('PR가 event와 달라져 stale 결과를 건너뜁니다.');
+              return;
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+            const trackedComments = comments
+              .filter((comment) =>
+                comment.user?.login === 'github-actions[bot]' &&
+                typeof comment.body === 'string' &&
+                comment.body.startsWith(COMMENT_MARKER),
+              )
+              .sort((left, right) => right.id - left.id);
+            const runId = BigInt(process.env.GITHUB_RUN_ID ?? context.runId);
+            const runAttempt = BigInt(process.env.GITHUB_RUN_ATTEMPT ?? '1');
+            const runMarker = `<!-- ui-contract-review-run:${runId}-attempt:${runAttempt} -->`;
+            const newerComment = trackedComments.find((comment) => {
+              const match = comment.body.match(RUN_MARKER_PATTERN);
+              if (!match) return false;
+              const commentRunId = BigInt(match[1]);
+              const commentAttempt = BigInt(match[2]);
+              return commentRunId > runId ||
+                (commentRunId === runId && commentAttempt > runAttempt);
+            });
+            if (newerComment) {
+              core.info(`더 최신 run(${newerComment.id})이 있어 오래된 결과를 건너뜁니다.`);
+              return;
+            }
+
+            const existingComment = trackedComments[0];
+            const status = outcome === 'failure'
+              ? '⚠️ UI Contract Review 실패'
+              : '✅ UI Contract Review 해결됨';
+            const body = [COMMENT_MARKER, runMarker, status, '', report].join('\n');
+
+            if (outcome === 'failure') {
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  body,
+                  comment_id: existingComment.id,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  body,
+                  issue_number: issueNumber,
+                  owner,
+                  repo,
+                });
+              }
+              return;
+            }
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                body,
+                comment_id: existingComment.id,
+              });
+            }

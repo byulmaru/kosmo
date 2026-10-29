@@ -1244,7 +1244,14 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
   const files = changedFiles(cwd, analysisBase, head);
   const errors = [];
   const signals = [];
-  const categories = new Set();
+  const categoryFiles = new Map();
+  const addCategory = (category, file) => {
+    const paths = categoryFiles.get(category) ?? [];
+    paths.push(file);
+    categoryFiles.set(category, paths);
+  };
+  const categoryFileSummary = (category) =>
+    (categoryFiles.get(category) ?? []).map((file) => `\n- ${file}`).join('') || '\n- (none)';
   const baseHasPolicy = basePolicyExists(cwd, base);
   let uiCleanupOnly = true;
   const legacyReductions = new Map();
@@ -1271,13 +1278,15 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     ...registeredCustomIconOwners(readAtRef(cwd, base, 'eslint.config.mjs')),
     ...customAdmission.sourcePaths,
   ]);
-  const requiresCustomIconBody = files.some(
-    ({ path: file, oldPath }) =>
-      customSourcePaths.has(file) || (oldPath && customSourcePaths.has(oldPath)),
-  );
-  if (requiresCustomIconBody && !customIconBodyIsComplete(prBody)) {
+  const customIconBodyPaths = files
+    .filter(
+      ({ path: file, oldPath }) =>
+        customSourcePaths.has(file) || (oldPath && customSourcePaths.has(oldPath)),
+    )
+    .map(({ path: file }) => file);
+  if (customIconBodyPaths.length > 0 && !customIconBodyIsComplete(prBody)) {
     errors.push(
-      `Custom icon changes require nonempty PR body fields: ${CUSTOM_ICON_BODY_LABELS.map((label) => `${label}:`).join(' / ')}.`,
+      `Custom icon changes require nonempty PR body fields: ${CUSTOM_ICON_BODY_LABELS.map((label) => `${label}:`).join(' / ')}. Affected custom icon files: ${customIconBodyPaths.join(', ')}.`,
     );
   }
   if (customAdmission.kind === 'invalid') {
@@ -1301,13 +1310,13 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       }
     }
     if (file === 'eslint.config.mjs' && customAdmission.kind === 'valid') {
-      categories.add('ui');
+      addCategory('ui', file);
       uiCleanupOnly = false;
       signals.push(`${file}: treated as a custom icon owner admission.`);
       continue;
     }
     if (isPolicyPath(cwd, base, head, file)) {
-      categories.add('policy');
+      addCategory('policy', file);
       if (!baseHasPolicy && !bootstrap) {
         errors.push(
           `${file}: initial enforcement policy introduction requires the explicit bootstrap path.`,
@@ -1354,7 +1363,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     }
 
     if (!isAppSource(file)) {
-      categories.add('feature');
+      addCategory('feature', file);
       continue;
     }
 
@@ -1379,7 +1388,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       for (const [key, count] of legacyCleanup.consumed) {
         legacyConsumed.set(key, (legacyConsumed.get(key) ?? 0) + count);
       }
-      categories.add('feature');
+      addCategory('feature', file);
       continue;
     }
 
@@ -1389,7 +1398,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
     }
 
     if (owner && !mixedOwner && (!isNewSource || catalogOwner || registeredCustomSource)) {
-      categories.add('ui');
+      addCategory('ui', file);
       if (!analysis.visualOnlyRemoval || analysis.nonVisualChanged) {
         uiCleanupOnly = false;
       }
@@ -1416,33 +1425,33 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       ) {
         errors.push(`${file}: new visual source has no component/pattern story catalog entry.`);
       } else {
-        categories.add('ui');
+        addCategory('ui', file);
         if (!analysis.visualOnlyRemoval || analysis.nonVisualChanged || isNewSource || mixedOwner) {
           uiCleanupOnly = false;
         }
       }
     } else if (analysis.nonVisualChanged) {
-      categories.add('feature');
+      addCategory('feature', file);
     } else if (changed.status === 'D' || changed.status === 'R') {
-      categories.add('feature');
+      addCategory('feature', file);
     }
   }
 
-  if (categories.has('ui') && categories.has('feature')) {
+  if (categoryFiles.has('ui') && categoryFiles.has('feature')) {
     errors.push(
-      'The PR mixes UI contract changes with feature changes; split the changes into separate PRs.',
+      `The PR mixes UI contract changes with feature changes; split the changes into separate PRs. UI files:${categoryFileSummary('ui')}\nFeature files:${categoryFileSummary('feature')}`,
     );
   }
-  if (categories.has('policy') && (categories.has('ui') || categories.has('feature'))) {
+  if (categoryFiles.has('policy') && (categoryFiles.has('ui') || categoryFiles.has('feature'))) {
     const allowsInitialCleanup =
       !baseHasPolicy &&
       bootstrap &&
-      categories.has('ui') &&
-      !categories.has('feature') &&
+      categoryFiles.has('ui') &&
+      !categoryFiles.has('feature') &&
       uiCleanupOnly;
     if (!allowsInitialCleanup) {
       errors.push(
-        'The PR mixes enforcement-policy changes with runtime UI or feature changes; split the policy review.',
+        `The PR mixes enforcement-policy changes with runtime UI or feature changes; split the policy review. Policy files:${categoryFileSummary('policy')}\nUI files:${categoryFileSummary('ui')}\nFeature files:${categoryFileSummary('feature')}`,
       );
     }
   }
@@ -1453,7 +1462,7 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       );
     }
   }
-  return { errors, signals, categories: [...categories], files };
+  return { errors, signals, categories: [...categoryFiles.keys()], files };
 }
 
 const MERGE_QUEUE_QUERY = `
