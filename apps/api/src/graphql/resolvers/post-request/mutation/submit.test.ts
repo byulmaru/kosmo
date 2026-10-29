@@ -483,6 +483,7 @@ test('submitPostRequest recovers a lost acknowledgement after an upload source d
 
   let current: PostRequestState | null = null;
   let queryCount = 0;
+  const readCurrent = (): PostRequestState | null => current;
   t.mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
     assert.equal(id, workflowId);
     return {
@@ -555,13 +556,15 @@ test('submitPostRequest recovers a lost acknowledgement after an upload source d
   assert.deepEqual(initial.errors, undefined);
   assert.equal(initial.data?.submitPostRequest.request.status, 'QUEUED');
 
-  assert.ok(current);
-  current = { ...current, status: PostRequestStatus.PROCESSING };
+  const currentAfterStart = readCurrent();
+  assert.ok(currentAfterStart);
+  current = { ...currentAfterStart, status: PostRequestStatus.PROCESSING };
   const replay = await requestSubmit(input);
   assert.deepEqual(replay.errors, undefined);
   assert.equal(replay.data?.submitPostRequest.request.status, 'PROCESSING');
-  assert.ok(current);
-  current = { ...current, status: PostRequestStatus.FAILED };
+  const currentBeforeFailure = readCurrent();
+  assert.ok(currentBeforeFailure);
+  current = { ...currentBeforeFailure, status: PostRequestStatus.FAILED };
   const failedReplay = await requestSubmit(input);
   assert.deepEqual(failedReplay.errors, undefined);
   assert.equal(failedReplay.data?.submitPostRequest.request.status, 'FAILED');
