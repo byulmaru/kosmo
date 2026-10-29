@@ -13,10 +13,11 @@ import type { PostDetailCoachmarkTargets } from './PostDetailCoachmarkSteps';
 type Props = Readonly<{
   account: CoachmarkController_account$key | null | undefined;
   ready: boolean;
+  summaryAvailable: boolean;
   targets: PostDetailCoachmarkTargets;
 }>;
 
-export function PostDetailCoachmark({ account, ready, targets }: Props) {
+export function PostDetailCoachmark({ account, ready, summaryAvailable, targets }: Props) {
   const theme = useTheme();
   const helpTriggerRef = useRef<NativeView>(null);
   const getSteps = useCallback(() => createPostDetailCoachmarkSteps(targets), [targets]);
@@ -45,7 +46,7 @@ export function PostDetailCoachmark({ account, ready, targets }: Props) {
         automaticHandle?.cancel();
         getManualHandle()?.cancel();
       };
-    }, [ready]),
+    }, [ready, summaryAvailable]),
   );
 
   return (

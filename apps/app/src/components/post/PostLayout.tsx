@@ -32,6 +32,9 @@ const PostLayoutFragment = graphql`
     createdAt
     visibility
     replyCount
+    reactionCounts {
+      count
+    }
     content {
       id
       bodyText
@@ -148,6 +151,7 @@ export function PostLayout({
         : null,
   };
   const coachmarkReady = coachmarkReadyState.postId === post.id && coachmarkReadyState.ready;
+  const coachmarkSummaryAvailable = post.reactionCounts?.some(({ count }) => count > 0) ?? false;
   const markCoachmarkReady = useCallback(() => {
     setCoachmarkReadyState((current) =>
       current.postId === post.id && current.ready ? current : { postId: post.id, ready: true },
@@ -247,6 +251,7 @@ export function PostLayout({
           <PostDetailCoachmark
             account={coachmarkAccount}
             ready={coachmarkReady}
+            summaryAvailable={coachmarkSummaryAvailable}
             targets={coachmarkTargets}
           />
         ) : null}

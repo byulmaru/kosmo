@@ -3197,6 +3197,7 @@ const meta = {
     'PostDetailThreadRouteCoachmarkInteraction',
     'PostDetailThreadRouteCoachmarkAuto',
     'PostDetailThreadRouteCoachmarkNoReactions',
+    'PostDetailThreadRouteCoachmarkSummaryDisappears',
   ],
   decorators: [
     (Story) => (
@@ -6076,6 +6077,63 @@ export const PostDetailThreadRouteCoachmarkAuto: Story = {
       },
     },
   },
+};
+
+function PostDetailCoachmarkSummaryStoreUpdateStory() {
+  const environment = useRelayEnvironment();
+
+  return (
+    <>
+      <PostDetailScreen />
+      <Pressable
+        accessibilityLabel="반응 요약을 모두 제거"
+        accessibilityRole="button"
+        onPress={() =>
+          commitLocalUpdate(environment, (store) => {
+            const post = store.get(routeCurrentPost.id);
+            if (!post) {
+              throw new Error('게시글 도움말 반응 요약 fixture가 필요합니다.');
+            }
+            post.setLinkedRecords([], 'reactionCounts');
+          })
+        }
+      >
+        <Text>반응 요약을 모두 제거</Text>
+      </Pressable>
+    </>
+  );
+}
+
+export const PostDetailThreadRouteCoachmarkSummaryDisappears: Story = {
+  ...PostDetailThreadRouteCoachmarkAuto,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const findReadySurface = async (actionName: '다음' | '완료') => {
+      const surface = await screen.findByTestId('coachmark-surface');
+      await waitFor(() => {
+        const action = within(surface).getByRole('button', { name: actionName });
+        expect(surface).toBeVisible();
+        expect(action).toBeVisible();
+        expect(action).toBeEnabled();
+      });
+      return surface;
+    };
+
+    let surface = await findReadySurface('다음');
+    await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
+    surface = await findReadySurface('다음');
+    expect(within(surface).getByText('같은 마음이라면 이모지를 눌러요')).toBeVisible();
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '5');
+
+    await userEvent.click(canvas.getByRole('button', { name: '반응 요약을 모두 제거' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+
+    await userEvent.click(canvas.getByRole('button', { name: '게시글 도움말' }));
+    surface = await findReadySurface('다음');
+    expect(within(surface).getByText('이모지로 마음을 표현해요')).toBeVisible();
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '4');
+  },
+  render: () => <PostDetailCoachmarkSummaryStoreUpdateStory />,
 };
 
 export const PostDetailThreadRouteCoachmarkInteraction: Story = {

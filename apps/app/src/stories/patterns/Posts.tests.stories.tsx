@@ -24,6 +24,7 @@ import baseMeta, {
   PostDetailThreadRouteCoachmarkAuto as postDetailThreadRouteCoachmarkAuto,
   PostDetailThreadRouteCoachmarkInteraction as postDetailThreadRouteCoachmarkInteraction,
   PostDetailThreadRouteCoachmarkNoReactions as postDetailThreadRouteCoachmarkNoReactions,
+  PostDetailThreadRouteCoachmarkSummaryDisappears as postDetailThreadRouteCoachmarkSummaryDisappears,
   ProductionMoreShareReferences as productionMoreShareReferences,
   ReactionSummaryPostNavigation as reactionSummaryPostNavigation,
   ReactionSummaryQuoteNavigation as reactionSummaryQuoteNavigation,
@@ -117,6 +118,9 @@ export const PostDetailThreadRouteCoachmarkAuto: Story = {
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
   },
 };
+
+export const PostDetailThreadRouteCoachmarkSummaryDisappears: Story =
+  postDetailThreadRouteCoachmarkSummaryDisappears;
 
 export const PostDetailThreadRouteCoachmarkNoReactions: Story = {
   ...postDetailThreadRouteCoachmarkNoReactions,
