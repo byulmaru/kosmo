@@ -25,6 +25,11 @@ export const Playground: Story = {
   parameters: { controls: { include: ['pending'] } },
 };
 
+export const Dark: Story = {
+  globals: { theme: 'dark' },
+  parameters: { controls: { disable: true } },
+};
+
 export const Narrow320: Story = {
   globals: { viewport: { isRotated: false, value: 'notificationBanner320' } },
   parameters: {
