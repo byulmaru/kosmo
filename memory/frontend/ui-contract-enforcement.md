@@ -1,12 +1,12 @@
 # Frontend: UI Contract Enforcement
 
-이 문서는 KOSMO의 정적 UI 계약 검사와 PR 경계를 설명한다. 검사 통과는 Figma 일치, 의미적 시각 중복의 부재, Web·iOS·Android runtime 또는 원격 merge ruleset 적용을 증명하지 않는다.
+이 문서는 KOSMO의 정적 UI 계약 검사와 PR 경계를 설명한다. 검사 통과는 Figma 일치, 의미적 시각 중복의 부재, Web·iOS·Android runtime 또는 원격 merge ruleset 적용을 증명하지 않는다. PR classifier 결과는 참고용 UI Contract Review이며, 그 결과 하나로 PR 분리나 제품 구조 변경을 기계적으로 강제하지 않는다.
 
 ## 변경 분류와 PR 경계
 
 - 이미 공개된 named prop·variant와 기존 composition point를 재사용하는 consumer 변경은 기능 PR에서 진행할 수 있다. Production component와 story/source 경로를 근거로 남긴다.
-- 새 component·variant·public visual prop을 만들거나 작은 visual contract를 바꾸는 변경은 canonical component와 대표 story를 다루는 UI-only PR로 분리한다. route·data·Relay·API·mutation·cache·권한·feature flag 같은 runtime 통합은 별도 feature/runtime PR에서 연결한다.
-- 기존 Production component의 state·variant·callback·interaction 지원을 보강하는 변경도 UI-only PR 경계에 둔다. 배치·placement·margin·flex·width·height·padding 같은 caller-owned layout 조정은 그 자체로 visual contract 변경으로 분류하지 않는다.
+- 새 component·variant·public visual prop을 만들거나 작은 visual contract를 바꾸는 변경은 canonical component와 대표 story를 다루는 UI-only PR로 분리하는 것을 reviewer와 확인한다. route·data·Relay·API·mutation·cache·권한·feature flag 같은 runtime 통합은 별도 feature/runtime PR에서 연결한다.
+- 기존 Production component의 state·variant·callback·interaction 지원을 보강하는 변경도 UI-only PR 경계로 검토한다. 배치·placement·margin·flex·width·height·padding 같은 caller-owned layout 조정은 그 자체로 visual contract 변경으로 분류하지 않는다.
 - 기존 recipe와 예외는 현재 UI를 보존하기 위해 유지할 수 있지만, legacy snapshot에 있다는 사실은 새 디자인 승인이나 새 consumer의 면제가 아니다. 버그 복구·의도적 recipe는 근거와 영향 범위를 리뷰에서 설명한다.
 
 ## ESLint가 검사하는 범위
@@ -61,7 +61,7 @@ Lucide의 일반 glyph와 type-only import는 허용하고, builtin `no-restrict
 node scripts/check-ui-contract-pr.mjs --base <base-sha> --head <head-sha>
 ```
 
-검사 정책·config·legacy snapshot은 현재 PR base를 신뢰하고, changed paths와 source·catalog·visual/non-visual AST 비교는 base/head의 공통 조상부터 head까지의 변경만 분석한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 섞지 않는다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
+검사 정책·config·legacy snapshot은 현재 PR base를 신뢰하고, changed paths와 source·catalog·visual/non-visual AST 비교는 base/head의 공통 조상부터 head까지의 변경만 분석한다. policy-only 변경은 허용하지만 policy와 runtime/UI 변경을 함께 다루는 경우 reviewer가 경계를 확인한다. 최초 checker 도입처럼 base에 checker가 없는 경우에만 명시적인 `--bootstrap` 경로를 사용하며, 기존 UI cleanup을 넘어서 새 feature나 새 visual contract를 자동 면제하지 않는다. 예외 snapshot을 자동 생성하거나 갱신하지 않는다.
 
 owner 판단은 `components/ui/**`와 실제 Production component를 import하는 `components`·`patterns` story에 한정한다. screen story만으로 새 canonical owner를 만들 수 없으며, platform sibling(`.native`/`.web`)은 같은 Production module 경계로 본다. `react-relay`, `expo-router`, `FeatureFlagsContext`와 같은 알려진 runtime 연결은 base/head 양쪽 source를 함께 보아 시각 변경과 feature 변경을 섞지 않는다.
 
@@ -69,8 +69,8 @@ custom icon admission은 일반 enforcement-policy 완화와 구분한다. `esli
 
 `*.test.stories.*`와 `*.tests.stories.*`는 component·pattern story classifier, 새 UI owner catalog, custom icon 대표 story 증거에서 제외하고 보조 테스트 변경으로 처리한다. main `*.stories.*`가 Production component의 대표 story 책임을 가지며, 이 제외는 Tests story의 Production UI 복제 금지를 완화하지 않고 Storybook의 실제 test 실행도 끄지 않는다.
 
-merge queue에서는 webhook의 immutable event head/base와 exact queue entry를 사용한다. GraphQL queue 응답은 exact event head를 찾을 때까지 page를 따라가며, 누락·오류·unknown head·필요한 SHA fetch 실패·local ancestry 검증 실패는 fail closed한다. 선택된 queue entry와 PR의 base/head를 개별적으로 검증하며 moving branch tip이나 전체 repository history query를 성공 근거로 삼지 않는다. 이 CLI와 workflow는 read-only 검사 경계이며, 원격 ruleset을 변경하지 않는다.
+CLI의 `--merge-group` 경로에서는 webhook의 immutable event head/base와 exact queue entry를 사용한다. GraphQL queue 응답은 exact event head를 찾을 때까지 page를 따라가며, 누락·오류·unknown head·필요한 SHA fetch 실패·local ancestry 검증 실패는 fail closed한다. 선택된 queue entry와 PR의 base/head를 개별적으로 검증하며 moving branch tip이나 전체 repository history query를 성공 근거로 삼지 않는다. 현재 advisory workflow는 `pull_request` 이벤트에서만 실행하고 `merge_group`에는 실행하지 않는다. 기본 Lint workflow의 `merge_group` 트리거와 일반 lint 실행은 유지되며, 이 CLI와 advisory workflow는 required check나 원격 ruleset을 변경하지 않는다.
 
 ## 검토 증거와 남은 한계
 
-PR에는 재사용한 component prop/variant와 Production story/source 근거, 또는 분리한 UI-only contract PR와 후속 runtime consumer 경계를 적는다. 이 텍스트와 템플릿 항목은 리뷰 증거일 뿐 자동 승인 조건의 대체가 아니다. 로컬 `test:eslint`·lint·workflow 검증, 원격 CI/required check·merge ruleset, Native device QA와 Storybook/Production runtime 검증은 각각 별도 상태로 보고한다.
+PR에는 재사용한 component prop/variant와 Production story/source 근거, 또는 분리한 UI-only contract PR와 후속 runtime consumer 경계를 적는다. 이 텍스트와 템플릿 항목, advisory classifier 결과는 reviewer 판단을 위한 증거일 뿐 자동 승인 조건이나 기계적인 PR 분리의 대체·강제가 아니다. 직접 ESLint 규칙은 blocking 검증으로 유지하며, 로컬 `test:eslint`·lint·workflow 검증, 원격 CI/required check·merge ruleset, Native device QA와 Storybook/Production runtime 검증은 각각 별도 상태로 보고한다.

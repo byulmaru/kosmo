@@ -28,6 +28,7 @@ const POLICY_PATHS = new Set([
   'scripts/ui-contract-legacy.json',
   'eslint.config.mjs',
   '.github/workflows/lint.yml',
+  '.github/workflows/ui-contract-review.yml',
   'package.json',
 ]);
 

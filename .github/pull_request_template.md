@@ -32,7 +32,7 @@ Canonical 문서와 Linear에는 비즈니스 요구사항·관찰 가능한 보
 
 ## UI 계약과 consumer 경계
 
-<!-- UI를 변경하지 않는 backend·data PR은 "해당 없음"이라고 적어도 됩니다. 이 항목의 작성만으로 승인된 것으로 보지 않습니다. -->
+<!-- UI를 변경하지 않는 backend·data PR은 "해당 없음"이라고 적어도 됩니다. 이 항목의 작성이나 UI Contract classifier 결과만으로 승인·분리가 확정되는 것은 아닙니다. -->
 
 - 기존 UI 계약을 재사용했다면 component의 named prop·variant·조합 지점과 Production story/source 경로를 적어 주세요.
 - 새 component·variant·public visual prop 또는 작은 시각 계약을 바꿨다면 canonical component와 대표 story를 단일 UI-only PR에서 갱신했는지, 후속 consumer/runtime integration PR의 경계를 적어 주세요.
@@ -42,7 +42,7 @@ Canonical 문서와 Linear에는 비즈니스 요구사항·관찰 가능한 보
 
 <!--
 새 custom icon, 예외 등록, canonical UI component와 대표 component/pattern story를 같은 UI-only PR에 포함할 수 있습니다.
-실제 runtime consumer·Relay·route·feature flag 연결은 별도 feature/runtime PR로 분리하세요. 해당하지 않는 PR에서는 이 항목을 지워도 됩니다.
+실제 runtime consumer·Relay·route·feature flag 연결은 reviewer와 범위를 확인해 별도 feature/runtime PR로 연결하세요. 해당하지 않는 PR에서는 이 항목을 지워도 됩니다.
 -->
 
 - 고려한 Lucide 대안:

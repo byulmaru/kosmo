@@ -572,12 +572,14 @@ describe('check-ui-contract-pr', () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
       'scripts/ui-contract-legacy.json': '{"version":1,"entries":{}}\n',
+      '.github/workflows/ui-contract-review.yml': 'name: old\n',
     });
     await writeRepositoryFile(
       root,
       'scripts/ui-contract-legacy.json',
       '{"version":1,"entries":{"new":{}}}\n',
     );
+    await writeRepositoryFile(root, '.github/workflows/ui-contract-review.yml', 'name: new\n');
     commit(root, 'policy self exemption');
     const result = checkPullRequest({ ...refs(root), cwd: root });
     assert.deepEqual(result.errors, []);

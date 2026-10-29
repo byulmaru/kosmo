@@ -1,0 +1,96 @@
+name: UI Contract Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ui-contract-review:
+    name: UI Contract Review (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        id: checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Set up mise
+        id: mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          version: '2026.9.2'
+
+      - name: Install dependencies
+        id: dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run UI contract review
+        id: check
+        env:
+          UI_CONTRACT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          UI_CONTRACT_LOG: ${{ runner.temp }}/ui-contract-review.log
+        run: |
+          set -euo pipefail
+          UI_CONTRACT_CHECKER="scripts/check-ui-contract-pr.mjs"
+          UI_CONTRACT_TEMP=""
+          UI_CONTRACT_ARGS=()
+          trap 'if [ -n "$UI_CONTRACT_TEMP" ]; then rm -f "$UI_CONTRACT_TEMP"; fi' EXIT
+
+          if git cat-file -e "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" 2>/dev/null; then
+            UI_CONTRACT_TEMP="$(mktemp scripts/.check-ui-contract-pr.base.XXXXXX.mjs)"
+            git show "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" > "$UI_CONTRACT_TEMP"
+            UI_CONTRACT_CHECKER="$UI_CONTRACT_TEMP"
+          else
+            UI_CONTRACT_ARGS+=(--bootstrap)
+          fi
+
+          node "$UI_CONTRACT_CHECKER" \
+            --base "$UI_CONTRACT_BASE_SHA" \
+            --head "$UI_CONTRACT_HEAD_SHA" \
+            --event-file "$GITHUB_EVENT_PATH" \
+            "${UI_CONTRACT_ARGS[@]}" 2>&1 | tee "$UI_CONTRACT_LOG"
+
+      - name: Summarize UI contract review
+        if: always()
+        env:
+          UI_CONTRACT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          UI_CONTRACT_LOG: ${{ runner.temp }}/ui-contract-review.log
+        run: |
+          set -euo pipefail
+          {
+            echo '## UI Contract Review (참고용)'
+            echo
+            echo '이 workflow는 required check가 아니며 merge를 차단하지 않습니다.'
+            echo
+            echo "- Base: \`$UI_CONTRACT_BASE_SHA\`"
+            echo "- Head: \`$UI_CONTRACT_HEAD_SHA\`"
+            echo "- Checkout: \`${{ steps.checkout.outcome }}\`"
+            echo "- Dependencies: \`${{ steps.dependencies.outcome }}\`"
+            echo "- Review: \`${{ steps.check.outcome }}\`"
+            echo
+            if [ '${{ steps.check.outcome }}' = 'success' ]; then
+              echo '정적 UI 계약 검토가 통과했습니다. 직접 ESLint 규칙과 별도의 참고 결과입니다.'
+            elif [ '${{ steps.check.outcome }}' = 'failure' ]; then
+              echo '정적 UI 계약 검토에서 오류가 발생했습니다. 아래 근거를 reviewer가 확인하세요.'
+            else
+              echo '검사 단계가 실행되지 않았습니다. checkout·도구·dependency 단계의 실패를 확인하세요.'
+            fi
+            echo
+            if [ -f "$UI_CONTRACT_LOG" ]; then
+              echo '<details><summary>검사 출력 (최대 200줄)</summary>'
+              echo
+              sed -n '1,200{s/`/\\`/g;s/^/    /;p;}' "$UI_CONTRACT_LOG"
+              echo
+              echo '</details>'
+            else
+              echo '검사 출력 파일이 없어 설치 또는 실행 단계의 실패를 별도로 확인해야 합니다.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

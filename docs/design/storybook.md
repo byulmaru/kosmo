@@ -68,6 +68,8 @@ apps/app/src/stories/
 - 기존 Production component의 state·variant·callback·interaction 지원을 실제로 보강하는 변경은 해당 DSN Storybook 이슈의 UI-only PR에서 진행한다. Story를 추가했다는 사실만으로 새로운 public 계약이나 runtime 완료를 추론하지 않는다.
 - `style`의 시각 override는 배치 조정과 다르다. color·background·border·font·shadow·opacity·outline 같은 component-owned visual 계약을 바꿀 때는 canonical component/recipe의 근거와 예외 책임을 명시하고, 기존 recipe를 유지하는 경우에도 새 디자인 승인으로 기록하지 않는다.
 
+위 UI-only·feature/runtime 경계는 authoring과 reviewer의 판단 기준이다. UI Contract classifier는 별도 참고용 workflow에서 실행하며, 그 결과 하나로 PR 분리나 제품 구조 변경을 자동 강제하지 않는다. canonical component의 시각 override와 custom icon import를 제한하는 직접 ESLint 규칙은 계속 blocking 검증으로 적용한다.
+
 ## Story 종류
 
 ### 재사용 UI
