@@ -223,6 +223,10 @@ mock.module('./PostActionSurface', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('./PostDetailCoachmark', {
+  exports: { PostDetailCoachmark: () => null },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('./PostBody', {
   exports: {
     PostBody: (props: Record<string, unknown>) =>

@@ -18,6 +18,9 @@ import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
   query PostDetailQuery($postId: ID!) {
+    me {
+      ...CoachmarkController_account
+    }
     currentSession {
       id
       selectedProfile {
@@ -182,6 +185,7 @@ function PostDetailContent({
     </PostDetailFrame>
   ) : (
     <PostDetailThread
+      coachmarkAccount={data.me}
       header={header}
       identity={postId}
       onCurrentPostBackgroundPress={() => router.push(`/${post.profile.relativeHandle}/${post.id}`)}

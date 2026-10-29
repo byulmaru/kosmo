@@ -22,6 +22,7 @@ import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { startWebLogin } from '@/auth/webLogin';
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
@@ -3042,6 +3043,14 @@ const defaultSession = shellQuery({
   profiles: [defaultStoryProfile],
   selectedProfile: defaultStoryProfile,
 });
+const postDetailCoachmarkAccount = {
+  ...defaultSession.me,
+  metadata: [{ key: 'coachmark.post.shown', value: 'true' }],
+};
+const postDetailCoachmarkNewAccount = {
+  ...defaultSession.me,
+  metadata: [],
+};
 const mediaViewerThreadCurrentPost = {
   ...withReactionViewerState(mediaViewerQuotePost),
   replyParent: { __typename: 'Post' as const, id: routeParentPost.id },
@@ -3195,17 +3204,22 @@ const meta = {
     'ReplyModalBackdropDismissInteraction',
     'ReplyModalComposerMediaEditorGeometry',
     'ReplyFullscreenVisibleViewport',
+    'PostDetailThreadRouteCoachmarkInteraction',
+    'PostDetailThreadRouteCoachmarkAuto',
+    'PostDetailThreadRouteCoachmarkNoReactions',
   ],
   decorators: [
     (Story) => (
       <SessionProvider>
-        <PostActionAuthenticationProvider>
-          <PostComposerCoordinatorProvider owner="list" profile={null}>
-            <PostMediaViewerHostProvider>
-              <Story />
-            </PostMediaViewerHostProvider>
-          </PostComposerCoordinatorProvider>
-        </PostActionAuthenticationProvider>
+        <CoachmarkProvider accountId={defaultSession.me.id}>
+          <PostActionAuthenticationProvider>
+            <PostComposerCoordinatorProvider owner="list" profile={null}>
+              <PostMediaViewerHostProvider>
+                <Story />
+              </PostMediaViewerHostProvider>
+            </PostComposerCoordinatorProvider>
+          </PostActionAuthenticationProvider>
+        </CoachmarkProvider>
       </SessionProvider>
     ),
   ],
@@ -3227,6 +3241,36 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+function createPostDetailCoachmarkQueryResponse({
+  accountMetadata = postDetailCoachmarkAccount.metadata,
+  includeReactions = true,
+}: {
+  accountMetadata?: readonly { key: string; value: string }[];
+  includeReactions?: boolean;
+} = {}) {
+  const currentPost = includeReactions ? routeCurrentPost : routeCurrentPostWithoutReactions;
+  return {
+    data: {
+      currentSession: defaultSession.currentSession,
+      me: { ...postDetailCoachmarkAccount, metadata: accountMetadata },
+      node: {
+        ...currentPost,
+        reactionCounts: includeReactions ? routeCurrentPostReactionCounts : [],
+        replyAncestors: [{ ...routeParentPost, repostSource: routeSourcePost }, routeRootPost],
+        replyDescendants: {
+          edges: [
+            { cursor: 'route-child', node: routeChildPost },
+            { cursor: 'route-sibling', node: routeSiblingPost },
+            { cursor: 'route-reply-quote', node: routeReplyQuotePost },
+            { cursor: 'route-source-null', node: routeSourceNullPost },
+          ],
+          pageInfo: { endCursor: null, hasNextPage: false },
+        },
+      },
+    },
+  };
+}
 
 export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -5826,6 +5870,7 @@ export const PostDetailThreadRoute: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
@@ -6011,6 +6056,107 @@ export const PostDetailThreadRoute: Story = {
   ),
 };
 
+export const PostDetailThreadRouteCoachmark: Story = {
+  ...PostDetailThreadRoute,
+  play: undefined,
+  parameters: {
+    ...PostDetailThreadRoute.parameters,
+    relay: {
+      ...PostDetailThreadRoute.parameters?.relay,
+      mutationResponse: {
+        setAccountMetadata: {
+          account: postDetailCoachmarkAccount,
+          key: 'coachmark.post.shown',
+          value: 'true',
+        },
+      },
+      operationResponses: {
+        ...PostDetailThreadRoute.parameters?.relay?.operationResponses,
+        PostDetailQuery: createPostDetailCoachmarkQueryResponse(),
+      },
+    },
+  },
+};
+
+export const PostDetailThreadRouteCoachmarkNoReactions: Story = {
+  ...PostDetailThreadRouteCoachmark,
+  play: undefined,
+  parameters: {
+    ...PostDetailThreadRouteCoachmark.parameters,
+    relay: {
+      ...PostDetailThreadRouteCoachmark.parameters?.relay,
+      operationResponses: {
+        ...PostDetailThreadRouteCoachmark.parameters?.relay?.operationResponses,
+        PostDetailQuery: createPostDetailCoachmarkQueryResponse({
+          accountMetadata: postDetailCoachmarkNewAccount.metadata,
+          includeReactions: false,
+        }),
+      },
+    },
+  },
+};
+
+export const PostDetailThreadRouteCoachmarkAuto: Story = {
+  ...PostDetailThreadRouteCoachmark,
+  play: undefined,
+  parameters: {
+    ...PostDetailThreadRouteCoachmark.parameters,
+    relay: {
+      ...PostDetailThreadRouteCoachmark.parameters?.relay,
+      operationResponses: {
+        ...PostDetailThreadRouteCoachmark.parameters?.relay?.operationResponses,
+        PostDetailQuery: createPostDetailCoachmarkQueryResponse({
+          accountMetadata: postDetailCoachmarkNewAccount.metadata,
+        }),
+      },
+    },
+  },
+};
+
+export const PostDetailThreadRouteCoachmarkInteraction: Story = {
+  ...PostDetailThreadRouteCoachmark,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('button', { name: '❤️ 반응 2개' });
+    const help = await canvas.findByRole('button', { name: '게시글 도움말' });
+    await userEvent.click(help);
+    const findReadySurface = async (actionName: '다음' | '완료') => {
+      const surface = await screen.findByTestId('coachmark-surface');
+      await waitFor(() => {
+        const action = within(surface).getByRole('button', { name: actionName });
+        expect(surface).toBeVisible();
+        expect(action).toBeVisible();
+        expect(action).toBeEnabled();
+      });
+      return surface;
+    };
+
+    let surface = await findReadySurface('다음');
+
+    expect(surface).toBeVisible();
+    expect(within(surface).getByText('이모지로 마음을 표현해요')).toBeVisible();
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '5');
+
+    for (const title of [
+      '같은 마음이라면 이모지를 눌러요',
+      '함께 보고 싶은 글을 공유해요',
+      '다시 보고 싶은 글을 저장해요',
+      '답글로 대화를 이어가요',
+    ]) {
+      await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
+      surface = await findReadySurface(title === '답글로 대화를 이어가요' ? '완료' : '다음');
+      expect(within(surface).getByText(title)).toBeVisible();
+    }
+
+    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+
+    await userEvent.click(help);
+    surface = await findReadySurface('다음');
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+  },
+};
+
 export const MobilePostDetailThreadRoute: Story = {
   ...PostDetailThreadRoute,
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -6030,6 +6176,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...withReactionViewerState(quotePost),
               reactionCounts: [],
@@ -6105,6 +6252,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...withReactionViewerState(pureRepost),
               reactionCounts: [],
@@ -6151,6 +6299,7 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
@@ -6208,6 +6357,7 @@ export const PostDetailReplyTargetedRefetch: Story = {
               id: 'session',
               selectedProfile: composerProfile,
             },
+            me: { ...defaultSession.me, metadata: postDetailCoachmarkAccount.metadata },
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6276,6 +6426,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6324,6 +6475,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
+            me: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6399,6 +6551,7 @@ export const PostDetailThreadPageLoading: Story = {
         PostDetailQuery: {
           data: {
             currentSession: defaultSession.currentSession,
+            me: { ...defaultSession.me, metadata: postDetailCoachmarkAccount.metadata },
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6442,6 +6595,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         PostDetailQuery: {
           data: {
             currentSession: defaultSession.currentSession,
+            me: { ...defaultSession.me, metadata: postDetailCoachmarkAccount.metadata },
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],

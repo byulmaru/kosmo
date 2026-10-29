@@ -27,6 +27,7 @@ export type ReactionActionProps = Readonly<{
   execution?: PostActionExecution;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   renderTrigger: (props: ReactionActionTriggerRenderProps) => ReactNode;
+  triggerRef?: Ref<View>;
 }>;
 
 export function ReactionAction({
@@ -34,6 +35,7 @@ export function ReactionAction({
   execution = { kind: 'enabled' },
   onResolutionRequired,
   renderTrigger,
+  triggerRef: coachmarkTriggerRef,
 }: ReactionActionProps): ReactNode {
   const environment = useRelayEnvironment();
   const { selectedProfileId } = useSession();
@@ -109,7 +111,14 @@ export function ReactionAction({
         expanded: execution.kind === 'enabled' && fullOpen,
         hasReacted: controller.selectedTypeIds.length > 0,
         onPress: toggleFull,
-        ref: triggerRef,
+        ref: (node) => {
+          triggerRef.current = node;
+          if (typeof coachmarkTriggerRef === 'function') {
+            coachmarkTriggerRef(triggerDisabled ? null : node);
+          } else if (coachmarkTriggerRef) {
+            coachmarkTriggerRef.current = triggerDisabled ? null : node;
+          }
+        },
       })}
       <FullReactionOverlay
         onClose={closeFull}
