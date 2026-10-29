@@ -151,6 +151,13 @@ test('Production adapter hides feedback without a current session', async () => 
   assert.equal(props.showFeedback, false);
 });
 
+test('Production adapter selects the protected post request route', async () => {
+  pathname = '/post-requests';
+  const props = await renderSidebar();
+
+  assert.equal(props.currentDestination, 'postRequests');
+});
+
 test('Production adapter starts guest authentication through the existing BFF entry', async () => {
   pathname = '/@writer/post-id';
   const props = await renderSidebar({ guestPublicContent: true });

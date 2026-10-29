@@ -26,6 +26,7 @@ export type InfiniteListProps<Item> = Readonly<{
   style?: StyleProp<ViewStyle>;
   footer?: ReactElement | null;
   empty?: ReactElement | null;
+  header?: ReactElement | null;
 }>;
 
 export function InfiniteList<Item>({
@@ -39,6 +40,7 @@ export function InfiniteList<Item>({
   onRefresh,
   pageSize,
   footer,
+  header,
   renderItem,
   refreshing,
   reselectDestination,
@@ -81,6 +83,7 @@ export function InfiniteList<Item>({
   if (Platform.OS === 'web' || hasNativeScrollParent) {
     return (
       <View style={style}>
+        {header}
         {data.length === 0
           ? empty
           : data.map((item, index) => (
@@ -96,6 +99,7 @@ export function InfiniteList<Item>({
       data={data}
       ref={scrollRef}
       ListEmptyComponent={empty}
+      ListHeaderComponent={header}
       keyExtractor={keyExtractor}
       keyboardShouldPersistTaps="handled"
       ListFooterComponent={footer}

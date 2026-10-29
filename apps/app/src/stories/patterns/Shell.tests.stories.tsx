@@ -203,7 +203,9 @@ export const UniversalMobileProfilePickerDismissesInsideDrawer: Story = {
     await userEvent.click(trigger);
     await page.findByLabelText('프로필 전환');
     const followRequestsLink = within(drawer).getByRole('link', { name: '팔로워 요청' });
+    const postRequestsLink = within(drawer).getByRole('link', { name: '작성 요청' });
     expect(followRequestsLink).toHaveAttribute('href', '/follow-requests');
+    expect(postRequestsLink).toHaveAttribute('href', '/post-requests');
     await userEvent.click(followRequestsLink);
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
     expect(page.queryByLabelText('프로필 전환')).toBeNull();

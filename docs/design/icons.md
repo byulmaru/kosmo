@@ -78,6 +78,7 @@ back에 chevron을 사용하지 않는다.
 | Shell            | 알림                       | `Bell`                         | `BottomTabBar`, `SidebarNavigation`                                                     |
 | Shell            | 프로필                     | Avatar `28` / `UserRound` `20` | `SidebarNavigation`                                                                     |
 | Shell            | 팔로우 요청                | `UserRoundPlus`                | Home, `SidebarNavigation`                                                               |
+| Shell            | 작성 요청                  | `ClipboardList`                | `SidebarNavigation`                                                                     |
 | Shell            | 북마크                     | `Bookmark`                     | `SidebarNavigation`, `PostActionBar`                                                    |
 | Shell            | 설정                       | `Settings`                     | `SidebarNavigation`                                                                     |
 | Shell            | 디스코드 커뮤니티 참여하기 | `UsersRound` (20, stroke 2)    | Web `SidebarNavigation`; Figma sync·runtime 검증 대기                                   |

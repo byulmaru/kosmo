@@ -14,6 +14,7 @@ import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { useProfilePinOrder } from './ProfilePinOrder';
 import { ProfilePinOrderContext } from './ProfilePinOrderContext';
+import type { ReactElement } from 'react';
 import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
@@ -200,6 +201,7 @@ const PostListHashtagFragment = graphql`
 
 type Props = {
   error?: boolean;
+  header?: ReactElement | null;
   hashtag?: PostList_hashtag$key | null;
   home?: PostList_home$key | null;
   ignoreBlock?: boolean;
@@ -215,6 +217,7 @@ type Props = {
 
 export const PostList = memo(function PostList({
   error = false,
+  header,
   hashtag: hashtagKey,
   home: homeKey,
   ignoreBlock = false,
@@ -394,6 +397,7 @@ export const PostList = memo(function PostList({
                   </View>
                 ) : null
               }
+              header={header}
               renderItem={({ item }) => (
                 <PostListItem post={item.node} presentation={postListPresentation} />
               )}
