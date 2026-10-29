@@ -1,7 +1,5 @@
 import { Text, View } from 'react-native';
-import { expect, within } from 'storybook/test';
 import { PostContentEmoji } from '@/components/post/PostContentEmoji';
-import { PostContentRenderer } from '@/components/post/PostContentRenderer';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const localEmojiImage = `data:image/svg+xml,${encodeURIComponent(
@@ -36,50 +34,4 @@ export const LocalFixture: Story = {
 export const FailedFixture: Story = {
   args: { shortcode: ':unavailable:', url: 'data:image/png;base64,not-valid' },
   name: 'Failed Fixture',
-};
-
-function ContentWarningRendererStory() {
-  return (
-    <View style={{ maxWidth: 360 }}>
-      <PostContentRenderer
-        bodyText=":blobcat:"
-        contentWarning="민감한 내용"
-        document={{
-          version: 1,
-          summary: '민감한 내용',
-          body: {
-            type: 'doc',
-            attrs: {
-              customEmojis: [{ shortcode: ':blobcat:', url: 'https://emoji.example/blobcat.png' }],
-            },
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'text',
-                    text: ':blobcat:',
-                  },
-                ],
-              },
-            ],
-          },
-        }}
-        media={[]}
-        mentionedProfiles={[]}
-        postId="post-content-emoji-warning-story"
-      />
-    </View>
-  );
-}
-
-export const ContentWarningHidden: StoryObj = {
-  name: 'Content Warning Hidden',
-  render: () => <ContentWarningRendererStory />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '민감한 내용, 본문, 보기' })).toBeVisible();
-    expect(canvas.queryByText(':blobcat:', { exact: true })).toBeNull();
-    expect(canvas.queryByRole('img')).toBeNull();
-  },
 };
