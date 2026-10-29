@@ -24,6 +24,7 @@ const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
 const previousCancelAnimationFrame = globalThis.cancelAnimationFrame;
 const appStateListeners = new Set<(nextState: string) => void>();
 let keyboardDismissCount = 0;
+let animationFrames: FrameRequestCallback[] = [];
 const emitAppState = (nextState: string) => {
   for (const listener of appStateListeners) {
     listener(nextState);
@@ -338,6 +339,11 @@ before(async () => {
 });
 
 beforeEach(() => {
+  animationFrames = [];
+  Object.assign(globalThis, {
+    cancelAnimationFrame: () => undefined,
+    requestAnimationFrame: (callback: FrameRequestCallback) => animationFrames.push(callback),
+  });
   mentionSearchEnabled = true;
   appStateListeners.clear();
   keyboardDismissCount = 0;
@@ -806,6 +812,8 @@ describe('PostComposer local author', () => {
     await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
     await act(async () => switcherProps?.onSelectionSuccess?.());
     assert.equal(switcherProps?.selectedProfileId, profileB.id);
+    assert.equal(editorFocusCount, 0);
+    await act(async () => animationFrames.splice(0).forEach((callback) => callback(0)));
     assert.equal(editorFocusCount, 1);
     await act(async () => {
       renderer?.update(
@@ -876,6 +884,8 @@ describe('PostComposer local author', () => {
 
       await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
       await act(async () => switcherProps?.onSelectionSuccess?.());
+      assert.equal(editorFocusCount, 0);
+      await act(async () => animationFrames.splice(0).forEach((callback) => callback(0)));
       assert.equal(editorFocusCount, 1);
 
       await act(async () => renderer?.unmount());
