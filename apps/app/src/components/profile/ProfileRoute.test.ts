@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createContext, createElement, useContext, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -33,6 +33,7 @@ const queryHistory: Array<{
   handle: string;
   query: QueryName;
 }> = [];
+let queryLoadSequence = 0;
 const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
@@ -64,7 +65,7 @@ let windowHeight = 800;
 let globalParams: RouteParams = {};
 let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
-let pathname = '/profile/';
+let pathname = '/@target';
 let currentRouteInfo: { params: RouteParams; pathname: string } | null = null;
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
@@ -107,6 +108,60 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+function readMockQuery(query: QueryName, variables: { handle: string }, fetchKey: string | number) {
+  queryHistory.push({
+    fetchKey: String(fetchKey),
+    handle: variables.handle,
+    query,
+  });
+  const mode = queryModes[query];
+  if (mode === 'loading') {
+    throw pending;
+  }
+  if (mode === 'error') {
+    throw new Error(`${query}:${variables.handle}`);
+  }
+
+  return {
+    currentSession: selectedProfileId
+      ? { selectedProfile: { id: selectedProfileId } }
+      : { selectedProfile: null },
+    profileByHandle: profileAvailable
+      ? {
+          displayName: profileDisplayName ?? `Display ${variables.handle}`,
+          handle: variables.handle,
+          id: `profile:${variables.handle}`,
+          instance: { kind: profileInstanceKind },
+          relativeHandle: `@${variables.handle}`,
+          viewerState:
+            query === 'ProfilePostListPageQuery'
+              ? {
+                  profileBlock: postListProfileBlockId ? { id: postListProfileBlockId } : null,
+                }
+              : profileBlockStatus == null || profileViewerState == null
+                ? null
+                : {
+                    ...profileViewerState,
+                    blockedBy: profileBlockStatus.blockedBy,
+                    profileBlock:
+                      profileViewerState.profileBlock === undefined
+                        ? profileBlockStatus.profileBlockId
+                          ? {
+                              id: profileBlockStatus.profileBlockId,
+                              targetProfile: {
+                                displayName: `Display ${variables.handle}`,
+                                id: `profile:${variables.handle}`,
+                                relativeHandle: `@${variables.handle}`,
+                              },
+                            }
+                          : null
+                        : profileViewerState.profileBlock,
+                  },
+        }
+      : null,
+  };
+}
+
 mockModule('expo-router', {
   Slot: () =>
     SlotContent
@@ -130,6 +185,7 @@ mockModule('expo-router', {
     ),
   useGlobalSearchParams: () => globalParams,
   useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
+  useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
   useRouter: () => ({
@@ -223,58 +279,27 @@ mockModule('react-relay', {
     query: QueryName,
     variables: { handle: string },
     options: { fetchKey: string },
-  ) => {
-    queryHistory.push({
-      fetchKey: options.fetchKey,
-      handle: variables.handle,
-      query,
-    });
-    const mode = queryModes[query];
-    if (mode === 'loading') {
-      throw pending;
-    }
-    if (mode === 'error') {
-      throw new Error(`${query}:${variables.handle}`);
-    }
-
-    return {
-      currentSession: selectedProfileId
-        ? { selectedProfile: { id: selectedProfileId } }
-        : { selectedProfile: null },
-      profileByHandle: profileAvailable
-        ? {
-            displayName: profileDisplayName ?? `Display ${variables.handle}`,
-            handle: variables.handle,
-            id: `profile:${variables.handle}`,
-            instance: { kind: profileInstanceKind },
-            relativeHandle: `@${variables.handle}`,
-            viewerState:
-              query === 'ProfilePostListPageQuery'
-                ? {
-                    profileBlock: postListProfileBlockId ? { id: postListProfileBlockId } : null,
-                  }
-                : profileBlockStatus == null || profileViewerState == null
-                  ? null
-                  : {
-                      ...profileViewerState,
-                      blockedBy: profileBlockStatus.blockedBy,
-                      profileBlock:
-                        profileViewerState.profileBlock === undefined
-                          ? profileBlockStatus.profileBlockId
-                            ? {
-                                id: profileBlockStatus.profileBlockId,
-                                targetProfile: {
-                                  displayName: `Display ${variables.handle}`,
-                                  id: `profile:${variables.handle}`,
-                                  relativeHandle: `@${variables.handle}`,
-                                },
-                              }
-                            : null
-                          : profileViewerState.profileBlock,
-                    },
-          }
-        : null,
-    };
+  ) => readMockQuery(query, variables, options.fetchKey),
+  usePreloadedQuery: (
+    query: QueryName,
+    queryReference: { variables: { handle: string }; fetchKey: string },
+  ) => readMockQuery(query, queryReference.variables, queryReference.fetchKey),
+  useQueryLoader: () => {
+    const [queryReference, setQueryReference] = useState<{
+      fetchKey: string;
+      variables: { handle: string };
+    } | null>(null);
+    const loadQuery = useCallback(
+      (variables: { handle: string }, options?: { fetchPolicy?: string }) => {
+        setQueryReference({
+          fetchKey: `${options?.fetchPolicy ?? 'store-and-network'}:${++queryLoadSequence}`,
+          variables,
+        });
+      },
+      [],
+    );
+    const disposeQuery = useCallback(() => setQueryReference(null), []);
+    return [queryReference, loadQuery, disposeQuery] as const;
   },
 });
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
@@ -479,7 +504,7 @@ afterEach(async () => {
   globalParams = {};
   layoutLocalParams = {};
   screenLocalParams = {};
-  pathname = '/profile/';
+  pathname = '/@target';
   currentRouteInfo = null;
   platform.OS = 'web';
   windowWidth = 1_280;
@@ -492,6 +517,7 @@ afterEach(async () => {
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
+  queryLoadSequence = 0;
   profileAvailable = true;
   profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
@@ -511,7 +537,7 @@ afterEach(async () => {
   SlotContent = ProfilePostListPage;
 });
 
-async function renderRoute(profileHandle: string, routePath = `/profile/${profileHandle}`) {
+async function renderRoute(profileHandle: string, routePath = `/${profileHandle}`) {
   globalParams = { profileHandle };
   screenLocalParams = { profileHandle };
   pathname = routePath;
@@ -755,6 +781,10 @@ describe('profile route parameter lifecycle', () => {
   it('followers와 following을 독립 heading과 관계 tab으로 전환한다', async () => {
     await renderRoute('@local', '/@local/followers');
 
+    assert.equal(
+      queryHistory.filter(({ query }) => query === 'ProfilePostListPageQuery').length,
+      0,
+    );
     assert.deepEqual(identities('ProfileHero'), []);
     assert.deepEqual(identities('FollowButton'), []);
     assert.deepEqual(identities('ProfileConnectionList'), ['local']);
@@ -777,6 +807,10 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('IconButton').props.visualSize, 44);
 
     await renderRoute('@local', '/@local/following');
+    assert.equal(
+      queryHistory.filter(({ query }) => query === 'ProfilePostListPageQuery').length,
+      0,
+    );
     assert.deepEqual(identities('ProfileHero'), []);
     assert.deepEqual(identities('ProfileConnectionList'), ['local']);
     assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
@@ -794,10 +828,29 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로잉');
   });
 
+  it('같은 Profile의 Home 재진입은 posts freshness 요청을 다시 시작한다', async () => {
+    await renderRoute('@local', '/@local');
+    const initialPostsQueryKeys = new Set(
+      queryHistory
+        .filter(({ query }) => query === 'ProfilePostListPageQuery')
+        .map(({ fetchKey }) => fetchKey),
+    );
+
+    await renderRoute('@local', '/@local/followers');
+    await renderRoute('@local', '/@local');
+
+    const postsQueryKeys = new Set(
+      queryHistory
+        .filter(({ query }) => query === 'ProfilePostListPageQuery')
+        .map(({ fetchKey }) => fetchKey),
+    );
+    assert.equal(postsQueryKeys.size, initialPostsQueryKeys.size + 1);
+  });
+
   it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {
     platform.OS = 'ios';
 
-    await renderRoute('@local', '/profile/@local');
+    await renderRoute('@local', '/@local');
     assert.equal(rendered('Stack').length, 1);
     assert.equal(rendered('PostList').length, 1);
     assert.equal(rendered('FlatList').length, 1);
@@ -956,6 +1009,11 @@ describe('profile route parameter lifecycle', () => {
       await renderRoute('@local');
       assert.deepEqual(identities('ProfileHero'), ['local']);
       assert.deepEqual(identities('PostList'), ['error']);
+      const layoutQueryKeys = new Set(
+        queryHistory
+          .filter(({ query }) => query === 'ProfileLayoutQuery')
+          .map(({ fetchKey }) => fetchKey),
+      );
 
       queryModes.ProfilePostListPageQuery = 'success';
       const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
@@ -971,6 +1029,14 @@ describe('profile route parameter lifecycle', () => {
       );
       assert.equal(latestPostQuery?.handle, 'local');
       assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
+      assert.deepEqual(
+        new Set(
+          queryHistory
+            .filter(({ query }) => query === 'ProfileLayoutQuery')
+            .map(({ fetchKey }) => fetchKey),
+        ),
+        layoutQueryKeys,
+      );
     } finally {
       console.error = originalConsoleError;
     }

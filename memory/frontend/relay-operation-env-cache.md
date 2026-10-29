@@ -5,7 +5,7 @@ Read this entire file when changing Relay documents, actor environments, mutatio
 ## Relay Colocation
 
 - GraphQL query, mutation, fragment document는 실제로 사용하는 `.tsx` 파일에 `graphql` tag로 둔다.
-- route는 `useLazyLoadQuery`로 화면 query를 소유하고, GraphQL entity를 소비하는 자식은 자신의 fragment를 선언해 generated `{FragmentName}$key`를 prop으로 받는다.
+- route 또는 route에서 합성하는 공통 화면 경계는 실제 화면·오류·접근 경계에서 사용하는 query를 소유하고, GraphQL entity를 소비하는 자식은 자신의 fragment를 선언해 generated `{FragmentName}$key`를 prop으로 받는다. 일반 route는 `useLazyLoadQuery`를 사용하며, 요청과 표시 수명을 분리할 때는 표준 `useQueryLoader`와 `usePreloadedQuery`를 사용하고 handle·actor별 수명과 기존 fetch policy·query-local retry를 유지한다.
 - 부모는 자식 fragment를 spread하고 fragment ref를 그대로 넘긴다. `id`, `handle`, `displayName` 같은 field subset을 수동 scalar prop으로 복제하지 않는다.
 - 한 컴포넌트가 여러 부모 query에서 재사용되더라도 document를 공용 query helper로 빼지 않는다. 재사용 경계는 query가 아니라 fragment다.
 - operation name은 화면/컴포넌트 책임을 드러내는 기존 이름을 유지한다. Relay network request body는 `operationName`, persisted text가 아닌 `request.params.text`, `variables`를 포함해 API와 E2E interception 계약을 지킨다.
