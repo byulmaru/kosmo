@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostDetailBackground } from '@/components/post/PostDetailBackground';
@@ -172,6 +172,80 @@ export const StateAccessibility: Story = {
     await expect(
       canvas.findByRole('progressbar', { name: '반응 요약을 불러오는 중입니다.' }),
     ).resolves.toBeVisible();
+  },
+};
+
+function ReactionSummaryAnchorStates() {
+  const anchorRef = useRef<View>(null);
+  const disabledAnchorRef = useRef<View>(null);
+  const pendingAnchorRef = useRef<View>(null);
+  const [anchorState, setAnchorState] = useState('waiting');
+  const [disabledAnchorState, setDisabledAnchorState] = useState('waiting');
+  const [pendingAnchorState, setPendingAnchorState] = useState('waiting');
+  const [toggleCount, setToggleCount] = useState(0);
+  const reportAnchor =
+    (ref: typeof anchorRef, label: string, setState: (value: string) => void) => () => {
+      const target = document.querySelector(`[role="button"][aria-label="${label}"]`);
+      setState(
+        ref.current === null ? 'null' : Object.is(ref.current, target) ? 'matched' : 'mismatch',
+      );
+    };
+
+  return (
+    <View>
+      <ReactionSummary
+        entries={[{ count: 1, type: '🥹' }]}
+        firstEntryRef={anchorRef}
+        onFirstEntryLayout={reportAnchor(anchorRef, '🥹 반응 1개', setAnchorState)}
+        onToggle={() => setToggleCount((count) => count + 1)}
+      />
+      <Text testID="reaction-anchor-state">{anchorState}</Text>
+      <ReactionSummary
+        disabled
+        entries={[{ count: 2, type: '❤️' }]}
+        firstEntryRef={disabledAnchorRef}
+        onFirstEntryLayout={reportAnchor(disabledAnchorRef, '❤️ 반응 2개', setDisabledAnchorState)}
+        onToggle={() => setToggleCount((count) => count + 1)}
+      />
+      <Text testID="reaction-disabled-anchor-state">{disabledAnchorState}</Text>
+      <ReactionSummary
+        entries={[{ count: 3, type: '🎉' }]}
+        firstEntryRef={pendingAnchorRef}
+        onFirstEntryLayout={reportAnchor(
+          pendingAnchorRef,
+          '🎉 반응 3개, 처리 중',
+          setPendingAnchorState,
+        )}
+        onToggle={() => setToggleCount((count) => count + 1)}
+        pendingTypeIds={['🎉']}
+      />
+      <Text testID="reaction-pending-anchor-state">{pendingAnchorState}</Text>
+      <Text testID="reaction-toggle-count">{toggleCount}</Text>
+    </View>
+  );
+}
+
+export const AnchorAndNonInteractiveStates: Story = {
+  render: () => <ReactionSummaryAnchorStates />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(canvas.getByTestId('reaction-anchor-state')).toHaveTextContent('matched'),
+    );
+    await waitFor(() =>
+      expect(canvas.getByTestId('reaction-disabled-anchor-state')).toHaveTextContent('null'),
+    );
+    await waitFor(() =>
+      expect(canvas.getByTestId('reaction-pending-anchor-state')).toHaveTextContent('null'),
+    );
+
+    const disabled = canvas.getByRole('button', { name: '❤️ 반응 2개' });
+    const pending = canvas.getByRole('button', { name: '🎉 반응 3개, 처리 중' });
+    expect(disabled).toBeDisabled();
+    expect(pending).toBeDisabled();
+    await userEvent.click(disabled, { pointerEventsCheck: 0 });
+    await userEvent.click(pending, { pointerEventsCheck: 0 });
+    expect(canvas.getByTestId('reaction-toggle-count')).toHaveTextContent('0');
   },
 };
 
