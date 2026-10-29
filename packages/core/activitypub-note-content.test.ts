@@ -62,6 +62,116 @@ describe('projectRemoteNoteContent', () => {
     });
   });
 
+  // Source-derived synthetic fixture: Mastodon documents shortcode text plus a toot:Emoji tag
+  // (https://github.com/mastodon/documentation/blob/main/content/en/spec/activitypub.md#emoji);
+  // Misskey wraps the shortcode in U+200B (https://github.com/misskey-dev/misskey/blob/develop/packages/backend/src/core/MfmService.ts).
+  it('stores matched synthetic remote Custom Emoji metadata without changing links or text', () => {
+    const emoji = { shortcode: ':nyan:', url: 'https://misskey.example/files/nyan.webp' };
+    const result = projectRemoteNoteContent({
+      content:
+        '<p>Hi \u200B:nyan:\u200B and <a href="https://example.com/:nyan:">:nyan:</a> ' +
+        ':nyan::nyan:</p>',
+      emojis: [emoji, emoji],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body, {
+      type: 'doc',
+      attrs: { customEmojis: [emoji] },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hi \u200B:nyan:\u200B and ' },
+            {
+              type: 'text',
+              text: ':nyan:',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/:nyan:' } }],
+            },
+            { type: 'text', text: ' :nyan::nyan:' },
+          ],
+        },
+      ],
+    });
+    assert.equal(
+      postContentDocumentToText(result),
+      'Hi \u200B:nyan:\u200B and :nyan: :nyan::nyan:',
+    );
+  });
+
+  it('does not store a shortcode that is part of a linked URL', () => {
+    const result = projectRemoteNoteContent({
+      content: 'See https://example.com/:nyan:',
+      emojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/nyan.webp' }],
+      summary: null,
+      mediaType: 'text/plain',
+    });
+
+    assert.deepEqual(result.body, {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'See ' },
+            {
+              type: 'text',
+              text: 'https://example.com/:nyan:',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/:nyan:' } }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('keeps emoji-only Notes scoped to each Note mapping', () => {
+    const first = projectRemoteNoteContent({
+      content: ':nyan:',
+      emojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/first.webp' }],
+      summary: null,
+      mediaType: 'text/plain',
+    });
+    const second = projectRemoteNoteContent({
+      content: ':nyan:',
+      emojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/second.webp' }],
+      summary: null,
+      mediaType: 'text/plain',
+    });
+
+    assert.deepEqual(first.body.attrs, {
+      customEmojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/first.webp' }],
+    });
+    assert.deepEqual(second.body.attrs, {
+      customEmojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/second.webp' }],
+    });
+    assert.equal(postContentDocumentToText(first), ':nyan:');
+    assert.equal(postContentDocumentToText(second), ':nyan:');
+  });
+
+  it('keeps missing, malformed, and conflicting Custom Emoji mappings as text', () => {
+    const source = ':missing: :broken: :conflict:';
+    const result = projectRemoteNoteContent({
+      content: source,
+      emojis: [
+        { shortcode: ':broken:', url: 'http://emoji.example/broken.png' },
+        { shortcode: ':conflict:', url: 'https://emoji.example/one.png' },
+        { shortcode: ':conflict:', url: 'https://emoji.example/two.png' },
+      ],
+      summary: null,
+      mediaType: 'text/plain',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: source }],
+      },
+    ]);
+    assert.equal(postContentDocumentToText(result), source);
+  });
+
   it('projects absent-media-type HTML into paragraphs and hard breaks', () => {
     const result = projectRemoteNoteContent({
       content: '<div><p>Hello <strong>world</strong><br>again</p><p>Second &amp; final</p></div>',

@@ -30,6 +30,10 @@ Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 
 자격 증명이 없는 절대 HTTPS URL만 이미지 대상으로 사용한다. 같은 Note에서 하나의 이름에 서로 다른 이미지 URL이
 연결되거나 필요한 정보가 없으면 임의의 이미지를 고르지 않고 원래 shortcode 또는 사용 가능한 대체 텍스트를 유지한다.
 
+V1 본문에는 shortcode를 일반 text로 유지하고, 해당 Note의 매칭된 `{ shortcode, url }` 목록을
+`body.attrs.customEmojis`에 보존한다. 새 node나 mark를 추가하지 않아 구 reader에서도 본문·CW·Media와
+`sensitiveMedia` 가림 상태를 유지한다. 읽을 수 없는 이모지 부가 정보는 무시하고 나머지 본문을 보존한다.
+
 이미지가 로딩 중이거나 실패하면 텍스트를 표시하고, 로드에 성공하면 같은 본문 위치에 이모지 이미지를 표시한다.
 이모지만 있는 본문도 읽을 수 있어야 하며 Plain Text 표현에는 shortcode를 보존한다. Content Warning으로 가려진
 본문의 이모지는 공개 전까지 이미지를 요청하지 않는다. 이모지의 유효성이나 이미지 서버의 실패가 본문 전체의

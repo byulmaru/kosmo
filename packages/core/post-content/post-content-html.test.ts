@@ -112,30 +112,25 @@ test('serializes Hashtag tokens as escaped, non-link inline text', () => {
   );
 });
 
-test('serializes Custom Emoji marks as escaped shortcode text without an image URL', () => {
+test('serializes Custom Emoji metadata as escaped shortcode text without an image URL', () => {
   assert.equal(
     postContentDocumentToHtml({
       version: 1,
       summary: null,
       body: {
         type: 'doc',
+        attrs: {
+          customEmojis: [{ shortcode: ':party:', url: 'https://emoji.example/party.png' }],
+        },
         content: [
           {
             type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: '<:party:>',
-                marks: [
-                  { type: 'custom_emoji', attrs: { url: 'https://emoji.example/party.png' } },
-                ],
-              },
-            ],
+            content: [{ type: 'text', text: '<:party:>' }],
           },
         ],
       },
     }),
-    '<p><span>&lt;:party:&gt;</span></p>',
+    '<p>&lt;:party:&gt;</p>',
   );
 });
 
