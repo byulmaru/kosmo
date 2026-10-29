@@ -5,6 +5,7 @@ import { match } from 'ts-pattern';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { PostContentEmoji } from './PostContentEmoji';
 import { PostContentMention } from './PostContentMention';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { PostContentWarning } from './PostContentWarning';
@@ -22,10 +23,10 @@ import type { PostContentMentionProfile } from './PostContentMention';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
-type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
-
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
+  readonly emojiByShortcode: ReadonlyMap<string, string>;
+  readonly emojiFontSize: number;
   readonly interactive: boolean;
   readonly linkColor: string;
   readonly mentionedProfiles: ReadonlyMap<string, PostContentMentionProfile>;
@@ -84,6 +85,8 @@ export function PostContentRenderer({
   ) : (
     renderNode(document, 'body', {
       bodyStyle,
+      emojiByShortcode: new Map(),
+      emojiFontSize: size === 'lg' ? typography.lg.fontSize : typography.md.fontSize,
       interactive,
       linkColor: theme.actionLinkBase,
       mentionedProfiles: mentionedProfilesById,
@@ -140,18 +143,24 @@ type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostCo
 
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
-    .with({ type: 'doc' }, (document) => (
-      <Text key={key} numberOfLines={context.numberOfLines} selectable style={context.bodyStyle}>
-        {document.content
-          .filter((child) => child.type === 'paragraph')
-          .map((child, index) => (
-            <Fragment key={`${key}.${index}`}>
-              {index > 0 ? '\n\n' : null}
-              {renderNode(child, `${key}.${index}`, context)}
-            </Fragment>
-          ))}
-      </Text>
-    ))
+    .with({ type: 'doc' }, (document) => {
+      const documentContext = {
+        ...context,
+        emojiByShortcode: readCustomEmojiMap(document),
+      };
+      return (
+        <Text key={key} numberOfLines={context.numberOfLines} selectable style={context.bodyStyle}>
+          {document.content
+            .filter((child) => child.type === 'paragraph')
+            .map((child, index) => (
+              <Fragment key={`${key}.${index}`}>
+                {index > 0 ? '\n\n' : null}
+                {renderNode(child, `${key}.${index}`, documentContext)}
+              </Fragment>
+            ))}
+        </Text>
+      );
+    })
     .with({ type: 'paragraph' }, (paragraph) => (
       <Fragment key={key}>
         {(paragraph.content ?? []).map((child, index) =>
@@ -202,40 +211,91 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
 }
 
 function renderMarks(node: PostContentTextNode, key: Key, context: RenderContext): ReactNode {
-  return (node.marks ?? []).reduceRight<ReactNode>(
-    (content, mark, index) => renderMark(mark, content, node.text, `${key}.mark.${index}`, context),
-    node.text,
+  const link = node.marks?.find((mark) => mark.type === 'link');
+  const content =
+    link?.attrs.href === node.text
+      ? node.text
+      : renderCustomEmojiText(node.text, key, !link || !context.interactive, context);
+
+  if (!link || !context.interactive) {
+    return content;
+  }
+
+  return (
+    <Text
+      accessibilityLabel={`${node.text}, ${link.attrs.href}`}
+      accessibilityRole="link"
+      key={`${key}.link`}
+      onPress={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void Linking.openURL(link.attrs.href);
+      }}
+      style={[styles.link, { color: context.linkColor }]}
+    >
+      {content}
+    </Text>
   );
 }
 
-function renderMark(
-  mark: PostContentMark,
-  content: ReactNode,
-  accessibilityLabel: string,
+function renderCustomEmojiText(
+  text: string,
   key: Key,
+  accessible: boolean,
   context: RenderContext,
 ): ReactNode {
-  return match(mark)
-    .when(
-      (value) => value.type === 'link' && !context.interactive,
-      () => content,
-    )
-    .with({ type: 'link' }, (link) => (
-      <Text
-        accessibilityLabel={`${accessibilityLabel}, ${link.attrs.href}`}
-        accessibilityRole="link"
-        key={key}
-        onPress={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void Linking.openURL(link.attrs.href);
-        }}
-        style={[styles.link, { color: context.linkColor }]}
-      >
-        {content}
-      </Text>
-    ))
-    .otherwise(() => content);
+  const shortcodes = Array.from(text.matchAll(/:[^:\s]+:/g));
+  if (shortcodes.length === 0) {
+    return text;
+  }
+
+  const content: ReactNode[] = [];
+  let end = 0;
+  shortcodes.forEach((match, index) => {
+    const start = match.index ?? end;
+    if (start > end) {
+      content.push(text.slice(end, start));
+    }
+    const url = context.emojiByShortcode.get(match[0]);
+    content.push(
+      url ? (
+        <PostContentEmoji
+          accessible={accessible}
+          fontSize={context.emojiFontSize}
+          key={`${key}.emoji.${index}.${url}`}
+          shortcode={match[0]}
+          url={url}
+        />
+      ) : (
+        match[0]
+      ),
+    );
+    end = start + match[0].length;
+  });
+  if (end < text.length) {
+    content.push(text.slice(end));
+  }
+  return content;
+}
+
+function readCustomEmojiMap(document: PostContentBodyDocumentV1): ReadonlyMap<string, string> {
+  const entries = document.attrs?.customEmojis;
+  if (!Array.isArray(entries)) {
+    return new Map();
+  }
+
+  const emojiByShortcode = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const shortcode = (entry as { shortcode?: unknown }).shortcode;
+    const url = (entry as { url?: unknown }).url;
+    if (typeof shortcode === 'string' && typeof url === 'string') {
+      emojiByShortcode.set(shortcode, url);
+    }
+  }
+  return emojiByShortcode;
 }
 
 const styles = StyleSheet.create({
