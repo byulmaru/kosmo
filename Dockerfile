@@ -33,6 +33,8 @@ FROM workspace AS deps
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   pnpm install --frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store
 
+RUN pnpm rebuild --pending
+
 # pnpm install --ignore-scripts skips this package-name bin link, but app builds invoke it.
 RUN test -e apps/app/node_modules/.bin/relay-compiler \
   || ln -s ../relay-compiler/cli.js apps/app/node_modules/.bin/relay-compiler
@@ -52,8 +54,6 @@ COPY tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
-
-RUN pnpm rebuild --pending
 
 # Public client settings are selected from the channel configuration in the Web bundle.
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
@@ -88,7 +88,6 @@ COPY --chown=app:app apps/fedify-consumer ./apps/fedify-consumer
 COPY --chown=app:app apps/worker ./apps/worker
 COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
-COPY --chown=app:app --from=app-build /app/packages/core/validation/reaction-emoji-values.json ./packages/core/validation/reaction-emoji-values.json
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server
 COPY --chown=app:app --from=app-build /app/apps/admin/build ./apps/admin/build

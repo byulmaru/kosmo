@@ -31,18 +31,13 @@ test('generated picker records preserve upstream base order and annotations', ()
     const english = englishData.find((entry) => lookupKey(entry.emoji) === key);
     assert.ok(source && korean && english, `Missing upstream data: ${option.id}`);
     assert.equal(option.label, korean.label);
-    assert.equal(new Set(option.keywords).size, option.keywords.length);
-    assert.ok(!option.keywords.includes(option.label));
-    const searchableTerms = new Set([option.label, ...option.keywords]);
-    for (const term of [
+    assert.deepEqual(option.keywords, [
       korean.label,
       english.label,
       ...(korean.tags ?? []),
       ...(english.tags ?? []),
       ...source.short_names,
-    ]) {
-      assert.ok(searchableTerms.has(term), `Missing search term for ${option.id}: ${term}`);
-    }
+    ]);
   }
 });
 

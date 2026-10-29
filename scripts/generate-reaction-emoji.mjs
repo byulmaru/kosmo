@@ -79,9 +79,7 @@ const pickerOptions = [...emojiData]
       categoryLabel: category[1],
       label: ko.label,
       quick: quickOrder !== undefined,
-      keywords: [...new Set([en.label, ...ko.tags, ...en.tags, ...entry.short_names])].filter(
-        (keyword) => keyword !== ko.label,
-      ),
+      keywords: [ko.label, en.label, ...ko.tags, ...en.tags, ...entry.short_names],
     };
     return quickOrder === undefined ? option : { ...option, quickOrder };
   });
