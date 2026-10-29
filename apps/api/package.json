@@ -13,7 +13,7 @@
     "test:unit": "KOSMO_TEST_TEMPORAL_RUNTIME=0 NODE_ENV=production node --import tsx --import ../../packages/core/temporal/test-client.ts --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.10",
+    "@hono/node-server": "^2.1.3",
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
     "@pothos/core": "^4.12.0",
