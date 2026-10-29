@@ -1,4 +1,5 @@
-import { AccountMetadata, db } from '@kosmo/core/db';
+import { Accounts, db } from '@kosmo/core/db';
+import { eq } from 'drizzle-orm';
 import {
   createE2EProfile,
   createE2ESession,
@@ -16,11 +17,10 @@ async function signInSearchUser(
   options: { displayName?: string; handle?: string } = {},
 ) {
   const session = await createE2ESession(options);
-  await db.insert(AccountMetadata).values({
-    accountId: session.account.id,
-    key: 'coachmark.search.shown',
-    value: 'true',
-  });
+  await db
+    .update(Accounts)
+    .set({ metadata: { ...session.account.metadata, 'coachmark.search.shown': 'true' } })
+    .where(eq(Accounts.id, session.account.id));
   await setE2ESessionCookie(context, session.token);
   return session;
 }
