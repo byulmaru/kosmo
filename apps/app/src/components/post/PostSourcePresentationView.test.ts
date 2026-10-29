@@ -31,7 +31,7 @@ mockModule('react-native', {
   findNodeHandle: () => null,
   Platform: platform,
   Pressable: MockPressable,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
   Text: 'Text',
   View: 'View',
 });

@@ -5,6 +5,13 @@ import baseMeta, {
   ActionBarRepostNavigation as actionBarRepostNavigation,
   ActionBarRepostOfQuoteNavigation as actionBarRepostOfQuoteNavigation,
   ActionBarThreadNavigation as actionBarThreadNavigation,
+  AuthorNavigationLongHandle as authorNavigationLongHandle,
+  AuthorNavigationLongName as authorNavigationLongName,
+  AuthorNavigationQuote as authorNavigationQuote,
+  AuthorNavigationRepost as authorNavigationRepost,
+  AuthorNavigationRepostOfQuote as authorNavigationRepostOfQuote,
+  AuthorNavigationShort as authorNavigationShort,
+  AuthorNavigationTruncated as authorNavigationTruncated,
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
   ContentWarningCardPressableFeedbackInteraction as contentWarningCardPressableFeedback,
   ContentWarningProductionConsumersShareRevealStateInteraction as contentWarningConsumersInteraction,
@@ -63,3 +70,10 @@ export const ActionBarRepostNavigation: Story = actionBarRepostNavigation;
 export const ActionBarRepostOfQuoteNavigation: Story = actionBarRepostOfQuoteNavigation;
 export const ActionBarThreadNavigation: Story = actionBarThreadNavigation;
 export const ActionBarPendingNavigation: Story = actionBarPendingNavigation;
+export const AuthorNavigationLongName: Story = authorNavigationLongName;
+export const AuthorNavigationLongHandle: Story = authorNavigationLongHandle;
+export const AuthorNavigationShort: Story = authorNavigationShort;
+export const AuthorNavigationTruncated: Story = authorNavigationTruncated;
+export const AuthorNavigationQuote: Story = authorNavigationQuote;
+export const AuthorNavigationRepost: Story = authorNavigationRepost;
+export const AuthorNavigationRepostOfQuote: Story = authorNavigationRepostOfQuote;
