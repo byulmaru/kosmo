@@ -5,7 +5,7 @@ import type { View as NativeView } from 'react-native';
 import type { CoachmarkGuide } from './CoachmarkGuide';
 
 export type CoachmarkStep = Readonly<{
-  anchorRef: RefObject<NativeView | null>;
+  anchorRef?: RefObject<NativeView | null>;
   description: string;
   title?: string;
 }>;

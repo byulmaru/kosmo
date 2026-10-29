@@ -1,4 +1,4 @@
-import { db, Profiles } from '@kosmo/core/db';
+import { AccountMetadata, db, Profiles } from '@kosmo/core/db';
 import { ProfileFollowPolicy } from '@kosmo/core/enums';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { eq } from 'drizzle-orm';
@@ -863,6 +863,11 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
   page,
 }) => {
   const session = await signIn(page, 'e2e-navigation-search');
+  await db.insert(AccountMetadata).values({
+    accountId: session.account.id,
+    key: 'coachmark.search.shown',
+    value: 'true',
+  });
   const firstQueryProfiles = Array.from({ length: 20 }, (_, index) => `e2e-query-first-${index}`);
   const secondQueryProfiles = Array.from({ length: 20 }, (_, index) => `e2e-query-second-${index}`);
 

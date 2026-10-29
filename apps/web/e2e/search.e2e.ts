@@ -1,3 +1,4 @@
+import { AccountMetadata, db } from '@kosmo/core/db';
 import {
   createE2EProfile,
   createE2ESession,
@@ -15,6 +16,11 @@ async function signInSearchUser(
   options: { displayName?: string; handle?: string } = {},
 ) {
   const session = await createE2ESession(options);
+  await db.insert(AccountMetadata).values({
+    accountId: session.account.id,
+    key: 'coachmark.search.shown',
+    value: 'true',
+  });
   await setE2ESessionCookie(context, session.token);
   return session;
 }
