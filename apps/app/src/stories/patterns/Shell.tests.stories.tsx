@@ -1,4 +1,5 @@
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { UniversalShell } from '@/components/shell/UniversalShell';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
@@ -20,6 +21,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
   ...baseMeta,
+  component: UniversalShell,
   excludeStories: [],
   parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Shell/Tests',
