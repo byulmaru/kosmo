@@ -1,4 +1,4 @@
-import { AccountMetadata, db } from '@kosmo/core/db';
+import { Accounts, db, firstOrThrow } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
@@ -15,16 +15,19 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const viewer = await createE2ESession({ timelineGuideShown: false });
     await setE2ESessionCookie(context, viewer.token);
-    const shownRows = () =>
-      db.select().from(AccountMetadata).where(eq(AccountMetadata.accountId, viewer.account.id));
+    const metadata = () =>
+      db
+        .select({ metadata: Accounts.metadata })
+        .from(Accounts)
+        .where(eq(Accounts.id, viewer.account.id))
+        .then(firstOrThrow)
+        .then((account) => account.metadata);
 
     await page.goto('/home');
     const homeGuide = page.getByRole('dialog', { name: '팔로우한 사람들의 소식' });
     await expect(homeGuide).toBeVisible();
-    await expect
-      .poll(async () => (await shownRows()).map(({ key, value }) => ({ key, value })))
-      .toEqual([{ key: 'coachmark.timeline.shown', value: 'true' }]);
-    const [firstShown] = await shownRows();
+    await expect.poll(metadata).toEqual({ 'coachmark.timeline.shown': 'true' });
+    const firstShown = await metadata();
     await homeGuide.getByRole('button', { name: '다음', exact: true }).click();
     const localGuide = page.getByRole('dialog', {
       name: '새로운 사람들을 만나보세요',
@@ -57,6 +60,6 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/local(?:\?.*)?$/);
     await homeGuide.getByRole('button', { name: '건너뛰기' }).click();
     await expect(help).toBeFocused();
-    expect(await shownRows()).toEqual([firstShown]);
+    expect(await metadata()).toEqual(firstShown);
   });
 }

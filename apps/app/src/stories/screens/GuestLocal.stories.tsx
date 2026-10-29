@@ -1,3 +1,4 @@
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import LocalTimelineScreen from '@/components/timeline/LocalTimelineScreen';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -32,9 +33,11 @@ function guestPost(id: string, bodyText: string) {
 function GuestLocalStory() {
   return (
     <SessionProvider>
-      <UniversalShell>
-        <LocalTimelineScreen publicEntry />
-      </UniversalShell>
+      <CoachmarkProvider>
+        <UniversalShell>
+          <LocalTimelineScreen publicEntry />
+        </UniversalShell>
+      </CoachmarkProvider>
     </SessionProvider>
   );
 }
