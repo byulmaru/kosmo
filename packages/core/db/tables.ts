@@ -20,7 +20,7 @@ import type { fraciBinary, FractionalIndexOf } from 'fraci';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
-type ProfilePinOrderKey = Buffer & FractionalIndexOf<ReturnType<typeof fraciBinary>>;
+export type ProfilePinOrderKey = Buffer & FractionalIndexOf<ReturnType<typeof fraciBinary>>;
 
 const createdAt = () =>
   datetime('created_at')

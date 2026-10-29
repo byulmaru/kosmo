@@ -9,7 +9,7 @@ import { postVisibilityCondition } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
 import { startProfileUpdateEffects } from './profile-update';
 import type { FractionalIndexOf } from 'fraci';
-import type { Transaction } from '../db';
+import type { ProfilePinOrderKey, Transaction } from '../db';
 
 const profilePinKeys = fraciBinary();
 const profilePinFraci = defineDrizzleFraci(
@@ -23,15 +23,15 @@ const profilePinFraci = defineDrizzleFraci(
 export const generateProfilePinKey = (
   before: Uint8Array | null,
   after: Uint8Array | null,
-): (typeof ProfilePinnedPosts.$inferSelect)['orderKey'] => {
+): ProfilePinOrderKey => {
   const key = profilePinKeys
     .generateKeyBetween(
-      before ? (new Uint8Array(before) as FractionalIndexOf<typeof profilePinKeys>) : null,
-      after ? (new Uint8Array(after) as FractionalIndexOf<typeof profilePinKeys>) : null,
+      before as FractionalIndexOf<typeof profilePinKeys> | null,
+      after as FractionalIndexOf<typeof profilePinKeys> | null,
       crypto.randomInt(256),
     )
     .next().value;
-  return Buffer.from(key) as (typeof ProfilePinnedPosts.$inferSelect)['orderKey'];
+  return Buffer.from(key) as ProfilePinOrderKey;
 };
 
 type ProfilePinInput = {
@@ -190,28 +190,27 @@ export const reorderProfilePost = async ({
     if (!targetKeys) {
       throw new NotFoundError('Pinned post not found');
     }
-    let destinationKeys: [Uint8Array | null, Uint8Array | null];
-
-    if (beforePostId) {
-      const beforeKeys = await keys.indicesForBefore({ profileId }, { postId: beforePostId });
-      if (!beforeKeys) {
-        throw new NotFoundError('Pinned post not found');
-      }
-      if (beforePostId === postId) {
-        throw new ConflictError({ message: 'A post cannot be moved before itself' });
-      }
-      if (targetKeys[1] && Buffer.compare(targetKeys[1], beforeKeys[1]) === 0) {
-        return false;
-      }
-      destinationKeys = beforeKeys;
-    } else {
-      if (!targetKeys[1]) {
-        return false;
-      }
-      destinationKeys = await keys.indicesForLast({ profileId });
+    const destinationKeys = beforePostId
+      ? await keys.indicesForBefore({ profileId }, { postId: beforePostId })
+      : await keys.indicesForLast({ profileId });
+    if (!destinationKeys) {
+      throw new NotFoundError('Pinned post not found');
+    }
+    if (beforePostId === postId) {
+      throw new ConflictError({ message: 'A post cannot be moved before itself' });
     }
 
-    const key = generateProfilePinKey(destinationKeys[0], destinationKeys[1]);
+    const [, targetNextKey] = targetKeys;
+    const [destinationPreviousKey, destinationNextKey] = destinationKeys;
+    const isUnchanged =
+      targetNextKey === null
+        ? destinationNextKey === null
+        : destinationNextKey !== null && Buffer.compare(targetNextKey, destinationNextKey) === 0;
+    if (isUnchanged) {
+      return false;
+    }
+
+    const key = generateProfilePinKey(destinationPreviousKey, destinationNextKey);
     await tx
       .update(ProfilePinnedPosts)
       .set({ orderKey: key })

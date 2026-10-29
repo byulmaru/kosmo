@@ -86,12 +86,10 @@ let testHashtagIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
 
-type ProfilePinOrderKey = (typeof CoreDb.ProfilePinnedPosts.$inferSelect)['orderKey'];
-
 const backfilledProfilePinOrderKey = (
   id: string,
   position: number | null = null,
-): ProfilePinOrderKey => {
+): CoreDb.ProfilePinOrderKey => {
   const rank = Buffer.alloc(4);
   rank.writeInt32BE(position ?? 0x7fffffff);
   return Buffer.concat([
@@ -99,7 +97,7 @@ const backfilledProfilePinOrderKey = (
     rank,
     Buffer.from([position === null ? 1 : 0]),
     Buffer.from(id.replaceAll('-', ''), 'hex'),
-  ]) as ProfilePinOrderKey;
+  ]) as CoreDb.ProfilePinOrderKey;
 };
 
 describe('ActivityPub Local Post Note', () => {
@@ -1545,7 +1543,7 @@ describe('ActivityPub Local Post Note', () => {
     });
     const boundaryPins: {
       id: string;
-      orderKey: ProfilePinOrderKey;
+      orderKey: CoreDb.ProfilePinOrderKey;
       postId: string;
       profileId: string;
     }[] = [];

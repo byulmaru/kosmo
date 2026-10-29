@@ -7,6 +7,7 @@ import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import type { CollectionDispatcher, RequestContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { ProfilePinOrderKey } from '@kosmo/core/db';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';
@@ -18,8 +19,6 @@ type FeaturedRow = {
   readonly postId: string;
   readonly key: ProfilePinOrderKey;
 };
-
-type ProfilePinOrderKey = (typeof ProfilePinnedPosts.$inferSelect)['orderKey'];
 
 const isLocalProfile = async (
   context: Pick<RequestContext<void>, 'canonicalOrigin' | 'host'>,

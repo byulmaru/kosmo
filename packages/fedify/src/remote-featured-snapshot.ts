@@ -2,6 +2,7 @@ import { db, first, Instances, ProfilePinnedPosts, Profiles } from '@kosmo/core/
 import { InstanceKind } from '@kosmo/core/enums';
 import { generateProfilePinKey } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
+import type { ProfilePinOrderKey } from '@kosmo/core/db';
 
 export type RemoteFeaturedSnapshotInput = {
   profileId: string;
@@ -30,7 +31,7 @@ export const replaceRemoteFeaturedSnapshot = async ({
     }
     await tx.delete(ProfilePinnedPosts).where(eq(ProfilePinnedPosts.profileId, profileId));
 
-    let previous: ReturnType<typeof generateProfilePinKey> | null = null;
+    let previous: ProfilePinOrderKey | null = null;
     if (postIds.length > 0) {
       await tx.insert(ProfilePinnedPosts).values(
         postIds.map((postId, position) => {

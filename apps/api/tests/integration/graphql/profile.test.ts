@@ -81,7 +81,7 @@ let localInstanceId: string;
 let restoreSentryTransport: (() => void) | undefined;
 
 const profilePinOrderKeys = (count: number) => {
-  const keys: ReturnType<typeof generateProfilePinKey>[] = [];
+  const keys: CoreDb.ProfilePinOrderKey[] = [];
   while (keys.length < count) {
     keys.push(generateProfilePinKey(keys.at(-1) ?? null, null));
   }

@@ -30,6 +30,7 @@ import {
   reorderProfilePost,
   unpinProfilePost,
 } from './profile-pin';
+import type { ProfilePinOrderKey } from '../db';
 
 after(async () => {
   await pg.end();
@@ -119,8 +120,6 @@ const createFixture = async () => {
   return { instance, profile };
 };
 
-type ProfilePinOrderKey = (typeof ProfilePinnedPosts.$inferSelect)['orderKey'];
-
 const orderedPins = (profileId: string) =>
   db
     .select({
@@ -147,6 +146,8 @@ test('generated profile pin keys use jitter and stay between their bounds', () =
   const randomInt = mock.method(nodeCrypto, 'randomInt', () => skips.shift() ?? 0);
   const first = generateProfilePinKey(null, null);
   const last = generateProfilePinKey(first, null);
+  const firstSnapshot = Buffer.from(first);
+  const lastSnapshot = Buffer.from(last);
   const lowerJitter = generateProfilePinKey(first, last);
   const higherJitter = generateProfilePinKey(first, last);
 
@@ -154,6 +155,8 @@ test('generated profile pin keys use jitter and stay between their bounds', () =
   assert.ok(Buffer.compare(lowerJitter, last) < 0);
   assert.ok(Buffer.compare(first, higherJitter) < 0);
   assert.ok(Buffer.compare(higherJitter, last) < 0);
+  assert.deepEqual(first, firstSnapshot);
+  assert.deepEqual(last, lastSnapshot);
   assert.notDeepEqual(lowerJitter, higherJitter);
   assert.equal(randomInt.mock.callCount(), 4);
   assert.ok(randomInt.mock.calls.every((call) => call.arguments[0] === 256));
