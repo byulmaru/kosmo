@@ -15,6 +15,7 @@ import { PostBody } from './PostBody';
 import { PostComposerController } from './PostComposerController';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
+import type { PostRequestComposer_parent$key } from './__generated__/PostRequestComposer_parent.graphql';
 import type {
   PostRequestComposer_request$data,
   PostRequestComposer_request$key,
@@ -139,7 +140,10 @@ export function PostRequestComposer({
     PostRequestComposerRefetchQuery,
     PostRequestComposer_request$key
   >(PostRequestComposerFragment, requestKey);
-  const replyParent = useFragment(PostRequestComposerParentFragment, request.draft.replyParent);
+  const replyParent = useFragment<PostRequestComposer_parent$key>(
+    PostRequestComposerParentFragment,
+    request.draft.replyParent,
+  );
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [submissionUncertain, setSubmissionUncertain] = useState(false);

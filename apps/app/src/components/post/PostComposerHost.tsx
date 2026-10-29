@@ -338,10 +338,14 @@ const styles = StyleSheet.create({
   composerFrame: { flexShrink: 1, minHeight: 0 },
   composerFrameFill: { flex: 1 },
   uncertainCloseBackdrop: {
-    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
+    bottom: 0,
     justifyContent: 'center',
+    left: 0,
     padding: spacing.lg,
+    position: 'absolute',
+    right: 0,
+    top: 0,
     zIndex: 10,
   },
   uncertainCloseDialog: {

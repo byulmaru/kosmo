@@ -152,6 +152,7 @@ test('profile route action follows Profile.viewerState after switching', async (
 });
 
 test('home route active profile query refetches after switching profiles', async ({ page }) => {
+  test.setTimeout(60_000);
   const graphQLRequests = collectGraphQLRequests(page);
   const betaPostBody = 'beta profile timeline post';
 
@@ -271,6 +272,7 @@ test('Profile 전환 후 Local query가 새 selected Profile 응답에 수렴한
 test('Home no-data 오류는 actor revision 변경으로 새 actor query와 timeline을 복구한다', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const betaPostBody = 'actor revision recovery timeline post';
   await page.goto('/login');
   await page.waitForURL('**/first-profile/handle');
@@ -481,8 +483,6 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function createPost(page: Page, body: string) {
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
-
   await page.goto('/home');
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   const expand = page.getByRole('button', { name: 'Composer 확장' });
@@ -497,8 +497,30 @@ async function createPost(page: Page, body: string) {
   await expect(composer).toBeVisible();
 
   await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
+  const submitResponsePromise = waitForGraphQLOperation(
+    page,
+    'PostComposerSubmitPostRequestMutation',
+  );
   await composer.getByRole('button', { name: '게시', exact: true }).click();
-  await createPostResponse;
+  const submitResponse = await submitResponsePromise;
+  const responseBody = (await submitResponse.json()) as {
+    data?: { submitPostRequest?: { request?: { requestId?: string | null } | null } | null };
+    errors?: unknown[];
+  };
+  const operation = readGraphQLOperation(submitResponse.request().postData());
+  const acceptedRequestId = responseBody.data?.submitPostRequest?.request?.requestId;
+
+  expect(submitResponse.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
+  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
+  expect(acceptedRequestId).toEqual(expect.any(String));
+  expect(operation?.variables).toMatchObject({
+    input: { bodyText: body, requestId: acceptedRequestId },
+  });
+  await expect
+    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
 }
 
 async function failGraphQLOperation(page: Page, operationName: string) {

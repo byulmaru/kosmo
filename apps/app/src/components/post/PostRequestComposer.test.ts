@@ -167,6 +167,10 @@ function mount() {
   });
 }
 
+function readComposerProps(): ComposerProps | undefined {
+  return composerProps;
+}
+
 function pressButton(label: string) {
   const button = renderer?.root
     .findAllByType('Button' as ElementType)
@@ -190,7 +194,9 @@ test('failed and cancelled requests can restore the snapshot into a fresh compos
 
     pressButton('다시 작성');
 
-    assert.deepEqual(composerProps?.initialDraft, {
+    const restoredProps = readComposerProps();
+    assert.ok(restoredProps);
+    assert.deepEqual(restoredProps.initialDraft, {
       bodyText: '복원 본문',
       contentWarning: '복원 경고',
       media: [
@@ -215,7 +221,7 @@ test('failed and cancelled requests can restore the snapshot into a fresh compos
       sensitiveMedia: true,
       visibility: 'DIRECT',
     });
-    assert.equal(composerProps?.profile, (requestData as { authorProfile: unknown }).authorProfile);
+    assert.equal(restoredProps.profile, (requestData as { authorProfile: unknown }).authorProfile);
     await act(async () => renderer?.unmount());
     renderer = null;
   }
@@ -247,10 +253,12 @@ test('restored reply keeps its relation and the original visibility', async () =
 
   pressButton('다시 작성');
 
-  assert.equal(composerProps?.replyParentId, 'post-parent-id');
-  assert.equal(composerProps?.replyParentVisibility, 'FOLLOWERS');
-  assert.equal(composerProps?.repostSourceId, undefined);
-  assert.ok(composerProps?.beforeEditor);
+  const restoredProps = readComposerProps();
+  assert.ok(restoredProps);
+  assert.equal(restoredProps.replyParentId, 'post-parent-id');
+  assert.equal(restoredProps.replyParentVisibility, 'FOLLOWERS');
+  assert.equal(restoredProps.repostSourceId, undefined);
+  assert.ok(restoredProps.beforeEditor);
   assert.equal(renderer?.root.findByType('PostBody' as ElementType).props.post, replyParent);
 });
 
@@ -288,7 +296,7 @@ test('an uncertain submission lets the user confirm closing', async () => {
     );
   });
   pressButton('다시 작성');
-  act(() => composerProps?.onPostRequestUncertainChange?.(true));
+  act(() => readComposerProps()?.onPostRequestUncertainChange?.(true));
 
   const backButton = renderer?.root.findByProps({ accessibilityLabel: '뒤로' });
   assert.ok(backButton);
@@ -302,12 +310,12 @@ test('an uncertain submission lets the user confirm closing', async () => {
     '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.',
   );
   assert.equal(backCount, 0);
-  act(() => composerProps?.onSubmittingChange?.(true));
+  act(() => readComposerProps()?.onSubmittingChange?.(true));
   act(() => backButton.props.onPress?.());
   assert.equal(dialog?.props.visible, false);
   assert.equal(backCount, 0);
-  act(() => composerProps?.onSubmittingChange?.(false));
-  act(() => composerProps?.onPostRequestUncertainChange?.(true));
+  act(() => readComposerProps()?.onSubmittingChange?.(false));
+  act(() => readComposerProps()?.onPostRequestUncertainChange?.(true));
   act(() => backButton.props.onPress?.());
   act(() => confirmation?.props.onConfirm());
   assert.equal(backCount, 1);
@@ -326,9 +334,11 @@ test('restored quote keeps its source relation', async () => {
 
   pressButton('다시 작성');
 
-  assert.equal(composerProps?.repostSourceId, 'post-source-id');
-  assert.equal(composerProps?.replyParentId, undefined);
-  assert.ok(composerProps?.children);
+  const restoredProps = readComposerProps();
+  assert.ok(restoredProps);
+  assert.equal(restoredProps.repostSourceId, 'post-source-id');
+  assert.equal(restoredProps.replyParentId, undefined);
+  assert.ok(restoredProps.children);
   assert.equal(
     renderer?.root.findByType('PostSourcePreview' as ElementType).props.source,
     repostSourceKey,
@@ -385,7 +395,7 @@ test('accepted submission returns to request detail after the controller acknowl
   });
 
   pressButton('다시 작성');
-  act(() => composerProps?.onPostRequestAccepted?.());
+  act(() => readComposerProps()?.onPostRequestAccepted?.());
 
   assert.equal(backCount, 1);
 });

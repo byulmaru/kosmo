@@ -171,13 +171,19 @@ async function updateCard(request: PostRequestCard_request$key, props: CardProps
   });
 }
 
+function findAllByType(type: string) {
+  return renderer?.root.findAll((node) => node.type === type) ?? [];
+}
+
 function button(label: string) {
-  return renderer?.root.findAllByType('Button').find((node) => node.props.children === label);
+  return findAllByType('Button').find((node) => node.props.children === label);
 }
 
 function visibleText() {
-  return renderer?.root
-    .findAllByType('Text')
+  if (!renderer) {
+    return undefined;
+  }
+  return findAllByType('Text')
     .flatMap((node) => node.children)
     .filter((child): child is string => typeof child === 'string')
     .join('');
@@ -269,7 +275,7 @@ describe('PostRequestCard', () => {
     );
     assert.equal(visibleText()?.includes('비공개 미리보기'), false);
     assert.equal(visibleText()?.includes('민감한 내용'), true);
-    assert.equal(renderer?.root.findAllByType('Image').length, 0);
+    assert.equal(findAllByType('Image').length, 0);
 
     await updateCard(
       makeRequest('QUEUED', {
@@ -282,7 +288,7 @@ describe('PostRequestCard', () => {
       }),
     );
     assert.equal(visibleText()?.includes('민감한 미리보기'), true);
-    assert.equal(renderer?.root.findAllByType('Image').length, 0);
+    assert.equal(findAllByType('Image').length, 0);
 
     await updateCard(
       makeRequest('QUEUED', {
@@ -295,7 +301,7 @@ describe('PostRequestCard', () => {
       }),
     );
     assert.equal(visibleText()?.includes('공개 미리보기'), true);
-    assert.equal(renderer?.root.findAllByType('Image').length, 1);
+    assert.equal(findAllByType('Image').length, 1);
   });
 
   it('links to the published post and emits completion only after observing an active-to-published transition', async () => {
@@ -305,7 +311,7 @@ describe('PostRequestCard', () => {
     });
     await renderCard(published, { onPublished });
 
-    assert.equal(renderer?.root.findByType('Link').props.href, '/@writer/post-id');
+    assert.equal(findAllByType('Link')[0]?.props.href, '/@writer/post-id');
     assert.equal(onPublished.mock.callCount(), 0);
 
     await updateCard(makeRequest('QUEUED'), { onPublished });
