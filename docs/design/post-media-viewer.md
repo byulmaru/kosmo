@@ -15,7 +15,8 @@
 - Overlay: black 70% `color/overlay/media-viewer`
 - Compact: `390×844` 대표 canvas에서 상단 `654px` image stage와 그 아래 semantic canvas Post detail panel을 세로로 배치한다. Figma의 좌우 16px·상단 80px·하단 16px Media frame은 DSN-63 disconnected Target의 historical reference이며, runtime Surface는 detail을 제외한 전체 image stage를 사용한다.
 - Wide: `560×420` Media frame을 image stage 가운데 배치한 값은 DSN-63 disconnected Target의 historical reference다. Runtime Surface는 오른쪽 `346px` full-height context rail을 제외한 나머지 image stage를 사용하며, Production responsive clamp는 PROD-849가 별도로 검증한다.
-- Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, dark halo, 공용 inverse 원형 Hover·Pressed state layer, 2px inside FocusVisible ring과 공통 Disabled opacity
+- Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, 공용 inverse 원형 Hover·Pressed state layer, 2px inside FocusVisible ring과 공통 Disabled opacity
+- 닫기 버튼의 dark halo는 Web에서만 유지한다. iOS·Android의 idle X는 상시 원형 surface나 그림자 없이 표시한다.
 - Ready: Media, 다중 navigation·상단 counter와 presentation별 secondary surface
 - Loading: 상태 설명과 일반 motion의 spinner 또는 reduced-motion의 정적 `···`를 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
 - Error: 상태 설명·`다시 시도` action을 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.

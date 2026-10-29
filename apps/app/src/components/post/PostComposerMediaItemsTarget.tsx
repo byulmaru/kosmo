@@ -132,6 +132,7 @@ export function PostComposerMediaItemsTarget({
                     accessibilityIgnoresInvertColors
                     accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                     accessibilityRole="image"
+                    fadeDuration={0}
                     source={{ uri: item.asset.uri }}
                     style={styles.preview}
                   />
@@ -141,6 +142,7 @@ export function PostComposerMediaItemsTarget({
                   accessibilityIgnoresInvertColors
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                   accessibilityRole="image"
+                  fadeDuration={0}
                   source={{ uri: item.asset.uri }}
                   style={[
                     styles.preview,

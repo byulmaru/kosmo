@@ -63,6 +63,7 @@ mock.module('react-relay', {
 
 mock.module('react-native', {
   exports: {
+    Animated: { View: 'View' },
     Platform: {
       get OS() {
         return platform;
@@ -180,6 +181,11 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => false,
     useTheme: () => ({ border: '#333333', text: '#111111' }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../Splash.tsx', import.meta.url), {

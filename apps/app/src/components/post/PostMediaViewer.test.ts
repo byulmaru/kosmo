@@ -30,17 +30,17 @@ const MockScrollView = forwardRef<
   useImperativeHandle(ref, () => ({ scrollTo: () => undefined }), []);
   return createElement('ScrollView', props, props.children as ReactNode);
 });
-type PressableMockState = { pressed: boolean };
+type PressableMockState = { focused?: boolean; pressed: boolean };
+let pressState: PressableMockState = { pressed: false };
 type PressableMockProps = Record<string, unknown> & {
   children?: ReactNode | ((state: PressableMockState) => ReactNode);
   style?: unknown | ((state: PressableMockState) => unknown);
 };
 const Pressable = ({ children, style, ...props }: PressableMockProps) => {
-  const state = { pressed: false };
   return createElement(
     'Pressable',
-    { ...props, style: typeof style === 'function' ? style(state) : style },
-    typeof children === 'function' ? children(state) : children,
+    { ...props, style: typeof style === 'function' ? style(pressState) : style },
+    typeof children === 'function' ? children(pressState) : children,
   );
 };
 
@@ -150,6 +150,11 @@ mock.module('@/theme/ThemeProvider', {
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/useOverlayMotion', {
   exports: {
@@ -203,6 +208,7 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'web';
+  pressState = { pressed: false };
   viewport.height = 800;
   viewport.width = 767;
   keydownListener = null;
@@ -278,6 +284,39 @@ describe('PostMediaViewer', () => {
         },
       ],
     );
+  });
+
+  it('닫기 버튼은 Native 그림자 없이 눌림 피드백과 Web 그림자를 유지한다', async () => {
+    for (const os of ['web', 'ios', 'android']) {
+      platform.OS = os;
+      for (const pressed of [false, true, false]) {
+        pressState = { pressed };
+        await render();
+        const close = pressable('이미지 뷰어 닫기');
+        const visual = close.findByProps({ accessibilityElementsHidden: true });
+        const visualStyle = flattenStyle(visual.props.style);
+        assert.equal(visualStyle.boxShadow, undefined);
+        assert.equal(
+          visualStyle.filter,
+          os === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
+        );
+        assert.equal(visualStyle.width, 48);
+        assert.equal(visualStyle.height, 48);
+        assert.equal(
+          flattenStyle(close.find((node) => (node.type as unknown) === 'AnimatedView').props.style)
+            .backgroundColor,
+          pressed ? 'rgba(255, 255, 255, 0.24)' : 'transparent',
+        );
+      }
+
+      pressState = { focused: true, pressed: false };
+      await render();
+      const focusedStyle = flattenStyle(
+        pressable('이미지 뷰어 닫기').findByProps({ accessibilityElementsHidden: true }).props
+          .style,
+      );
+      assert.equal(focusedStyle.outlineWidth, os === 'web' ? 2 : undefined);
+    }
   });
 
   it('같은 Post fragment의 Content·Media·Profile 데이터를 canonical body renderer에 전달한다', async () => {

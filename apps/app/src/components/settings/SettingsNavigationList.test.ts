@@ -19,15 +19,43 @@ let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermine
 let permissionStatusCalls = 0;
 let requestPermissionAndSyncCalls = 0;
 let migrationEnabled = false;
+let webPushConfigAvailable = false;
+let webPushPermissionContextAvailable = false;
+let browserPushSupport:
+  | 'checking'
+  | 'installation-required'
+  | 'supported'
+  | 'unsupported'
+  | 'unavailable' = 'supported';
+let browserNotificationPermission: NotificationPermission = 'default';
+let requestedBrowserNotificationPermission: NotificationPermission = 'granted';
+let browserNotificationRequestPromise: Promise<NotificationPermission> | null = null;
+let browserNotificationRequestCalls = 0;
+let syncWebPermissionCalls: NotificationPermission[] = [];
 let requestPermissionAndSync: () => Promise<void> = async () => {
   requestPermissionAndSyncCalls += 1;
 };
 const toastCalls: Array<{ message: string; tone: string }> = [];
+const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
 
 mock.module('expo-router', {
   exports: {
     Link: ({ children, href }: { children: ReactElement; href: string }) =>
       createElement('Link', { href }, cloneElement(children, { href } as never)),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/config/public', {
+  exports: {
+    getPublicConfig: (key: string) =>
+      key === 'webPush' && webPushConfigAvailable
+        ? {
+            apiKey: 'api-key',
+            appId: 'app-id',
+            messagingSenderId: 'sender-id',
+            projectId: 'project-id',
+            vapidKey: 'vapid-key',
+          }
+        : undefined,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
@@ -70,6 +98,23 @@ mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
 mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
   exports: {
     useRequestNativePushPermissionAndSync: () => requestPermissionAndSync,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../native-push/webPushPermissionContext.ts', import.meta.url), {
+  exports: {
+    useWebPushPermission: () => {
+      if (!webPushPermissionContextAvailable) {
+        throw new Error('Web Push provider is unavailable.');
+      }
+      return {
+        permission: browserNotificationPermission,
+        support: browserPushSupport,
+        syncPermission: async (permission: NotificationPermission) => {
+          syncWebPermissionCalls.push(permission);
+          browserNotificationPermission = permission;
+        },
+      };
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
@@ -167,6 +212,19 @@ afterEach(async () => {
     requestPermissionAndSyncCalls += 1;
   };
   migrationEnabled = false;
+  webPushConfigAvailable = false;
+  webPushPermissionContextAvailable = false;
+  browserPushSupport = 'supported';
+  browserNotificationPermission = 'default';
+  requestedBrowserNotificationPermission = 'granted';
+  browserNotificationRequestPromise = null;
+  browserNotificationRequestCalls = 0;
+  syncWebPermissionCalls = [];
+  if (originalNotificationDescriptor) {
+    Object.defineProperty(globalThis, 'Notification', originalNotificationDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'Notification');
+  }
   toastCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -185,6 +243,10 @@ describe('SettingsNavigationList', () => {
       'Byulmaru ID Account Settings 외부 서비스로 이동',
     );
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
+    assert.deepEqual(links[0].props.hrefAttrs, {
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    });
     assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
     assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
@@ -216,6 +278,104 @@ describe('SettingsNavigationList', () => {
       rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
       false,
     );
+  });
+
+  it('Web Push config가 없으면 provider 없이 설정 목록을 렌더링한다', async () => {
+    webPushConfigAvailable = false;
+    webPushPermissionContextAvailable = false;
+
+    await render();
+
+    assert.ok(rendered('Pressable').length > 0);
+    assert.deepEqual(syncWebPermissionCalls, []);
+  });
+
+  it('브라우저 권한 요청을 press 중 먼저 시작하고 허용 결과를 provider에 전달한다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    exposeBrowserNotification();
+    let resolvePermission!: (permission: NotificationPermission) => void;
+    browserNotificationRequestPromise = new Promise((resolve) => {
+      resolvePermission = resolve;
+    });
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => {
+      notification.props.onPress();
+      assert.equal(browserNotificationRequestCalls, 1);
+      assert.deepEqual(syncWebPermissionCalls, []);
+      resolvePermission('granted');
+      await browserNotificationRequestPromise;
+    });
+
+    assert.deepEqual(syncWebPermissionCalls, ['granted']);
+    assert.equal(requestPermissionAndSyncCalls, 0);
+    assert.deepEqual(toastCalls, []);
+  });
+
+  it('허용된 권한 상태에서는 동기화를 재시도할 수 있다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserNotificationPermission = 'granted';
+    exposeBrowserNotification();
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification.props.onPress());
+
+    assert.equal(browserNotificationRequestCalls, 1);
+    assert.deepEqual(syncWebPermissionCalls, ['granted']);
+  });
+
+  it('거부된 권한은 상태와 브라우저 설정 안내로 표시한다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserNotificationPermission = 'denied';
+    exposeBrowserNotification();
+    await render();
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'web-notification-settings'),
+      false,
+    );
+    assert.equal(browserNotificationRequestCalls, 0);
+    assert.deepEqual(syncWebPermissionCalls, []);
+  });
+
+  it('Firebase가 브라우저를 지원하지 않으면 권한 action을 숨긴다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserPushSupport = 'unsupported';
+    await render();
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'web-notification-settings'),
+      false,
+    );
+    assert.equal(browserNotificationRequestCalls, 0);
+  });
+
+  it('홈 화면 앱 설치가 필요한 상태에서는 권한 action을 요청하지 않는다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserPushSupport = 'installation-required';
+    await render();
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'web-notification-settings'),
+      false,
+    );
+    assert.equal(browserNotificationRequestCalls, 0);
+    assert.deepEqual(syncWebPermissionCalls, []);
   });
 
   it('권한이 이미 허용됐으면 OS 알림 설정을 연다', async () => {
@@ -472,6 +632,24 @@ async function render(
     renderer = create(createElement(SettingsNavigationList, props));
   });
   assert.ok(renderer);
+}
+
+function exposeBrowserNotification() {
+  Object.defineProperty(globalThis, 'Notification', {
+    configurable: true,
+    value: {
+      get permission() {
+        return browserNotificationPermission;
+      },
+      requestPermission: () => {
+        browserNotificationRequestCalls += 1;
+        return (
+          browserNotificationRequestPromise ??
+          Promise.resolve(requestedBrowserNotificationPermission)
+        );
+      },
+    } as unknown as typeof Notification,
+  });
 }
 
 function rendered(type: string): ReactTestInstance[] {

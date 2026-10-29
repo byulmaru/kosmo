@@ -83,7 +83,7 @@ const meta = {
     'UnavailableSummaryCanComplete',
   ],
   globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: { layout: 'fullscreen' },
+  parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Screens/First Profile Onboarding',
 } satisfies Meta<typeof OnboardingStory>;
 export default meta;

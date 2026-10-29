@@ -20,7 +20,10 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -62,6 +65,7 @@ let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
 let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
+let PostMentions: typeof CoreDb.PostMentions;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
@@ -103,6 +107,7 @@ describe('GraphQL remote profile boundary', () => {
       ProfileMutes,
       ProfilePinnedPosts,
       Profiles,
+      PostMentions,
       PostContents,
       Posts,
       Sessions,
@@ -1141,6 +1146,78 @@ describe('GraphQL remote profile boundary', () => {
       post: { id: globalId('Post', post.id) },
       node: { posts: { edges: [{ node: { id: globalId('Post', post.id) } }] } },
     });
+  });
+
+  test('reorder uses selected Member authority and returns persisted ordered Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const posts = await Promise.all(
+      Array.from({ length: 3 }, () => createContentfulPost({ profileId: auth.profile.id })),
+    );
+    for (const post of posts) {
+      await db.insert(ProfilePinnedPosts).values({ profileId: auth.profile.id, postId: post.id });
+    }
+    const rows = await db
+      .select()
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
+      .orderBy(asc(ProfilePinnedPosts.id));
+    const operation = `mutation Reorder($input: ReorderProfilePostInput!) { reorderProfilePost(input: $input) { changed profile { id pinnedPosts { id } } } }`;
+    const input = {
+      postId: globalId('Post', rows[2].postId),
+      beforePostId: globalId('Post', rows[0].postId),
+    };
+    const owner = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(owner);
+    assert.equal(owner.data?.reorderProfilePost.changed, true);
+    const restore = await requestGraphQL(
+      operation,
+      { input: { postId: input.postId } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(restore);
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+    const result = await requestGraphQL<{
+      reorderProfilePost: {
+        changed: boolean;
+        profile: { id: string; pinnedPosts: { id: string }[] };
+      };
+    }>(operation, { input }, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.reorderProfilePost.changed, true);
+    assert.deepEqual(
+      result.data?.reorderProfilePost.profile.pinnedPosts.map((post) => post.id),
+      [rows[2], rows[0], rows[1]].map((row) => globalId('Post', row.postId)),
+    );
+    const again = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(again);
+    assert.equal(again.data?.reorderProfilePost.changed, false);
+    const anonymous = await requestGraphQL(operation, { input });
+    assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
+    const wrongType = await requestGraphQL(
+      operation,
+      { input: { ...input, beforePostId: globalId('Profile', auth.profile.id) } },
+      auth.token,
+    );
+    assert.ok(wrongType.errors?.length);
+    const foreign = await createAuthenticatedSession();
+    const forbidden = await requestGraphQL(operation, { input }, foreign.token);
+    assertGraphQLErrorCode(forbidden, 'NOT_FOUND');
   });
 
   test('profile pin mutations use the selected profile and concrete Post Relay IDs', async () => {
@@ -5123,6 +5200,187 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(allPosts);
     assert.deepEqual(connectionIds(allPosts.data?.homeTimeline), includedHomeIds);
     assert.deepEqual(connectionIds(allPosts.data?.profile?.posts), includedProfileIds);
+  });
+
+  test('filters Reply Home candidates by current-content mentions before pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile({
+      handle: 'home-mention-author',
+      instanceId: localInstanceId,
+    });
+    const followedMention = await createProfile({
+      handle: 'home-followed-mention',
+      instanceId: localInstanceId,
+    });
+    const unrelatedMention = await createProfile({
+      handle: 'home-unrelated-mention',
+      instanceId: localInstanceId,
+    });
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: auth.profile.id, followeeProfileId: author.id },
+      { followerProfileId: auth.profile.id, followeeProfileId: followedMention.id },
+    ]);
+
+    const addMentionRevision = async (
+      postId: string,
+      targets: readonly { handle: string; id: string }[],
+    ) => {
+      let start = 0;
+      const mentions = targets.map(({ handle, id }) => {
+        const relativeHandle = `@${handle}`;
+        const reference = {
+          end: start + relativeHandle.length,
+          handle,
+          profileId: id,
+          relativeHandle,
+          start,
+        };
+        start = reference.end + 1;
+        return reference;
+      });
+      const bodyText = targets.map(({ handle }) => `@${handle}`).join(' ');
+      const content = await db
+        .insert(PostContents)
+        .values({
+          document: postContentDocumentFromTextAndMedia(bodyText, [], false, null, mentions),
+          postId,
+        })
+        .returning()
+        .then(firstOrThrow);
+      await db
+        .insert(PostMentions)
+        .values(mentions.map(({ profileId }) => ({ postContentId: content.id, profileId })));
+      await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, postId));
+    };
+    const createMentionedPost = async (
+      profileId: string,
+      targets: readonly { handle: string; id: string }[],
+      { id, replyParentId }: { id?: string; replyParentId?: string } = {},
+    ) => {
+      const post = await createContentfulPost({ id, profileId, replyParentId });
+      await addMentionRevision(post.id, targets);
+      return post;
+    };
+
+    const noMention = await createContentfulPost({ profileId: author.id });
+    const viewerParent = await createContentfulPost({ profileId: auth.profile.id });
+    const standaloneUnrelatedMention = await createMentionedPost(author.id, [unrelatedMention]);
+    const viewerMention = await createMentionedPost(author.id, [auth.profile], {
+      replyParentId: viewerParent.id,
+    });
+    const followedMentionPost = await createMentionedPost(author.id, [followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const mixedMention = await createMentionedPost(author.id, [unrelatedMention, followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const historicalMention = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
+    await addMentionRevision(historicalMention.id, [auth.profile]);
+    await addMentionRevision(historicalMention.id, [unrelatedMention]);
+    const noMentionReply = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
+    const ownUnrelatedReply = await createMentionedPost(auth.profile.id, [unrelatedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const pageBoundaryExcluded = await createMentionedPost(author.id, [unrelatedMention], {
+      id: 'ffffffff-ffff-7fff-bfff-ffffffffffff',
+      replyParentId: viewerParent.id,
+    });
+    const quote = await createContentfulPost({
+      profileId: author.id,
+      repostSourceId: pageBoundaryExcluded.id,
+    });
+    await addMentionRevision(quote.id, [unrelatedMention]);
+    const contentlessRepost = await db
+      .insert(Posts)
+      .values({
+        profileId: author.id,
+        repostSourceId: pageBoundaryExcluded.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const firstEligible = await createContentfulPost({
+      id: 'eeeeeeee-eeee-7eee-beee-eeeeeeeeeeee',
+      profileId: author.id,
+    });
+
+    const expectedHomeIds = (posts: readonly { id: string }[]) =>
+      posts
+        .map(({ id }) => id)
+        .toSorted((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+        .map((id) => globalId('Post', id));
+    const firstPage = await requestRemotePostRead({
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), [
+      globalId('Post', firstEligible.id),
+    ]);
+    assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+
+    const allPosts = await requestRemotePostRead({
+      first: 100,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(allPosts);
+    assert.deepEqual(
+      connectionIds(allPosts.data?.homeTimeline),
+      expectedHomeIds([
+        noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
+        viewerMention,
+        followedMentionPost,
+        mixedMention,
+        noMentionReply,
+        ownUnrelatedReply,
+        quote,
+        contentlessRepost,
+        firstEligible,
+      ]),
+    );
+
+    await db
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, auth.profile.id),
+          eq(ProfileFollows.followeeProfileId, followedMention.id),
+        ),
+      );
+    const afterUnfollow = await requestRemotePostRead({
+      first: 100,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(afterUnfollow);
+    assert.deepEqual(
+      connectionIds(afterUnfollow.data?.homeTimeline),
+      expectedHomeIds([
+        noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
+        viewerMention,
+        noMentionReply,
+        ownUnrelatedReply,
+        quote,
+        contentlessRepost,
+        firstEligible,
+      ]),
+    );
   });
 
   test('applies Repost candidate eligibility before Profile and Home pagination', async () => {

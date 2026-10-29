@@ -177,9 +177,8 @@ export function PostMediaViewer({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const targetInsideViewer = containsTarget(dialogRef, event.target);
-      if (event.key === 'Escape' && !targetInsideViewer) {
-        ignoreNextPlatformClose.current = true;
-        return;
+      if (event.key === 'Escape') {
+        ignoreNextPlatformClose.current = !targetInsideViewer || event.defaultPrevented;
       }
       if (
         event.defaultPrevented ||
@@ -559,7 +558,7 @@ function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] 
     {
       ...(Platform.OS === 'web'
         ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
-        : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }),
+        : undefined),
       ...(Platform.OS === 'web' && webState.focused
         ? ({
             outlineColor: '#ffffff',

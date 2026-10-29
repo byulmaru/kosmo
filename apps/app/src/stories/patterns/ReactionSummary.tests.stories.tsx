@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostDetailBackground } from '@/components/post/PostDetailBackground';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import {
@@ -13,15 +13,44 @@ import baseMeta, {
   ReactionSummaryStates as StateCases,
 } from './ReactionSummary.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactionSummaryPlaygroundArgs } from './ReactionSummary.stories';
 
 const meta = {
   ...baseMeta,
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Patterns/Reaction/Summary/Tests',
-} satisfies Meta;
+} satisfies Meta<ReactionSummaryPlaygroundArgs>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const EditableEntriesRender: Story = {
+  args: {
+    entries: [{ count: 42, type: '🧩' }],
+    selectedTypeIds: ['🧩'],
+  },
+  play: async ({ canvasElement }) => {
+    const reaction = await within(canvasElement).findByRole('button', { name: '🧩 반응 42개' });
+    expect(reaction).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+export const PlaygroundSelectionUpdatesArgs: Story = {
+  args: { onToggle: fn(), selectedTypeIds: [] },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reaction = await canvas.findByRole('button', { name: '❤️ 반응 18개' });
+    expect(reaction).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(reaction);
+    await expect(args.onToggle).toHaveBeenCalledWith({ nextSelected: true, optionId: '❤️' });
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 18개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+  },
+};
 
 export const WidthFitAndPeopleLink: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },

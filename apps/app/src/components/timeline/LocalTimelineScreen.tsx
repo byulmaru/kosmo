@@ -102,7 +102,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           <PageHeader title="타임라인 둘러보기" />
         ) : null
       ) : (
-        <LocalHeader onReselect={refresh} width={width} />
+        <LocalHeader width={width} />
       )}
       <View style={styles.body}>
         <RouteBoundary
@@ -136,7 +136,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   );
 }
 
-function LocalHeader({ onReselect, width }: { onReselect: () => void; width: number }) {
+function LocalHeader({ width }: { width: number }) {
   const shellChrome = useShellChrome();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
@@ -163,7 +163,7 @@ function LocalHeader({ onReselect, width }: { onReselect: () => void; width: num
             : undefined
         }
       >
-        <TimelineTabs onReselect={onReselect} value="local" />
+        <TimelineTabs value="local" />
       </View>
     </>
   );

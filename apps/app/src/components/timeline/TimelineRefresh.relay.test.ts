@@ -12,6 +12,8 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { colors } from '@/theme/tokens';
+import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse, Variables } from 'relay-runtime';
@@ -22,6 +24,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let renderer: ReactTestRenderer | null = null;
 let HomeTimelineScreen: ComponentType;
+let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
 let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
 const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
@@ -58,25 +61,71 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
     toast.visible = false;
   };
 };
+const navigations: unknown[] = [];
+const tabRegistry = createTabReselectionRegistry();
+const shellChrome = {
+  openProfileSwitcher,
+  registerHomeReselection: () => () => undefined,
+  registerTabReselection: tabRegistry.register,
+  reselectTab: tabRegistry.reselect,
+};
+class AnimatedValueMock {
+  constructor(public value: number) {}
+  setValue(value: number) {
+    this.value = value;
+  }
+  stopAnimation() {}
+}
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation() {}
+}
 
 // Only resolve graphql tags to compiler artifacts; all Relay hooks and normalization are real.
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|fragment) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
     return require(
-      `${name.startsWith('PostList') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
+      `${name.startsWith('PostList') || name.startsWith('ProfilePinOrder') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
     ).default;
   },
 });
 mockModule('expo-router', {
+  useRouter: () => ({
+    replace: (href: string) => navigations.push(href),
+    setParams: (params: object) => navigations.push(params),
+  }),
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('lucide-react-native', {
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
+mockModule(require.resolve('lucide-react-native'), {
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 mockModule('react-native', {
   Platform: platform,
+  Animated: {
+    Color: AnimatedColorMock,
+    Text: 'Text',
+    Value: AnimatedValueMock,
+    View: 'View',
+    subtract: (a: AnimatedValueMock, b: AnimatedValueMock) => a.value - b.value,
+  },
+  Easing: {},
+  Pressable: ({ children, ...props }: { children: (state: { pressed: boolean }) => ReactNode }) =>
+    createElement('Pressable', props, children({ pressed: false })),
+  ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   FlatList: (props: {
     data: unknown[];
@@ -108,15 +157,10 @@ mockModule('@/relay/RelayActorProvider', {
   useRelayActorLifecycleKey: () => 'actor',
 });
 mockModule('@/session/SessionProvider', { useSession: () => ({ status: sessionStatus }) });
-mockModule('@/components/shell/ShellChromeContext', {
-  useShellChrome: () => ({ openProfileSwitcher }),
-});
+mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,
-});
-mockModule('@/components/TimelineTabs', {
-  TimelineTabs: (props: object) => createElement('TimelineTabs', props),
 });
 mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
 mockModule('@/components/ui/StateView', {
@@ -127,14 +171,8 @@ mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
 mockModule('@/theme/ThemeProvider', {
-  useReducedMotion: () => false,
-  useTheme: () => ({ text: '#111', textSecondary: '#777' }),
-});
-mockModule('@/theme/tokens', {
-  fontFamilies: { ui: 'ui' },
-  space: { 8: 8, 16: 16 },
-  spacing: { lg: 16, sm: 8, xl: 24 },
-  typography: { md: {}, sm: {} },
+  useTheme: () => colors.light,
+  useReducedMotion: () => true,
 });
 
 // Mock unrelated row UI/providers, retaining PostList, InfiniteList and loadNext behavior.
@@ -156,6 +194,7 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
 });
 
 before(async () => {
+  ({ TimelineTabs } = await import('../TimelineTabs'));
   ({ default: HomeTimelineScreen } = await import('./HomeTimelineScreen'));
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
@@ -189,6 +228,7 @@ afterEach(async () => {
       Reflect.deleteProperty(globalThis, key);
     }
   }
+  navigations.length = 0;
 });
 
 const profile = {
@@ -424,7 +464,7 @@ describe('Guest Local with real Relay', () => {
     );
     await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
     assertConnection(environment, 'localTimeline', ['a', 'b']);
-    assert.equal(renderer!.root.findAllByType('TimelineTabs' as never).length, 0);
+    assert.equal(renderer!.root.findAllByType(TimelineTabs).length, 0);
     assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
 
     await scrollGuestNearEnd();
@@ -495,3 +535,77 @@ describe('Guest Local with real Relay', () => {
     assert.equal(openProfileSwitcher.mock.callCount(), 1);
   });
 });
+
+for (const os of ['ios', 'android']) {
+  for (const timeline of ['Home', 'Local'] as const) {
+    it(`${os} ${timeline}: 실제 상단 탭 재선택은 새로고침 중에도 스크롤만 한다`, async () => {
+      platform.OS = os;
+      const environment = new Environment({
+        network: Network.create((operation, variables) =>
+          Observable.create<GraphQLResponse>((sink) => {
+            requests.push({ name: operation.name, variables, sink });
+          }),
+        ),
+        store: new Store(new RecordSource()),
+      });
+      let offset = 480;
+      await act(async () => {
+        renderer = create(
+          createElement(ReactRelay.RelayEnvironmentProvider, {
+            environment,
+            children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+          }),
+          {
+            createNodeMock: ({ type }) =>
+              type === 'FlatList'
+                ? {
+                    scrollToOffset: (options: { animated: boolean; offset: number }) => {
+                      assert.deepEqual(options, { animated: true, offset: 0 });
+                      offset = options.offset;
+                    },
+                  }
+                : null,
+          },
+        );
+      });
+      const field = timeline === 'Home' ? 'homeTimeline' : 'localTimeline';
+      await respond(latest(`${timeline}PageQuery`), payload(field, ['a', 'b']));
+      const tab = () =>
+        renderer!.root.find(
+          (node) =>
+            (node.type as unknown) === 'Pressable' &&
+            node.props.accessibilityLabel === (timeline === 'Home' ? '홈' : '로컬'),
+        );
+      const initialRequests = requests.length;
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        offset = 480;
+        await act(async () => tab().props.onPress());
+        assert.equal(offset, 0);
+        assert.equal(requests.length, initialRequests);
+        assert.deepEqual(navigations, []);
+        assert.equal(tab().props.accessibilityState.selected, true);
+      }
+      assertConnection(environment, field, ['a', 'b']);
+
+      await act(async () => list().props.onRefresh());
+      const refresh = latest(timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery');
+      assert.equal(requests.length, initialRequests + 1);
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        offset = 640;
+        await act(async () => tab().props.onPress());
+        assert.equal(offset, 0);
+        assert.equal(requests.length, initialRequests + 1);
+        assert.equal(list().props.refreshing, true);
+        assert.deepEqual(navigations, []);
+      }
+      await respond(refresh, payload(field, ['new', 'a']));
+      assert.equal(list().props.refreshing, false);
+      assertConnection(environment, field, ['new', 'a']);
+      await act(async () => list().props.onEndReached());
+      const next = latest(`PostList${timeline}NextPageQuery`);
+      assert.equal(next.variables.cursor, 'cursor-a');
+      await respond(next, payload(field, ['b'], false));
+      assertConnection(environment, field, ['new', 'a', 'b'], false);
+    });
+  }
+}

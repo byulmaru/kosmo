@@ -365,6 +365,8 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   eligible remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 규칙은 DIRECT Note 역참조, Featured
   membership, signed-fetch 권한, inbound DIRECT 처리나 Notification을 추가하지 않는다. Canonical Mention node는
   `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에 포함하지 않는다.
+- Public·Unlisted Post의 게시·삭제는 멘션한 Remote Profile을 기존 수신자에 포함하며, 같은 수신자에는 중복 전달하지 않는다.
+  Followers Only와 Mentioned Profiles의 수신 범위는 기존 정책을 유지한다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -442,12 +444,13 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
   ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. Local first-party UI는
   server-authoritative 순서로 조회 가능한 고정 Post 전체를 표시하고, Remote는 검증된 Featured collection을 원격 순서로 표시한다.
-  새 pin은 기존 pin의 상대 순서를 보존해 추가한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
+  새 pin은 기존 pin의 상대 순서를 보존해 추가하며 앞·뒤 배치는 이 계약에서 고정하지 않는다. Local Profile의 수동 순서 변경은
+  [Profile 객체](./profile.md)의 행동을 따르며, Local Featured collection도 저장된 순서에서 조회 가능한 항목의 상대 순서를 유지한다.
 - Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
   추론할 수 있게 해서는 안 된다.
-- Local pin/unpin commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
+- Local pin/unpin 또는 고정 순서 변경 commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
   요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
 - Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
@@ -554,7 +557,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
   Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
-  따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
+  따른다. Custom emoji는 후속 계약에 남기고, inbound
   Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,

@@ -18,6 +18,7 @@ import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
 import { ModalOverlay } from './ModalOverlay';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
+import type { ViewStyle } from 'react-native';
 
 type ActionMenuIcon = ComponentType<{
   color: string;
@@ -88,6 +89,7 @@ export function ActionMenuPresentationProvider({
 const webMenuInset = space[4] + borderWidths[1];
 const webMenuItemHeight = 36;
 const defaultWebMenuMinWidth = 128;
+const webFixedPositionStyle = { position: 'fixed' } as unknown as ViewStyle;
 
 export function ActionMenu({
   accessibilityLabel,
@@ -124,11 +126,6 @@ export function ActionMenu({
       return;
     }
 
-    const ownerWindow = trigger.ownerDocument.defaultView;
-    if (!ownerWindow) {
-      return;
-    }
-
     const triggerRect = trigger.getBoundingClientRect();
     const menu = menuRef.current as unknown as HTMLElement | null;
     const menuRect = menu?.getBoundingClientRect();
@@ -157,10 +154,7 @@ export function ActionMenu({
             : triggerRect.top - webMenuInset;
     const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
     const viewportTop = Math.max(0, Math.min(anchoredTop, viewportHeight - menuHeight));
-    const nextPosition = {
-      left: viewportLeft + ownerWindow.scrollX,
-      top: viewportTop + ownerWindow.scrollY,
-    };
+    const nextPosition = { left: viewportLeft, top: viewportTop };
 
     setWebPosition((current) =>
       current.left === nextPosition.left && current.top === nextPosition.top
@@ -371,7 +365,7 @@ export function ActionMenu({
         })}
         {overlayMotion.mounted ? (
           <ActionMenuPortal>
-            <View style={[styles.webPosition, webPosition]}>
+            <View style={[webFixedPositionStyle, styles.webPosition, webPosition]}>
               <Animated.View
                 accessibilityElementsHidden={!open}
                 aria-hidden={!open || undefined}
@@ -619,5 +613,5 @@ const styles = StyleSheet.create({
   webMenu: {
     borderWidth: borderWidths[1],
   },
-  webPosition: { position: 'absolute', zIndex: 100 },
+  webPosition: { zIndex: 100 },
 });

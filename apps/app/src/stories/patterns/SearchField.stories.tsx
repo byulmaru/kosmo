@@ -1,6 +1,7 @@
 import { SearchIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
@@ -9,7 +10,7 @@ import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { TextInput } from 'react-native';
 
-type SearchFieldArgs = {
+export type SearchFieldArgs = {
   accessibilityLabel: string;
   containerWidth: number;
   disabled: boolean;
@@ -109,6 +110,22 @@ const meta = {
   component: SearchFieldComposition,
   excludeStories: ['InputClearAndFocus', 'DisabledContract'],
   parameters: { controls: { disable: true } },
+  render: (args) => {
+    const [, updateArgs] = useArgs<SearchFieldArgs>();
+    return (
+      <SearchFieldComposition
+        {...args}
+        onChangeText={(value) => {
+          args.onChangeText(value);
+          updateArgs({ value });
+        }}
+        onClear={() => {
+          args.onClear();
+          updateArgs({ value: '' });
+        }}
+      />
+    );
+  },
   title: 'KOSMO/Patterns/Search Field',
 } satisfies Meta<typeof SearchFieldComposition>;
 
