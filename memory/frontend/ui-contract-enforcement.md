@@ -71,7 +71,7 @@ custom icon admission은 일반 enforcement-policy 완화와 구분한다. `esli
 
 CLI의 `--merge-group` 경로에서는 webhook의 immutable event head/base와 exact queue entry를 사용한다. GraphQL queue 응답은 exact event head를 찾을 때까지 page를 따라가며, 누락·오류·unknown head·필요한 SHA fetch 실패·local ancestry 검증 실패는 fail closed한다. 선택된 queue entry와 PR의 base/head를 개별적으로 검증하며 moving branch tip이나 전체 repository history query를 성공 근거로 삼지 않는다. 현재 advisory workflow는 `pull_request` 이벤트에서만 실행하고 `merge_group`에는 실행하지 않는다. 기본 Lint workflow의 `merge_group` 트리거와 일반 lint 실행은 유지되며, 이 CLI와 advisory workflow는 required check나 원격 ruleset을 변경하지 않는다.
 
-advisory workflow는 검사 원문과 정확한 base/head SHA를 Actions 요약에 남기고, 같은 저장소의 Dependabot이 아닌 PR에만 실패 결과를 고정 marker 댓글로 생성·갱신한다. 이후 검사가 통과하면 기존 marker 댓글만 해결 상태로 갱신하며 새 성공 댓글은 만들지 않는다. fork PR과 Dependabot PR은 요약만 남기고 댓글을 쓰지 않으며, PR 상태·head/base SHA·본문이 event와 달라진 stale 결과와 더 오래된 run/attempt 결과는 댓글을 건너뛴다. base에 있는 예전 checker를 사용한 도입 PR에서는 이 파일별 상세 진단이 누락될 수 있다.
+advisory workflow는 검사 원문과 정확한 base/head SHA를 Actions 요약에 남기고, 구조화된 checker 결과가 있으면 실패 원인 파일을 접힌 원문 출력 밖에 표시한다. 같은 저장소의 Dependabot이 아닌 PR에만 실패 결과를 고정 marker 댓글로 생성·갱신하며, 이후 검사가 통과하면 기존 marker 댓글만 해결 상태로 갱신하고 새 성공 댓글은 만들지 않는다. fork PR과 Dependabot PR은 요약만 남기고 댓글을 쓰지 않으며, PR 상태·head/base SHA·본문이 event와 달라진 stale 결과와 더 오래된 run/attempt 결과는 댓글을 건너뛴다. base에 있는 예전 checker를 사용하는 도입 PR에서는 명확한 policy/supporting signal을 제외한 비앱·비story 경로가 모두 남는 경우에만 feature 파일을 보조 진단하고, app/story 경로가 섞이면 파일을 추정하지 않는다.
 
 ## 검토 증거와 남은 한계
 

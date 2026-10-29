@@ -42,11 +42,12 @@ jobs:
           UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GITHUB_TOKEN: ${{ github.token }}
           UI_CONTRACT_LOG: ${{ runner.temp }}/ui-contract-review.log
+          UI_CONTRACT_RESULT: ${{ runner.temp }}/ui-contract-review-result.json
         run: |
           set -euo pipefail
           UI_CONTRACT_CHECKER="scripts/check-ui-contract-pr.mjs"
           UI_CONTRACT_TEMP=""
-          UI_CONTRACT_ARGS=()
+          UI_CONTRACT_BOOTSTRAP=0
           trap 'if [ -n "$UI_CONTRACT_TEMP" ]; then rm -f "$UI_CONTRACT_TEMP"; fi' EXIT
 
           if git cat-file -e "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" 2>/dev/null; then
@@ -54,14 +55,42 @@ jobs:
             git show "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" > "$UI_CONTRACT_TEMP"
             UI_CONTRACT_CHECKER="$UI_CONTRACT_TEMP"
           else
-            UI_CONTRACT_ARGS+=(--bootstrap)
+            UI_CONTRACT_BOOTSTRAP=1
           fi
 
-          node "$UI_CONTRACT_CHECKER" \
-            --base "$UI_CONTRACT_BASE_SHA" \
-            --head "$UI_CONTRACT_HEAD_SHA" \
-            --event-file "$GITHUB_EVENT_PATH" \
-            "${UI_CONTRACT_ARGS[@]}" 2>&1 | tee "$UI_CONTRACT_LOG"
+          export UI_CONTRACT_BOOTSTRAP UI_CONTRACT_CHECKER
+          node --input-type=module <<'NODE' 2>&1 | tee "$UI_CONTRACT_LOG"
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+
+          try {
+            const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+            const { checkPullRequest } = await import(
+              pathToFileURL(process.env.UI_CONTRACT_CHECKER).href
+            );
+            const result = checkPullRequest({
+              base: process.env.UI_CONTRACT_BASE_SHA,
+              bootstrap: process.env.UI_CONTRACT_BOOTSTRAP === '1',
+              cwd: process.env.GITHUB_WORKSPACE,
+              head: process.env.UI_CONTRACT_HEAD_SHA,
+              prBody: event.pull_request?.body,
+            });
+            writeFileSync(process.env.UI_CONTRACT_RESULT, JSON.stringify(result));
+            if (result.errors.length > 0) {
+              console.error(`UI contract PR check failed: ${result.errors.join('\n')}`);
+              process.exitCode = 1;
+            } else {
+              console.log(
+                `UI contract PR check passed (${result.categories.join(', ') || 'supporting-only'}).`,
+              );
+            }
+          } catch (error) {
+            console.error(
+              `UI contract PR check failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            process.exitCode = 1;
+          }
+          NODE
 
       - name: Summarize UI contract review
         id: summary
@@ -71,6 +100,7 @@ jobs:
           UI_CONTRACT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           UI_CONTRACT_LOG: ${{ runner.temp }}/ui-contract-review.log
+          UI_CONTRACT_RESULT: ${{ runner.temp }}/ui-contract-review-result.json
           UI_CONTRACT_CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
           UI_CONTRACT_DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
           UI_CONTRACT_CHECK_OUTCOME: ${{ steps.check.outcome }}
@@ -85,10 +115,99 @@ jobs:
             const dependenciesOutcome = process.env.UI_CONTRACT_DEPENDENCIES_OUTCOME;
             const checkOutcome = process.env.UI_CONTRACT_CHECK_OUTCOME;
             const logPath = process.env.UI_CONTRACT_LOG;
+            const resultPath = process.env.UI_CONTRACT_RESULT;
             const outcome = checkOutcome === 'success' || checkOutcome === 'failure'
               ? checkOutcome
               : 'skipped';
             const runUrl = `${context.serverUrl}/${process.env.GITHUB_REPOSITORY}/actions/runs/${context.runId}`;
+            let reviewResult;
+            if (resultPath && fs.existsSync(resultPath)) {
+              try {
+                reviewResult = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+              } catch {
+                reviewResult = undefined;
+              }
+            }
+            const changedFiles = Array.isArray(reviewResult?.files)
+              ? reviewResult.files.map(({ path }) => path).filter(Boolean)
+              : [];
+            const reviewErrors = Array.isArray(reviewResult?.errors) ? reviewResult.errors : [];
+            const isMixedCategoryError = (error) =>
+              error.startsWith('The PR mixes UI contract changes with feature changes;') ||
+              error.startsWith('The PR mixes enforcement-policy changes with runtime UI or feature changes;');
+            const mixedCategoryError = reviewErrors.some(isMixedCategoryError);
+            const formatIndented = (values) =>
+              [...new Set(values.filter(Boolean))]
+                .map((value) => `    ${String(value).replace(/[\r\n]+/g, ' ')}`)
+                .join('\n');
+            const causeLines = [];
+            if (outcome === 'failure') {
+              if (!reviewResult) {
+                causeLines.push(
+                  '정확한 원인 파일을 판정하지 않았습니다. 검사 결과가 없어 checkout·dependency·import·실행 실패 가능성을 확인해야 합니다.',
+                );
+              } else if (
+                mixedCategoryError &&
+                reviewResult.categoryFiles &&
+                typeof reviewResult.categoryFiles === 'object'
+              ) {
+                const categoryLabels = { feature: '기능 파일', policy: '정책 파일', ui: 'UI 계약 파일' };
+                for (const category of ['policy', 'ui', 'feature']) {
+                  const files = Array.isArray(reviewResult.categoryFiles[category])
+                    ? reviewResult.categoryFiles[category]
+                    : [];
+                  if (files.length > 0) {
+                    causeLines.push(`${categoryLabels[category]}:\n\n${formatIndented(files)}`);
+                  }
+                }
+              } else if (mixedCategoryError) {
+                const policyFiles = [];
+                const uiFiles = [];
+                const supportingFiles = new Set();
+                for (const signal of Array.isArray(reviewResult.signals) ? reviewResult.signals : []) {
+                  const policyMatch = signal.match(
+                    /^([^:]+): treated as a dedicated enforcement-policy change\.$/,
+                  );
+                  const customMatch = signal.match(
+                    /^([^:]+): treated as a custom icon owner admission\.$/,
+                  );
+                  const supportingMatch = signal.match(
+                    /^([^:]+): treated as (?:supporting (?:change|story evidence|legacy-contract cleanup)|UI supporting evidence)\.$/,
+                  );
+                  if (policyMatch) policyFiles.push(policyMatch[1]);
+                  if (customMatch) uiFiles.push(customMatch[1]);
+                  if (supportingMatch) supportingFiles.add(supportingMatch[1]);
+                }
+                const remainingFiles = changedFiles.filter(
+                  (file) =>
+                    !supportingFiles.has(file) &&
+                    !policyFiles.includes(file) &&
+                    !uiFiles.includes(file),
+                );
+                const hasAmbiguousFile = remainingFiles.some(
+                  (file) =>
+                    file.startsWith('apps/app/src/') ||
+                    /\.stories?\.[cm]?[jt]sx?$/.test(file),
+                );
+                if (policyFiles.length > 0) {
+                  causeLines.push(`정책 파일:\n\n${formatIndented(policyFiles)}`);
+                }
+                if (uiFiles.length > 0) {
+                  causeLines.push(`UI 계약 파일:\n\n${formatIndented(uiFiles)}`);
+                }
+                if (remainingFiles.length > 0 && !hasAmbiguousFile) {
+                  causeLines.push(`기능 파일:\n\n${formatIndented(remainingFiles)}`);
+                } else if (hasAmbiguousFile || causeLines.length === 0) {
+                  causeLines.push(
+                    '정확한 원인 파일을 판정하지 않았습니다. 기존 checker가 파일별 분류를 제공하지 않습니다.',
+                  );
+                }
+              }
+              const diagnosticErrors = reviewErrors.filter((error) => !isMixedCategoryError(error));
+              if (diagnosticErrors.length > 0) {
+                causeLines.push(`검사 진단:\n\n${formatIndented(diagnosticErrors)}`);
+              }
+            }
             let logExcerpt = '';
             let logTruncated = false;
             if (logPath && fs.existsSync(logPath)) {
@@ -109,8 +228,15 @@ jobs:
             const diagnosis = outcome === 'success'
               ? '정적 UI 계약 검토가 통과했습니다.'
               : outcome === 'failure'
-                ? '정적 UI 계약 검토가 실패했습니다. 아래 원문 진단에서 실패한 파일 경로를 확인하세요.'
+                ? '정적 UI 계약 검토가 실패했습니다. 원인 파일과 검사 원문을 확인하세요.'
                 : '검사 단계가 실행되지 않았습니다. checkout·도구·dependency 단계의 원인을 확인하세요.';
+            let causeText = causeLines.join('\n\n');
+            if (causeText.length > 16000) {
+              causeText = `${causeText.slice(0, 16000)}\n    원인 진단이 16000자에서 생략되었습니다.`;
+            }
+            const causeSection = causeLines.length
+              ? ['### 실패 원인 파일', '', causeText, '']
+              : [];
             const report = [
               '## UI Contract Review (참고용)',
               '',
@@ -123,6 +249,7 @@ jobs:
               `- Dependencies: \`${dependenciesOutcome}\``,
               `- Review: \`${checkOutcome}\``,
               '',
+              ...causeSection,
               diagnosis,
               '',
               '직접 ESLint 규칙, 원격 CI/merge ruleset, Native·Storybook runtime 검증과 별도의 참고 결과입니다.',

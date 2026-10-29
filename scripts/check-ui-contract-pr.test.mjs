@@ -452,6 +452,10 @@ describe('check-ui-contract-pr', () => {
     assert.match(mixedError, /UI files:\n- apps\/app\/src\/components\/ui\/Button\.tsx/);
     assert.match(mixedError, /Feature files:\n- apps\/app\/src\/components\/Feature\.tsx/);
     assert.doesNotMatch(mixedError, /docs\/review\.md/);
+    assert.deepEqual(result.categoryFiles, {
+      ui: ['apps/app/src/components/ui/Button.tsx'],
+      feature: ['apps/app/src/components/Feature.tsx'],
+    });
   });
 
   it('keeps deleted or renamed UI owners in the UI classification', async () => {
@@ -620,6 +624,10 @@ describe('check-ui-contract-pr', () => {
     assert.match(mixedError, /Policy files:\n- scripts\/ui-contract-legacy\.json/);
     assert.match(mixedError, /Feature files:\n- apps\/app\/src\/components\/Feature\.tsx/);
     assert.doesNotMatch(mixedError, /docs\/review\.md/);
+    assert.deepEqual(result.categoryFiles, {
+      policy: ['scripts/ui-contract-legacy.json'],
+      feature: ['apps/app/src/components/Feature.tsx'],
+    });
   });
 
   it('allows a custom icon, owner registration, canonical component, story, and review body together', async () => {

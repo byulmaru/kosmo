@@ -1462,7 +1462,13 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       );
     }
   }
-  return { errors, signals, categories: [...categoryFiles.keys()], files };
+  return {
+    errors,
+    signals,
+    categories: [...categoryFiles.keys()],
+    categoryFiles: Object.fromEntries(categoryFiles),
+    files,
+  };
 }
 
 const MERGE_QUEUE_QUERY = `
