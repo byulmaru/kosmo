@@ -42,7 +42,10 @@ mockModule('expo-router', {
   useRouter: () => ({ back: () => undefined, canGoBack: () => false, replace: () => undefined }),
 });
 mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon', Menu: 'Menu' });
-mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'ArrowLeftIcon', Menu: 'Menu' });
+mockModule(require.resolve('lucide-react-native'), {
+  ArrowLeftIcon: 'ArrowLeftIcon',
+  Menu: 'Menu',
+});
 mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ top: 0 }) });
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('react-native', {

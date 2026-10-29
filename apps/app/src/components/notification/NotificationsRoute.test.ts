@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -7,6 +8,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import type { useNotificationReadAll as ReadAllHook } from './NotificationReadAllContext';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let state: 'loading' | 'error' | 'content' | 'profileRequired' = 'loading';
@@ -27,6 +29,7 @@ mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 });
 mockModule('lucide-react-native', { Menu: 'Menu' });
+mockModule(require.resolve('lucide-react-native'), { Menu: 'Menu' });
 mockModule('react-relay', {
   graphql: () => ({}),
   useLazyLoadQuery: () => ({
