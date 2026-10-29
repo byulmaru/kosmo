@@ -2,6 +2,7 @@ import baseMeta, {
   ActionBarCatalogInteraction as actionBarCatalogInteraction,
   ActionSemanticColorsDarkInteraction as actionSemanticColorsDarkInteraction,
   AuthorPostDeletion as authorPostDeletion,
+  AuthorPostDeletionCountError as authorPostDeletionCountError,
   AuthorPostDeletionFailureRetry as authorPostDeletionFailureRetry,
   AuthorPostDeletionGraphQLErrorRetry as authorPostDeletionGraphQLErrorRetry,
   AuthorPostDeletionPending as authorPostDeletionPending,
@@ -15,7 +16,9 @@ import baseMeta, {
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
   ReactionFullDismissFocusAndPlacement as reactionFullDismissFocusAndPlacement,
   ReactionMobileWebTabClearance as reactionMobileWebTabClearance,
+  ReactionNullableDeleteSuccessContract as reactionNullableDeleteSuccessContract,
   ReactionRecentUseContract as reactionRecentUseContract,
+  ReactionSharedSurfaceConsistencyContract as reactionSharedSurfaceConsistencyContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
   ReactionViewerOverlayContract as reactionViewerOverlayContract,
 } from './PostActionBar.stories';
@@ -35,6 +38,7 @@ export const PlaygroundInteraction: Story = playgroundInteraction;
 export const ActionBarCatalogInteraction: Story = actionBarCatalogInteraction;
 export const ActionSemanticColorsDarkInteraction: Story = actionSemanticColorsDarkInteraction;
 export const AuthorPostDeletion: Story = authorPostDeletion;
+export const AuthorPostDeletionCountError: Story = authorPostDeletionCountError;
 export const AuthorPostDeletionPending: Story = authorPostDeletionPending;
 export const AuthorPostDeletionFailureRetry: Story = authorPostDeletionFailureRetry;
 export const AuthorPostDeletionGraphQLErrorRetry: Story = authorPostDeletionGraphQLErrorRetry;
@@ -49,5 +53,8 @@ export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutat
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
 export const ReactionDirectFullContract: Story = reactionDirectFullContract;
+export const ReactionNullableDeleteSuccessContract: Story = reactionNullableDeleteSuccessContract;
+export const ReactionSharedSurfaceConsistencyContract: Story =
+  reactionSharedSurfaceConsistencyContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;

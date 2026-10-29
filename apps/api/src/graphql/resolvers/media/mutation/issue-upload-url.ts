@@ -1,5 +1,8 @@
+import '@kosmo/core/polyfill';
+
 import { db, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
+import { parseNexusMediaUploadReference } from '@kosmo/core/media-upload';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { resolveComposerProfileId } from '@/profile/authorization';
@@ -43,7 +46,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           Authorization: `Bearer ${mediaStorageApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: '{}',
+        body: JSON.stringify({ staging: true }),
         signal: AbortSignal.any([
           ctx.c.req.raw.signal,
           AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
@@ -57,6 +60,11 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
       if (!upload.success) {
         throw new Error('Media Storage Service returned an invalid upload response');
       }
+
+      const storageReference = `nexus:v1:${upload.data.id.slice(2)}`;
+      if (parseNexusMediaUploadReference(storageReference)?.id !== upload.data.id) {
+        throw new Error('Media Storage Service returned an invalid upload response');
+      }
       const expiresAt = Temporal.Instant.from(upload.data.expiresAt);
 
       const media = await db
@@ -66,7 +74,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           state: MediaState.UPLOADING,
           accountId: ctx.session.accountId,
           profileId: composerProfileId,
-          storageReference: upload.data.id,
+          storageReference,
           uploadExpiresAt: expiresAt,
         })
         .returning()

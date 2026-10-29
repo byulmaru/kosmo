@@ -96,8 +96,8 @@ test('selectProfile response identifies the selected profile and recreates the a
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
-  await expect(page).toHaveURL(/\/home$/);
+  await page.waitForURL('**/first-profile/handle');
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 
   const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
@@ -128,7 +128,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   const gammaProfileId = await createProfileFromSwitcher(page, 'gamma');
   await createProfileFromSwitcher(page, 'delta');
@@ -156,7 +156,7 @@ test('home route active profile query refetches after switching profiles', async
   const betaPostBody = 'beta profile timeline post';
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   const alphaHomeProfileId = await createProfileFromSwitcher(page, 'alphahome');
   await createProfileFromSwitcher(page, 'betahome');
@@ -273,7 +273,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
 }) => {
   const betaPostBody = 'actor revision recovery timeline post';
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'revisionalpha');
   const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
@@ -286,7 +286,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.waitForLoadState('networkidle');
 
-  let homeQueryCount = 0;
+  let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName !== 'HomePageQuery') {
@@ -294,8 +294,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
       return;
     }
 
-    homeQueryCount += 1;
-    if (homeQueryCount === 1) {
+    if (failHomeQueries) {
       await route.abort('failed');
       return;
     }
@@ -319,6 +318,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
         requestBody.extensions?.selectedProfileId === betaProfileId
       );
     });
+    failHomeQueries = false;
     const selectProfileResponse = await selectProfileFromSwitcher(page, 'revisionbeta');
     const selectedProfileId = selectProfileResponse.data?.selectProfile?.profile?.id;
     expect(selectedProfileId).toBe(betaProfileId);
@@ -346,7 +346,7 @@ test('home onboarding stays hidden while the home active profile query errors', 
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'errorhome');
   await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
@@ -386,6 +386,21 @@ function collectGraphQLRequests(page: Page) {
 }
 
 async function createProfileFromSwitcher(page: Page, handle: string) {
+  if (new URL(page.url()).pathname === '/first-profile/handle') {
+    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(handle);
+    const created = waitForGraphQLOperation(page, 'FirstProfileOnboardingCreateMutation');
+    await page.getByRole('button', { name: '바로 시작' }).click();
+    const body = (await (await created).json()) as {
+      data?: { createProfile?: { profile?: { id?: string } } };
+      errors?: unknown[];
+    };
+    expect(body.errors).toBeUndefined();
+    const id = body.data?.createProfile?.profile?.id;
+    expect(id).toEqual(expect.any(String));
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(sidebarProfileHandle(page, handle)).toBeVisible();
+    return id as string;
+  }
   let createProfilePostData: string | null = null;
   const createProfileResponse = page.waitForResponse(async (response) => {
     if (!isGraphQLResponse(response.url())) {

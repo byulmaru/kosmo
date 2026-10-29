@@ -15,7 +15,6 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -898,7 +897,7 @@ describe('GraphQL Reaction', () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('hidden-repost-source-author');
     const { post: source } = await createCorePost({
-      document: postContentDocumentFromText(crypto.randomUUID()),
+      bodyText: crypto.randomUUID(),
       origin: 'LOCAL',
       profileId: sourceAuthor.id,
       visibility: PostVisibility.PUBLIC,

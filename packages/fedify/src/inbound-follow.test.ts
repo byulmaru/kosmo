@@ -42,11 +42,13 @@ let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let createKosmoFederation: typeof FederationModule.createKosmoFederation;
@@ -67,11 +69,13 @@ describe('inbound Follow and Undo', () => {
       db,
       firstOrThrow,
       Instances,
+      Media,
       Notifications,
       pg,
       ProfileBlocks,
       ProfileFollowRequests,
       ProfileFollows,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -84,6 +88,8 @@ describe('inbound Follow and Undo', () => {
 
   beforeEach(async () => {
     await waitForProfileFollowWorkflows({ terminateIdlePairs: true });
+    await db.delete(ProfileMedia);
+    await db.delete(Media);
     await db.delete(Profiles);
     if (recipientAccountIds.length > 0) {
       await db.delete(Accounts).where(inArray(Accounts.id, recipientAccountIds));
@@ -704,6 +710,55 @@ describe('inbound Follow and Undo', () => {
         .then(firstOrThrow),
       { followersCount: 0, followingCount: 0 },
     );
+  });
+
+  test('passes an ID-less inbound Follow published timestamp as the second Update argument', async () => {
+    const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const published = Temporal.Instant.from('2026-09-29T00:03:00Z');
+    const expectedRequestId = '00000000-0000-8000-8000-000000000712';
+    const transition = mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async (_name: unknown, options: unknown) => {
+        assert.ok(options && typeof options === 'object');
+        const args = (options as { args?: readonly unknown[] }).args;
+        assert.deepEqual(args?.[0], {
+          kind: 'FOLLOW',
+          origin: 'ACTIVITYPUB',
+        });
+        assert.deepEqual(args?.[1], {
+          actorUri: remoteActorUri.href,
+          objectUri: localActorUri.href,
+          published: published.toString(),
+        });
+        await db.insert(ProfileFollowRequests).values({
+          id: expectedRequestId,
+          followerProfileId: fixture.remoteProfile.id,
+          followeeProfileId: fixture.localProfile.id,
+        });
+        return {
+          ok: true as const,
+          result: {
+            commandKind: 'FOLLOW' as const,
+            created: true,
+            kind: 'PENDING' as const,
+            followerProfileId: fixture.remoteProfile.id,
+            followeeProfileId: fixture.localProfile.id,
+            profileFollowRequestId: expectedRequestId,
+          },
+        };
+      },
+    );
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: null }),
+        new Follow({ actor: remoteActorUri, object: localActorUri, published }),
+      );
+      assert.equal(transition.mock.callCount(), 1);
+    } finally {
+      transition.mock.restore();
+    }
   });
 
   test('removes the personal inbound Follow relation and Notification on Undo', async () => {

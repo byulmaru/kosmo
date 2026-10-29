@@ -3,6 +3,7 @@ import {
   Client,
   Connection,
   WithStartWorkflowOperation,
+  WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
@@ -31,6 +32,7 @@ export const temporalClient = new Client({
 export interface WorkflowDefinition<T extends Workflow> {
   readonly workflow: string | T;
   readonly workflowIdFromArgs: (...args: Parameters<T>) => string;
+  readonly timeoutMs?: number;
 }
 
 declare const workflowUpdateDefinitionTypes: unique symbol;
@@ -50,9 +52,10 @@ export interface WorkflowUpdateDefinition<
 type RunWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = Omit<
   WorkflowStartOptions<T>,
   'workflowId' | 'taskQueue'
-> & {
-  readonly mode: Mode;
-};
+> &
+  (Mode extends 'execute'
+    ? { readonly mode: 'execute'; readonly returnExistingResult?: boolean }
+    : { readonly mode: 'start'; readonly returnExistingResult?: never });
 
 type RunWorkflowUpdateResultOptions<T extends Workflow> = {
   readonly args: Parameters<T>;
@@ -108,7 +111,7 @@ export async function runWorkflow<T extends Workflow>(
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T> | unknown> {
   const args = (options.args ?? []) as Parameters<T>;
   const workflowId = definition.workflowIdFromArgs(...args);
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + (definition.timeoutMs ?? 30_000);
 
   try {
     if (options.mode === 'update-result') {
@@ -147,7 +150,7 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    const { mode, ...workflowOptions } = options;
+    const { mode, returnExistingResult, ...workflowOptions } = options;
     const startOptions = {
       ...workflowOptions,
       workflowId,
@@ -160,9 +163,20 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    return await temporalClient.withDeadline(deadline, () =>
-      temporalClient.workflow.execute(definition.workflow, startOptions),
-    );
+    return await temporalClient.withDeadline(deadline, async () => {
+      try {
+        return await temporalClient.workflow.execute(definition.workflow, startOptions);
+      } catch (error) {
+        if (
+          returnExistingResult === true &&
+          error instanceof WorkflowExecutionAlreadyStartedError &&
+          error.workflowId === workflowId
+        ) {
+          return temporalClient.workflow.getHandle<T>(workflowId).result();
+        }
+        throw error;
+      }
+    });
   } catch (error) {
     let failure: unknown = error;
     while (failure instanceof Error && !(failure instanceof ApplicationFailure)) {

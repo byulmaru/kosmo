@@ -8,6 +8,7 @@ import {
   Delete,
   Image,
   Note,
+  PUBLIC_COLLECTION,
   QuoteAuthorization,
   QuoteRequest,
   Reject,
@@ -26,6 +27,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
@@ -44,12 +46,14 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let localOutboundFederation: typeof LocalOutboundFederation;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -63,6 +67,7 @@ let sendLocalPostQuoteRequest: typeof LocalPostDelivery.sendLocalPostQuoteReques
 let projectLocalPostNote: typeof ProjectLocalPostNote;
 let testAccountIds: string[] = [];
 let testInstanceIds: string[] = [];
+let testHashtagIds: string[] = [];
 let testProfileIds: string[] = [];
 
 describe('ActivityPub Local Post delivery', () => {
@@ -75,11 +80,13 @@ describe('ActivityPub Local Post delivery', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
 
       PostContents,
+      PostContentHashtags,
       PostMentions,
       Posts,
       ProfileFollows,
@@ -168,7 +175,7 @@ describe('ActivityPub Local Post delivery', () => {
     }
   });
 
-  test('Create(Note) delivery reuses the resolved Mention projection without adding recipients', async () => {
+  test('Create(Note) delivery serializes Hashtag links and sends to remote Mentions', async () => {
     const author = await createProfile({ instanceId: localInstanceId });
     const follower = await createRemoteActor({ handle: 'mention-delivery-follower' });
     const mentionTarget = await createRemoteActor({ handle: 'mention-delivery-target' });
@@ -178,6 +185,12 @@ describe('ActivityPub Local Post delivery', () => {
     });
     const post = await createPost(author.id);
     assert.ok(post.currentContentId);
+    const hashtag = await db
+      .insert(Hashtags)
+      .values({ displayName: 'DeliveryTag', name: 'deliverytag' })
+      .returning()
+      .then(firstOrThrow);
+    testHashtagIds.push(hashtag.id);
     await db
       .update(PostContents)
       .set({
@@ -188,6 +201,8 @@ describe('ActivityPub Local Post delivery', () => {
                 content: [
                   { text: 'Hello ', type: 'text' },
                   { attrs: { profileId: mentionTarget.profile.id }, type: 'mention' },
+                  { text: ' ', type: 'text' },
+                  { attrs: { hashtagId: hashtag.id, token: '#dELiveryTag' }, type: 'hashtag' },
                 ],
                 type: 'paragraph',
               },
@@ -203,6 +218,10 @@ describe('ActivityPub Local Post delivery', () => {
       postContentId: post.currentContentId,
       profileId: mentionTarget.profile.id,
     });
+    await db.insert(PostContentHashtags).values({
+      postContentId: post.currentContentId,
+      hashtagId: hashtag.id,
+    });
     const fixture = createContextFixture();
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
@@ -213,29 +232,118 @@ describe('ActivityPub Local Post delivery', () => {
     assert.ok(call?.activity instanceof Create);
     const note = await call.activity.getObject();
     assert.ok(note instanceof Note);
-    assert.equal(
-      note.content?.toString(),
-      `<p>Hello <span class="h-card"><a href="${mentionTarget.actorUri}" class="u-url mention">@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}</a></span></p>`,
-    );
-    const serializedNote = (await note.toJsonLd()) as {
-      readonly tag?: { readonly href?: string; readonly name?: string; readonly type?: string };
+    const hashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', hashtag.id)}/posts`;
+    const noteHtml =
+      `<p>Hello <span class="h-card"><a href="${mentionTarget.actorUri}" class="u-url mention">` +
+      `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}</a></span> ` +
+      `<a href="${hashtagUrl}" rel="tag">#dELiveryTag</a></p>`;
+    assert.equal(note.content?.toString(), noteHtml);
+
+    const createJsonLd = (await call.activity.toJsonLd()) as {
+      readonly object?: unknown;
+      readonly type?: string;
     };
+    assert.equal(createJsonLd.type, 'Create');
+    const serializedObject = Array.isArray(createJsonLd.object)
+      ? createJsonLd.object[0]
+      : createJsonLd.object;
+    assert.ok(serializedObject && typeof serializedObject === 'object');
+    const serializedNote = serializedObject as {
+      readonly content?: string;
+      readonly tag?: unknown;
+      readonly type?: string;
+    };
+    assert.equal(serializedNote.type, 'Note');
+    assert.equal(serializedNote.content, noteHtml);
+    const serializedTags = Array.isArray(serializedNote.tag)
+      ? serializedNote.tag
+      : [serializedNote.tag];
     assert.deepEqual(
-      {
-        href: serializedNote.tag?.href,
-        name: serializedNote.tag?.name,
-        type: serializedNote.tag?.type,
-      },
-      {
-        href: mentionTarget.actorUri,
-        name: `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}`,
-        type: 'Mention',
-      },
+      serializedTags
+        .map((tag) => {
+          const value = tag as {
+            readonly href?: string;
+            readonly name?: string;
+            readonly type?: string;
+          };
+          return { href: value.href, name: value.name, type: value.type };
+        })
+        .sort((left, right) => (left.href ?? '').localeCompare(right.href ?? '')),
+      [
+        {
+          href: mentionTarget.actorUri,
+          name: `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}`,
+          type: 'Mention',
+        },
+        { href: hashtagUrl, name: '#DeliveryTag', type: 'Hashtag' },
+      ].sort((left, right) => left.href.localeCompare(right.href)),
     );
     assert.deepEqual(
-      call.recipients.map((recipient) => recipient.id?.href),
-      [follower.actorUri],
+      call.recipients.map((recipient) => recipient.id?.href).sort(),
+      [follower.actorUri, mentionTarget.actorUri].sort(),
     );
+    assert.deepEqual(
+      call.activity.ccIds.map((uri) => uri.href).sort(),
+      [`${publicOrigin}/ap/actor/${author.id}/followers`, mentionTarget.actorUri].sort(),
+    );
+  });
+
+  test('PUBLIC/UNLISTED Mention recipients receive Create/Delete with the existing audience addresses', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const mentionTarget = await createRemoteActor({ handle: 'public-mention-target' });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    for (const visibility of [PostVisibility.PUBLIC, PostVisibility.UNLISTED]) {
+      const post = await createPost(author.id, { visibility });
+      assert.ok(post.currentContentId);
+      await addPostMentions(post.currentContentId, [mentionTarget.profile.id]);
+      await sendLocalPostCreate(post.id);
+
+      const createCall = fixture.calls.at(-1);
+      assert.ok(createCall?.activity instanceof Create);
+      const followersUri = `${publicOrigin}/ap/actor/${author.id}/followers`;
+      const toIds =
+        visibility === PostVisibility.PUBLIC ? [PUBLIC_COLLECTION.href] : [followersUri];
+      const ccIds =
+        visibility === PostVisibility.PUBLIC
+          ? [followersUri, mentionTarget.actorUri]
+          : [PUBLIC_COLLECTION.href, mentionTarget.actorUri];
+      assert.deepEqual(
+        createCall.recipients.map((recipient) => recipient.id?.href),
+        [mentionTarget.actorUri],
+      );
+      assert.deepEqual(
+        createCall.activity.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(createCall.activity.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+      const note = await createCall.activity.getObject();
+      assert.ok(note instanceof Note);
+      assert.deepEqual(
+        note.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(note.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+
+      await db
+        .update(Posts)
+        .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+        .where(eq(Posts.id, post.id));
+      await sendLocalPostDelete(post.id);
+
+      const deleteCall = fixture.calls.at(-1);
+      assert.ok(deleteCall?.activity instanceof Delete);
+      assert.deepEqual(
+        deleteCall.recipients.map((recipient) => recipient.id?.href),
+        [mentionTarget.actorUri],
+      );
+      assert.deepEqual(
+        deleteCall.activity.toIds.map((uri) => uri.href),
+        toIds,
+      );
+      assert.deepEqual(deleteCall.activity.ccIds.map((uri) => uri.href).sort(), ccIds.sort());
+    }
   });
 
   test('DIRECT Create/Delete는 현재 Content의 remote Mention만 대상으로 하고 follower와 Parent를 제외한다', async () => {
@@ -471,6 +579,8 @@ describe('ActivityPub Local Post delivery', () => {
       replyParentId: parent.id,
       visibility: PostVisibility.FOLLOWERS,
     });
+    assert.ok(followersReply.currentContentId);
+    await addPostMentions(followersReply.currentContentId, [parentAuthor.profile.id]);
     const directReply = await createPost(author.id, {
       replyParentId: parent.id,
       visibility: PostVisibility.DIRECT,
@@ -491,7 +601,7 @@ describe('ActivityPub Local Post delivery', () => {
     );
   });
 
-  test('Root Post followers와 direct Parent target을 함께 확장하고 actor 기준으로 중복 제거한다', async () => {
+  test('Mention, followers, reply Parent가 같은 actor면 Create/Delete를 한 번만 전달한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActor({ handle: 'follower', sharedInbox: true });
     await db.insert(ProfileFollows).values({
@@ -501,17 +611,34 @@ describe('ActivityPub Local Post delivery', () => {
     const rootPost = await createPost(author.id);
     const remoteParent = await createPost(follower.profile.id);
     const reply = await createPost(author.id, { replyParentId: remoteParent.id });
+    assert.ok(reply.currentContentId);
+    await addPostMentions(reply.currentContentId, [follower.profile.id]);
     const fixture = createContextFixture();
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
     await sendLocalPostCreate(rootPost.id);
     await sendLocalPostCreate(reply.id);
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+      .where(eq(Posts.id, reply.id));
+    await sendLocalPostDelete(reply.id);
 
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 3);
     assert.deepEqual(
       fixture.calls.map((call) => call.recipients.map((recipient) => recipient.id?.href)),
-      [[follower.actorUri], [follower.actorUri]],
+      [[follower.actorUri], [follower.actorUri], [follower.actorUri]],
     );
+    assert.deepEqual(
+      fixture.calls[0]?.activity.ccIds.map((uri) => uri.href),
+      [`${publicOrigin}/ap/actor/${author.id}/followers`],
+    );
+    for (const call of fixture.calls.slice(1)) {
+      assert.deepEqual(
+        call.activity.ccIds.map((uri) => uri.href).sort(),
+        [`${publicOrigin}/ap/actor/${author.id}/followers`, follower.actorUri].sort(),
+      );
+    }
   });
 
   test('Local Parent Reply는 Parent direct target 없이 Author followers에게만 전달한다', async () => {
@@ -1474,6 +1601,9 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  if (testHashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, testHashtagIds));
+  }
   await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
   if (testAccountIds.length > 0) {
@@ -1483,6 +1613,7 @@ const cleanTestRows = async () => {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testHashtagIds = [];
   testAccountIds = [];
   testProfileIds = [];
 };

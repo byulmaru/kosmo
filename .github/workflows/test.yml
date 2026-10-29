@@ -35,7 +35,7 @@ jobs:
               container="$(docker run --detach --rm --publish 127.0.0.1:18080:8080 kosmo-admin-smoke admin)"
               trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
               timeout 30 sh -c 'until test "$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18080/healthz)" = 200; do sleep 1; done'
-              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/healthz)"
+              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/healthz)"
               grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$health_post"
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$health_post"
               shell="$(curl --silent --show-error --dump-header - http://127.0.0.1:18080/)"
@@ -45,7 +45,7 @@ jobs:
               grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$escaped"
               grep -Fq '&lt;script>alert(1)&lt;/script>' <<<"$escaped"
               if grep -Fq '<script>alert(1)</script>' <<<"$escaped"; then exit 1; fi
-              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/)"
+              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/)"
               grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$shell_post"
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
               test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404

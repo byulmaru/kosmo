@@ -20,14 +20,26 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import {
+  headNexusMediaUploadSource,
+  parseNexusMediaUploadReference,
+} from '@kosmo/core/media-upload';
+import {
   canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
+import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { createStagingR2Fixture } from './staging-r2.fixture';
+import {
+  trackLocalPostCreateWorkflows,
+  waitForLocalPostCreateWorkflows,
+} from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
@@ -37,8 +49,6 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
-process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
-process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media.example';
 
 const onePixelPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -47,9 +57,11 @@ const onePixelPng = Buffer.from(
 
 let db: typeof CoreDb.db;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
@@ -67,18 +79,26 @@ let localOutboundFederation: typeof LocalOutboundFederation;
 let projectLocalPostNote: typeof ProjectLocalPostNote;
 let app: Hono<Env>;
 let localInstanceId: string;
+let stagingR2: Awaited<ReturnType<typeof createStagingR2Fixture>>;
+let restoreLocalPostCreateWorkflowTracking: (() => void) | undefined;
 
 describe('Post Reply GraphQL 경계', () => {
   before(async () => {
+    restoreLocalPostCreateWorkflowTracking = trackLocalPostCreateWorkflows();
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
+    stagingR2 = await createStagingR2Fixture();
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = stagingR2.endpoint;
+    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
 
     ({
       AccountProfiles,
       Accounts,
       ActivityPubActors,
+      ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       pg,
@@ -112,19 +132,29 @@ describe('Post Reply GraphQL 경계', () => {
   });
 
   beforeEach(async () => {
+    await waitForLocalPostCreateWorkflows();
+    stagingR2.reset();
     await resetFixtures();
   });
 
   after(async () => {
-    await pg.end();
+    try {
+      await waitForLocalPostCreateWorkflows();
+    } finally {
+      restoreLocalPostCreateWorkflowTracking?.();
+      await pg.end();
+      await stagingR2.close();
+    }
   });
 
   test('replyParentId 생략은 기존 일반 Post 계약을 유지한다', async () => {
     const auth = await createAuthenticatedSession();
+    const hashtagName = `tag${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const bodyText = `일반 게시글 #${hashtagName}`;
 
     const result = await requestCreatePost(
       {
-        bodyText: '일반 게시글',
+        bodyText,
         contentWarning: '통합 검증 경고',
         visibility: PostVisibility.UNLISTED,
       },
@@ -148,6 +178,49 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
     assert.equal(content.document.summary, '통합 검증 경고');
+
+    const hashtag = await db
+      .select({ id: Hashtags.id })
+      .from(Hashtags)
+      .where(eq(Hashtags.name, hashtagName))
+      .then(firstOrThrow);
+    const projected = await requestGraphQL<{
+      node: { content: { bodyText: string; document: unknown } } | null;
+    }>(
+      `query CreatedHashtagPost($postId: ID!) {
+        node(id: $postId) {
+          ... on Post {
+            content { bodyText document }
+          }
+        }
+      }`,
+      { postId: encodeGlobalId('Post', stored.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(projected);
+    assert.equal(projected.data?.node?.content.bodyText, bodyText);
+    assert.deepEqual(projected.data?.node?.content.document, {
+      body: {
+        content: [
+          {
+            content: [
+              { text: '일반 게시글 ', type: 'text' },
+              {
+                attrs: {
+                  hashtagId: encodeGlobalId('Hashtag', hashtag.id),
+                  token: `#${hashtagName}`,
+                },
+                type: 'hashtag',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'doc',
+      },
+      summary: '통합 검증 경고',
+      version: 1,
+    });
   });
 
   test('createPost combines selected and typed Mentions into Profile relations', async () => {
@@ -546,7 +619,11 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(execute.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
+    const [workflow, options] = execute.mock.calls[0]!.arguments;
+    assert.equal(workflow, POST_CREATE_WORKFLOW_TYPE);
+    const workflowArgs = options.args?.[0] as { input: { origin: string } };
+    assert.equal(workflowArgs.input.origin, 'LOCAL');
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -721,10 +798,10 @@ describe('Post Reply GraphQL 경계', () => {
     });
 
     const result = await requestGraphQL<{
-      createPost: { post: { id: string; profile: { id: string } } };
+      createPost: { post: { id: string; profile: { id: string }; visibility: PostVisibility } };
     }>(
       `mutation CreatePost($input: CreatePostInput!) {
-        createPost(input: $input) { post { id profile { id } } }
+        createPost(input: $input) { post { id profile { id } visibility } }
       }`,
       {
         input: {
@@ -741,6 +818,7 @@ describe('Post Reply GraphQL 경계', () => {
       result.data?.createPost.post.profile.id,
       encodeGlobalId('Profile', composerProfile.id),
     );
+    assert.equal(result.data?.createPost.post.visibility, PostVisibility.FOLLOWERS);
     assert.equal(
       (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
         .activeProfileId,
@@ -786,6 +864,16 @@ describe('Post Reply GraphQL 경계', () => {
       assert.equal(denied.errors?.[0]?.extensions?.field, 'admissionId');
     }
     assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
+    const quote = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.repostSourceId, source.id))
+      .then(firstOrThrow);
+    await waitForLocalPostCreateWorkflows();
+    const owner = temporalClient.workflow.getHandle(
+      postQuoteOwnerWorkflow.workflowIdFromArgs({ postId: quote.id }),
+    );
+    assert.equal((await owner.describe()).status.name, 'COMPLETED');
   });
 
   test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
@@ -1267,44 +1355,16 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('업로드 발급부터 PostContent와 Local Note Media projection까지 하나의 흐름으로 연결한다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const storageReference = `u_${crypto.randomUUID()}`;
-    const uploadUrl = 'https://media.example/v1/uploads/integration-signed-url';
     const publicMediaUrl = 'https://media.example/media/integration.webp';
-    const representationUrl = `https://media.example/v1/uploads/${storageReference}`;
-    let uploaded: Buffer | null = null;
-
-    t.mock.method(
-      globalThis,
-      'fetch',
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url = String(input);
-        if (url === 'https://media.example/v1/uploads' && init?.method === 'POST') {
-          return Response.json(
-            {
-              expiresAt: Temporal.Now.instant().add({ minutes: 5 }).toString(),
-              id: storageReference,
-              uploadUrl,
-            },
-            { status: 201 },
-          );
-        }
-        if (url === uploadUrl && init?.method === 'PUT') {
-          uploaded = Buffer.from(await new Response(init.body).arrayBuffer());
-          return new Response(null, { status: 201 });
-        }
-        if (url === representationUrl && init?.method === undefined) {
-          assert.deepEqual(uploaded, onePixelPng);
-          return Response.json({ mediaType: 'storage-defined-format', url: publicMediaUrl });
-        }
-        throw new Error(`Unexpected Media Storage request: ${init?.method ?? 'GET'} ${url}`);
-      },
-    );
 
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
     const mediaId = issued.data?.issueMediaUploadUrl.media.id;
     assert.ok(mediaId);
     assert.equal(issued.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+    const storedMedia = await db.select().from(Media).then(firstOrThrow);
+    const session = parseNexusMediaUploadReference(storedMedia.storageReference!);
+    assert.ok(session);
 
     const uploadedResponse = await fetch(issued.data!.issueMediaUploadUrl.uploadUrl, {
       body: onePixelPng,
@@ -1312,10 +1372,69 @@ describe('Post Reply GraphQL 경계', () => {
       method: 'PUT',
     });
     assert.equal(uploadedResponse.status, 201);
+    assert.deepEqual(await uploadedResponse.json(), { id: session.id });
+    assert.equal(stagingR2.objects.get(session.sourceKey)?.contentLength, onePixelPng.length);
 
+    const originalExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
+    const execute = t.mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (
+        workflow: Parameters<typeof temporalClient.workflow.execute>[0],
+        options: Parameters<typeof temporalClient.workflow.execute>[1],
+      ) => {
+        if (workflow !== MEDIA_UPLOAD_WORKFLOW_TYPE) {
+          if (workflow === POST_CREATE_WORKFLOW_TYPE) {
+            const workflowInput = (
+              options.args?.[0] as {
+                input: { accountId?: string; media?: { mediaId: string }[] };
+              }
+            ).input;
+            assert.equal(workflowInput.accountId, auth.account.id);
+            assert.equal(workflowInput.media?.[0]?.mediaId, storedMedia.id);
+          }
+          return originalExecute(workflow, options);
+        }
+
+        const { accountId, mediaId: workflowMediaId } = options.args?.[0] as {
+          accountId: string;
+          mediaId: string;
+        };
+        assert.equal(workflowMediaId, storedMedia.id);
+        assert.equal(accountId, auth.account.id);
+        await headNexusMediaUploadSource(storedMedia.storageReference!);
+        await db
+          .update(Media)
+          .set({
+            mediaType: 'storage-defined-format',
+            readyAt: Temporal.Now.instant(),
+            state: MediaState.READY,
+            url: publicMediaUrl,
+          })
+          .where(eq(Media.id, storedMedia.id));
+        return {
+          id: session.id,
+          mediaType: 'storage-defined-format',
+          url: publicMediaUrl,
+        } as never;
+      },
+    );
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+    assert.equal(
+      execute.mock.calls.filter((call) => call.arguments[0] === MEDIA_UPLOAD_WORKFLOW_TYPE).length,
+      1,
+    );
+
+    const selectedMedia = await db
+      .select()
+      .from(Media)
+      .where(eq(Media.id, storedMedia.id))
+      .then(firstOrThrow);
+    assert.equal(selectedMedia.accountId, auth.account.id);
+    assert.equal(selectedMedia.source, MediaSource.LOCAL);
+    assert.equal(selectedMedia.state, MediaState.READY);
 
     const created = await requestCreatePost(
       {
@@ -1381,7 +1500,7 @@ describe('Post Reply GraphQL 경계', () => {
   test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const uploading = await createUploadingMedia(auth.account.id, auth.profile.id);
-    const before = await db.$count(Posts);
+    const before = { contents: await db.$count(PostContents), posts: await db.$count(Posts) };
 
     const wrongType = await requestCreatePost(
       {
@@ -1403,7 +1522,16 @@ describe('Post Reply GraphQL 경계', () => {
     );
     assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media');
-    assert.equal(await db.$count(Posts), before);
+    assert.deepEqual(
+      { contents: await db.$count(PostContents), posts: await db.$count(Posts) },
+      before,
+    );
+    const unchangedMedia = await db
+      .select()
+      .from(Media)
+      .where(eq(Media.id, uploading.id))
+      .then(firstOrThrow);
+    assert.equal(unchangedMedia.altText, uploading.altText);
   });
 
   test('조회 가능한 일반 Post·Reply·Quote를 Parent로 하고 독립 Visibility를 저장한다', async () => {
@@ -1474,10 +1602,10 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Create admission 실패는 Post를 저장하지 않고 GraphQL 오류를 반환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const createContext = t.mock.method(localOutboundFederation, 'createContext');
-    t.mock.method(temporalClient.workflow, 'start', async () => {
+    t.mock.method(temporalClient.workflow, 'execute', async () => {
       throw new Error('Temporal unavailable');
     });
 
@@ -1489,14 +1617,8 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
 
-    assertNoGraphQLErrors(result);
-
-    const committed = await db
-      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-      .from(Posts)
-      .then(firstOrThrow);
-    assert.equal(committed.state, PostState.ACTIVE);
-    assert.ok(committed.currentContentId);
+    assert.ok(result.errors?.length);
+    assert.equal(await db.$count(Posts), 0);
     assert.equal(createContext.mock.callCount(), 0);
   });
 
@@ -1933,6 +2055,224 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('replyCount는 여러 Parent의 직접 eligible Reply만 집계하고 Quote 관계와 분리한다', async () => {
+    const author = await createProfile('reply-count-author');
+    const remoteAuthor = await createRemoteActorProfile('reply-count-remote-author');
+    const disabledAuthor = await createProfile(
+      'reply-count-disabled-author',
+      ProfileState.DISABLED,
+    );
+    const suspendedInstance = await createInstance(
+      InstanceKind.ACTIVITYPUB,
+      InstanceState.SUSPENDED,
+    );
+    const suspendedAuthor = await createProfile('reply-count-suspended-author', {
+      instanceId: suspendedInstance.id,
+    });
+    const root = await createContentfulPost(author.id);
+    const otherRoot = await createContentfulPost(author.id);
+    const quoteSource = await createContentfulPost(author.id);
+    const direct = await createContentfulPost(author.id, { replyParentId: root.id });
+    await createContentfulPost(author.id, { replyParentId: direct.id });
+    const replyQuote = await createContentfulPost(author.id, {
+      replyParentId: root.id,
+      repostSourceId: quoteSource.id,
+    });
+    const replyToQuote = await createContentfulPost(author.id, { replyParentId: replyQuote.id });
+    const pureQuote = await createContentfulPost(author.id, { repostSourceId: root.id });
+    await db
+      .insert(Posts)
+      .values({
+        profileId: author.id,
+        repostSourceId: root.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remoteReply = await createContentfulPost(remoteAuthor.id, { replyParentId: root.id });
+    const unlinkedRemotePost = await createContentfulPost(remoteAuthor.id);
+    const remoteInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, remoteAuthor.instanceId))
+      .then(firstOrThrow);
+    const receivedAt = Temporal.Now.instant();
+    await db.insert(ActivityPubPosts).values([
+      {
+        postId: remoteReply.id,
+        publishedAt: receivedAt,
+        receivedAt,
+        uri: `https://${remoteInstance.domain}/notes/${crypto.randomUUID()}`,
+      },
+      {
+        postId: unlinkedRemotePost.id,
+        publishedAt: receivedAt,
+        receivedAt,
+        uri: `https://${remoteInstance.domain}/notes/${crypto.randomUUID()}`,
+      },
+    ]);
+    await createContentfulPost(author.id, {
+      replyParentId: otherRoot.id,
+      state: PostState.DELETED,
+    });
+    await createContentfulPost(disabledAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(suspendedAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(author.id, { replyParentId: otherRoot.id });
+
+    const result = await requestReplyCounts([
+      root.id,
+      otherRoot.id,
+      direct.id,
+      replyQuote.id,
+      replyToQuote.id,
+      pureQuote.id,
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.nodes.map((node) => ({ id: node?.id, replyCount: node?.replyCount })),
+      [
+        { id: encodeGlobalId('Post', root.id), replyCount: 3 },
+        { id: encodeGlobalId('Post', otherRoot.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', direct.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', replyQuote.id), replyCount: 1 },
+        { id: encodeGlobalId('Post', replyToQuote.id), replyCount: 0 },
+        { id: encodeGlobalId('Post', pureQuote.id), replyCount: 0 },
+      ],
+    );
+  });
+
+  test('replyCount는 페이지 크기와 무관하게 전체 direct Reply 수를 반환한다', async () => {
+    const author = await createProfile('reply-count-page-author');
+    const root = await createContentfulPost(author.id);
+    await Promise.all(
+      Array.from({ length: 21 }, () => createContentfulPost(author.id, { replyParentId: root.id })),
+    );
+
+    const page = await requestReplyDescendants(root.id, { first: 20 });
+    const count = await requestReplyCounts([root.id]);
+
+    assertNoGraphQLErrors(page);
+    assert.equal(page.data?.node?.replyDescendants.edges.length, 20);
+    assert.equal(page.data?.node?.replyDescendants.pageInfo.hasNextPage, true);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.replyCount, 21);
+  });
+
+  test('replyCount는 각 direct Reply의 viewer visibility와 block 방향을 적용한다', async () => {
+    const viewer = await createAuthenticatedSession();
+    const publicAuthor = await createProfile('reply-count-public-author');
+    const followedAuthor = await createProfile('reply-count-followed-author');
+    const hiddenFollowerAuthor = await createProfile('reply-count-hidden-follower-author');
+    const mentionedAuthor = await createProfile('reply-count-mentioned-author');
+    const hiddenMentionAuthor = await createProfile('reply-count-hidden-mention-author');
+    const viewerBlockedAuthor = await createProfile('reply-count-viewer-blocked-author');
+    const authorBlockedViewer = await createProfile('reply-count-author-blocked-viewer');
+    const root = await createContentfulPost(publicAuthor.id);
+    await createContentfulPost(publicAuthor.id, { replyParentId: root.id });
+    await createContentfulPost(followedAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await createContentfulPost(hiddenFollowerAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const mentionedReply = await createContentfulPost(mentionedAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const hiddenMentionReply = await createContentfulPost(hiddenMentionAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(mentionedReply.currentContentId);
+    assert.ok(hiddenMentionReply.currentContentId);
+    await db.insert(PostMentions).values([
+      { postContentId: mentionedReply.currentContentId, profileId: viewer.profile.id },
+      { postContentId: hiddenMentionReply.currentContentId, profileId: hiddenFollowerAuthor.id },
+    ]);
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: followedAuthor.id,
+      followerProfileId: viewer.profile.id,
+    });
+    await db.insert(ProfileBlocks).values([
+      { ownerProfileId: viewer.profile.id, targetProfileId: viewerBlockedAuthor.id },
+      { ownerProfileId: authorBlockedViewer.id, targetProfileId: viewer.profile.id },
+    ]);
+    const outgoingBlockedReply = await createContentfulPost(viewerBlockedAuthor.id, {
+      replyParentId: root.id,
+    });
+    await createContentfulPost(authorBlockedViewer.id, { replyParentId: root.id });
+
+    const [authenticated, anonymous, directlyReadable] = await Promise.all([
+      requestReplyCounts([root.id], viewer.token),
+      requestReplyCounts([root.id]),
+      requestGraphQL<{ node: { id: string } | null }>(
+        `query DirectReply($id: ID!) { node(id: $id) { id } }`,
+        { id: encodeGlobalId('Post', outgoingBlockedReply.id) },
+        viewer.token,
+      ),
+    ]);
+
+    assertNoGraphQLErrors(authenticated);
+    assertNoGraphQLErrors(anonymous);
+    assertNoGraphQLErrors(directlyReadable);
+    assert.equal(directlyReadable.data?.node?.id, encodeGlobalId('Post', outgoingBlockedReply.id));
+    assert.equal(authenticated.data?.nodes[0]?.replyCount, 4);
+    assert.equal(anonymous.data?.nodes[0]?.replyCount, 3);
+  });
+
+  test('Reply 생성·삭제 응답은 요청 viewer의 직접 Parent에 서버 확정 수치를 반환한다', async () => {
+    const author = await createAuthenticatedSession();
+    const parentAuthor = await createProfile('reply-count-mutation-parent');
+    const parent = await createContentfulPost(parentAuthor.id);
+    const created = await requestGraphQL<{
+      createPost: { post: { id: string; replyParent: { id: string; replyCount: number } | null } };
+    }>(
+      `mutation CreateReplyWithCount($input: CreatePostInput!) {
+        createPost(input: $input) {
+          post { id replyParent { id replyCount } }
+        }
+      }`,
+      {
+        input: {
+          bodyText: 'counted reply',
+          replyParentId: encodeGlobalId('Post', parent.id),
+          visibility: PostVisibility.PUBLIC,
+        },
+      },
+      author.token,
+    );
+
+    assertNoGraphQLErrors(created);
+    const reply = created.data!.createPost.post;
+    assert.deepEqual(reply.replyParent, {
+      id: encodeGlobalId('Post', parent.id),
+      replyCount: 1,
+    });
+
+    const deleted = await requestGraphQL<{
+      deletePost: { postId: string; replyParent: { id: string; replyCount: number } | null };
+    }>(
+      `mutation DeleteReplyWithCount($input: DeletePostInput!) {
+        deletePost(input: $input) {
+          postId
+          replyParent { id replyCount }
+        }
+      }`,
+      { input: { id: reply.id } },
+      author.token,
+    );
+
+    assertNoGraphQLErrors(deleted);
+    assert.deepEqual(deleted.data?.deletePost, {
+      postId: reply.id,
+      replyParent: { id: encodeGlobalId('Post', parent.id), replyCount: 0 },
+    });
+  });
+
   test('숨겨진 Parent와 ineligible Parent 아래의 visible descendant를 filter-before-limit으로 유지한다', async () => {
     const rootAuthor = await createProfile('boundary-root-author');
     const hiddenAuthor = await createProfile('boundary-hidden-author');
@@ -2074,6 +2414,11 @@ type PostNode = {
   replyParent: { id: string } | null;
 };
 
+type PostReplyCountNode = {
+  id: string;
+  replyCount: number | null;
+};
+
 type CreatePostNode = {
   __typename: 'Post';
   id: string;
@@ -2159,6 +2504,17 @@ const requestPostNode = (postId: string) =>
       }
     }`,
     { postId: encodeGlobalId('Post', postId) },
+  );
+
+const requestReplyCounts = (postIds: string[], token?: string) =>
+  requestGraphQL<{ nodes: Array<PostReplyCountNode | null> }>(
+    `query PostReplyCounts($postIds: [ID!]!) {
+      nodes(ids: $postIds) {
+        ... on Post { id replyCount }
+      }
+    }`,
+    { postIds: postIds.map((id) => encodeGlobalId('Post', id)) },
+    token,
   );
 
 const requestPostContent = (postId: string, token?: string) =>

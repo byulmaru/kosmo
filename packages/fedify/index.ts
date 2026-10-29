@@ -1,7 +1,10 @@
 export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
-export { federation } from './src/federation';
+export { federation, localInstanceActorIdentifier } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
-export { materializeHydratedRemoteNote } from './src/inbound-create-note';
+export {
+  materializeHydratedRemoteNote,
+  prepareHydratedRemoteNote,
+} from './src/inbound-create-note';
 export type {
   InboundCaptureContext,
   InboundObservabilityReporter,
@@ -37,6 +40,8 @@ export {
   sendLocalPostQuoteRevocations,
 } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
+export { configureFedifyInboxLogging } from './src/logging';
+export { closeFedifyMetrics, startFedifyMetrics } from './src/metrics';
 export {
   getProfileBlockActivityUri,
   getProfileBlockOrderingKey,
@@ -44,7 +49,11 @@ export {
   sendProfileBlock,
   sendProfileBlockUndo,
 } from './src/profile-block-delivery';
-export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
+export {
+  sendProfileFollow,
+  sendProfileFollowAccept,
+  sendProfileUnfollow,
+} from './src/profile-follow-delivery';
 export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {

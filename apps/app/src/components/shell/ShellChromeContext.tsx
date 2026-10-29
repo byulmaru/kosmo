@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { TabReselectionDestination, TabReselectionHandler } from './tabReselection';
@@ -36,22 +36,29 @@ export function ShellChromeProvider({
   reselectTab,
   reselectHome,
 }: ShellChromeProviderProps) {
-  return (
-    <ShellChromeContext.Provider
-      value={{
-        navigationDrawerOpen,
-        navigationDrawerTriggerRef,
-        openNavigationDrawer,
-        openProfileSwitcher,
-        registerHomeReselection,
-        registerTabReselection,
-        reselectTab,
-        reselectHome,
-      }}
-    >
-      {children}
-    </ShellChromeContext.Provider>
+  const value = useMemo(
+    () => ({
+      navigationDrawerOpen,
+      navigationDrawerTriggerRef,
+      openNavigationDrawer,
+      openProfileSwitcher,
+      registerHomeReselection,
+      registerTabReselection,
+      reselectTab,
+      reselectHome,
+    }),
+    [
+      navigationDrawerOpen,
+      navigationDrawerTriggerRef,
+      openNavigationDrawer,
+      openProfileSwitcher,
+      registerHomeReselection,
+      registerTabReselection,
+      reselectTab,
+      reselectHome,
+    ],
   );
+  return <ShellChromeContext.Provider value={value}>{children}</ShellChromeContext.Provider>;
 }
 
 export function useShellChrome() {

@@ -1,7 +1,14 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { pg } from '@kosmo/core/db';
-import { closeFedifyQueue, federation } from '@kosmo/fedify';
+import { pg, pgRead } from '@kosmo/core/db';
+import {
+  closeFedifyMetrics,
+  closeFedifyQueue,
+  configureFedifyInboxLogging,
+  federation,
+  startFedifyMetrics,
+} from '@kosmo/fedify';
+import { Sentry } from './sentry';
 import type { Server } from 'node:http';
 
 const healthStatus = (
@@ -35,6 +42,8 @@ const closeHttpServer = async (server: Server, listening: boolean): Promise<void
 };
 
 async function run(): Promise<void> {
+  configureFedifyInboxLogging(Sentry);
+
   if (!process.env.FEDIFY_QUEUE_DATABASE_URL?.trim()) {
     throw new Error('FEDIFY_QUEUE_DATABASE_URL is required.');
   }
@@ -60,6 +69,7 @@ async function run(): Promise<void> {
   process.once('SIGINT', stop);
 
   try {
+    await startFedifyMetrics();
     server.listen(port, host);
     await once(server, 'listening');
     listening = true;
@@ -83,9 +93,13 @@ async function run(): Promise<void> {
       await closeFedifyQueue();
     } finally {
       try {
-        await pg.end({ timeout: 5 });
+        await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
       } finally {
-        await closeHttpServer(server, listening);
+        try {
+          await closeHttpServer(server, listening);
+        } finally {
+          await closeFedifyMetrics();
+        }
       }
     }
   }

@@ -10,7 +10,7 @@ import {
   loadQuoteSourceIdentity,
 } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { postCreateIdentities } from '@kosmo/core/temporal/post-admission';
+import { postCreateIdentities, quotePostCreateInput } from '@kosmo/core/temporal/post-admission';
 import {
   federation,
   materializeInboundQuoteSource,
@@ -24,7 +24,7 @@ import {
 import { Context } from '@temporalio/activity';
 import { WorkflowClient } from '@temporalio/client';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { createPostPersisted } from '../../../../packages/core/services/post';
+import { createPostInTransaction } from '../../../../packages/core/services/post';
 import { applyPostQuoteConsent } from '../../../../packages/core/services/post-quote-consent';
 import type {
   PreparedQuoteConsent,
@@ -185,10 +185,12 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
       let existingCreation = false;
       if (command.kind === 'INITIALIZE') {
         if (/^\d{13}:/.test(command.commandId)) {
-          const identities = postCreateIdentities({
-            ...command.input,
-            admissionId: command.commandId.slice(0, 50),
-          });
+          const identities = postCreateIdentities(
+            quotePostCreateInput({
+              ...command.input,
+              admissionId: command.commandId.slice(0, 50),
+            }),
+          );
           if (
             identities.postId !== command.postId ||
             identities.contentId !== command.initialContentId
@@ -231,7 +233,12 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
           existingCreation = true;
         }
         if (!exists) {
-          await createPostPersisted(command.input, command.postId, tx, command.initialContentId);
+          await createPostInTransaction(
+            tx,
+            command.input,
+            command.postId,
+            command.initialContentId,
+          );
           created = true;
         }
       }

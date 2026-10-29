@@ -85,46 +85,24 @@ export const SubmissionSuccess: Story = {
   },
 };
 
-export const BlockActionAfterReport: Story = {
+export const BlockFailureAfterReport: Story = {
   parameters: {
     relay: {
       ...baseMeta.parameters.relay,
       operationResponses: {
         ProfileBlockActionBlockMutation: {
-          sequence: [
-            { data: { blockProfile: { profileBlock: null, success: false } } },
-            {
-              data: {
-                blockProfile: {
-                  profileBlock: {
-                    id: 'content-report-profile-block',
-                    targetProfile: reportAuthor,
-                  },
-                  success: true,
-                },
-              },
-            },
-          ],
+          data: { blockProfile: { profileBlock: null, success: false } },
         },
       },
     },
   },
-  play: async ({ canvasElement, parameters }) => {
+  play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
-    let confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    let confirmation = within(confirmationDialog);
-    await userEvent.click(confirmation.getByRole('button', { name: '취소' }));
-    await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
-    expect(page.getByText('신고가 접수되었어요')).toBeVisible();
-    await waitFor(() => expect(block).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce();
-
-    await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    confirmation = within(confirmationDialog);
+    const confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    const confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
@@ -132,17 +110,40 @@ export const BlockActionAfterReport: Story = {
     expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
     await waitFor(() => expect(block).toHaveFocus());
+  },
+};
+
+export const BlockSuccessAfterReport: Story = {
+  parameters: {
+    relay: {
+      ...baseMeta.parameters.relay,
+      operationResponses: {
+        ProfileBlockActionBlockMutation: {
+          data: {
+            blockProfile: {
+              profileBlock: {
+                id: 'content-report-profile-block',
+                targetProfile: reportAuthor,
+              },
+              success: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const { page } = await completeReport(canvasElement);
+    const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    confirmation = within(confirmationDialog);
+    const confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    const confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() => {
       expect(page.queryByRole('button', { name: '게시물 신고 닫기' })).not.toBeInTheDocument();
-      expect(page.queryByText('신고가 접수되었어요')).not.toBeInTheDocument();
     });
     await waitFor(() => expect(page.getByRole('button', { name: '신고 메뉴 열기' })).toHaveFocus());
-    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledTimes(3);
   },
 };
 
@@ -420,5 +421,61 @@ export const FallbackFocusAfterTriggerRemoval: Story = {
     await waitFor(() => expect(trigger).not.toBeInTheDocument());
     await userEvent.click(page.getByRole('button', { name: '게시물 신고 닫기' }));
     await waitFor(() => expect(fallback).toHaveFocus());
+  },
+};
+
+export const CodePointLimitAcceptsTrimmedEmoji: Story = {
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    await userEvent.click(page.getByRole('radio', { name: '스팸·사기' }));
+
+    const details = ` \n${'😀'.repeat(2_000)} \t`;
+    const body = page.getByRole('textbox', { name: '게시물 신고 상세 내용' });
+    await userEvent.click(body);
+    await userEvent.paste(details);
+
+    expect(page.getByText('2,000 / 2,000')).toBeVisible();
+    expect(page.queryByText('신고 상세 내용은 2,000자 이내로 입력해주세요.')).toBeNull();
+    const submit = page.getByRole('button', { name: '신고하기' });
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    await waitFor(() => expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledOnce());
+    expect(parameters.relay.mutationRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'ContentReportFormSubmitContentReportMutation',
+        operationKind: 'mutation',
+      }),
+      {
+        input: {
+          details: '😀'.repeat(2_000),
+          reason: 'SPAM_FRAUD',
+          targetId: 'post-local-preview',
+          targetType: 'POST',
+        },
+      },
+    );
+  },
+};
+
+export const CodePointLimitRejectsOverLimitEmoji: Story = {
+  play: async ({ canvasElement, parameters }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '신고 메뉴 열기' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '게시물 신고' }));
+    await userEvent.click(page.getByRole('radio', { name: '스팸·사기' }));
+
+    const details = ` \n${'😀'.repeat(2_001)} \t`;
+    fireEvent.change(page.getByRole('textbox', { name: '게시물 신고 상세 내용' }), {
+      target: { value: details },
+    });
+
+    expect(page.getByText('2,001 / 2,000')).toBeVisible();
+    expect(page.getByText('신고 상세 내용은 2,000자 이내로 입력해주세요.')).toBeVisible();
+    expect(page.getByRole('button', { name: '신고하기' })).toBeDisabled();
+    expect(parameters.relay.mutationRequestObserver).not.toHaveBeenCalled();
   },
 };

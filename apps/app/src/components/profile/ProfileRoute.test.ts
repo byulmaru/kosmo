@@ -29,7 +29,7 @@ const queryModes: Record<QueryName, QueryMode> = {
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
-  fetchKey: number;
+  fetchKey: string;
   handle: string;
   query: QueryName;
 }> = [];
@@ -65,6 +65,7 @@ let globalParams: RouteParams = {};
 let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let pathname = '/profile/';
+let currentRouteInfo: { params: RouteParams; pathname: string } | null = null;
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
@@ -128,6 +129,7 @@ mockModule('expo-router', {
         : null,
     ),
   useGlobalSearchParams: () => globalParams,
+  useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
   useRouter: () => ({
@@ -220,7 +222,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
-    options: { fetchKey: number },
+    options: { fetchKey: string },
   ) => {
     queryHistory.push({
       fetchKey: options.fetchKey,
@@ -478,6 +480,7 @@ afterEach(async () => {
   layoutLocalParams = {};
   screenLocalParams = {};
   pathname = '/profile/';
+  currentRouteInfo = null;
   platform.OS = 'web';
   windowWidth = 1_280;
   windowHeight = 800;
@@ -873,6 +876,9 @@ describe('profile route parameter lifecycle', () => {
       assert.ok(errorLeading);
       await act(async () => errorLeading.props.onPress());
       assert.equal(routerBackCount, 1);
+      const failedFetchKey = queryHistory.findLast(
+        ({ query }) => query === 'ProfileLayoutQuery',
+      )?.fetchKey;
 
       queryModes.ProfileLayoutQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());
@@ -882,7 +888,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfileLayoutQuery',
       );
       assert.equal(latestLayoutQuery?.handle, 'remote@activitypub.example');
-      assert.equal(latestLayoutQuery?.fetchKey, 1);
+      assert.notEqual(latestLayoutQuery?.fetchKey, failedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }
@@ -925,6 +931,9 @@ describe('profile route parameter lifecycle', () => {
         const errorState = requireRendered('ProfileConnectionListState');
         assert.equal(errorState.props.kind, kind);
         assert.equal(errorState.props.state, 'error');
+        const failedFetchKey = queryHistory.findLast(
+          ({ query: current }) => current === query,
+        )?.fetchKey;
 
         queryModes[query] = 'success';
         await act(async () => errorState.props.onRetry());
@@ -932,7 +941,7 @@ describe('profile route parameter lifecycle', () => {
         assert.equal(requireRendered('ProfileConnectionList').props.kind, kind);
         const latestQuery = queryHistory.findLast(({ query: current }) => current === query);
         assert.equal(latestQuery?.handle, 'local');
-        assert.equal(latestQuery?.fetchKey, 1);
+        assert.notEqual(latestQuery?.fetchKey, failedFetchKey);
       } finally {
         console.error = originalConsoleError;
       }
@@ -951,6 +960,9 @@ describe('profile route parameter lifecycle', () => {
       queryModes.ProfilePostListPageQuery = 'success';
       const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
       assert.ok(errorPostList);
+      const failedFetchKey = queryHistory.findLast(
+        ({ query }) => query === 'ProfilePostListPageQuery',
+      )?.fetchKey;
       await act(async () => errorPostList.props.onRetry());
 
       assert.deepEqual(identities('PostList'), ['local']);
@@ -958,7 +970,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfilePostListPageQuery',
       );
       assert.equal(latestPostQuery?.handle, 'local');
-      assert.equal(latestPostQuery?.fetchKey, 1);
+      assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
     } finally {
       console.error = originalConsoleError;
     }
@@ -1336,4 +1348,29 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
     assert.equal(stateActionFocus.mock.callCount(), 0);
   });
+});
+
+it('background profile retains its own header when another author post becomes the global route', async () => {
+  await renderRoute('@local', '/@local');
+  currentRouteInfo = { params: { profileHandle: '@local' }, pathname: '/@local' };
+  pathname = '/@other/post-id';
+  globalParams = { profileHandle: '@other' };
+  await act(async () =>
+    renderer!.update(
+      createElement(
+        LocalParamsContext.Provider,
+        { value: layoutLocalParams },
+        createElement(ProfileLayout),
+      ),
+    ),
+  );
+  assert.equal(requireRendered('PageHeader').props.title, 'Display local');
+  assert.equal(requireRendered('ProfileHero').props.heading, false);
+});
+
+it('Native profile layout route info still resolves its active followers child', async () => {
+  currentRouteInfo = { params: { profileHandle: '@local' }, pathname: '/@local' };
+  await renderRoute('@local', '/@local/followers');
+  assert.equal(requireRendered('PageHeader').props.title, 'Display local님의 팔로워');
+  assert.equal(rendered('ProfileHero').length, 0);
 });

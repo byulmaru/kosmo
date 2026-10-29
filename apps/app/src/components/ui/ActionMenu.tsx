@@ -8,23 +8,17 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
 import { ModalOverlay } from './ModalOverlay';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
+import type { ViewStyle } from 'react-native';
 
 type ActionMenuIcon = ComponentType<{
   color: string;
@@ -95,6 +89,7 @@ export function ActionMenuPresentationProvider({
 const webMenuInset = space[4] + borderWidths[1];
 const webMenuItemHeight = 36;
 const defaultWebMenuMinWidth = 128;
+const webFixedPositionStyle = { position: 'fixed' } as unknown as ViewStyle;
 
 export function ActionMenu({
   accessibilityLabel,
@@ -131,11 +126,6 @@ export function ActionMenu({
       return;
     }
 
-    const ownerWindow = trigger.ownerDocument.defaultView;
-    if (!ownerWindow) {
-      return;
-    }
-
     const triggerRect = trigger.getBoundingClientRect();
     const menu = menuRef.current as unknown as HTMLElement | null;
     const menuRect = menu?.getBoundingClientRect();
@@ -164,10 +154,7 @@ export function ActionMenu({
             : triggerRect.top - webMenuInset;
     const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
     const viewportTop = Math.max(0, Math.min(anchoredTop, viewportHeight - menuHeight));
-    const nextPosition = {
-      left: viewportLeft + ownerWindow.scrollX,
-      top: viewportTop + ownerWindow.scrollY,
-    };
+    const nextPosition = { left: viewportLeft, top: viewportTop };
 
     setWebPosition((current) =>
       current.left === nextPosition.left && current.top === nextPosition.top
@@ -378,7 +365,7 @@ export function ActionMenu({
         })}
         {overlayMotion.mounted ? (
           <ActionMenuPortal>
-            <View style={[styles.webPosition, webPosition]}>
+            <View style={[webFixedPositionStyle, styles.webPosition, webPosition]}>
               <Animated.View
                 accessibilityElementsHidden={!open}
                 aria-hidden={!open || undefined}
@@ -462,7 +449,7 @@ export function ActionMenu({
                         ) : null}
                         {item.busy ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
-                            <ActivityIndicator color={itemColor} />
+                            <LoadingIndicator color={itemColor} />
                           </View>
                         ) : Icon ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
@@ -548,7 +535,7 @@ export function ActionMenu({
                   style={[styles.item, styles.nativeItem]}
                 >
                   {item.busy ? (
-                    <ActivityIndicator color={itemColor} />
+                    <LoadingIndicator accessible={false} aria-hidden color={itemColor} />
                   ) : Icon ? (
                     <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
                   ) : null}
@@ -626,5 +613,5 @@ const styles = StyleSheet.create({
   webMenu: {
     borderWidth: borderWidths[1],
   },
-  webPosition: { position: 'absolute', zIndex: 100 },
+  webPosition: { zIndex: 100 },
 });

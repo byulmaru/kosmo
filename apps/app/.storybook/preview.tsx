@@ -4,6 +4,7 @@ import './preview.css';
 import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useArgs } from 'storybook/preview-api';
 import { sb } from 'storybook/test';
 import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
@@ -12,8 +13,12 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
 import { RelayStoryProvider } from './mocks/react-relay';
+import { StoryArgsUpdaterContext } from './StoryArgsUpdater';
 import type { Preview } from '@storybook/react-vite';
 import type { PropsWithChildren } from 'react';
+
+// Storybook does not load the BFF channel script.
+Object.assign(globalThis, { __KOSMO_CHANNEL__: 'dev' });
 
 sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 sb.mock(import('../src/auth/webLogin.ts'), { spy: true });
@@ -29,6 +34,8 @@ const preview: Preview = {
       </FeatureFlagsContext.Provider>
     ),
     (Story, context) => {
+      // The story metadata is fixed, so opting in preserves hook order across renders.
+      const updateArgs = context.parameters.storyArgsUpdater === true ? useArgs()[1] : null;
       const router = context.parameters.router ?? {};
       const relay = context.parameters.relay ?? {};
 
@@ -36,49 +43,51 @@ const preview: Preview = {
       const reduceMotion = context.globals.reduceMotion === true;
 
       return (
-        <SafeAreaProvider>
-          <ThemeProvider mode={theme} reduceMotion={reduceMotion}>
-            <ToastProvider>
-              <PostContentWarningRevealProvider>
-                <RelayStoryProvider
-                  actorBoundary={relay.actorBoundary}
-                  mutationError={relay.mutationError}
-                  mutationGraphQLErrors={relay.mutationGraphQLErrors}
-                  mutationLoading={relay.mutationLoading}
-                  mutationRequestObserver={relay.mutationRequestObserver}
-                  mutationResponse={relay.mutationResponse}
-                  paginationError={relay.paginationError}
-                  paginationLoading={relay.paginationLoading}
-                  paginationRequestObserver={relay.paginationRequestObserver}
-                  paginationResponse={relay.paginationResponse}
-                  paginationResponses={relay.paginationResponses}
-                  operationResponses={relay.operationResponses}
-                  queryData={relay.data}
-                  queryRequestObserver={relay.queryRequestObserver}
-                >
-                  <RouterMockProvider
-                    params={router.params}
-                    pathname={router.pathname}
-                    segments={router.segments}
-                    slotLabel={router.slotLabel}
+        <StoryArgsUpdaterContext.Provider value={updateArgs}>
+          <SafeAreaProvider>
+            <ThemeProvider mode={theme} reduceMotion={reduceMotion}>
+              <ToastProvider>
+                <PostContentWarningRevealProvider>
+                  <RelayStoryProvider
+                    actorBoundary={relay.actorBoundary}
+                    mutationError={relay.mutationError}
+                    mutationGraphQLErrors={relay.mutationGraphQLErrors}
+                    mutationLoading={relay.mutationLoading}
+                    mutationRequestObserver={relay.mutationRequestObserver}
+                    mutationResponse={relay.mutationResponse}
+                    paginationError={relay.paginationError}
+                    paginationLoading={relay.paginationLoading}
+                    paginationRequestObserver={relay.paginationRequestObserver}
+                    paginationResponse={relay.paginationResponse}
+                    paginationResponses={relay.paginationResponses}
+                    operationResponses={relay.operationResponses}
+                    queryData={relay.data}
+                    queryRequestObserver={relay.queryRequestObserver}
                   >
-                    <Suspense
-                      fallback={
-                        <View style={{ padding: 24 }}>
-                          <Text>스토리를 불러오는 중입니다.</Text>
-                        </View>
-                      }
+                    <RouterMockProvider
+                      params={router.params}
+                      pathname={router.pathname}
+                      segments={router.segments}
+                      slotLabel={router.slotLabel}
                     >
-                      <ThemedStory>
-                        <Story />
-                      </ThemedStory>
-                    </Suspense>
-                  </RouterMockProvider>
-                </RelayStoryProvider>
-              </PostContentWarningRevealProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </SafeAreaProvider>
+                      <Suspense
+                        fallback={
+                          <View style={{ padding: 24 }}>
+                            <Text>스토리를 불러오는 중입니다.</Text>
+                          </View>
+                        }
+                      >
+                        <ThemedStory>
+                          <Story />
+                        </ThemedStory>
+                      </Suspense>
+                    </RouterMockProvider>
+                  </RelayStoryProvider>
+                </PostContentWarningRevealProvider>
+              </ToastProvider>
+            </ThemeProvider>
+          </SafeAreaProvider>
+        </StoryArgsUpdaterContext.Provider>
       );
     },
   ],

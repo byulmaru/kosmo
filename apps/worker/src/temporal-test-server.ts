@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 
 const host = process.env.HOST?.trim() || '127.0.0.1';
 const healthPort = Number(process.env.PORT);
@@ -23,7 +24,7 @@ if (!namespace) {
 
 const environment = await TestWorkflowEnvironment.createLocal({
   server: {
-    executable: { type: 'cached-download', version: 'v1.8.2' },
+    executable: temporalTestExecutable,
     ip: host,
     namespace,
     port: temporalPort,

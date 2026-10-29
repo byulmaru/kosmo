@@ -6,10 +6,10 @@ import {
   ValidationError,
 } from '../error';
 import type { ErrorCode } from '../error';
-import type { LocalPostInput } from '../services/post';
+import type { LegacyLocalPostInput } from '../services/post';
 import type { WorkflowUpdateDefinition } from './client';
 
-export type PostCreateInput = LocalPostInput & { readonly admissionId: string };
+export type PostCreateInput = LegacyLocalPostInput & { readonly admissionId: string };
 export type PostDeleteInput = {
   readonly actorProfileId: string;
   readonly postId: string;
@@ -18,6 +18,7 @@ export type PostDeleteInput = {
 export type PostDeleteResult = {
   readonly postId: string;
   readonly sourcePostId: string | null;
+  readonly replyParentId?: string | null;
   readonly revokedQuoteIds?: readonly string[];
 };
 export type PostTransitionOutcome<T> =

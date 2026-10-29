@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   createFederation,
   generateCryptoKeyPair,
@@ -13,6 +13,7 @@ import {
   Create,
   CryptographicKey,
   Document,
+  Hashtag,
   Image,
   LanguageString,
   Mention,
@@ -38,11 +39,13 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
   remoteProfileLookupWorkflow,
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne, sql } from 'drizzle-orm';
+import { uniqueHref } from './activitypub-uri';
 import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -66,6 +69,7 @@ const createObservation = { activityType: 'Create', handler: 'create' } as const
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
+const nativeWorkflowExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
 
 type RemoteProfileRefreshOptions = {
   args?: readonly { actorUri: string }[];
@@ -86,6 +90,15 @@ const assertRemoteProfileRefreshCall = (workflow: unknown, options: unknown, act
   assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
   assert.equal(workflowOptions.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
 };
+
+const remoteProfileWorkflowCallCount = (
+  calls: readonly { readonly arguments: readonly unknown[] }[],
+): number =>
+  calls.filter(
+    ({ arguments: [workflow] }) =>
+      workflow === remoteProfileLookupWorkflow.workflow ||
+      workflow === remoteProfileRefreshWorkflow.workflow,
+  ).length;
 
 const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) => {
   const executions = new Map<string, Promise<string>>();
@@ -127,6 +140,23 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
         return execution;
       }
 
+      if (workflow === postCreateWorkflow.workflow) {
+        const workflowOptions = options as {
+          args?: readonly { requestId: string; input: { origin: string } }[];
+          workflowId?: string;
+          workflowIdConflictPolicy?: string;
+          workflowIdReusePolicy?: string;
+        };
+        const args = workflowOptions.args?.[0];
+        assert.ok(args);
+        assert.equal(workflowOptions.args?.length, 1);
+        assert.equal(args.input.origin, 'ACTIVITYPUB');
+        assert.equal(workflowOptions.workflowId, 'post-create:' + args.requestId);
+        assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+        assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
+        return nativeWorkflowExecute(workflow as never, options as never);
+      }
+
       const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
       assert.ok(typeof actorUri === 'string');
       assertRemoteProfileRefreshCall(workflow, options, actorUri);
@@ -141,11 +171,13 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
@@ -155,11 +187,41 @@ let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let createMentionNotification: typeof CoreServices.createMentionNotification;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
-let handleInboundCreate: typeof handleInboundCreateType;
+let runInboundCreate: typeof handleInboundCreateType;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
 let ensureDrizzleLocalProfileActor: typeof ensureDrizzleLocalProfileActorType;
 let localInstanceId: string;
+
+const handleInboundCreate = async (
+  context: Parameters<typeof handleInboundCreateType>[0],
+  create: Parameters<typeof handleInboundCreateType>[1],
+  receivedAt?: Parameters<typeof handleInboundCreateType>[2],
+): Promise<void> => {
+  await runInboundCreate(context, create, receivedAt);
+
+  const objectUri = uniqueHref(create.objectIds);
+  if (objectUri === undefined) {
+    return;
+  }
+  const post = await db
+    .select({ postId: ActivityPubPosts.postId })
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, objectUri))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (post === undefined) {
+    return;
+  }
+
+  try {
+    await temporalClient.workflow.getHandle(`post-create-effects:${post.postId}`).result();
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'WorkflowNotFoundError')) {
+      throw error;
+    }
+  }
+};
 
 describe('inbound Create dispatch', () => {
   before(async () => {
@@ -172,11 +234,13 @@ describe('inbound Create dispatch', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       Media,
       Notifications,
       pg,
       PostContents,
+      PostContentHashtags,
       PostMentions,
       Posts,
       ProfileBlocks,
@@ -187,7 +251,7 @@ describe('inbound Create dispatch', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createMentionNotification, createPost } = await import('@kosmo/core/services'));
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
-    ({ handleInboundCreate } = await import('./inbound-create'));
+    ({ handleInboundCreate: runInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
     ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ ensureDrizzleLocalProfileActor } = await import('./local-actor-store'));
@@ -196,6 +260,7 @@ describe('inbound Create dispatch', () => {
   });
 
   beforeEach(async () => {
+    mock.restoreAll();
     await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
@@ -206,7 +271,10 @@ describe('inbound Create dispatch', () => {
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
+  afterEach(() => mock.restoreAll());
+
   after(async () => {
+    mock.restoreAll();
     await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
@@ -276,7 +344,7 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     const unrefreshedActor = await db
       .select({ profileUrl: ActivityPubActors.profileUrl })
       .from(ActivityPubActors)
@@ -333,7 +401,7 @@ describe('inbound Create dispatch', () => {
         { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
       ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
     );
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
@@ -386,6 +454,157 @@ describe('inbound Create dispatch', () => {
       { postContentId: content.id, profileId: profile.id },
     ]);
     assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test('materializes only typed Hashtags that match the remote body and reuses local identity', async () => {
+    const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+    const localProfile = await createLocalFollowerProfile(`hashtag-author-${suffix}`);
+    const localToken = `#Shared${suffix}`;
+    await createPost({
+      bodyText: localToken,
+      origin: 'LOCAL',
+      profileId: localProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const sharedName = `shared${suffix}`;
+    const localHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, sharedName))
+      .then(firstOrThrow);
+    const hashtagCountBeforeReceipt = await db.$count(Hashtags);
+
+    const remoteSharedToken = `#ＳＨＡＲＥＤ${suffix.toUpperCase()}`;
+    const longToken = `#${'r'.repeat(65)}`;
+    const emojiToken = '#remote-tag🔥';
+    const spaceToken = '#two words';
+    const absentToken = '#absent body expression';
+    const bodyOnlyToken = `#bodyonly${suffix}`;
+    const unconfirmedToken = `#unconfirmed${suffix}`;
+    const sharedHref = `https://remote.example/tags/${suffix}`;
+    const longHref = 'https://remote.example/tags/long';
+    const emojiHref = 'https://remote.example/tags/remote-tag';
+    const spaceHref = 'https://remote.example/tags/two-words';
+    const objectUri = new URL(`https://remote.example/notes/hashtag-${suffix}`);
+    await createStoredRemoteActor();
+
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p>First <a class="hashtag" href="${sharedHref}"><span>#ＳＨＡＲＥ</span><strong>Ｄ${suffix.toUpperCase()}</strong></a> and ` +
+        `<a class="hashtag" href="${sharedHref}">#shared${suffix}</a></p>` +
+        `<p>Again ${remoteSharedToken} / <a href="${longHref}">${longToken}</a> / ` +
+        `<a href="${emojiHref}">${emojiToken}</a></p>` +
+        `<p><a href="${spaceHref}">${spaceToken}</a> ${bodyOnlyToken} ` +
+        `<a href="https://evil.example/tags/unconfirmed">${unconfirmedToken}</a> ` +
+        `${localToken}Extra abc${localToken} ` +
+        `<a href="https://example.com/#shared${suffix}">https://example.com/#shared${suffix}</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Hashtag({ href: new URL(sharedHref), name: remoteSharedToken }),
+        new Hashtag({ href: new URL(longHref), name: longToken }),
+        new Hashtag({ href: new URL(emojiHref), name: emojiToken }),
+        new Hashtag({ href: new URL(spaceHref), name: spaceToken }),
+        new Hashtag({
+          href: new URL(`https://remote.example/tags/absent-${suffix}`),
+          name: absentToken,
+        }),
+        new URL(`https://remote.example/tags/unloaded-${suffix}`),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+    const documentLoads: string[] = [];
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Hashtag receipt must not fetch any Hashtag href');
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(async (url) => {
+          documentLoads.push(url);
+          throw new Error(`Hashtag receipt must not load ${url}`);
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const { content, post } = await getMaterializedPost(objectUri);
+    assert.equal(fetchMock.mock.callCount(), 0);
+    assert.deepEqual(documentLoads, []);
+    assert.equal(post.currentContentId, content.id);
+    assert.equal(
+      postContentDocumentToText(content.document),
+      `First ${remoteSharedToken} and #shared${suffix}\n\n` +
+        `Again ${remoteSharedToken} / ${longToken} / ${emojiToken}\n\n` +
+        `${spaceToken} ${bodyOnlyToken} ${unconfirmedToken} ${localToken}Extra abc${localToken} ` +
+        `https://example.com/#shared${suffix}`,
+    );
+
+    const hashtagsByParagraph = content.document.body.content.map((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    );
+    assert.deepEqual(
+      hashtagsByParagraph.map((paragraph) => paragraph.map(({ token }) => token)),
+      [
+        [remoteSharedToken, `#shared${suffix}`],
+        [remoteSharedToken, longToken, emojiToken],
+        [spaceToken],
+      ],
+    );
+
+    const shared = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, sharedName))
+      .then(firstOrThrow);
+    assert.equal(shared.id, localHashtag.id);
+    assert.equal(shared.displayName, localHashtag.displayName);
+    assert.equal(await db.$count(Hashtags), hashtagCountBeforeReceipt + 3);
+    const relations = await db
+      .select()
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, content.id));
+    const hashtagNodeIds = new Set(hashtagsByParagraph.flat().map(({ hashtagId }) => hashtagId));
+    assert.equal(relations.length, 4);
+    assert.deepEqual(new Set(relations.map(({ hashtagId }) => hashtagId)), hashtagNodeIds);
+    assert.equal(relations.filter(({ hashtagId }) => hashtagId === shared.id).length, 1);
+    assert.deepEqual(
+      hashtagsByParagraph
+        .flat()
+        .filter(({ token }) => token === remoteSharedToken)
+        .map(({ hashtagId }) => hashtagId),
+      [shared.id, shared.id],
+    );
+    const lastParagraph = content.document.body.content[2];
+    assert.ok(lastParagraph?.type === 'paragraph');
+    assert.deepEqual(
+      lastParagraph.content?.find((node) => node.type === 'text' && node.text === unconfirmedToken),
+      {
+        type: 'text',
+        text: unconfirmedToken,
+        marks: [{ type: 'link', attrs: { href: 'https://evil.example/tags/unconfirmed' } }],
+      },
+    );
+    assert.deepEqual(
+      lastParagraph.content?.find(
+        (node) => node.type === 'text' && node.text === `https://example.com/#shared${suffix}`,
+      ),
+      {
+        type: 'text',
+        text: `https://example.com/#shared${suffix}`,
+        marks: [{ type: 'link', attrs: { href: `https://example.com/#shared${suffix}` } }],
+      },
+    );
   });
 
   test('falls back to the actor URI when a stored profile URL alias is malformed', async () => {
@@ -581,7 +800,7 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: target.id },
     ]);
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
@@ -752,12 +971,21 @@ describe('inbound Create dispatch', () => {
       async (deadline: number | Date, execute: () => Promise<unknown>) => {
         const deadlineAt = deadline instanceof Date ? deadline.getTime() : deadline;
         const remainingMs = deadlineAt - Date.now();
-        if (remainingMs > 25_000) {
-          deadlineDurationMs = remainingMs;
-          void execute().catch(() => undefined);
-          throw new Error('Temporal client deadline exceeded');
-        }
-        return originalWithDeadline(deadline, execute);
+        return originalWithDeadline(deadline, () => {
+          const callIndex = executeMock.mock.calls.length;
+          const execution = execute();
+          const workflow = executeMock.mock.calls[callIndex]?.arguments[0];
+          if (
+            (workflow === remoteProfileLookupWorkflow.workflow ||
+              workflow === remoteProfileRefreshWorkflow.workflow) &&
+            remainingMs > 25_000
+          ) {
+            deadlineDurationMs = remainingMs;
+            void execution.catch(() => undefined);
+            throw new Error('Temporal client deadline exceeded');
+          }
+          return execution;
+        });
       },
     );
     const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
@@ -784,7 +1012,7 @@ describe('inbound Create dispatch', () => {
     }
 
     const { content } = await getMaterializedPost(objectUri);
-    assert.equal(executeMock.mock.callCount(), 1);
+    assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
     assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs >= 29_900);
     assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs <= 30_000);
     assert.deepEqual(content.document.body.content, [
@@ -1098,7 +1326,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
     assert.equal((await db.select().from(Instances)).length, instanceCount);
     assert.equal(fetchMock.mock.callCount(), 0);
-    assert.equal(executeMock.mock.callCount(), 1);
+    assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
   });
 
   test('preserves Mention, Content Warning, and an attached Image in one inbound Post', async () => {
@@ -1223,7 +1451,7 @@ describe('inbound Create dispatch', () => {
       });
 
       assert.equal(result.status, 'created');
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal((await getMaterializedPost(objectUri)).post.profileId, author.id);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1349,7 +1577,7 @@ describe('inbound Create dispatch', () => {
       assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(workflowLookupObject.mock.callCount(), 1);
       assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
@@ -1454,7 +1682,7 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'invalid_note', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(
         await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, remoteActorUri.href)),
         1,
@@ -1540,7 +1768,7 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'no_active_local_mention', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(await db.$count(ActivityPubActors), 1);
       assert.equal(await db.$count(Profiles), 1);
       assert.equal(await db.$count(ActivityPubPosts), 0);
@@ -1754,7 +1982,7 @@ describe('inbound Create dispatch', () => {
         );
       }
 
-      assert.equal(lookupWorkflow.mock.callCount(), 5);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 5);
       assert.equal(lookupObject.mock.callCount(), 5);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1938,7 +2166,7 @@ describe('inbound Create dispatch', () => {
           receivedAt,
         }),
       );
-      assert.equal(executeMock.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
       assert.equal(lookupObject.mock.callCount(), 1);
     } finally {
       executeMock.mock.restore();
@@ -2205,7 +2433,7 @@ describe('inbound Create dispatch', () => {
     await createStoredRemoteActor();
     const localAuthor = await createLocalFollowerProfile('local-parent-author');
     const localParent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localAuthor.id,
       visibility: PostVisibility.FOLLOWERS,
@@ -2875,7 +3103,7 @@ describe('inbound Create dispatch', () => {
       );
     }
 
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
     assert.equal((await db.select().from(Media)).length, 0);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
@@ -3270,7 +3498,7 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const localParent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3315,13 +3543,13 @@ describe('inbound Create dispatch', () => {
     const firstParentProfile = await createLocalFollowerProfile('blocked-parent-owner');
     const secondParentProfile = await createLocalFollowerProfile('blocked-parent-target');
     const firstParent = await createPost({
-      document: postContentDocumentFromText('first blocked parent'),
+      bodyText: 'first blocked parent',
       origin: 'LOCAL',
       profileId: firstParentProfile.id,
       visibility: PostVisibility.PUBLIC,
     });
     const secondParent = await createPost({
-      document: postContentDocumentFromText('second blocked parent'),
+      bodyText: 'second blocked parent',
       origin: 'LOCAL',
       profileId: secondParentProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3428,7 +3656,7 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const previousPost = await createPost({
-      document: postContentDocumentFromText('Previous local Post'),
+      bodyText: 'Previous local Post',
       origin: 'LOCAL',
       profileId: previousProfile.id,
       visibility: PostVisibility.PUBLIC,
@@ -3456,7 +3684,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when effects Workflow start fails', async (t) => {
+  test('materializes an inbound Reply through the remote Post Workflow', async () => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -3471,32 +3699,22 @@ describe('inbound Create dispatch', () => {
       .returning()
       .then(firstOrThrow);
     const parent = await createPost({
-      document: postContentDocumentFromText('Local parent'),
+      bodyText: 'Local parent',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    const errorLog = mock.method(console, 'error', () => undefined);
-    t.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-
-    try {
-      await handleInboundCreate(
-        createContext(),
-        createRemoteCreate({
-          objectUri: replyUri,
-          replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
-        }),
-        receivedAt,
-      );
-    } finally {
-      errorLog.mock.restore();
-    }
+    await handleInboundCreate(
+      createContext(),
+      createRemoteCreate({
+        objectUri: replyUri,
+        replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
+      }),
+      receivedAt,
+    );
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
-    assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
@@ -4163,7 +4381,7 @@ describe('inbound Create dispatch', () => {
       restoreReporter();
     }
 
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
     assert.equal(await db.$count(Posts), 0);
   });
@@ -4258,7 +4476,7 @@ describe('inbound Create dispatch', () => {
         reason: 'note_mention_limit_exceeded',
         status: 'rejected',
       });
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
     } finally {
       lookupWorkflow.mock.restore();
       restoreReporter();
@@ -4346,15 +4564,26 @@ describe('inbound Create dispatch', () => {
   test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
     const profile = await createStoredRemoteActor();
     const mentionLabel = '@alice';
+    const firstHashtagToken = `#first${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const changedHashtagToken = `#changed${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const firstHashtagName = firstHashtagToken.slice(1);
+    const changedHashtagName = changedHashtagToken.slice(1);
+    const firstHashtagHref = new URL('https://remote.example/tags/first');
+    const changedHashtagHref = new URL('https://remote.example/tags/changed');
     const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const first = new Note({
       attribution: remoteActorUri,
-      content: `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a></p>`,
+      content:
+        `<p>First <a href="${remoteActorUri.href}">${mentionLabel}</a> ` +
+        `<a href="${firstHashtagHref.href}">${firstHashtagToken}</a></p>`,
       id: remoteObjectUri,
       mediaType: 'text/html',
       published: publishedAt,
       summary: '<p>Content warning</p>',
-      tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
+      tags: [
+        new Mention({ href: remoteActorUri, name: mentionLabel }),
+        new Hashtag({ href: firstHashtagHref, name: firstHashtagToken }),
+      ],
       to: PUBLIC_COLLECTION,
     });
 
@@ -4378,11 +4607,15 @@ describe('inbound Create dispatch', () => {
             cc: PUBLIC_COLLECTION,
             content:
               `<div>\n  <p>First <a class="h-card" href="${remoteActorUri.href}">` +
-              `<span>${mentionLabel}</span></a></p>\n</div>`,
+              `<span>${mentionLabel}</span></a> ` +
+              `<a href="${changedHashtagHref.href}">${changedHashtagToken}</a></p>\n</div>`,
             id: remoteObjectUri,
             mediaType: 'text/html',
             published: receivedAt.add({ hours: 1 }),
-            tags: [new Mention({ href: remoteActorUri, name: mentionLabel })],
+            tags: [
+              new Mention({ href: remoteActorUri, name: mentionLabel }),
+              new Hashtag({ href: changedHashtagHref, name: changedHashtagToken }),
+            ],
           }),
         }),
         receivedAt.add({ hours: 2 }),
@@ -4411,11 +4644,26 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), 'First @alice@remote.example');
+    assert.equal(
+      postContentDocumentToText(content.document),
+      `First @alice@remote.example ${firstHashtagToken}`,
+    );
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },
     ]);
+    const firstHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, firstHashtagName.toLowerCase()))
+      .then(firstOrThrow);
+    assert.deepEqual(await db.select().from(PostContentHashtags), [
+      { postContentId: content.id, hashtagId: firstHashtag.id },
+    ]);
+    assert.deepEqual(
+      await db.select().from(Hashtags).where(eq(Hashtags.name, changedHashtagName.toLowerCase())),
+      [],
+    );
 
     const futureObjectUri = new URL('https://remote.example/notes/future');
     const futurePublishedAt = receivedAt.add({ hours: 24 });
@@ -4494,6 +4742,53 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(PostContents)).length, 1);
   });
 
+  test('rejects a different author that wins the Note URI before the unified Create persists', async () => {
+    const alice = await createStoredRemoteActor();
+    const mallory = await createStoredRemoteActor({
+      actorUri: new URL('https://remote.example/users/mallory'),
+      handle: 'mallory',
+      instanceId: alice.instanceId,
+    });
+    const objectUri = new URL('https://remote.example/notes/unified-create-author-race');
+    const observations: Array<{ reasonCode: string }> = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
+    const executeWorkflow = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        if (workflow === postCreateWorkflow.workflow) {
+          const winner = await createPost({
+            document: postContentDocumentFromText('Winning author content'),
+            objectUri: objectUri.href,
+            origin: 'ACTIVITYPUB',
+            profileId: mallory.id,
+            publishedAt: receivedAt,
+            receivedAt,
+            visibility: PostVisibility.PUBLIC,
+          });
+          assert.equal(winner.created, true);
+        }
+        return nativeWorkflowExecute(workflow as never, options as never);
+      },
+    );
+    try {
+      await handleInboundCreate(createContext(), createRemoteCreate({ objectUri }), receivedAt);
+      assert.equal(executeWorkflow.mock.callCount(), 1);
+      assert.ok(observations.some(({ reasonCode }) => reasonCode === 'stored_author_mismatch'));
+      const winner = await getMaterializedPost(objectUri);
+      assert.equal(winner.post.profileId, mallory.id);
+      assert.equal(postContentDocumentToText(winner.content.document), 'Winning author content');
+      assert.equal(winner.post.repostSourceId, null);
+      assert.equal(await db.$count(ActivityPubPosts), 1);
+      assert.equal(await db.$count(Posts), 1);
+    } finally {
+      executeWorkflow.mock.restore();
+      restoreReporter();
+    }
+  });
+
   test('rechecks the author that wins a concurrent hydrated Note URI conflict', async () => {
     const alice = await createStoredRemoteActor();
     const malloryUri = new URL('https://remote.example/users/mallory');
@@ -4567,6 +4862,9 @@ describe('inbound Create dispatch', () => {
 
   test('rolls back a partial materialization and allows retry', async () => {
     await createStoredRemoteActor();
+    const hashtagToken = `#retry${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const hashtagName = hashtagToken.slice(1);
+    const hashtagHref = new URL('https://remote.example/tags/retry');
     const create = () =>
       new Create({
         actor: remoteActorUri,
@@ -4578,23 +4876,25 @@ describe('inbound Create dispatch', () => {
             }),
           ],
           attribution: remoteActorUri,
-          content: 'Retryable',
+          content: `<p>Retryable <a href="${hashtagHref.href}">${hashtagToken}</a></p>`,
           id: remoteObjectUri,
+          mediaType: 'text/html',
+          tags: [new Hashtag({ href: hashtagHref, name: hashtagToken })],
           to: PUBLIC_COLLECTION,
         }),
       });
     await pg`
-      create function fail_inbound_post_content() returns trigger
+      create function fail_inbound_post_content_hashtag() returns trigger
       language plpgsql as $function$
       begin
-        raise exception 'intentional post content failure';
+        raise exception 'intentional post content hashtag failure';
       end
       $function$
     `;
     await pg`
-      create trigger fail_inbound_post_content
-      before insert on post_content
-      for each row execute function fail_inbound_post_content()
+      create trigger fail_inbound_post_content_hashtag
+      before insert on post_content_hashtag
+      for each row execute function fail_inbound_post_content_hashtag()
     `;
 
     try {
@@ -4602,14 +4902,31 @@ describe('inbound Create dispatch', () => {
       assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
       assert.equal((await db.select().from(Posts)).length, 0);
       assert.equal((await db.select().from(PostContents)).length, 0);
+      assert.equal((await db.select().from(PostContentHashtags)).length, 0);
+      assert.deepEqual(await db.select().from(Hashtags).where(eq(Hashtags.name, hashtagName)), []);
       assert.equal((await db.select().from(Media)).length, 0);
     } finally {
-      await pg`drop trigger fail_inbound_post_content on post_content`;
-      await pg`drop function fail_inbound_post_content()`;
+      await pg`drop trigger fail_inbound_post_content_hashtag on post_content_hashtag`;
+      await pg`drop function fail_inbound_post_content_hashtag()`;
     }
 
     await handleInboundCreate(createContext(), create(), receivedAt);
-    assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
+    const materialized = await getMaterializedPost(remoteObjectUri);
+    assert.equal(materialized.mapping.uri, remoteObjectUri.href);
+    const hashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, hashtagName))
+      .then(firstOrThrow);
+    assert.deepEqual(await db.select().from(PostContentHashtags), [
+      { postContentId: materialized.content.id, hashtagId: hashtag.id },
+    ]);
+    const paragraph = materialized.content.document.body.content[0];
+    assert.ok(paragraph?.type === 'paragraph');
+    assert.deepEqual(paragraph.content, [
+      { type: 'text', text: 'Retryable ' },
+      { type: 'hashtag', attrs: { hashtagId: hashtag.id, token: hashtagToken } },
+    ]);
     assert.equal((await db.select().from(Media)).length, 1);
   });
 });

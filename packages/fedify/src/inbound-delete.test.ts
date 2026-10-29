@@ -48,9 +48,11 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let deletePostPersisted: typeof DeletePostPersisted;
@@ -68,9 +70,11 @@ describe('inbound Delete dispatch', () => {
       db,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       PostContents,
       Posts,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -86,6 +90,8 @@ describe('inbound Delete dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileMedia);
+    await db.delete(Media);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -283,7 +289,7 @@ describe('inbound Delete dispatch', () => {
     await materializeRemotePost(remote.id, mappedUri);
     const localProfile = await createProfile(localInstanceId, 'local');
     const localPost = await createPost({
-      document: postContentDocumentFromText('local'),
+      bodyText: 'local',
       origin: 'LOCAL',
       profileId: localProfile.id,
       visibility: PostVisibility.PUBLIC,

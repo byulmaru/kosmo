@@ -25,6 +25,10 @@ import {
   replyNotification,
   repostNotification,
 } from '../fixtures';
+import {
+  checkReactionSummaryExcludedTouches,
+  tapReactionSummaryWhitespace,
+} from '../reactionSummaryHitTest';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { RequestParameters, Variables } from 'relay-runtime';
@@ -86,6 +90,10 @@ const operationalNotification = {
 const quoteNotificationPost = notificationPost({
   bodyText: '알림에서 확인할 인용글 본문입니다.',
   id: 'notification-quote-post',
+  reactionCounts: [
+    { count: 2, type: '❤️' },
+    { count: 1, type: '🎉' },
+  ],
   profile: profile({
     displayName: '인용 작성자',
     handle: 'quote-author',
@@ -130,6 +138,10 @@ const contentProfile = notificationsProfile(
         bodyText: '알림에서 바로 확인할 수 있는 답글 본문입니다.',
         contentWarning: '답글 내용에 주의가 필요합니다.',
         id: 'notification-reply-post',
+        reactionCounts: [
+          { count: 2, type: '❤️' },
+          { count: 1, type: '🎉' },
+        ],
         media: [notificationReplyMedia],
         profile: unreadFollower,
       }),
@@ -160,6 +172,10 @@ const mentionProfile = notificationsProfile(
       post: notificationPost({
         bodyText: '이 글에서 회원님을 멘션했습니다.',
         id: 'notification-mention-post',
+        reactionCounts: [
+          { count: 2, type: '❤️' },
+          { count: 1, type: '🎉' },
+        ],
         profile: unreadFollower,
         replyParent: post({
           bodyText: '답글 원문 미리보기는 표시하지 않습니다.',
@@ -713,7 +729,7 @@ export const HeaderAndWebRefreshPolicy: Story = {
     expect(heading).toBeVisible();
     expect(headerRect.height).toBe(64);
     expect(headerRect.right - actionRect.right).toBe(16);
-    expect(action).toHaveStyle({ backgroundColor: theme.actionSecondaryBase });
+    expect(action.firstElementChild).toHaveStyle({ backgroundColor: theme.actionSecondaryBase });
     expect(action).toHaveStyle({ borderColor: theme.actionSecondaryBorder });
     expect(actionStyle.borderWidth).toBe('1px');
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
@@ -1511,4 +1527,88 @@ export const MobileNoSelectedProfileScreen: Story = {
     expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
   },
   render: () => <NotificationsScreen />,
+};
+
+function reactionSummaryReadStory(
+  base: Story,
+  kind: 'reply' | 'mention' | 'quote',
+  expectedPath: string,
+  notificationId: string,
+): Story {
+  return {
+    ...base,
+    play: async ({ canvasElement }) => {
+      notificationMutationRequest.mockClear();
+      const canvas = within(canvasElement);
+      const post = await canvas.findByTestId(`${kind}-notification-post`);
+      const item = post.closest<HTMLElement>('[data-testid="notification-list-item"]')!;
+      await checkReactionSummaryExcludedTouches(post, () => {
+        expect(notificationMutationRequest).not.toHaveBeenCalled();
+        expect(canvas.getByText('/notifications')).toBeVisible();
+      });
+      await tapReactionSummaryWhitespace(post);
+      await expect(canvas.findByText(expectedPath)).resolves.toBeVisible();
+      expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
+      expect(notificationMutationRequest).toHaveBeenCalledWith(
+        'NotificationListItemMarkReadMutation',
+        { ids: [notificationId] },
+      );
+      if (!base.parameters?.relay?.mutationLoading && !base.parameters?.relay?.mutationError) {
+        await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
+      }
+    },
+  };
+}
+
+export const ReplyReactionWhitespaceReadsOnce: Story = {
+  ...reactionSummaryReadStory(
+    ReplyAuthorActivationReadsOnce,
+    'reply',
+    '/@starlight/notification-reply-post',
+    'notification-reply',
+  ),
+};
+export const MentionReactionWhitespaceReadsOnce: Story = {
+  ...reactionSummaryReadStory(
+    MentionSelectedProfileScreen,
+    'mention',
+    '/@starlight/notification-mention-post',
+    'notification-mention',
+  ),
+};
+export const QuoteReactionWhitespaceReadsOnce: Story = {
+  ...reactionSummaryReadStory(
+    QuoteListActivationReadsNotification,
+    'quote',
+    '/@quote-author/notification-quote-post',
+    'notification-quote',
+  ),
+};
+export const ReplyReactionWhitespacePendingRead: Story = {
+  ...reactionSummaryReadStory(
+    {
+      ...ReplyAuthorActivationReadsOnce,
+      parameters: {
+        ...ReplyAuthorActivationReadsOnce.parameters,
+        relay: { ...ReplyAuthorActivationReadsOnce.parameters?.relay, mutationLoading: true },
+      },
+    },
+    'reply',
+    '/@starlight/notification-reply-post',
+    'notification-reply',
+  ),
+};
+export const ReplyReactionWhitespaceFailedRead: Story = {
+  ...reactionSummaryReadStory(
+    {
+      ...ReplyAuthorActivationReadsOnce,
+      parameters: {
+        ...ReplyAuthorActivationReadsOnce.parameters,
+        relay: { ...ReplyAuthorActivationReadsOnce.parameters?.relay, mutationError: true },
+      },
+    },
+    'reply',
+    '/@starlight/notification-reply-post',
+    'notification-reply',
+  ),
 };

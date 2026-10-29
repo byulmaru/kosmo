@@ -177,3 +177,21 @@ payload를 보내면 validation으로 거절하며, 성공 확인 또는 명시�
 Quote effects는 공통 Notification Activity로 Reply·Quote·Mention projection과 Push dispatch를 실행한다.
 DB consent writer와 protocol effect의 소유권은 유지한다. Activity delivery는 재시도 가능하며 외부 서버의
 exactly-once 수신을 보장하지 않는다. 기존 생성 Workflow history의 effects trace는 patch marker로 보존한다.
+
+## 2026-10-29 공통 생성 경로 정렬
+
+이 절은 앞선 2026-10-18 구현 설명 중 신규 API의 생성 경로와 결과 회수 방법을 갱신한다.
+신규 Local Post·Reply·Quote와 원격 Create는 #1334의 공통 `postCreateWorkflow`와
+`createPostActivity`를 사용한다. Quote만 기존 owner INITIALIZE에 연결하며 Source 잠금·현재
+Run/token fence·공통 `createPostInTransaction` 저장을 같은 transaction에서 확정한다.
+기존 document/Update 입력은 이전 history와 non-Temporal service의 호환 경로로 유지한다.
+
+`postCreateWorkflowArgs`는 Quote admission과 canonical payload에 결속된 최초 Content UUID를
+request ID로 사용한다. 같은 입력은 같은 Workflow 결과를 회수하고, 입력이 바뀌면 request ID가
+달라지지만 Post UUID는 같은 admission에 고정된다. owner는 다른 최초 Content ID를 거절한다.
+공통 Workflow의 startTime 기준 5분을 넘긴 admission과 30초보다 미래인 시각은 저장 Activity 전에
+거절한다. 기존 history가 남은 결과는 `returnExistingResult`로 회수하므로 이 최초 생성 창과 구분한다.
+
+생성 Workflow는 main의 공통 effects child 시작 ACK 뒤 저장 결과를 반환한다. 알림·외부 발송의
+완료까지 caller를 기다리게 하지 않으며 원격 URI 중복은 effects child를 다시 시작하지 않는다.
+신규 경로 통합은 실제 production history replay·writer drain·migration inventory 확인을 대신하지 않는다.

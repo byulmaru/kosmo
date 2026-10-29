@@ -6,6 +6,8 @@ import {
   Accounts,
   db,
   firstOrThrow,
+  HashtagMuteRules,
+  Hashtags,
   Instances,
   Notifications,
   pg,
@@ -14,6 +16,7 @@ import {
   ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
+  ProfileHashtags,
   ProfileMutes,
   Profiles,
   Reactions,
@@ -21,6 +24,8 @@ import {
 import {
   AccountProfileRole,
   AccountState,
+  HashtagMuteDecision,
+  HashtagMuteScope,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -28,8 +33,8 @@ import {
   PostVisibility,
   ProfileFollowPolicy,
 } from '../enums';
-import { postContentDocumentFromText } from '../post-content/server';
 import { createReplyNotification } from './create-reply-notification';
+import { createMentionNotification } from './mention-notification';
 import {
   createFollowNotification,
   createFollowRequestNotification,
@@ -38,7 +43,7 @@ import {
   deleteFollowRequestNotification,
   deleteNotificationBySource,
 } from './notification';
-import { materializeNotification } from './notification-policy';
+import { isNotificationSuppressed, materializeNotification } from './notification-policy';
 import { createPost, createPostPersisted, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
@@ -46,6 +51,7 @@ import { muteProfile, unmuteProfile } from './profile-mute';
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
 const accountIds: string[] = [];
+const hashtagIds: string[] = [];
 const accountIdsByProfile = new Map<string, string>();
 
 const getAccountId = (profileId: string) => {
@@ -105,16 +111,52 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
 const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
-const createReaction = async (authorProfileId: string, recipientProfileId: string) => {
-  const post = await db
-    .insert(Posts)
-    .values({
-      profileId: recipientProfileId,
-      state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
-    })
+const createHashtag = async (name: string, displayName = name) => {
+  const hashtag = await db
+    .insert(Hashtags)
+    .values({ name: `${name}-${crypto.randomUUID()}`, displayName })
     .returning()
     .then(firstOrThrow);
+  hashtagIds.push(hashtag.id);
+  return hashtag;
+};
+
+const createHashtagMuteRule = async ({
+  ownerProfileId,
+  targetHashtagId,
+  scopes = [HashtagMuteScope.NOTIFICATION],
+  decision = HashtagMuteDecision.EXCLUDE,
+  expiresAt = null,
+}: {
+  readonly ownerProfileId: string;
+  readonly targetHashtagId: string;
+  readonly scopes?: HashtagMuteScope[];
+  readonly decision?: HashtagMuteDecision;
+  readonly expiresAt?: Temporal.Instant | null;
+}) =>
+  db
+    .insert(HashtagMuteRules)
+    .values({ ownerProfileId, targetHashtagId, scopes, decision, expiresAt })
+    .returning()
+    .then(firstOrThrow);
+
+const createReaction = async (
+  authorProfileId: string,
+  recipientProfileId: string,
+  postText?: string,
+) => {
+  const post =
+    postText === undefined
+      ? await db
+          .insert(Posts)
+          .values({
+            profileId: recipientProfileId,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          })
+          .returning()
+          .then(firstOrThrow)
+      : await createContentPost(recipientProfileId, postText);
 
   return db
     .insert(Reactions)
@@ -128,10 +170,10 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
     .then(firstOrThrow);
 };
 
-const createContentPost = (profileId: string) =>
+const createContentPost = (profileId: string, content: string = crypto.randomUUID()) =>
   createPost({
     accountId: accountIdsByProfile.get(profileId),
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: content,
     origin: 'LOCAL',
     profileId,
     visibility: PostVisibility.PUBLIC,
@@ -142,6 +184,101 @@ const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>)
     assert.fail('Expected an established profile follow');
   }
   return result.result.profileFollow;
+};
+
+type ProfileTargetNotificationKind =
+  | typeof NotificationKind.FOLLOW
+  | typeof NotificationKind.FOLLOW_REQUEST
+  | typeof NotificationKind.REACTION
+  | typeof NotificationKind.REPLY
+  | typeof NotificationKind.REPOST
+  | typeof NotificationKind.MENTION;
+
+const createProfileTargetSource = async (
+  kind: ProfileTargetNotificationKind,
+  relatedProfileId: string,
+  recipientProfileId: string,
+  postText: string,
+): Promise<{ readonly id: string; readonly create: () => Promise<string[]> }> => {
+  switch (kind) {
+    case NotificationKind.FOLLOW: {
+      const follow = getEstablishedFollow(
+        await followProfile({
+          followerProfileId: relatedProfileId,
+          followeeProfileId: recipientProfileId,
+        }),
+      );
+      return { id: follow.id, create: () => createFollowNotification(follow.id) };
+    }
+    case NotificationKind.FOLLOW_REQUEST: {
+      const request = await db
+        .insert(ProfileFollowRequests)
+        .values({
+          actorAccountId: accountIdsByProfile.get(relatedProfileId) ?? null,
+          followerProfileId: relatedProfileId,
+          followeeProfileId: recipientProfileId,
+        })
+        .returning()
+        .then(firstOrThrow);
+      return {
+        id: request.id,
+        create: () => createFollowRequestNotification(request.id),
+      };
+    }
+    case NotificationKind.REACTION: {
+      const reaction = await createReaction(relatedProfileId, recipientProfileId, postText);
+      return { id: reaction.id, create: () => createReactionNotification(reaction.id) };
+    }
+    case NotificationKind.REPLY: {
+      const parent = await createContentPost(recipientProfileId, postText);
+      const reply = await createPost({
+        accountId: getAccountId(relatedProfileId),
+        bodyText: postText,
+        origin: 'LOCAL',
+        profileId: relatedProfileId,
+        replyParentId: parent.id,
+        visibility: PostVisibility.PUBLIC,
+      }).then(({ post }) => post);
+      return { id: reply.id, create: () => createReplyNotification(reply.id) };
+    }
+    case NotificationKind.REPOST: {
+      const source = await createContentPost(recipientProfileId, postText);
+      const { repost } = await repostPost({
+        actorAccountId: getAccountId(relatedProfileId),
+        actorProfileId: relatedProfileId,
+        origin: 'LOCAL',
+        sourcePostId: source.id,
+      });
+      return { id: repost.id, create: () => createRepostNotification(repost.id) };
+    }
+    case NotificationKind.MENTION: {
+      const recipient = await db
+        .select({ handle: Profiles.handle })
+        .from(Profiles)
+        .where(eq(Profiles.id, recipientProfileId))
+        .then(firstOrThrow);
+      const relativeHandle = `@${recipient.handle}`;
+      const authoredBodyText = `${postText} ${relativeHandle}`;
+      const post = await createPost({
+        accountId: getAccountId(relatedProfileId),
+        bodyText: authoredBodyText,
+        mentions: [
+          {
+            start: postText.length + 1,
+            end: authoredBodyText.length,
+            handle: relativeHandle,
+            profileId: recipientProfileId,
+            relativeHandle,
+          },
+        ],
+        origin: 'LOCAL',
+        profileId: relatedProfileId,
+        visibility: PostVisibility.PUBLIC,
+      }).then(({ post }) => post);
+      return { id: post.id, create: () => createMentionNotification(post.id) };
+    }
+  }
+  assert.fail(`Unsupported profile target notification kind: ${kind}`);
 };
 
 const notificationInsertLock = { classId: 873, objectId: 634 } as const;
@@ -314,6 +451,9 @@ after(async () => {
         ),
       );
     await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
+  }
+  if (hashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, hashtagIds));
   }
   if (accountIds.length > 0) {
     await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
@@ -503,6 +643,226 @@ test('Follow·Follow Request 알림은 Recipient Mute와 양방향 Block을 반�
   assert.equal((await readNotifications(request.id)).length, 1);
 });
 
+test('Notification 정책은 허용과 Profile Tag 억제를 각각 한 번의 DB query로 판정한다', async () => {
+  const recipient = await createProfile();
+  const related = await createProfile();
+  const hashtag = await createHashtag('notification-policy-query-count');
+
+  const assertPolicyQuery = async (expectedSuppressed: boolean) => {
+    const previousDebug = pg.options.debug;
+    let submittedQueries = 0;
+    pg.options.debug = () => {
+      submittedQueries += 1;
+    };
+
+    try {
+      assert.equal(
+        await isNotificationSuppressed(db, recipient.id, related.id),
+        expectedSuppressed,
+      );
+      assert.equal(submittedQueries, 1);
+    } finally {
+      pg.options.debug = previousDebug;
+    }
+  };
+
+  await assertPolicyQuery(false);
+
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+  await createHashtagMuteRule({ ownerProfileId: recipient.id, targetHashtagId: hashtag.id });
+
+  await assertPolicyQuery(true);
+});
+
+test('일치하는 Profile Tag는 구현된 여섯 일반 알림 경로를 억제하고 문자열만 일치하면 생성한다', async () => {
+  const recipient = await createProfile();
+  const kinds = [
+    NotificationKind.FOLLOW,
+    NotificationKind.FOLLOW_REQUEST,
+    NotificationKind.REACTION,
+    NotificationKind.REPLY,
+    NotificationKind.REPOST,
+    NotificationKind.MENTION,
+  ] as const;
+
+  for (const [index, kind] of kinds.entries()) {
+    const hashtag = await createHashtag(`notification-topic-${index}`, `표시 이름 ${index}`);
+    await createHashtagMuteRule({
+      ownerProfileId: recipient.id,
+      targetHashtagId: hashtag.id,
+      decision: index % 2 === 0 ? HashtagMuteDecision.EXCLUDE : HashtagMuteDecision.COLLAPSE,
+    });
+
+    const related = await createProfile(
+      kind === NotificationKind.FOLLOW ? InstanceKind.ACTIVITYPUB : InstanceKind.LOCAL,
+    );
+    const profileTags = [{ profileId: related.id, hashtagId: hashtag.id }];
+    if (index === 0) {
+      const unrelatedHashtag = await createHashtag('unrelated-profile-topic');
+      profileTags.push({ profileId: related.id, hashtagId: unrelatedHashtag.id });
+    }
+    await db.insert(ProfileHashtags).values(profileTags);
+
+    const matchingSource = await createProfileTargetSource(
+      kind,
+      related.id,
+      recipient.id,
+      `게시물 본문에는 #${hashtag.name}이 있지만 구조화된 게시물 태그는 없다`,
+    );
+    await matchingSource.create();
+    assert.deepEqual(await readNotifications(matchingSource.id), [], `${kind} should be muted`);
+
+    const untaggedRelated = await createProfile();
+    await db
+      .update(Profiles)
+      .set({ bio: `bio #${hashtag.name}` })
+      .where(eq(Profiles.id, untaggedRelated.id));
+    const textOnlySource = await createProfileTargetSource(
+      kind,
+      untaggedRelated.id,
+      recipient.id,
+      `본문에만 #${hashtag.name}이 있다`,
+    );
+    await textOnlySource.create();
+    const [notification] = await readNotifications(textOnlySource.id);
+    assert.equal(notification?.kind, kind);
+    assert.equal(notification?.recipientProfileId, recipient.id);
+  }
+});
+
+test('Hashtag Mute는 Notification Scope와 생성 시점의 활성 Rule·Profile Tag만 소비한다', async () => {
+  const recipient = await createProfile();
+  const related = await createProfile();
+  const hashtag = await createHashtag('canonical-topic', '사람에게 보이는 다른 표기');
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+  const rule = await createHashtagMuteRule({
+    ownerProfileId: recipient.id,
+    targetHashtagId: hashtag.id,
+    scopes: [HashtagMuteScope.HOME],
+  });
+
+  const unselectedScopeSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(unselectedScopeSource.id);
+  assert.equal((await readNotifications(unselectedScopeSource.id)).length, 1);
+
+  await db
+    .update(HashtagMuteRules)
+    .set({
+      scopes: [HashtagMuteScope.NOTIFICATION],
+      expiresAt: Temporal.Now.instant().subtract({ minutes: 5 }),
+    })
+    .where(eq(HashtagMuteRules.id, rule.id));
+  const expiredRuleSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(expiredRuleSource.id);
+  assert.equal((await readNotifications(expiredRuleSource.id)).length, 1);
+
+  await db
+    .update(HashtagMuteRules)
+    .set({ expiresAt: Temporal.Now.instant().add({ minutes: 5 }) })
+    .where(eq(HashtagMuteRules.id, rule.id));
+  const activeRuleSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(activeRuleSource.id);
+  assert.deepEqual(await readNotifications(activeRuleSource.id), []);
+
+  const changedBeforeJudgmentSource = await createReaction(related.id, recipient.id);
+  await db
+    .delete(ProfileHashtags)
+    .where(
+      and(eq(ProfileHashtags.profileId, related.id), eq(ProfileHashtags.hashtagId, hashtag.id)),
+    );
+  await createReactionNotification(changedBeforeJudgmentSource.id);
+  assert.equal((await readNotifications(changedBeforeJudgmentSource.id)).length, 1);
+
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+  await db.delete(HashtagMuteRules).where(eq(HashtagMuteRules.id, rule.id));
+  const removedRuleSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(removedRuleSource.id);
+  assert.equal((await readNotifications(removedRuleSource.id)).length, 1);
+});
+
+test('같은 Account의 Recipient 중 Rule Owner Profile만 Profile Tag Mute를 적용한다', async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  const [recipientA1, recipientA2, related] = await Promise.all([
+    createProfile(),
+    createProfile(),
+    createProfile(),
+  ]);
+  await db.insert(AccountProfiles).values([
+    { accountId: account.id, profileId: recipientA1.id, role: AccountProfileRole.OWNER },
+    { accountId: account.id, profileId: recipientA2.id, role: AccountProfileRole.MEMBER },
+  ]);
+
+  const hashtag = await createHashtag('recipient-isolation');
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+  await createHashtagMuteRule({
+    ownerProfileId: recipientA1.id,
+    targetHashtagId: hashtag.id,
+    decision: HashtagMuteDecision.COLLAPSE,
+  });
+  const sourceA1 = await createProfileTargetSource(
+    NotificationKind.FOLLOW,
+    related.id,
+    recipientA1.id,
+    '',
+  );
+  const sourceA2 = await createProfileTargetSource(
+    NotificationKind.FOLLOW,
+    related.id,
+    recipientA2.id,
+    '',
+  );
+
+  await sourceA1.create();
+  await sourceA2.create();
+
+  assert.deepEqual(await readNotifications(sourceA1.id), []);
+  const notificationsA2 = await readNotifications(sourceA2.id);
+  assert.deepEqual(
+    notificationsA2
+      .map(({ recipientAccountId, recipientProfileId }) => [recipientAccountId, recipientProfileId])
+      .sort(),
+    [
+      [account.id, recipientA2.id],
+      [getAccountId(recipientA2.id), recipientA2.id],
+    ].sort(),
+  );
+});
+
+test('Rule·Profile Tag 변경은 저장된 Notification ID와 Read State를 바꾸지 않는다', async () => {
+  const recipient = await createProfile();
+  const related = await createProfile();
+  const hashtag = await createHashtag('notification-state');
+  const existingSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(existingSource.id);
+  const [existing] = await readNotifications(existingSource.id);
+  assert.ok(existing);
+
+  const readAt = Temporal.Now.instant();
+  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, existing.id));
+  await createHashtagMuteRule({
+    ownerProfileId: recipient.id,
+    targetHashtagId: hashtag.id,
+  });
+  await db.insert(ProfileHashtags).values({ profileId: related.id, hashtagId: hashtag.id });
+
+  const newSource = await createReaction(related.id, recipient.id);
+  await createReactionNotification(newSource.id);
+  assert.deepEqual(await readNotifications(newSource.id), []);
+
+  const [retained] = await readNotifications(existingSource.id);
+  assert.equal(retained?.id, existing.id);
+  assert.equal(retained?.readAt?.toString(), readAt.toString());
+});
+
 test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 source를 보존한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
@@ -520,7 +880,7 @@ test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 sou
   const replyParent = await createContentPost(followee.id);
   const reply = await createPostPersisted({
     accountId: getAccountId(follower.id),
-    document: postContentDocumentFromText('policy failure reply'),
+    bodyText: 'policy failure reply',
     origin: 'LOCAL',
     profileId: follower.id,
     replyParentId: replyParent.id,
@@ -595,6 +955,24 @@ test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 sou
     }
   } finally {
     await pg.unsafe('ALTER TABLE profile_block_policy_failure RENAME TO profile_block');
+  }
+
+  await pg.unsafe('ALTER TABLE hashtag_mute_rule RENAME TO hashtag_mute_rule_policy_failure');
+  try {
+    for (const source of cases) {
+      await assert.rejects(
+        source.create(),
+        (error: unknown) => {
+          assert.match(String(error), /hashtag_mute_rule/);
+          return true;
+        },
+        `${source.name} Hashtag Mute policy SELECT failure should propagate`,
+      );
+      await source.assertSource();
+      assert.deepEqual(await readNotifications(source.id), []);
+    }
+  } finally {
+    await pg.unsafe('ALTER TABLE hashtag_mute_rule_policy_failure RENAME TO hashtag_mute_rule');
   }
 
   for (const source of cases) {
@@ -1129,7 +1507,7 @@ test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부
         const parent = await createContentPost(recipient.id);
         const reply = await createPost({
           accountId: getAccountId(author.id),
-          document: postContentDocumentFromText(`mute policy reply ${crypto.randomUUID()}`),
+          bodyText: `mute policy reply ${crypto.randomUUID()}`,
           origin: 'LOCAL',
           profileId: author.id,
           replyParentId: parent.id,

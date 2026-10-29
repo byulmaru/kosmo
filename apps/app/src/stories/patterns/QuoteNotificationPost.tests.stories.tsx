@@ -125,11 +125,10 @@ export const PresentationContract: Story = {
     await expect(canvas.getByRole('toolbar', { name: '액션 바' })).toBeVisible();
     const author = canvas.getByTestId('notification-post-author');
     await expect(author).toHaveAttribute('href', '/@quote-author');
-    const timestampLink = canvasElement.querySelector(
+    const timestampLink = author.parentElement?.querySelector(
       'a[href="/@quote-author/notification-quote-post"]',
     );
     await expect(timestampLink).not.toBeNull();
-    const timestamp = within(timestampLink as HTMLElement).getByText('5분 전');
     await expect(canvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
       'href',
       '/@source-author/notification-quote-source',
@@ -138,7 +137,7 @@ export const PresentationContract: Story = {
 
     await userEvent.click(author);
     await expect(args.onActivate).toHaveBeenCalledOnce();
-    await userEvent.click(timestamp);
+    await userEvent.click(timestampLink as HTMLElement);
     await expect(args.onActivate).toHaveBeenCalledTimes(2);
     await userEvent.click(canvas.getByText('인용된 원문 미리보기입니다.'));
     await expect(args.onActivate).toHaveBeenCalledTimes(2);

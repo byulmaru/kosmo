@@ -63,6 +63,10 @@ import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
+import {
+  checkReactionSummaryExcludedTouches,
+  tapReactionSummaryWhitespace,
+} from '../reactionSummaryHitTest';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -191,13 +195,23 @@ const linkedPost = post({
   bodyText: '일반 텍스트와 안전한 외부 링크\n강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
   id: 'linked',
 });
-const unsupportedDocumentPost = post({
+const unknownNodesPost = post({
   bodyDocument: {
     type: 'doc',
-    content: [{ type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] }],
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 첫 문단입니다.' }],
+      },
+      { type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '지원되는 다음 문단입니다.' }],
+      },
+    ],
   } as never,
-  bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
-  id: 'unsupported-document',
+  bodyText: '지원되는 첫 문단입니다.\n\n실행하면 안 되는 구조\n\n지원되는 다음 문단입니다.',
+  id: 'unknown-nodes',
 });
 const mediaTextPost = post({
   bodyDocument: {
@@ -879,7 +893,7 @@ const storyPosts = [
   ...visibilityPosts,
   remoteAuthorPost,
   linkedPost,
-  unsupportedDocumentPost,
+  unknownNodesPost,
   ...threadStoryPosts,
   sourcePost,
   pureRepost,
@@ -2117,9 +2131,31 @@ function ContentWarningRevealStory() {
   return (
     <Catalog>
       <PostContentRenderer
-        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        bodyText="가림 해제 뒤 표시되는 #원문 본문입니다."
         contentWarning="민감한 내용이 포함되어 있습니다."
-        document={null}
+        document={{
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '가림 해제 뒤 표시되는 ' },
+                  {
+                    type: 'hashtag',
+                    attrs: {
+                      hashtagId: '019f6678-86fa-709b-984e-1520766b8447',
+                      token: '#원문',
+                    },
+                  },
+                  { type: 'text', text: ' 본문입니다.' },
+                ],
+              },
+            ],
+          },
+        }}
         media={[
           {
             altText: '가림 해제 뒤 표시되는 이미지',
@@ -3031,6 +3067,10 @@ const postMediaViewerThreadResponseData = {
     },
   },
 };
+const postMediaViewerThreadRetryErrorResponse = { error: 'Viewer thread fixture failure' };
+const postMediaViewerThreadRetryResponse = fn(
+  (): { data?: unknown; error?: string } => postMediaViewerThreadRetryErrorResponse,
+);
 const postMediaViewerHostResponseData = {
   surface: mediaViewerThreadCurrentPost,
 };
@@ -3101,6 +3141,9 @@ const meta = {
     'ContentWarningSourcePreviewRevealInteraction',
     'LinkedSourceQuoteInteraction',
     'ProductionMoreShareReferences',
+    'ReactionSummaryPostNavigation',
+    'ReactionSummaryQuoteNavigation',
+    'ReactionSummaryRepostNavigation',
   ],
   decorators: [
     (Story) => (
@@ -3147,8 +3190,9 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(canvasElement.textContent).toContain(
       '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
     );
-    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
-    expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    expect(canvas.getByText('지원되는 첫 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvas.getByText('지원되는 다음 문단입니다.', { exact: false })).toBeVisible();
+    expect(canvasElement.textContent).not.toContain('실행하면 안 되는 구조');
     const mediaText = within(canvas.getByTestId('media-text'));
     expect(mediaText.getByText('document text')).toBeVisible();
     const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');
@@ -4904,6 +4948,7 @@ export const QuoteListItemInternalBackground: Story = {
     const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
     const target = document.elementFromPoint(x, y)!;
     expect(target).toBe(root);
+    expect(getComputedStyle(target).cursor).toBe('pointer');
     const coords = (offset: number) => ({
       clientX: x + offset,
       clientY: y,
@@ -5235,16 +5280,16 @@ export const PostMediaViewerWideThreadLoading: Story = {
 
 export const PostMediaViewerWideThreadErrorRetry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  beforeEach: () => {
+    postMediaViewerThreadRetryResponse
+      .mockReset()
+      .mockReturnValue(postMediaViewerThreadRetryErrorResponse);
+  },
   parameters: {
     relay: {
       operationResponses: {
         PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
-        PostMediaViewerThreadQuery: {
-          sequence: [
-            { error: 'Viewer thread fixture failure' },
-            { data: postMediaViewerThreadResponseData },
-          ],
-        },
+        PostMediaViewerThreadQuery: () => postMediaViewerThreadRetryResponse(),
       },
     },
   },
@@ -5261,6 +5306,9 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
     expect(wideDetail).toBeDefined();
     expect(errorState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    postMediaViewerThreadRetryResponse.mockReturnValue({
+      data: postMediaViewerThreadResponseData,
+    });
     await userEvent.click(viewer.getByRole('button', { name: '답글 다시 불러오기' }));
     await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
@@ -5760,7 +5808,7 @@ export const PostDetailThreadRoute: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
     const heading = canvas.getByRole('heading', { name: '게시글' });
     const backButton = canvas.getByRole('button', { name: '뒤로 가기' });
 
@@ -6073,14 +6121,17 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-visible-parent',
       'post-thread-current-route-boundary-current',
     ]);
     const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
-    const firstPost = thread.children[0] as HTMLElement;
-    expect(header.getBoundingClientRect().bottom).toBeLessThanOrEqual(
-      firstPost.getBoundingClientRect().top,
+    const current = canvas.getByTestId('post-thread-current-route-boundary-current');
+    await waitFor(() =>
+      expect(
+        Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
+      ).toBeLessThanOrEqual(1),
     );
     expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
     expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
@@ -6747,7 +6798,8 @@ export const ContentWarningRevealInteraction: Story = {
   ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
     const toggle = canvas.getByRole('button', {
@@ -6764,12 +6816,19 @@ export const ContentWarningRevealInteraction: Story = {
     toggle.focus();
     expect(toggle).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
+    const body = canvas.getByText(/가림 해제 뒤 표시되는/);
+    expect(body).toBeVisible();
+    expect(body).toHaveTextContent('가림 해제 뒤 표시되는 #원문 본문입니다.');
+    expect(canvas.getByRole('link', { name: '#원문, 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/hashtags/[hashtagId]/posts',
+    );
     const gallery = canvas.getByTestId('post-media-gallery');
     expect(gallery).toBeVisible();
 
     await userEvent.keyboard('{Enter}');
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
 };
@@ -6814,6 +6873,8 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const pathname = canvas.getByTestId('content-warning-list-pathname');
     const initialPath = pathname.textContent;
     const card = listSurface.getByTestId('post-list-item-card');
+    expect(getComputedStyle(card).cursor).toBe('pointer');
+    expect(getComputedStyle(row).cursor).toBe('pointer');
     await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
     const cardBounds = card.getBoundingClientRect();
     const cardCoords = (x: number) => ({
@@ -6962,8 +7023,54 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     await userEvent.unhover(card);
     expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
 
-    await userEvent.click(warning);
+    const row = within(card).getByTestId('post-list-standard-row');
+    const bounds = row.getBoundingClientRect();
+    const coords = {
+      clientX: bounds.left + 2,
+      clientY: bounds.bottom - 2,
+      pageX: bounds.left + 2 + window.scrollX,
+      pageY: bounds.bottom - 2 + window.scrollY,
+    };
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: row, coords });
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: row, coords });
+    await userEvent.unhover(card);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+
+    const touch = new Touch({ identifier: 1171, target: row, ...coords });
+    const dispatchTouch = (type: string, active: boolean) => {
+      row.dispatchEvent(
+        new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          changedTouches: [touch],
+          targetTouches: active ? [touch] : [],
+          touches: active ? [touch] : [],
+        }),
+      );
+    };
+    for (const end of ['touchcancel', 'touchend']) {
+      dispatchTouch('touchstart', true);
+      await waitFor(() =>
+        expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+      );
+      dispatchTouch(end, false);
+      await waitFor(() =>
+        expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor),
+      );
+    }
+
+    warning.focus();
+    await userEvent.keyboard('{Enter}');
     expect(within(listSurface).getByText(contentWarningPost.content!.bodyText)).toBeVisible();
+    dispatchTouch('touchstart', true);
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    dispatchTouch('touchcancel', false);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
   },
 };
 
@@ -6986,6 +7093,46 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     const sourcePreviewLink = within(sourcePreview).getByRole('link', {
       name: '원문 게시글 보기',
     });
+
+    const quoteBackground = listSurface.getByTestId('post-source-presentation');
+    const cardFeedback = listSurface.getByTestId('post-list-item-feedback');
+    const restingFeedback = getComputedStyle(cardFeedback).backgroundColor;
+    const quoteBounds = quoteBackground.getBoundingClientRect();
+    const quoteCoords = (x: number) => ({
+      clientX: x,
+      clientY: quoteBounds.top + 2,
+      pageX: x + window.scrollX,
+      pageY: quoteBounds.top + 2 + window.scrollY,
+    });
+    const quotePointer = userEvent.setup();
+    await quotePointer.hover(quoteBackground);
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.stateHover }),
+    );
+    await quotePointer.pointer({
+      keys: '[MouseLeft>]',
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 2),
+    });
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await quotePointer.pointer({
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 32),
+    });
+    await waitFor(() =>
+      expect(cardFeedback).toHaveStyle({ backgroundColor: colors.light.stateHover }),
+    );
+    await quotePointer.pointer({
+      keys: '[/MouseLeft]',
+      target: quoteBackground,
+      coords: quoteCoords(quoteBounds.left + 2),
+    });
+    await quotePointer.unhover(quoteBackground);
+    await waitFor(() =>
+      expect(getComputedStyle(cardFeedback).backgroundColor).toBe(restingFeedback),
+    );
 
     expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
     expect(listSurface.getByRole('button', { name: outerWarning })).toBeVisible();
@@ -8900,4 +9047,34 @@ export const ReplySensitiveMediaParentPresentation: Story = {
     expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
   },
   render: () => <ReplyModalPresentationStory parentId={mediaOnlyPost.id} />,
+};
+
+function reactionSummaryNavigationStory(postId: string, expectedPath: string): Story {
+  return {
+    render: () => <ProductionPostListItemStory postId={postId} presentation="wide" />,
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const pathname = canvas.getByTestId('presentation-story-pathname');
+      const initialPath = pathname.textContent;
+      await checkReactionSummaryExcludedTouches(canvasElement, () => {
+        expect(pathname.textContent).toBe(initialPath);
+      });
+      for (const fraction of [0, 0.5, 1]) {
+        await tapReactionSummaryWhitespace(canvasElement, fraction);
+        expect(pathname.textContent).toBe(expectedPath);
+      }
+      await userEvent.click(canvas.getByRole('link', { name: /반응한 프로필 보기/ }));
+      expect(pathname.textContent).toBe(`${expectedPath}/reactions`);
+    },
+  };
+}
+
+export const ReactionSummaryPostNavigation: Story = {
+  ...reactionSummaryNavigationStory('short', '/@kosmo/short'),
+};
+export const ReactionSummaryQuoteNavigation: Story = {
+  ...reactionSummaryNavigationStory('post-quote', '/@reposter/post-quote'),
+};
+export const ReactionSummaryRepostNavigation: Story = {
+  ...reactionSummaryNavigationStory('post-repost', '/@source@remote.example/post-source'),
 };

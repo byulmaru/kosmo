@@ -1,10 +1,13 @@
 import { Children, createContext, useContext, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
-import type { PropsWithChildren, ReactElement, RefObject } from 'react';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
+import type { PropsWithChildren, ReactElement, ReactNode, RefObject } from 'react';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type RadioOption<Value extends string> = Readonly<{
   description?: string;
@@ -86,6 +89,120 @@ export function RadioGroup<Value extends string>({
   );
 }
 
+type RadioOptionVisualProps<Value extends string> = {
+  checked: boolean;
+  children: ReactNode;
+  disabled: boolean;
+  hovered: boolean;
+  option: RadioOption<Value>;
+  pressed: boolean;
+};
+
+function RadioOptionVisual<Value extends string>({
+  checked,
+  children,
+  disabled,
+  hovered,
+  option,
+  pressed,
+}: RadioOptionVisualProps<Value>) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || hovered;
+  const interactionColor = useAnimatedColorTransition({
+    color: disabled
+      ? theme.stateDisabledSurface
+      : interaction
+        ? pressed
+          ? theme.statePressed
+          : theme.stateHover
+        : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : interaction ? 'interaction' : 'selection',
+  });
+  const selectedColor = useAnimatedColorTransition({
+    color: disabled
+      ? theme.stateDisabledForeground
+      : checked
+        ? theme.stateSelectedBorder
+        : theme.foregroundSecondary,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
+  const interactionBorder = useAnimatedColorTransition({
+    color: disabled ? theme.borderDisabled : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
+  const indicatorColor = disabled ? theme.stateDisabledForeground : selectedColor;
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.feedback,
+          {
+            backgroundColor: interactionColor,
+            borderColor: interactionBorder,
+            borderWidth: disabled ? borderWidths[1] : borderWidths[0],
+          } as unknown as ViewStyle,
+        ]}
+      />
+      <Svg
+        accessible={Platform.OS === 'web' ? undefined : false}
+        aria-hidden
+        focusable={false}
+        style={styles.indicator}
+        height={iconSizes[20]}
+        width={iconSizes[20]}
+        viewBox="0 0 20 20"
+      >
+        <AnimatedCircle
+          cx={10}
+          cy={10}
+          r={9}
+          fill="none"
+          stroke={indicatorColor as unknown as string}
+          strokeWidth={borderWidths[2]}
+        />
+        <AnimatedCircle
+          cx={10}
+          cy={10}
+          r={5}
+          fill={indicatorColor as unknown as string}
+          opacity={disabled ? (checked ? 1 : 0) : checked ? 1 : 0}
+        />
+      </Svg>
+      {children ?? (
+        <View style={styles.content}>
+          <Text
+            style={[
+              styles.label,
+              { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
+            ]}
+          >
+            {option.label}
+          </Text>
+          {option.description ? (
+            <Text
+              style={[
+                styles.description,
+                { color: disabled ? theme.stateDisabledForeground : theme.foregroundSecondary },
+              ]}
+            >
+              {option.description}
+            </Text>
+          ) : null}
+        </View>
+      )}
+    </>
+  );
+}
+
 export function RadioOption<Value extends string>({
   children,
   option,
@@ -96,9 +213,9 @@ export function RadioOption<Value extends string>({
     throw new Error('RadioOption은 RadioGroup 안에서 사용해야 합니다.');
   }
 
-  const theme = useTheme();
   const optionRef = useRef<View>(null);
   const [focusVisible, setFocusVisible] = useState(false);
+  const theme = useTheme();
   context.optionRefs.set(option.value, optionRef);
 
   const disabled = context.disabled || Boolean(option.disabled);
@@ -113,12 +230,6 @@ export function RadioOption<Value extends string>({
   const tabStopValue = selectedEnabled ? context.value : enabledOptions[0]?.value;
   const tabIndex = disabled || option.value !== tabStopValue ? -1 : 0;
   const web = Platform.OS === 'web';
-  const indicatorColor = disabled
-    ? theme.stateDisabledForeground
-    : checked
-      ? theme.stateSelectedBorder
-      : theme.foregroundSecondary;
-
   const onKeyDown = (event: { key: string; preventDefault: () => void }) => {
     if (disabled || !web) {
       return;
@@ -172,29 +283,11 @@ export function RadioOption<Value extends string>({
       }}
       ref={optionRef}
       style={(state) => {
-        const webState = state as { hovered?: boolean };
-        const focused = web && focusVisible;
-        const hovered = web && Boolean(webState.hovered);
-        const borderWidth = disabled
-          ? borderWidths[1]
-          : focused
-            ? borderWidths[2]
-            : borderWidths[0];
+        const borderWidth = focusVisible ? borderWidths[2] : borderWidths[1];
         return [
           styles.root,
           {
-            backgroundColor: disabled
-              ? theme.stateDisabledSurface
-              : state.pressed
-                ? theme.statePressed
-                : hovered
-                  ? theme.stateHover
-                  : undefined,
-            borderColor: disabled
-              ? theme.borderDisabled
-              : focused
-                ? theme.stateFocusRing
-                : undefined,
+            borderColor: focusVisible ? theme.stateFocusRing : 'transparent',
             borderWidth,
             ...(web ? ({ outlineStyle: 'none' } as unknown as ViewStyle) : undefined),
             padding: space[12] - borderWidth,
@@ -213,46 +306,15 @@ export function RadioOption<Value extends string>({
           } as WebRadioProps)
         : undefined)}
     >
-      <Svg
-        accessible={web ? undefined : false}
-        aria-hidden
-        focusable={false}
-        style={styles.indicator}
-        height={iconSizes[20]}
-        width={iconSizes[20]}
-        viewBox="0 0 20 20"
-      >
-        <Circle
-          cx={10}
-          cy={10}
-          r={9}
-          fill="none"
-          stroke={indicatorColor}
-          strokeWidth={borderWidths[2]}
+      {(state) => (
+        <RadioOptionVisual
+          checked={checked}
+          children={children}
+          disabled={disabled}
+          hovered={web && Boolean((state as { hovered?: boolean }).hovered)}
+          option={option}
+          pressed={state.pressed}
         />
-        {checked ? <Circle cx={10} cy={10} r={5} fill={indicatorColor} /> : null}
-      </Svg>
-      {children ?? (
-        <View style={styles.content}>
-          <Text
-            style={[
-              styles.label,
-              { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
-            ]}
-          >
-            {option.label}
-          </Text>
-          {option.description ? (
-            <Text
-              style={[
-                styles.description,
-                { color: disabled ? theme.stateDisabledForeground : theme.foregroundSecondary },
-              ]}
-            >
-              {option.description}
-            </Text>
-          ) : null}
-        </View>
       )}
     </Pressable>
   );
@@ -262,11 +324,21 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     borderRadius: radius[12],
+    borderColor: 'transparent',
+    borderWidth: borderWidths[1],
     flexDirection: 'row',
     gap: space[12],
-    padding: space[12],
+    padding: space[12] - borderWidths[1],
   },
   indicator: { flexShrink: 0 },
+  feedback: {
+    borderRadius: radius[12],
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   content: { ...layoutRecipes.labelSupportStack, flex: 1 },
   label: textStyles.uiLabelL,
   description: textStyles.uiCopyM,

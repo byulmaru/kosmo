@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -11,7 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { PostDetailBackground } from './PostDetailBackground';
+import { PostDetailBackground, PostDetailBackgroundFeedbackContext } from './PostDetailBackground';
 import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
@@ -30,13 +31,6 @@ const PostListRowFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      media {
-        id
-        altText
-        url
-      }
-      contentWarning
     }
     repostSource {
       ...PostSourcePreview_source
@@ -63,14 +57,6 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      contentWarning
-      document
-      media {
-        id
-        altText
-        url
-      }
     }
     profile {
       avatar {
@@ -236,7 +222,7 @@ export function PostListItem({
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
           onBackgroundPress={openDetail}
         >
-          <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+          <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
               accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
               accessibilityRole="link"
@@ -249,7 +235,7 @@ export function PostListItem({
                 {post.profile.displayName}님이 재게시함
               </Text>
             </Pressable>
-          </Link>
+          </NavigationLink>
         </PostAttributionRow>
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
@@ -266,7 +252,7 @@ export function PostListItem({
       {pinnedAttribution}
       {replyAttribution}
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.quoteRow}>
-        <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+        <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
@@ -282,7 +268,7 @@ export function PostListItem({
               size={48}
             />
           </Pressable>
-        </Link>
+        </NavigationLink>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
             onBackgroundPress={openDetail}
@@ -293,6 +279,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            onReactionSummaryBackgroundPress={openDetail}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -318,47 +305,46 @@ function PostListItemCard({
   const [pressed, setPressed] = useState(false);
   const [pointerHovered, setPointerHovered] = useState(false);
 
-  // Keep hover across child controls and press feedback on the background responder.
+  // Only detail-background responders share card press feedback; child controls stay independent.
   return (
-    <PostDetailBackground
-      accessible={false}
-      onBackgroundPress={onBackgroundPress}
-      onResponderGrant={() => setPressed(true)}
-      onResponderRelease={() => setPressed(false)}
-      onResponderTerminate={() => setPressed(false)}
-      focusable={false}
-      onPointerEnter={(event) => {
-        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
-          setPointerHovered(true);
-        }
-      }}
-      onPointerLeave={(event) => {
-        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
-          setPointerHovered(false);
-        }
-      }}
-      role={article ? 'article' : undefined}
-      style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
-      tabIndex={-1}
-      testID="post-list-item-card"
-    >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          styles.surfaceFeedback,
-          {
-            backgroundColor: pressed
-              ? theme.statePressedSubtle
-              : Platform.OS === 'web' && pointerHovered
-                ? theme.stateHover
-                : undefined,
-          },
-        ]}
-        testID="post-list-item-feedback"
-      />
-      {children}
-    </PostDetailBackground>
+    <PostDetailBackgroundFeedbackContext.Provider value={setPressed}>
+      <PostDetailBackground
+        accessible={false}
+        onBackgroundPress={onBackgroundPress}
+        focusable={false}
+        onPointerEnter={(event) => {
+          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+            setPointerHovered(true);
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+            setPointerHovered(false);
+          }
+        }}
+        role={article ? 'article' : undefined}
+        style={[style, Platform.OS === 'web' ? { cursor: 'pointer' } : undefined]}
+        tabIndex={-1}
+        testID="post-list-item-card"
+      >
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[
+            styles.surfaceFeedback,
+            {
+              backgroundColor: pressed
+                ? theme.statePressedSubtle
+                : Platform.OS === 'web' && pointerHovered
+                  ? theme.stateHover
+                  : undefined,
+            },
+          ]}
+          testID="post-list-item-feedback"
+        />
+        {children}
+      </PostDetailBackground>
+    </PostDetailBackgroundFeedbackContext.Provider>
   );
 }
 
@@ -413,7 +399,7 @@ function PostListRow({
       style={styles.standardRow}
       testID="post-list-standard-row"
     >
-      <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+      <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
         <Pressable
           aria-hidden
           accessibilityElementsHidden
@@ -429,7 +415,7 @@ function PostListRow({
             size={48}
           />
         </Pressable>
-      </Link>
+      </NavigationLink>
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
@@ -451,6 +437,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onReactionSummaryBackgroundPress={openDetail}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

@@ -23,6 +23,7 @@ import {
 } from './PostMediaViewer';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import { PostMediaViewerThread } from './PostMediaViewerThread';
+import { getPostReplyActionCount } from './postReplyCount';
 import { getReplyProcessingState } from './replySurface';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -36,6 +37,7 @@ const PostMediaViewerHostOperation = graphql`
       ... on Post {
         id
         state
+        replyCount
         content {
           id
         }
@@ -204,6 +206,7 @@ function PostMediaViewerHostContent({
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
+        count: getPostReplyActionCount(Boolean(surface?.content), surface?.replyCount),
         expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
         onPress: () => {
           if (replyAuthentication.execution.kind === 'resolution-required') {

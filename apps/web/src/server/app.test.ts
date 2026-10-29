@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -62,14 +62,22 @@ let fetch = vi.fn<typeof globalThis.fetch>();
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
+const SERVICE_WORKER_NAME = 'firebase-messaging-sw.js';
+let serviceWorkerSource: string;
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
+  serviceWorkerSource = await readFile(
+    new URL('../../../app/public/firebase-messaging-sw.js', import.meta.url),
+    'utf8',
+  );
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
+  await writeFile(join(staticRoot, SERVICE_WORKER_NAME), serviceWorkerSource);
   await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
+  await writeFile(join(staticRoot, 'robots.txt'), 'User-agent: *\nDisallow: /private\n');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -159,6 +167,58 @@ describe('Web channel bootstrap', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(await response.text()).toBe('ENVIRONMENT must be dev or prod');
+  });
+});
+
+describe('Dev search exclusion', () => {
+  test.each([
+    ['dev', 'noindex'],
+    ['prod', null],
+    [undefined, null],
+  ] as const)('%s environment applies the expected search header', async (environment, value) => {
+    vi.stubEnv('ENVIRONMENT', environment);
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe(value);
+  });
+
+  test('dev robots permits crawling while production serves the exported policy', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+
+    const devResponse = await app.request('/robots.txt');
+    const devHead = await app.request('/robots.txt', { method: 'HEAD' });
+
+    expect(devResponse.status).toBe(200);
+    expect(devResponse.headers.get('content-type')).toContain('text/plain');
+    expect(devResponse.headers.get('cache-control')).toBe('no-cache');
+    expect(devResponse.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await devResponse.text()).toBe('User-agent: *\nAllow: /\n');
+    expect(devHead.status).toBe(200);
+    expect(devHead.headers.get('x-robots-tag')).toBe('noindex');
+
+    vi.stubEnv('ENVIRONMENT', 'prod');
+    const prodResponse = await app.request('/robots.txt');
+
+    expect(prodResponse.status).toBe(200);
+    expect(prodResponse.headers.get('x-robots-tag')).toBeNull();
+    expect(await prodResponse.text()).toBe('User-agent: *\nDisallow: /private\n');
+  });
+
+  test('adds noindex to direct federation responses', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    federationFetch.mockResolvedValueOnce(
+      new Response('federation response', {
+        headers: { 'Content-Type': 'application/activity+json' },
+      }),
+    );
+
+    const federation = await app.request('/ap/actor/alice');
+
+    expect(federation.status).toBe(200);
+    expect(federation.headers.get('content-type')).toContain('application/activity+json');
+    expect(federation.headers.get('x-robots-tag')).toBe('noindex');
   });
 });
 
@@ -633,6 +693,18 @@ describe('runtime routing', () => {
     expect(await unknownPath.text()).toBe('404 Not Found');
     expect(missingAsset.status).toBe(404);
     expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
+  test('serves the Firebase worker as an uncached JavaScript asset and keeps missing workers as 404', async () => {
+    const worker = await app.request(`/${SERVICE_WORKER_NAME}?firebase=%7B%7D`);
+    const missingWorker = await app.request('/missing-firebase-messaging-sw.js');
+
+    expect(worker.status).toBe(200);
+    expect(worker.headers.get('content-type')).toContain('text/javascript');
+    expect(worker.headers.get('cache-control')).toBe('no-cache');
+    expect(await worker.text()).toBe(serviceWorkerSource);
+    expect(missingWorker.status).toBe(404);
+    expect(await missingWorker.text()).toBe('404 Not Found');
   });
 
   test('preserves public document cache variation for revalidation and compression', async () => {

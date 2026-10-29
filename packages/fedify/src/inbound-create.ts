@@ -81,6 +81,7 @@ export const handleInboundCreate = async (
       await handleInboundQuote({
         commandId: create.id?.href,
         actorUri,
+        authorProfileId: materialization.authorProfileId,
         context,
         duplicateCreate: materialization.status === 'duplicate',
         note: object,

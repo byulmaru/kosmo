@@ -1,12 +1,13 @@
 import type { PostQuoteConsentStatus } from '../enums';
 import type { ErrorCode } from '../error';
-import type { LocalPostInput } from '../services/post';
+import type { LegacyLocalPostInput, LocalPostInput } from '../services/post';
 import type { ApplyPostQuoteConsentInput } from '../services/post-quote-consent';
 import type { WorkflowUpdateDefinition } from './client';
 
 export type QuoteOwnerCommand = { readonly postId: string; readonly commandId: string } & (
   | {
       readonly kind: 'NOTE';
+      readonly authorProfileId?: string;
       readonly embeddedSource?: Record<string, unknown>;
       readonly malformed?: boolean;
       readonly actorUri: string;
@@ -44,7 +45,7 @@ export type QuoteOwnerCommand = { readonly postId: string; readonly commandId: s
   | { readonly kind: 'REJECT'; readonly requestUri: string; readonly sourceAuthorActorUri: string }
   | {
       readonly kind: 'INITIALIZE';
-      readonly input: LocalPostInput;
+      readonly input: LocalPostInput | LegacyLocalPostInput;
       readonly initialContentId?: string;
     }
 );

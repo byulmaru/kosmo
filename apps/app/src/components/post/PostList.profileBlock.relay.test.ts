@@ -13,6 +13,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import hashtagQuery from './__generated__/PostListHashtagNextPageQuery.graphql';
 import homeQuery from './__generated__/PostListHomeNextPageQuery.graphql';
 import localQuery from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { ReactNode } from 'react';
@@ -30,6 +31,7 @@ const requests: Array<{
   variables: Record<string, unknown>;
   sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 }> = [];
+const toastRetryActions: Array<() => void> = [];
 const animationFrames = new Map<number, FrameRequestCallback>();
 const originalWindow = globalThis.window;
 const originalDocument = globalThis.document;
@@ -97,13 +99,20 @@ stub('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
+  findNodeHandle: () => null,
   useWindowDimensions: () => ({ height: 844, width: 390 }),
 });
 stub('expo-router', {
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
+  usePathname: () => '/home',
   useRouter: () => ({ push: () => undefined }),
 });
-stub('lucide-react-native', { MessageCircle: 'MessageCircle', Pin: 'Pin' });
+stub('lucide-react-native', {
+  MessageCircle: 'MessageCircle',
+  Pin: 'Pin',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 stub('react-native-svg', {
   Circle: 'Circle',
   Defs: 'Defs',
@@ -113,7 +122,7 @@ stub('react-native-svg', {
   Stop: 'Stop',
   Svg: 'Svg',
 });
-stub('@/theme/ThemeProvider', { useTheme: () => theme });
+stub('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
 stub('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { full: 999, md: 12, sm: 4 },
@@ -124,7 +133,16 @@ stub('@/lib/date', { formatTimelineTimestamp: () => 'now' });
 stub('@/components/profile/ProfileNameBlock', { ProfileNameBlock: () => null });
 stub('@/components/ui/Avatar', { Avatar: () => null });
 stub('@/components/ui/TimestampText', { TimestampText: 'TimestampText' });
-stub('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
+stub('@/components/ui/ToastProvider', {
+  useToast: () => ({
+    showToast: (_message: string, options: { action?: { onPress: () => void } }) => {
+      if (options.action) {
+        toastRetryActions.push(options.action.onPress);
+      }
+      return () => undefined;
+    },
+  }),
+});
 stub('@/session/SessionProvider', { useSession: () => ({ selectedProfileId: 'owner-a' }) });
 stub('@/components/ui/Button', {
   Button: ({ children, ...props }: { children?: ReactNode }) =>
@@ -150,10 +168,6 @@ for (const [file, name] of [
 stub(new URL('./PostMediaViewerHost.tsx', import.meta.url), {
   PostMediaViewerHostProvider: ({ children }: { children?: ReactNode }) => children,
   usePostMediaViewerHost: () => () => undefined,
-});
-stub(new URL('./PostDetailBackground.tsx', import.meta.url), {
-  PostDetailBackground: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('View', props, children),
 });
 stub(new URL('./PostActionSurface.tsx', import.meta.url), { PostActionSurface: () => null });
 stub(new URL('./PostBody.tsx', import.meta.url), {
@@ -190,6 +204,7 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  toastRetryActions.length = 0;
   animationFrames.clear();
   if (originalWindow) {
     globalThis.window = originalWindow;
@@ -205,7 +220,8 @@ afterEach(async () => {
 
 const targetId = 'target-a';
 const blockId = 'block-a';
-const queryBySurface = { home: homeQuery, local: localQuery } as const;
+const hashtagId = 'hashtag-a';
+const queryBySurface = { hashtag: hashtagQuery, home: homeQuery, local: localQuery } as const;
 type Surface = keyof typeof queryBySurface;
 
 function FeedSurface({
@@ -218,7 +234,7 @@ function FeedSurface({
   surface: Surface;
 }) {
   const listFragmentKey = {
-    __id: 'client:root',
+    __id: surface === 'hashtag' ? hashtagId : 'client:root',
     __fragments: { [`PostList_${surface}`]: { count: 20, cursor: null } },
     __fragmentOwner: queryOwner,
   };
@@ -272,11 +288,18 @@ function createFeedEnvironment() {
 
 async function start(surface: Surface, rows = feedRows(), hasNextPage = false) {
   const environment = createFeedEnvironment();
-  const operation = createOperationDescriptor(getRequest(queryBySurface[surface]), {
-    count: 20,
-  });
-  const field = surface === 'home' ? 'homeTimeline' : 'localTimeline';
-  environment.commitPayload(operation, { [field]: feedConnection(rows, hasNextPage) });
+  const variables = surface === 'hashtag' ? { count: 20, id: hashtagId } : { count: 20 };
+  const operation = createOperationDescriptor(getRequest(queryBySurface[surface]), variables);
+  const connection = feedConnection(rows, hasNextPage);
+  const payload =
+    surface === 'hashtag'
+      ? {
+          node: { __typename: 'Hashtag', id: hashtagId, name: 'Topic', posts: connection },
+        }
+      : {
+          [surface === 'home' ? 'homeTimeline' : 'localTimeline']: connection,
+        };
+  environment.commitPayload(operation, payload);
   await act(async () => {
     renderer = create(
       createElement(FeedUnderTest, {
@@ -514,4 +537,52 @@ test('the web list loads another page when blocking filters every loaded row', a
   await act(async () => mock.timers.tick(0));
   await act(async () => flushAnimationFrames());
   assert.deepEqual(visibleBodies(), ['body-post-next']);
+});
+
+test('hashtag pagination keeps loaded rows and retries the same cursor after a page failure', async () => {
+  documentHeight = 800;
+  await start('hashtag', [postNode('post-first', 'author-first')], true);
+  assert.deepEqual(visibleBodies(), ['body-post-first']);
+
+  const failedRequest = requests.find((item) => item.name === 'PostListHashtagNextPageQuery');
+  assert.ok(failedRequest, 'the public hashtag connection should load its next page');
+  assert.equal(failedRequest.variables.id, hashtagId);
+  assert.equal(failedRequest.variables.cursor, 'post-first');
+
+  await act(async () => {
+    failedRequest.sink.error(new Error('network failure'));
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  assert.deepEqual(visibleBodies(), ['body-post-first']);
+
+  const retryAction = toastRetryActions.at(-1);
+  assert.ok(retryAction, 'a failed page should expose a retry action');
+  await act(async () => {
+    retryAction();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  const retryRequest = requests
+    .filter((item) => item.name === 'PostListHashtagNextPageQuery')
+    .at(-1);
+  assert.ok(retryRequest);
+  assert.notEqual(retryRequest, failedRequest);
+  assert.equal(retryRequest.variables.id, hashtagId);
+  assert.equal(retryRequest.variables.cursor, failedRequest.variables.cursor);
+  assert.deepEqual(visibleBodies(), ['body-post-first']);
+
+  await act(async () => {
+    retryRequest.sink.next({
+      data: {
+        node: {
+          __typename: 'Hashtag',
+          id: hashtagId,
+          posts: feedConnection([postNode('post-next', 'author-next')], false),
+        },
+      },
+    });
+    retryRequest.sink.complete();
+  });
+  await act(async () => mock.timers.tick(0));
+  await act(async () => flushAnimationFrames());
+  assert.deepEqual(visibleBodies(), ['body-post-first', 'body-post-next']);
 });

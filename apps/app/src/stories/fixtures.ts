@@ -151,6 +151,7 @@ export type StoryPost = {
   profile: StoryProfile;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
+  replyCount: number;
   replyParent: StoryReplyParentReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
@@ -170,6 +171,7 @@ export function post({
   profile: author = profile(),
   reactionCounts = [],
   repostCount = 0,
+  replyCount = 0,
   replyParent = null,
   repostSource = null,
   viewerRepost = null,
@@ -185,6 +187,7 @@ export function post({
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
+  replyCount?: number;
   replyParent?: StoryReplyParentReference | null;
   repostSource?: StoryPost | null;
   viewerRepost?: StoryPostReference | null;
@@ -214,6 +217,7 @@ export function post({
     profile: author,
     reactionCounts,
     repostCount,
+    replyCount,
     replyParent,
     repostSource,
     state: 'ACTIVE',

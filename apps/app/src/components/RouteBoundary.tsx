@@ -25,17 +25,24 @@ type RouteBoundaryProps = {
   title: string;
 };
 
-type RouteBoundaryContextValue = RouteBoundaryHandle & {
-  fetchKey: number;
+type RouteBoundaryQueryLifecycle = {
+  fetchKey: string;
+  fetchPolicy: 'store-or-network' | 'network-only';
 };
+
+type RouteBoundaryContextValue = RouteBoundaryHandle & RouteBoundaryQueryLifecycle;
+
+function createFetchKey() {
+  return `${Date.now()}-${Math.random()}`;
+}
 
 const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(null);
 
 /**
  * Returns the query lifecycle owned by the nearest RouteBoundary.
  *
- * Route components should not maintain their own retry counters. `refetch` changes only the visible
- * query fetch key.
+ * Route components should not maintain their own retry state. `refetch` changes the visible query
+ * fetch key and exposes the network-only retry policy to queries that use it.
  */
 export function useRouteBoundary(): RouteBoundaryContextValue {
   const value = useContext(RouteBoundaryContext);
@@ -50,14 +57,24 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
   function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
-    const [fetchKey, setFetchKey] = useState(0);
+    const [queryLifecycle, setQueryLifecycle] = useState<RouteBoundaryQueryLifecycle>(() => ({
+      fetchKey: createFetchKey(),
+      fetchPolicy: 'store-or-network',
+    }));
 
-    const refetch = useCallback(() => setFetchKey((key) => key + 1), []);
+    const refetch = useCallback(
+      () =>
+        setQueryLifecycle({
+          fetchKey: createFetchKey(),
+          fetchPolicy: 'network-only',
+        }),
+      [],
+    );
     const reset = useCallback(() => refetch(), [refetch]);
 
     useImperativeHandle(ref, () => ({ refetch }), [refetch]);
 
-    const contextValue = { fetchKey, refetch };
+    const contextValue = { ...queryLifecycle, refetch };
 
     return (
       <RouteBoundaryContext.Provider value={contextValue}>
@@ -84,7 +101,7 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
               reset();
             }
           }}
-          resetKeys={[fetchKey]}
+          resetKeys={[queryLifecycle.fetchKey]}
         >
           <Suspense fallback={loading}>{children}</Suspense>
         </ErrorBoundary>

@@ -81,6 +81,7 @@ mockModule('react-relay', {
   useFragment: () => renderedPost,
 });
 mockModule('expo-router', {
+  usePathname: () => '/home',
   Link: ({ children }: { children: ReactNode }) => children,
   useRouter: () => ({ push: () => undefined }),
 });
@@ -91,7 +92,7 @@ mockModule(require.resolve('lucide-react-native'), {
   MoreHorizontal: StubIcon,
   Pin: StubIcon,
 });
-mockModule('@/theme/ThemeProvider', { useTheme: () => theme });
+mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   breakpoints: { compact: 768, full: 1_280 },
@@ -317,6 +318,29 @@ test('Native count actions keep the compact 16px icon slot inside the social tar
     'center',
   );
   assert.equal(flattenStyle(glyph.props.style).width, 16);
+  assert.equal(findByType(root, 'Text').children[0], '12.3K');
+});
+
+test('Reply count remains accessible on the Reply control without changing interaction state', async () => {
+  platform.OS = 'ios';
+  const root = await renderBar({
+    post: null,
+    reply: {
+      accessibilityLabel: '답글',
+      count: 12_345,
+      expanded: true,
+      onPress: () => undefined,
+      processing: 'default',
+    },
+  });
+  const button = findByTestID(root, 'post-action-reply');
+
+  assert.equal(button.props.accessibilityLabel, '답글, 12.3K');
+  assert.deepEqual(button.props.accessibilityState, {
+    busy: false,
+    disabled: false,
+    expanded: true,
+  });
   assert.equal(findByType(root, 'Text').children[0], '12.3K');
 });
 

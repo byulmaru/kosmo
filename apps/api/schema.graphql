@@ -1,8 +1,14 @@
 type Account implements Node {
   featureFlags: [String!]!
   id: ID!
+  metadata(keys: [String!]!): [AccountMetadata!]!
   name: String!
   profiles: [Profile!]!
+}
+
+type AccountMetadata {
+  key: String!
+  value: String!
 }
 
 type AccountProfile implements Node {
@@ -78,6 +84,7 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
+  applyNightshade: Boolean = false
   id: ID!
 }
 
@@ -191,6 +198,7 @@ input DeletePostInput {
 
 type DeletePostPayload {
   postId: ID!
+  replyParent: Post
   repostSource: Post
 }
 
@@ -252,6 +260,7 @@ type FollowRequestNotification implements Node & Notification {
 type Hashtag implements Node {
   id: ID!
   name: String!
+  posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relatedProfiles(after: String, first: Int): ProfileConnection!
   viewerMuteRule: HashtagMuteRule
 }
@@ -363,9 +372,11 @@ type Mutation {
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
   registerPushInstallation(input: RegisterPushInstallationInput!): RegisterPushInstallationPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  reorderProfilePost(input: ReorderProfilePostInput!): ReorderProfilePostPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
+  setAccountMetadata(input: SetAccountMetadataInput!): SetAccountMetadataPayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
@@ -441,6 +452,7 @@ type Post implements Node {
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
+  replyCount: Int
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
   replyParent: Post
   repostCount: Int!
@@ -659,6 +671,7 @@ type ProfileViewerState {
 enum PushInstallationPlatform {
   ANDROID
   IOS
+  WEB
 }
 
 type Query {
@@ -726,6 +739,16 @@ type RejectProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input ReorderProfilePostInput {
+  beforePostId: ID
+  postId: ID!
+}
+
+type ReorderProfilePostPayload {
+  changed: Boolean!
+  profile: Profile!
+}
+
 type ReplyNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
@@ -767,6 +790,17 @@ type Session implements Node {
   account: Account!
   id: ID!
   selectedProfile: Profile
+}
+
+input SetAccountMetadataInput {
+  key: String!
+  value: String!
+}
+
+type SetAccountMetadataPayload {
+  account: Account!
+  key: String!
+  value: String!
 }
 
 input SubmitContentReportInput {

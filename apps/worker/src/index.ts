@@ -1,8 +1,8 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { pg } from '@kosmo/core/db';
+import { pg, pgRead } from '@kosmo/core/db';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { closeFedifyQueue } from '@kosmo/fedify';
+import { closeFedifyMetrics, closeFedifyQueue, startFedifyMetrics } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
 import { runSchedules } from './schedule';
@@ -11,6 +11,7 @@ import { healthStatus, validateWorkerEnvironment } from './worker';
 if (import.meta.main) {
   try {
     const { address, namespace, port, host } = validateWorkerEnvironment(process.env);
+    await startFedifyMetrics();
 
     let worker: Worker | undefined;
     const server = createServer((request, response) => {
@@ -64,7 +65,7 @@ if (import.meta.main) {
           await closeFedifyQueue();
         } finally {
           try {
-            await pg.end({ timeout: 5 });
+            await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
           } finally {
             await server[Symbol.asyncDispose]();
           }
@@ -74,5 +75,12 @@ if (import.meta.main) {
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
+  } finally {
+    try {
+      await closeFedifyMetrics();
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    }
   }
 }

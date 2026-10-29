@@ -37,7 +37,7 @@ import {
   profileDisplayNameSchema,
   remoteProfileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString } from '@fedify/vocab';
@@ -762,14 +762,7 @@ const persistRemoteProfileActor = async (
           .where(eq(ActivityPubActors.uri, actorUri));
 
         if (featuredUri === null) {
-          await tx
-            .delete(ProfilePinnedPosts)
-            .where(
-              and(
-                eq(ProfilePinnedPosts.profileId, profile.id),
-                isNotNull(ProfilePinnedPosts.position),
-              ),
-            );
+          await tx.delete(ProfilePinnedPosts).where(eq(ProfilePinnedPosts.profileId, profile.id));
         }
 
         await syncProfileMedia(profile.id);

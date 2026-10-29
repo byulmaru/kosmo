@@ -567,12 +567,14 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     const sourceRow = page.getByTestId(`post-thread-current-${sourceId}`);
     await expect(sourceRow).toBeInViewport();
     const header = page.getByRole('heading', { name: '게시글', exact: true }).locator('..');
-    const sourceHeaderOffset = async () => {
+    const sourceHeaderDistance = async () => {
       const sourceBox = await sourceRow.boundingBox();
       const headerBox = await header.boundingBox();
-      return sourceBox && headerBox ? sourceBox.y - (headerBox.y + headerBox.height) : -1;
+      return sourceBox && headerBox
+        ? Math.abs(sourceBox.y - (headerBox.y + headerBox.height))
+        : Infinity;
     };
-    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+    await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
     releaseAncestorImage();
     const ancestorImage = page.locator(`img[src="${imageUrl}"]`).first();
@@ -580,7 +582,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
       .poll(() => ancestorImage.evaluate((image) => (image as HTMLImageElement).naturalHeight))
       .toBe(1200);
     await expect(sourceRow).toBeInViewport();
-    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+    await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
     const nextPageResponse = waitForGraphQLOperation(page, 'PostDetailThreadNextPageQuery');
     const beforeManualScroll = await page.evaluate(() => window.scrollY);
@@ -599,14 +601,14 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await page.goto(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await assertQuerySuccess(ordinaryDetailResponse);
     await expect(sourceRow).toBeInViewport();
-    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+    await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
     const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
     await page.goto(`/@stale-reply-author/${sourceId}`);
     await assertQuerySuccess(correctedDetailResponse);
     await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await expect(sourceRow).toBeInViewport();
-    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+    await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
     await page.mouse.wheel(0, -10_000);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);

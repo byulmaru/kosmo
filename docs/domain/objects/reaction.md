@@ -57,8 +57,9 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 
 ## ActivityPub 수신 투영
 
-- Remote `Like`와 `EmojiReact`는 저장된 Remote Profile을 행동 주체로 하는 같은 Reaction 추가 행동으로
-  materialize한다. 대상은 파생 Local Note URI 또는 저장된 Remote Post URI로 식별되는 기존 Post다.
+- Remote `Like`와 `EmojiReact`의 발신 actor가 아직 저장되어 있지 않으면 해당 원격 계정을 확인·등록한 뒤
+  기존 Reaction 추가 조건을 적용한다. 확인할 수 없거나 사용할 수 없는 계정으로는 Reaction을 만들지 않는다.
+  대상은 파생 Local Note URI 또는 저장된 Remote Post URI로 식별되는 기존 Post다.
 - Activity의 `actor`는 저장된 Remote Profile actor URI와 일치해야 하고, `object`는 대상 Post의 ActivityPub
   identity와 일치해야 한다. `Like`와 `EmojiReact`의 `to`·`cc` 등 audience는 Post Visibility를 정의하지 않으며,
   대상 Post Author를 포함하지 않거나 생략되어도 수신 Reaction의 유효성 또는 권한 증거로 사용하지 않는다.

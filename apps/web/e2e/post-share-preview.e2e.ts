@@ -100,7 +100,7 @@ test('공개 Quote의 현재 작성자·본문·Mention·이미지 순서로 초
   expect(response.headers()['vary']).toBe('Accept');
   expect(response.headers()['etag']).toBeUndefined();
   expect(metadata.title).toBe(
-    '<img src=x onerror="preview()"> & Writer (@e2e-preview-author) · KOSMO',
+    '<img src=x onerror="preview()"> & Writer(@e2e-preview-author) on KOSMO',
   );
   expect(metadata.descriptions).toEqual([body]);
   expect(metadata.ogDescriptions).toEqual([body]);
@@ -162,7 +162,7 @@ test('Content Warning과 Sensitive Media 원문·이미지 정보는 응답 어�
   const sensitiveResponse = await request.get(sharePath(author.profile!.handle, sensitive.id));
   const sensitiveHtml = await sensitiveResponse.text();
 
-  expect(warningHtml).toContain('콘텐츠 경고: 민감한 경고 &amp; 확인');
+  expect(warningHtml).toContain('열람 주의 문구: 민감한 경고 &amp; 확인');
   expect(warningHtml).not.toContain(warningBody);
   expect(warningHtml).not.toContain(warningAlt);
   expect(warningHtml).not.toContain(warningUrl);
@@ -214,7 +214,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
   const privateHtml = await privateResponse.text();
 
   expect(repostHtml).toContain('direct quote source body');
-  expect(repostHtml).toContain('E2E Direct Source Author (@e2e-direct-source-author) · KOSMO');
+  expect(repostHtml).toContain('E2E Direct Source Author(@e2e-direct-source-author) on KOSMO');
   expect(repostHtml).not.toContain('E2E Repost Author');
   expect(repostHtml).toContain(
     `${origin}${sharePath(sourceAuthor.profile!.handle, quoteSource.id)}`,
@@ -282,7 +282,7 @@ test('Reply는 Parent 대신 자체 Content를 표시하고 Remote 작성자의 
   const html = await response.text();
 
   expect(html).toContain(
-    'E2E Remote Reply Author (@remote-reply@reply-preview.remote.example) · KOSMO',
+    'E2E Remote Reply Author(@remote-reply@reply-preview.remote.example) on KOSMO',
   );
   expect(html).toContain('remote reply body');
   expect(html).not.toContain('reply parent only secret');

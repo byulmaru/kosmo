@@ -81,6 +81,9 @@ spec:
             - name: http
               containerPort: {{ .Values.worker.health.port }}
               protocol: TCP
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
           args:
             - worker
           env:
@@ -88,6 +91,8 @@ spec:
               value: {{ .Values.env | quote }}
             - name: PORT
               value: {{ .Values.worker.health.port | quote }}
+            - name: METRICS_PORT
+              value: "9464"
             - name: TEMPORAL_ADDRESS
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
@@ -105,6 +110,8 @@ spec:
                   key: password
             - name: PGHOST
               value: {{ include "kosmo.postgresPoolerName" . | quote }}
+            - name: PGREADHOST
+              value: ""
             - name: PGPORT
               value: "5432"
             - name: PGUSER

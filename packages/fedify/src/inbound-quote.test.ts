@@ -33,6 +33,7 @@ import { setInboundObservabilityReporter } from './inbound-observability';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
+import type { QuoteOwnerCommand } from '@kosmo/core/temporal/post-quote-owner';
 import type { createKosmoFederation as createKosmoFederationType } from './federation';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type {
@@ -385,9 +386,9 @@ test('FEP-044f authorization approves one materialized Source without changing N
   assert.equal(quoteUri.href, 'https://quote.example/notes/2');
 });
 
-test('Create listener materializes the Quote body first and then records its resolution state', async () => {
+test('Create listener passes the committed Post identity and duplicate outcome to the Quote owner', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
-  await createRemoteActor('quote', 'https://quote.example/users/quote');
+  const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
   const source = await createRemotePost(sourceActor.id, 'https://source.example/notes/listener');
   const quoteUri = new URL('https://quote.example/notes/listener-quote');
   const note = new Note({
@@ -397,6 +398,18 @@ test('Create listener materializes the Quote body first and then records its res
     to: PUBLIC_COLLECTION,
     quote: new URL('https://source.example/notes/listener'),
   });
+  const admittedCommands: QuoteOwnerCommand[] = [];
+  const originalAdmission = temporalClient.workflow.executeUpdateWithStart.bind(
+    temporalClient.workflow,
+  );
+  mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async (...args: Parameters<typeof originalAdmission>) => {
+      admittedCommands.push(args[1].args?.[0] as QuoteOwnerCommand);
+      return originalAdmission(...args);
+    },
+  );
 
   await handleInboundCreate(
     createContext(),
@@ -427,6 +440,70 @@ test('Create listener materializes the Quote body first and then records its res
 
   assert.equal(quotePost.repostSourceId, source.post.id);
   assert.equal(quoteState.status, PostQuoteConsentStatus.PENDING);
+  const admittedNote = admittedCommands.find((command) => command.kind === 'NOTE');
+  assert.ok(admittedNote?.kind === 'NOTE');
+  assert.equal(admittedNote.postId, quotePost.id);
+  assert.equal(admittedNote.authorProfileId, quoteActor.id);
+  assert.equal(admittedNote.duplicateCreate, false);
+
+  await handleInboundCreate(
+    createContext(),
+    new Create({ actor: new URL('https://quote.example/users/quote'), object: note }),
+    receivedAt,
+  );
+  const duplicateAdmission = admittedCommands.at(-1);
+  assert.ok(duplicateAdmission?.kind === 'NOTE');
+  assert.equal(duplicateAdmission.postId, quotePost.id);
+  assert.equal(duplicateAdmission.authorProfileId, quoteActor.id);
+  assert.equal(duplicateAdmission.duplicateCreate, true);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quotePost.id)).then(firstOrThrow))
+      .currentContentId,
+    quotePost.currentContentId,
+  );
+});
+
+test('Quote admission은 Create 결과의 작성자가 저장된 Quote 작성자와 다르면 승인 상태를 만들지 않는다', async () => {
+  const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
+  const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
+  const sourceUri = new URL('https://source.example/notes/author-binding');
+  const source = await createRemotePost(sourceActor.id, sourceUri.href);
+  const quoteUri = new URL('https://quote.example/notes/author-binding');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const input = {
+    actorUri: 'https://quote.example/users/quote',
+    context: createContext(),
+    note: new Note({
+      attribution: new URL('https://quote.example/users/quote'),
+      content: 'quote body',
+      id: quoteUri,
+      quote: sourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+  };
+
+  await handleInboundQuote({ ...input, authorProfileId: sourceActor.id });
+  const unchanged = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(unchanged.profileId, quoteActor.id);
+  assert.equal(unchanged.currentContentId, quote.post.currentContentId);
+  assert.equal(unchanged.quoteConsentStatus, null);
+  assert.equal(unchanged.repostSourceId, null);
+
+  await handleInboundQuote({ ...input, authorProfileId: quoteActor.id });
+  const pending = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(pending.currentContentId, quote.post.currentContentId);
+  assert.equal(pending.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+  assert.equal(pending.repostSourceId, source.post.id);
 });
 
 test('authorization-free duplicate Create and Update preserve the approved Quote and its Source', async () => {
@@ -533,8 +610,8 @@ test('a remote Quote without authorization remains pending and keeps its body vi
   assert.ok(storedPost.currentContentId);
 });
 
-test('an embedded public target uses the existing remote Note materializer before resolution', async () => {
-  await createRemoteActor('source', 'https://source.example/users/source');
+test('an embedded public target materializes with the Fedify class context before resolution', async () => {
+  const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
   const targetUri = new URL('https://source.example/notes/embedded');
   const quoteUri = new URL('https://quote.example/notes/with-embedded-target');
@@ -551,10 +628,14 @@ test('an embedded public target uses the existing remote Note materializer befor
       to: PUBLIC_COLLECTION,
     }),
   });
+  currentContext = createKosmoFederation().createContext(
+    new URL(publicOrigin),
+    undefined,
+  ) as TestQuoteContext;
 
   await handleInboundQuote({
     actorUri: 'https://quote.example/users/quote',
-    context: createContext(),
+    context: currentContext,
     note,
     postId: quote.post.id,
     receivedAt,
@@ -577,6 +658,12 @@ test('an embedded public target uses the existing remote Note materializer befor
     .then(firstOrThrow);
 
   assert.ok(materialized.id);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, materialized.id)).then(firstOrThrow))
+      .profileId,
+    sourceActor.id,
+  );
+  assert.equal(storedQuote.sourcePostId, materialized.id);
   assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
 });
 

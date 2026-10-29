@@ -1,8 +1,9 @@
 import { Check } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius } from '@/theme/tokens';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { ViewStyle } from 'react-native';
 
 export type CheckboxValue = boolean | 'mixed';
@@ -22,13 +23,109 @@ type WebCheckboxProps = {
   role: 'checkbox';
 };
 
+type CheckboxVisualProps = {
+  checked: CheckboxValue;
+  disabled: boolean;
+  focusVisible: boolean;
+  hovered: boolean;
+  pressed: boolean;
+};
+
+function CheckboxVisual({
+  checked,
+  disabled,
+  focusVisible,
+  hovered,
+  pressed,
+}: CheckboxVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || hovered;
+  const activeColor = disabled
+    ? theme.actionPrimaryDisabled
+    : pressed
+      ? theme.actionPrimaryPressed
+      : hovered
+        ? theme.actionPrimaryHover
+        : theme.actionPrimaryBase;
+  const backgroundColor =
+    checked === false
+      ? disabled
+        ? theme.stateDisabledSurface
+        : theme.backgroundSurface
+      : activeColor;
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : interaction ? 'interaction' : 'selection',
+    selectionKey: checked,
+  });
+  const borderColor =
+    checked === false ? (disabled ? theme.borderDisabled : theme.borderStrong) : 'transparent';
+  const animatedBorder = useAnimatedColorTransition({
+    color: borderColor,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
+  const interactionColor = useAnimatedColorTransition({
+    color:
+      !disabled && interaction ? (pressed ? theme.statePressed : theme.stateHover) : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : interaction ? 'interaction' : 'selection',
+  });
+  return (
+    <View style={styles.visual}>
+      {focusVisible ? (
+        <View style={[styles.focusRing, { borderColor: theme.stateFocusRing }]} />
+      ) : null}
+      {!disabled ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.stateLayer, { backgroundColor: interactionColor } as unknown as ViewStyle]}
+        />
+      ) : null}
+      <Animated.View
+        style={[
+          styles.indicator,
+          {
+            backgroundColor: animatedBackground,
+            borderColor: animatedBorder,
+          } as unknown as ViewStyle,
+        ]}
+      >
+        {checked === true ? (
+          <Check
+            color={disabled ? theme.actionPrimaryOnDisabled : theme.actionPrimaryOnBase}
+            size={iconSizes[20]}
+            strokeWidth={2}
+          />
+        ) : checked === 'mixed' ? (
+          <View
+            style={[
+              styles.mixed,
+              {
+                backgroundColor: disabled
+                  ? theme.actionPrimaryOnDisabled
+                  : theme.actionPrimaryOnBase,
+              },
+            ]}
+          />
+        ) : null}
+      </Animated.View>
+    </View>
+  );
+}
+
 export function Checkbox({
   accessibilityLabel,
   checked,
   disabled = false,
   onCheckedChange,
 }: CheckboxProps) {
-  const theme = useTheme();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
   const targetSize = web ? 32 : Platform.OS === 'ios' ? 44 : 48;
@@ -71,51 +168,15 @@ export function Checkbox({
         : undefined)}
     >
       {(state) => {
-        const webState = state as { hovered?: boolean };
-        const hovered = web && Boolean(webState.hovered);
-        const activeColor = disabled
-          ? theme.actionPrimaryDisabled
-          : state.pressed
-            ? theme.actionPrimaryPressed
-            : hovered
-              ? theme.actionPrimaryHover
-              : theme.actionPrimaryBase;
-        const foreground = disabled ? theme.actionPrimaryOnDisabled : theme.actionPrimaryOnBase;
-
+        const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
         return (
-          <View style={styles.visual}>
-            {hovered || state.pressed ? (
-              <View
-                style={[
-                  styles.stateLayer,
-                  { backgroundColor: state.pressed ? theme.statePressed : theme.stateHover },
-                ]}
-              />
-            ) : null}
-            {focusVisible ? (
-              <View style={[styles.focusRing, { borderColor: theme.stateFocusRing }]} />
-            ) : null}
-            <View
-              style={[
-                styles.indicator,
-                checked === false
-                  ? {
-                      backgroundColor: disabled
-                        ? theme.stateDisabledSurface
-                        : theme.backgroundSurface,
-                      borderColor: disabled ? theme.borderDisabled : theme.borderStrong,
-                      borderWidth: borderWidths[1],
-                    }
-                  : { backgroundColor: activeColor },
-              ]}
-            >
-              {checked === true ? (
-                <Check color={foreground} size={iconSizes[20]} strokeWidth={2} />
-              ) : checked === 'mixed' ? (
-                <View style={[styles.mixed, { backgroundColor: foreground }]} />
-              ) : null}
-            </View>
-          </View>
+          <CheckboxVisual
+            checked={checked}
+            disabled={disabled}
+            focusVisible={focusVisible}
+            hovered={hovered}
+            pressed={state.pressed}
+          />
         );
       }}
     </Pressable>
@@ -154,6 +215,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   indicator: {
     alignItems: 'center',
+    borderWidth: borderWidths[1],
     borderRadius: radius[4],
     height: iconSizes[20],
     justifyContent: 'center',

@@ -30,7 +30,7 @@
 - `getRemoteProfileActorStateActivity`는 usable Profile과 actor의 7일 freshness를 읽기 전용으로 반환하며 fetch나 상태 변경을 하지 않는다. `fetchRemoteProfileActorActivity`는 네트워크 전에 현재 저장 actor의 Profile 사용 가능 상태와 요청 URI·Instance 정책을 확인하고 origin/signing loader를 선택한 뒤 Fedify에서 actor를 가져와 expanded JSON-LD와 fetch 시작 시각을 반환한다. `applyRemoteProfileActorActivity`는 네트워크 없이 문서를 다시 검증하고 receipt/fetch timestamp를 써서 원자적으로 투영한다. `recoverRemoteProfileActorActivity`는 cached lookup의 verified receipt에만 쓰며 exact actor URI를 다시 확인해 Unresponsive Instance를 CAS 복구하되 freshness timestamp는 보존한다. Update Workflow는 state miss면 `null`이고 hit이면 supplied document를 receipt timestamp로 적용한다. 별도 receipt-only recovery Activity는 호출하지 않으며, apply가 동반하는 atomic recovery는 유지한다.
 - `lookupRemoteActorUriActivity`는 저장 actor URI를 우선하고 없을 때만 WebFinger를 실행한다. State, fetch, apply Activity를 Workflow가 순서화한다. Refresh Workflow는 state를 읽고 fresh면 반환하며 stale/missing이면 fetch와 apply를 수행한다. Actor fetch는 Fedify shared helper에서 하며 parsed protocol rejection은 `RemoteActorMaterializationError`가 된다.
 - `remoteProfileLookupWorkflow`와 `remoteProfileRefreshWorkflow`는 `patched('remote-profile-activity-split-v1')`를 사용한다. 신규 history는 split Activity sequence를 실행하고 marker 이전 history가 기록한 `materializeRemoteProfileActorActivity`와 `refreshRemoteProfileActorActivity` Activity name 및 call trace는 호환 adapter로 유지한다. Adapter는 해당 unpatched history가 drain될 때 제거한다. Legacy materialization은 cache hit의 receipt로만 recovery하고 Active·Unresponsive Instance 모두 같은 7일 TTL을 적용한다.
-- Lookup Workflow의 strict Zod schema는 handle input과 actor input의 optional strict `receipt` shape를 검증한다. Actor URI와 optional context origin은 HTTP(S), receipt timestamp는 ISO instant여야 하며 nested field가 부분적으로 malformed인 입력은 거부한다. Update Workflow는 HTTP(S) actor URI, JSON document, ISO receipt를 별도 strict schema로 검증하고 context origin을 받지 않는다. 알려진 projection·conflict·not-found 오류는 non-retryable Activity failure로 변환하며 transient 오류는 그대로 전파한다. Refresh input의 optional `profileId`는 origin 선택용 acting Profile ID이며, `profileId` 선택 로직을 우선 사용하고 없으면 optional `contextOrigin`과 configured origin fallback을 사용한다. Context origin이 없을 때 refresh Workflow ID는 기존 문자열을 유지하며, 제공되면 ID에 포함한다.
+- Lookup Workflow schema는 handle과 actor input, optional `receipt`의 알려진 필드를 검증한다. Actor URI와 optional context origin은 HTTP(S), receipt timestamp는 ISO instant여야 하며 nested field가 부분적으로 malformed인 입력은 거부한다. Update Workflow schema는 HTTP(S) actor URI, JSON document, ISO receipt를 검증하고 context origin을 받지 않는다. 알려진 projection·conflict·not-found 오류는 non-retryable Activity failure로 변환하며 transient 오류는 그대로 전파한다. Refresh input의 optional `profileId`는 origin 선택용 acting Profile ID이며, `profileId` 선택 로직을 우선 사용하고 없으면 optional `contextOrigin`과 configured origin fallback을 사용한다. Actor fetch는 local `profileId`가 있으면 해당 Profile signer를, 없으면 configured local origin의 `~instance` signer를 사용하며, 조회 origin은 기존 input 선택을 유지한다. Context origin이 없을 때 refresh Workflow ID는 기존 문자열을 유지하며, 제공되면 ID에 포함한다.
 
 ## Quote Consent Owner
 
@@ -48,10 +48,17 @@
 
 ## Inputs And Identity
 
-- Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Activity가
-  state-changing command를 실행하며, core service를 재사용하는 경우에도 core는 transport-neutral compile-time
-  DTO type만 소유한다. Workflow의 validator와 handler replay 경계가 같은 local schema로 fail-closed한다.
-  `typeof`를 나열한 수동 validator나 Core에 runtime wire schema를 복제하지 않는다.
+- Temporal Workflow/Activity/Update/Signal object payload schema는 기본적으로 `z.object(...)`를 사용해 알려진
+  필드를 검증하고 알 수 없는 필드를 제거한다. 알 수 없는 key 거부가 해당 경계의 명시적 계약일 때만
+  `z.strictObject(...)`를 쓰고, 알 수 없는 필드를 의도적으로 보존해 전달해야 할 때만 `.passthrough()`를 쓴다.
+  외부 trust boundary의 알려진 필드, 타입과 의미 검증은 유지한다.
+- Workflow/Update wire input schema는 해당 Workflow의 trust boundary 가까이에 둔다. Workflow validator와
+  handler replay 경계는 같은 local schema를 사용하고, Activity가 state-changing command를 실행하며 core service를
+  재사용하는 경우에도 core는 transport-neutral compile-time DTO type만 소유한다. `typeof`를 나열한 수동
+  validator나 Core에 runtime wire schema를 복제하지 않는다.
+- 새 payload 필드는 optional 또는 defaulted로 추가한다. 필수 필드 추가나 기존 필드의 type·의미 변경은
+  compatibility strategy와 coordinated rollout/versioning이 필요하다. 알 수 없는 필드를 제거하는 것만으로 새 필수
+  의미를 구현할 수는 없다.
 - Workflow input은 JSON-serializable한 immutable source identity여야 한다. 삭제 뒤 필요한 값은 exact source ID와 pair identity로 표현하고, Activity가 삭제된 source row를 다시 읽는 것으로 복원하지 않는다.
 - create effect는 stable source identity를 우선 사용하고 Activity가 현재 projection을 조회하게 한다.
 - input type은 한 Workflow에서만 쓰면 Workflow 파일 가까이에 둔다. Worker, core와 protocol adapter가 실제로 같은 shape를 소비할 때만 neutral contract module로 공유한다. 이름만 같은 type을 package마다 복제하지 않는다.
@@ -71,3 +78,11 @@
   non-Temporal/shared core service test는 공통 domain policy와 transaction contract를 검증하며 Workflow start
   여부를 새 Temporal-first acceptance로 요구하지 않는다.
 - PR/CI 검증과 exact revision dev의 Temporal history, Activity retry, Worker restart 증거를 구분한다.
+
+## 2026-10-29 Post 생성 경로 적용 범위
+
+- 신규 API Local Post/Reply/Quote와 원격 Create는 #1334의 공통 `postCreateWorkflow` →
+  `createPostActivity`와 effects child를 사용한다. 앞선 non-Temporal 저장 설명은 기존 service 호환 경로다.
+- Quote는 admission별 Post ID와 payload별 request ID를 유지하고 기존 owner INITIALIZE에서 Source 잠금·
+  owner fence·공통 persistence를 같은 transaction에 연결한다. 결과 회수와 만료 거절의 최신 구현 설명은
+  ADR 0030의 2026-10-29 절을 따른다.

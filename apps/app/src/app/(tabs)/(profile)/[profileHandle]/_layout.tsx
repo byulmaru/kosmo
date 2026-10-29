@@ -1,5 +1,5 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Slot, Stack, useCurrentRouteInfo, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -68,11 +68,16 @@ const ProfileLayoutQuery = graphql`
 `;
 
 export default function ProfileLayout() {
-  const { profileHandle } = useGlobalSearchParams<{
-    profileHandle?: string | string[];
-  }>();
-  const handle = normalizeProfileHandle(profileHandle);
-  const pathname = usePathname();
+  // Keep a stacked profile bound to its own route when another screen becomes active.
+  const routeInfo = useCurrentRouteInfo();
+  const handle = normalizeProfileHandle(routeInfo?.params.profileHandle);
+  const profilePathname = routeInfo?.pathname ?? '';
+  const globalPathname = usePathname();
+  // Native layout route info names the parent; resolve only its connection child globally.
+  const pathname =
+    globalPathname.startsWith(`${profilePathname}/`) && getProfileConnectionKind(globalPathname)
+      ? globalPathname
+      : profilePathname;
   const { width } = useWindowDimensions();
   const { status } = useSession();
   const connectionKind = getProfileConnectionKind(pathname);

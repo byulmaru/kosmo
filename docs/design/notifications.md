@@ -6,6 +6,17 @@ PROD-811이 실제 목록 연결, Relay projection, 읽음 처리, 권한과 nav
 PROD-930은 production Notification runtime에서 플랫폼별로 나뉘었던 `모두 읽음` action과 Read/Unread
 표시를 Web·iOS·Android에서 같은 계약으로 제공하며, 현재 로드된 ID와 기존 API/Relay 수렴 경계를 유지한다.
 
+## Native pull-to-refresh 읽음 동기화 · PROD-682
+
+Native pull-to-refresh는 현재 목록에 로드된 미확인 알림만 먼저
+읽음 처리한 뒤, 성공하면 새 알림을 조회해 목록에 반영한다. 조회 결과의 새 Notification이 unread이면
+그 상태를 그대로 표시하며 서버가 계산한 미확인 수에 따라 indicator도 유지할 수 있다.
+
+현재 로드된 unread가 없으면 읽음 mutation 없이 목록 refetch를 바로 실행한다. 읽음 mutation이 실패하면
+오류와 다시 시도 action을 표시하고 목록을 refetch하지 않는다. 이후 조회가 실패해도 완료된 읽음 처리는
+유지한다. 이 계약은 Native pull-to-refresh에만 적용하며 Web 새로고침, `NotificationReadAllContext`와
+`모두 읽음` action의 동작은 변경하지 않는다.
+
 ## Canonical source
 
 - [NotificationListItem 조합](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4048-10559)
@@ -42,15 +53,16 @@ API kind, 알림 생성 또는 runtime 통합이 완료된 것은 아니었다. 
 
 Quote 작성자 정보는 한 번만 표시한다. 이유 문구에 이름을 반복하거나 별도의 Post 작성자 header를
 덧붙이지 않는다. Source 미리보기 안의 기존 작성자 정보는 유지한다. 종류 아이콘과 이유 문구는
-알림의 의미를 전달하며, 별도 이동 target을 추가하지 않는다.
+알림의 의미를 전달한다. 종류 rail은 별도 목적지를 추가하지 않고 Quote 자체의 canonical 상세를 연다.
 
-알림 본문·시각을 활성화하면 Source가 아닌 Quote 자체의 canonical 상세로 이동한다.
+알림 본문·시각·종류 rail을 활성화하면 Source가 아닌 Quote 자체의 canonical 상세로 이동한다.
 작성자 링크는 해당 Profile로, Source 미리보기는 기존 Source 상세로 이동한다. 기존 Post Action Bar,
 CW 공개, 미디어와 composer의 독립 동작을 유지하며 내부 action이 알림 상세 이동까지 함께 실행하지 않는다.
 
 읽음/미확인 배경·rail·hover·focus와 Best Effort Read는 공용 Notification 계약을 재사용한다.
-작성자·시각·본문의 link navigation과 미디어 열기에서 기존 읽음 처리를 시작하며, CW 공개·Action Bar·
-composer control은 자체 동작만 수행한다. 모두 읽음, unread indicator, selected Profile 격리와
+종류 rail·작성자·시각·본문의 link navigation과 미디어 열기는 각각 Best Effort Read를 한 번 시작하고
+이동이나 열기가 읽음 결과를 기다리지 않는다. CW 공개·Action Bar·composer control은 자체 동작만 수행한다.
+모두 읽음, unread indicator, selected Profile 격리와
 조회 불가 알림의 처리도 기존 계약을 따른다.
 
 이 결정은 표시 계약의 확정이며 구현·Figma 반영·Web/iOS/Android runtime 검증 완료를 뜻하지 않는다.
@@ -91,9 +103,11 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
-- 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
-  OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
-  활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
+- 로그인한 Native 앱은 OS 알림 권한이 미결정이면 권한을 요청한다. 신규 설치에서는 최초 로그인 때 요청하며,
+  기존 설치도 다음 로그인된 앱 시작 때 미결정이면 요청한다. Guest, 인증 진행 중, Web에서는 요청하지 않는다.
+  이미 허용되거나 거부된 권한은 로그인 때 자동 재요청하지 않는다. 요청이 허용되면 FCM token을 즉시 동기화한다.
+  앱 설정의 알림 action은 권한이 미결정이면 OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을
+  연다. 권한을 허용한 로그인 세션은 로그인·앱 활성화와 token 갱신 때 FCM token을 동기화한다.
 - Profile Notification Push의 title/body는 아래 PROD-1061 공통 정보 구성 계약을 사용한다. 줄 수·줄바꿈·자름·
   접힘·펼침은 OS가 소유한다. Operational Notification은 저장된 제목·선택적 본문 계약을 따른다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
@@ -188,6 +202,14 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 | Quote         | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님의 게시글을 인용했습니다.`           |
 | Mention       | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님을 언급했습니다.`                    |
 
+## Web Push 권한과 표시 · PROD-1215
+
+- Web Push는 지원 조건을 충족하는 Android·Desktop browser/PWA와 iOS/iPadOS 홈 화면 앱에서 제공한다.
+- Web에서는 앱 시작·로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 직접 활성화할 때만
+  OS 권한 요청을 시작한다.
+- Foreground와 background 모두 OS 알림을 표시하며 custom in-app Push banner를 추가하지 않는다. 알림 대상,
+  본문 privacy, 만료와 이동은 [Push 정책](../domain/decisions/0029-native-push-notification-policy.md)을 따른다.
+
 ## 표시와 합성
 
 - Follow/FollowRequest/Reaction/Repost는 48px kind rail 안에 32px 아이콘을 표시한다. 원형 배경을
@@ -195,7 +217,7 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   12px이며 Reaction/Repost는 위 PROD-1078 계약에 따라 겹침 없이 표시한다. 전체 actor 수는
   consumer 입력이며 컴포넌트에서 그룹을 만들지 않는다. invalid count는 전달된 actor 수 이상인 정수로
   정규화한다. Reply는 한 명만 허용한다.
-- Follow는 프로필, FollowRequest는 `/follow-requests`가 Target destination이며 inline 수락 버튼은
+- Follow는 프로필, FollowRequest는 `/follow-requests`가 행 전체의 Target destination이며 inline 수락 버튼은
   없다. 기존 runtime과 notification OpenSpec의 requester-profile 이동은 아직 교체하지 않는다.
   PROD-811에서 navigation 계약과 spec을 함께 정렬해야 한다.
 - Follow/FollowRequest/Reaction/Repost 행은 최소 80px이며 긴 이름·문구에 맞춰 높이가 늘어난다.
@@ -230,9 +252,13 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
   `inline` variant를 사용한다. 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
-- Reply의 kind rail은 게시글 구성 전체 높이로 늘어난 하나의 게시글 상세 이동 target이며, 아이콘은 기존
-  상단 48px × 48px geometry 안에 유지한다. 아이콘 아래 빈 rail 영역도 같은 상세 경로를 열고 Best Effort
-  Read를 한 번 시작한다. Mention과 Quote의 kind rail은 장식 요소로 유지한다.
+- 대상 게시글을 표시하는 Reply/Mention/Quote/Reaction/Repost의 kind rail은 기존 게시글·미리보기 구성의
+  전체 높이로 늘어난 48px 너비의 target이며, 종류 아이콘은 기존 상단 48px × 48px geometry 안에 유지한다.
+  아이콘 아래 빈 rail 영역은 해당 알림의 기존 기본 목적지와 같은 경로를 열고 기존 pending/disabled 상태를
+  따른다. Reply/Mention은 결과 게시글, Quote는 Quote Post, Reaction/Repost는 대상 게시글로 이동한다. 각
+  활성화는 Best Effort Read를 한 번 시작하며, 이동은 읽음 결과를 기다리지 않는다. 이 rail은 기존 행 높이,
+  Web/Native inset, kind/content gap과 내부 여백을 바꾸지 않는다. 대상 게시글을 표시하지 않는 정적 일반 문구
+  행에는 target을 추가하지 않는다.
 - Reply/Mention에는 별도의 알림 이유 문장을 표시하지 않는다. 이 결정은 Quote의 이유 문구를 정하지 않는다.
   알림 작성자 이름은 `foregroundPrimary`, 종류 아이콘·핸들·시각은
   `foregroundSecondary`를 사용한다. Light `#64646F`, Dark `#A3A3A3`이며 legacy `textSecondary`, Info 색상,
@@ -259,11 +285,28 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   `인용 알림`, `멘션 알림`, `재게시 알림`이다. 이 행은 읽음/읽지 않음 상태와 모두 읽음 대상에 남지만
   source 링크나 알림 활성화 동작은 제공하지 않는다. Post의 본문이 없을 때도 Reply/Mention/Quote wrapper를
   비워 두지 않고 같은 일반 문구를 표시한다. source가 있으면 기존 종류별 표시와 이동 동작을 유지한다.
+- Reply·Quote·Mention의 Reaction 요약 row에서 새 상세 진입 영역은 마지막 People control 오른쪽의 4px 비대화형 간격을 지난 넓은 여백으로 한정한다. 이 여백을 누르면 해당 Post 상세로 한 번 이동하고 Best Effort Read를 한 번 시작하며, Read 응답의 지연·실패가 이동을 막지 않는다. 반응 칩 사이, 마지막 칩·People control 사이와 People control 오른쪽 4px 간격은 상세 이동이나 Read를 시작하지 않는다. 반응 컨트롤의 기존 독립 동작은 유지하며, 입력 범위는 [Reaction 요약 row 계약](./reactions.md#reaction-요약-row)을 따른다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
-  Follow/FollowRequest는 단일 item target 활성화에서, Reaction/Repost는 사진별 프로필 또는 게시글 영역의
-  활성화에서, Reply/Mention은 작성자 Profile·시각·본문의 link navigation과 미디어 열기에서, Reply는 kind rail
-  link navigation에서도 각각 한 번 시작한다. Reply/Mention의 Content Warning 공개, Action Bar와 열린
-  composer의 control은 자체 동작만 수행하며 item navigation이나 Read를 함께 시작하지 않는다.
+  Follow/FollowRequest는 기존 행 target 활성화에서, Reaction/Repost는 kind rail·사진별 Profile 또는 게시글
+  영역의 활성화에서, Reply/Mention은 kind rail·작성자 Profile·시각·본문의 link navigation과 미디어 열기에서,
+  Quote는 kind rail·작성자 Profile·시각·본문의 link navigation과 미디어 열기에서 각각 한 번 시작한다.
+  Reply/Mention/Quote의 Content Warning 공개, Action Bar와 열린 composer의 control은 자체 동작만 수행하며
+  item navigation이나 Read를 함께 시작하지 않는다.
+
+## Native OTA 다운로드 완료 로컬 알림
+
+Native 기기에서 새 OTA update 다운로드가 완료되면 기존 OS 알림 권한과 foreground 알림 표시를 사용해
+로컬 OS 알림을 표시한다. 제목은 `업데이트가 준비되었어요.`, 본문은 `누르면 앱을 재시작해 적용합니다.`이다.
+알림을 누르면 대기 중인 update를 적용하도록 앱을 즉시 재시작한다. 이 동작은 진행 중인 앱 사용이나 저장하지
+않은 작업을 중단할 수 있으며, 사용자는 이를 허용했다.
+
+기존 OS 알림 설정을 따르며 별도의 권한 요청, 앱 내 알림 설정, 알림 채널 또는 background fetch를 추가하지
+않는다. 이 로컬 알림은 서버 FCM이나 broadcast가 아니며 canonical `Notification`, 알림 목록 항목 또는 unread
+count를 만들지 않는다. `ON_LOAD` 확인으로 Native 앱이 관찰하는 다운로드 완료이므로 publication 수신을 뜻하지
+않으며 앱이 종료된 동안 다운로드를 보장하지 않는다.
+
+Cold launch에서 update가 이미 적용됐거나 알림이 오래되어 일치하는 대기 update가 없으면, 알림을 처리하고
+추가 재시작이나 social navigation을 하지 않는다.
 
 ## 검증 경계
 

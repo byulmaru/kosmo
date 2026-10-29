@@ -27,6 +27,7 @@ const schema = z.discriminatedUnion('kind', [
   z.strictObject({
     ...base,
     kind: z.literal('NOTE'),
+    authorProfileId: z.uuid().optional(),
     embeddedSource: z.record(z.string(), z.unknown()).optional(),
     malformed: z.boolean().optional(),
     actorUri: z.url(),
@@ -74,19 +75,44 @@ const schema = z.discriminatedUnion('kind', [
     ...base,
     kind: z.literal('INITIALIZE'),
     initialContentId: z.uuid().optional(),
-    input: z.strictObject({
-      origin: z.literal('LOCAL'),
-      profileId: z.uuid(),
-      accountId: z.uuid().optional(),
-      replyParentId: z.uuid().optional(),
-      document: z.custom(isPostContentDocumentV1),
-      authoredBodyText: z.string().optional(),
-      visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
-      repostSourceId: z.uuid(),
-      media: z
-        .array(z.strictObject({ mediaId: z.uuid(), altText: z.string().nullable() }))
-        .optional(),
-    }),
+    input: z.union([
+      z.strictObject({
+        origin: z.literal('LOCAL'),
+        profileId: z.uuid(),
+        accountId: z.uuid().optional(),
+        replyParentId: z.uuid().optional(),
+        document: z.custom(isPostContentDocumentV1),
+        authoredBodyText: z.string().optional(),
+        visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
+        repostSourceId: z.uuid(),
+        media: z
+          .array(z.strictObject({ mediaId: z.uuid(), altText: z.string().nullable() }))
+          .optional(),
+      }),
+      z.object({
+        origin: z.literal('LOCAL'),
+        profileId: z.uuid(),
+        accountId: z.uuid().optional(),
+        replyParentId: z.uuid().optional(),
+        bodyText: z.string(),
+        contentWarning: z.string().nullable().optional(),
+        sensitiveMedia: z.boolean().optional(),
+        visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
+        repostSourceId: z.uuid(),
+        media: z.array(z.object({ mediaId: z.uuid(), altText: z.string().nullable() })).optional(),
+        mentions: z
+          .array(
+            z.object({
+              start: z.number().int(),
+              end: z.number().int(),
+              handle: z.string(),
+              relativeHandle: z.string(),
+              profileId: z.uuid(),
+            }),
+          )
+          .optional(),
+      }),
+    ]),
   }),
 ]);
 const {
@@ -140,7 +166,11 @@ export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<vo
       command.kind === 'INITIALIZE' &&
       input.initialSourcePostId !== command.input.repostSourceId
     ) {
-      throw ApplicationFailure.nonRetryable('Quote creation requires its Source recovery barrier');
+      throw ApplicationFailure.nonRetryable(
+        'Quote admission payload does not match its original Source',
+        'VALIDATION',
+        'admissionId',
+      );
     }
     if (finish || closing) {
       throw ApplicationFailure.retryable(

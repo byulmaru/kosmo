@@ -3,8 +3,10 @@
 ## 정의
 
 Media는 Post Content와 Profile 표현에 사용되는 Kosmo의 논리적 이미지다. Local upload와 Remote 원본,
-state, Media와 연결된 Profile, Local Upload Account, Alt Text와 접근 결과를 소유한다. 이미지 byte, 원본·파생 파일 표현의
-검증·저장·변환과 제공은 Media Storage Service가 소유한다.
+state, Media와 연결된 Profile, Local Upload Account, Alt Text와 접근 결과를 소유한다. Kosmo는 Local upload byte를
+private staging에 임시 저장해 Media Storage Service로 전달하며, 최종 이미지 검증·저장·변환과 제공은 Media Storage
+Service가 소유한다. 새 Local upload는 실제 수신 byte를 기준으로 파일당 16 MiB를 넘기지 않으며, 완료 전에는 공개되지
+않는다.
 
 ## 상태
 
@@ -42,9 +44,10 @@ URL과 Media Type column은 Uploading Local Media에는 아직 값이 없으며,
 기록한다.
 Local Media의 URL은 저장 서비스가 확정한 공개 표현이고 Remote Media의 Remote URL은 원격 원본 위치다.
 Media Source가 각 URL 속성의 의미와 생명주기를 구분한다.
-Media Storage Service의 완료 응답은 공개 표현의 최종 권위다. Kosmo는 persistence에 필요한 필드의 존재와
-transport type만 확인하고, Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시
-검증하지 않는다. 저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
+Kosmo는 저장 서비스에 전달할 staged source의 존재와 입력 metadata를 확인하지만, 이 검사는 handoff 조건이다.
+Media Storage Service의 완료 응답은 공개 URL과 최종 Media Type의 권위다. Kosmo는 응답 필드의 존재와 transport type만
+확인하고, 반환된 Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시 검증하지 않는다.
+저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
 
 ## 관계
 
@@ -64,16 +67,32 @@ Profile이 달라도 참조할 수 있다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                                                                     | 결과                                                                                             |
-| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. Media Storage Service가 제한된 업로드 권한을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
-| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공과 공개 표현이 확인된다                                               | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                     | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
-| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                                        | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
-| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                            | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                                                         | 결과                                                                                             |
+| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. Media 서버가 제한된 업로드 URL을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
+| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 staged source 입력 metadata가 확인되고 Media Storage Service에서 공개 표현이 확인된다               | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                                                         | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
+| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                            | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
+| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
 
+Local 업로드 완료는 클라이언트가 명시적으로 보내는 공개 확정 요청이며, Post나 Profile 표현 저장이 이를 대신하지 않는다.
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
+
+게시글 첨부는 파일 선택 시 `issueMediaUploadUrl`과 업로드 `PUT`으로 private staging까지만 진행한다. 등록 제출 시
+현재 첨부된 Media만 `completeMediaUpload`로 완료하고 모두 Ready가 된 뒤 Post를 저장한다. 제거했거나 등록을 포기한
+첨부는 완료하지 않으며, Profile avatar/header 업로드의 기존 완료 시점은 유지한다.
+
+Post Composer에서 새 Local Media마다 Nightshade 처리를 선택할 수 있으며 기본값은 off다. 선택한 이미지는 Media
+Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다. 처리가
+실패하면 해당 Media는 Ready가 되지 않고 Post 저장을 막으며, 초안과 실패한 첨부를 유지해 제거하거나 다시 올릴 수
+있게 한다. 선택한 처리가 실패한 이미지를 처리 전 원본으로 대신 공개하지 않는다.
+
+클라이언트는 기존 `issueMediaUploadUrl` → 업로드 `PUT` → `completeMediaUpload` 흐름을 유지하며 파일 크기를
+별도로 제출하지 않는다. 새 업로드는 모두 같은 Media 업로드 경로를 사용하고, 서버가 실제 수신 byte를 기준으로
+파일당 16 MiB 제한을 적용한 뒤 private staging에 저장한다. staging byte는 공개되지 않으며, `completeMediaUpload`는
+Media Storage Service의 최종 저장 결과가 확인된 뒤에만 완료된다. 새 업로드의 공개 확정 시점은 이 완료 요청이며,
+기존 Ready Media와 전환 전에 발급된 업로드 완료 호환성에는 영향을 주지 않는다.
 
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.
@@ -144,9 +163,9 @@ kind의 refresh에서 URL이 그대로면 현재 관계의 Media를 갱신할 �
 
 - 업로드 만료 뒤 상태 전이, 완료 전 업로드 취소, 삭제와 orphan Media 정리는 현재 행동에서 제외한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
-- Media Storage Service의 endpoint, 저장 참조 형식, URL 조립 규칙, 구체 이미지 형식과 제한, 저장 위치와 cache
-  정책은 도메인 계약으로 고정하지 않는다. Kosmo는 완료 응답의 URL과 media type을 그대로 저장한다.
-- 구체 MIME type 목록과 문법, byte와 Media Type의 일치, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책,
-  바이러스 스캔과 성인물 탐지는 Media Storage Service가 소유하며 Kosmo에서 중복 검증하지 않는다.
+- Media Storage Service의 endpoint, 저장 참조 형식, URL 조립 규칙, staging 입력의 구체 MIME type 목록, 저장 위치와
+  cache 정책은 도메인 계약으로 고정하지 않는다.
+- 최종 표현의 구체 MIME type 목록·문법과 byte 일치, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔과
+  성인물 탐지는 Media Storage Service가 소유한다. Kosmo의 staged source metadata 확인은 handoff 조건이며 이를 대체하지 않는다.
 - Remote Media의 Media Storage Service 복제, proxy/cache와 파생 표현은 별도 구현에서 정밀화한다.
 - IRI-only attachment hydration과 추가 원격 metadata fetch는 별도 resource budget·retry 계약에서 정밀화한다.

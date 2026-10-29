@@ -45,6 +45,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   실제 layout에 포함하며, 부모 밖으로 확장하는 `hitSlop`이나 고정 28px 부모 안의 overlap을 사용하지 않는다.
   코드·렌더 검증과 실제 Native touch·focus 검증은 별도 증거로 기록한다.
 
+## Reply count
+
+- 집계 의미와 조회 범위는 [Post의 Reply 수](../domain/objects/post.md#reply-수)를 따른다.
+- Home·Local·Profile·Bookmarks 목록, Post 상세와 스레드, Media Viewer의 공용 Action Bar에서 같은
+  Reply 수를 표시한다. 숫자가 1 이상이면 Reply glyph 옆에 표시하고, 0이면 숫자를 생략한다. 조회 실패나
+  미제공을 0으로 바꾸거나 별도 숫자로 표시하지 않는다.
+- 기존 locale 기반 `Intl.NumberFormat` compact notation, glyph와 count 간격, 색상과 플랫폼별 target을
+  유지한다. 제공된 0도 렌더할 수 있는 공용 control의 표현 능력은 유지하며, production Reply가 0을
+  생략하는 정책과 구분한다.
+- 표시된 Reply 수는 보조 기술로도 확인할 수 있어야 한다. Reply의 accessible name과 기존 expanded·disabled
+  의미를 유지하고, 숫자를 별도 클릭 영역이나 새 navigation으로 만들지 않는다.
+- 순수 Repost의 Reply는 기존처럼 바깥 contentless Post 기준 disabled다. 직접 Repost Source의 Reply 수를
+  바깥 Reply에 대신 표시하지 않는다. Quote는 자신의 Reply 수를 표시한다.
+
 ## Action semantic colors
 
 - Reaction은 active·Web hover에서 semantic `actionReactionBase` (`#F97066`)를 사용한다.
@@ -89,7 +103,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
   상태 또는 resting canvas로 돌아간다.
-- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 root Pressable 자체 입력만 따른다. Content Warning은 조상 hover 억제 계약이 없다.
+- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 상세로 이동하는 비상호작용 배경 responder의 입력을 따른다. 안쪽 행·본문 바깥·attribution·인용 배경에서도 같은 카드 overlay를 표시하고, release·cancel·스크롤 전환이나 배경 경계 이탈로 탭이 취소되면 즉시 해제한다. 독립 링크·미디어·CW 버튼·게시글 액션·열린 메뉴 입력은 카드 pressed와 navigation을 활성화하지 않는다. Content Warning은 조상 hover 억제 계약이 없다.
 - 이 feedback surface는 별도 navigation target이나 접근성 role을 추가하지 않는다. Action Bar는 실제 PostBody·Source
   navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
@@ -255,6 +269,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다.
 - Home, Search, Detail, Profile 게시물 메뉴에서 같은 owner 고정·해제 action을 제공한다. Profile pinned segment는
   authoritative order를 따르며 chronology와 분리한다.
+
+### 고정글 순서 변경 · PROD-1234
+
+- 현재 선택한 Local Profile의 Owner와 Member는 Profile pinned segment의 각 게시글 더보기 메뉴에서 `위로 이동`과
+  `아래로 이동`을 선택할 수 있다. 첫 게시글에는 `위로 이동`, 마지막 게시글에는 `아래로 이동`을 표시하지 않는다.
+  조회 가능한 고정글이 하나뿐이면 두 항목을 모두 생략한다. 다른 Profile과 Remote Profile에는 순서 변경 항목을 제공하지 않는다.
+- 순서 변경 항목은 기존 고정·해제 항목 다음, `삭제` 앞에 둔다. `링크 복사`의 첫 행과 `삭제`의 마지막 행을 유지한다.
+  Home·Search·Detail 및 일반 chronology에는 순서 변경 항목을 추가하지 않는다.
+- 메뉴에서 이동을 선택하면 별도 확인창이나 편집 화면 없이 즉시 저장하고 메뉴를 닫는다. 저장 성공 후 현재 고정 목록에
+  저장된 순서를 표시한다. 기존 고정글의 구성과 일반 chronology는 유지한다.
+- 같은 고정 목록의 순서 저장 중에는 추가 이동을 막고 busy·disabled 상태를 전달한다. 실패하면 이전에 확인한 목록 순서를
+  유지하고 공용 한국어 오류 Toast로 알린다. 사용자는 메뉴를 다시 열어 재시도할 수 있다.
+- 메뉴가 닫히면 같은 게시글의 More trigger로 focus를 복원한다. Web keyboard와 Native touch·보조 기술에서 같은 이동을
+  제공하며, 기존 메뉴의 dismiss와 플랫폼별 입력 target을 유지한다. 드래그 전용 조작이나 새 성공 확인 단계는 추가하지 않는다.
 
 ### Storybook 이관 · PROD-863
 

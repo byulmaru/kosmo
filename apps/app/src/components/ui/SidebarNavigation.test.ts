@@ -18,17 +18,43 @@ function MockPressable({ children, ...props }: { children?: unknown; [key: strin
   return createElement('Pressable', props, content as never);
 }
 
+class AnimatedValueMock {
+  constructor(public value: number | string) {}
+
+  setValue(value: number | string) {
+    this.value = value;
+  }
+
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
+
+const flattenStyle = (style: unknown): Record<string, unknown> =>
+  Object.assign({}, ...(Array.isArray(style) ? style.flat(Infinity) : [style]).filter(Boolean));
+
 mockModule('expo-router', {
   Link: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('Link', props, children as never),
 });
 mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  Animated: {
+    Color: AnimatedValueMock,
+    Value: AnimatedValueMock,
+    View: 'AnimatedView',
+    Text: 'AnimatedText',
+    createAnimatedComponent: (component: unknown) => component,
+    timing: () => ({ start: () => undefined, stop: () => undefined }),
+  },
+  Easing: { bezier: () => () => 0 },
   Platform: { OS: 'web' },
   Pressable: MockPressable,
+  processColor: () => undefined,
   StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
-    flatten: (style: unknown) => style,
+    flatten: flattenStyle,
   },
   Text: 'Text',
   View: 'View',
@@ -49,6 +75,10 @@ mockModule(require.resolve('lucide-react-native'), {
   SquarePen: 'SquarePen',
   UserRound: 'UserRound',
   UserRoundPlus: 'UserRoundPlus',
+  UsersRound: 'UsersRound',
+});
+mockModule('@/components/BrandLogo', {
+  BrandLogo: (props: object) => createElement('BrandLogo', props),
 });
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => false,
@@ -73,8 +103,11 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
-  iconSizes: { 20: 20, 24: 24 },
-  motion: { duration: { fast: 100, instant: 0 }, easing: { standard: 'linear' } },
+  iconSizes: { 20: 20, 24: 24, 48: 48 },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { 8: 8, full: 999 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24 },
   textStyles: { uiCopyL: {}, uiLabelL: {}, uiLabelM: {}, uiLabelS: {} },
@@ -124,6 +157,7 @@ describe('guest public-content sidebar', () => {
       .map((node) => node.props.accessibilityLabel);
 
     assert.equal(guestActions.length, 2);
+    assert.equal(view.root.findByType('BrandLogo' as never).props.variant, 'full');
     assert.ok(labels.includes('가입하기'));
     assert.ok(labels.includes('로그인'));
     assert.ok(!labels.includes('홈'));
@@ -140,5 +174,39 @@ describe('guest public-content sidebar', () => {
     assert.ok(labels.includes('가입하기'));
     assert.ok(labels.includes('로그인'));
     assert.equal(view.root.findAllByType('GuestActionLink' as never).length, 2);
+    const logo = view.root.findByType('BrandLogo' as never);
+    assert.equal(logo.props.variant, 'mark');
+    assert.equal(logo.props.width, 48);
+  });
+
+  it('preserves the signup corners and rounds only the compose control', async () => {
+    const view = await renderGuestSidebar('compact');
+    const signup = view.root
+      .findAllByType('Pressable' as never)
+      .find((node) => node.props.accessibilityLabel === '가입하기');
+    assert.ok(signup);
+    assert.equal(flattenStyle(signup.props.style).borderRadius, 8);
+    for (const testID of ['sidebar-control-visual', 'sidebar-control-feedback']) {
+      assert.equal(flattenStyle(signup.findByProps({ testID }).props.style).borderRadius, 8);
+    }
+
+    await act(async () => {
+      view.update(
+        createElement(SidebarNavigation, {
+          onLogout: () => undefined,
+          onNavigate: () => undefined,
+          presentation: 'compact',
+          showFeedback: false,
+        }),
+      );
+    });
+    const compose = view.root
+      .findAllByType('Pressable' as never)
+      .find((node) => node.props.accessibilityLabel === '글쓰기');
+    assert.ok(compose);
+    assert.equal(flattenStyle(compose.props.style).borderRadius, 999);
+    for (const testID of ['sidebar-control-visual', 'sidebar-control-feedback']) {
+      assert.equal(flattenStyle(compose.findByProps({ testID }).props.style).borderRadius, 999);
+    }
   });
 });

@@ -2,6 +2,8 @@ import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
   isPostContentMentionHandleUsernameWithinLimit,
+  normalizePostContentHashtagId,
+  normalizePostContentHashtagToken,
   normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
@@ -78,6 +80,8 @@ function canonicalizePostContentBody(
             profileId: normalizePostContentProfileId(node.attrs.profileId),
           }),
         );
+      } else if (node.type === postContentSchema.nodes.hashtag) {
+        inline.push(node);
       } else {
         inline.push(postContentSchema.nodes.hard_break.create());
       }
@@ -150,8 +154,8 @@ export function validateLocalPostContentDocument(
       field: 'bodyText',
     });
   }
-  const bodyTextLength = bodyText.length;
-  const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
+  const bodyTextLength = [...bodyText].length;
+  const authoredTextLength = [...(document.summary ?? '')].length + bodyTextLength;
 
   if (bodyTextLength === 0 && mediaCount === 0) {
     throw new RangeError('PostContent must contain body text or Media');
@@ -181,6 +185,9 @@ function postContentBodyToText(
               node.attrs.handle ??
               postContentMentionFallbackText
             );
+          }
+          if (node.type === 'hashtag') {
+            return node.attrs.token;
           }
           return '\n';
         })
@@ -301,6 +308,16 @@ function assertPostContentJsonKeys(value: unknown): void {
       throw new TypeError('Legacy Mention label must be a string');
     }
     normalizePostContentMentionHandle(value.attrs.handle);
+    return;
+  }
+  if (value.type === 'hashtag') {
+    assertOnlyKeys(value, ['type', 'attrs']);
+    if (!isRecord(value.attrs)) {
+      throw new TypeError('Hashtag attrs must be an object');
+    }
+    assertOnlyKeys(value.attrs, ['hashtagId', 'token']);
+    normalizePostContentHashtagId(value.attrs.hashtagId);
+    normalizePostContentHashtagToken(value.attrs.token);
   }
 }
 

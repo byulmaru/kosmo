@@ -37,7 +37,7 @@ export function PostContentMention({
   }
 
   return (
-    <NavigationLink href={`/${data.relativeHandle}` as Href}>
+    <NavigationLink href={`/${data.relativeHandle}` as Href} resetScroll>
       <Text
         accessibilityLabel={`${data.relativeHandle}, ${data.displayName}, 프로필 보기`}
         accessibilityRole="link"

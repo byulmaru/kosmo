@@ -61,11 +61,13 @@ const actionBarProps = {
   },
 };
 
+const replyAccessibilityLabel = `답글, ${formatPostActionCount(actionBarProps.reply.count)}`;
+
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'unselected' | 'selected' | 'pending';
 type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
-type DeleteOutcome = 'graphql-error' | 'network-error' | 'pending' | 'success';
+type DeleteOutcome = 'count-error' | 'graphql-error' | 'network-error' | 'pending' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   deleteOutcome?: DeleteOutcome;
   onMutationRequest?: (requestName: string, variables: Variables) => void;
@@ -169,6 +171,22 @@ function PostActionBarFixture({
               }
               if (deleteOutcome === 'network-error') {
                 return Promise.reject(new Error('delete failed'));
+              }
+              if (deleteOutcome === 'count-error') {
+                return Promise.resolve({
+                  data: {
+                    deletePost: {
+                      postId: sourcePostId,
+                      replyParent: { id: 'post-reply-parent', replyCount: null },
+                    },
+                  },
+                  errors: [
+                    {
+                      message: 'Reply count failed',
+                      path: ['deletePost', 'replyParent', 'replyCount'],
+                    },
+                  ],
+                } as GraphQLResponse);
               }
               if (deleteOutcome === 'graphql-error') {
                 return Promise.resolve({
@@ -339,7 +357,12 @@ function PostActionBarFixtureLoaded({
   );
 }
 
-type ReactionRequestOutcome = 'data-errors-success' | 'network-error' | 'payload-error' | 'success';
+type ReactionRequestOutcome =
+  | 'data-errors-success'
+  | 'network-error'
+  | 'nullable-delete-success'
+  | 'payload-error'
+  | 'success';
 
 type ReactionMutationSink = Readonly<{
   complete: () => void;
@@ -364,8 +387,9 @@ type ReactionRequestSummary = Readonly<{
   type: string;
 }>;
 
-function ReactionContractHarness() {
+function ReactionContractHarness({ duplicateSurface = false }: { duplicateSurface?: boolean }) {
   const requestsRef = useRef<CapturedReactionRequest[]>([]);
+  const reactionIdsByActor = useRef(new Map<number, Map<string, string>>());
   const selectedTypesByActor = useRef(new Map<number, Set<string>>());
   const nextActorId = useRef(0);
   const nextRequestId = useRef(0);
@@ -376,6 +400,7 @@ function ReactionContractHarness() {
     (_nativeToken: string | null, selectedProfileId: string | null) => {
       const actorId = ++nextActorId.current;
       selectedTypesByActor.current.set(actorId, new Set());
+      reactionIdsByActor.current.set(actorId, new Map());
       const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.operationKind !== 'mutation') {
@@ -468,11 +493,15 @@ function ReactionContractHarness() {
     }
 
     const selectedTypes = selectedTypesByActor.current.get(request.actorId)!;
+    const reactionIds = reactionIdsByActor.current.get(request.actorId)!;
     const add = request.name === 'PostReactionControllerAddReactionMutation';
+    const deletedReactionId = reactionIds.get(request.type) ?? null;
     if (add) {
       selectedTypes.add(request.type);
+      reactionIds.set(request.type, `reaction-${request.actorId}-${request.id}`);
     } else {
       selectedTypes.delete(request.type);
+      reactionIds.delete(request.type);
     }
     const post = {
       __typename: 'Post',
@@ -483,7 +512,7 @@ function ReactionContractHarness() {
       })),
       viewerReactions: [...selectedTypes].map((type, index) => ({
         __typename: 'Reaction',
-        id: `reaction-${request.actorId}-${index}-${type}`,
+        id: reactionIds.get(type) ?? `reaction-${request.actorId}-${index}-${type}`,
         type,
       })),
     };
@@ -500,8 +529,8 @@ function ReactionContractHarness() {
         }
       : {
           deleteReaction: {
-            post,
-            reactionId: null,
+            post: outcome === 'nullable-delete-success' ? null : post,
+            reactionId: outcome === 'nullable-delete-success' ? deletedReactionId : null,
           },
         };
     request.sink.next({
@@ -520,6 +549,7 @@ function ReactionContractHarness() {
           mounted={mounted}
           onMountedChange={setMounted}
           onSettleRequest={settleRequest}
+          duplicateSurface={duplicateSurface}
           requests={requests}
         />
       </RelayActorBoundary>
@@ -531,11 +561,13 @@ function ReactionContractControls({
   mounted,
   onMountedChange,
   onSettleRequest,
+  duplicateSurface,
   requests,
 }: {
   mounted: boolean;
   onMountedChange: (mounted: boolean) => void;
   onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
+  duplicateSurface: boolean;
   requests: ReadonlyArray<ReactionRequestSummary>;
 }) {
   const { resetActor } = useRelayActor();
@@ -560,24 +592,31 @@ function ReactionContractControls({
       <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
       {requests.map((request) => (
         <View key={request.id}>
-          {(['success', 'payload-error', 'data-errors-success', 'network-error'] as const).map(
-            (outcome) => (
-              <Text
-                accessibilityLabel={`요청 ${request.id} ${outcome}`}
-                accessibilityRole="button"
-                key={outcome}
-                onPress={() => onSettleRequest(request.id, outcome)}
-              >
-                요청 {request.id} {outcome}
-              </Text>
-            ),
-          )}
+          {(
+            [
+              'success',
+              'payload-error',
+              'data-errors-success',
+              'network-error',
+              'nullable-delete-success',
+            ] as const
+          ).map((outcome) => (
+            <Text
+              accessibilityLabel={`요청 ${request.id} ${outcome}`}
+              accessibilityRole="button"
+              key={outcome}
+              onPress={() => onSettleRequest(request.id, outcome)}
+            >
+              요청 {request.id} {outcome}
+            </Text>
+          ))}
         </View>
       ))}
       {mounted ? (
         <Suspense fallback={<View />}>
           <SessionProvider>
             <PostActionBarFixtureContents showReactionSummary />
+            {duplicateSurface ? <PostActionBarFixtureContents showReactionSummary /> : null}
           </SessionProvider>
         </Suspense>
       ) : null}
@@ -777,6 +816,7 @@ const meta = {
     'ActionBarCatalogInteraction',
     'ActionSemanticColorsDarkInteraction',
     'AuthorPostDeletion',
+    'AuthorPostDeletionCountError',
     'AuthorPostDeletionFailureRetry',
     'AuthorPostDeletionGraphQLErrorRetry',
     'AuthorPostDeletionPending',
@@ -791,6 +831,8 @@ const meta = {
     'ReactionMobileWebTabClearance',
     'ReactionViewerOverlayContract',
     'ReactionRecentUseContract',
+    'ReactionNullableDeleteSuccessContract',
+    'ReactionSharedSurfaceConsistencyContract',
     'ReactionSummaryToggleContract',
   ],
   parameters: { controls: { disable: true } },
@@ -823,7 +865,7 @@ export const Playground: Story = {
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
     expect(labels).toEqual([
-      args.replyAccessibilityLabel,
+      `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
       args.repostState === 'selected' ? '재게시 취소' : '재게시',
       '반응',
       args.bookmarkAccessibilityLabel,
@@ -854,7 +896,7 @@ export const PlaygroundInteraction: Story = {
       .map((button) => button.getAttribute('aria-label'));
     await step('Controls에 따른 고정 순서와 trailing group 확인', async () => {
       expect(labels).toEqual([
-        args.replyAccessibilityLabel,
+        `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
         args.repostState === 'selected' ? '재게시 취소' : '재게시',
         '반응',
         args.bookmarkAccessibilityLabel,
@@ -875,7 +917,9 @@ export const PlaygroundInteraction: Story = {
     });
 
     await step('Actions callback과 처리 상태 확인', async () => {
-      const replyButton = canvas.getByRole('button', { name: args.replyAccessibilityLabel });
+      const replyButton = canvas.getByRole('button', {
+        name: `${args.replyAccessibilityLabel}, ${formatPostActionCount(args.replyCount)}`,
+      });
       const bookmarkButton = canvas.getByRole('button', {
         name: args.bookmarkAccessibilityLabel,
       });
@@ -945,7 +989,7 @@ export const ActionBarCatalogInteraction: Story = {
     const defaultToolbar = canvas.getAllByRole('toolbar')[0]!;
     const defaultToolbarCanvas = within(defaultToolbar);
     const iconMetrics = [
-      ['답글', 16, 16, '3.5'],
+      [replyAccessibilityLabel, 16, 16, '3.5'],
       ['재게시', 16, 16, '2.7'],
       ['반응', 16, 16, '3.5'],
       ['북마크', 16, 16, '3.5'],
@@ -962,7 +1006,7 @@ export const ActionBarCatalogInteraction: Story = {
       defaultToolbarCanvas.getByTestId('post-action-repost-icon').getBoundingClientRect().width,
     ).toBe(16);
 
-    for (const label of ['답글', '재게시'] as const) {
+    for (const label of [replyAccessibilityLabel, '재게시'] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
       const count = button.querySelector('[dir="auto"]') as HTMLElement;
@@ -985,7 +1029,9 @@ export const ActionBarCatalogInteraction: Story = {
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
 
     const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
-    const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
+    const defaultReply = defaultToolbarCanvas.getByRole('button', {
+      name: replyAccessibilityLabel,
+    });
     const defaultBookmark = defaultToolbarCanvas.getByRole('button', { name: '북마크' });
     const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
     verifyHuggedActionTargets(defaultToolbar);
@@ -1061,7 +1107,9 @@ export const ActionBarCatalogInteraction: Story = {
     fireEvent.keyUp(defaultReply, { code: 'Space', key: ' ' });
     await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('1'));
 
-    const resolutionReply = within(toolbars[4]!).getByRole('button', { name: '답글' });
+    const resolutionReply = within(toolbars[4]!).getByRole('button', {
+      name: replyAccessibilityLabel,
+    });
     expect(within(resolutionReply).queryByTestId('post-action-reply-hover')).toBeNull();
     fireEvent.mouseDown(resolutionReply, { buttons: 1 });
     await waitFor(() => expect(getComputedStyle(resolutionReply).opacity).toBe('0.72'));
@@ -1181,14 +1229,16 @@ export const ActionBarCatalogInteraction: Story = {
     expect(activeReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
-    const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
+    const blockedReply = within(toolbars[3]!).getByRole('button', {
+      name: replyAccessibilityLabel,
+    });
     fireEvent.pointerEnter(blockedReply);
     expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(blockedReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
     const resolutionToolbar = within(toolbars[4]!);
     for (const [label, testID] of [
-      ['답글', 'reply'],
+      [replyAccessibilityLabel, 'reply'],
       ['재게시', 'repost'],
       ['반응', 'reaction'],
       ['북마크', 'bookmark'],
@@ -1336,9 +1386,23 @@ export const AuthorPostDeletion: Story = {
       'PostDeletionActionDeletePostMutation',
       { id: sourcePostId },
     );
+    await waitFor(() => expect(canvas.getByText('삭제된 게시글')).toBeVisible());
+    expect(screen.queryByRole('alertdialog', { name: '게시글을 삭제할까요?' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   },
   render: () => (
     <PostActionBarFixture
+      onMutationRequest={deletionMutationRequest}
+      selectedProfileId="profile-author"
+    />
+  ),
+};
+
+export const AuthorPostDeletionCountError: Story = {
+  ...AuthorPostDeletion,
+  render: () => (
+    <PostActionBarFixture
+      deleteOutcome="count-error"
       onMutationRequest={deletionMutationRequest}
       selectedProfileId="profile-author"
     />
@@ -1446,7 +1510,7 @@ export const AuthorPostDeletionGraphQLErrorRetry: Story = {
 export const ControlledReply: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = canvas.getByRole('button', { name: '답글' });
+    const button = canvas.getByRole('button', { name: replyAccessibilityLabel });
 
     expect(button).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(button);
@@ -1480,9 +1544,16 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
     let position = screen.getByTestId('full-reaction-overlay-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
-    expect(canvasElement.ownerDocument.activeElement).toBe(
-      within(dialog).getByRole('searchbox', { name: '반응 검색' }),
-    );
+    const search = within(dialog).getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(search).toHaveFocus());
+    expect(getComputedStyle(search).fontSize).toBe('16px');
+    await userEvent.click(within(dialog).getByRole('heading', { name: '빠른 반응' }));
+    await userEvent.click(search);
+    expect(search).toHaveFocus();
+    expect(getComputedStyle(search).fontSize).toBe('16px');
+    await userEvent.type(search, '존재하지않음');
+    expect(within(dialog).getByText('검색 결과가 없어요')).toBeVisible();
+    await userEvent.clear(search);
     expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
     expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
@@ -1502,6 +1573,12 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
     await userEvent.click(topLeftTrigger!);
+    const reopenedSearch = within(
+      await screen.findByRole('dialog', { name: '반응 선택' }),
+    ).getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(reopenedSearch).toHaveFocus());
+    expect(getComputedStyle(reopenedSearch).fontSize).toBe('16px');
+    expect(reopenedSearch).toHaveValue('');
     await userEvent.click(canvasElement.ownerDocument.body);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
@@ -1718,7 +1795,7 @@ export const ReactionSummaryToggleContract: Story = {
     await userEvent.click(heart);
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
-    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 1 success' }).click();
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
@@ -1729,7 +1806,7 @@ export const ReactionSummaryToggleContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
-    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 2 success' }).click();
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
@@ -1739,6 +1816,92 @@ export const ReactionSummaryToggleContract: Story = {
     );
   },
   render: () => <ReactionContractHarness />,
+};
+
+export const ReactionNullableDeleteSuccessContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '❤️ 반응 12개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 2 nullable-delete-success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+    expect(canvas.queryByRole('button', { name: '❤️ 반응 13개, 오류, 다시 시도' })).toBeNull();
+    expect(canvas.queryByRole('button', { name: '❤️ 반응 12개' })).toBeNull();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionSharedSurfaceConsistencyContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const hearts = await canvas.findAllByRole('button', { name: '❤️ 반응 12개' });
+    expect(hearts).toHaveLength(2);
+    await userEvent.click(hearts[0]!);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    const party = await canvas.findAllByRole('button', { name: '🎉 반응 7개' });
+    expect(party).toHaveLength(2);
+    await userEvent.click(party[0]!);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    const partyRequest = readReactionRequests(canvas).find((request) => request.type === '🎉')!;
+    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: '🎉 반응 8개' })).toHaveLength(2),
+    );
+
+    const heartRequest = readReactionRequests(canvas).find((request) => request.type === '❤️')!;
+    canvas.getByRole('button', { name: `요청 ${heartRequest.id} network-error` }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: /❤️ 반응 12개/ })).toHaveLength(2),
+    );
+    const successfulParty = canvas.getAllByRole('button', { name: '🎉 반응 8개' });
+    expect(successfulParty).toHaveLength(2);
+    successfulParty.forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => {
+      const failedHeart = canvas.getByRole('button', {
+        name: '❤️ 반응 12개, 오류, 다시 시도',
+      });
+      expect(failedHeart).toBeVisible();
+      expect(failedHeart).toHaveAttribute('aria-busy', 'false');
+      expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    const retryHeartRequest = readReactionRequests(canvas).find(
+      (request) => request.type === '❤️' && request.id !== heartRequest.id,
+    )!;
+    canvas.getByRole('button', { name: `요청 ${retryHeartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: '❤️ 반응 13개' })).toHaveLength(2),
+    );
+  },
+  render: () => <ReactionContractHarness duplicateSurface />,
 };
 
 export const ReactionConcurrentMutationContract: Story = {
@@ -2024,7 +2187,7 @@ export const InteractionContract: Story = {
 
     const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
     expect(labels).toEqual([
-      '답글',
+      replyAccessibilityLabel,
       '재게시',
       '반응',
       '북마크',
@@ -2034,7 +2197,7 @@ export const InteractionContract: Story = {
       '북마크',
     ]);
 
-    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const replyButton = canvas.getByRole('button', { name: replyAccessibilityLabel });
     replyButton.focus();
     await userEvent.keyboard('{Enter}');
     await userEvent.keyboard(' ');
@@ -2060,7 +2223,7 @@ export const InteractionContract: Story = {
 export const ProcessingAccessibility: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const replyButton = canvas.getByRole('button', { name: replyAccessibilityLabel });
     const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
     await userEvent.click(repostButton);
     await userEvent.click(
@@ -2140,7 +2303,7 @@ export const AccessibilityAndCompactGeometry: Story = {
     const buttons = within(actionBar).getAllByRole('button');
 
     expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-      '답글',
+      '답글, 0',
       '재게시',
       '반응',
       '북마크',
@@ -2155,7 +2318,7 @@ export const AccessibilityAndCompactGeometry: Story = {
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
     expect(actionBar.getBoundingClientRect().height).toBe(28);
-    verifyHuggedActionTargets(actionBar);
+    verifyHuggedActionTargets(actionBar, '답글, 0');
     expect(buttons[0]).toHaveTextContent('0');
     expect(buttons[0]!.getBoundingClientRect().width).toBeGreaterThan(28);
   },
@@ -2251,11 +2414,11 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   verifyHuggedActionTargets(toolbar);
 }
 
-function verifyHuggedActionTargets(toolbar: HTMLElement) {
+function verifyHuggedActionTargets(toolbar: HTMLElement, replyLabel = replyAccessibilityLabel) {
   const toolbarBounds = toolbar.getBoundingClientRect();
   const toolbarCanvas = within(toolbar);
   const actions = [
-    ['답글', 'reply', 50],
+    [replyLabel, 'reply', 50],
     ['재게시', 'repost', 50],
     ['반응', 'reaction', 50],
     ['북마크', 'bookmark', 50],
@@ -2280,7 +2443,7 @@ function verifyHuggedActionTargets(toolbar: HTMLElement) {
       toolbarBounds.top + toolbarBounds.height / 2,
       0,
     );
-    if (label === '답글') {
+    if (testID === 'reply') {
       expect(targetBounds.left).toBeCloseTo(slotBounds.left, 0);
     } else {
       expect(targetBounds.left + targetBounds.width / 2).toBeCloseTo(

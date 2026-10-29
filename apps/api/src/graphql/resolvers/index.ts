@@ -1,5 +1,6 @@
 import './account';
 import './bookmark';
+import './account-metadata';
 import './content-report';
 import './hashtag';
 import './media';

@@ -37,5 +37,5 @@ export default function ProfileEditPage() {
 
 function ProfileEditRouteContent() {
   const { fetchKey } = useRouteBoundary();
-  return <ProfileEditRoute fetchKey={String(fetchKey)} />;
+  return <ProfileEditRoute fetchKey={fetchKey} />;
 }

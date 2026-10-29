@@ -6,10 +6,15 @@ import type { PostReactionController } from '@/components/post/PostReactionContr
 
 type PostReactionSummaryProps = {
   controller: PostReactionController;
+  onBackgroundPress?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
-export function PostReactionSummary({ controller, style }: PostReactionSummaryProps) {
+export function PostReactionSummary({
+  controller,
+  onBackgroundPress,
+  style,
+}: PostReactionSummaryProps) {
   if (!controller.reactionCounts.some(({ count }) => count > 0)) {
     return null;
   }
@@ -21,6 +26,7 @@ export function PostReactionSummary({ controller, style }: PostReactionSummaryPr
         disabled={controller.disabled}
         entries={controller.reactionCounts}
         errorTypeIds={controller.errorTypeIds}
+        onBackgroundPress={onBackgroundPress}
         onToggle={controller.toggleReaction}
         pendingTypeIds={controller.pendingTypeIds}
         peopleHref={peopleHref}

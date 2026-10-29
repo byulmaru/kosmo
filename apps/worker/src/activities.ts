@@ -12,11 +12,17 @@ export {
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
+export {
+  createLocalPostActivity,
+  generateLocalPostIdActivity,
+} from './activities/local-post-create';
+export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { createNotificationActivity } from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
+export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export {
   createPostTransitionActivity,
   deletePostTransitionActivity,
@@ -40,7 +46,10 @@ export {
   sendQuoteOwnerEffectActivity,
 } from './activities/quote-owner';
 export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
-export { lookupRemotePostActivity } from './activities/remote-post-lookup';
+export {
+  lookupRemotePostActivity,
+  prepareRemotePostActivity,
+} from './activities/remote-post-lookup';
 export {
   collectRemoteFeaturedActivity,
   collectRemoteFeaturedItemsActivity,
@@ -55,6 +64,7 @@ export {
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
+  sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
 } from './profile-follow-activities';
@@ -90,9 +100,9 @@ export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,
+  sendLocalPostQuoteRequest as sendLocalPostQuoteRequestActivity,
   sendLocalPostQuoteRevocations as sendLocalPostQuoteRevocationsActivity,
 } from '@kosmo/fedify';
-export { sendLocalPostQuoteRequest as sendLocalPostQuoteRequestActivity } from '@kosmo/fedify';
 export {
   sendRepostAnnounce as sendRepostAnnounceActivity,
   sendRepostUndo as sendRepostUndoActivity,

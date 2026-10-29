@@ -221,6 +221,7 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     };
     const reply = actionBar.props.children.props.reply;
     assert.ok(reply);
+    assert.equal((reply as { count?: number }).count, 2);
     await act(async () => reply.onPress());
 
     assert.deepEqual(replyPressOwners, ['list']);
@@ -448,6 +449,7 @@ function hostPayload() {
         relativeHandle: '@author',
       },
       reactionCounts: [],
+      replyCount: 2,
       repostCount: 0,
       repostSource: null,
       state: 'ACTIVE',

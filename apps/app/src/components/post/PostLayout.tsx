@@ -1,8 +1,8 @@
-import { Link } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,6 +13,7 @@ import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
+import { getPostReplyActionCount } from './postReplyCount';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
@@ -27,6 +28,7 @@ const PostLayoutFragment = graphql`
     id
     createdAt
     visibility
+    replyCount
     content {
       id
       bodyText
@@ -160,6 +162,7 @@ export function PostLayout({
     ? {
         accessibilityLabel: '답글',
         controlRef: replyTriggerRef,
+        count: getPostReplyActionCount(Boolean(post.content), post.replyCount),
         expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
         onPress: handleReplyPress,
         processing: getReplyProcessingState(
@@ -187,7 +190,7 @@ export function PostLayout({
       ]}
     >
       <View style={[styles.header, compact ? styles.compactHeader : null]}>
-        <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
+        <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
@@ -203,7 +206,7 @@ export function PostLayout({
               size={compact ? 40 : 48}
             />
           </Pressable>
-        </Link>
+        </NavigationLink>
         <View style={styles.headerContent}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
         </View>

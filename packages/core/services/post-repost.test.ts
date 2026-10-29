@@ -92,7 +92,7 @@ const createContentPost = async (
   visibility: PostVisibility = PostVisibility.PUBLIC,
 ) =>
   createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId,
     visibility,
@@ -191,8 +191,8 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
   const followersSource = await createContentPost(author.profile.id, PostVisibility.FOLLOWERS);
   const directRecipientHandle = `@${author.profile.handle}`;
   const directSource = await createPost({
-    authoredBodyText: directRecipientHandle,
-    document: postContentDocumentFromTextAndMedia(directRecipientHandle, [], false, null, [
+    bodyText: directRecipientHandle,
+    mentions: [
       {
         end: directRecipientHandle.length,
         handle: directRecipientHandle,
@@ -200,7 +200,7 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
         relativeHandle: directRecipientHandle,
         start: 0,
       },
-    ]),
+    ],
     origin: 'LOCAL',
     profileId: actor.profile.id,
     visibility: PostVisibility.DIRECT,
@@ -459,7 +459,7 @@ test('Reply·Quote·Reply Quote delete도 Tombstone을 기록한다', async () =
   const parent = await createContentPost(actor.profile.id);
   const source = await createContentPost(actor.profile.id);
   const reply = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: actor.profile.id,
     replyParentId: parent.id,
@@ -468,7 +468,7 @@ test('Reply·Quote·Reply Quote delete도 Tombstone을 기록한다', async () =
   const quote = await createContentPost(actor.profile.id);
   await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, quote.id));
   const replyQuote = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: actor.profile.id,
     replyParentId: parent.id,

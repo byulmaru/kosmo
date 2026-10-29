@@ -1,21 +1,56 @@
-import { View } from 'react-native';
-import { expect, userEvent, within } from 'storybook/test';
+import { useState } from 'react';
+import { Text, View } from 'react-native';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { PostDetailBackground } from '@/components/post/PostDetailBackground';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
+import {
+  checkReactionSummaryExcludedTouches,
+  tapReactionSummaryWhitespace,
+} from '../reactionSummaryHitTest';
 import baseMeta, {
   canonicalReactionEntries,
   ReactionSummaryInteraction as Interaction,
   ReactionSummaryStates as StateCases,
 } from './ReactionSummary.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactionSummaryPlaygroundArgs } from './ReactionSummary.stories';
 
 const meta = {
   ...baseMeta,
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Patterns/Reaction/Summary/Tests',
-} satisfies Meta;
+} satisfies Meta<ReactionSummaryPlaygroundArgs>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const EditableEntriesRender: Story = {
+  args: {
+    entries: [{ count: 42, type: '🧩' }],
+    selectedTypeIds: ['🧩'],
+  },
+  play: async ({ canvasElement }) => {
+    const reaction = await within(canvasElement).findByRole('button', { name: '🧩 반응 42개' });
+    expect(reaction).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+export const PlaygroundSelectionUpdatesArgs: Story = {
+  args: { onToggle: fn(), selectedTypeIds: [] },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reaction = await canvas.findByRole('button', { name: '❤️ 반응 18개' });
+    expect(reaction).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(reaction);
+    await expect(args.onToggle).toHaveBeenCalledWith({ nextSelected: true, optionId: '❤️' });
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 18개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+  },
+};
 
 export const WidthFitAndPeopleLink: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -137,5 +172,85 @@ export const StateAccessibility: Story = {
     await expect(
       canvas.findByRole('progressbar', { name: '반응 요약을 불러오는 중입니다.' }),
     ).resolves.toBeVisible();
+  },
+};
+
+function WhitespaceSummary({ width }: { width: number }) {
+  const [opened, setOpened] = useState(0);
+  const [selected, setSelected] = useState<ReadonlyArray<string>>([]);
+  return (
+    <PostDetailBackground
+      onBackgroundPress={() => setOpened((count) => count + 1)}
+      style={{ width }}
+      testID="whitespace-summary"
+    >
+      <ReactionSummary
+        entries={canonicalReactionEntries}
+        onBackgroundPress={() => setOpened((count) => count + 1)}
+        onToggle={({ optionId, nextSelected }) => setSelected(nextSelected ? [optionId] : [])}
+        pendingTypeIds={['❤️']}
+        peopleHref="/@kosmo/reaction-post/reactions"
+        selectedTypeIds={selected}
+      />
+      <Text testID="opened-count">{opened}</Text>
+    </PostDetailBackground>
+  );
+}
+
+export const TrailingWhitespaceAndIndependentControls: Story = {
+  render: () => <WhitespaceSummary width={600} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const count = canvas.getByTestId('opened-count');
+    await checkReactionSummaryExcludedTouches(canvasElement, () =>
+      expect(count).toHaveTextContent('0'),
+    );
+    const reaction = canvas.getByRole('button', { name: '🥹 반응 24개' });
+    await userEvent.click(reaction);
+    expect(reaction).toHaveAttribute('aria-pressed', 'true');
+    const pending = canvas.getByRole('button', { name: '❤️ 반응 18개, 처리 중' });
+    await userEvent.click(within(pending).getByText('❤️'));
+    expect(count).toHaveTextContent('0');
+    for (const [index, fraction] of [0, 0.5, 1].entries()) {
+      await tapReactionSummaryWhitespace(canvasElement, fraction);
+      expect(count.textContent).toBe(String(index + 1));
+    }
+    await userEvent.click(canvas.getByRole('link', { name: '반응한 프로필 보기' }));
+    expect(count.textContent).toBe('3');
+  },
+};
+
+export const OverflowWhitespaceAndIndependentControls: Story = {
+  ...TrailingWhitespaceAndIndependentControls,
+  render: () => <WhitespaceSummary width={180} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const count = canvas.getByTestId('opened-count');
+    await checkReactionSummaryExcludedTouches(canvasElement, () =>
+      expect(count.textContent).toBe('0'),
+    );
+    expect(canvas.getByRole('link', { name: /숨겨진 반응 유형/ })).toHaveTextContent(/\+\d+/);
+    await tapReactionSummaryWhitespace(canvasElement);
+    expect(count.textContent).toBe('1');
+    await userEvent.click(canvas.getByRole('link', { name: /반응한 프로필 보기/ }));
+    expect(count.textContent).toBe('1');
+  },
+};
+
+export const TrailingGapDoesNotReserveControlWidth: Story = {
+  render: () => <WhitespaceSummary width={600} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const background = await canvas.findByTestId('reaction-summary-detail-background');
+    const row = canvas.getByTestId('reaction-summary-row');
+    const people = within(row).getByRole('link', { name: '반응한 프로필 보기' });
+    const host = canvas.getByTestId('whitespace-summary');
+    const width = people.getBoundingClientRect().right - row.getBoundingClientRect().left + 2;
+    host.style.width = `${width}px`;
+    await waitFor(() => expect(row.getBoundingClientRect().width).toBe(width));
+    await waitFor(() => expect(background.getBoundingClientRect().width).toBe(0));
+    expect(within(row).getAllByRole('button')).toHaveLength(6);
+    expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth);
+    expect(canvas.getByTestId('opened-count').textContent).toBe('0');
   },
 };

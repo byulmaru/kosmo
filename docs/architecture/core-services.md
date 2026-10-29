@@ -84,10 +84,14 @@ application query 계층이 계산한다.
 GraphQL의 요청별 가시성·owner policy는 PostgreSQL RLS나 session actor state로 계산하지 않는다.
 GraphQL application SQL은 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`로 구성한 process
 shared DB access 경계를 사용한다. API, Web, Worker, Fedify consumer와 Admin의 ordinary `PG*` connection은
-하나의 shared non-owner runtime role과 transaction-mode CloudNativePG Pooler를 사용한다. Fedify
-MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`과 migration owner의 `PGHOST`는 direct read-write Service를
-사용한다. GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은
-target architecture에 포함하지 않는다.
+하나의 shared non-owner runtime role과 transaction-mode read-write CloudNativePG Pooler를 사용한다. Production
+API, Web, Admin의 `PGREADHOST`는 read-only CloudNativePG Pooler를 가리킨다. Worker와 Fedify consumer 및
+standby가 없는 dev에는 `PGREADHOST`가 비어 있고, local에서는 생략한다. 따라서
+API, Web, Admin의 ordinary SELECT는 인증과 ACL 조회를 포함해 replica lag를 허용하지만, writes와
+transaction-bound queries, GraphQL Mutation의 즉시 nested response, durable effect가 의존하는 committed state
+reads는 primary의 최신 상태를 사용한다. Fedify MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`과 migration
+owner의 `PGHOST`는 direct read-write Service를 사용한다. GraphQL operation 전용 DB session, actor GUC,
+operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은 target architecture에 포함하지 않는다.
 
 Temporal-first GraphQL mutation은 위 caller 인증·membership·visibility 검증과 입력 정규화를 마친 뒤
 serializable actor/domain input, exported `WorkflowDefinition`과 capability별 `mode`·conflict·reuse 옵션을
@@ -120,12 +124,12 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   소유할 수 있다. Temporal-first capability에서는 Worker Activity가 transaction, persistence와 멱등성
   경계를 소유하며, 기존 core domain policy나 service는 필요할 때만 내부에서 재사용한다. 이때 caller는 DB
   handle이나 callback을 넘기지 않고 serializable command와 검증된 actor identity만 전달한다.
-- 새로운 Post origin이나 lifecycle 계약을 transaction 인자의 존재 여부에서 추론하지 않는다.
-  `createPost`처럼 origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side
-  effect까지 보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제
-  요구가 생긴 시점에 명시적인 post-commit coordination 경계를 먼저 설계한다. capability 문서가
-  caller-owned transaction 경로의 lifecycle 생략을 현재 제한으로 명시한 기존 계약은 그 결정이 변경될
-  때까지 유지한다.
+- Local GraphQL `createPost`는 Temporal-first 경로를 사용하며 기존 non-Temporal/shared `createPost` action과
+  분리된다. 기존 shared action의 Post origin이나 lifecycle 계약은 transaction 인자의 존재 여부에서 추론하지
+  않는다. origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side effect까지
+  보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제 요구가 생긴 시점에
+  명시적인 post-commit coordination 경계를 먼저 설계한다. capability 문서가 caller-owned transaction 경로의
+  lifecycle 생략을 현재 제한으로 명시한 기존 계약은 그 결정이 변경될 때까지 유지한다.
 - 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
   뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
   경계에서 격리하고 commit된 상태를 유지한다.

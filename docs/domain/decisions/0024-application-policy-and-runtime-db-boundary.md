@@ -36,7 +36,10 @@ Accepted
   top-level field에 반영되며, 클라이언트가 현재 선택 상태를 보유한다.
 - API, Web, Worker, Fedify consumer와 Admin application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`,
   `PGDATABASE`, `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용하며, `PGHOST`는 transaction-mode
-  CloudNativePG Pooler를 가리킨다. Fedify MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write
+  read-write CloudNativePG Pooler를 가리킨다. API, Web, Admin의 ordinary SELECT는 인증과 ACL 조회를 포함해
+  replica lag를 관찰할 수 있다. 모든 write와 transaction-bound query, GraphQL Mutation의 즉시 nested response,
+  durable effect가 의존하는 조회는 primary의 최신 상태를 사용한다. Fedify MessageQueue의 별도
+  `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write
   Service를 사용해 session 기반 `LISTEN`/`NOTIFY`를 유지하고, migration owner의 `PGHOST`도 같은 direct
   Service를 사용한다. Fedify queue와 migration의 별도 database/role 경계는 유지한다.
 - 이 전환은 hidden/deleted Post owner cleanup, `DELETE RETURNING` mutation payload, Notification cleanup,

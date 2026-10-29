@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, afterEach, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
@@ -9,6 +10,8 @@ import {
   ApplicationType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -18,12 +21,13 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '@kosmo/core/enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '@kosmo/core/post-content/server';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
 import { and, eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
@@ -33,6 +37,10 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type {
   captureOperationalNotificationAudienceActivity as CaptureOperationalNotificationAudienceActivity,
@@ -46,6 +54,10 @@ import type {
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
+import type {
+  finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
+  prepareMediaUploadActivity as PrepareMediaUploadActivity,
+} from './activities/media-upload';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -58,6 +70,7 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
@@ -87,6 +100,8 @@ let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
+let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
+let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -100,6 +115,7 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    Media,
     NotificationQuoteJudgments,
     Notifications,
     OAuthAuthorizationCodes,
@@ -129,6 +145,8 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
+  ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
+    await import('./activities/media-upload'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -883,14 +901,14 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
     admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -911,14 +929,14 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Combined source'),
+    bodyText: 'Combined source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
     admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-    document: postContentDocumentFromText('Combined quote'),
+    bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -943,7 +961,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   const replyRecipient = await createProfile();
   const author = await createProfile();
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -951,7 +969,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
     admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-    document: postContentDocumentFromText('Quote and reply'),
+    bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: quoteSource.id,
@@ -1260,7 +1278,7 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1294,11 +1312,11 @@ test('Post deletion Notification Activity removes exact related rows and is idem
   const actor = await createProfile();
   const mentionContent = (profile: { handle: string; id: string }) => {
     const relativeHandle = `@${profile.handle}`;
-    const authoredBodyText = `Mention ${relativeHandle}`;
-    const start = authoredBodyText.indexOf(relativeHandle);
+    const bodyText = `Mention ${relativeHandle}`;
+    const start = bodyText.indexOf(relativeHandle);
     return {
-      authoredBodyText,
-      document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+      bodyText,
+      mentions: [
         {
           end: start + relativeHandle.length,
           handle: relativeHandle,
@@ -1306,7 +1324,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
           relativeHandle,
           start,
         },
-      ]),
+      ],
     };
   };
   const { post } = await createCorePost({
@@ -1329,7 +1347,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
   });
   const { post: quote } = await createCorePost({
     admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: post.id,
@@ -1436,34 +1454,34 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
   const repostRecipient = await createProfile();
   const actor = await createProfile();
   const { post: replyParent } = await createCorePost({
-    document: postContentDocumentFromText('Reply parent'),
+    bodyText: 'Reply parent',
     origin: 'LOCAL',
     profileId: replyRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: reply } = await createCorePost({
-    document: postContentDocumentFromText('Reply body'),
+    bodyText: 'Reply body',
     origin: 'LOCAL',
     profileId: actor.id,
     replyParentId: replyParent.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
     admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: quoteSource.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: repostSource } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: repostRecipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1521,7 +1539,7 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Deleted Repost source'),
+    bodyText: 'Deleted Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1786,6 +1804,12 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(Profiles)
       .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
       .where(eq(Profiles.id, actor.id));
+    const { post } = await createCorePost({
+      bodyText: 'Read the article',
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
     const document = {
       version: 1,
       summary: null,
@@ -1806,12 +1830,6 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         ],
       },
     } as const;
-    const { post } = await createCorePost({
-      document,
-      origin: 'LOCAL',
-      profileId: recipient.id,
-      visibility: PostVisibility.PUBLIC,
-    });
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
@@ -1851,7 +1869,9 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const nativeInstallationId = installationIds[0]!;
+    const webInstallationId = installationIds[1]!;
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     const payload = sent[0];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
@@ -1864,10 +1884,40 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
       href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.ok('token' in payload);
+    assert.equal('fid' in payload, false);
+    assert.equal(
+      payload.token,
+      installationRows.find(({ id }) => id === nativeInstallationId)?.token,
+    );
     assert.equal(payload.android?.priority, undefined);
     assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-reaction' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    const webPayload = sent[1];
+    assert.ok(webPayload);
+    assert.ok('fid' in webPayload);
+    assert.equal(webPayload.fid, 'web-fid-reaction');
+    assert.equal('token' in webPayload, false);
+    assert.equal(webPayload.notification, undefined);
+    assert.equal(webPayload.android, undefined);
+    assert.equal(webPayload.apns, undefined);
+    assert.deepEqual(webPayload.data, {
+      notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      title: '혜주',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
+    });
+    const webTtl = webPayload.webpush?.headers?.TTL;
+    assert.match(webTtl ?? '', /^\d+$/);
+    assert.ok(Number(webTtl) <= 24 * 60 * 60);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
@@ -1890,18 +1940,18 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         },
       })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[1]?.notification?.body,
+      sent[2]?.notification?.body,
       `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
     );
     assert.ok(
       new TextEncoder().encode(
         JSON.stringify({
-          android: sent[1]?.android,
-          apns: sent[1]?.apns,
-          data: sent[1]?.data,
-          notification: sent[1]?.notification,
+          android: sent[2]?.android,
+          apns: sent[2]?.apns,
+          data: sent[2]?.data,
+          notification: sent[2]?.notification,
         }),
       ).byteLength < 4096,
     );
@@ -1910,12 +1960,15 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[2]?.notification?.body,
+      sent[3]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
+    assert.equal(sent[3]?.notification?.body.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[4]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[4]?.data?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1925,16 +1978,20 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[3]?.notification?.body,
+      sent[5]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
+    assert.equal(sent[5]?.notification?.body.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[6]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[6]?.data?.body.includes('Read the article'), false);
 
     await db.delete(AccountProfiles).where(eq(AccountProfiles.profileId, recipient.id));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent.length, 4);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent.length, 7);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
@@ -1969,14 +2026,14 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       .where(eq(Profiles.id, actor.id));
 
     const { post: target } = await createCorePost({
-      document: postContentDocumentFromText('target'),
+      bodyText: 'target',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
     postIds.push(target.id);
     const { post: reply } = await createCorePost({
-      document: postContentDocumentFromText('reply'),
+      bodyText: 'reply',
       origin: 'LOCAL',
       profileId: actor.id,
       replyParentId: target.id,
@@ -1985,7 +2042,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
       admissionId: `${Date.now()}:${crypto.randomUUID()}`,
-      document: postContentDocumentFromText('quote'),
+      bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
       repostSourceId: target.id,
@@ -2456,7 +2513,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
   }
 });
 
-test('Push Notification Activity는 등록되지 않은 token만 정확히 제거한다', async (t) => {
+test('Push Notification Activity는 등록되지 않은 FID만 제거하고 invalid-argument는 보존한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
@@ -2466,7 +2523,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
     const { post } = await createCorePost({
-      document: postContentDocumentFromText('Token cleanup'),
+      bodyText: 'Token cleanup',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
@@ -2490,24 +2547,37 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
         projectId: process.env.FIREBASE_PROJECT_ID,
       });
     const messaging = getMessaging(app);
+    let providerCode = 'messaging/installation-id-not-registered';
     t.mock.method(messaging, 'send', async () => {
       throw new FirebaseError({
-        code: 'messaging/registration-token-not-registered',
-        message: 'Registration token is no longer registered',
+        code: providerCode,
+        message: 'Push target is no longer registered',
       });
     });
 
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    const invalidInstallationId = installationIds[0]!;
-    await sendPushNotificationActivity(notificationId, invalidInstallationId);
+    const webInstallationId = installationIds[0]!;
+    const nativeInstallationId = installationIds[1]!;
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-stale' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
     assert.equal(
-      await db.$count(PushInstallations, eq(PushInstallations.id, invalidInstallationId)),
+      await db.$count(PushInstallations, eq(PushInstallations.id, webInstallationId)),
       0,
     );
     assert.equal(
       await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
+      1,
+    );
+
+    providerCode = 'messaging/invalid-argument';
+    await assert.rejects(() => sendPushNotificationActivity(notificationId, nativeInstallationId));
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.id, nativeInstallationId)),
       1,
     );
   } finally {
@@ -2522,5 +2592,336 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     } else {
       process.env.FIREBASE_PROJECT_ID = previousProjectId;
     }
+  }
+});
+
+test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+  const requests: { authorization: string | undefined; method: string; url: string }[] = [];
+  let headResponseStatus = 200;
+  const server = createServer((request, response) => {
+    requests.push({
+      authorization: request.headers.authorization,
+      method: request.method ?? '',
+      url: request.url ?? '',
+    });
+    if (request.method !== 'HEAD') {
+      response.writeHead(405).end();
+      return;
+    }
+    if (
+      request.headers.authorization !== 'Bearer test-api-key' ||
+      !/^\/v1\/uploads\/u_[0-9a-f-]{36}\?staging=true$/.test(request.url ?? '')
+    ) {
+      response.writeHead(400).end();
+      return;
+    }
+    if (headResponseStatus !== 200) {
+      response
+        .writeHead(headResponseStatus, { 'Content-Type': 'application/xml' })
+        .end(
+          '<Error><Code>ServiceUnavailable</Code><Message>Transient staging failure</Message></Error>',
+        );
+      return;
+    }
+    response
+      .writeHead(200, {
+        'Content-Length': '128',
+        'Content-Type': 'image/jpeg',
+        'Last-Modified': new Date().toUTCString(),
+      })
+      .end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const stagingConfig = [
+    ['MEDIA_STORAGE_SERVICE_ORIGIN', `http://127.0.0.1:${address.port}`],
+    ['MEDIA_STORAGE_SERVICE_API_KEY', 'test-api-key'],
+  ] as const;
+  const previousStagingConfig = stagingConfig.map(([key]) => process.env[key]);
+  for (const [key, value] of stagingConfig) {
+    process.env[key] = value;
+  }
+
+  const createUploadingMedia = async (storageReference = `nexus:v1:${crypto.randomUUID()}`) => {
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, accountId: fixture.account.id, storageReference };
+  };
+  const readMediaState = async (mediaId: string) => {
+    const media = await db
+      .select({
+        accountId: Media.accountId,
+        mediaType: Media.mediaType,
+        readyAt: Media.readyAt,
+        source: Media.source,
+        state: Media.state,
+        storageReference: Media.storageReference,
+        url: Media.url,
+      })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    return { ...media, readyAt: media.readyAt?.toString() ?? null };
+  };
+  const hasFailureType = (type: string) => (error: unknown) =>
+    error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
+
+  try {
+    const uploading = await createUploadingMedia();
+    const uploadingState = await readMediaState(uploading.mediaId);
+    const uuid = uploading.storageReference.slice('nexus:v1:'.length);
+    const uploadId = `u_${uuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(uploading), {
+      id: uploadId,
+      sourceKey: `uploads/${uploadId}/${uuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(requests, [
+      {
+        authorization: 'Bearer test-api-key',
+        method: 'HEAD',
+        url: `/v1/uploads/${uploadId}?staging=true`,
+      },
+    ]);
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    await assert.rejects(
+      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+
+    const ready = await createUploadingMedia();
+    await db
+      .update(Media)
+      .set({
+        mediaType: 'image/webp',
+        readyAt: Temporal.Now.instant(),
+        state: MediaState.READY,
+        url: 'https://media.example/ready.webp',
+      })
+      .where(eq(Media.id, ready.mediaId));
+    const readyState = await readMediaState(ready.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(ready),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(ready.mediaId), readyState);
+
+    const invalidSource = await createUploadingMedia('nexus:v1:invalid');
+    const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidSource),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
+    assert.equal(requests.length, 1);
+
+    const transientFailure = await createUploadingMedia();
+    const transientFailureState = await readMediaState(transientFailure.mediaId);
+    headResponseStatus = 503;
+    await assert.rejects(
+      prepareMediaUploadActivity(transientFailure),
+      (error: unknown) =>
+        error instanceof Error &&
+        !(error instanceof ApplicationFailure) &&
+        error.message === 'Media Storage Service rejected upload metadata (503)',
+    );
+    const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
+    assert.deepEqual(requests[1], {
+      authorization: 'Bearer test-api-key',
+      method: 'HEAD',
+      url: `/v1/uploads/u_${transientUuid}?staging=true`,
+    });
+    assert.deepEqual(await readMediaState(transientFailure.mediaId), transientFailureState);
+  } finally {
+    stagingConfig.forEach(([key], index) => {
+      const value = previousStagingConfig[index];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+      server.closeAllConnections();
+    });
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완료를 수렴시킨다', async () => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const mediaIds: string[] = [];
+
+  const createUploadingMedia = async () => {
+    const referenceId = crypto.randomUUID();
+    const media = await db
+      .insert(Media)
+      .values({
+        accountId: fixture.account.id,
+        profileId: fixture.profiles[0]!.id,
+        source: MediaSource.LOCAL,
+        state: MediaState.UPLOADING,
+        storageReference: `nexus:v1:${referenceId}`,
+        uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+      })
+      .returning({ id: Media.id })
+      .then(firstOrThrow);
+    mediaIds.push(media.id);
+    return { mediaId: media.id, remoteUploadId: `u_${referenceId}` };
+  };
+
+  try {
+    const { mediaId, remoteUploadId } = await createUploadingMedia();
+    const result: MediaUploadWorkflowResult = {
+      id: remoteUploadId,
+      url: 'https://media.example/ready.webp',
+      mediaType: 'image/webp',
+    };
+    const input: MediaUploadWorkflowInput & {
+      readonly remoteUploadId: string;
+      readonly result: MediaUploadWorkflowResult;
+    } = {
+      mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId,
+      result,
+    };
+    const expectNonRetryableFailure = (error: unknown) =>
+      error instanceof ApplicationFailure && error.nonRetryable === true;
+
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, accountId: crypto.randomUUID() }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...input,
+        result: { ...result, url: 'javascript:alert(1)' } as MediaUploadWorkflowResult,
+      }),
+      expectNonRetryableFailure,
+    );
+
+    const stillUploading = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(stillUploading.state, MediaState.UPLOADING);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const firstReady = await db
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(firstReady.state, MediaState.READY);
+    assert.ok(firstReady.readyAt);
+
+    assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    const retriedReady = await db
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(retriedReady.state, MediaState.READY);
+    assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    await assert.rejects(
+      finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
+      expectNonRetryableFailure,
+    );
+
+    const nightshade = await createUploadingMedia();
+    const nightshadeResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: nightshade.remoteUploadId,
+      url: 'https://media.example/nightshade.webp',
+    };
+    const nightshadeInput = {
+      mediaId: nightshade.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: nightshade.remoteUploadId,
+      applyNightshade: true,
+      result: nightshadeResult,
+    };
+    assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
+    const nightshadeReady = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, nightshade.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
+      nightshadeResult,
+    );
+
+    const concurrent = await createUploadingMedia();
+    const concurrentResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: concurrent.remoteUploadId,
+      url: 'https://media.example/concurrent.webp',
+    };
+    const concurrentInput = {
+      mediaId: concurrent.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: concurrent.remoteUploadId,
+      result: concurrentResult,
+    };
+    assert.deepEqual(
+      await Promise.all([
+        finalizeMediaUploadActivity(concurrentInput),
+        finalizeMediaUploadActivity(concurrentInput),
+      ]),
+      [concurrentResult, concurrentResult],
+    );
+    const converged = await db
+      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .from(Media)
+      .where(eq(Media.id, concurrent.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(converged.state, MediaState.READY);
+    assert.equal(converged.url, concurrentResult.url);
+    assert.ok(converged.readyAt);
+  } finally {
+    if (mediaIds.length > 0) {
+      await db.delete(Media).where(inArray(Media.id, mediaIds));
+    }
+    await cleanupAccountDeletionFixture(fixture);
   }
 });

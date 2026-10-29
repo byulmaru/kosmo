@@ -14,7 +14,10 @@ type PostListItemComponent = typeof PostListItemExport;
 type NativeHarness = {
   cleanup(): void;
   modalDidDismiss(): void;
+  layout(tag: number): void;
+  touchMove(point: { x: number; y: number }): void;
   nativeExports: Record<string, unknown> & {
+    Platform: { OS: string };
     Pressable: ComponentType<Record<string, unknown>>;
     Text: ComponentType<Record<string, unknown>>;
   };
@@ -38,6 +41,8 @@ const pressedColor = 'post-list-item-pressed-marker';
 let ActionMenu: ActionMenuComponent;
 let PostListItem: PostListItemComponent;
 let selections: string[] = [];
+let navigations: string[] = [];
+const router = { push: (href: string) => navigations.push(href) };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -55,8 +60,9 @@ mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 });
 mockModule('expo-router', {
+  usePathname: () => '/home',
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
-  useRouter: () => ({ push: () => undefined }),
+  useRouter: () => router,
 });
 mockModule('lucide-react-native', { MessageCircle: () => null, Pin: () => null });
 mockModule('react-relay', {
@@ -157,6 +163,8 @@ before(async () => {
 afterEach(async () => {
   await act(async () => nativeHarness.unmount());
   selections = [];
+  navigations = [];
+  native.Platform.OS = 'ios';
 });
 
 after(() => nativeHarness.cleanup());
@@ -298,6 +306,7 @@ test('an active ActionMenu row selects once without pressing its PostListItem an
   await act(async () => nativeHarness.modalDidDismiss());
   assert.deepEqual(selections, ['active']);
   assertFeedbackRest();
+  assert.deepEqual(navigations, []);
 });
 
 test('disabled rows and empty Modal surface leave card feedback at rest under the Modal responder', async (t) => {
@@ -321,4 +330,58 @@ test('disabled rows and empty Modal surface leave card feedback at rest under th
   await release(t);
   assert.deepEqual(selections, []);
   assert.ok(nativeHarness.tagByAccessibilityLabel('Active menu item'));
+  assert.deepEqual(navigations, []);
 });
+
+for (const os of ['ios', 'android']) {
+  for (const testID of ['post-list-item-card', 'post-list-standard-row']) {
+    test(`${os} ${testID} shares feedback and clears it on drag, cancel and release`, async (t) => {
+      native.Platform.OS = os;
+      await mountPost(t);
+      const tag = requiredTag(nativeHarness.tagByTestID(testID), testID);
+      await act(async () => nativeHarness.layout(tag));
+      await touchDown(tag);
+      assert.equal(nativeHarness.responderTag(), tag);
+      assert.ok(feedbackIsPressed());
+      await release(t);
+      assertFeedbackRest();
+      assert.deepEqual(navigations, ['/@profile/post-1']);
+
+      await touchDown(tag);
+      assert.ok(feedbackIsPressed());
+      await act(async () => nativeHarness.touchMove({ x: 50, y: 20 }));
+      assertFeedbackRest();
+      await act(async () => nativeHarness.touchMove({ x: 20, y: 20 }));
+      await release(t);
+      assert.deepEqual(navigations, ['/@profile/post-1']);
+
+      await touchDown(tag);
+      assert.ok(feedbackIsPressed());
+      await cancel(t);
+      assertFeedbackRest();
+      assert.deepEqual(navigations, ['/@profile/post-1']);
+      await touchDown(tag);
+      await release(t);
+      assertFeedbackRest();
+      assert.deepEqual(navigations, ['/@profile/post-1', '/@profile/post-1']);
+    });
+  }
+}
+
+for (const [variant, content, repostSource] of [
+  ['Media', { bodyText: 'Media body', media: [{ id: 'media-1' }] }, null],
+  ['PureRepost', null, post],
+  ['Quote', { bodyText: 'Quote body', media: [] }, post],
+] as const) {
+  test(`${variant} background owns card feedback without changing its detail target`, async (t) => {
+    const fixture = { ...post, content, repostSource } as unknown as PostListItem_post$key;
+    await mountPost(t, fixture);
+    const tag = requiredTag(nativeHarness.tagByTestID('post-list-item-card'), variant);
+    await act(async () => nativeHarness.layout(tag));
+    await touchDown(tag);
+    assert.ok(feedbackIsPressed());
+    await release(t);
+    assertFeedbackRest();
+    assert.deepEqual(navigations, ['/@profile/post-1']);
+  });
+}

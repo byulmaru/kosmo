@@ -57,11 +57,16 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
           args:
             - web
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            - name: METRICS_PORT
+              value: "9464"
             - name: INTERNAL_API_ORIGIN
               value: {{ printf "http://%s" $apiServiceName | quote }}
             - name: PGPASSWORD
@@ -71,6 +76,8 @@ spec:
                   key: password
             - name: PGHOST
               value: {{ include "kosmo.postgresPoolerName" . | quote }}
+            - name: PGREADHOST
+              value: {{ ternary (include "kosmo.postgresReadPoolerName" .) "" (eq .Values.env "prod") | quote }}
             - name: PGPORT
               value: "5432"
             - name: PGUSER

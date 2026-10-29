@@ -9,12 +9,12 @@
     "start": "node --import tsx src/index.ts",
     "test": "pnpm test:unit && pnpm test:workflow && pnpm test:database",
     "test:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/worker test:database:isolated",
-    "test:database:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/worker exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/test-runtime.database.test.ts src/activities.database.test.ts && KOSMO_TEST_TEMPORAL_RUNTIME=0 pnpm --filter @kosmo/worker exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/activities/post-transition.database.test.ts src/activities/cleanup-unavailable-notifications.database.test.ts src/activities/profile-block.database.test.ts src/activities/hashtag-mute-rule.database.test.ts src/profile-follow-activities.database.test.ts src/remote-profile-materialization.workflow.test.ts src/remote-post-lookup.workflow.test.ts src/profile-block.workflow.database.test.ts src/database-counts-snapshot.database.test.ts && pnpm --filter @kosmo/worker exec node --import tsx --test --test-concurrency=1 src/profile-migration-activities.database.test.ts && pnpm --filter @kosmo/worker exec node --import tsx --test --test-concurrency=1 src/quote-cas-experiment.database.test.ts src/quote-owner.workflow.database.test.ts src/quote-owner-lifecycle.database.test.ts src/post-create-admission.database.test.ts",
-    "test:unit": "pnpm build && node --import tsx --test src/worker.test.ts src/schedule.test.ts src/database-counts-snapshot.test.ts",
-    "test:workflow": "TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=test node --import tsx --test src/workflows.test.ts src/post-transition.workflow.test.ts src/child-workflow.test.ts src/following-accounts-import.workflow.test.ts src/hashtag-mute-rule.workflow.test.ts"
+    "test:database:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/worker exec node --import tsx src/test-runner.ts database && pnpm --filter @kosmo/worker exec node --import tsx src/test-runner.ts native-database",
+    "test:unit": "pnpm build && node --import tsx src/test-runner.ts unit",
+    "test:workflow": "TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=test node --import tsx src/test-runner.ts workflow"
   },
   "dependencies": {
-    "@fedify/vocab": "2.4.0",
+    "@fedify/vocab": "2.4.5",
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
     "@temporalio/activity": "^1.22.0",
@@ -23,12 +23,14 @@
     "@temporalio/workflow": "^1.22.0",
     "drizzle-orm": "1.0.0-beta.22",
     "firebase-admin": "^14.4.0",
+    "nexus-rpc": "0.0.2",
     "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fedify/fedify": "^2.4.0",
+    "@fedify/fedify": "^2.4.5",
+    "@temporalio/nexus": "1.22.0",
     "@temporalio/testing": "^1.22.0"
   }
 }

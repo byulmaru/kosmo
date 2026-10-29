@@ -2,6 +2,7 @@ import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import {
   Accept,
   Announce,
+  Application,
   Block,
   Create,
   Delete,
@@ -20,6 +21,7 @@ import {
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
@@ -42,6 +44,7 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
+import { ensureDrizzleLocalInstanceActorKeyPairs } from './local-instance-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
   countLocalPostEmojiReactions,
@@ -61,12 +64,17 @@ import {
   authorizeLocalQuoteAuthorization,
   dispatchLocalQuoteAuthorization,
 } from './local-quote-authorization';
-import { fedifyQueue } from './queue';
+import { fedifyMeterProvider } from './metrics';
+import { fedifyKv, fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation, FederationOptions, InboxContext } from '@fedify/fedify';
 import type { DocumentLoader } from '@fedify/fedify/runtime';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
+export const localInstanceActorIdentifier = '~instance';
+const localInstanceActorHandle = 'kosmo.instance';
+const hasCanonicalHost = (context: Pick<Context<void>, 'canonicalOrigin' | 'host'>) =>
+  context.host === new URL(context.canonicalOrigin).host;
 
 type FederationLoaderOverrides = Pick<
   FederationOptions<void>,
@@ -82,7 +90,8 @@ export const createKosmoFederation = (
     Object.assign(context, { quoteAuthorizationDocumentLoader });
   const federation: Federation<void> = createFederation<void>({
     allowPrivateAddress: false,
-    kv: new MemoryKvStore(),
+    kv: fedifyKv ?? new MemoryKvStore(),
+    meterProvider: fedifyMeterProvider,
     ...(fedifyQueue
       ? {
           // Producer and consumer processes share one durable queue.  Queue
@@ -97,8 +106,28 @@ export const createKosmoFederation = (
 
   federation
     .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {
-      if (ctx.host !== new URL(ctx.canonicalOrigin).host) {
+      if (!hasCanonicalHost(ctx)) {
         return null;
+      }
+
+      if (identifier === localInstanceActorIdentifier) {
+        const keyPairs = await ctx.getActorKeyPairs(localInstanceActorIdentifier);
+        const rsaKeyPair = keyPairs.find(
+          (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
+        );
+        if (rsaKeyPair == null) {
+          throw new Error(`Local Instance actor ${identifier} is missing an RSA key pair.`);
+        }
+        const actorUri = ctx.getActorUri(localInstanceActorIdentifier);
+        return new Application({
+          id: actorUri,
+          inbox: new URL('/inbox', ctx.canonicalOrigin),
+          preferredUsername: localInstanceActorHandle,
+          publicKey: rsaKeyPair.cryptographicKey,
+          assertionMethods: keyPairs
+            .filter((keyPair) => keyPair.publicKey.algorithm.name === 'Ed25519')
+            .map((keyPair) => keyPair.multikey),
+        });
       }
 
       const localInstance = await resolveConfiguredLocalInstance();
@@ -121,12 +150,25 @@ export const createKosmoFederation = (
         profile: result.profile,
       });
     })
-    .mapHandle((context, username) =>
-      context.host === new URL(context.canonicalOrigin).host
-        ? resolveLocalActorIdentifierByHandle(username)
-        : null,
-    )
+    .mapHandle((context, username) => {
+      if (!hasCanonicalHost(context)) {
+        return null;
+      }
+
+      return normalizeHandle(username) === localInstanceActorHandle
+        ? localInstanceActorIdentifier
+        : resolveLocalActorIdentifierByHandle(username);
+    })
     .setKeyPairsDispatcher(async (ctx, identifier) => {
+      if (identifier === localInstanceActorIdentifier) {
+        if (!hasCanonicalHost(ctx)) {
+          return [];
+        }
+
+        const localInstance = await resolveConfiguredLocalInstance();
+        return ensureDrizzleLocalInstanceActorKeyPairs(localInstance.id);
+      }
+
       const localInstance = await resolveConfiguredLocalInstance();
       const result = await ensureDrizzleLocalProfileActor({
         actorUri: ctx.getActorUri(identifier),
@@ -235,6 +277,9 @@ export const createKosmoFederation = (
 
   federation
     .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+    .setSharedKeyDispatcher((context) =>
+      hasCanonicalHost(context) ? { identifier: localInstanceActorIdentifier } : null,
+    )
     .on(Accept, withInboundObservability('accept', handleInboundAccept))
     .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
     .on(Block, withInboundObservability('block', handleInboundBlock))

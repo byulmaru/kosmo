@@ -1,4 +1,5 @@
 [tools]
+"aqua:temporalio/cli" = "1.8.2"
 helm = "4.2.2"
-node = "26.3.0"
-pnpm = "11.27.1"
+node = "26.12.1"
+pnpm = "11.28.8"

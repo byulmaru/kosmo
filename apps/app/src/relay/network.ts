@@ -2,6 +2,22 @@ import { getApiOrigin, getPublicWebOrigin } from '@/config/origin';
 import { RelayTransportError } from './transportError';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
+export class GraphQLHttpError extends Error {
+  readonly operationName: string;
+  readonly status: number;
+  readonly elapsedMs: number;
+
+  constructor(
+    message: string,
+    metadata: { operationName: string; status: number; elapsedMs: number },
+  ) {
+    super(message);
+    this.operationName = metadata.operationName;
+    this.status = metadata.status;
+    this.elapsedMs = metadata.elapsedMs;
+  }
+}
+
 function isNativeRuntime(): boolean {
   return globalThis.navigator?.product === 'ReactNative';
 }
@@ -19,6 +35,7 @@ export async function executeGraphQLRequest(
 
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getPublicWebOrigin();
+  const startedAt = Date.now();
   const responsePromise = fetchImplementation(`${origin}/graphql`, {
     method: 'POST',
     credentials: native ? 'omit' : 'include',
@@ -48,7 +65,11 @@ export async function executeGraphQLRequest(
             .filter(Boolean)
             .join('\n')
         : undefined;
-    throw new Error(message || `GraphQL request failed with HTTP ${response.status}.`);
+    throw new GraphQLHttpError(message || `GraphQL request failed with HTTP ${response.status}.`, {
+      operationName: request.name,
+      status: response.status,
+      elapsedMs: Math.max(0, Date.now() - startedAt),
+    });
   }
 
   if (!body) {

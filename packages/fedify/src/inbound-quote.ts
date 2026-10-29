@@ -75,6 +75,7 @@ const currentAuthorizationLoader = async (context: QuoteContext): Promise<Docume
 type InboundQuoteInput = {
   commandId?: string;
   actorUri: string;
+  authorProfileId?: string;
   context: QuoteContext;
   note: Note;
   postId: string;
@@ -300,7 +301,8 @@ const materializeTarget = async ({
   try {
     materialized = await materializeHydratedRemoteNote({
       context: {
-        ...context,
+        canonicalOrigin: context.canonicalOrigin,
+        parseUri: (uri) => context.parseUri(uri),
         lookupObject: async (identifier) => {
           try {
             return await context.lookupObject(identifier);
@@ -497,7 +499,12 @@ export const prepareStoredInboundQuote = async (
 ): Promise<PreparedInboundQuote> => {
   const quote = await loadQuoteSource(input.postId);
   const expectation = await loadQuoteExpectation(input.postId);
-  if (!quote?.actorUri || quote.actorUri !== input.actorUri || !expectation) {
+  if (
+    !quote?.actorUri ||
+    quote.actorUri !== input.actorUri ||
+    (input.authorProfileId !== undefined && quote.profileId !== input.authorProfileId) ||
+    !expectation
+  ) {
     return { kind: 'NOOP', retryable: false };
   }
   if (input.malformed) {
@@ -652,6 +659,7 @@ const admit = async (command: QuoteOwnerCommand) =>
 export const handleInboundQuote = async ({
   commandId = randomUUID(),
   actorUri,
+  authorProfileId,
   context,
   note,
   postId,
@@ -673,6 +681,7 @@ export const handleInboundQuote = async ({
     postId,
     commandId,
     actorUri,
+    ...(authorProfileId === undefined ? {} : { authorProfileId }),
     targetUri: extraction.malformed ? '' : extraction.targetUri,
     ...(extraction.malformed ? { malformed: true } : {}),
     ...(embedded

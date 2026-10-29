@@ -122,3 +122,59 @@ test.each([
     expect(html).not.toContain('#fragment');
   }
 });
+
+test.each([
+  [null, true, 'public body with sensitive media'],
+  ['spoiler warning', false, '열람 주의 문구: spoiler warning'],
+  ['spoiler warning', true, '열람 주의 문구: spoiler warning'],
+])(
+  'preserves post metadata for warning %s and sensitive media %s',
+  async (summary, sensitive, description) => {
+    vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+    vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+    const rows = [
+      {
+        authorDisplayName: 'uta',
+        authorHandle: 'uta',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: postContentDocumentFromTextAndMedia(
+          'public body with sensitive media',
+          [{ mediaId }],
+          sensitive,
+          summary,
+        ),
+        currentContentId: 'content',
+        postId,
+        replyParentId: null,
+        repostSourceId: null,
+      },
+    ];
+    vi.spyOn(db, 'select').mockImplementation(() => {
+      const result = Promise.resolve(rows);
+      const query = {
+        from: () => query,
+        innerJoin: () => query,
+        leftJoin: () => query,
+        where: () => query,
+        limit: () => result,
+      };
+      return query as unknown as ReturnType<typeof db.select>;
+    });
+    const response = await routes.request(path);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('<title>uta(@uta) on KOSMO</title>');
+    expect(html).toContain('property="og:title" content="uta(@uta) on KOSMO"');
+    expect(html).toContain('name="twitter:title" content="uta(@uta) on KOSMO"');
+    expect(html).toContain('property="og:type" content="article"');
+    expect(html).toContain(`name="description" content="${description}"`);
+    expect(html).toContain(`property="og:description" content="${description}"`);
+    expect(html).toContain(`name="twitter:description" content="${description}"`);
+    expect(html).toContain('property="og:image" content="https://kos.moe/og-default.png"');
+    if (summary) {
+      expect(html).not.toContain('public body with sensitive media');
+    }
+  },
+);

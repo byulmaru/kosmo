@@ -2,12 +2,20 @@ import '@kosmo/core/polyfill';
 
 import { isUniqueViolation } from '@kosmo/core/db';
 import { InstanceState, ProfileState } from '@kosmo/core/enums';
-import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
+import {
+  ConflictError,
+  NotFoundError,
+  PermissionDeniedError,
+  ValidationError,
+} from '@kosmo/core/error';
 import { repostPost } from '@kosmo/core/services';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
-import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
 
@@ -52,7 +60,21 @@ export const handleInboundAnnounce = async (
     return;
   }
 
-  const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
+  const storedActor = await findOrMaterializeRemoteProfileActorByUri({
+    actorUri,
+    contextOrigin: context.canonicalOrigin,
+    receipt: { activityUri, receivedAt },
+  }).catch((error) => {
+    if (
+      error instanceof RemoteActorMaterializationError ||
+      error instanceof NotFoundError ||
+      error instanceof ConflictError
+    ) {
+      return null;
+    }
+
+    throw error;
+  });
   if (
     !storedActor ||
     storedActor.profile.state !== ProfileState.ACTIVE ||
