@@ -4761,6 +4761,7 @@ describe('inbound Create dispatch', () => {
         if (workflow === postCreateWorkflow.workflow) {
           const winner = await createPost({
             document: postContentDocumentFromText('Winning author content'),
+            mentionProfileIds: [],
             objectUri: objectUri.href,
             origin: 'ACTIVITYPUB',
             profileId: mallory.id,

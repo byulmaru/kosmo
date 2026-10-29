@@ -195,3 +195,8 @@ request ID로 사용한다. 같은 입력은 같은 Workflow 결과를 회수하
 생성 Workflow는 main의 공통 effects child 시작 ACK 뒤 저장 결과를 반환한다. 알림·외부 발송의
 완료까지 caller를 기다리게 하지 않으며 원격 URI 중복은 effects child를 다시 시작하지 않는다.
 신규 경로 통합은 실제 production history replay·writer drain·migration inventory 확인을 대신하지 않는다.
+
+main #1334에서 이미 실행된 admission 없는 common Quote 생성도 owner를 우회하는 구형 writer에 포함된다.
+위 신규 admission 검증은 그 실행의 양방향 replay 호환을 제공하지 않는다. 기존 전제대로 해당 실행도 구형
+Worker에서 완료하고 writer·DB session·process가 남지 않은 뒤 새 admission을 연다. 일반 Post/Reply의
+공통 history와 document 기반 legacy handler의 보존을 이 Quote writer 전환 전체의 호환 증거로 확대하지 않는다.

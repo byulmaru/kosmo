@@ -148,7 +148,14 @@ before(async () => {
   ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
     await import('./activities/media-upload'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
-  ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
+  ({ repostPost } = await import('@kosmo/core/services'));
+  const { createPostPersisted, deletePostPersisted } =
+    await import('../../../packages/core/services/post');
+  createCorePost = createPostPersisted;
+  deletePost = async (input) => {
+    const { result } = await deletePostPersisted(input);
+    return { ...result, replyParentId: result.replyParentId ?? null };
+  };
 });
 
 beforeEach(async () => {

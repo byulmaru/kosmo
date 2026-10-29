@@ -564,6 +564,112 @@ test('authorization-free duplicate Create and Update preserve the approved Quote
   assert.equal(afterUpdate.currentContentId, approved.currentContentId);
 });
 
+for (const failure of ['timeout', '503'] as const) {
+  test(
+    `동일 승인 URI의 embedded Update는 ${failure}에도 기존 승인과 Source를 유지한다`,
+    { timeout: 30_000 },
+    async () => {
+      const sourceActorUri = new URL('https://source.example/users/unchanged-approval');
+      const quoteActorUri = new URL('https://quote.example/users/unchanged-approval');
+      const sourceActor = await createRemoteActor('unchanged-source', sourceActorUri.href);
+      const quoteActor = await createRemoteActor('unchanged-quote', quoteActorUri.href);
+      const sourceUri = new URL('https://source.example/notes/unchanged-approval');
+      const source = await createRemotePost(sourceActor.id, sourceUri.href);
+      const quoteUri = new URL('https://quote.example/notes/unchanged-approval');
+      const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+      const base = new Note({
+        attribution: quoteActorUri,
+        content: 'approved quote body',
+        id: quoteUri,
+        quote: sourceUri,
+        to: PUBLIC_COLLECTION,
+      });
+      const authorization = quoteInteraction.createAuthorization({
+        attributedTo: sourceActorUri,
+        id: new URL('https://source.example/authorizations/unchanged-approval'),
+        interactingObject: base,
+        interactionTarget: sourceUri,
+      });
+      const approved = base.clone({ quoteAuthorization: authorization });
+      const context = createContext(
+        new Map([[authorization.id!.href, await authorization.toJsonLd({ format: 'expand' })]]),
+      );
+      await handleInboundQuote({
+        actorUri: quoteActorUri.href,
+        context,
+        note: approved,
+        postId: quote.post.id,
+        receivedAt,
+      });
+      const readConsent = () =>
+        db
+          .select({
+            approvalUri: Posts.quoteConsentApprovalUri,
+            sourcePostId: Posts.repostSourceId,
+            status: Posts.quoteConsentStatus,
+          })
+          .from(Posts)
+          .where(eq(Posts.id, quote.post.id))
+          .then(firstOrThrow);
+      const before = await readConsent();
+      assert.deepEqual(before, {
+        approvalUri: authorization.id!.href,
+        sourcePostId: source.post.id,
+        status: PostQuoteConsentStatus.APPROVED,
+      });
+
+      const authorizationReached = Promise.withResolvers<void>();
+      const releaseAuthorization = Promise.withResolvers<void>();
+      const loadAuthorization = async () => {
+        authorizationReached.resolve();
+        await releaseAuthorization.promise;
+        throw failure === 'timeout'
+          ? new Error('authorization fetch timed out')
+          : Object.assign(new Error('authorization service unavailable'), {
+              response: new Response(null, { status: 503 }),
+            });
+      };
+      currentContext = {
+        ...context,
+        quoteAuthorizationDocumentLoader: loadAuthorization,
+      } as TestQuoteContext;
+      const update = handleInboundUpdate(
+        currentContext,
+        new Update({
+          actor: quoteActorUri,
+          id: new URL(`https://quote.example/activities/unchanged-approval-${failure}`),
+          object: approved,
+        }),
+        receivedAt,
+      );
+      try {
+        await authorizationReached.promise;
+        assert.deepEqual(await readConsent(), before);
+      } finally {
+        releaseAuthorization.resolve();
+        await update;
+      }
+      assert.deepEqual(await readConsent(), before);
+
+      const replacement = new URL('https://source.example/authorizations/replacement-approval');
+      await handleInboundUpdate(
+        currentContext,
+        new Update({
+          actor: quoteActorUri,
+          id: new URL(`https://quote.example/activities/replacement-approval-${failure}`),
+          object: approved.clone({ quoteAuthorization: replacement }),
+        }),
+        receivedAt,
+      );
+      assert.deepEqual(await readConsent(), {
+        approvalUri: replacement.href,
+        sourcePostId: source.post.id,
+        status: PostQuoteConsentStatus.PENDING,
+      });
+    },
+  );
+}
+
 test('a remote Quote without authorization remains pending and keeps its body visible', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
@@ -719,6 +825,100 @@ test('a URL-only public target is hydrated through Fedify before resolution', as
       .currentContentId,
   );
 });
+
+for (const representation of ['embedded', 'url'] as const) {
+  test(`미저장 Followers Only ${representation} Source는 저장하지 않고 기존 저장 Source만 연결한다`, async () => {
+    const sourceActorUri = new URL('https://source.example/users/followers-source');
+    const quoteActorUri = new URL('https://quote.example/users/followers-source');
+    const sourceActor = await createRemoteActor('followers-source', sourceActorUri.href);
+    const quoteActor = await createRemoteActor('followers-quote', quoteActorUri.href);
+    const followersUri = new URL('https://source.example/users/followers-source/followers');
+    await db
+      .update(ActivityPubActors)
+      .set({ followersUri: followersUri.href })
+      .where(eq(ActivityPubActors.profileId, sourceActor.id));
+    const targetUri = new URL('https://source.example/notes/followers-source');
+    const target = new Note({
+      attribution: sourceActorUri,
+      content: 'followers-only source body',
+      id: targetUri,
+      to: followersUri,
+    });
+    const quoteUri = new URL('https://quote.example/notes/followers-source');
+    const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+    const note = new Note({
+      attribution: quoteActorUri,
+      content: 'quote body',
+      id: quoteUri,
+      quote: representation === 'embedded' ? target : targetUri,
+      to: PUBLIC_COLLECTION,
+    });
+    const authorization = quoteInteraction.createAuthorization({
+      attributedTo: sourceActorUri,
+      id: new URL('https://source.example/authorizations/followers-source'),
+      interactingObject: note,
+      interactionTarget: targetUri,
+    });
+    const lookupObject = mock.fn(async (identifier: string | URL) =>
+      identifier.toString() === targetUri.href ? target : null,
+    );
+    const input = {
+      actorUri: quoteActorUri.href,
+      context: createContext(
+        new Map([[authorization.id!.href, await authorization.toJsonLd({ format: 'expand' })]]),
+        lookupObject,
+      ),
+      note: note.clone({ quoteAuthorization: authorization }),
+      postId: quote.post.id,
+      receivedAt,
+    };
+    await handleInboundQuote(input);
+
+    assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+    assert.equal(await db.$count(Posts), 1);
+    assert.equal(await db.$count(PostContents), 1);
+    const withoutSource = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
+      .then(firstOrThrow);
+    assert.equal(withoutSource.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+    assert.equal(withoutSource.repostSourceId, null);
+    assert.equal(withoutSource.currentContentId, quote.post.currentContentId);
+    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
+
+    const storedSource = await createPost({
+      document: postContentDocumentFromText('previously delivered followers-only source'),
+      mentionProfileIds: [],
+      objectUri: targetUri.href,
+      origin: 'ACTIVITYPUB',
+      profileId: sourceActor.id,
+      publishedAt: null,
+      receivedAt,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    assert.equal(storedSource.created, true);
+    await handleInboundQuote(input);
+
+    const connected = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
+      .then(firstOrThrow);
+    assert.equal(connected.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+    assert.equal(connected.quoteConsentApprovalUri, authorization.id!.href);
+    assert.equal(connected.repostSourceId, storedSource.post.id);
+    assert.equal(connected.currentContentId, quote.post.currentContentId);
+    assert.equal(await db.$count(ActivityPubPosts), 2);
+    assert.equal(await db.$count(PostContents), 2);
+    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, storedSource.post.id)).then(firstOrThrow))
+        .visibility,
+      PostVisibility.FOLLOWERS,
+    );
+  });
+}
 
 test('유효한 FEP Quote는 서로 다른 legacy URL보다 우선한다', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');

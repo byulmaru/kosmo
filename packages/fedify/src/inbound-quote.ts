@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { randomUUID } from 'node:crypto';
 import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note, QuoteAuthorization } from '@fedify/vocab';
+import { Note, PUBLIC_COLLECTION, QuoteAuthorization } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
 import {
@@ -292,6 +292,13 @@ const materializeTarget = async ({
   ) {
     return { kind: 'permanent_failure' };
   }
+  if (
+    ![...targetObject.toIds, ...targetObject.ccIds].some(
+      (uri) => uri.href === PUBLIC_COLLECTION.href,
+    )
+  ) {
+    return { kind: 'permanent_failure' };
+  }
 
   if (expectation && !(await matchesQuoteExpectation(postId, expectation))) {
     return { kind: 'stale' };
@@ -573,9 +580,11 @@ export const prepareStoredInboundQuote = async (
   if (input.authorizationUpdate && input.format === ActivityPubQuoteFormat.LEGACY) {
     return { kind: 'NOOP', retryable: false };
   }
+  const authorizationReferenceChanged =
+    input.authorizationUpdate && input.approvalUri !== expectation.expectedApprovalUri;
   if (phase === 'INVALIDATE') {
     if (
-      !input.authorizationUpdate ||
+      !authorizationReferenceChanged ||
       source.actorUri === input.actorUri ||
       (expectation.expectedStatus !== PostQuoteConsentStatus.APPROVED &&
         expectation.expectedStatus !== PostQuoteConsentStatus.PENDING)
@@ -625,7 +634,7 @@ export const prepareStoredInboundQuote = async (
   });
   if (
     expectation.expectedStatus === PostQuoteConsentStatus.APPROVED &&
-    !input.authorizationUpdate &&
+    !authorizationReferenceChanged &&
     authorization.status !== PostQuoteConsentStatus.APPROVED
   ) {
     return { kind: 'NOOP', retryable: true };

@@ -27,10 +27,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '../post-content/server';
+import { postContentDocumentFromText } from '../post-content/server';
 import {
   createPost,
   deletePost as deletePostAction,

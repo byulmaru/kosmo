@@ -643,7 +643,7 @@ export const deletePost = async ({
   readonly replyParentId: string | null;
   readonly sourcePostId: string | null;
 }> => {
-  return unwrapPostTransition(
+  const result = unwrapPostTransition(
     await runWorkflow(postDeleteMutationWorkflow, {
       args: [{ actorProfileId, origin, postId }],
       mode: 'update-with-start',
@@ -652,6 +652,7 @@ export const deletePost = async ({
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     }),
   );
+  return { ...result, replyParentId: result.replyParentId ?? null };
 };
 
 export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
@@ -931,7 +932,7 @@ export const createPostInTransaction = async (
                 : null,
             repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : null,
           })
-          .where(eq(Posts.id, postId))
+          .where(eq(Posts.id, reserved.id))
           .returning()
           .then(firstOrThrow);
 
@@ -1028,7 +1029,9 @@ export async function createPostPersisted(
       return createPostInTransaction(tx, input, postId, initialContentId);
     });
   } catch (error) {
-    if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) throw error;
+    if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
+      throw error;
+    }
     return { created: false };
   }
 }

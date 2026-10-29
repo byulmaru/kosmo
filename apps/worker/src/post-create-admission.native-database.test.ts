@@ -62,7 +62,7 @@ const isAdmissionError = (error: unknown): boolean =>
   (error instanceof ValidationError && error.field === 'admissionId') ||
   (error instanceof ApplicationFailure &&
     error.type === 'VALIDATION' &&
-    error.details[0] === 'admissionId');
+    error.details?.[0] === 'admissionId');
 
 const createPost = async (input: AdmissionLocalPostInput) => {
   const [coreDb, temporalClient, temporalPost, coreAdmission] = await Promise.all([
@@ -1036,6 +1036,19 @@ if (isChildProcess) {
           const raceSource = await createSource(quoteProfile.id, 'source deleted during quote');
           const input = quoteInput(quoteProfile.id, raceSource.id, 'source deletion race');
           const identity = postCreateIdentities(quotePostCreateInput(input));
+          const owner = await environment.client.workflow.start('postQuoteOwnerWorkflow', {
+            args: [{ postId: identity.postId, initialSourcePostId: raceSource.id }],
+            taskQueue: KOSMO_TASK_QUEUE,
+            workflowId: `post-quote:${identity.postId}`,
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'REJECT_DUPLICATE',
+          });
+          quoteOwnerIds.add(identity.postId);
+          await waitFor(async () => {
+            const binding = await owner.query<{ targetUri?: string }>('quoteOwnerBinding');
+            return binding.targetUri !== undefined;
+          });
+          const ownerRunId = (await owner.describe()).runId;
           const beforeContents = await db.$count(PostContents);
           const sourceUpdated = deferred();
           const releaseDeletion = deferred();
@@ -1076,11 +1089,18 @@ if (isChildProcess) {
             );
             try {
               await waitFor(async () => {
+                const work = await owner.query<{ phase: string; runId: string }>('quoteOwnerWork');
+                return work.phase === 'WRITE' && work.runId === ownerRunId;
+              });
+              await waitFor(async () => {
                 const [observation] = await db.execute<{ blocked: boolean }>(sql`
                   SELECT EXISTS (
                     SELECT 1 FROM pg_stat_activity
                     WHERE datname = current_database()
                       AND pid <> pg_backend_pid()
+                      AND wait_event_type = 'Lock'
+                      AND query ILIKE '%for share%'
+                      AND query NOT ILIKE '% join %'
                       AND ${sourceHolderPid} = ANY(pg_blocking_pids(pid))
                   ) AS blocked
                 `);

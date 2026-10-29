@@ -232,7 +232,7 @@ test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated auth
     role: AccountProfileRole.OWNER,
   });
   const sourceAuthor = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     bodyText: 'quote source',
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
@@ -249,20 +249,20 @@ test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated auth
     tags: ['#' + fullwidthDisplayName],
   });
 
-  const post = await createPost({
+  const post = await createPostPersisted({
     bodyText: '#' + name + ' #' + fullwidthDisplayName.toUpperCase() + ' #' + displayName,
     origin: 'LOCAL',
     profileId: author.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const reply = await createPost({
+  const reply = await createPostPersisted({
     bodyText: `Replying with #${name}`,
     origin: 'LOCAL',
     profileId: author.id,
     replyParentId: post.post.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const quote = await createPost({
+  const quote = await createPostPersisted({
     bodyText: `Quoting with #${name}`,
     origin: 'LOCAL',
     profileId: author.id,
@@ -328,7 +328,7 @@ test('ActivityPub post text does not trigger local hashtag identity extraction',
   const profile = await createProfile(InstanceKind.ACTIVITYPUB);
   const bodyText = `#remote${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
   const name = bodyText.slice(1);
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText(bodyText),
     mentionProfileIds: [],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
