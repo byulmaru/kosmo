@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
-  backfillLocalPostContentHashtagsWorkflow,
+  reprocessLocalPostContentsWorkflow,
   reprocessLocalPostContentWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { Context } from '@temporalio/activity';
@@ -19,7 +19,7 @@ const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const id = (value: number): string => '00000000-0000-4000-8000-' + String(value).padStart(12, '0');
 
 test(
-  'post content reprocessing defaults to dry-run and the local backfill continues in bounded pages',
+  'post content reprocessing defaults to dry-run and the batch continues in bounded pages',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -68,7 +68,7 @@ test(
           const index = posts.findIndex((post) => post.postId === postId);
           return { status: index < 0 ? 'wouldUpdate' : outcomes[index % outcomes.length]! };
         },
-        loadLocalPostsForHashtagReprocessingActivity: async ({ afterPostId, maxPostId, limit }) => {
+        loadLocalPostsForContentReprocessingActivity: async ({ afterPostId, maxPostId, limit }) => {
           loaderCalls.push({
             ...(afterPostId === undefined ? {} : { afterPostId }),
             ...(maxPostId === undefined ? {} : { maxPostId }),
@@ -86,7 +86,7 @@ test(
         },
       } satisfies Pick<
         typeof activities,
-        'reprocessLocalPostContentActivity' | 'loadLocalPostsForHashtagReprocessingActivity'
+        'reprocessLocalPostContentActivity' | 'loadLocalPostsForContentReprocessingActivity'
       >,
     });
 
@@ -109,14 +109,14 @@ test(
         postContentId: id(3),
       }),
     );
-    const backfillInput = { dryRun: false };
+    const batchInput = { dryRun: false };
     assert.equal(
-      backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs({}),
-      backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs({ dryRun: true }),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ dryRun: true }),
     );
     assert.notEqual(
-      backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs({}),
-      backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs(backfillInput),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(batchInput),
     );
 
     await worker.runUntil(async () => {
@@ -143,15 +143,15 @@ test(
       );
       assert.equal(reprocessed.length, 1);
 
-      const backfillResult = await environment.client.workflow.execute(
-        backfillLocalPostContentHashtagsWorkflow.workflow,
+      const batchResult = await environment.client.workflow.execute(
+        reprocessLocalPostContentsWorkflow.workflow,
         {
-          workflowId: backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs(backfillInput),
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(batchInput),
           taskQueue,
-          args: [backfillInput],
+          args: [batchInput],
         },
       );
-      assert.deepEqual(backfillResult, {
+      assert.deepEqual(batchResult, {
         maxPostId: posts.at(-1)!.postId,
         counts: { updated: 13, wouldUpdate: 13, unchanged: 13, skipped: 13 },
       });
@@ -185,9 +185,9 @@ test(
       assert.equal(maxActiveActivities, 1);
 
       const defaultBatchResult = await environment.client.workflow.execute(
-        backfillLocalPostContentHashtagsWorkflow.workflow,
+        reprocessLocalPostContentsWorkflow.workflow,
         {
-          workflowId: backfillLocalPostContentHashtagsWorkflow.workflowIdFromArgs({}),
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
           taskQueue,
           args: [{}],
         },
@@ -207,8 +207,8 @@ test(
       ]);
 
       await assert.rejects(
-        environment.client.workflow.execute(backfillLocalPostContentHashtagsWorkflow.workflow, {
-          workflowId: 'invalid-post-content-backfill-' + process.pid,
+        environment.client.workflow.execute(reprocessLocalPostContentsWorkflow.workflow, {
+          workflowId: 'invalid-post-content-batch-reprocessing-' + process.pid,
           taskQueue,
           args: [
             {
@@ -226,7 +226,7 @@ test(
 );
 
 test(
-  'local post content hashtag backfill resumes after a Worker restart without replaying completed Activity results',
+  'local post content batch resumes after a Worker restart without replaying completed Activity results',
   { timeout: 120_000 },
   async () => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -272,11 +272,11 @@ test(
         const index = posts.findIndex((post) => post.postId === postId);
         return { status: statuses[index % statuses.length]! };
       },
-      loadLocalPostsForHashtagReprocessingActivity: async ({
+      loadLocalPostsForContentReprocessingActivity: async ({
         afterPostId,
         maxPostId,
         limit,
-      }: Parameters<typeof activities.loadLocalPostsForHashtagReprocessingActivity>[0]) => {
+      }: Parameters<typeof activities.loadLocalPostsForContentReprocessingActivity>[0]) => {
         loaderCalls.push({
           ...(afterPostId === undefined ? {} : { afterPostId }),
           ...(maxPostId === undefined ? {} : { maxPostId }),
@@ -293,7 +293,7 @@ test(
       },
     } satisfies Pick<
       typeof activities,
-      'reprocessLocalPostContentActivity' | 'loadLocalPostsForHashtagReprocessingActivity'
+      'reprocessLocalPostContentActivity' | 'loadLocalPostsForContentReprocessingActivity'
     >;
     const createWorker = () =>
       Worker.create({
@@ -324,9 +324,9 @@ test(
       await startWorker();
       const input = { dryRun: false };
       const handle = await environment.client.workflow.start(
-        backfillLocalPostContentHashtagsWorkflow.workflow,
+        reprocessLocalPostContentsWorkflow.workflow,
         {
-          workflowId: 'post-content-backfill-restart-' + process.pid,
+          workflowId: 'post-content-batch-reprocessing-restart-' + process.pid,
           taskQueue,
           args: [input],
         },

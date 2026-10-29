@@ -63,7 +63,7 @@ import type {
   prepareMediaUploadActivity as PrepareMediaUploadActivity,
 } from './activities/media-upload';
 import type {
-  loadLocalPostsForHashtagReprocessingActivity as LoadLocalPostsForHashtagReprocessingActivity,
+  loadLocalPostsForContentReprocessingActivity as LoadLocalPostsForContentReprocessingActivity,
   reprocessLocalPostContentActivity as ReprocessLocalPostContentActivity,
 } from './activities/post-content-reprocessing';
 
@@ -112,7 +112,7 @@ let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNot
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
 let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
-let loadLocalPostsForHashtagReprocessingActivity: typeof LoadLocalPostsForHashtagReprocessingActivity;
+let loadLocalPostsForContentReprocessingActivity: typeof LoadLocalPostsForContentReprocessingActivity;
 let reprocessLocalPostContentActivity: typeof ReprocessLocalPostContentActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
@@ -161,7 +161,7 @@ before(async () => {
   } = await import('./activities'));
   ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
     await import('./activities/media-upload'));
-  ({ loadLocalPostsForHashtagReprocessingActivity, reprocessLocalPostContentActivity } =
+  ({ loadLocalPostsForContentReprocessingActivity, reprocessLocalPostContentActivity } =
     await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
@@ -2826,7 +2826,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
   }
 });
 
-test('Local PostContent reprocessing dry-run plans changes without writing rows', async () => {
+test('Local PostContent hashtag processing dry-run plans changes without writing rows', async () => {
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const hashtagName = `dryrun${suffix}`;
   const fixture = await createPostContentReprocessingFixture({
@@ -2860,7 +2860,7 @@ test('Local PostContent reprocessing dry-run plans changes without writing rows'
   }
 });
 
-test('Local PostContent reprocessing preserves document state, repairs relations, and converges on retry', async () => {
+test('Local PostContent hashtag processing preserves document state, repairs relations, and converges on retry', async () => {
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const [existingHashtag, orphanHashtag, missingRelationHashtag] = await db
     .insert(Hashtags)
@@ -3040,7 +3040,7 @@ test('Local PostContent reprocessing preserves document state, repairs relations
   }
 });
 
-test('Local PostContent reprocessing repairs hashtag relations without changing the document', async () => {
+test('Local PostContent hashtag processing repairs relations without changing the document', async () => {
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const hashtag = await db
     .insert(Hashtags)
@@ -3164,7 +3164,7 @@ test('Local PostContent reprocessing and candidate paging include only active Lo
   });
 
   try {
-    const page = await loadLocalPostsForHashtagReprocessingActivity({ limit: 50 });
+    const page = await loadLocalPostsForContentReprocessingActivity({ limit: 50 });
     assert.equal(page.maxPostId, local.post.id);
     assert.deepEqual(page.posts, [{ postContentId: local.content.id, postId: local.post.id }]);
     assert.deepEqual(

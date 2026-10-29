@@ -24,13 +24,13 @@ import type {
   ReprocessLocalPostContentResult,
 } from '@kosmo/core/temporal/workflows';
 
-interface LoadLocalPostsForHashtagReprocessingInput {
+interface LoadLocalPostsForContentReprocessingInput {
   readonly afterPostId?: string;
   readonly limit: number;
   readonly maxPostId?: string | null;
 }
 
-type HashtagReprocessingPost = {
+type PostContentReprocessingTarget = {
   readonly postContentId: string;
   readonly postId: string;
 };
@@ -248,11 +248,11 @@ export const reprocessLocalPostContentActivity = async (
   }
 };
 
-export const loadLocalPostsForHashtagReprocessingActivity = async (
-  input: LoadLocalPostsForHashtagReprocessingInput,
+export const loadLocalPostsForContentReprocessingActivity = async (
+  input: LoadLocalPostsForContentReprocessingInput,
 ): Promise<{
   readonly maxPostId: string | null;
-  readonly posts: readonly HashtagReprocessingPost[];
+  readonly posts: readonly PostContentReprocessingTarget[];
 }> => {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);

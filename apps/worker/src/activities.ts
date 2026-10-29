@@ -24,7 +24,7 @@ export {
 } from './activities/operational-notification';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export {
-  loadLocalPostsForHashtagReprocessingActivity,
+  loadLocalPostsForContentReprocessingActivity,
   reprocessLocalPostContentActivity,
 } from './activities/post-content-reprocessing';
 export {

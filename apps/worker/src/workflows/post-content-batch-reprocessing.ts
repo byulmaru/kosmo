@@ -2,10 +2,10 @@ import { ApplicationFailure, continueAsNew, proxyActivities } from '@temporalio/
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import type {
-  BackfillLocalPostContentHashtagsInput,
-  BackfillLocalPostContentHashtagsResult,
   PostContentReprocessingCounts,
   PostContentReprocessingStatus,
+  ReprocessLocalPostContentsInput,
+  ReprocessLocalPostContentsResult,
 } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
@@ -27,9 +27,9 @@ const inputSchema = z.strictObject({
       counts: countsSchema,
     })
     .optional(),
-}) satisfies z.ZodType<BackfillLocalPostContentHashtagsInput>;
+}) satisfies z.ZodType<ReprocessLocalPostContentsInput>;
 
-const { loadLocalPostsForHashtagReprocessingActivity, reprocessLocalPostContentActivity } =
+const { loadLocalPostsForContentReprocessingActivity, reprocessLocalPostContentActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 const emptyCounts = (): Record<PostContentReprocessingStatus, number> => ({
@@ -39,13 +39,13 @@ const emptyCounts = (): Record<PostContentReprocessingStatus, number> => ({
   skipped: 0,
 });
 
-export async function backfillLocalPostContentHashtagsWorkflow(
-  input: BackfillLocalPostContentHashtagsInput,
-): Promise<BackfillLocalPostContentHashtagsResult> {
+export async function reprocessLocalPostContentsWorkflow(
+  input: ReprocessLocalPostContentsInput,
+): Promise<ReprocessLocalPostContentsResult> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
     throw ApplicationFailure.nonRetryable(
-      parsed.error.issues[0]?.message ?? 'Post content hashtag backfill input is invalid',
+      parsed.error.issues[0]?.message ?? 'Post content reprocessing input is invalid',
       'VALIDATION',
     );
   }
@@ -53,7 +53,7 @@ export async function backfillLocalPostContentHashtagsWorkflow(
   const { continuation } = parsed.data;
   const dryRun = parsed.data.dryRun ?? true;
   const counts = { ...(continuation?.counts ?? emptyCounts()) };
-  const page = await loadLocalPostsForHashtagReprocessingActivity({
+  const page = await loadLocalPostsForContentReprocessingActivity({
     ...(continuation?.afterPostId === undefined ? {} : { afterPostId: continuation.afterPostId }),
     ...(continuation === undefined ? {} : { maxPostId: continuation.maxPostId }),
     limit: BATCH_SIZE,
@@ -71,12 +71,12 @@ export async function backfillLocalPostContentHashtagsWorkflow(
     const lastPost = page.posts.at(-1)!;
     if (page.maxPostId === null) {
       throw ApplicationFailure.nonRetryable(
-        'Post content hashtag backfill candidate page is missing its upper bound',
+        'Post content reprocessing candidate page is missing its upper bound',
         'INVALID_ACTIVITY_RESULT',
       );
     }
 
-    await continueAsNew<typeof backfillLocalPostContentHashtagsWorkflow>({
+    await continueAsNew<typeof reprocessLocalPostContentsWorkflow>({
       dryRun,
       continuation: {
         maxPostId: page.maxPostId,
