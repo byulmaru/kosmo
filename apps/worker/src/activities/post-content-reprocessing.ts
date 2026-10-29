@@ -16,24 +16,13 @@ import {
   findLocalPostContentHashtagCandidates,
 } from '@kosmo/core/post-content/server';
 import { normalizeHashtag } from '@kosmo/core/validation';
-import { and, asc, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Transaction } from '@kosmo/core/db';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
   ReprocessLocalPostContentInput,
   ReprocessLocalPostContentResult,
 } from '@kosmo/core/temporal/workflows';
-
-interface LoadLocalPostsForContentReprocessingInput {
-  readonly afterPostId?: string;
-  readonly limit: number;
-  readonly maxPostId?: string | null;
-}
-
-type PostContentReprocessingTarget = {
-  readonly postContentId: string;
-  readonly postId: string;
-};
 
 class LostPostContentRace extends Error {}
 
@@ -246,63 +235,4 @@ export const reprocessLocalPostContentActivity = async (
     }
     throw error;
   }
-};
-
-export const loadLocalPostsForContentReprocessingActivity = async (
-  input: LoadLocalPostsForContentReprocessingInput,
-): Promise<{
-  readonly maxPostId: string | null;
-  readonly posts: readonly PostContentReprocessingTarget[];
-}> => {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    const maxPostId =
-      input.maxPostId === undefined
-        ? await tx
-            .select({ id: Posts.id })
-            .from(Posts)
-            .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-            .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-            .innerJoin(
-              PostContents,
-              and(eq(PostContents.id, Posts.currentContentId), eq(PostContents.postId, Posts.id)),
-            )
-            .where(and(eq(Posts.state, PostState.ACTIVE), eq(Instances.kind, InstanceKind.LOCAL)))
-            .orderBy(desc(Posts.id))
-            .limit(1)
-            .then(first)
-            .then((row) => row?.id ?? null)
-        : input.maxPostId;
-
-    if (maxPostId === null) {
-      return { maxPostId, posts: [] };
-    }
-
-    const posts = await tx
-      .select({ postContentId: Posts.currentContentId, postId: Posts.id })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .innerJoin(
-        PostContents,
-        and(eq(PostContents.id, Posts.currentContentId), eq(PostContents.postId, Posts.id)),
-      )
-      .where(
-        and(
-          eq(Posts.state, PostState.ACTIVE),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          lte(Posts.id, maxPostId),
-          input.afterPostId === undefined ? undefined : gt(Posts.id, input.afterPostId),
-        ),
-      )
-      .orderBy(asc(Posts.id))
-      .limit(input.limit);
-
-    return {
-      maxPostId,
-      posts: posts.flatMap(({ postContentId, postId }) =>
-        postContentId === null ? [] : [{ postContentId, postId }],
-      ),
-    };
-  });
 };

@@ -22,11 +22,8 @@ export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
+export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
-export {
-  loadLocalPostsForContentReprocessingActivity,
-  reprocessLocalPostContentActivity,
-} from './activities/post-content-reprocessing';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,

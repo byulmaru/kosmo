@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { reprocessLocalPostContentsWorkflow } from '@kosmo/core/temporal/post-content-reprocessing';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import {
-  reprocessLocalPostContentsWorkflow,
-  reprocessLocalPostContentWorkflow,
-} from '@kosmo/core/temporal/workflows';
 import { Context } from '@temporalio/activity';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
@@ -12,14 +9,134 @@ import { temporalTestExecutable } from './temporal-test-executable.js';
 import type {
   PostContentReprocessingStatus,
   ReprocessLocalPostContentInput,
+  ReprocessLocalPostContentsInput,
+  ReprocessLocalPostContentTarget,
 } from '@kosmo/core/temporal/workflows';
 import type * as activities from './activities';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const id = (value: number): string => '00000000-0000-4000-8000-' + String(value).padStart(12, '0');
+const emptyCounts = () => ({ updated: 0, wouldUpdate: 0, unchanged: 0, skipped: 0 });
 
 test(
-  'post content reprocessing defaults to dry-run and the batch continues in bounded pages',
+  'post content reprocessing handles one, selected, and empty target lists',
+  { timeout: 120_000 },
+  async (t) => {
+    const taskQueue = KOSMO_TASK_QUEUE + '-post-content-reprocessing-selection-' + process.pid;
+    const targets: readonly ReprocessLocalPostContentTarget[] = [
+      { postId: id(1), postContentId: id(101) },
+      { postId: id(2), postContentId: id(102) },
+    ];
+    const calls: ReprocessLocalPostContentInput[] = [];
+    const oneTarget: ReprocessLocalPostContentsInput = { targets: [targets[0]!] };
+    assert.equal(
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(oneTarget),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ ...oneTarget, dryRun: true }),
+    );
+    assert.notEqual(
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(oneTarget),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ ...oneTarget, dryRun: false }),
+    );
+    assert.notEqual(
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(oneTarget),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({
+        targets: [{ ...targets[0]!, postContentId: id(103) }],
+      }),
+    );
+    assert.notEqual(
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(oneTarget),
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({
+        targets: [targets[0]!, targets[1]!],
+      }),
+    );
+    const largeTargets = Array.from({ length: 5_000 }, (_, index) => ({
+      postId: id(10_000 + index),
+      postContentId: id(20_000 + index),
+    }));
+    assert.ok(
+      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ targets: largeTargets }).length < 128,
+    );
+
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: temporalTestExecutable },
+    });
+    t.after(() => environment.teardown());
+    const worker = await Worker.create({
+      workflowsPath,
+      connection: environment.nativeConnection,
+      taskQueue,
+      activities: {
+        reprocessLocalPostContentActivity: async (input) => {
+          calls.push(input);
+          return { status: input.postId === targets[0]!.postId ? 'wouldUpdate' : 'unchanged' };
+        },
+      } satisfies Pick<typeof activities, 'reprocessLocalPostContentActivity'>,
+    });
+
+    await worker.runUntil(async () => {
+      const oneResult = await environment.client.workflow.execute(
+        reprocessLocalPostContentsWorkflow.workflow,
+        {
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(oneTarget),
+          taskQueue,
+          args: [oneTarget],
+        },
+      );
+      assert.deepEqual(oneResult, {
+        counts: { ...emptyCounts(), wouldUpdate: 1 },
+      });
+      assert.deepEqual(calls, [{ ...targets[0]!, dryRun: true }]);
+
+      const selectedTargets: ReprocessLocalPostContentsInput = { targets };
+      const selectedResult = await environment.client.workflow.execute(
+        reprocessLocalPostContentsWorkflow.workflow,
+        {
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(selectedTargets),
+          taskQueue,
+          args: [selectedTargets],
+        },
+      );
+      assert.deepEqual(selectedResult, {
+        counts: { ...emptyCounts(), wouldUpdate: 1, unchanged: 1 },
+      });
+      assert.deepEqual(calls.slice(1), [
+        { ...targets[0]!, dryRun: true },
+        { ...targets[1]!, dryRun: true },
+      ]);
+
+      const beforeEmpty = calls.length;
+      const emptySelection: ReprocessLocalPostContentsInput = { targets: [] };
+      const emptyResult = await environment.client.workflow.execute(
+        reprocessLocalPostContentsWorkflow.workflow,
+        {
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(emptySelection),
+          taskQueue,
+          args: [emptySelection],
+        },
+      );
+      assert.deepEqual(emptyResult, { counts: emptyCounts() });
+      assert.equal(calls.length, beforeEmpty);
+
+      for (const [workflowId, input] of [
+        ['missing-targets', { target: 'all' }],
+        ['all-marker', { targets: 'all' }],
+        ['malformed-target', { targets: [{ ...targets[0]!, postContentId: 'invalid' }] }],
+      ] as const) {
+        await assert.rejects(
+          environment.client.workflow.execute(reprocessLocalPostContentsWorkflow.workflow, {
+            workflowId: `invalid-post-content-reprocessing-${workflowId}-${process.pid}`,
+            taskQueue,
+            args: [input as unknown as ReprocessLocalPostContentsInput],
+          }),
+        );
+      }
+      assert.equal(calls.length, beforeEmpty);
+    });
+  },
+);
+
+test(
+  'selected targets continue in pages of 50 and retry a failed Activity',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -27,14 +144,7 @@ test(
     });
     t.after(() => environment.teardown());
 
-    const taskQueue = KOSMO_TASK_QUEUE + '-post-content-reprocessing-' + process.pid;
-    const attempts: Array<{ postId: string; postContentId: string; dryRun?: boolean }> = [];
-    const reprocessed: Array<{ postId: string; postContentId: string; dryRun?: boolean }> = [];
-    const loaderCalls: Array<{
-      afterPostId?: string;
-      maxPostId?: string | null;
-      limit: number;
-    }> = [];
+    const taskQueue = KOSMO_TASK_QUEUE + '-post-content-reprocessing-pages-' + process.pid;
     const posts = Array.from({ length: 52 }, (_, index) => ({
       postId: id(100 + index),
       postContentId: id(1_100 + index),
@@ -45,9 +155,11 @@ test(
       'unchanged',
       'skipped',
     ];
+    const attempts: ReprocessLocalPostContentInput[] = [];
+    const completed: ReprocessLocalPostContentInput[] = [];
     let activeActivities = 0;
     let maxActiveActivities = 0;
-    let failedOnePost = false;
+    let failedPost = false;
     const worker = await Worker.create({
       workflowsPath,
       connection: environment.nativeConnection,
@@ -60,173 +172,65 @@ test(
           maxActiveActivities = Math.max(maxActiveActivities, activeActivities);
           await new Promise((resolve) => setTimeout(resolve, 1));
           activeActivities -= 1;
-          if (postId === posts[10]!.postId && dryRun === false && !failedOnePost) {
-            failedOnePost = true;
+          if (postId === posts[10]!.postId && dryRun === false && !failedPost) {
+            failedPost = true;
             throw new Error('Transient Activity failure');
           }
-          reprocessed.push(input);
+          completed.push(input);
           const index = posts.findIndex((post) => post.postId === postId);
-          return { status: index < 0 ? 'wouldUpdate' : outcomes[index % outcomes.length]! };
+          return { status: outcomes[index % outcomes.length]! };
         },
-        loadLocalPostsForContentReprocessingActivity: async ({ afterPostId, maxPostId, limit }) => {
-          loaderCalls.push({
-            ...(afterPostId === undefined ? {} : { afterPostId }),
-            ...(maxPostId === undefined ? {} : { maxPostId }),
-            limit,
-          });
-          const upperBound = maxPostId ?? posts.at(-1)?.postId ?? null;
-          const upperIndex =
-            upperBound === null ? -1 : posts.findIndex((post) => post.postId === upperBound);
-          const afterIndex =
-            afterPostId === undefined ? -1 : posts.findIndex((post) => post.postId === afterPostId);
-          return {
-            maxPostId: upperBound,
-            posts: posts.slice(afterIndex + 1, upperIndex + 1).slice(0, limit),
-          };
-        },
-      } satisfies Pick<
-        typeof activities,
-        'reprocessLocalPostContentActivity' | 'loadLocalPostsForContentReprocessingActivity'
-      >,
+      } satisfies Pick<typeof activities, 'reprocessLocalPostContentActivity'>,
     });
 
-    const singleInput: ReprocessLocalPostContentInput = {
-      postId: id(1),
-      postContentId: id(2),
+    const expectedCounts = { updated: 13, wouldUpdate: 13, unchanged: 13, skipped: 13 };
+    const selectedInput: ReprocessLocalPostContentsInput = {
+      targets: posts,
+      dryRun: false,
     };
-    assert.equal(
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs(singleInput),
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs({ ...singleInput, dryRun: true }),
-    );
-    assert.notEqual(
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs(singleInput),
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs({ ...singleInput, dryRun: false }),
-    );
-    assert.notEqual(
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs(singleInput),
-      reprocessLocalPostContentWorkflow.workflowIdFromArgs({
-        ...singleInput,
-        postContentId: id(3),
-      }),
-    );
-    const batchInput = { dryRun: false };
-    assert.equal(
-      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
-      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ dryRun: true }),
-    );
-    assert.notEqual(
-      reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
-      reprocessLocalPostContentsWorkflow.workflowIdFromArgs(batchInput),
-    );
 
     await worker.runUntil(async () => {
-      const singleResult = await environment.client.workflow.execute(
-        reprocessLocalPostContentWorkflow.workflow,
-        {
-          workflowId: reprocessLocalPostContentWorkflow.workflowIdFromArgs(singleInput),
-          taskQueue,
-          args: [singleInput],
-        },
-      );
-      assert.deepEqual(singleResult, { status: 'wouldUpdate' });
-      assert.deepEqual(reprocessed[0], {
-        ...singleInput,
-        dryRun: true,
-      });
-
-      await assert.rejects(
-        environment.client.workflow.execute(reprocessLocalPostContentWorkflow.workflow, {
-          workflowId: 'invalid-post-content-reprocessing-' + process.pid,
-          taskQueue,
-          args: [{ ...singleInput, postContentId: 'invalid' }],
-        }),
-      );
-      assert.equal(reprocessed.length, 1);
-
-      const batchResult = await environment.client.workflow.execute(
+      const handle = await environment.client.workflow.start(
         reprocessLocalPostContentsWorkflow.workflow,
         {
-          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(batchInput),
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(selectedInput),
           taskQueue,
-          args: [batchInput],
+          args: [selectedInput],
         },
       );
-      assert.deepEqual(batchResult, {
-        maxPostId: posts.at(-1)!.postId,
-        counts: { updated: 13, wouldUpdate: 13, unchanged: 13, skipped: 13 },
-      });
-      assert.deepEqual(loaderCalls, [
-        { limit: 50 },
-        { afterPostId: posts[49]!.postId, maxPostId: posts.at(-1)!.postId, limit: 50 },
-      ]);
-      assert.deepEqual(
-        reprocessed.slice(1).map(({ postId }) => postId),
-        posts.map(({ postId }) => postId),
-      );
-      const applyStart = 1;
-      const applyEnd = applyStart + posts.length;
-      assert.ok(reprocessed.slice(applyStart, applyEnd).every(({ dryRun }) => dryRun === false));
+      const result = await handle.result();
+      assert.deepEqual(result, { counts: expectedCounts });
       assert.equal(
-        new Set(reprocessed.slice(applyStart, applyEnd).map(({ postId }) => postId)).size,
-        posts.length,
-      );
-      assert.deepEqual(
-        attempts.filter(({ postId, dryRun }) => postId === posts[10]!.postId && dryRun === false),
-        [
-          { ...posts[10], dryRun: false },
-          { ...posts[10], dryRun: false },
-        ],
-      );
-      assert.equal(
-        reprocessed.filter(({ postId, dryRun }) => postId === posts[10]!.postId && dryRun === false)
-          .length,
+        (
+          await environment.client.workflow
+            .getHandle(handle.workflowId, handle.firstExecutionRunId)
+            .fetchHistory()
+        ).events?.filter(
+          (event) =>
+            event.workflowExecutionContinuedAsNewEventAttributes?.newExecutionRunId !== undefined,
+        ).length,
         1,
       );
-      assert.equal(maxActiveActivities, 1);
-
-      const defaultBatchResult = await environment.client.workflow.execute(
-        reprocessLocalPostContentsWorkflow.workflow,
-        {
-          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs({}),
-          taskQueue,
-          args: [{}],
-        },
-      );
-      assert.deepEqual(defaultBatchResult, {
-        maxPostId: posts.at(-1)!.postId,
-        counts: { updated: 13, wouldUpdate: 13, unchanged: 13, skipped: 13 },
-      });
       assert.deepEqual(
-        reprocessed.slice(applyEnd).map(({ postId }) => postId),
+        completed.map(({ postId }) => postId),
         posts.map(({ postId }) => postId),
       );
-      assert.ok(reprocessed.slice(applyEnd).every(({ dryRun }) => dryRun === true));
-      assert.deepEqual(loaderCalls.slice(2), [
-        { limit: 50 },
-        { afterPostId: posts[49]!.postId, maxPostId: posts.at(-1)!.postId, limit: 50 },
-      ]);
-
-      await assert.rejects(
-        environment.client.workflow.execute(reprocessLocalPostContentsWorkflow.workflow, {
-          workflowId: 'invalid-post-content-batch-reprocessing-' + process.pid,
-          taskQueue,
-          args: [
-            {
-              continuation: {
-                maxPostId: 'invalid',
-                counts: { updated: 0, wouldUpdate: 0, unchanged: 0, skipped: 0 },
-              },
-            },
-          ],
-        }),
+      assert.deepEqual(
+        attempts.filter(({ postId }) => postId === posts[10]!.postId),
+        [
+          { ...posts[10]!, dryRun: false },
+          { ...posts[10]!, dryRun: false },
+        ],
       );
-      assert.equal(loaderCalls.length, 4);
+      assert.equal(completed.filter(({ postId }) => postId === posts[10]!.postId).length, 1);
+      assert.ok(completed.every(({ dryRun }) => dryRun === false));
+      assert.equal(maxActiveActivities, 1);
     });
   },
 );
 
 test(
-  'local post content batch resumes after a Worker restart without replaying completed Activity results',
+  'selected reprocessing resumes after a Worker restart without replaying completed Activity results',
   { timeout: 120_000 },
   async () => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -237,13 +241,8 @@ test(
       postId: id(2_100 + index),
       postContentId: id(3_100 + index),
     }));
-    const attempts: Array<{ postId: string; postContentId: string; dryRun?: boolean }> = [];
-    const completed: Array<{ postId: string; postContentId: string; dryRun?: boolean }> = [];
-    const loaderCalls: Array<{
-      afterPostId?: string;
-      maxPostId?: string | null;
-      limit: number;
-    }> = [];
+    const attempts: ReprocessLocalPostContentInput[] = [];
+    const completed: ReprocessLocalPostContentInput[] = [];
     const statuses: readonly PostContentReprocessingStatus[] = [
       'updated',
       'wouldUpdate',
@@ -272,29 +271,7 @@ test(
         const index = posts.findIndex((post) => post.postId === postId);
         return { status: statuses[index % statuses.length]! };
       },
-      loadLocalPostsForContentReprocessingActivity: async ({
-        afterPostId,
-        maxPostId,
-        limit,
-      }: Parameters<typeof activities.loadLocalPostsForContentReprocessingActivity>[0]) => {
-        loaderCalls.push({
-          ...(afterPostId === undefined ? {} : { afterPostId }),
-          ...(maxPostId === undefined ? {} : { maxPostId }),
-          limit,
-        });
-        const upperBound = maxPostId ?? posts.at(-1)!.postId;
-        const upperIndex = posts.findIndex((post) => post.postId === upperBound);
-        const afterIndex =
-          afterPostId === undefined ? -1 : posts.findIndex((post) => post.postId === afterPostId);
-        return {
-          maxPostId: upperBound,
-          posts: posts.slice(afterIndex + 1, upperIndex + 1).slice(0, limit),
-        };
-      },
-    } satisfies Pick<
-      typeof activities,
-      'reprocessLocalPostContentActivity' | 'loadLocalPostsForContentReprocessingActivity'
-    >;
+    } satisfies Pick<typeof activities, 'reprocessLocalPostContentActivity'>;
     const createWorker = () =>
       Worker.create({
         workflowsPath,
@@ -322,11 +299,11 @@ test(
 
     try {
       await startWorker();
-      const input = { dryRun: false };
+      const input: ReprocessLocalPostContentsInput = { targets: posts, dryRun: false };
       const handle = await environment.client.workflow.start(
         reprocessLocalPostContentsWorkflow.workflow,
         {
-          workflowId: 'post-content-batch-reprocessing-restart-' + process.pid,
+          workflowId: reprocessLocalPostContentsWorkflow.workflowIdFromArgs(input),
           taskQueue,
           args: [input],
         },
@@ -339,21 +316,19 @@ test(
         { ...posts[1], dryRun: false },
       ]);
       assert.deepEqual(completed, [{ ...posts[0], dryRun: false }]);
-      assert.deepEqual(loaderCalls, [{ limit: 50 }]);
 
       await startWorker();
       const result = await handle.result();
       await stopWorker();
 
       assert.deepEqual(result, {
-        maxPostId: posts.at(-1)!.postId,
         counts: { updated: 13, wouldUpdate: 13, unchanged: 13, skipped: 13 },
       });
       assert.deepEqual(
         attempts.filter(({ postId }) => postId === posts[1]!.postId),
         [
-          { ...posts[1], dryRun: false },
-          { ...posts[1], dryRun: false },
+          { ...posts[1]!, dryRun: false },
+          { ...posts[1]!, dryRun: false },
         ],
       );
       assert.deepEqual(
@@ -362,10 +337,6 @@ test(
       );
       assert.equal(completed.filter(({ postId }) => postId === posts[0]!.postId).length, 1);
       assert.equal(completed.filter(({ postId }) => postId === posts[1]!.postId).length, 1);
-      assert.deepEqual(loaderCalls, [
-        { limit: 50 },
-        { afterPostId: posts[49]!.postId, maxPostId: posts.at(-1)!.postId, limit: 50 },
-      ]);
     } finally {
       if (worker && !workerStopped) {
         worker.shutdown();

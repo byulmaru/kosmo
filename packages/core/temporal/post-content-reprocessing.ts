@@ -1,13 +1,16 @@
+import { createHash } from 'node:crypto';
 import type { WorkflowDefinition } from './client';
 
-export const REPROCESS_LOCAL_POST_CONTENT_WORKFLOW_TYPE = 'reprocessLocalPostContentWorkflow';
 export const REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE = 'reprocessLocalPostContentsWorkflow';
 
 export type PostContentReprocessingStatus = 'updated' | 'wouldUpdate' | 'unchanged' | 'skipped';
 
-export type ReprocessLocalPostContentInput = {
+export type ReprocessLocalPostContentTarget = {
   readonly postId: string;
   readonly postContentId: string;
+};
+
+export type ReprocessLocalPostContentInput = ReprocessLocalPostContentTarget & {
   readonly dryRun?: boolean;
 };
 
@@ -18,35 +21,33 @@ export type ReprocessLocalPostContentResult = {
 export type PostContentReprocessingCounts = Readonly<Record<PostContentReprocessingStatus, number>>;
 
 export type ReprocessLocalPostContentsContinuation = {
-  readonly maxPostId: string;
-  readonly afterPostId?: string;
   readonly counts: PostContentReprocessingCounts;
 };
 
 export type ReprocessLocalPostContentsInput = {
+  readonly targets: readonly ReprocessLocalPostContentTarget[];
   readonly dryRun?: boolean;
   readonly continuation?: ReprocessLocalPostContentsContinuation;
 };
 
 export type ReprocessLocalPostContentsResult = {
-  readonly maxPostId: string | null;
   readonly counts: PostContentReprocessingCounts;
-};
-
-export const reprocessLocalPostContentWorkflow: WorkflowDefinition<
-  (input: ReprocessLocalPostContentInput) => Promise<ReprocessLocalPostContentResult>
-> = {
-  workflow: REPROCESS_LOCAL_POST_CONTENT_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ postId, postContentId, dryRun }) =>
-    REPROCESS_LOCAL_POST_CONTENT_WORKFLOW_TYPE +
-    ':' +
-    JSON.stringify([postId, postContentId, dryRun ?? true]),
 };
 
 export const reprocessLocalPostContentsWorkflow: WorkflowDefinition<
   (input: ReprocessLocalPostContentsInput) => Promise<ReprocessLocalPostContentsResult>
 > = {
   workflow: REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ dryRun }) =>
-    REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE + ':' + (dryRun === false ? 'apply' : 'dry-run'),
+  workflowIdFromArgs: ({ targets, dryRun }) => {
+    const targetScope = createHash('sha256')
+      .update(JSON.stringify(targets.map(({ postId, postContentId }) => [postId, postContentId])))
+      .digest('hex');
+    return (
+      REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE +
+      ':' +
+      targetScope +
+      ':' +
+      (dryRun === false ? 'apply' : 'dry-run')
+    );
+  },
 };

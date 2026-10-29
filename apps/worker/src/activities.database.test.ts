@@ -62,10 +62,7 @@ import type {
   finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
   prepareMediaUploadActivity as PrepareMediaUploadActivity,
 } from './activities/media-upload';
-import type {
-  loadLocalPostsForContentReprocessingActivity as LoadLocalPostsForContentReprocessingActivity,
-  reprocessLocalPostContentActivity as ReprocessLocalPostContentActivity,
-} from './activities/post-content-reprocessing';
+import type { reprocessLocalPostContentActivity as ReprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -112,7 +109,6 @@ let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNot
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
 let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
-let loadLocalPostsForContentReprocessingActivity: typeof LoadLocalPostsForContentReprocessingActivity;
 let reprocessLocalPostContentActivity: typeof ReprocessLocalPostContentActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
@@ -161,8 +157,7 @@ before(async () => {
   } = await import('./activities'));
   ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
     await import('./activities/media-upload'));
-  ({ loadLocalPostsForContentReprocessingActivity, reprocessLocalPostContentActivity } =
-    await import('./activities/post-content-reprocessing'));
+  ({ reprocessLocalPostContentActivity } = await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -3150,7 +3145,7 @@ test('Local PostContent hashtag processing repairs relations without changing th
   }
 });
 
-test('Local PostContent reprocessing and candidate paging include only active Local Posts', async () => {
+test('Local PostContent reprocessing accepts Local Posts and skips remote or deleted Posts', async () => {
   const local = await createPostContentReprocessingFixture({
     document: () => postContentDocumentFromText('local'),
   });
@@ -3164,9 +3159,14 @@ test('Local PostContent reprocessing and candidate paging include only active Lo
   });
 
   try {
-    const page = await loadLocalPostsForContentReprocessingActivity({ limit: 50 });
-    assert.equal(page.maxPostId, local.post.id);
-    assert.deepEqual(page.posts, [{ postContentId: local.content.id, postId: local.post.id }]);
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postContentId: local.content.id,
+        postId: local.post.id,
+      }),
+      { status: 'unchanged' },
+    );
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
