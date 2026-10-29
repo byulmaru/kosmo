@@ -25,6 +25,7 @@ type QueryMode = 'error' | 'pending' | 'success';
 type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
 
 const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
+const mockCommitMutation = () => undefined;
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
@@ -249,7 +250,7 @@ mockModule('react-relay', {
     assert.ok(operation);
     return operation as RelayOperationName;
   },
-  useMutation: () => [() => undefined],
+  useMutation: () => [mockCommitMutation],
   useLazyLoadQuery: (
     query: QueryName,
     _variables: Record<string, unknown>,
