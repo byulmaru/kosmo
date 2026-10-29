@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -6,6 +7,7 @@ import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let status = 'valid';
@@ -29,6 +31,10 @@ mockModule('react-native', {
   useWindowDimensions: () => ({ width: 390, height: 844 }),
 });
 mockModule('lucide-react-native', { ChevronLeftIcon: 'ChevronLeftIcon', Menu: 'Menu' });
+mockModule(require.resolve('lucide-react-native'), {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+  Menu: 'Menu',
+});
 mockModule('react-relay', {
   graphql: () => ({}),
   useLazyLoadQuery: () => ({
