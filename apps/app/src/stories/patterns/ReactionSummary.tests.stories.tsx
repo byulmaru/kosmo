@@ -52,6 +52,86 @@ export const PlaygroundSelectionUpdatesArgs: Story = {
   },
 };
 
+function ReactionSummaryMotion() {
+  const [pending, setPending] = useState<ReadonlyArray<string>>([]);
+  const [selected, setSelected] = useState<ReadonlyArray<string>>(['❤️']);
+
+  return (
+    <View style={{ width: 320 }}>
+      <ReactionSummary
+        entries={canonicalReactionEntries.slice(1, 2)}
+        onToggle={({ nextSelected, optionId }) => {
+          setSelected(nextSelected ? [optionId] : []);
+          setPending([optionId]);
+          setTimeout(() => setPending([]), 800);
+        }}
+        pendingTypeIds={pending}
+        selectedTypeIds={selected}
+      />
+    </View>
+  );
+}
+
+async function sampleFrames(read: () => string, duration = 260) {
+  const samples: string[] = [];
+  const start = performance.now();
+  do {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    samples.push(read());
+  } while (performance.now() - start < duration);
+  return samples;
+}
+
+const motionPlay: Story['play'] = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const reaction = canvas.getByRole('button', { name: '❤️ 반응 18개' });
+  const background = canvas.getByTestId('reaction-summary-selected-background');
+  const readColor = () => getComputedStyle(background).backgroundColor;
+  const selected = readColor();
+
+  await userEvent.click(reaction);
+  expect(reaction).toHaveAttribute('aria-busy', 'true');
+  const leaving = await sampleFrames(readColor);
+  await waitFor(() => expect(readColor()).not.toBe(selected));
+  const idle = readColor();
+  expect(leaving.some((color) => color !== selected && color !== idle)).toBe(true);
+
+  // Pending blocks another toggle while the optimistic visual transition remains observable.
+  const pendingReaction = canvas.getByRole('button', { name: '❤️ 반응 18개, 처리 중' });
+  expect(pendingReaction).toBeDisabled();
+  await waitFor(() =>
+    expect(canvas.getByRole('button', { name: '❤️ 반응 18개' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    ),
+  );
+};
+
+export const MotionContract: Story = {
+  tags: ['motion'],
+  render: () => <ReactionSummaryMotion />,
+  play: motionPlay,
+};
+
+export const ReducedMotionContract: Story = {
+  tags: ['motion'],
+  globals: { reduceMotion: true },
+  render: () => <ReactionSummaryMotion />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reaction = canvas.getByRole('button', { name: '❤️ 반응 18개' });
+    const background = canvas.getByTestId('reaction-summary-selected-background');
+    const readColor = () => getComputedStyle(background).backgroundColor;
+    const selected = readColor();
+
+    await userEvent.click(reaction);
+    const idle = readColor();
+    expect(idle).not.toBe(selected);
+    const frames = await sampleFrames(readColor);
+    expect(frames.every((color) => color === idle)).toBe(true);
+  },
+};
+
 export const WidthFitAndPeopleLink: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   render: () => <Interaction />,

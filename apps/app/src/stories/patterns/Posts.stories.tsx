@@ -5509,7 +5509,9 @@ export const LinkedSourceQuote: Story = {
     const externalLinks = canvas.getAllByLabelText('안전한 외부 링크, https://example.com/path');
     const expectedLinkColor =
       globals.theme === 'dark' ? colors.dark.actionLinkBase : colors.light.actionLinkBase;
-    expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(window.getComputedStyle(sourcePreview.firstElementChild!).backgroundColor).toBe(
+      'rgba(0, 0, 0, 0)',
+    );
     expect(window.getComputedStyle(sourcePreview).borderTopWidth).toBe('1px');
     for (const externalLink of externalLinks) {
       expect(externalLink).toHaveStyle({ color: expectedLinkColor });
@@ -5524,6 +5526,7 @@ export const LinkedSourceQuoteInteraction: Story = {
     const canvas = within(canvasElement);
     const postBody = await canvas.findByTestId('post-body');
     const sourcePreview = await canvas.findByTestId('source-post-preview');
+    const sourceFeedback = sourcePreview.firstElementChild!;
     const sourcePreviewLink = within(sourcePreview).getByRole('link', {
       name: '원문 게시글 보기',
     });
@@ -5532,21 +5535,21 @@ export const LinkedSourceQuoteInteraction: Story = {
     Linking.openURL = openURL;
 
     try {
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       await userEvent.hover(sourcePreview);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.hover(sourcePreviewLink);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.unhover(sourcePreview);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0)');
 
       await userEvent.hover(sourcePreviewLink);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.unhover(sourcePreviewLink);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0)');
 
       await dispatchPointerBoundary(sourcePreviewLink, 'enter', 'touch', 81);
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(window.getComputedStyle(sourceFeedback).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       await dispatchPointerBoundary(sourcePreviewLink, 'leave', 'touch', 81);
 
       await userEvent.click(
@@ -6990,7 +6993,7 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     const pointerUser = userEvent.setup();
 
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
-    const restingWarningColor = getComputedStyle(warning).backgroundColor;
+    const restingWarningColor = getComputedStyle(warning.firstElementChild!).backgroundColor;
 
     await pointerUser.hover(warning);
     await pointerUser.pointer({ keys: '[MouseLeft>]', target: warning });
@@ -7003,7 +7006,9 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
-      expect(getComputedStyle(warning).backgroundColor).toBe(restingWarningColor);
+      expect(getComputedStyle(warning.firstElementChild!).backgroundColor).toBe(
+        restingWarningColor,
+      );
     });
 
     await userEvent.hover(card);
@@ -7014,7 +7019,9 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
 
     await userEvent.hover(warning);
-    expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
+    expect(getComputedStyle(warning.firstElementChild!).backgroundColor).not.toBe(
+      restingWarningColor,
+    );
     await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
 
     await userEvent.unhover(warning);
@@ -7157,11 +7164,15 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
     expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
 
-    const restingWarningColor = getComputedStyle(sourceWarningButton).backgroundColor;
+    const restingWarningColor = getComputedStyle(
+      sourceWarningButton.firstElementChild!,
+    ).backgroundColor;
     expect(sourcePreviewLink).toBeVisible();
 
     await userEvent.hover(sourceWarningButton);
-    expect(getComputedStyle(sourceWarningButton).backgroundColor).not.toBe(restingWarningColor);
+    expect(getComputedStyle(sourceWarningButton.firstElementChild!).backgroundColor).not.toBe(
+      restingWarningColor,
+    );
 
     await userEvent.unhover(sourceWarningButton);
 

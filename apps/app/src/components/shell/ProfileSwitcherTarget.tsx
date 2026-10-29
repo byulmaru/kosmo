@@ -1,14 +1,19 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   ProfileSwitcherUnreadBadge,
   ProfileSwitcherUnreadIndicator,
 } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import {
+  useAnimatedColorTransition,
+  useAnimatedOpacityTransition,
+} from '@/components/ui/useAnimatedColorTransition';
+import { useElevation, useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 import type {
   ProfilePickerProfile,
@@ -35,6 +40,7 @@ export function ProfileSwitcherTarget({
   surface,
 }: ProfileSwitcherTargetProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const elevation = useElevation();
   const menuRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
@@ -112,42 +118,49 @@ export function ProfileSwitcherTarget({
         accessibilityState={{ disabled, expanded: open }}
         disabled={disabled}
         onPress={() => onOpenChange(!open)}
-        style={({ pressed }) => [
+        style={[
           styles.trigger,
           compact ? styles.compactTrigger : styles.wideTrigger,
           { height: triggerTargetSize },
-          { opacity: disabled ? 0.5 : pressed ? 0.65 : 1 },
+          { opacity: disabled ? 0.5 : 1 },
         ]}
       >
-        {compact ? (
-          <View style={styles.compactAvatar}>
-            <Avatar
-              imageUri={selectedProfile?.avatar?.url}
-              label={selectedProfile?.displayName ?? '프로필'}
-              size={40}
-            />
-            <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
-          </View>
-        ) : (
-          <>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.triggerName,
-                { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
-              ]}
-            >
-              {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
-            </Text>
-            <View style={styles.chevron}>
-              <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
-              {open ? (
-                <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
-              ) : (
-                <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
-              )}
-            </View>
-          </>
+        {({ pressed }) => (
+          <ProfileSwitcherTargetTriggerVisual pressed={pressed} reducedMotion={reducedMotion}>
+            {compact ? (
+              <View style={styles.compactAvatar}>
+                <Avatar
+                  imageUri={selectedProfile?.avatar?.url}
+                  label={selectedProfile?.displayName ?? '프로필'}
+                  size={40}
+                />
+                <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
+              </View>
+            ) : (
+              <>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.triggerName,
+                    { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
+                  ]}
+                >
+                  {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+                </Text>
+                <View style={styles.chevron}>
+                  <ProfileSwitcherUnreadIndicator
+                    compact={false}
+                    visible={!open && otherHasUnread}
+                  />
+                  {open ? (
+                    <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
+                  ) : (
+                    <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
+                  )}
+                </View>
+              </>
+            )}
+          </ProfileSwitcherTargetTriggerVisual>
         )}
       </Pressable>
 
@@ -188,51 +201,50 @@ export function ProfileSwitcherTarget({
                     disabled={disabled}
                     key={profile.id}
                     onPress={() => onSelectProfile(profile.id)}
-                    style={({ pressed }) => [
-                      styles.option,
-                      {
-                        backgroundColor: selected
-                          ? theme.stateSelectedSurface
-                          : pressed
-                            ? theme.statePressed
-                            : 'transparent',
-                        opacity: disabled ? 0.5 : 1,
-                      },
-                    ]}
+                    style={[styles.option, { opacity: disabled ? 0.5 : 1 }]}
                   >
-                    <View
-                      accessible={false}
-                      accessibilityElementsHidden
-                      aria-hidden
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      <Avatar
-                        imageUri={profile.avatar?.url}
-                        label={profile.displayName}
-                        size={40}
-                      />
-                    </View>
-                    <View style={styles.optionCopy}>
-                      <Text
-                        numberOfLines={1}
-                        style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}
+                    {({ pressed }) => (
+                      <ProfileSwitcherTargetOptionVisual
+                        pressed={pressed}
+                        reducedMotion={reducedMotion}
+                        selected={selected}
+                        theme={theme}
                       >
-                        {profile.displayName}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}
-                      >
-                        {profile.relativeHandle}
-                      </Text>
-                    </View>
-                    <View style={styles.trailing}>
-                      {selected ? (
-                        <CheckIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-                      ) : (
-                        <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
-                      )}
-                    </View>
+                        <View
+                          accessible={false}
+                          accessibilityElementsHidden
+                          aria-hidden
+                          importantForAccessibility="no-hide-descendants"
+                        >
+                          <Avatar
+                            imageUri={profile.avatar?.url}
+                            label={profile.displayName}
+                            size={40}
+                          />
+                        </View>
+                        <View style={styles.optionCopy}>
+                          <Text
+                            numberOfLines={1}
+                            style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}
+                          >
+                            {profile.displayName}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}
+                          >
+                            {profile.relativeHandle}
+                          </Text>
+                        </View>
+                        <View style={styles.trailing}>
+                          {selected ? (
+                            <CheckIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+                          ) : (
+                            <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
+                          )}
+                        </View>
+                      </ProfileSwitcherTargetOptionVisual>
+                    )}
                   </Pressable>
                 );
               })
@@ -241,6 +253,68 @@ export function ProfileSwitcherTarget({
         </View>
       ) : null}
     </View>
+  );
+}
+
+function ProfileSwitcherTargetTriggerVisual({
+  children,
+  pressed,
+  reducedMotion,
+}: {
+  children: ReactNode;
+  pressed: boolean;
+  reducedMotion: boolean;
+}) {
+  const opacity = useAnimatedOpacityTransition({
+    interactionKey: pressed ? 'pressed' : 'idle',
+    opacity: pressed ? 0.65 : 1,
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <Animated.View
+      style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: space[8], opacity }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+function ProfileSwitcherTargetOptionVisual({
+  children,
+  pressed,
+  reducedMotion,
+  selected,
+  theme,
+}: {
+  children: ReactNode;
+  pressed: boolean;
+  reducedMotion: boolean;
+  selected: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
+    color: selected ? theme.stateSelectedSurface : pressed ? theme.statePressed : 'transparent',
+    interactionKey: pressed ? 'pressed' : 'idle',
+    reducedMotion,
+    role: selected ? 'selection' : 'interaction',
+    selectionKey: selected,
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.optionFeedback,
+          { backgroundColor } as unknown as ViewStyle,
+        ]}
+      />
+      {children}
+    </>
   );
 }
 
@@ -274,7 +348,9 @@ const styles = StyleSheet.create({
     minHeight: 60,
     paddingHorizontal: space[12],
     paddingVertical: space[8],
+    position: 'relative',
   },
+  optionFeedback: { borderRadius: radius[12] },
   optionCopy: { flex: 1, minWidth: 0 },
   trailing: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
   empty: { ...textStyles.uiCopyM, padding: space[16], textAlign: 'center' },

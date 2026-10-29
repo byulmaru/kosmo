@@ -38,7 +38,13 @@ type NativeHarness = {
 const nativeHarness = createRequire(import.meta.url)(
   './PostListItem.native.harness.cjs',
 ) as NativeHarness;
-const native = nativeHarness.nativeExports;
+const native = {
+  ...nativeHarness.nativeExports,
+  Animated: {
+    ...(nativeHarness.nativeExports.Animated as Record<string, unknown>),
+    createAnimatedComponent: (component: unknown) => component,
+  },
+};
 const pressedColor = 'post-list-item-pressed-marker';
 let ActionMenu: ActionMenuComponent;
 let PostListItem: PostListItemComponent;
@@ -95,6 +101,10 @@ mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: { boxShadow: 'none' }, overlay: {} }),
   useReducedMotion: () => true,
   useTheme: () => theme,
+});
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },

@@ -68,8 +68,16 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Platform: { OS: 'web' },
-  Pressable: 'Pressable',
+  Pressable: (props: Record<string, unknown>) => {
+    const children = props.children;
+    return createElement(
+      'Pressable',
+      props,
+      typeof children === 'function' ? children({ pressed: false }) : children,
+    );
+  },
   ScrollView: 'ScrollView',
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
@@ -189,7 +197,12 @@ mockModule('@/session/logout', {
   useAccountDeletionCleanup: () => ({ error: null, logout: () => undefined, pending: false }),
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => new Proxy({}, { get: (_target, key) => `theme-${String(key)}` }),
+});
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
 });
 mockModule('expo-router', { useRouter: () => ({ replace: () => undefined }) });
 

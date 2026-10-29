@@ -290,6 +290,8 @@ const meta = {
     'RecentTwoRowsNativeContract',
     'reactionOptions',
     'SequentialKeyboardBrowseContract',
+    'MotionContract',
+    'ReducedMotionContract',
   ],
   parameters: { layout: 'centered' },
   render: (args) => <StoryPicker {...args} />,
@@ -310,6 +312,72 @@ export const WebSearchResults: Story = { args: { query: '하트' } };
 export const WebEmpty: Story = { args: { query: '존재하지않음' } };
 export const WebLoading: Story = { args: { loading: true } };
 export const WebRecent: Story = { args: { recentValues: ['fire', 'laugh'] } };
+
+async function sampleFrames(read: () => string, duration = 260) {
+  const samples: string[] = [];
+  const start = performance.now();
+  do {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    samples.push(read());
+  } while (performance.now() - start < duration);
+  return samples;
+}
+
+export const MotionContract: Story = {
+  tags: ['motion'],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const quick = within(canvas.getByTestId('full-reaction-section-quick-row-0'));
+    const option = quick.getByRole('button', { name: '감동 🥹' });
+    const visual = quick.getByTestId('full-reaction-option-moved-visual');
+    const readColor = () => getComputedStyle(visual).backgroundColor;
+    const initial = readColor();
+
+    await userEvent.click(option);
+    expect(option).toHaveAttribute('aria-pressed', 'true');
+    const entering = await sampleFrames(readColor);
+    const selected = readColor();
+    expect(entering.some((color) => color !== initial && color !== selected)).toBe(true);
+
+    await userEvent.click(option);
+    const leaving = await sampleFrames(readColor);
+    const idle = readColor();
+    expect(option).toHaveAttribute('aria-pressed', 'false');
+    expect(leaving.some((color) => color !== idle && color !== selected)).toBe(true);
+
+    // Retargeting a rapid deselect/select sequence must settle on the latest state.
+    await userEvent.click(option);
+    await userEvent.click(option);
+    await userEvent.click(option);
+    await waitFor(() => expect(readColor()).toBe(selected));
+    expect(option).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+export const ReducedMotionContract: Story = {
+  tags: ['motion'],
+  globals: { reduceMotion: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const quick = within(canvas.getByTestId('full-reaction-section-quick-row-0'));
+    const option = quick.getByRole('button', { name: '감동 🥹' });
+    const visual = quick.getByTestId('full-reaction-option-moved-visual');
+    const readColor = () => getComputedStyle(visual).backgroundColor;
+    const initial = readColor();
+
+    await userEvent.click(option);
+    const selected = readColor();
+    expect(selected).not.toBe(initial);
+    const selectedFrames = await sampleFrames(readColor);
+    expect(selectedFrames.every((color) => color === selected)).toBe(true);
+
+    await userEvent.click(option);
+    const idle = readColor();
+    expect(idle).not.toBe(selected);
+    const idleFrames = await sampleFrames(readColor);
+    expect(idleFrames.every((color) => color === idle)).toBe(true);
+  },
+};
 
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;

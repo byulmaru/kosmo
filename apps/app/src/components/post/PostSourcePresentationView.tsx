@@ -1,12 +1,13 @@
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
@@ -234,6 +235,7 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [pointerHovered, setPointerHovered] = useState(false);
   const router = useRouter();
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
@@ -332,18 +334,52 @@ export function PostSourcePreview({
           setPointerHovered(false);
         }
       }}
-      style={[
-        ...previewStyle,
-        {
-          backgroundColor: pointerHovered ? theme.stateHover : undefined,
-          cursor: 'auto',
-        },
-      ]}
+      style={[...previewStyle, { cursor: 'auto' }]}
       tabIndex={-1}
       testID="source-post-preview"
     >
-      {content}
+      <PostSourcePreviewFeedback
+        hovered={pointerHovered}
+        reducedMotion={reducedMotion}
+        theme={theme}
+      >
+        {content}
+      </PostSourcePreviewFeedback>
     </Pressable>
+  );
+}
+
+function PostSourcePreviewFeedback({
+  children,
+  hovered,
+  reducedMotion,
+  theme,
+}: {
+  children: ReactNode;
+  hovered: boolean;
+  reducedMotion: boolean;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const backgroundColor = useAnimatedColorTransition({
+    instantKey: theme,
+    color: hovered ? theme.stateHover : 'transparent',
+    interactionKey: hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: 'interaction',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.previewFeedback,
+          { backgroundColor } as unknown as ViewStyle,
+        ]}
+      />
+      {children}
+    </>
   );
 }
 
@@ -470,6 +506,13 @@ const styles = StyleSheet.create({
     ...typography.xsm,
   },
   sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
-  preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
+  preview: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md,
+    position: 'relative',
+  },
+  previewFeedback: { borderRadius: radii.lg },
   presentationLink: { maxWidth: '100%', minWidth: 0 },
 });
