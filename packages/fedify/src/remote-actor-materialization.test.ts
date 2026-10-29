@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   Endpoints,
@@ -44,6 +45,22 @@ const remoteDomain = 'remote.example';
 const remoteAliasDomain = 'alias.example';
 const remoteActorUri = new URL(`https://${remoteDomain}/users/alice`);
 
+type ProfilePinOrderKey = (typeof CoreDb.ProfilePinnedPosts.$inferSelect)['orderKey'];
+
+const backfilledProfilePinOrderKey = (
+  id: string,
+  position: number | null = null,
+): ProfilePinOrderKey => {
+  const rank = Buffer.alloc(4);
+  rank.writeInt32BE(position ?? 0x7fffffff);
+  return Buffer.concat([
+    Buffer.from([0x94]),
+    rank,
+    Buffer.from([position === null ? 1 : 0]),
+    Buffer.from(id.replaceAll('-', ''), 'hex'),
+  ]) as ProfilePinOrderKey;
+};
+
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
@@ -58,7 +75,6 @@ let PostContents: typeof CoreDb.PostContents;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
-let profilePinOrderKey: typeof CoreDb.profilePinOrderKey;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
@@ -89,7 +105,6 @@ describe('remote actor materialization', () => {
       ProfileMedia,
       ProfileFollows,
       ProfilePinnedPosts,
-      profilePinOrderKey,
       Profiles,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
@@ -1014,11 +1029,29 @@ describe('remote actor materialization', () => {
         .returning();
     const [remotePin, manualPin, stalePin, equalPin] = await createPosts(stored.profile.id, 4);
     const [otherPin] = await createPosts(otherProfile.id, 1);
+    const remotePinId = randomUUID();
+    const otherPinId = randomUUID();
 
     await db.insert(ProfilePinnedPosts).values([
-      { position: 0, postId: remotePin!.id, profileId: stored.profile.id },
-      { orderKey: Buffer.from([128, 0]), postId: manualPin!.id, profileId: stored.profile.id },
-      { position: 0, postId: otherPin!.id, profileId: otherProfile.id },
+      {
+        id: remotePinId,
+        orderKey: backfilledProfilePinOrderKey(remotePinId, 0),
+        position: 0,
+        postId: remotePin!.id,
+        profileId: stored.profile.id,
+      },
+      {
+        orderKey: Buffer.from([128, 0]) as ProfilePinOrderKey,
+        postId: manualPin!.id,
+        profileId: stored.profile.id,
+      },
+      {
+        id: otherPinId,
+        orderKey: backfilledProfilePinOrderKey(otherPinId, 0),
+        position: 0,
+        postId: otherPin!.id,
+        profileId: otherProfile.id,
+      },
     ]);
 
     const readPins = async (profileId: string) =>
@@ -1087,7 +1120,10 @@ describe('remote actor materialization', () => {
     assert.deepEqual(await readPins(stored.profile.id), []);
     assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
 
+    const stalePinId = randomUUID();
     await db.insert(ProfilePinnedPosts).values({
+      id: stalePinId,
+      orderKey: backfilledProfilePinOrderKey(stalePinId, 1),
       position: 1,
       postId: stalePin!.id,
       profileId: stored.profile.id,
@@ -1102,7 +1138,10 @@ describe('remote actor materialization', () => {
     });
     assert.deepEqual(await readPins(stored.profile.id), [[1, stalePin!.id]]);
 
+    const equalPinId = randomUUID();
     await db.insert(ProfilePinnedPosts).values({
+      id: equalPinId,
+      orderKey: backfilledProfilePinOrderKey(equalPinId, 2),
       position: 2,
       postId: equalPin!.id,
       profileId: stored.profile.id,
@@ -1342,7 +1381,10 @@ describe('remote actor materialization', () => {
       ])
       .returning();
 
+    const existingPinId = randomUUID();
     await db.insert(ProfilePinnedPosts).values({
+      id: existingPinId,
+      orderKey: backfilledProfilePinOrderKey(existingPinId, 0),
       position: 0,
       postId: posts[2]!.id,
       profileId: stored.profile.id,
@@ -1357,7 +1399,7 @@ describe('remote actor materialization', () => {
         })
         .from(ProfilePinnedPosts)
         .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
-        .orderBy(profilePinOrderKey, ProfilePinnedPosts.id);
+        .orderBy(ProfilePinnedPosts.orderKey, ProfilePinnedPosts.id);
 
     await replaceRemoteFeaturedSnapshot({
       postIds: [posts[0]!.id, posts[1]!.id],
@@ -1373,7 +1415,7 @@ describe('remote actor materialization', () => {
 
     const binaryPins = await readPins();
     assert.ok(binaryPins.every((pin) => Buffer.isBuffer(pin.orderKey)));
-    assert.ok(Buffer.compare(binaryPins[0]!.orderKey!, binaryPins[1]!.orderKey!) < 0);
+    assert.ok(Buffer.compare(binaryPins[0]!.orderKey, binaryPins[1]!.orderKey) < 0);
 
     await assert.rejects(
       replaceRemoteFeaturedSnapshot({
@@ -1446,7 +1488,10 @@ describe('remote actor materialization', () => {
       })
       .returning()
       .then(firstOrThrow);
+    const previousPinId = randomUUID();
     await db.insert(ProfilePinnedPosts).values({
+      id: previousPinId,
+      orderKey: backfilledProfilePinOrderKey(previousPinId, 0),
       position: 0,
       postId: previousPost.id,
       profileId: stored.profile.id,

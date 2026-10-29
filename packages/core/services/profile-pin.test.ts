@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import nodeCrypto from 'node:crypto';
 import { after, afterEach, mock, test } from 'node:test';
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
+import { getFraciErrorCode } from 'fraci';
 import {
   db,
   firstOrThrow,
@@ -9,7 +11,6 @@ import {
   PostContents,
   Posts,
   ProfilePinnedPosts,
-  profilePinOrderKey,
   Profiles,
 } from '../db';
 import {
@@ -20,7 +21,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import {
@@ -118,6 +119,46 @@ const createFixture = async () => {
   return { instance, profile };
 };
 
+type ProfilePinOrderKey = (typeof ProfilePinnedPosts.$inferSelect)['orderKey'];
+
+const orderedPins = (profileId: string) =>
+  db
+    .select({
+      id: ProfilePinnedPosts.id,
+      postId: ProfilePinnedPosts.postId,
+      key: ProfilePinnedPosts.orderKey,
+    })
+    .from(ProfilePinnedPosts)
+    .where(eq(ProfilePinnedPosts.profileId, profileId))
+    .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
+
+const insertPinsInOrder = async (profileId: string, postIds: readonly string[]) => {
+  let previous: ProfilePinOrderKey | null = null;
+  const pins = postIds.map((postId) => {
+    const orderKey = generateProfilePinKey(previous, null);
+    previous = orderKey;
+    return { orderKey, postId, profileId };
+  });
+  await db.insert(ProfilePinnedPosts).values(pins);
+};
+
+test('generated profile pin keys use jitter and stay between their bounds', () => {
+  const skips = [0, 0, 17, 18];
+  const randomInt = mock.method(nodeCrypto, 'randomInt', () => skips.shift() ?? 0);
+  const first = generateProfilePinKey(null, null);
+  const last = generateProfilePinKey(first, null);
+  const lowerJitter = generateProfilePinKey(first, last);
+  const higherJitter = generateProfilePinKey(first, last);
+
+  assert.ok(Buffer.compare(first, lowerJitter) < 0);
+  assert.ok(Buffer.compare(lowerJitter, last) < 0);
+  assert.ok(Buffer.compare(first, higherJitter) < 0);
+  assert.ok(Buffer.compare(higherJitter, last) < 0);
+  assert.notDeepEqual(lowerJitter, higherJitter);
+  assert.equal(randomInt.mock.callCount(), 4);
+  assert.ok(randomInt.mock.calls.every((call) => call.arguments[0] === 256));
+});
+
 test('eligible posts append per profile and pinning the same post is a no-op', async () => {
   const { profile } = await createFixture();
   const first = await createPost(profile.id);
@@ -153,6 +194,27 @@ test('eligible posts append per profile and pinning the same post is a no-op', a
     (await loadPins(otherProfile.id)).map(({ postId }) => postId),
     [otherPost.id],
   );
+});
+
+test('pin and reorder propagate unique violations without retrying', async () => {
+  const failure = Object.assign(new Error('Injected database failure'), { code: '23505' });
+  const transaction = mock.method(db, 'transaction', async () => {
+    throw failure;
+  });
+  const profileId = nodeCrypto.randomUUID();
+  const postId = nodeCrypto.randomUUID();
+
+  await assert.rejects(
+    pinProfilePost({ profileId, postId }),
+    (error: unknown) => error === failure,
+  );
+  await assert.rejects(
+    reorderProfilePost({ profileId, postId }),
+    (error: unknown) => error === failure,
+  );
+
+  assert.equal(transaction.mock.callCount(), 2);
+  assert.ok(transaction.mock.calls.every((call) => call.arguments.length === 1));
 });
 
 test('unpin removes only the exact present post and absent unpin is idempotent', async () => {
@@ -310,23 +372,13 @@ test('pin rejects inactive and suspended owner profiles', async () => {
   }
 });
 
-const orderedPins = (profileId: string) =>
-  db
-    .select({
-      id: ProfilePinnedPosts.id,
-      postId: ProfilePinnedPosts.postId,
-      key: profilePinOrderKey,
-    })
-    .from(ProfilePinnedPosts)
-    .where(eq(ProfilePinnedPosts.profileId, profileId))
-    .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id));
-
-test('reorder preserves hidden memberships, legacy order and idempotency', async () => {
+test('reorder preserves hidden memberships and idempotency', async () => {
   const { profile } = await createFixture();
   const posts = await Promise.all(Array.from({ length: 4 }, () => createPost(profile.id)));
-  for (const post of posts) {
-    await db.insert(ProfilePinnedPosts).values({ profileId: profile.id, postId: post.id });
-  }
+  await insertPinsInOrder(
+    profile.id,
+    posts.map((post) => post.id),
+  );
   const original = await orderedPins(profile.id);
   const [a, hidden, b, c] = original;
   await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hidden.postId));
@@ -348,25 +400,28 @@ test('reorder preserves hidden memberships, legacy order and idempotency', async
       .changed,
     false,
   );
+  await assert.rejects(
+    reorderProfilePost({ profileId: profile.id, postId: c.postId, beforePostId: c.postId }),
+    ConflictError,
+  );
   await reorderProfilePost({ profileId: profile.id, postId: c.postId });
   assert.deepEqual(
     (await orderedPins(profile.id)).map((row) => row.postId),
     original.map((row) => row.postId),
   );
-  // An old workload can still add a nullable-key row without rewriting others.
-  const oldWriterPost = await createPost(profile.id);
-  const beforeOldWrite = await orderedPins(profile.id);
-  await db.insert(ProfilePinnedPosts).values({ profileId: profile.id, postId: oldWriterPost.id });
-  const mixed = await orderedPins(profile.id);
-  assert.deepEqual(
-    mixed.filter((row) => row.postId !== oldWriterPost.id),
-    beforeOldWrite,
+  assert.equal(
+    (await reorderProfilePost({ profileId: profile.id, postId: c.postId })).changed,
+    false,
   );
-  assert.deepEqual(await orderedPins(profile.id), mixed);
   const fresh = await createPost(profile.id);
   await pinProfilePost({ profileId: profile.id, postId: fresh.id });
   assert.equal((await orderedPins(profile.id)).at(-1)?.postId, fresh.id);
   const before = await orderedPins(profile.id);
+  const notPinned = await createPost(profile.id);
+  await assert.rejects(
+    reorderProfilePost({ profileId: profile.id, postId: c.postId, beforePostId: notPinned.id }),
+    (error: unknown) => error instanceof NotFoundError,
+  );
   await assert.rejects(
     reorderProfilePost({ profileId: profile.id, postId: hidden.postId }),
     NotFoundError,
@@ -382,39 +437,75 @@ test('reorder preserves hidden memberships, legacy order and idempotency', async
   assert.deepEqual(await orderedPins(profile.id), before);
 });
 
-test('PostgreSQL bytea round trip, dense legacy gaps and collision constraints', async () => {
+test('PostgreSQL round trips binary order keys and enforces per-profile uniqueness', async () => {
   const { profile } = await createFixture();
-  const posts = await Promise.all([createPost(profile.id), createPost(profile.id)]);
-  const lower = Buffer.from('947fffffff0100000000000000000000000000000001', 'hex');
-  const upper = Buffer.from('947fffffff0100000000000000000000000000000002', 'hex');
-  let left: Buffer = lower;
-  const keys: Buffer[] = [lower, upper];
-  for (let i = 0; i < 400; i++) {
-    const key = generateProfilePinKey(left, upper);
-    assert.ok(Buffer.compare(left, key) < 0 && Buffer.compare(key, upper) < 0);
-    left = key;
-    keys.push(key);
-  }
-  const literals = sql.join(
-    keys.map((key) => sql`decode(${key.toString('hex')}, 'hex')`),
-    sql`, `,
-  );
-  const result = await db.execute(
-    sql`select key from unnest(ARRAY[${literals}]::bytea[]) as key order by key`,
+  const posts = await Promise.all(Array.from({ length: 4 }, () => createPost(profile.id)));
+  const first = generateProfilePinKey(null, null);
+  const last = generateProfilePinKey(first, null);
+  const middle = generateProfilePinKey(first, last);
+  const keys = [first, middle, last];
+  await db.insert(ProfilePinnedPosts).values(
+    keys.map((orderKey, index) => ({
+      orderKey,
+      postId: posts[index]!.id,
+      profileId: profile.id,
+    })),
   );
   assert.deepEqual(
-    result.map((row) => row.key),
-    [...keys].sort(Buffer.compare),
+    (await orderedPins(profile.id)).map((row) => row.key),
+    keys,
   );
-  await db
-    .insert(ProfilePinnedPosts)
-    .values({ profileId: profile.id, postId: posts[0].id, orderKey: lower });
   await assert.rejects(
     db
       .insert(ProfilePinnedPosts)
-      .values({ profileId: profile.id, postId: posts[1].id, orderKey: lower }),
+      .values({ profileId: profile.id, postId: posts[3]!.id, orderKey: first }),
   );
-  assert.equal((await orderedPins(profile.id)).length, 1);
+  assert.equal((await orderedPins(profile.id)).length, 3);
+});
+
+test('MAX_LENGTH_EXCEEDED leaves the persisted pin order unchanged', async () => {
+  mock.method(nodeCrypto, 'randomInt', () => 0);
+  const { profile } = await createFixture();
+  const [leftPost, rightPost, targetPost] = await Promise.all(
+    Array.from({ length: 3 }, () => createPost(profile.id)),
+  );
+  assert.ok(leftPost);
+  assert.ok(rightPost);
+  assert.ok(targetPost);
+
+  let leftKey = generateProfilePinKey(null, null);
+  const rightKey = generateProfilePinKey(leftKey, null);
+  let exhausted = false;
+  for (let attempt = 0; attempt < 1024; attempt++) {
+    try {
+      leftKey = generateProfilePinKey(leftKey, rightKey);
+    } catch (error) {
+      assert.equal(getFraciErrorCode(error), 'MAX_LENGTH_EXCEEDED');
+      exhausted = true;
+      break;
+    }
+  }
+  assert.ok(exhausted);
+  const targetKey = generateProfilePinKey(rightKey, null);
+  await db.insert(ProfilePinnedPosts).values([
+    { orderKey: leftKey, postId: leftPost.id, profileId: profile.id },
+    { orderKey: rightKey, postId: rightPost.id, profileId: profile.id },
+    { orderKey: targetKey, postId: targetPost.id, profileId: profile.id },
+  ]);
+  const before = await orderedPins(profile.id);
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  await assert.rejects(
+    reorderProfilePost({
+      profileId: profile.id,
+      postId: targetPost.id,
+      beforePostId: rightPost.id,
+    }),
+    (error: unknown) => getFraciErrorCode(error) === 'MAX_LENGTH_EXCEEDED',
+  );
+
+  assert.deepEqual(await orderedPins(profile.id), before);
+  assert.equal(start.mock.callCount(), 0);
 });
 
 test('concurrent reorder, append and removal preserve memberships', async () => {
@@ -467,7 +558,7 @@ test('reorder rejects Remote and unavailable profiles without altering their pin
       kind === InstanceKind.LOCAL ? ProfileState.DISABLED : ProfileState.ACTIVE,
     );
     const post = await createPost(profile.id);
-    await db.insert(ProfilePinnedPosts).values({ profileId: profile.id, postId: post.id });
+    await insertPinsInOrder(profile.id, [post.id]);
     const before = await orderedPins(profile.id);
     await assert.rejects(
       reorderProfilePost({ profileId: profile.id, postId: post.id }),
@@ -475,42 +566,4 @@ test('reorder rejects Remote and unavailable profiles without altering their pin
     );
     assert.deepEqual(await orderedPins(profile.id), before);
   }
-});
-
-test('legacy Remote null positions sort last even after maximum integer position', async () => {
-  const instance = await createInstance(InstanceKind.ACTIVITYPUB);
-  const profile = await createProfile(instance.id);
-  const posts = await Promise.all(Array.from({ length: 4 }, () => createPost(profile.id)));
-  await db.insert(ProfilePinnedPosts).values([
-    { id: '00000000-0000-7000-8000-000000000001', profileId: profile.id, postId: posts[0].id },
-    {
-      id: '00000000-0000-7000-8000-000000000002',
-      profileId: profile.id,
-      postId: posts[1].id,
-      position: 2147483647,
-    },
-    {
-      id: '00000000-0000-7000-8000-000000000003',
-      profileId: profile.id,
-      postId: posts[2].id,
-      position: 0,
-    },
-    { id: '00000000-0000-7000-8000-000000000004', profileId: profile.id, postId: posts[3].id },
-  ]);
-  const legacy = await db
-    .select()
-    .from(ProfilePinnedPosts)
-    .where(eq(ProfilePinnedPosts.profileId, profile.id))
-    .orderBy(asc(ProfilePinnedPosts.position), asc(ProfilePinnedPosts.id));
-  const effective = await orderedPins(profile.id);
-  assert.deepEqual(
-    effective.map((row) => row.postId),
-    legacy.map((row) => row.postId),
-  );
-  const firstKey = effective[0].key;
-  await db
-    .update(ProfilePinnedPosts)
-    .set({ orderKey: firstKey })
-    .where(eq(ProfilePinnedPosts.id, effective[0].id));
-  assert.deepEqual(await orderedPins(profile.id), effective);
 });

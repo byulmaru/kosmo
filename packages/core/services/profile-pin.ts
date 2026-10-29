@@ -1,16 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { fraciBinary } from 'fraci';
-import {
-  db,
-  first,
-  Instances,
-  isUniqueViolation,
-  Posts,
-  ProfilePinnedPosts,
-  profilePinOrderKey,
-  Profiles,
-} from '../db';
+import { defineDrizzleFraci, drizzleFraci } from 'fraci/drizzle';
+import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 import { postVisibilityCondition } from '../visibility/post';
@@ -19,22 +11,28 @@ import { startProfileUpdateEffects } from './profile-update';
 import type { FractionalIndexOf } from 'fraci';
 import type { Transaction } from '../db';
 
-const profilePinKeys = fraciBinary({ maxLength: 256, maxRetries: 8 });
+const profilePinKeys = fraciBinary();
+const profilePinFraci = defineDrizzleFraci(
+  profilePinKeys,
+  ProfilePinnedPosts,
+  ProfilePinnedPosts.orderKey,
+  { profileId: ProfilePinnedPosts.profileId },
+  { postId: ProfilePinnedPosts.postId },
+);
 
 export const generateProfilePinKey = (
   before: Uint8Array | null,
   after: Uint8Array | null,
-  skip = 0,
-): Buffer =>
-  Buffer.from(
-    profilePinKeys
-      .generateKeyBetween(
-        before ? (new Uint8Array(before) as FractionalIndexOf<typeof profilePinKeys>) : null,
-        after ? (new Uint8Array(after) as FractionalIndexOf<typeof profilePinKeys>) : null,
-        skip,
-      )
-      .next().value,
-  );
+): (typeof ProfilePinnedPosts.$inferSelect)['orderKey'] => {
+  const key = profilePinKeys
+    .generateKeyBetween(
+      before ? (new Uint8Array(before) as FractionalIndexOf<typeof profilePinKeys>) : null,
+      after ? (new Uint8Array(after) as FractionalIndexOf<typeof profilePinKeys>) : null,
+      crypto.randomInt(256),
+    )
+    .next().value;
+  return Buffer.from(key) as (typeof ProfilePinnedPosts.$inferSelect)['orderKey'];
+};
 
 type ProfilePinInput = {
   readonly profileId: string;
@@ -105,7 +103,7 @@ export const pinProfilePost = async ({
   profileId,
   postId,
 }: ProfilePinInput): Promise<ProfilePinResult> => {
-  const result = await retryPinWrite(async (tx, attempt) => {
+  const result = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
     await ensureEligiblePost(tx, { profileId, postId });
 
@@ -121,19 +119,14 @@ export const pinProfilePost = async ({
       return { changed: false, updateId: undefined };
     }
 
-    const last = await tx
-      .select({ key: profilePinOrderKey })
-      .from(ProfilePinnedPosts)
-      .where(eq(ProfilePinnedPosts.profileId, profileId))
-      .orderBy(desc(profilePinOrderKey), desc(ProfilePinnedPosts.id))
-      .limit(1)
-      .then(first);
+    const keys = drizzleFraci(tx, profilePinFraci);
+    const [last] = await keys.indicesForLast({ profileId });
     const inserted = await tx
       .insert(ProfilePinnedPosts)
       .values({
         profileId,
         postId,
-        orderKey: generateProfilePinKey(last?.key ?? null, null, attempt),
+        orderKey: generateProfilePinKey(last, null),
       })
       .onConflictDoNothing({ target: [ProfilePinnedPosts.profileId, ProfilePinnedPosts.postId] })
       .returning()
@@ -141,7 +134,7 @@ export const pinProfilePost = async ({
 
     return {
       changed: inserted !== undefined,
-      updateId: inserted ? randomUUID() : undefined,
+      updateId: inserted ? crypto.randomUUID() : undefined,
     };
   });
 
@@ -169,7 +162,7 @@ export const unpinProfilePost = async ({
 
     return {
       changed: deleted !== undefined,
-      updateId: deleted ? randomUUID() : undefined,
+      updateId: deleted ? crypto.randomUUID() : undefined,
     };
   });
 
@@ -180,78 +173,55 @@ export const unpinProfilePost = async ({
   return { changed: result.changed };
 };
 
-// A failed PostgreSQL transaction is discarded before retrying, never reused.
-const retryPinWrite = async <T>(
-  write: (tx: Transaction, attempt: number) => Promise<T>,
-): Promise<T> => {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await db.transaction((tx) => write(tx, attempt), { isolationLevel: 'serializable' });
-    } catch (error) {
-      // Query failures are wrapped by Drizzle; COMMIT failures come directly
-      // from postgres-js. Both abort this attempt before a fresh transaction.
-      const failure =
-        error instanceof Error && 'cause' in error && error.cause ? error.cause : error;
-      const code =
-        failure && typeof failure === 'object' && 'code' in failure ? failure.code : undefined;
-      if (
-        attempt >= 7 ||
-        (!isUniqueViolation(error) && code !== '23505' && code !== '40001' && code !== '40P01')
-      ) {
-        throw error;
-      }
-    }
-  }
-};
-
 export const reorderProfilePost = async ({
   profileId,
   postId,
   beforePostId,
 }: ProfilePinInput & { readonly beforePostId?: string | null }): Promise<ProfilePinResult> => {
-  const changed = await retryPinWrite(async (tx, attempt) => {
+  const changed = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
     await ensureEligiblePost(tx, { profileId, postId });
     if (beforePostId) {
       await ensureEligiblePost(tx, { profileId, postId: beforePostId });
     }
-    const rows = await tx
-      .select({
-        id: ProfilePinnedPosts.id,
-        postId: ProfilePinnedPosts.postId,
-        key: profilePinOrderKey,
-      })
-      .from(ProfilePinnedPosts)
-      .where(eq(ProfilePinnedPosts.profileId, profileId))
-      .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id));
-    const index = rows.findIndex((row) => row.postId === postId);
-    const target = rows[index];
-    if (!target || (beforePostId && !rows.some((row) => row.postId === beforePostId))) {
+
+    const keys = drizzleFraci(tx, profilePinFraci);
+    const targetKeys = await keys.indicesForAfter({ profileId }, { postId });
+    if (!targetKeys) {
       throw new NotFoundError('Pinned post not found');
     }
-    if (beforePostId === postId) {
-      throw new ConflictError({ message: 'A post cannot be moved before itself' });
+    let destinationKeys: [Uint8Array | null, Uint8Array | null];
+
+    if (beforePostId) {
+      const beforeKeys = await keys.indicesForBefore({ profileId }, { postId: beforePostId });
+      if (!beforeKeys) {
+        throw new NotFoundError('Pinned post not found');
+      }
+      if (beforePostId === postId) {
+        throw new ConflictError({ message: 'A post cannot be moved before itself' });
+      }
+      if (targetKeys[1] && Buffer.compare(targetKeys[1], beforeKeys[1]) === 0) {
+        return false;
+      }
+      destinationKeys = beforeKeys;
+    } else {
+      if (!targetKeys[1]) {
+        return false;
+      }
+      destinationKeys = await keys.indicesForLast({ profileId });
     }
-    if ((rows[index + 1]?.postId ?? null) === (beforePostId ?? null)) {
-      return false;
-    }
-    const remaining = rows.filter((row) => row.id !== target.id);
-    const destination = beforePostId
-      ? remaining.findIndex((row) => row.postId === beforePostId)
-      : remaining.length;
-    const key = generateProfilePinKey(
-      remaining[destination - 1]?.key ?? null,
-      remaining[destination]?.key ?? null,
-      attempt,
-    );
+
+    const key = generateProfilePinKey(destinationKeys[0], destinationKeys[1]);
     await tx
       .update(ProfilePinnedPosts)
       .set({ orderKey: key })
-      .where(eq(ProfilePinnedPosts.id, target.id));
+      .where(
+        and(eq(ProfilePinnedPosts.profileId, profileId), eq(ProfilePinnedPosts.postId, postId)),
+      );
     return true;
   });
   if (changed) {
-    await startProfileUpdateEffects(profileId, randomUUID());
+    await startProfileUpdateEffects(profileId, crypto.randomUUID());
   }
   return { changed };
 };

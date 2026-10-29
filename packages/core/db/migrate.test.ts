@@ -3,17 +3,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { fraciBinary } from 'fraci';
 import postgres from 'postgres';
 import drizzleConfig from '../drizzle.config';
 import { migrationLock, runDatabaseMigrations } from './migrate';
-import { ProfilePinnedPosts, profilePinOrderKey } from './tables';
+import { ProfilePinnedPosts } from './tables';
 import type { FractionalIndexOf } from 'fraci';
 
 const databaseUrl = process.env.DATABASE_URL;
+
+const preBackfillProfilePinOrderKey = sql<Buffer>`coalesce(${ProfilePinnedPosts.orderKey}, decode('94', 'hex') || int4send(coalesce(${ProfilePinnedPosts.position}, 2147483647)) || case when ${ProfilePinnedPosts.position} is null then decode('01', 'hex') else decode('00', 'hex') end || uuid_send(${ProfilePinnedPosts.id}))`;
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL is required for migration integration tests.');
@@ -350,10 +352,10 @@ test('고정글 순서 키 Backfill은 기존 유효 순서와 키를 보존하�
   const profilePinKeys = fraciBinary();
   const readEffectivePins = (profileId: string) =>
     pinDb
-      .select({ id: ProfilePinnedPosts.id, key: profilePinOrderKey })
+      .select({ id: ProfilePinnedPosts.id, key: preBackfillProfilePinOrderKey })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.profileId, profileId))
-      .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id));
+      .orderBy(asc(preBackfillProfilePinOrderKey), asc(ProfilePinnedPosts.id));
   const readPhysicalPins = (profileId: string) =>
     pinDb
       .select({ id: ProfilePinnedPosts.id, key: ProfilePinnedPosts.orderKey })
@@ -479,7 +481,7 @@ test('고정글 순서 키 Backfill 충돌은 행과 migration history를 함께
       VALUES (${nullId}, ${profileId}, ${nullId}, null)
     `;
     const [nullPin] = await pinDb
-      .select({ key: profilePinOrderKey })
+      .select({ key: preBackfillProfilePinOrderKey })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.id, nullId));
     assert.ok(nullPin);

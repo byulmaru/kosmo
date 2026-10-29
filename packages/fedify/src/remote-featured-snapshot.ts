@@ -30,7 +30,7 @@ export const replaceRemoteFeaturedSnapshot = async ({
     }
     await tx.delete(ProfilePinnedPosts).where(eq(ProfilePinnedPosts.profileId, profileId));
 
-    let previous: Buffer | null = null;
+    let previous: ReturnType<typeof generateProfilePinKey> | null = null;
     if (postIds.length > 0) {
       await tx.insert(ProfilePinnedPosts).values(
         postIds.map((postId, position) => {

@@ -30,6 +30,8 @@ const remoteActorUri = new URL('https://remote.example/users/alice');
 const firstLocalProfileId = '019f7abc-1111-7777-8888-123456789abc';
 const secondLocalProfileId = '019f7abc-2222-7777-8888-123456789abc';
 
+type ProfilePinOrderKey = (typeof CoreDb.ProfilePinnedPosts.$inferSelect)['orderKey'];
+
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let first: typeof CoreDb.first;
@@ -200,6 +202,7 @@ describe('inbound actor Update', () => {
       .returning()
       .then(firstOrThrow);
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: Buffer.from([128, 0]) as ProfilePinOrderKey,
       position: 0,
       postId: post.id,
       profileId: fixture.profile.id,
