@@ -49,12 +49,14 @@ const RouterContext = createContext<RouterContextValue>({
 export function RouterMockProvider({
   children,
   params = {},
+  onNavigate,
   pathname: initialPathname = '/home',
   segments = [],
   slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
+  onNavigate?: (href: Href) => void;
   pathname?: string;
   segments?: readonly string[];
   slot?: ReactNode;
@@ -74,15 +76,17 @@ export function RouterMockProvider({
           return paths.at(-1) === next ? paths : [...paths.slice(0, -1), next];
         }),
       segments,
-      setPathname: (href: Href) =>
+      setPathname: (href: Href) => {
+        onNavigate?.(href);
         setHistory((paths) => {
           const next = typeof href === 'string' ? href : href.pathname;
           return paths.at(-1) === next ? paths : [...paths, next];
-        }),
+        });
+      },
       slot,
       slotLabel,
     }),
-    [history, params, pathname, segments, slot, slotLabel],
+    [history, onNavigate, params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
