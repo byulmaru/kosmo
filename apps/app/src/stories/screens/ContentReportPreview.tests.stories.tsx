@@ -249,7 +249,7 @@ export const PostReportCompletionLayoutContract: Story = {
   play: async ({ canvasElement }) => {
     const { page } = await completeReport(canvasElement);
     const view = canvasElement.ownerDocument.defaultView!;
-    const surface = page.getByTestId('content-report-overlay-surface');
+    const surface = page.getByTestId('content-report-overlay-surface').parentElement!;
     const body = page.getByTestId('content-report-overlay-body');
     const handle = page.getByRole('heading', {
       name: `${longReportAuthor.relativeHandle} 차단`,
@@ -402,8 +402,7 @@ export const OverlaySubmittingSuppressesDuplicateAndClose: Story = {
     expect(page.getByRole('dialog', { name: '게시물 신고' })).toBeVisible();
     expect(page.queryByRole('alertdialog', { name: '작성 중인 신고를 버릴까요?' })).toBeNull();
 
-    const surface = page.getByTestId('content-report-overlay-surface');
-    fireEvent.click(surface.parentElement!);
+    fireEvent.click(page.getByTestId('content-report-overlay-backdrop'));
     expect(page.getByRole('dialog', { name: '게시물 신고' })).toBeVisible();
   },
 };

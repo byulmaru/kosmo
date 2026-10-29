@@ -219,12 +219,12 @@ export function RepostAction({
               }
               testID="repost"
             />
-            {quoteBinding?.expanded && quoteBinding.profile ? (
+            {quoteBinding?.profile ? (
               <ReplyComposerSurface
                 ref={quoteBinding.surfaceRef}
                 mode="quote"
                 onRequestClose={quoteBinding.onRequestClose}
-                open
+                open={quoteBinding.expanded}
                 parent={data}
                 profile={quoteBinding.profile}
                 triggerRef={ref}

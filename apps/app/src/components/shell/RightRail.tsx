@@ -12,6 +12,7 @@ import type { RightRail_query$key } from './__generated__/RightRail_query.graphq
 
 type RightRailProps = {
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  onDismiss?: () => void;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open?: boolean;
   profile: RightRail_profile$key;
@@ -41,6 +42,7 @@ export function RightRail({
   fallbackFocusRef,
   mode,
   onExpand,
+  onDismiss,
   onRequestClose,
   open = true,
   profile: profileKey,
@@ -52,6 +54,7 @@ export function RightRail({
   return (
     <PostComposerHost
       fallbackFocusRef={fallbackFocusRef}
+      onDismiss={onDismiss}
       onRequestClose={onRequestClose}
       open={open}
       profile={profile}

@@ -104,6 +104,30 @@ const mockDefaultNavigationTheme = {
   dark: false,
 };
 
+class MockAnimatedValue {
+  constructor(public value: number) {}
+
+  interpolate(config: Record<string, unknown>) {
+    return { config, type: 'interpolation' };
+  }
+
+  setValue(value: number) {
+    this.value = value;
+  }
+}
+
+const mockAnimated = {
+  Value: MockAnimatedValue,
+  View: 'AnimatedView',
+  timing: (value: MockAnimatedValue, config: { toValue: number }) => ({
+    start: (callback?: (result: { finished: boolean }) => void) => {
+      value.setValue(config.toValue);
+      callback?.({ finished: true });
+    },
+    stop: () => undefined,
+  }),
+};
+
 function MockRelayActorProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     relayActorMounts += 1;
@@ -199,6 +223,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Animated: mockAnimated,
+  Easing: { bezier: (...points: number[]) => points.join(',') },
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Platform: platform,
@@ -316,6 +342,7 @@ mockModule(new URL('../components/ui/StateView.tsx', import.meta.url), {
 });
 mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
   useElevation: () => ({ overlay: {} }),
+  useReducedMotion: () => false,
   useTheme: () => ({
     backgroundCanvas: '#fff',
     backgroundElevated: '#fff',

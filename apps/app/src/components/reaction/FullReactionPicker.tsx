@@ -127,6 +127,10 @@ export function FullReactionPicker({
       if (event.key !== 'Escape') {
         return;
       }
+      const pickerElement = pickerRef.current as unknown as HTMLElement | null;
+      if (pickerElement?.closest('[inert]')) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       onClose();

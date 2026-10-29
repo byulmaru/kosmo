@@ -206,7 +206,7 @@ export const OverlayMobileSheetGeometry: Story = {
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
     await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = page.getByTestId('feedback-overlay-surface');
+    const surface = page.getByTestId('feedback-overlay-surface').parentElement!;
     const body = page.getByTestId('feedback-overlay-body');
     const bounds = surface.getBoundingClientRect();
 
@@ -225,7 +225,9 @@ export const OverlayFullDialogGeometry: Story = {
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
     await page.findByRole('dialog', { name: '피드백 보내기' });
-    const bounds = page.getByTestId('feedback-overlay-surface').getBoundingClientRect();
+    const bounds = page
+      .getByTestId('feedback-overlay-surface')
+      .parentElement!.getBoundingClientRect();
 
     expect(bounds.width).toBe(600);
     expect(bounds.top).toBe(48);

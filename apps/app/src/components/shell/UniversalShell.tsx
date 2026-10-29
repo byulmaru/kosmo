@@ -132,6 +132,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const { height, width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerClosing, setComposerClosing] = useState(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -236,7 +237,8 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
-  const composerMode = showRightRail && !composerOpen ? 'rail' : mobile ? 'mobile' : 'overlay';
+  const composerMode =
+    showRightRail && !composerOpen && !composerClosing ? 'rail' : mobile ? 'mobile' : 'overlay';
   const composerVisible = profile !== null && (composerMode === 'rail' || composerOpen);
   const composerOverlayVisible = composerMode !== 'rail' && composerVisible;
   const composerBackgroundA11yProps = composerOverlayVisible
@@ -296,6 +298,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       router.push('/home');
       return;
     }
+    setComposerClosing(false);
     if (web && typeof document !== 'undefined') {
       composerTriggerFocusRef.current = document.activeElement as HTMLElement | null;
     }
@@ -304,14 +307,21 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     setSwitcherOpen(false);
   }, [profile, router, web]);
 
+  const dismissComposer = useCallback(() => {
+    setComposerClosing(false);
+  }, []);
+
   const closeComposer = useCallback(
     (reason: 'created' | 'dismiss' = 'dismiss') => {
+      if (showRightRail && composerOpen && composerMode === 'overlay') {
+        setComposerClosing(true);
+      }
       setComposerOpen(false);
       if (reason === 'created' && composerMode === 'mobile') {
         router.replace('/home');
       }
     },
-    [composerMode, router],
+    [composerMode, composerOpen, router, showRightRail],
   );
 
   const swipeToOpenDrawer = useMemo(
@@ -536,6 +546,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           {profile ? (
             <RightRail
               fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
+              onDismiss={dismissComposer}
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}

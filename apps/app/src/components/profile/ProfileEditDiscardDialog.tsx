@@ -1,7 +1,8 @@
-import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
+import { ModalOverlay } from '../ui/ModalOverlay';
 import type { RefObject } from 'react';
 
 type FocusableRef = RefObject<{ focus: () => void } | null>;
@@ -22,54 +23,44 @@ export function ProfileEditDiscardDialog({
   const theme = useTheme();
 
   return (
-    <Modal
+    <ModalOverlay
       accessibilityLabel="변경사항을 버릴까요?"
-      animationType="fade"
       onDismiss={Platform.OS === 'web' ? () => returnFocusRef?.current?.focus() : undefined}
       onRequestClose={onContinue}
       role="dialog"
-      transparent
       visible={visible}
     >
-      <View style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}>
-        <View
-          style={[
-            styles.surface,
-            { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
-          ]}
-        >
-          <View style={styles.copy}>
-            <Text
-              accessibilityRole="header"
-              style={[styles.title, { color: theme.foregroundPrimary }]}
-            >
-              변경사항을 버릴까요?
-            </Text>
-            <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-              저장하지 않은 변경사항이 사라져요.
-            </Text>
-          </View>
-          <View style={styles.actions}>
-            <Button onPress={onContinue} style={styles.action} tone="secondary">
-              계속 편집
-            </Button>
-            <Button onPress={onDiscard} style={styles.action} tone="danger">
-              버리기
-            </Button>
-          </View>
+      <View
+        style={[
+          styles.surface,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
+      >
+        <View style={styles.copy}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.foregroundPrimary }]}
+          >
+            변경사항을 버릴까요?
+          </Text>
+          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+            저장하지 않은 변경사항이 사라져요.
+          </Text>
+        </View>
+        <View style={styles.actions}>
+          <Button onPress={onContinue} style={styles.action} tone="secondary">
+            계속 편집
+          </Button>
+          <Button onPress={onDiscard} style={styles.action} tone="danger">
+            버리기
+          </Button>
         </View>
       </View>
-    </Modal>
+    </ModalOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
   surface: {
     borderRadius: radii.lg,
     borderWidth: 1,

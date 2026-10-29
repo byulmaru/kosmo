@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import {
-  Modal,
+  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +25,7 @@ import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -33,9 +34,11 @@ import {
   breakpoints,
   fontFamilies,
   radii,
+  space,
   spacing,
   typography,
 } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { PostBody } from './PostBody';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
@@ -96,13 +99,17 @@ const PostMediaViewerStateContext = createContext<ViewerState | null>(null);
 export function PostMediaViewer({
   children,
   fallbackFocus,
+  onDismiss,
   onClose,
+  open = true,
   originControl,
   selectedIndex,
 }: Readonly<{
   children?: ReactNode;
   fallbackFocus?: RefObject<NativeView | null>;
+  onDismiss?: () => void;
   onClose: () => void;
+  open?: boolean;
   originControl: RefObject<NativeView | null>;
   selectedIndex: number;
 }>) {
@@ -111,6 +118,8 @@ export function PostMediaViewer({
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
+  const overlayMotion = useOverlayMotion(open);
+  const wasMounted = useRef(overlayMotion.mounted);
   const moveByRef = useRef<((delta: number) => void) | null>(null);
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
@@ -139,9 +148,12 @@ export function PostMediaViewer({
     [lastContentId, selectedIndex],
   );
   const requestClose = useCallback(() => {
+    if (!open) {
+      return;
+    }
     onClose();
     requestAnimationFrame(() => focusPostMediaViewerTarget(originControl, fallbackFocus));
-  }, [fallbackFocus, onClose, originControl]);
+  }, [fallbackFocus, onClose, open, originControl]);
   const viewerState = useMemo<ViewerState>(
     () => ({
       currentIndex,
@@ -162,13 +174,23 @@ export function PostMediaViewer({
     return () => globalThis.cancelAnimationFrame?.(focusFrame);
   }, []);
 
+  useEffect(() => {
+    if (wasMounted.current && !overlayMotion.mounted) {
+      onDismiss?.();
+    }
+    wasMounted.current = overlayMotion.mounted;
+  }, [onDismiss, overlayMotion.mounted]);
+
   const handlePlatformRequestClose = useCallback(() => {
+    if (!open) {
+      return;
+    }
     if (Platform.OS === 'web' && ignoreNextPlatformClose.current) {
       ignoreNextPlatformClose.current = false;
       return;
     }
     requestClose();
-  }, [requestClose]);
+  }, [open, requestClose]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -176,6 +198,9 @@ export function PostMediaViewer({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!open) {
+        return;
+      }
       const targetInsideViewer = containsTarget(dialogRef, event.target);
       if (event.key === 'Escape') {
         ignoreNextPlatformClose.current = !targetInsideViewer || event.defaultPrevented;
@@ -201,33 +226,59 @@ export function PostMediaViewer({
 
     globalThis.addEventListener?.('keydown', handleKeyDown);
     return () => globalThis.removeEventListener?.('keydown', handleKeyDown);
-  }, []);
+  }, [open]);
 
   return (
-    <Modal
+    <ModalSheetHost
       accessibilityLabel="이미지 뷰어"
-      animationType="fade"
+      animationType="none"
+      closeRequestDisabled={!open}
+      interactionDisabled={!open}
       navigationBarTranslucent
       onRequestClose={handlePlatformRequestClose}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
-      visible
+      visible={overlayMotion.mounted}
     >
-      <View style={styles.backdrop} testID="post-media-viewer-backdrop">
+      <Animated.View
+        aria-hidden={!open}
+        accessibilityElementsHidden={!open}
+        importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={open ? 'auto' : 'none'}
+        style={[styles.backdrop, { opacity: overlayMotion.progress }]}
+        testID="post-media-viewer-backdrop"
+      >
         <Pressable
           accessible={false}
+          disabled={!open}
           focusable={false}
           onPress={requestClose}
           style={styles.backdropDismissTarget}
           tabIndex={-1}
           testID="post-media-viewer-backdrop-dismiss"
         />
-        <View
+        <Animated.View
           accessibilityViewIsModal
-          onAccessibilityEscape={requestClose}
+          aria-hidden={!open}
+          accessibilityElementsHidden={!open}
+          importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+          onAccessibilityEscape={open ? requestClose : undefined}
           ref={dialogRef}
-          style={[styles.dialog, Platform.OS === 'web' ? null : safeAreaStyle]}
+          style={[
+            styles.dialog,
+            Platform.OS === 'web' ? null : safeAreaStyle,
+            {
+              transform: [
+                {
+                  translateY: overlayMotion.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [space[12], 0],
+                  }),
+                },
+              ],
+            },
+          ]}
           testID="post-media-viewer-dialog"
         >
           <IconButton
@@ -252,9 +303,9 @@ export function PostMediaViewer({
               {children}
             </PostMediaViewerStateContext.Provider>
           </OverlayPortalProvider>
-        </View>
-      </View>
-    </Modal>
+        </Animated.View>
+      </Animated.View>
+    </ModalSheetHost>
   );
 }
 

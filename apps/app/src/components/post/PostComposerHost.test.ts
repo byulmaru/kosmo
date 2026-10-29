@@ -11,6 +11,7 @@ import type { PostComposerHost as PostComposerHostComponent } from './PostCompos
 
 const platform = { OS: 'web' };
 const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
+let exitMounted = false;
 let composerProps:
   | {
       body: string;
@@ -30,6 +31,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: 'Modal',
   Platform: platform,
@@ -71,6 +73,13 @@ mockModule('@/theme/ThemeProvider', {
     overlayScrim: '#scrim',
   }),
 });
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean) => ({
+    entered: visible,
+    mounted: visible || exitMounted,
+    progress: { interpolate: () => 1 },
+  }),
+});
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { lg: 16 },
@@ -92,6 +101,7 @@ afterEach(async () => {
   }
   composerProps = undefined;
   platform.OS = 'web';
+  exitMounted = false;
   safeAreaInsets.top = 0;
   mock.restoreAll();
 });
@@ -155,7 +165,7 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const host = renderer?.root.findAllByType('View' as ElementType).find((view) => {
+    const host = renderer?.root.findAllByType('AnimatedView' as ElementType).find((view) => {
       const styles = (
         Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
       ) as Array<{ position?: unknown }>;
@@ -181,6 +191,113 @@ describe('PostComposerHost', () => {
     const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
     assert.equal(dialog?.props['aria-modal'], undefined);
     assert.equal(dialog?.props.role, undefined);
+  });
+
+  it('닫힌 Web Overlay는 exit 동안 mounted 상태를 유지하되 입력과 접근성을 차단한다', async () => {
+    exitMounted = true;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onRequestClose: () => undefined,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const host = renderer?.root.findAllByType('AnimatedView' as ElementType).find((view) => {
+      const styles = (
+        Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
+      ) as Array<{ position?: unknown }>;
+      return styles.some((style) => style?.position === 'fixed');
+    });
+    assert.ok(host);
+    assert.equal(host?.props.pointerEvents, 'none');
+    assert.equal(host?.props.accessibilityElementsHidden, false);
+    assert.equal(host?.props['aria-hidden'], true);
+    assert.ok(host?.props.style.at(-1).opacity);
+    assert.equal(renderer?.root.findByType('div' as ElementType).props.inert, true);
+  });
+
+  it('Overlay exit 완료는 semantic close와 분리된 dismiss 경계를 알린다', async () => {
+    let closeCount = 0;
+    let dismissCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    exitMounted = true;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    assert.equal(closeCount, 0);
+    assert.equal(dismissCount, 0);
+
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+    const reopenedHost = renderer?.root
+      .findAllByType('AnimatedView' as ElementType)
+      .find((view) => {
+        const styles = (
+          Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
+        ) as Array<{ position?: unknown }>;
+        return styles.some((style) => style?.position === 'fixed');
+      });
+    assert.equal(reopenedHost?.props.pointerEvents, 'auto');
+    assert.equal(dismissCount, 0);
+
+    exitMounted = true;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    exitMounted = false;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    assert.equal(closeCount, 0);
+    assert.equal(dismissCount, 1);
   });
 
   it('Rail에서 Overlay로 바꿔도 같은 Composer draft owner를 유지한다', async () => {

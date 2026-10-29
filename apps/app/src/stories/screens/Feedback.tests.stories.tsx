@@ -244,7 +244,7 @@ export const OverlaySelectedImages: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     const dialog = within(await page.findByRole('dialog', { name: '피드백 보내기' }));
-    const surface = page.getByTestId('feedback-overlay-surface');
+    const surface = page.getByTestId('feedback-overlay-surface').parentElement!;
     const before = surface.getBoundingClientRect();
     expect(before.top).toBe(48);
     await userEvent.type(
@@ -307,9 +307,9 @@ async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: bool
       expect(close).toBeDisabled();
       fireEvent.click(close);
       await userEvent.keyboard('{Escape}');
-      const backdrop = page.getByTestId('feedback-overlay-surface').parentElement;
+      const backdrop = page.getByTestId('feedback-overlay-backdrop');
       expect(backdrop).not.toBeNull();
-      await userEvent.click(backdrop!);
+      fireEvent.click(backdrop!);
       expect(page.getByRole('dialog', { name: '피드백 보내기' })).toBeVisible();
       expect(page.queryByRole('alertdialog')).toBeNull();
       expect(body).toHaveValue('제출 중인 피드백');
@@ -329,7 +329,7 @@ async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: bool
     expect(body).toHaveValue('');
     if (dialog) {
       expect(canvas.getByRole('button', { name: '피드백 닫기' })).toBeEnabled();
-      await userEvent.click(page.getByTestId('feedback-overlay-surface').parentElement!);
+      await userEvent.click(page.getByTestId('feedback-overlay-backdrop'));
       await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
     }
   } finally {
