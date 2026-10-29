@@ -644,6 +644,51 @@ test('update mode는 stable ID로 기존 Workflow만 조회해 typed Update를 b
   }
 });
 
+test('update mode는 non-empty typed Update args를 기존 Workflow에 전달한다', async () => {
+  type Input = { accountId: string; requestId: string };
+  type Result = { status: 'CANCELLED' };
+  const input: Input = { accountId: 'account-1', requestId: 'request-1' };
+  const definition: WorkflowUpdateDefinition<(input: Input) => Promise<void>, Result, [Input]> = {
+    workflow: 'postRequestWorkflow',
+    update: 'cancelPostRequest',
+    workflowIdFromArgs: ({ accountId, requestId }) => `post-request:${accountId}:${requestId}`,
+  };
+  const result: Result = { status: 'CANCELLED' };
+  const executeUpdate = mock.fn(
+    async (name: string, options: { args?: unknown[]; updateId?: string }) => {
+      assert.equal(name, 'cancelPostRequest');
+      assert.deepEqual(options.args, [input]);
+      assert.equal(options.updateId, 'cancel-request-1');
+      return result;
+    },
+  );
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
+    assert.equal(id, 'post-request:account-1:request-1');
+    return { executeUpdate } as never;
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_value: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    assert.strictEqual(
+      await runWorkflow(definition, {
+        args: [input],
+        mode: 'update',
+        updateArgs: [input],
+        updateId: 'cancel-request-1',
+      }),
+      result,
+    );
+    assert.equal(executeUpdate.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    getHandle.mock.restore();
+  }
+});
+
 test('서로 다른 Workflow는 각자의 ID callback과 native 결과 타입을 보존한다', async () => {
   const objectWorkflow = async (profileId: string): Promise<{ profileId: string }> => ({
     profileId,

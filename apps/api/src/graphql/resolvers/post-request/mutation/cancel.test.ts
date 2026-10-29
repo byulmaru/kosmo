@@ -11,6 +11,7 @@ import {
 import { graphql } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+import type { ExecutionResult } from 'graphql';
 
 const accountId = '00000000-0000-4000-8000-000000000001';
 const profileId = '00000000-0000-4000-8000-000000000002';
@@ -44,6 +45,10 @@ const snapshot: PostRequestState['snapshot'] = {
   submittedAt: '2026-10-29T00:00:00.000Z',
 };
 
+type CancelPostRequestResult = {
+  cancelPostRequest: { request: { status: string } };
+};
+
 const requestCancel = () =>
   graphql({
     schema,
@@ -56,7 +61,7 @@ const requestCancel = () =>
     `,
     variableValues: { input: { requestId } },
     contextValue: { session: { accountId } },
-  });
+  }) as Promise<ExecutionResult<CancelPostRequestResult>>;
 
 test('cancelPostRequest sends an idempotent Update to an active request', async (t) => {
   const workflowId = postRequestWorkflowId(accountId, requestId);

@@ -35,7 +35,7 @@ export type PostRequestLocalPostInput = Omit<LocalPostInput, 'accountId'> & {
 export type PostRequestSnapshot = {
   readonly input: PostRequestLocalPostInput;
   readonly mediaProcessing: readonly PostRequestMediaProcessing[];
-  readonly postId: string;
+  readonly postId?: string;
   readonly requestId: string;
   readonly submissionFingerprint?: string;
   readonly submittedAt: string;

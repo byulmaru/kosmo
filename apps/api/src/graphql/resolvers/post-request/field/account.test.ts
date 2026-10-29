@@ -200,7 +200,7 @@ test('Account.postRequests paginates one execution per request and filters curre
   );
   assert.equal(thirdConnection.pageInfo.hasNextPage, false);
   assert.equal(thirdConnection.pageInfo.hasPreviousPage, true);
-  assert.equal(list.callCount(), 4);
+  assert.equal(list.mock.callCount(), 4);
   assert.ok(
     listRequests.every(
       ({ query }) =>
@@ -273,7 +273,7 @@ test('Account.postRequests caps first at the existing 20-item connection maximum
   ).postRequests;
   assert.equal(connection.edges.length, 20);
   assert.equal(connection.pageInfo.hasNextPage, true);
-  assert.equal(list.callCount(), 1);
+  assert.equal(list.mock.callCount(), 1);
 });
 
 test('Account.postRequest returns an owner snapshot after profile context is gone and filters profile mismatch', async (t) => {
@@ -381,7 +381,7 @@ test('Account.postRequests denies unauthenticated and non-owner reads before lis
   const nonOwnerResult = await execute(otherAccountId);
   assert.ok(nonOwnerResult.errors?.[0]?.originalError instanceof PermissionDeniedError);
   assert.equal(nonOwnerResult.data?.account, null);
-  assert.equal(list.callCount(), 0);
+  assert.equal(list.mock.callCount(), 0);
 });
 
 test('PostRequest Node returns null silently for missing, non-owner, and unauthenticated loads', async (t) => {

@@ -60,6 +60,7 @@ const decodeCursor = (cursor: string | null | undefined): PostRequestCursor => {
       !('pageToken' in value) ||
       !('offset' in value) ||
       (value.pageToken !== null && typeof value.pageToken !== 'string') ||
+      typeof value.offset !== 'number' ||
       !Number.isSafeInteger(value.offset) ||
       value.offset < 0
     ) {

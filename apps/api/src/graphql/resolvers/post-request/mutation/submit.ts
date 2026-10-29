@@ -1,20 +1,22 @@
 import { createHash } from 'node:crypto';
-import { db, firstOrThrow, Media as MediaTable } from '@kosmo/core/db';
+import { db, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState, PostVisibility } from '@kosmo/core/enums';
 import { ConflictError, ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import {
+  POST_REQUEST_SEARCH_ATTRIBUTES,
   PostRequestStatus,
   postRequestWorkflow,
   postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
 import { Post } from '../../post/ref';
 import { Profile } from '../../profile/ref';
@@ -26,16 +28,12 @@ import {
 } from '../input';
 import { PostRequest } from '../ref';
 import { loadPostRequestStateForAccount } from '../state';
-import {
-  postRequestStateFromSnapshot,
-  postRequestTypedSearchAttributes,
-  rethrowPostRequestFailure,
-} from './helpers';
 import type {
   PostRequestLocalPostInput,
   PostRequestSnapshot,
   PostRequestState,
 } from '@kosmo/core/temporal/post-request';
+import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 
 const existingSubmission = (
   current: PostRequestState,
@@ -131,6 +129,10 @@ builder.mutationField('submitPostRequest', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const submittedMedia = input.media ?? [];
+      if (new Set(submittedMedia.map(({ mediaId }) => mediaId.id)).size !== submittedMedia.length) {
+        throw new ValidationError('Post request media must be unique', { field: 'media' });
+      }
+
       const actorProfileId = input.actorProfileId?.id ?? ctx.session.profile?.id;
       const submissionFingerprint = createHash('sha256')
         .update(
@@ -174,18 +176,17 @@ builder.mutationField('submitPostRequest', (t) =>
         mediaProcessing.map(({ mediaId }) => mediaId),
       );
 
-      const { id: postId } = await db
-        .execute<{ id: string }>(sql`SELECT uuidv7() AS id`)
-        .then(firstOrThrow);
       const snapshot: PostRequestSnapshot = {
         input: postInput,
         mediaProcessing,
-        postId,
         requestId: input.requestId,
         submissionFingerprint,
         submittedAt: new Date().toISOString(),
       };
-      const state = postRequestStateFromSnapshot(snapshot, PostRequestStatus.QUEUED);
+      const state: PostRequestState = {
+        snapshot,
+        status: PostRequestStatus.QUEUED,
+      };
       const workflowId = postRequestWorkflowId(ctx.session.accountId, input.requestId);
 
       try {
@@ -194,7 +195,20 @@ builder.mutationField('submitPostRequest', (t) =>
           mode: 'start',
           workflowIdConflictPolicy: 'FAIL',
           workflowIdReusePolicy: 'REJECT_DUPLICATE',
-          typedSearchAttributes: postRequestTypedSearchAttributes(snapshot, state.status),
+          typedSearchAttributes: [
+            {
+              key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.ownerAccountId, type: 'KEYWORD' },
+              value: snapshot.input.accountId,
+            },
+            {
+              key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.profileId, type: 'KEYWORD' },
+              value: snapshot.input.profileId,
+            },
+            {
+              key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.status, type: 'KEYWORD' },
+              value: state.status,
+            },
+          ] satisfies NonNullable<WorkflowStartOptions<Workflow>['typedSearchAttributes']>,
         });
         return { request: state };
       } catch (error) {
@@ -202,7 +216,7 @@ builder.mutationField('submitPostRequest', (t) =>
           !(error instanceof WorkflowExecutionAlreadyStartedError) ||
           error.workflowId !== workflowId
         ) {
-          return rethrowPostRequestFailure(error);
+          return rethrowPostWorkflowFailure(error);
         }
 
         const current = await loadPostRequestStateForAccount({

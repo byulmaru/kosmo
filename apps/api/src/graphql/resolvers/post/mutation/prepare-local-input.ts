@@ -16,7 +16,7 @@ import { Profile } from '../../profile/ref';
 import { extractPostMentionCandidates } from './mention-candidates';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
-import type { LocalPostInput } from '@kosmo/core/services/post';
+import type { LocalPostInput } from '@kosmo/core/services';
 import type { SessionContext } from '@/context';
 
 export type LocalPostMutationInput = {

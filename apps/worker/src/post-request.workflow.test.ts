@@ -66,6 +66,12 @@ const createPostRequest = (
   };
 };
 
+const withoutPostId = (args: PostRequestWorkflowArgs): PostRequestWorkflowArgs => {
+  const { postId, ...snapshot } = args;
+  assert.ok(postId);
+  return snapshot;
+};
+
 const createWorker = (
   environment: TestWorkflowEnvironment,
   taskQueue: string,
@@ -125,7 +131,7 @@ const committedPost = (input: PostCreateActivityInput): PostCreateActivityResult
 
 const postCreateEffectsActivities = {
   createNotificationActivity: async () => {},
-  createReplyNotificationActivity: async () => {},
+  createReplyNotificationActivity: async () => [],
   sendLocalPostCreateActivity: async () => {},
 };
 
@@ -187,9 +193,12 @@ test(
         'PROCESSING',
       );
 
-      const cancelled = await handle.executeUpdate<PostRequestState>(POST_REQUEST_CANCEL_UPDATE, {
-        args: [],
-      });
+      const cancelled = await handle.executeUpdate<PostRequestState, []>(
+        POST_REQUEST_CANCEL_UPDATE,
+        {
+          args: [],
+        },
+      );
       assert.equal(cancelled.status, PostRequestStatus.CANCELLED);
       const result = await handle.result();
       assert.equal(result.status, PostRequestStatus.CANCELLED);
@@ -263,17 +272,20 @@ test(
     const args = createPostRequest(true);
     const mediaId = args.mediaProcessing[0]!.mediaId;
     const secondArgs: PostRequestWorkflowArgs = {
-      ...args,
-      postId: randomUUID(),
+      ...withoutPostId(args),
       requestId: randomUUID(),
     };
+    const generatedPostId = randomUUID();
     const prepareStarted = Promise.withResolvers<void>();
     const releasePrepare = Promise.withResolvers<void>();
     const joinedExistingUpload = Promise.withResolvers<void>();
     const mediaReady = Promise.withResolvers<void>();
+    const postIdGenerationStarted = Promise.withResolvers<void>();
+    const releasePostIdGeneration = Promise.withResolvers<void>();
     let isMediaReady = false;
     let prepareCalls = 0;
     let joinCalls = 0;
+    let postIdGenerationCalls = 0;
     const postCreateInputs: PostCreateActivityInput[] = [];
     const worker = await createWorker(environment, taskQueue, {
       ...postCreateEffectsActivities,
@@ -281,6 +293,13 @@ test(
         assert.equal(isMediaReady, true);
         postCreateInputs.push(input);
         return committedPost(input);
+      },
+      generatePostIdActivity: async () => {
+        assert.equal(isMediaReady, true);
+        postIdGenerationCalls += 1;
+        postIdGenerationStarted.resolve();
+        await releasePostIdGeneration.promise;
+        return generatedPostId;
       },
       finalizeMediaUploadActivity: async ({ result }) => {
         isMediaReady = true;
@@ -318,6 +337,7 @@ test(
 
         assert.equal(joinCalls, 1);
         assert.equal(prepareCalls, 1);
+        assert.equal(postIdGenerationCalls, 0);
         assert.deepEqual(postCreateInputs, []);
         assert.equal(
           (await secondHandle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
@@ -325,6 +345,17 @@ test(
         );
 
         releasePrepare.resolve();
+        await postIdGenerationStarted.promise;
+        assert.equal(
+          (await secondHandle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
+          PostRequestStatus.PUBLISHING,
+        );
+        const cancelWhileGenerating = await secondHandle.executeUpdate<PostRequestState, []>(
+          POST_REQUEST_CANCEL_UPDATE,
+          { args: [] },
+        );
+        assert.equal(cancelWhileGenerating.status, PostRequestStatus.PUBLISHING);
+        releasePostIdGeneration.resolve();
         const [firstResult, secondResult] = await Promise.all([
           firstHandle.result(),
           secondHandle.result(),
@@ -333,8 +364,9 @@ test(
         assert.equal(secondResult.status, PostRequestStatus.PUBLISHED);
         assert.deepEqual(
           new Set(postCreateInputs.map(({ postId }) => postId)),
-          new Set([args.postId, secondArgs.postId]),
+          new Set([args.postId, generatedPostId]),
         );
+        assert.equal(postIdGenerationCalls, 1);
         assert.equal(isMediaReady, true);
         assert.equal(prepareCalls, 1);
       });
@@ -428,6 +460,7 @@ test(
     const taskQueue = `post-request-failed-${process.pid}-${randomUUID()}`;
     const args = createPostRequest();
     let createAttempts = 0;
+    let postIdGenerationCalls = 0;
     const worker = await createWorker(environment, taskQueue, {
       createPostActivityV2: async () => {
         createAttempts += 1;
@@ -435,6 +468,10 @@ test(
           'The account no longer permits this Post',
           'PERMISSION_DENIED',
         );
+      },
+      generatePostIdActivity: async () => {
+        postIdGenerationCalls += 1;
+        return randomUUID();
       },
     });
 
@@ -462,6 +499,45 @@ test(
       );
       assert.equal((await failedHandle.describe()).status.name, 'COMPLETED');
       assert.equal(createAttempts, 1);
+      assert.equal(postIdGenerationCalls, 0);
+    });
+  },
+);
+
+test(
+  'Post Request closes FAILED with a sanitized result if Post ID generation fails before publication',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    t.after(() => environment.teardown());
+
+    const taskQueue = `post-request-id-failed-${process.pid}-${randomUUID()}`;
+    const args = withoutPostId(createPostRequest());
+    let postCreateCalls = 0;
+    const worker = await createWorker(environment, taskQueue, {
+      createPostActivityV2: async () => {
+        postCreateCalls += 1;
+        return committedPost({
+          input: args.input,
+          postId: randomUUID(),
+        });
+      },
+      generatePostIdActivity: async () => {
+        throw ApplicationFailure.nonRetryable(
+          'database rejected UUID allocation with private details',
+          'POST_ID_GENERATION_FAILED',
+        );
+      },
+    });
+
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, taskQueue, args);
+      const result = await handle.result();
+      assert.equal(result.status, PostRequestStatus.FAILED);
+      assert.equal(result.error?.code, 'INTERNAL_SERVER_ERROR');
+      assert.equal(result.error?.message, 'The post request could not be completed');
+      assert.equal(result.snapshot.postId, undefined);
+      assert.equal(postCreateCalls, 0);
     });
   },
 );
@@ -484,7 +560,8 @@ test(
         postCreateInputs.push(input);
         return committedPost(input);
       },
-      createReplyNotificationActivity: async () => {},
+      createNotificationActivity: async () => {},
+      createReplyNotificationActivity: async () => [],
       sendLocalPostCreateActivity: async () => {
         effectsStarted.resolve();
         await releaseEffects.promise;
@@ -540,14 +617,18 @@ test(
     t.after(() => environment.teardown());
 
     const taskQueue = `post-request-reconcile-${process.pid}-${randomUUID()}`;
-    const args = createPostRequest();
+    const args = withoutPostId(createPostRequest());
+    const generatedPostId = randomUUID();
     const lateReconciliationStarted = Promise.withResolvers<void>();
     const releaseLateReconciliation = Promise.withResolvers<void>();
     let createAttempts = 0;
     let reconciliationAttempts = 0;
+    let postIdGenerationCalls = 0;
+    const postCreateInputs: PostCreateActivityInput[] = [];
     const worker = await createWorker(environment, taskQueue, {
-      createPostActivityV2: async () => {
+      createPostActivityV2: async (input) => {
         createAttempts += 1;
+        postCreateInputs.push(input);
         if (createAttempts === 1) {
           throw ApplicationFailure.nonRetryable(
             'The Post Create V2 workflow type is unavailable',
@@ -559,26 +640,32 @@ test(
           'PERMISSION_DENIED',
         );
       },
-      reconcilePostRequestActivity: async () => {
+      generatePostIdActivity: async () => {
+        postIdGenerationCalls += 1;
+        return generatedPostId;
+      },
+      reconcilePostRequestActivity: async ({ postId }) => {
+        assert.equal(postId, generatedPostId);
         reconciliationAttempts += 1;
         if (reconciliationAttempts === 1) {
           return { status: 'ABSENT' as const };
         }
         lateReconciliationStarted.resolve();
         await releaseLateReconciliation.promise;
-        return { postId: args.postId, status: 'PUBLISHED' as const };
+        return { postId, status: 'PUBLISHED' as const };
       },
     });
 
     await worker.runUntil(async () => {
       const handle = await startPostRequest(environment, taskQueue, args);
+      assert.equal(args.postId, undefined);
       await lateReconciliationStarted.promise;
 
       assert.equal(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.CONFIRMING,
       );
-      const cancelResult = await handle.executeUpdate<PostRequestState>(
+      const cancelResult = await handle.executeUpdate<PostRequestState, []>(
         POST_REQUEST_CANCEL_UPDATE,
         {
           args: [],
@@ -589,9 +676,14 @@ test(
       releaseLateReconciliation.resolve();
       const result = await handle.result();
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
-      assert.equal(result.result?.postId, args.postId);
+      assert.equal(result.result?.postId, generatedPostId);
       assert.equal(createAttempts, 2);
       assert.equal(reconciliationAttempts, 2);
+      assert.equal(postIdGenerationCalls, 1);
+      assert.deepEqual(
+        postCreateInputs.map(({ postId }) => postId),
+        [generatedPostId, generatedPostId],
+      );
     });
   },
 );

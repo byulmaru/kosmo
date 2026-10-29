@@ -127,14 +127,19 @@ export async function runWorkflow<T extends Workflow>(
   try {
     if (options.mode === 'update') {
       const { updateArgs, updateId } = options;
-      return await temporalClient.withDeadline(deadline, () =>
-        temporalClient.workflow
-          .getHandle<T>(workflowId)
-          .executeUpdate((definition as WorkflowUpdateDefinition<T, unknown, unknown[]>).update, {
-            args: updateArgs as unknown[] | undefined,
-            updateId,
-          }),
-      );
+      const update = (definition as WorkflowUpdateDefinition<T, unknown, unknown[]>).update;
+      return await temporalClient.withDeadline(deadline, () => {
+        const handle = temporalClient.workflow.getHandle<T>(workflowId);
+        return updateArgs?.length
+          ? handle.executeUpdate<unknown, [unknown, ...unknown[]]>(update, {
+              args: updateArgs as [unknown, ...unknown[]],
+              updateId,
+            })
+          : handle.executeUpdate<unknown, []>(update, {
+              args: (updateArgs ?? []) as [],
+              updateId,
+            });
+      });
     }
 
     if (options.mode === 'update-with-start') {

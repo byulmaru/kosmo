@@ -36,7 +36,10 @@ type PostRequestDraftSource = {
   visibility: PostVisibility;
 };
 
-export const PostRequestDraftMention = builder.simpleObject('PostRequestDraftMention', {
+export const PostRequestDraftMention =
+  builder.objectRef<PostRequestDraftMentionSource>('PostRequestDraftMention');
+
+PostRequestDraftMention.implement({
   fields: (t) => ({
     start: t.exposeInt('start'),
     end: t.exposeInt('end'),
@@ -49,7 +52,10 @@ export const PostRequestDraftMention = builder.simpleObject('PostRequestDraftMen
   }),
 });
 
-export const PostRequestDraftMedia = builder.simpleObject('PostRequestDraftMedia', {
+export const PostRequestDraftMedia =
+  builder.objectRef<PostRequestDraftMediaSource>('PostRequestDraftMedia');
+
+PostRequestDraftMedia.implement({
   fields: (t) => ({
     mediaId: t.exposeID('mediaId'),
     altText: t.exposeString('altText', { nullable: true }),
@@ -63,7 +69,9 @@ export const PostRequestDraftMedia = builder.simpleObject('PostRequestDraftMedia
   }),
 });
 
-export const PostRequestDraft = builder.simpleObject('PostRequestDraft', {
+export const PostRequestDraft = builder.objectRef<PostRequestDraftSource>('PostRequestDraft');
+
+PostRequestDraft.implement({
   fields: (t) => ({
     bodyText: t.exposeString('bodyText'),
     contentWarning: t.exposeString('contentWarning', { nullable: true }),

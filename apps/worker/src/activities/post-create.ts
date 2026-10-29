@@ -85,7 +85,7 @@ const toErrorResult = (
 
 const assertLocalPostRequestAuthorization = async (
   tx: Transaction,
-  input: PostCreateActivityInput['input'],
+  input: PostCreateInput,
 ): Promise<void> => {
   if (input.origin !== 'LOCAL' || input.accountId === undefined) {
     throw new PermissionDeniedError('Active Account membership is required to create this Post');

@@ -23,4 +23,12 @@ test('Post Request Workflow ID scopes a request to its Account and request ID', 
 
   assert.equal(postRequestWorkflowId(accountId, requestId), expectedWorkflowId);
   assert.equal(postRequestWorkflow.workflowIdFromArgs(args), expectedWorkflowId);
+
+  const snapshotWithoutPostId: PostRequestWorkflowArgs = {
+    input: args.input,
+    mediaProcessing: args.mediaProcessing,
+    requestId,
+    submittedAt: args.submittedAt,
+  };
+  assert.equal(postRequestWorkflow.workflowIdFromArgs(snapshotWithoutPostId), expectedWorkflowId);
 });

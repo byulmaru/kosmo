@@ -71,7 +71,7 @@ const workflowArgsSchema = z
         mediaId: z.uuid(),
       }),
     ),
-    postId: z.uuid(),
+    postId: z.uuid().optional(),
     requestId: z.uuid(),
     submissionFingerprint: z
       .string()
@@ -96,7 +96,7 @@ const workflowArgsSchema = z
     }
   });
 
-const { getPostRequestMediaStateActivity, reconcilePostRequestActivity } =
+const { generatePostIdActivity, getPostRequestMediaStateActivity, reconcilePostRequestActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 const { waitForPostRequestMediaUploadActivity } = proxyActivities<typeof activities>({
   ...workflowActivityOptions,
@@ -256,7 +256,9 @@ const uploadMedia = async (
   }
 };
 
-const createPost = async (snapshot: PostRequestSnapshot): Promise<PostCreateWorkflowResult> =>
+const createPost = async (
+  snapshot: PostRequestSnapshot & { readonly postId: string },
+): Promise<PostCreateWorkflowResult> =>
   runChildWorkflow(postCreateWorkflowV2, {
     args: [
       {
@@ -274,7 +276,7 @@ export async function postRequestWorkflow(
   input: PostRequestWorkflowArgs,
 ): Promise<PostRequestState> {
   const parsed = parseInput(input);
-  const snapshot = parsed;
+  let snapshot = parsed;
   let state: PostRequestState = { snapshot, status: PostRequestStatus.QUEUED };
   let activeMediaCancellationScope: CancellationScope | undefined;
   const setStatus = (
@@ -322,10 +324,23 @@ export async function postRequestWorkflow(
   }
 
   setStatus(PostRequestStatus.PUBLISHING);
+  let publishSnapshot: PostRequestSnapshot & { readonly postId: string };
+  try {
+    publishSnapshot = {
+      ...snapshot,
+      postId: snapshot.postId ?? (await generatePostIdActivity()),
+    };
+  } catch (error) {
+    setStatus(PostRequestStatus.FAILED, { error: failureDetails(error) });
+    return state;
+  }
+  snapshot = publishSnapshot;
+  state = { ...state, snapshot };
+
   let ambiguousPostFailure = false;
   while (true) {
     try {
-      const result = await createPost(snapshot);
+      const result = await createPost(publishSnapshot);
       if (result.status === 'rejected') {
         setStatus(PostRequestStatus.FAILED, {
           error: {
@@ -348,9 +363,9 @@ export async function postRequestWorkflow(
       let reconciliation: Awaited<ReturnType<typeof reconcilePostRequestActivity>>;
       try {
         reconciliation = await reconcilePostRequestActivity({
-          accountId: snapshot.input.accountId,
-          postId: snapshot.postId,
-          profileId: snapshot.input.profileId,
+          accountId: publishSnapshot.input.accountId,
+          postId: publishSnapshot.postId,
+          profileId: publishSnapshot.input.profileId,
         });
       } catch {
         await sleep('5 seconds');

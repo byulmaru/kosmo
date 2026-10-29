@@ -17,6 +17,11 @@ import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
 import { graphql } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+import type { ExecutionResult } from 'graphql';
+
+type SubmitPostRequestResult = {
+  submitPostRequest: { request: { status: string } };
+};
 
 const requestSubmit = (input: {
   bodyText: string;
@@ -43,7 +48,7 @@ const requestSubmit = (input: {
         },
       },
     },
-  });
+  }) as Promise<ExecutionResult<SubmitPostRequestResult>>;
 
 const noExistingPostRequestHandle = {
   query: async (queryName: string) => {
@@ -51,6 +56,83 @@ const noExistingPostRequestHandle = {
     return null;
   },
 };
+
+test('submitPostRequest rejects duplicate media before checking uploads or starting the workflow', async (t) => {
+  t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);
+  const mediaId = '00000000-0000-4000-8000-000000000003';
+  const uploadId = '00000000-0000-4000-8000-000000000005';
+  const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+  const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+  process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://storage.example';
+  process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'test-key';
+  t.after(() => {
+    if (previousOrigin === undefined) {
+      delete process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+    } else {
+      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousOrigin;
+    }
+    if (previousApiKey === undefined) {
+      delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+    } else {
+      process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousApiKey;
+    }
+  });
+
+  t.mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from: () => ({
+          where: async () => [
+            {
+              id: mediaId,
+              source: MediaSource.LOCAL,
+              state: MediaState.UPLOADING,
+              storageReference: `nexus:v1:${uploadId}`,
+              url: null,
+            },
+          ],
+        }),
+      }) as never,
+  );
+  const headRequests: Array<{ method: string | undefined; url: string }> = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    headRequests.push({ method: init?.method, url: String(input) });
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'content-length': '1',
+        'content-type': 'image/png',
+        'last-modified': new Date().toUTCString(),
+      },
+    });
+  });
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+  const start = t.mock.method(temporalClient.workflow, 'start');
+
+  const encodedMediaId = encodeGlobalId('Media', mediaId);
+  const result = await requestSubmit({
+    bodyText: 'duplicate image',
+    media: [
+      { applyNightshade: false, mediaId: encodedMediaId },
+      { applyNightshade: true, mediaId: encodedMediaId },
+    ],
+    requestId: '00000000-0000-4000-8000-000000000006',
+    visibility: 'PUBLIC',
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'media');
+  assert.equal(error.code, 'VALIDATION');
+  assert.deepEqual(headRequests, []);
+  assert.equal(start.mock.callCount(), 0);
+});
 
 test('submitPostRequest checks raw uploads before start and keeps READY media choices in the snapshot', async (t) => {
   const query = t.mock.fn(async (queryName: string) => {
@@ -103,16 +185,9 @@ test('submitPostRequest checks raw uploads before start and keeps READY media ch
         from: () => ({ where: async () => rows }),
       }) as never,
   );
-  const generatedPostIds = [
-    '019f6678-86fa-709b-984e-1520766b8448',
-    '019f6678-86fa-709b-984e-1520766b8449',
-  ];
-  let generatedPostIdIndex = 0;
-  t.mock.method(
-    db,
-    'execute',
-    async () => [{ id: generatedPostIds[generatedPostIdIndex++] }] as never,
-  );
+  const execute = t.mock.method(db, 'execute', async () => {
+    throw new Error('Post request submission must not generate a Post ID');
+  });
 
   const metadataRequests: Array<{ method: string | undefined; url: string }> = [];
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -130,7 +205,7 @@ test('submitPostRequest checks raw uploads before start and keeps READY media ch
   const started: Array<{
     args?: readonly {
       mediaProcessing: readonly { applyNightshade: boolean; mediaId: string }[];
-      postId: string;
+      postId?: string;
       requestId: string;
       submittedAt: string;
       submissionFingerprint?: string;
@@ -145,7 +220,11 @@ test('submitPostRequest checks raw uploads before start and keeps READY media ch
     started.push(options as (typeof started)[number]);
     return { workflowId: 'post-request', firstExecutionRunId: 'run-1' } as never;
   });
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const uploadingResult = await requestSubmit({
     bodyText: 'uploading image',
@@ -164,7 +243,7 @@ test('submitPostRequest checks raw uploads before start and keeps READY media ch
   assert.deepEqual(started[0]?.args?.[0]?.mediaProcessing, [
     { applyNightshade: true, mediaId: uploadingMediaId },
   ]);
-  assert.equal(started[0]?.args?.[0]?.postId, generatedPostIds[0]);
+  assert.equal(started[0]?.args?.[0]?.postId, undefined);
   assert.ok(started[0]?.args?.[0]?.submittedAt);
   assert.equal(started[0]?.workflowIdConflictPolicy, 'FAIL');
   assert.equal(started[0]?.workflowIdReusePolicy, 'REJECT_DUPLICATE');
@@ -196,8 +275,9 @@ test('submitPostRequest checks raw uploads before start and keeps READY media ch
   assert.deepEqual(started[1]?.args?.[0]?.mediaProcessing, [
     { applyNightshade: true, mediaId: readyMediaId },
   ]);
-  assert.equal(started[1]?.args?.[0]?.postId, generatedPostIds[1]);
+  assert.equal(started[1]?.args?.[0]?.postId, undefined);
   assert.equal(query.mock.callCount(), 2);
+  assert.equal(execute.mock.callCount(), 0);
 });
 
 test('submitPostRequest does not admit an Uploading Media whose raw upload is missing', async (t) => {
@@ -241,7 +321,11 @@ test('submitPostRequest does not admit an Uploading Media whose raw upload is mi
   );
   t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 404 }));
   const start = t.mock.method(temporalClient.workflow, 'start');
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const result = await requestSubmit({
     bodyText: 'image without bytes',
@@ -427,12 +511,6 @@ test('submitPostRequest recovers a lost acknowledgement after an upload source d
         }),
       }) as never,
   );
-  t.mock.method(
-    db,
-    'execute',
-    async () => [{ id: '019f6678-86fa-709b-984e-1520766b8448' }] as never,
-  );
-
   let fetchCount = 0;
   t.mock.method(globalThis, 'fetch', async () => {
     fetchCount += 1;
@@ -461,7 +539,11 @@ test('submitPostRequest recovers a lost acknowledgement after an upload source d
     current = { snapshot, status: PostRequestStatus.QUEUED };
     return { workflowId, firstExecutionRunId: 'run-1' } as never;
   });
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const input = {
     bodyText: 'same content',
@@ -505,11 +587,6 @@ test('submitPostRequest confirms a matching racing start and rejects different c
       },
     } as never;
   });
-  t.mock.method(
-    db,
-    'execute',
-    async () => [{ id: '019f6678-86fa-709b-984e-1520766b8448' }] as never,
-  );
   const start = t.mock.method(
     temporalClient.workflow,
     'start',
@@ -523,7 +600,11 @@ test('submitPostRequest confirms a matching racing start and rejects different c
       );
     },
   );
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const matching = await requestSubmit({
     bodyText: 'same content',

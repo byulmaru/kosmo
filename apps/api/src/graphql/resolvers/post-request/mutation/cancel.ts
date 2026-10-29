@@ -6,9 +6,9 @@ import {
 } from '@kosmo/core/temporal/post-request';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { PostRequest } from '../ref';
 import { loadPostRequestStateForAccount } from '../state';
-import { rethrowPostRequestFailure } from './helpers';
 import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
 
 const isPublishingState = (state: PostRequestState) =>
@@ -55,7 +55,7 @@ async function cancelRunningRequest(
     if (latest) {
       rejectPublishingState(latest);
     }
-    return rethrowPostRequestFailure(error);
+    return rethrowPostWorkflowFailure(error);
   }
 
   if (updated.status === PostRequestStatus.CANCELLED) {
