@@ -243,9 +243,13 @@ describe('ui-contract/no-visual-style-overrides', () => {
       const key = 'margin';
       const keyedStyles = { margin: { color: 'red' } };
       const props = { style: { opacity: 0.5 } };
+      const visualOverrides = [{ backgroundColor: 'green' }];
+      const layoutOverrides = [{ margin: 8 }];
       export function Fixture() {
         return <>
           <Button style={{ ...styles.first, ...styles.second }}>Spread</Button>
+          <Button style={[...visualOverrides]}>Visual array spread</Button>
+          <Button style={[...layoutOverrides]}>Layout array spread</Button>
           <Button {...props}>Props</Button>
           <Button style={{ ['borderColor']: 'red' }}>Computed</Button>
           <Button style={{ color: 'red' }}>Color</Button>
@@ -255,7 +259,7 @@ describe('ui-contract/no-visual-style-overrides', () => {
       }
     `);
 
-    assert.equal(violations(messages).length, 5);
+    assert.equal(violations(messages).length, 6);
   });
 
   it('rejects new SVG value imports, reexports, and intrinsic SVG elements', async () => {

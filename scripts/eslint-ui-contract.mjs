@@ -330,7 +330,12 @@ function createRule(context) {
     if (expression.type === 'ArrayExpression') {
       for (const element of expression.elements) {
         if (element) {
-          inspectExpression(element, component, propertyNode, seenVariables);
+          inspectExpression(
+            element.type === 'SpreadElement' ? element.argument : element,
+            component,
+            propertyNode,
+            seenVariables,
+          );
         }
       }
       return;
