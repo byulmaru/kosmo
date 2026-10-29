@@ -16,7 +16,7 @@ Web analytics는 선행 Reaction 기능이 허용하는 Unicode Type의 서버 �
 
 ### Requirement: 허용되지 않은 종류와 개인 정보의 경계
 
-지원 집합에서 확인되지 않은 Type에 대해서도 기존 성공 이벤트는 유지해야 하며(MUST), 종류 key와 Unicode/custom 구분을 생략한다. 앱에서 추가하는 custom event property에는 Post·Profile ID, 콘텐츠, Reaction DB ID, 이름·shortcode·표시 원문, 미승인 사용자 정의 emoji 식별값, 오류 원문, 직접 식별 trait 또는 중복 Account ID를 포함하지 않는다. **Source Context:** [PROD-986](https://linear.app/byulmaru/issue/PROD-986)의 미매핑 fallback·금지 property 및 custom emoji 후속 경계.
+지원 집합에서 확인되지 않은 Type에 대해서도 기존 성공 이벤트는 유지해야 하며(MUST), 종류 key와 Unicode/custom 구분을 생략한다. Reaction event에 앱이 추가하는 property에는 Post·Profile ID, 콘텐츠, Reaction DB ID, 이름·shortcode·표시 원문, 미승인 사용자 정의 emoji 식별값, 오류 원문, 직접 식별 trait 또는 중복 Account ID를 포함하지 않는다. **Source Context:** [PROD-986](https://linear.app/byulmaru/issue/PROD-986)의 미매핑 fallback·금지 property 및 custom emoji 후속 경계.
 
 #### Scenario: 지원 집합 밖의 값
 

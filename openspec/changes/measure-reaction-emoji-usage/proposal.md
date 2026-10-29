@@ -8,14 +8,14 @@ Web에서 지원되는 Unicode Reaction 종류별로 사용 Account 수, 추가�
 
 ## What Changes
 
-- 기존 성공 이벤트에 검증된 Unicode 종류 식별값과 Unicode/사용자 정의 구분을 추가한다. 기존 `reaction_type`과 Account identity를 유지한다.
+- 기존 성공 이벤트에 검증된 Unicode 종류 식별값과 Unicode 종류 표시를 추가한다. 기존 `reaction_type`과 Account identity를 유지한다.
 - 종류별 계산식, 관측 범위와 해석 한계, 최소 PostHog Insight 또는 재현 가능한 쿼리를 마련한다.
 - 명시적 event property의 경계를 정리하고 운영 문서·공개 고지와의 정합성 확인을 기록한다.
 
 ## Non-Goals
 
 - PROD-942의 Reaction catalog, 허용 범위, Picker, mutation 또는 Unicode 동일성 계약을 다시 정의하지 않는다.
-- 사용자 정의 emoji의 개별 식별 정보 수집, Native 계측, 과거 데이터 backfill, PostHog Cloud 설정 변경과 production 배포를 다루지 않는다.
+- 사용자 정의 emoji의 개별 식별 정보 수집, Native 종류 key 계측, 과거 데이터 backfill, PostHog Cloud 설정 변경과 production 배포를 다루지 않는다. Native의 기존 `reaction_type` 전송은 유지한다.
 
 ## Constraints
 
@@ -34,9 +34,9 @@ Web에서 지원되는 Unicode Reaction 종류별로 사용 Account 수, 추가�
 
 - Canonical: `docs/domain/objects/reaction.md`, `docs/design/reactions.md`, `docs/operations/posthog.md`.
 - Linear: [PROD-986](https://linear.app/byulmaru/issue/PROD-986), [PROD-942](https://linear.app/byulmaru/issue/PROD-942), [PROD-539](https://linear.app/byulmaru/issue/PROD-539).
-- User agreement: PROD-942의 두 PR 위에 delta layer를 쌓고 Spec까지만 진행한다.
+- User agreement: 선행 PR 병합 뒤 최신 `main`에 맞춰 PROD-986 PR을 수정하고 Draft로 유지한다.
 
 ## Session Status
 
 - Status: Active
-- Last updated: 2026-09-27
+- Last updated: 2026-10-30
