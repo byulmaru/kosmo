@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sessionName } from '@kosmo/core';
 import {
-  AccountMetadata,
   AccountProfiles,
   Accounts,
   ActivityPubActors,
@@ -252,18 +251,13 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
     .insert(Accounts)
     .values({
       displayName,
+      // General feature tests use a returning account; onboarding tests start unseen.
+      metadata: (options.timelineGuideShown ?? true) ? { 'coachmark.timeline.shown': 'true' } : {},
       oidcSubject: options.oidcSubject ?? `e2e-oidc-${suffix}`,
       state: options.accountState ?? AccountState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);
-
-  // General feature tests use a returning account; onboarding tests explicitly start unseen.
-  if (options.timelineGuideShown ?? true) {
-    await db
-      .insert(AccountMetadata)
-      .values({ accountId: account.id, key: 'coachmark.timeline.shown', value: 'true' });
-  }
 
   let profile: typeof Profiles.$inferSelect | null = null;
 

@@ -1928,8 +1928,17 @@ function timelineStoryParameters(
       operationResponses: {
         SessionProviderQuery: { data: timelineStoryQuery },
         UniversalShellQuery: { data: timelineStoryQuery },
-        CoachmarkControllerCreateMetadataMutation: {
-          data: { createAccountMetadata: { account: timelineStoryQuery.me } },
+        CoachmarkControllerSetMetadataMutation: {
+          data: {
+            setAccountMetadata: {
+              key: 'coachmark.timeline.shown',
+              value: 'true',
+              account: {
+                ...timelineStoryQuery.me,
+                metadata: [{ key: 'coachmark.timeline.shown', value: 'true' }],
+              },
+            },
+          },
         },
         [operationName]: { data },
       },
@@ -2337,8 +2346,17 @@ export const UniversalMobileTimelineNoSelectedProfile: Story = {
         currentSession: { ...timelineLocalQuery.currentSession, selectedProfile: null },
       },
       operationResponses: {
-        CoachmarkControllerCreateMetadataMutation: {
-          data: { createAccountMetadata: { account: timelineStoryQuery.me } },
+        CoachmarkControllerSetMetadataMutation: {
+          data: {
+            setAccountMetadata: {
+              key: 'coachmark.timeline.shown',
+              value: 'true',
+              account: {
+                ...timelineStoryQuery.me,
+                metadata: [{ key: 'coachmark.timeline.shown', value: 'true' }],
+              },
+            },
+          },
         },
       },
     },
