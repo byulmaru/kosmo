@@ -17,7 +17,7 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { useTheme } from '@/theme/ThemeProvider';
+import { StateView } from '@/components/ui/StateView';
 import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -781,7 +781,6 @@ function PostDetailThreadRows({
   presentation,
 }: PostDetailThreadRowsProps) {
   const viewport = useContext(RouteThreadViewportContext);
-  const theme = useTheme();
   if (!viewport) {
     throw new Error('PostDetailThreadRows must be rendered inside PostDetailThreadViewport.');
   }
@@ -851,25 +850,20 @@ function PostDetailThreadRows({
           </View>
         )}
       />
-      {conversationLoading ? (
-        <Text accessibilityLiveRegion="polite" style={{ color: theme.text }}>
-          답글을 불러오는 중입니다.
-        </Text>
-      ) : conversationError ? (
-        <View accessibilityRole="alert">
-          <Text style={{ color: theme.text }}>답글을 불러오지 못했어요</Text>
-          <Button onPress={onConversationRetry} style={styles.retryButton} tone="secondary">
-            다시 시도
-          </Button>
-        </View>
+      {conversationLoading || conversationError ? (
+        <StateView
+          actionLabel={conversationError ? '다시 시도' : undefined}
+          alert={conversationError}
+          loading={conversationLoading && !conversationError}
+          onAction={onConversationRetry}
+          title={conversationError ? '답글을 불러오지 못했어요' : '답글을 불러오는 중입니다.'}
+        />
       ) : isLoadingNext ? (
-        <Text accessibilityLiveRegion="polite" style={{ color: theme.text }}>
-          답글을 더 불러오는 중입니다.
-        </Text>
+        <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
       ) : loadError ? (
         <View accessibilityRole="alert">
-          <Text style={{ color: theme.text }}>답글을 더 불러오지 못했어요</Text>
-          <Text style={{ color: theme.text }}>이미 불러온 답글은 그대로 유지돼요.</Text>
+          <Text>답글을 더 불러오지 못했어요</Text>
+          <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
           <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
             답글 다시 불러오기
           </Button>

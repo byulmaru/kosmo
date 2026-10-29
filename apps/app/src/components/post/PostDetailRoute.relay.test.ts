@@ -280,7 +280,7 @@ describe('Post detail independent Relay operations', () => {
 
     await act(async () => request('PostDetailComposerQuery').fail(new Error('composer failed')));
     assert.equal(node('CurrentPost'), currentBefore);
-    await act(async () => node('Button').props.onPress());
+    await act(async () => node('StateView').props.onAction());
     assert.equal(pending.at(-1)?.request.name, 'PostDetailComposerQuery');
     await act(async () =>
       request('PostDetailComposerQuery').respond({

@@ -1,7 +1,7 @@
 import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import {
@@ -12,7 +12,6 @@ import {
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -299,12 +298,27 @@ function PostDetailRouteTree({
           />
         ) : pureRepostSourceHref ? null : (
           <>
-            {current.error ? <PostDetailQueryStatus onRetry={current.retry ?? undefined} /> : null}
-            <PostDetailComposerStatus
-              error={composer.error}
-              loading={composer.loading && !composer.error}
-              onRetry={composer.retry ?? undefined}
-            />
+            {current.error ? (
+              <StateView
+                actionLabel="다시 시도"
+                alert
+                onAction={current.retry ?? undefined}
+                title="게시글을 불러오지 못했어요"
+              />
+            ) : null}
+            {composer.error || composer.loading ? (
+              <StateView
+                actionLabel={composer.error ? '다시 시도' : undefined}
+                alert={composer.error}
+                loading={composer.loading && !composer.error}
+                onAction={composer.retry ?? undefined}
+                title={
+                  composer.error
+                    ? '답글 작성을 준비하지 못했어요'
+                    : '답글 작성을 준비하는 중입니다.'
+                }
+              />
+            ) : null}
             <PostDetailConversationData
               conversationError={conversation.error || conversationStructuralError}
               conversationKey={conversationKey}
@@ -553,45 +567,6 @@ function PostDetailCurrentStatus({
       }
     />
   );
-}
-
-function PostDetailQueryStatus({ onRetry }: { onRetry?: () => void }) {
-  const theme = useTheme();
-  return (
-    <View accessibilityRole="alert">
-      <Text style={{ color: theme.text }}>게시글을 새로 불러오지 못했어요</Text>
-      <Button onPress={onRetry} tone="secondary">
-        다시 시도
-      </Button>
-    </View>
-  );
-}
-
-function PostDetailComposerStatus({
-  error,
-  loading,
-  onRetry,
-}: {
-  error: boolean;
-  loading: boolean;
-  onRetry?: () => void;
-}) {
-  const theme = useTheme();
-  if (error) {
-    return (
-      <View accessibilityRole="alert">
-        <Text style={{ color: theme.text }}>답글 작성을 준비하지 못했어요</Text>
-        <Button onPress={onRetry} tone="secondary">
-          다시 시도
-        </Button>
-      </View>
-    );
-  }
-  return loading ? (
-    <Text accessibilityLiveRegion="polite" style={{ color: theme.text }}>
-      답글 작성을 준비하는 중입니다.
-    </Text>
-  ) : null;
 }
 
 const styles = StyleSheet.create({

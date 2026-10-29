@@ -149,6 +149,10 @@ mock.module('@/components/ui/Button', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/components/ui/StateView', {
+  exports: { StateView: (props: Record<string, unknown>) => createElement('StateView', props) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('@/theme/ThemeProvider', {
   exports: { useTheme: () => ({ border: '#cccccc', card: '#ffffff', divider: '#dddddd' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
