@@ -12,6 +12,36 @@ import type { SettingsLinkRowProps } from './SettingsLinkRow';
 const require = createRequire(import.meta.url);
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
+let pressableState: { hovered: boolean; pressed: boolean } = {
+  hovered: false,
+  pressed: false,
+};
+const timingCalls: Array<{ duration: number; target: string }> = [];
+const pendingAnimations: Array<{ complete: () => void; stopped: boolean }> = [];
+let stopAnimationCalls = 0;
+let setValueCalls = 0;
+const theme = {
+  borderSubtle: '#eeeeee',
+  foregroundPrimary: '#111111',
+  foregroundSecondary: '#666666',
+  stateFocusRing: '#005fcc',
+  stateSelectedSurface: '#fff8dc',
+  stateSelectedBorder: '#9a7800',
+  stateHover: '#f4f4f4',
+  statePressed: '#e8e8e8',
+};
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    setValueCalls += 1;
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    stopAnimationCalls += 1;
+    callback?.();
+  }
+}
 
 mock.module('expo-router', {
   exports: {
@@ -30,13 +60,51 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    processColor: () => undefined,
+    Animated: {
+      Color: AnimatedColorMock,
+      View: 'AnimatedView',
+      timing: (
+        value: { setValue: (next: unknown) => void },
+        config: { duration: number; toValue: unknown },
+      ) => {
+        const target =
+          config.toValue instanceof AnimatedColorMock ? config.toValue.value : config.toValue;
+        const pending = {
+          complete: () => value.setValue(target),
+          stopped: false,
+        };
+        pendingAnimations.push(pending);
+        return {
+          start: () => {
+            timingCalls.push({ duration: config.duration, target: String(target) });
+          },
+          stop: () => {
+            pending.stopped = true;
+          },
+        };
+      },
+    },
+    Easing: { bezier: () => () => 0 },
     Platform: {
       get OS() {
         return platformOS;
       },
     },
-    Pressable: 'Pressable',
+    Pressable: ({
+      children,
+      ...props
+    }: {
+      children?: ReactElement | ((state: { hovered: boolean; pressed: boolean }) => ReactElement);
+      [key: string]: unknown;
+    }) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children(pressableState) : children,
+      ),
     StyleSheet: {
+      absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
         Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : style,
@@ -73,16 +141,8 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => reducedMotion,
-    useTheme: () => ({
-      borderSubtle: '#eeeeee',
-      foregroundPrimary: '#111111',
-      foregroundSecondary: '#666666',
-      stateFocusRing: '#005fcc',
-      stateSelectedSurface: '#fff8dc',
-      stateSelectedBorder: '#9a7800',
-      stateHover: '#f4f4f4',
-      statePressed: '#e8e8e8',
-    }),
+    useThemeMode: () => 'light',
+    useTheme: () => theme,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 let SettingsLinkRow: ComponentType<SettingsLinkRowProps>;
@@ -95,6 +155,11 @@ before(async () => {
 beforeEach(() => {
   platformOS = 'web';
   reducedMotion = false;
+  pressableState = { hovered: false, pressed: false };
+  timingCalls.length = 0;
+  pendingAnimations.length = 0;
+  stopAnimationCalls = 0;
+  setValueCalls = 0;
 });
 
 afterEach(async () => {
@@ -127,8 +192,9 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props['aria-current'], 'page');
     assert.deepEqual(row.props.accessibilityState, { selected: true });
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    assert.equal(rowStyle.backgroundColor, '#fff8dc');
-    assert.equal(rowStyle.borderColor, '#9a7800');
+    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
     assert.equal(rowStyle.borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
@@ -153,9 +219,9 @@ describe('SettingsLinkRow', () => {
     const row = byTestId('selected-parent-settings-row');
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: true });
-    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    assert.equal(rowStyle.backgroundColor, '#fff8dc');
-    assert.equal(rowStyle.borderColor, '#9a7800');
+    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
@@ -236,14 +302,10 @@ describe('SettingsLinkRow', () => {
       testID: 'selected-settings-row',
     });
 
-    const row = byTestId('selected-settings-row');
-    const idleStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    const hoveredStyle = flattenStyle(row.props.style({ hovered: true, pressed: false }));
-    const pressedStyle = flattenStyle(row.props.style({ hovered: true, pressed: true }));
-    const pressedOnlyStyle = flattenStyle(row.props.style({ hovered: false, pressed: true }));
-    assert.notEqual(idleStyle.backgroundColor, hoveredStyle.backgroundColor);
-    assert.notDeepEqual(hoveredStyle, pressedOnlyStyle);
-    assert.deepEqual(pressedStyle, pressedOnlyStyle);
+    const idleStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(idleStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(idleStyle.borderColor), '#9a7800');
+    assert.equal(idleStyle.transitionDuration, undefined);
   });
 
   it('Web row feedback uses fast or selected timing and native omits CSS transitions', async () => {
@@ -255,11 +317,8 @@ describe('SettingsLinkRow', () => {
       testID: 'motion-settings-row',
     });
 
-    const row = byTestId('motion-settings-row');
-    let style = flattenStyle(row.props.style({ hovered: true, pressed: false }));
-    const hoverDuration = style.transitionDuration;
-    style = flattenStyle(row.props.style({ hovered: false, pressed: true }));
-    assert.equal(style.transitionDuration, hoverDuration);
+    let style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(style.transitionDuration, undefined);
 
     await act(async () =>
       renderer?.update(
@@ -272,10 +331,10 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    const selectedStyle = flattenStyle(
-      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
-    );
-    assert.notEqual(selectedStyle.transitionDuration, hoverDuration);
+    completePendingAnimations();
+    const selectedStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(selectedStyle.backgroundColor), '#fff8dc');
+    assert.equal(selectedStyle.transitionDuration, undefined);
 
     reducedMotion = true;
     await act(async () =>
@@ -289,11 +348,9 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    style = flattenStyle(
-      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
-    );
-    assert.equal(style.transitionDuration, '0ms');
-    assert.notEqual(style.transitionDuration, selectedStyle.transitionDuration);
+    style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(style.backgroundColor), '#fff8dc');
+    assert.equal(style.transitionDuration, undefined);
 
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -311,6 +368,75 @@ describe('SettingsLinkRow', () => {
     assert.equal(style.transitionDuration, undefined);
     assert.equal(style.transitionProperty, undefined);
     assert.equal(style.transitionTimingFunction, undefined);
+  });
+
+  it('hover 중 선택 상태가 바뀌어도 border 전이는 양방향 200ms를 유지한다', async () => {
+    pressableState = { hovered: true, pressed: false };
+    const props = {
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: false,
+      testID: 'selected-transition-row',
+    } satisfies SettingsLinkRowProps;
+    await render(props);
+
+    timingCalls.length = 0;
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
+    });
+    completePendingAnimations();
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === '#9a7800'),
+      true,
+    );
+
+    timingCalls.length = 0;
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: false }));
+    });
+    completePendingAnimations();
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === 'transparent'),
+      true,
+    );
+    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(finalStyle.borderColor), 'transparent');
+  });
+
+  it('focus 진입은 진행 중 feedback 전이를 중단하거나 끝점으로 점프시키지 않는다', async () => {
+    const props = {
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: false,
+      testID: 'focus-transition-row',
+    } satisfies SettingsLinkRowProps;
+    await render(props);
+
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
+    });
+    const timingCount = timingCalls.length;
+    const stopCount = stopAnimationCalls;
+    const setValueCount = setValueCalls;
+    const row = byTestId('focus-transition-row');
+
+    await act(async () => {
+      row.props.onFocus({
+        currentTarget: { matches: () => true },
+      });
+    });
+
+    assert.equal(timingCalls.length, timingCount);
+    assert.equal(stopAnimationCalls, stopCount);
+    assert.equal(setValueCalls, setValueCount);
+
+    completePendingAnimations();
+    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(finalStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(finalStyle.borderColor), '#9a7800');
+    assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 2);
   });
 
   it('Web focus ring은 focus-visible일 때만 표시하고 pointer focus에서는 숨긴다', async () => {
@@ -376,4 +502,16 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return Array.isArray(style)
     ? Object.assign({}, ...style.filter(Boolean))
     : (style as Record<string, unknown>);
+}
+
+function colorValue(value: unknown) {
+  return value instanceof AnimatedColorMock ? value.value : value;
+}
+
+function completePendingAnimations() {
+  pendingAnimations.splice(0).forEach((animation) => {
+    if (!animation.stopped) {
+      animation.complete();
+    }
+  });
 }

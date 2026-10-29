@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { View } from 'react-native';
 import { useArgs } from 'storybook/preview-api';
-import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import { SelectTrigger } from '@/components/ui/SelectTrigger';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -151,9 +151,11 @@ export const InteractionContract: Story = {
     expect(button).toHaveAccessibleDescription(args.error);
     expect(button.getBoundingClientRect().height).toBe(48);
     await user.hover(button);
-    expect(button.firstElementChild?.firstElementChild).toHaveStyle({
-      backgroundColor: colors[globals.theme === 'dark' ? 'dark' : 'light'].stateHover,
-    });
+    await waitFor(() =>
+      expect(button.firstElementChild?.firstElementChild).toHaveStyle({
+        backgroundColor: colors[globals.theme === 'dark' ? 'dark' : 'light'].stateHover,
+      }),
+    );
     await user.unhover(button);
     await user.tab();
     expect(button).toHaveFocus();

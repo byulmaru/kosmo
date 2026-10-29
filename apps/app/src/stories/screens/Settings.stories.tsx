@@ -161,7 +161,7 @@ export const FullMasterDetail: Story = {
     expect(account).toHaveAttribute('target', '_blank');
     expect(account).toHaveAttribute('rel', 'noopener noreferrer');
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
-    expect(profileEntry).toHaveStyle({
+    expect(profileEntry.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
     });
