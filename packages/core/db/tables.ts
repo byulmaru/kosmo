@@ -16,9 +16,11 @@ import {
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { fraciBinary, FractionalIndexOf } from 'fraci';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
+export type ProfilePinOrderKey = Buffer & FractionalIndexOf<ReturnType<typeof fraciBinary>>;
 
 const createdAt = () =>
   datetime('created_at')
@@ -665,7 +667,7 @@ export const ProfilePinnedPosts = pgTable(
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
     position: integer('position'),
-    orderKey: bytea('order_key'),
+    orderKey: bytea('order_key').$type<ProfilePinOrderKey>().notNull(),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
@@ -678,12 +680,6 @@ export const ProfilePinnedPosts = pgTable(
     ),
   ],
 );
-
-// A positive, twenty-one-byte fraci integer: legacy rank, null flag, then UUID.
-// This virtual initialization is stable, idempotent and includes old writers.
-// NULL sorts after every integer, matching PostgreSQL position ASC NULLS LAST.
-// All legacy Local ranks are NULL, so their UUID ordering is unchanged.
-export const profilePinOrderKey = sql<Buffer>`coalesce(${ProfilePinnedPosts.orderKey}, decode('94', 'hex') || int4send(coalesce(${ProfilePinnedPosts.position}, 2147483647)) || case when ${ProfilePinnedPosts.position} is null then decode('01', 'hex') else decode('00', 'hex') end || uuid_send(${ProfilePinnedPosts.id}))`;
 
 export const Reactions = pgTable(
   'reaction',
