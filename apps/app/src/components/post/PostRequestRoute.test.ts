@@ -105,9 +105,21 @@ async function renderScreen() {
   assert.ok(renderer);
 }
 
-function list() {
+function findAllByType(type: string) {
   assert.ok(renderer);
-  return renderer.root.findByType('PostRequestList');
+  return renderer.root.findAll((node) => node.type === type);
+}
+
+function findByType(type: string) {
+  const matches = findAllByType(type);
+  assert.equal(matches.length, 1, `Expected one ${type}`);
+  const match = matches[0];
+  assert.ok(match);
+  return match;
+}
+
+function list() {
+  return findByType('PostRequestList');
 }
 
 describe('post request route', () => {
@@ -130,10 +142,10 @@ describe('post request route', () => {
     assert.equal(list().props.profileId, 'profile-a');
     assert.equal(list().props.focusedRequestId, 'request-a');
     assert.equal(list().props.focusedRequest, null);
-    assert.equal(renderer?.root.findByType('PostRequestComposer').props.requestId, 'request-a');
+    assert.equal(findByType('PostRequestComposer').props.requestId, 'request-a');
 
     await act(async () => list().props.onRewrite('request-b'));
-    await act(async () => renderer?.root.findByType('PostRequestComposer').props.onBack());
+    await act(async () => findByType('PostRequestComposer').props.onBack());
     assert.deepEqual(navigationEvents, [
       {
         method: 'setParams',
@@ -157,7 +169,7 @@ describe('post request route', () => {
     assert.equal(list().props.profileId, 'profile-b');
     assert.equal(list().props.focusedRequestId, 'request-a');
     assert.equal(list().props.focusedRequest.requestId, 'request-a');
-    assert.equal(renderer?.root.findAllByType('PostRequestComposer').length, 0);
+    assert.equal(findAllByType('PostRequestComposer').length, 0);
   });
 
   it('loads the full history when no request is focused', async () => {

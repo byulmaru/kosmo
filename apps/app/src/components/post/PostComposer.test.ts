@@ -1274,6 +1274,8 @@ describe('PostComposer local author', () => {
     await act(async () => targetProps?.onSubmit());
     const originalSubmission = mutationCalls[0]?.variables;
     assert.ok(originalSubmission);
+    const originalRequestId = originalSubmission.input.requestId;
+    assert.ok(typeof originalRequestId === 'string');
     await act(async () => mutationCalls[0]?.onError(new Error('결과 확인 불가')));
 
     const staleRetry = currentRetry;
@@ -1315,7 +1317,7 @@ describe('PostComposer local author', () => {
     assert.ok(currentRetry);
     await act(async () => currentRetry?.());
     assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
-    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission.input.requestId);
+    assert.equal(mutationCalls[1]?.variables.input.requestId, originalRequestId);
 
     sessionAccountId = 'account-2';
     await act(async () => {
@@ -1323,7 +1325,7 @@ describe('PostComposer local author', () => {
     });
     await act(async () =>
       mutationCalls[1]?.onCompleted({
-        submitPostRequest: { request: { requestId: originalSubmission.input.requestId } },
+        submitPostRequest: { request: { requestId: originalRequestId } },
       }),
     );
     assert.equal(acceptedCount, 0);
@@ -1340,7 +1342,7 @@ describe('PostComposer local author', () => {
     assert.deepEqual(mutationCalls[2]?.variables, originalSubmission);
     await act(async () =>
       mutationCalls[2]?.onCompleted({
-        submitPostRequest: { request: { requestId: originalSubmission.input.requestId } },
+        submitPostRequest: { request: { requestId: originalRequestId } },
       }),
     );
     assert.equal(acceptedCount, 1);

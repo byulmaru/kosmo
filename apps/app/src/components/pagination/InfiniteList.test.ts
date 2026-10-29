@@ -98,8 +98,17 @@ describe('InfiniteList', () => {
       renderer = create(createElement(InfiniteList, props({ data: [], empty, header })));
     });
 
-    assert.equal(renderer?.root.findByType('View').children[0]?.type, 'FeedHeader');
-    assert.equal(renderer?.root.findByType('View').children[1]?.type, 'Empty');
+    const feedContent = renderer?.root.findAll((node) => (node.type as unknown) === 'View')[0];
+    const headerChild = feedContent?.children[0];
+    const emptyChild = feedContent?.children[1];
+    assert.equal(
+      typeof headerChild === 'object' && headerChild !== null ? headerChild.type : headerChild,
+      'FeedHeader',
+    );
+    assert.equal(
+      typeof emptyChild === 'object' && emptyChild !== null ? emptyChild.type : emptyChild,
+      'Empty',
+    );
   });
 
   it('native FlatList가 footer와 endReached pagination을 소유한다', async () => {
