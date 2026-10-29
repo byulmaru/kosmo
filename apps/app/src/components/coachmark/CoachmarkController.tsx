@@ -50,7 +50,7 @@ type CoachmarkControllerOptions = Readonly<{
   guide: CoachmarkGuide;
   preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
   ready: boolean;
-  steps: readonly CoachmarkStep[];
+  steps: readonly CoachmarkStep[] | (() => readonly CoachmarkStep[]);
 }>;
 
 type CoachmarkController = Readonly<{
@@ -72,6 +72,7 @@ export function useCoachmarkController({
   const [commitMetadata] = useMutation<CoachmarkControllerSetMetadataMutation>(
     setAccountMetadataMutation,
   );
+  const resolveSteps = useCallback(() => (typeof steps === 'function' ? steps() : steps), [steps]);
 
   const onShown = useCallback(() => {
     if (!account) {
@@ -91,17 +92,18 @@ export function useCoachmarkController({
 
   const requestCoachmark = useCallback(
     (mode: 'automatic' | 'manual') => {
+      const currentSteps = resolveSteps();
       return request({
         accountId: account?.id,
         guide,
         mode,
         onShown,
         preferredFocusRef,
-        ready,
-        steps,
+        ready: ready && currentSteps.length > 0,
+        steps: currentSteps,
       });
     },
-    [account, guide, onShown, preferredFocusRef, ready, request, steps],
+    [account, guide, onShown, preferredFocusRef, ready, request, resolveSteps],
   );
 
   return {

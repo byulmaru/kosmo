@@ -18,6 +18,7 @@ import type {
   ScrollViewProps,
   View as NativeView,
 } from 'react-native';
+import type { CoachmarkController_account$key } from '@/components/coachmark/CoachmarkController';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
@@ -113,6 +114,7 @@ export function PostDetailFrame({
 
 export function PostDetailThread({
   onCurrentPostBackgroundPress,
+  coachmarkAccount,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -126,6 +128,7 @@ export function PostDetailThread({
   replyProfile,
 }: {
   onCurrentPostBackgroundPress?: () => void;
+  coachmarkAccount?: CoachmarkController_account$key | null;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -141,6 +144,7 @@ export function PostDetailThread({
   return (
     <PostDetailThreadContent
       onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
+      coachmarkAccount={coachmarkAccount}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
@@ -158,6 +162,7 @@ export function PostDetailThread({
 
 function PostDetailThreadContent({
   onCurrentPostBackgroundPress,
+  coachmarkAccount,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -170,6 +175,7 @@ function PostDetailThreadContent({
   replyProfile,
 }: {
   onCurrentPostBackgroundPress?: () => void;
+  coachmarkAccount?: CoachmarkController_account$key | null;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -430,6 +436,7 @@ function PostDetailThreadContent({
                 onActionBarBackgroundPress={onCurrentPostBackgroundPress}
                 onDeleted={onPostDeleted}
                 onReplyPress={currentPostReplyOnPress}
+                coachmarkAccount={coachmarkAccount}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
                 replyAvailable={currentPostReplyAvailable}
                 replySurfacePostId={currentPostReplySurfaceId}
