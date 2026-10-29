@@ -288,6 +288,9 @@ mockModule('@/components/feedback/FeedbackOverlay', {
 mockModule('@/components/content-report/ContentReportContext', {
   ContentReportProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule('@/components/coachmark/CoachmarkProvider', {
+  CoachmarkProvider: ({ children }: PropsWithChildren) => children,
+});
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,

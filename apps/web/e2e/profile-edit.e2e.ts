@@ -5,12 +5,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import {
-  isGraphQLOperation,
-  readGraphQLOperation,
-  toGlobalId,
-  waitForGraphQLOperation,
-} from './graphql';
+import { isGraphQLOperation, readGraphQLOperation, toGlobalId } from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
@@ -239,8 +234,9 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
   await profileRoutePromise;
 
   // Relay cache만이 아니라 저장된 서버 상태를 다시 조회한다.
+  await page.goto('about:blank');
   const reloadedProfileRoutePromise = waitForProfileRoute(page);
-  await page.reload();
+  await page.goto('/@prod527-tags');
   await reloadedProfileRoutePromise;
   await expect(page.getByText('#FirstWrite', { exact: true })).toBeVisible();
   await expect(page.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
@@ -280,16 +276,23 @@ async function selectReplacement(page: Page, triggerName: string, fileName: stri
 }
 
 async function waitForProfileRoute(page: Page) {
-  const responses = await Promise.all([
-    waitForGraphQLOperation(page, 'ProfileLayoutQuery'),
-    waitForGraphQLOperation(page, 'ProfilePostListPageQuery'),
-  ]);
-
-  for (const response of responses) {
-    const body = (await response.json()) as { errors?: unknown[] };
-    expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
-    expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
-  }
+  await Promise.all(
+    ['ProfileLayoutQuery', 'ProfilePostListPageQuery'].map(async (operationName) => {
+      const request = await page.waitForRequest(
+        (candidate) =>
+          new URL(candidate.url()).pathname === '/graphql' &&
+          isGraphQLOperation(candidate.postData(), operationName),
+      );
+      const response = await request.response();
+      expect(response).not.toBeNull();
+      if (!response) {
+        return;
+      }
+      const body = (await response.json()) as { errors?: unknown[] };
+      expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+      expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+    }),
+  );
 }
 
 async function addProfileTag(page: Page, tag: string) {
