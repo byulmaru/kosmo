@@ -2422,7 +2422,8 @@ for (const revokedDuringVerification of [false, true]) {
           .from(Posts)
           .where(eq(Posts.id, quote.post.id))
           .then(firstOrThrow);
-        assert.equal(waiting.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+        assert.equal(waiting.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+        assert.equal(waiting.quoteConsentApprovalUri, authorization.id!.href);
         assert.equal(waiting.repostSourceId, source.post.id);
         if (revokedDuringVerification) {
           currentContext = context;
