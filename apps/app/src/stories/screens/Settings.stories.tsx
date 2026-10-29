@@ -117,7 +117,7 @@ const meta = {
         value={{
           permission: 'default',
           support: 'supported',
-          syncPermission: async () => undefined,
+          requestPermission: async () => undefined,
         }}
       >
         <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>

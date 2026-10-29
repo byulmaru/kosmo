@@ -30,6 +30,7 @@ let browserPushSupport:
 let browserNotificationPermission: NotificationPermission = 'default';
 let requestedBrowserNotificationPermission: NotificationPermission = 'granted';
 let browserNotificationRequestPromise: Promise<NotificationPermission> | null = null;
+let browserNotificationRequestThrows = false;
 let browserNotificationRequestCalls = 0;
 let syncWebPermissionCalls: NotificationPermission[] = [];
 let requestPermissionAndSync: () => Promise<void> = async () => {
@@ -109,10 +110,11 @@ mock.module(new URL('../native-push/webPushPermissionContext.ts', import.meta.ur
       return {
         permission: browserNotificationPermission,
         support: browserPushSupport,
-        syncPermission: async (permission: NotificationPermission) => {
-          syncWebPermissionCalls.push(permission);
-          browserNotificationPermission = permission;
-        },
+        requestPermission: () =>
+          Notification.requestPermission().then((permission) => {
+            syncWebPermissionCalls.push(permission);
+            browserNotificationPermission = permission;
+          }),
       };
     },
   },
@@ -218,6 +220,7 @@ afterEach(async () => {
   browserNotificationPermission = 'default';
   requestedBrowserNotificationPermission = 'granted';
   browserNotificationRequestPromise = null;
+  browserNotificationRequestThrows = false;
   browserNotificationRequestCalls = 0;
   syncWebPermissionCalls = [];
   if (originalNotificationDescriptor) {
@@ -316,6 +319,38 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(syncWebPermissionCalls, ['granted']);
     assert.equal(requestPermissionAndSyncCalls, 0);
     assert.deepEqual(toastCalls, []);
+  });
+
+  it('브라우저 권한 요청이 동기적으로 실패하면 재시도 안내를 표시한다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserNotificationRequestThrows = true;
+    exposeBrowserNotification();
+    await render();
+
+    let notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 1);
+    assert.deepEqual(syncWebPermissionCalls, []);
+    assert.deepEqual(toastCalls, [
+      {
+        message: '브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        tone: 'danger',
+      },
+    ]);
+
+    browserNotificationRequestThrows = false;
+    notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 2);
+    assert.deepEqual(syncWebPermissionCalls, ['granted']);
   });
 
   it('허용된 권한 상태에서는 동기화를 재시도할 수 있다', async () => {
@@ -643,6 +678,9 @@ function exposeBrowserNotification() {
       },
       requestPermission: () => {
         browserNotificationRequestCalls += 1;
+        if (browserNotificationRequestThrows) {
+          throw new Error('permission request failed');
+        }
         return (
           browserNotificationRequestPromise ??
           Promise.resolve(requestedBrowserNotificationPermission)

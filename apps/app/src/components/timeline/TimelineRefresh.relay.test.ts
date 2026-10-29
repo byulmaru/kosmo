@@ -12,6 +12,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { colors } from '@/theme/tokens';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
@@ -69,6 +70,23 @@ const shellChrome = {
   registerTabReselection: tabRegistry.register,
   reselectTab: tabRegistry.reselect,
 };
+
+function timelineScreenWithPushContext(timeline: 'Home' | 'Local') {
+  const screen = createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen);
+  return timeline === 'Home'
+    ? createElement(
+        WebPushPermissionContext.Provider,
+        {
+          value: {
+            permission: 'default',
+            requestPermission: async () => undefined,
+            support: 'unsupported',
+          },
+        },
+        screen,
+      )
+    : screen;
+}
 class AnimatedValueMock {
   constructor(public value: number) {}
   setValue(value: number) {
@@ -340,9 +358,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
           renderer = create(
             createElement(ReactRelay.RelayEnvironmentProvider, {
               environment,
-              children: createElement(
-                timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen,
-              ),
+              children: timelineScreenWithPushContext(timeline),
             }),
           );
         });
@@ -396,7 +412,7 @@ for (const timeline of ['Home', 'Local'] as const) {
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
-        children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+        children: timelineScreenWithPushContext(timeline),
       });
     await act(async () => {
       renderer = create(render());
@@ -553,7 +569,7 @@ for (const os of ['ios', 'android']) {
         renderer = create(
           createElement(ReactRelay.RelayEnvironmentProvider, {
             environment,
-            children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+            children: timelineScreenWithPushContext(timeline),
           }),
           {
             createNodeMock: ({ type }) =>

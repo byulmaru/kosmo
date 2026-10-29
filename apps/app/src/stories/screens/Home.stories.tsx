@@ -10,6 +10,7 @@ import {
 } from 'relay-runtime';
 import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import HomePageQueryNode from '@/components/timeline/__generated__/HomePageQuery.graphql';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
@@ -61,6 +62,19 @@ const recoveredHomeData = {
 
 const meta = {
   component: HomeScreen,
+  decorators: [
+    (Story) => (
+      <WebPushPermissionContext.Provider
+        value={{
+          permission: 'default',
+          requestPermission: async () => undefined,
+          support: 'unsupported',
+        }}
+      >
+        <Story />
+      </WebPushPermissionContext.Provider>
+    ),
+  ],
   parameters: { layout: 'fullscreen', router: { pathname: '/home' } },
   title: 'KOSMO/Screens/Home',
 } satisfies Meta<typeof HomeScreen>;
@@ -113,6 +127,22 @@ function HomeRefreshStory() {
   );
 }
 
+function HomePushPermissionStory() {
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+
+  return (
+    <WebPushPermissionContext.Provider
+      value={{
+        permission,
+        requestPermission: async () => setPermission('granted'),
+        support: 'supported',
+      }}
+    >
+      <HomeScreen />
+    </WebPushPermissionContext.Provider>
+  );
+}
+
 function CachedHomeAutoRevalidationStory() {
   const [requestCount, setRequestCount] = useState(0);
   const environment = useMemo(() => {
@@ -160,6 +190,59 @@ export const EmptyTimelineFull: Story = {
     expect(timeline).toHaveStyle({ paddingBottom: '0px', paddingTop: '0px' });
     expectHomeBrandHeader(canvasElement);
   },
+};
+
+export const PushPermissionBanner: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const enableButton = await canvas.findByRole('button', { name: '알림 켜기' });
+    const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
+
+    expect(
+      enableButton.compareDocumentPosition(emptyTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await userEvent.click(enableButton);
+    await waitFor(() =>
+      expect(canvas.queryByRole('button', { name: '알림 켜기' })).not.toBeInTheDocument(),
+    );
+  },
+  render: () => <HomePushPermissionStory />,
+};
+
+export const PushPermissionBannerNarrow320: Story = {
+  globals: { viewport: { isRotated: false, value: 'homePushBanner320' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+    viewport: {
+      options: {
+        homePushBanner320: {
+          name: 'Home push banner 320',
+          styles: { height: '844px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const enableButton = await canvas.findByRole('button', { name: '알림 켜기' });
+    const dismissButton = canvas.getByRole('button', { name: '배너 닫기' });
+    const canvasBounds = canvasElement.getBoundingClientRect();
+    const enableBounds = enableButton.getBoundingClientRect();
+    const dismissBounds = dismissButton.getBoundingClientRect();
+    const documentElement = canvasElement.ownerDocument.documentElement;
+
+    expect(canvasBounds.width).toBe(320);
+    expect(enableBounds.left).toBeGreaterThanOrEqual(canvasBounds.left);
+    expect(dismissBounds.right).toBeLessThanOrEqual(canvasBounds.right);
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+    expect(documentElement.scrollWidth).toBeLessThanOrEqual(documentElement.clientWidth);
+  },
+  render: () => <HomePushPermissionStory />,
 };
 
 export const OnboardingCompact: Story = {

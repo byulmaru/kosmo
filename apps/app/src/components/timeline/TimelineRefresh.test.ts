@@ -3,8 +3,10 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { WebPushSupport } from '@/components/native-push/webPushPermissionContext';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -45,6 +47,10 @@ function MockPostList({ identityKey }: { identityKey?: string }) {
   return createElement('TimelineRows', { identityKey });
 }
 
+function MockNotificationPermissionBanner() {
+  return createElement('NotificationPermissionBanner');
+}
+
 function localData() {
   return {
     currentSession: {
@@ -59,6 +65,20 @@ const homeData = {
   currentSession: { id: 'session', selectedProfile: { id: 'profile-a' } },
   me: { id: 'me', name: 'Me', profiles: [{ id: 'profile-a' }] },
 };
+
+function homeWithWebPush(support: WebPushSupport) {
+  return createElement(
+    WebPushPermissionContext.Provider,
+    {
+      value: {
+        permission: 'default',
+        requestPermission: async () => undefined,
+        support,
+      },
+    },
+    createElement(HomeTimelineScreen),
+  );
+}
 
 const localRefetch = (
   _variables: object,
@@ -115,6 +135,9 @@ mockModule('relay-runtime', {
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
+mockModule('@/components/ui/NotificationPermissionBanner', {
+  NotificationPermissionBanner: MockNotificationPermissionBanner,
+});
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });
@@ -174,9 +197,23 @@ afterEach(async () => {
 });
 
 describe('Timeline refresh', () => {
+  it('places the eligible Web permission banner before Home posts', async () => {
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(homeWithWebPush('supported'));
+    });
+
+    const contentOrder = renderer?.root
+      .findAll(
+        (node) => node.type === MockNotificationPermissionBanner || node.type === MockPostList,
+      )
+      .map((node) => node.type);
+    assert.deepEqual(contentOrder, [MockNotificationPermissionBanner, MockPostList]);
+  });
+
   it('iOS Home root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {
     await act(async () => {
-      renderer = create(createElement(HomeTimelineScreen));
+      renderer = create(homeWithWebPush('unsupported'));
     });
 
     assert.ok(nativeHomeReselectionHandler);
@@ -215,7 +252,7 @@ describe('Timeline refresh', () => {
       }
 
       await act(async () => {
-        renderer = create(createElement(HomeTimelineScreen));
+        renderer = create(homeWithWebPush('unsupported'));
       });
 
       let postList = renderer?.root.findByType(MockPostList);
