@@ -3,6 +3,7 @@ import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactNode } from 'react';
+import type { View } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { usePostBookmarkAction as usePostBookmarkActionExport } from './PostBookmarkAction';
 import type {
@@ -36,6 +37,7 @@ const mutationRequests: MutationRequest[] = [];
 const relayEnvironment = {};
 const environmentGeneration = { current: 0 };
 const bookmarkFailures: unknown[] = [];
+let mutationPending = false;
 let fragmentData: unknown;
 let renderer: ReactTestRenderer | null = null;
 
@@ -51,9 +53,10 @@ function MockActionMenu({
     expanded: boolean;
     focusTrigger: () => void;
     onPress: () => void;
-    ref: null;
+    ref: { current: null };
   }) => ReactNode;
 }) {
+  const ref = { current: null };
   return createElement(
     'ActionMenu',
     { items },
@@ -61,7 +64,7 @@ function MockActionMenu({
       expanded: false,
       focusTrigger: () => undefined,
       onPress: () => undefined,
-      ref: null,
+      ref,
     }),
   );
 }
@@ -95,7 +98,10 @@ mockModule('react-native-svg', {
 mockModule('react-relay', {
   graphql: () => ({}),
   useFragment: () => fragmentData,
-  useMutation: () => [(request: MutationRequest) => mutationRequests.push(request), false],
+  useMutation: () => [
+    (request: MutationRequest) => mutationRequests.push(request),
+    mutationPending,
+  ],
   useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('relay-runtime', {
@@ -169,6 +175,7 @@ beforeEach(() => {
   mutationRequests.length = 0;
   environmentGeneration.current = 0;
   bookmarkFailures.length = 0;
+  mutationPending = false;
   fragmentData = undefined;
 });
 
@@ -177,6 +184,55 @@ after(async () => {
 });
 
 describe('Post interaction analytics callbacks', () => {
+  it('재게시 안내 앵커는 disabled·pending에서 비우고 로그인 유도 상태에서는 유지한다', async () => {
+    fragmentData = { content: null, id: 'post-id', repostCount: 0, viewerRepost: null };
+
+    const disabledRef = { current: null } as { current: View | null };
+    await act(async () => {
+      renderer = create(
+        createElement(RepostAction, {
+          controlRef: disabledRef,
+          execution: { kind: 'disabled', reason: 'target' },
+          post: {} as never,
+        }),
+      );
+    });
+    const disabledControl = renderer!.root.findByType(MockPostActionControl);
+    disabledControl.props.controlRef({});
+    assert.equal(disabledRef.current, null);
+
+    mutationPending = true;
+    const pendingRef = { current: null } as { current: View | null };
+    await act(async () => {
+      renderer?.update(
+        createElement(RepostAction, {
+          controlRef: pendingRef,
+          execution: { kind: 'enabled' },
+          post: {} as never,
+        }),
+      );
+    });
+    const pendingControl = renderer!.root.findByType(MockPostActionControl);
+    pendingControl.props.controlRef({});
+    assert.equal(pendingRef.current, null);
+
+    mutationPending = false;
+    const resolutionRef = { current: null } as { current: View | null };
+    await act(async () => {
+      renderer?.update(
+        createElement(RepostAction, {
+          controlRef: resolutionRef,
+          execution: { kind: 'resolution-required', reason: 'guest' },
+          post: {} as never,
+        }),
+      );
+    });
+    const resolutionControl = renderer!.root.findByType(MockPostActionControl);
+    const node = {};
+    resolutionControl.props.controlRef(node);
+    assert.strictEqual(resolutionRef.current, node);
+  });
+
   it('재게시 생성·취소는 각 성공 payload 뒤 한 번씩 기록한다', async () => {
     fragmentData = { content: null, id: 'post-id', repostCount: 0, viewerRepost: null };
 

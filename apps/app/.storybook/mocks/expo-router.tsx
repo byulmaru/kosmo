@@ -122,6 +122,10 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
   return useContext(RouterContext).params as T;
 }
 
+export function useFocusEffect(effect: () => void | (() => void)) {
+  useEffect(effect, [effect]);
+}
+
 export function useRouter() {
   const { back, canGoBack, replacePathname, setPathname } = useContext(RouterContext);
   return useMemo(

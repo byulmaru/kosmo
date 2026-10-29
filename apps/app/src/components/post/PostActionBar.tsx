@@ -39,6 +39,7 @@ export type MoreActionConfig = {
 
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
+  bookmarkControlRef?: Ref<View>;
   execution?: PostActionExecution;
   more?: MoreActionConfig;
   moreItems?: readonly ActionMenuItem[];
@@ -51,7 +52,9 @@ export type PostActionBarProps = {
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post?: PostActionBar_post$key | null;
   reactionController?: PostReactionController;
+  reactionControlRef?: Ref<View>;
   reply?: ReplyActionConfig;
+  repostControlRef?: Ref<View>;
   repostExecution?: PostActionExecution;
 };
 
@@ -65,6 +68,7 @@ const postActionBarPostFragment = graphql`
 
 export function PostActionBar({
   bookmark,
+  bookmarkControlRef,
   execution = { kind: 'enabled' },
   more,
   moreItems,
@@ -76,8 +80,10 @@ export function PostActionBar({
   onRepostError,
   onResolutionRequired,
   post,
+  reactionControlRef,
   reactionController,
   reply,
+  repostControlRef,
   repostExecution = execution,
 }: PostActionBarProps) {
   const theme = useTheme();
@@ -121,6 +127,7 @@ export function PostActionBar({
       ) : null}
       {data?.repost ? (
         <RepostAction
+          controlRef={repostControlRef}
           execution={repostExecution}
           onError={onRepostError}
           onResolutionRequired={onResolutionRequired}
@@ -132,6 +139,7 @@ export function PostActionBar({
           controller={reactionController}
           execution={execution}
           onResolutionRequired={onResolutionRequired}
+          triggerRef={reactionControlRef}
           renderTrigger={({ disabled, expanded, hasReacted, onPress, ref }) => (
             <PostActionControl
               accessibilityLabel="반응"
@@ -161,6 +169,11 @@ export function PostActionBar({
               accessibilityLabel={resolvedBookmark.accessibilityLabel}
               active={resolvedBookmark.hasBookmarked}
               alignVisualToEnd
+              controlRef={
+                execution.kind !== 'disabled' && resolvedBookmark.processing === 'default'
+                  ? bookmarkControlRef
+                  : undefined
+              }
               fillActive
               hoverDisabled={execution.kind === 'resolution-required'}
               icon={Bookmark}
