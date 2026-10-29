@@ -10,7 +10,8 @@ mock.module('react-native', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 it('uses the latest navigation observer and preserves back history', async () => {
-  const { RouterMockProvider, usePathname, useRouter } = await import('../../.storybook/mocks/expo-router');
+  const { RouterMockProvider, usePathname, useRouter } =
+    await import('../../.storybook/mocks/expo-router');
   const params = {};
   const segments: readonly string[] = [];
   const oldCalls: unknown[] = [];
@@ -25,18 +26,28 @@ it('uses the latest navigation observer and preserves back history', async () =>
     createElement(RouterMockProvider, { onNavigate, params, segments }, createElement(Probe));
   let renderer: ReactTestRenderer | undefined;
   try {
-    await act(async () => { renderer = create(render(oldObserver)); });
-    await act(async () => { renderer!.update(render(newObserver)); });
-    await act(async () => { renderer!.root.findByType('router-probe' as never).props.push('/next'); });
+    await act(async () => {
+      renderer = create(render(oldObserver));
+    });
+    await act(async () => {
+      renderer!.update(render(newObserver));
+    });
+    await act(async () => {
+      renderer!.root.findByType('router-probe' as never).props.push('/next');
+    });
     assert.deepEqual(oldCalls, []);
     assert.deepEqual(newCalls, ['/next']);
     assert.equal(renderer!.root.findByType('router-probe' as never).props.pathname, '/next');
     assert.equal(renderer!.root.findByType('router-probe' as never).props.canGoBack(), true);
-    await act(async () => { renderer!.root.findByType('router-probe' as never).props.back(); });
+    await act(async () => {
+      renderer!.root.findByType('router-probe' as never).props.back();
+    });
     assert.equal(renderer!.root.findByType('router-probe' as never).props.pathname, '/home');
     assert.equal(renderer!.root.findByType('router-probe' as never).props.canGoBack(), false);
     assert.deepEqual(newCalls, ['/next']);
   } finally {
-    await act(async () => { renderer?.unmount(); });
+    await act(async () => {
+      renderer?.unmount();
+    });
   }
 });
