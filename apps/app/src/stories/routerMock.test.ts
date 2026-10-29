@@ -10,6 +10,8 @@ mock.module('react-native', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 it('uses the latest navigation observer and preserves back history', async () => {
+  const previousReact = (globalThis as { React?: unknown }).React;
+  Object.assign(globalThis, { React });
   const { RouterMockProvider, usePathname, useRouter } =
     await import('../../.storybook/mocks/expo-router');
   const params = {};
