@@ -13,6 +13,8 @@ import type { UniversalShell as UniversalShellComponent } from './UniversalShell
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
 let hardwareBackPressListener: (() => boolean) | null = null;
+let viewport = { height: 800, width: 390 };
+let safeAreaBottom = 0;
 let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
 let routeSegments: string[] = [];
@@ -39,7 +41,14 @@ let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
 let sidebarNavigationProps:
   | { guestPublicContent?: boolean; onComposeOpen?: () => void }
   | undefined;
-let invitationProps: { onDismiss?: () => void; visible?: boolean } | undefined;
+let invitationProps:
+  | {
+      onDismiss?: () => void;
+      onLayout?: (height: number) => void;
+      pinToBottom?: boolean;
+      visible?: boolean;
+    }
+  | undefined;
 let sessionStatus: 'error' | 'guest' | 'valid' | null = null;
 let shellChromeProps:
   | Pick<
@@ -110,13 +119,13 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: unknown) => styles },
   Text: 'Text',
   View: 'View',
-  useWindowDimensions: () => ({ height: 800, width: 390 }),
+  useWindowDimensions: () => viewport,
 });
 
 mockModule('react-native-drawer-layout', { Drawer: 'Drawer' });
 
 mockModule('react-native-safe-area-context', {
-  useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
+  useSafeAreaInsets: () => ({ bottom: safeAreaBottom, left: 0, right: 0, top: 0 }),
 });
 
 mockModule('react-relay', {
@@ -247,8 +256,11 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  globalThis.sessionStorage?.removeItem('kosmo:public-content-invitation-dismissed');
   platform.OS = 'web';
   layout = 'mobile';
+  viewport = { height: 800, width: 390 };
+  safeAreaBottom = 0;
   pathname = '/home';
   routeSegments = [];
   sessionProfile = null;
@@ -273,6 +285,48 @@ afterEach(async () => {
 });
 
 describe('UniversalShell screen fallback focus target', () => {
+  it('removes guest root tabs and reserves only the measured panel until dismissed', async () => {
+    pathname = '/';
+    sessionStatus = 'guest';
+    viewport = { height: 480, width: 320 };
+    safeAreaBottom = 24;
+    await renderShell();
+    const route = () => renderer!.root.findByProps({ testID: 'universal-shell-content' });
+    const padding = () => Object.assign({}, ...route().props.style).paddingBottom;
+    assert.equal(bottomTabBarProps, undefined);
+    assert.equal(invitationProps?.pinToBottom, true);
+    assert.equal(padding(), 0);
+    await act(async () => invitationProps?.onLayout?.(224));
+    assert.equal(padding(), 224);
+    await act(async () => invitationProps?.onLayout?.(280));
+    assert.equal(padding(), 280);
+    await act(async () => invitationProps?.onDismiss?.());
+    assert.equal(invitationProps?.visible, false);
+    assert.equal(padding(), 0);
+    assert.equal(bottomTabBarProps, undefined);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, true);
+  });
+
+  it('preserves tabs for other routes, session states and Native', async () => {
+    for (const scenario of [
+      { os: 'web', path: '/@writer', status: 'guest' },
+      { os: 'web', path: '/', status: 'error' },
+      { os: 'web', path: '/', status: 'valid' },
+      { os: 'ios', path: '/', status: 'guest' },
+      { os: 'android', path: '/', status: 'guest' },
+    ] as const) {
+      platform.OS = scenario.os;
+      pathname = scenario.path;
+      sessionStatus = scenario.status;
+      bottomTabBarProps = undefined;
+      await renderShell();
+      assert.ok(bottomTabBarProps);
+      assert.equal(invitationProps?.pinToBottom, false);
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
+  });
+
   it('shows the closable Web invitation and guest navigation only on public content', async () => {
     platform.OS = 'web';
     layout = 'mobile';

@@ -22,16 +22,23 @@ import type { TextStyle, ViewStyle } from 'react-native';
 type Props = {
   onDismiss: () => void;
   onLayout: (height: number) => void;
+  pinToBottom?: boolean;
   visible: boolean;
 };
 
-export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props) {
+export function PublicContentInvitation({
+  onDismiss,
+  onLayout,
+  pinToBottom = false,
+  visible,
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const mobile = width < breakpoints.compact;
   const placement = getPublicContentInvitationPlacement({
     height,
+    pinToBottom,
     safeAreaBottom: insets.bottom,
     width,
   });
@@ -59,6 +66,16 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
       style={[
         styles.root,
         positionedStyle,
+        pinToBottom && mobile
+          ? ({
+              paddingBottom: space[12] + insets.bottom,
+              paddingLeft: spacing.lg + insets.left,
+              paddingRight: spacing.lg + insets.right,
+              // Keep every control reachable when reflow makes the fixed panel taller than the viewport.
+              maxHeight: '100dvh',
+              overflowY: 'auto',
+            } as unknown as ViewStyle)
+          : null,
         {
           backgroundColor: theme.backgroundCanvas,
           borderColor: theme.borderSubtle,
