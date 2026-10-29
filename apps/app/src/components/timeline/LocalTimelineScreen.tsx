@@ -119,7 +119,11 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           />
         </MobileWebRouteChrome>
       ) : (
-        <LocalHeader width={width} homeTabAnchorRef={homeTabAnchorRef} localTabAnchorRef={localTabAnchorRef} />
+        <LocalHeader
+          width={width}
+          homeTabAnchorRef={homeTabAnchorRef}
+          localTabAnchorRef={localTabAnchorRef}
+        />
       )}
       <View style={styles.body}>
         <RouteBoundary
@@ -147,7 +151,8 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
             onRefreshComplete={completeRefresh}
             refreshVersion={refreshState.refreshVersion}
             refreshing={refreshState.refreshing}
-            homeTabAnchorRef={homeTabAnchorRef} localTabAnchorRef={localTabAnchorRef}
+            homeTabAnchorRef={homeTabAnchorRef}
+            localTabAnchorRef={localTabAnchorRef}
           />
         </RouteBoundary>
       </View>
@@ -155,7 +160,15 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   );
 }
 
-function LocalHeader({ width, homeTabAnchorRef, localTabAnchorRef }: { width: number; homeTabAnchorRef: RefObject<View | null>; localTabAnchorRef: RefObject<View | null> }) {
+function LocalHeader({
+  width,
+  homeTabAnchorRef,
+  localTabAnchorRef,
+}: {
+  width: number;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+}) {
   const shellChrome = useShellChrome();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
