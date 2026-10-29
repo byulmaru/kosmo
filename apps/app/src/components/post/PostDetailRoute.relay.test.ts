@@ -131,7 +131,7 @@ afterEach(async () => {
   pending = [];
 });
 
-function createEnvironment() {
+function createEnvironment(store = new Store(new RecordSource())) {
   return new Environment({
     network: Network.create((request, variables) =>
       Observable.create<GraphQLResponse>((sink) => {
@@ -148,7 +148,7 @@ function createEnvironment() {
         return () => undefined;
       }),
     ),
-    store: new Store(new RecordSource()),
+    store,
   });
 }
 
@@ -171,19 +171,30 @@ function request(name: string) {
 }
 
 const author = profile({ id: 'profile-kosmo', relativeHandle: '@kosmo' });
-const currentPost = post({ id: 'post-current', profile: author, bodyText: '현재 게시글' });
+const currentPost = {
+  ...post({ id: 'post-current', profile: author, bodyText: '현재 게시글' }),
+  viewerReactions: [],
+};
+const existingReply = {
+  ...post({ id: 'reply-existing', profile: author, bodyText: '이미 불러온 답글' }),
+  viewerReactions: [],
+};
 const composerProfile = profile({ id: 'profile-composer', relativeHandle: '@writer' });
 const conversationPayload = {
   node: {
     ...currentPost,
-    replyAncestors: [],
+    replyAncestors: [existingReply],
     replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
   },
 };
 
 describe('Post detail independent Relay operations', () => {
   it('renders current Post before conversation/composer responses and preserves the tree on retry', async () => {
-    const environment = createEnvironment();
+    const store = new Store(new RecordSource(), {
+      gcReleaseBufferSize: 0,
+      gcScheduler: (run) => run(),
+    });
+    const environment = createEnvironment(store);
     await act(async () => {
       renderer = create(tree(environment));
     });
@@ -232,17 +243,68 @@ describe('Post detail independent Relay operations', () => {
     assert.equal(node('CurrentPost'), currentBefore);
     assert.equal(node('Providers').props.draft, 'typed draft');
     assert.equal(node('Conversation').props.conversationKey, conversationKeyBeforeRetry);
+    store.scheduleGC();
+    assert.ok(store.getSource().get('reply-existing'));
 
     await act(async () => node('Conversation').props.onConversationRetry());
     const recoveredRequest = pending.at(-1);
     assert.equal(recoveredRequest?.request.name, 'PostDetailConversationQuery');
     await act(async () => recoveredRequest?.respond(conversationPayload));
     assert.equal(node('CurrentPost'), currentBefore);
+    assert.equal(node('Providers').props.draft, 'typed draft');
+    assert.equal(node('Conversation').props.conversationError, false);
+    assert.equal(node('Conversation').props.conversationLoading, false);
 
     await act(async () => node('Conversation').props.onConversationRetry());
     const missingConversationRequest = pending.at(-1);
     assert.equal(missingConversationRequest?.request.name, 'PostDetailConversationQuery');
     await act(async () => missingConversationRequest?.respond({ node: null }));
     assert.equal(node('StateView').props.title, '게시글을 찾을 수 없어요');
+  });
+
+  it('retries current Post, composer and initial conversation failures independently', async () => {
+    const environment = createEnvironment();
+    await act(async () => {
+      renderer = create(tree(environment));
+    });
+    await act(async () => request('PostDetailQuery').fail(new Error('current failed')));
+    assert.equal(node('StateView').props.alert, true);
+    await act(async () => node('StateView').props.onAction());
+    assert.deepEqual(
+      pending.slice(3).map((item) => item.request.name),
+      ['PostDetailQuery'],
+    );
+    await act(async () => request('PostDetailQuery').respond({ node: currentPost }));
+    const currentBefore = node('CurrentPost');
+    const viewportBefore = node('Viewport');
+
+    await act(async () => request('PostDetailComposerQuery').fail(new Error('composer failed')));
+    assert.equal(node('CurrentPost'), currentBefore);
+    await act(async () => node('Button').props.onPress());
+    assert.equal(pending.at(-1)?.request.name, 'PostDetailComposerQuery');
+    await act(async () =>
+      request('PostDetailComposerQuery').respond({
+        currentSession: { __typename: 'Session', id: 'session', selectedProfile: composerProfile },
+      }),
+    );
+    await act(async () => node('DraftInput').props.onChange('draft before conversation'));
+
+    await act(async () =>
+      request('PostDetailConversationQuery').fail(new Error('initial conversation failed')),
+    );
+    assert.equal(node('Conversation').props.conversationError, true);
+    assert.equal(node('Conversation').props.conversationKey, null);
+    await act(async () => node('Conversation').props.onConversationRetry());
+    assert.equal(pending.at(-1)?.request.name, 'PostDetailConversationQuery');
+    assert.equal(node('Conversation').props.conversationLoading, true);
+    await act(async () => request('PostDetailConversationQuery').respond(conversationPayload));
+    assert.ok(node('Conversation').props.conversationKey);
+    assert.equal(node('CurrentPost'), currentBefore);
+    assert.equal(node('Viewport'), viewportBefore);
+    assert.equal(node('Providers').props.draft, 'draft before conversation');
+    assert.deepEqual(
+      pending.slice(3).map((item) => item.request.name),
+      ['PostDetailQuery', 'PostDetailComposerQuery', 'PostDetailConversationQuery'],
+    );
   });
 });

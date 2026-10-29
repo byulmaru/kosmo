@@ -3144,6 +3144,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'PostDetailConversationRetryPreservesState',
   ],
   decorators: [
     (Story) => (
@@ -6276,6 +6277,131 @@ export const PostDetailReplyTargetedRefetch: Story = {
     expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
   },
   // UniversalShell keeps SessionProvider outside the actor boundary; mirror that lifecycle here.
+  render: () => (
+    <RelayActorBoundary>
+      <PostDetailScreen />
+    </RelayActorBoundary>
+  ),
+};
+
+export const PostDetailConversationRetryPreservesState: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      mutationResponse: {
+        createPost: { post: routeCreatedReply },
+      },
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailConversationQuery: {
+          sequence: [
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [
+                      { cursor: routeChildPost.id, node: routeChildPost },
+                      ...paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                    ],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+            { delayMs: 1000, error: '답글을 불러오지 못했어요.' },
+            {
+              delayMs: 700,
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [
+                      { cursor: routeChildPost.id, node: routeChildPost },
+                      ...paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                      { cursor: routeCreatedReply.id, node: routeCreatedReply },
+                    ],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        PostDetailComposerQuery: {
+          data: {
+            currentSession: {
+              __typename: 'Session',
+              id: 'session',
+              selectedProfile: composerProfile,
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const currentRow = await canvas.findByTestId('post-thread-current-route-current');
+    const existingReplyRow = await canvas.findByTestId('post-thread-item-route-child');
+
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const firstDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await userEvent.type(
+      within(firstDialog).getByRole('textbox', { name: '답글 본문' }),
+      '첫 번째 답글',
+    );
+    await userEvent.click(within(firstDialog).getByRole('button', { name: '답글 게시' }));
+
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오는 중입니다.'));
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const pendingDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const draft = within(pendingDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(draft, '실패 중에도 남는 draft');
+
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오지 못했어요'));
+    expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
+    expect(canvas.getByTestId('post-thread-item-route-child')).toBe(existingReplyRow);
+    expect(draft).toHaveValue('@kosmo 실패 중에도 남는 draft');
+
+    await userEvent.click(within(pendingDialog).getByRole('button', { name: '닫기' }));
+    const discardDialog = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(discardDialog).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오는 중입니다.'));
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const recoveryDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const recoveryDraft = within(recoveryDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(recoveryDraft, '복구 중에도 남는 draft');
+
+    await waitFor(() =>
+      expect(canvasElement).toHaveTextContent('targeted refetch로 반영된 새 Reply'),
+    );
+    expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
+    expect(canvas.getByTestId('post-thread-item-route-child')).toBe(existingReplyRow);
+    expect(recoveryDraft).toHaveValue('@kosmo 복구 중에도 남는 draft');
+  },
   render: () => (
     <RelayActorBoundary>
       <PostDetailScreen />
