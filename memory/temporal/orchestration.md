@@ -35,6 +35,13 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
+- Local GraphQL과 inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`를 공유하고 ID는
+  `post-create:${requestId}`로 만든다. Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에
+  `USE_EXISTING`, `REJECT_DUPLICATE`, `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction
+  Activity가 공통 결과를 commit한 뒤 Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다.
+  ID가 일치하는 `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
+  `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
+  그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
 
 ## Workflow Source Structure
 

@@ -8,6 +8,7 @@ export { hashtagMuteRuleWorkflow } from './hashtag-mute-rule';
 export { localPostCreateWorkflow } from './local-post-create';
 export { mediaUploadWorkflow } from './media-upload';
 export { operationalNotificationDeliveryWorkflow } from './operational-notification';
+export { postCreateWorkflow } from './post-create';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';

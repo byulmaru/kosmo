@@ -9,7 +9,7 @@ import {
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { localPostCreateWorkflow } from '@kosmo/core/temporal/local-post-create';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { ApplicationFailure } from '@temporalio/client';
@@ -24,7 +24,7 @@ import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
 import { extractPostMentionCandidates } from './mention-candidates';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
-import type { LocalPostCreateInput } from '@kosmo/core/temporal/local-post-create';
+import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
 
 const rethrowLocalPostCreateFailure = (error: unknown): never => {
   if (!(error instanceof ApplicationFailure)) {
@@ -291,30 +291,35 @@ builder.mutationField('createPost', (t) =>
         }
       }
 
-      const result = await runWorkflow(localPostCreateWorkflow, {
-        args: [{ requestId: crypto.randomUUID() }],
-        mode: 'update-with-start',
-        updateArgs: [
-          {
-            accountId: ctx.session.accountId,
-            bodyText,
-            contentWarning: contentWarning || null,
-            media: media.map(({ altText, mediaId }) => ({
-              altText: altText ?? null,
-              mediaId: mediaId.id,
-            })),
-            mentions: mentionReferences,
-            origin: 'LOCAL',
-            profileId,
-            replyParentId: input.replyParentId?.id,
-            repostSourceId: input.repostSourceId?.id,
-            sensitiveMedia: input.sensitiveMedia ?? false,
-            visibility: input.visibility,
-          } satisfies LocalPostCreateInput,
-        ],
+      const args: PostCreateWorkflowArgs = {
+        requestId: crypto.randomUUID(),
+        input: {
+          accountId: ctx.session.accountId,
+          bodyText,
+          contentWarning: contentWarning || null,
+          media: media.map(({ altText, mediaId }) => ({
+            altText: altText ?? null,
+            mediaId: mediaId.id,
+          })),
+          mentions: mentionReferences,
+          origin: 'LOCAL',
+          profileId,
+          replyParentId: input.replyParentId?.id,
+          repostSourceId: input.repostSourceId?.id,
+          sensitiveMedia: input.sensitiveMedia ?? false,
+          visibility: input.visibility,
+        },
+      };
+      const result = await runWorkflow(postCreateWorkflow, {
+        args: [args],
+        mode: 'execute',
+        returnExistingResult: true,
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'REJECT_DUPLICATE',
       }).catch(rethrowLocalPostCreateFailure);
+      if (result.status === 'rejected') {
+        throw new Error('Local Post creation returned an ActivityPub-only rejection');
+      }
 
       const post = await db
         .select()

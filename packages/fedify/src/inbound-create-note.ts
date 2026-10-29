@@ -13,10 +13,8 @@ import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import {
-  remotePostCreateWorkflow,
-  remoteProfileRefreshWorkflow,
-} from '@kosmo/core/temporal/workflows';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
+import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
@@ -31,11 +29,11 @@ import {
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { ActivityPubPostInput } from '@kosmo/core/services';
-import type { ActivityPubPostCreateInput } from '@kosmo/core/temporal/post-create';
 import type {
-  RemotePostCreateWorkflowArgs,
-  RemotePostCreateWorkflowResult,
-} from '@kosmo/core/temporal/workflows';
+  ActivityPubPostCreateInput,
+  PostCreateWorkflowArgs,
+  PostCreateWorkflowResult,
+} from '@kosmo/core/temporal/post-create';
 import type { InboundObservation } from './inbound-observability';
 
 type StoredRemoteProfileActor = NonNullable<
@@ -618,15 +616,16 @@ export const handleInboundCreateNote = async ({
     });
     return;
   }
-  const args: RemotePostCreateWorkflowArgs = {
+  const args: PostCreateWorkflowArgs = {
     input: toPostCreateInput(prepared.input),
     requestId: randomUUID(),
   };
-  const result: RemotePostCreateWorkflowResult = await runWorkflow(remotePostCreateWorkflow, {
+  const result: PostCreateWorkflowResult = await runWorkflow(postCreateWorkflow, {
     args: [args],
     mode: 'execute',
+    returnExistingResult: true,
     workflowIdConflictPolicy: 'USE_EXISTING',
-    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    workflowIdReusePolicy: 'REJECT_DUPLICATE',
   });
   if (result.status === 'rejected') {
     observeInbound({

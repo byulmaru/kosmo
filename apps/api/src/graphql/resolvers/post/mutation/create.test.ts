@@ -6,6 +6,7 @@ import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { ApplicationFailure } from '@temporalio/client';
 import {
   graphql,
@@ -176,11 +177,27 @@ test('validates createPost input before running the resolver', async () => {
 });
 
 test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
-  const workflowReached = new Error('localPostCreateWorkflow reached');
-  const updateWithStart = t.mock.method(
+  const workflowReached = new Error('postCreateWorkflow reached');
+  const execute = t.mock.method(
     temporalClient.workflow,
-    'executeUpdateWithStart',
-    async () => {
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postCreateWorkflow.workflow);
+      assert.ok(options && typeof options === 'object');
+      const workflowOptions = options as {
+        args?: readonly { requestId: string; input: { origin: string } }[];
+        workflowId?: string;
+        workflowIdConflictPolicy?: string;
+        workflowIdReusePolicy?: string;
+      };
+      const args = workflowOptions.args?.[0];
+      assert.ok(args);
+      assert.equal(workflowOptions.args?.length, 1);
+      assert.equal(args.input.origin, 'LOCAL');
+      assert.equal(workflowOptions.workflowId, 'post-create:' + args.requestId);
+      assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+      assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
+      assert.equal('returnExistingResult' in workflowOptions, false);
       throw workflowReached;
     },
   );
@@ -212,7 +229,7 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   });
 
   assert.equal(result.errors?.[0]?.originalError, workflowReached);
-  assert.equal(updateWithStart.mock.callCount(), 1);
+  assert.equal(execute.mock.callCount(), 1);
 });
 
 test('maps Temporal validation failures back to the GraphQL field error', async (t) => {
@@ -221,13 +238,9 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
     'VALIDATION',
     'media',
   );
-  const updateWithStart = t.mock.method(
-    temporalClient.workflow,
-    'executeUpdateWithStart',
-    async () => {
-      throw failure;
-    },
-  );
+  const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
+    throw failure;
+  });
 
   const result = await graphql({
     schema,
@@ -254,7 +267,7 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
   const error = result.errors?.[0]?.originalError;
   assert.ok(error instanceof ValidationError);
   assert.equal(error.field, 'media');
-  assert.equal(updateWithStart.mock.callCount(), 1);
+  assert.equal(execute.mock.callCount(), 1);
 });
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {

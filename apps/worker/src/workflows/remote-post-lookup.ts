@@ -1,9 +1,12 @@
 import {
+  postCreateWorkflow,
   REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
   remotePostCreateWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
+  ChildWorkflowCancellationType,
+  ParentClosePolicy,
   patched,
   proxyActivities,
   WorkflowIdReusePolicy,
@@ -67,11 +70,19 @@ export async function remotePostLookupWorkflow(input: RemotePostLookupInput) {
   }
 
   // The prepared Activity result payload bounds this smaller native child input.
-  const created = await runChildWorkflow(remotePostCreateWorkflow, {
-    args: [{ input: prepared.input, requestId: prepared.requestId }],
-    mode: 'execute',
-    workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-  });
+  const created = patched('remote-post-create-shared-child-v1')
+    ? await runChildWorkflow(postCreateWorkflow, {
+        args: [{ input: prepared.input, requestId: prepared.requestId }],
+        cancellationType: ChildWorkflowCancellationType.ABANDON,
+        mode: 'execute',
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+      })
+    : await runChildWorkflow(remotePostCreateWorkflow, {
+        args: [{ input: prepared.input, requestId: prepared.requestId }],
+        mode: 'execute',
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      });
   if (created.status === 'rejected') {
     return {
       documentBytes: prepared.documentBytes,

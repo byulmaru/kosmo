@@ -24,7 +24,12 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
 import type {
-  RemotePostCreateWorkflowArgs,
+  ActivityPubPostCreateInput,
+  PostCreateActivityInput,
+  PostCreateActivityResult,
+  PostCreateWorkflowArgs,
+} from '@kosmo/core/temporal/post-create';
+import type {
   RemotePostLookupInput,
   RemotePostLookupResult,
   RemoteProfileLookupInput,
@@ -47,6 +52,29 @@ const authorUri = new URL('https://remote.example/users/alice');
 const objectUri = new URL('https://objects.example/notes/1');
 const requestContextUri = 'https://contexts.example/activitystreams';
 
+const createTestActivityPubPostInput = (
+  objectUri: string,
+  profileId = randomUUID(),
+): ActivityPubPostCreateInput => ({
+  document: {
+    body: {
+      content: [{ content: [{ text: 'Remote post', type: 'text' }], type: 'paragraph' }],
+      type: 'doc',
+    },
+    summary: null,
+    version: 1,
+  },
+  hashtagNames: [],
+  media: [],
+  mentionProfileIds: [],
+  objectUri,
+  origin: 'ACTIVITYPUB',
+  profileId,
+  publishedAt: '2026-10-29T00:00:00.000Z',
+  receivedAt: '2026-10-29T00:00:01.000Z',
+  visibility: PostVisibility.PUBLIC,
+});
+
 process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_ORIGIN = publicOrigin;
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -54,6 +82,7 @@ process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const {
   REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES,
+  postCreateWorkflow,
   remotePostCreateWorkflow,
   remotePostLookupWorkflow,
   remoteProfileLookupWorkflow,
@@ -253,7 +282,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
     const remoteCreateActivityInputs: Array<Parameters<typeof createPostActivity>[0]> = [];
-    let remoteCreateArgs: RemotePostCreateWorkflowArgs | undefined;
+    let remoteCreateArgs: PostCreateWorkflowArgs | undefined;
     const effectStarted = Promise.withResolvers<void>();
     const effectReleased = Promise.withResolvers<void>();
     t.after(() => effectReleased.resolve());
@@ -277,7 +306,17 @@ test(
         },
         createPostActivity: async (activityInput: Parameters<typeof createPostActivity>[0]) => {
           remoteCreateActivityInputs.push(activityInput);
-          return createPostActivity(activityInput);
+          const result = await createPostActivity(activityInput);
+          if (
+            activityInput.input.origin === 'ACTIVITYPUB' &&
+            activityInput.input.objectUri === objectUri.href &&
+            result.ok &&
+            result.result.status === 'created' &&
+            remoteCreateActivityInputs.length === 1
+          ) {
+            throw ApplicationFailure.retryable('Post creation Activity response was lost');
+          }
+          return result;
         },
         generatePostIdActivity,
         createNotificationActivity: async (
@@ -354,16 +393,42 @@ test(
         status: 'created',
       });
       assert.ok(remoteCreateArgs);
+      const createdPostWorkflowId = postCreateWorkflow.workflowIdFromArgs(remoteCreateArgs);
       assert.deepEqual(
-        await environment.client.workflow
-          .getHandle(remotePostCreateWorkflow.workflowIdFromArgs(remoteCreateArgs))
-          .result(),
+        await environment.client.workflow.getHandle(createdPostWorkflowId).result(),
         { authorProfileId: author.id, postId: created.postId, status: 'created' },
+      );
+      const retryAttempts = remoteCreateActivityInputs.filter(
+        ({ input }) => input.origin === 'ACTIVITYPUB' && input.objectUri === objectUri.href,
+      );
+      assert.equal(retryAttempts.length, 2);
+      assert.deepEqual(
+        retryAttempts.map(({ postId: generatedPostId }) => generatedPostId),
+        [created.postId, created.postId],
       );
       await effectStarted.promise;
       assert.equal(await db.$count(Posts), 1);
       effectReleased.resolve();
-      await environment.client.workflow.getHandle(`post-create-effects:${created.postId}`).result();
+      await environment.client.workflow.getHandle('post-create-effects:' + created.postId).result();
+      const createdLookupWorkflowId = taskQueue + ':created';
+      const createdLookupHandle = environment.client.workflow.getHandle(createdLookupWorkflowId);
+      const createdLookupHistory = await createdLookupHandle.fetchHistory();
+      const postCreateChildStarted = (createdLookupHistory.events ?? []).find(
+        (event) =>
+          event.childWorkflowExecutionStartedEventAttributes?.workflowType?.name ===
+          postCreateWorkflow.workflow,
+      );
+      assert.ok(postCreateChildStarted);
+      assert.equal(
+        postCreateChildStarted.childWorkflowExecutionStartedEventAttributes?.workflowExecution
+          ?.workflowId,
+        createdPostWorkflowId,
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        createdLookupHistory,
+        createdLookupWorkflowId,
+      );
       const effectActivityCallsAfterCreate = effectActivityCalls;
       assert.ok(effectActivityCallsAfterCreate > 0);
       assert.equal(activityInputs[0]?.maxDocumentBytes, REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES);
@@ -387,10 +452,10 @@ test(
       };
       const activityCallsBeforeInvalidInput = remoteCreateActivityInputs.length;
       await assert.rejects(
-        environment.client.workflow.execute(remotePostCreateWorkflow.workflow, {
+        environment.client.workflow.execute(postCreateWorkflow.workflow, {
           args: [invalidArgs],
           taskQueue,
-          workflowId: `${taskQueue}:${remotePostCreateWorkflow.workflowIdFromArgs(invalidArgs)}`,
+          workflowId: postCreateWorkflow.workflowIdFromArgs(invalidArgs),
           workflowExecutionTimeout: '30 seconds',
         }),
         (error: unknown) =>
@@ -406,10 +471,10 @@ test(
       const mediaBeforeFutureInput = await db.$count(Media);
       const effectsBeforeFutureInput = effectActivityCalls;
       assert.deepEqual(
-        await environment.client.workflow.execute(remotePostCreateWorkflow.workflow, {
+        await environment.client.workflow.execute(postCreateWorkflow.workflow, {
           args: [futureArgs],
           taskQueue,
-          workflowId: `${taskQueue}:${remotePostCreateWorkflow.workflowIdFromArgs(futureArgs)}`,
+          workflowId: postCreateWorkflow.workflowIdFromArgs(futureArgs),
           workflowExecutionTimeout: '30 seconds',
         }),
         { authorProfileId: author.id, postId: created.postId, status: 'duplicate' },
@@ -750,3 +815,94 @@ const truncateDatabase = async () => {
     END $$;
   `);
 };
+
+const legacyRemotePostLookupWorkflowsPath = new URL(
+  './test-fixtures/legacy-remote-post-lookup.ts',
+  import.meta.url,
+).pathname;
+
+test(
+  'Remote Post Lookup replays the legacy remote-create child trace',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: temporalTestExecutable },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-remote-post-lookup-legacy-child-' + process.pid;
+    const profileId = randomUUID();
+    const requestId = randomUUID();
+    const postId = randomUUID();
+    const input = createTestActivityPubPostInput(
+      'https://remote.example/notes/legacy-child',
+      profileId,
+    );
+    const preparedInputs: Array<Parameters<typeof prepareRemotePostActivity>[0]> = [];
+    const createInputs: PostCreateActivityInput[] = [];
+    const worker = await Worker.create({
+      activities: {
+        prepareRemotePostActivity: async (
+          received: Parameters<typeof prepareRemotePostActivity>[0],
+        ) => {
+          preparedInputs.push(received);
+          return { documentBytes: 42, input, requestId, status: 'prepared' } as const;
+        },
+        generatePostIdActivity: async () => postId,
+        createPostActivity: async (
+          received: PostCreateActivityInput,
+        ): Promise<PostCreateActivityResult> => {
+          createInputs.push(received);
+          return {
+            ok: true,
+            result: {
+              authorProfileId: received.input.profileId,
+              postId: received.postId,
+              status: 'created',
+            },
+          };
+        },
+        createNotificationActivity: async () => {},
+        sendLocalPostCreateActivity: async () => {},
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: legacyRemotePostLookupWorkflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const workflowId = taskQueue + ':legacy-child-marker';
+      const handle = await environment.client.workflow.start('remotePostLookupWorkflow', {
+        args: [{ objectUri: input.objectUri }],
+        taskQueue,
+        workflowId,
+      });
+
+      assert.deepEqual(await handle.result(), {
+        authorProfileId: profileId,
+        documentBytes: 42,
+        postId,
+        status: 'created',
+      });
+      assert.equal(preparedInputs.length, 1);
+      assert.equal(preparedInputs[0]?.objectUri, input.objectUri);
+      assert.deepEqual(createInputs, [{ input, postId }]);
+
+      const history = await handle.fetchHistory();
+      const legacyChildStarted = (history.events ?? []).find(
+        (event) =>
+          event.childWorkflowExecutionStartedEventAttributes?.workflowType?.name ===
+          remotePostCreateWorkflow.workflow,
+      );
+      assert.ok(legacyChildStarted);
+      assert.equal(
+        legacyChildStarted.childWorkflowExecutionStartedEventAttributes?.workflowExecution
+          ?.workflowId,
+        remotePostCreateWorkflow.workflowIdFromArgs({ input, requestId }),
+      );
+
+      await Worker.runReplayHistory({ workflowsPath }, history, workflowId);
+    });
+  },
+);

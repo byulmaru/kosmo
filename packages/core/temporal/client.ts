@@ -3,6 +3,7 @@ import {
   Client,
   Connection,
   WithStartWorkflowOperation,
+  WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
@@ -51,9 +52,10 @@ export interface WorkflowUpdateDefinition<
 type RunWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = Omit<
   WorkflowStartOptions<T>,
   'workflowId' | 'taskQueue'
-> & {
-  readonly mode: Mode;
-};
+> &
+  (Mode extends 'execute'
+    ? { readonly mode: 'execute'; readonly returnExistingResult?: boolean }
+    : { readonly mode: 'start'; readonly returnExistingResult?: never });
 
 type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit<
   WorkflowStartOptions<T>,
@@ -126,7 +128,7 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    const { mode, ...workflowOptions } = options;
+    const { mode, returnExistingResult, ...workflowOptions } = options;
     const startOptions = {
       ...workflowOptions,
       workflowId,
@@ -139,9 +141,20 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    return await temporalClient.withDeadline(deadline, () =>
-      temporalClient.workflow.execute(definition.workflow, startOptions),
-    );
+    return await temporalClient.withDeadline(deadline, async () => {
+      try {
+        return await temporalClient.workflow.execute(definition.workflow, startOptions);
+      } catch (error) {
+        if (
+          returnExistingResult === true &&
+          error instanceof WorkflowExecutionAlreadyStartedError &&
+          error.workflowId === workflowId
+        ) {
+          return temporalClient.workflow.getHandle<T>(workflowId).result();
+        }
+        throw error;
+      }
+    });
   } catch (error) {
     let failure: unknown = error;
     while (failure instanceof Error && !(failure instanceof ApplicationFailure)) {
