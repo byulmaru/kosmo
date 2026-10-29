@@ -1,7 +1,7 @@
 ## Current Constraints
 
 - `apps/app/src/components/post/PostReactionController.tsx`가 Quick·Full Picker의 공통 mutation 성공 callback과 기존 Reaction 계측을 소유한다. `reaction_type`은 `❤️`의 `default`와 그 외 `custom`을 뜻하며 사용자 정의 이모지 여부가 아니다.
-- PROD-942의 #1023은 Emoji 16 허용 집합과 정확한 Unicode 문자열 검증, #1025는 Full Picker 연결을 소유한다. 두 PR은 2026-09-27 현재 Draft다.
+- PROD-942의 #1023·#1051·#1025가 병합됐다. 최신 `main`의 Emoji 16 허용 집합, 정확한 Unicode 문자열 검증, Full Picker 연결을 따른다.
 - `docs/operations/posthog.md`는 기존 event allowlist와 Account identity를 기록한다. 공개 고지 변경·production 수집 전환은 별도 운영 책임과 맞춰 검토한다.
 
 ## Practical Approach
@@ -19,9 +19,9 @@
 
 ## Risks / Limits
 
-- 선행 Stack이 바뀌면 허용 집합·정확한 문자열 identity·공통 controller interface가 영향받는지만 확인한다.
+- 최신 `main`과 합칠 때 허용 집합·정확한 문자열 identity·공통 controller interface, 기존 optimistic update 계약을 함께 확인한다.
 - 실제 PostHog 수집 공백과 과거 key 없음은 backfill하지 않는다. 현재 프로젝트의 내부·테스트 Account 목록과 봇 분류 근거는 확인되지 않았다.
 
 ## Open Questions
 
-- 없음. 운영 제외 목록이 발견되면 소유자와 적용 근거를 확인하고 기존 기준을 재사용한다.
+- 구현 질문은 없다. 2026년 10월 13일 시행 방침이 새 key를 충분히 고지하는지에 대한 production 판단은 `tasks.md`의 배포 gate로 남는다. 운영 제외 목록이 발견되면 소유자와 적용 근거를 확인하고 기존 기준을 재사용한다.
