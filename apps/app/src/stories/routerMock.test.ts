@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it, mock } from 'node:test';
-import { createElement } from 'react';
+import React, { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -49,5 +49,6 @@ it('uses the latest navigation observer and preserves back history', async () =>
     await act(async () => {
       renderer?.unmount();
     });
+    Object.assign(globalThis, { React: previousReact });
   }
 });
