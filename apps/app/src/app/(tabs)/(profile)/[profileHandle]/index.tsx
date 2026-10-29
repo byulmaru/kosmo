@@ -106,31 +106,21 @@ function ProfilePostListPageContent({
         resetKeys={[queryReference?.fetchKey ?? 'empty']}
         title="게시글 목록을 불러오지 못했어요"
       >
-        <ProfilePostListPageData
-          handle={handle}
-          key={queryReference?.fetchKey ?? 'empty'}
-          queryReference={queryReference}
-        />
+        {queryReference ? (
+          <ProfilePostListPageData
+            handle={handle}
+            key={queryReference.fetchKey}
+            queryReference={queryReference}
+          />
+        ) : (
+          <PostList loading />
+        )}
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
 function ProfilePostListPageData({
-  handle,
-  queryReference,
-}: {
-  handle: string;
-  queryReference: PreloadedQuery<ProfilePostListPageQueryType> | null;
-}) {
-  if (!queryReference) {
-    return <PostList loading />;
-  }
-
-  return <ProfilePostListPageDataContent handle={handle} queryReference={queryReference} />;
-}
-
-function ProfilePostListPageDataContent({
   handle,
   queryReference,
 }: {
