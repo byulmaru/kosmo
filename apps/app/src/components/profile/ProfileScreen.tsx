@@ -1,7 +1,7 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { Suspense, useDeferredValue, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
@@ -10,13 +10,15 @@ import {
   useContentReportMenuItem,
 } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
+import { PostList } from '@/components/post/PostList';
 import { FollowButton } from '@/components/profile/FollowButton';
-import { ProfileConnectionListState } from '@/components/profile/ProfileConnectionList';
-import { ProfileHero } from '@/components/profile/ProfileHero';
 import {
-  ProfileRouteContainer,
-  ProfileRouteProvider,
-} from '@/components/profile/ProfileRouteShell';
+  ProfileConnectionList,
+  ProfileConnectionListState,
+} from '@/components/profile/ProfileConnectionList';
+import { ProfileHero } from '@/components/profile/ProfileHero';
+import { ProfilePostsContent } from '@/components/profile/ProfilePostsContent';
+import { ProfileRouteContainer } from '@/components/profile/ProfileRouteShell';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -31,15 +33,25 @@ import { iconSizes, spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileConnectionKind } from '@/components/profile/route';
-import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
+import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
+import type { ProfileScreenQuery as ProfileScreenQueryType } from './__generated__/ProfileScreenQuery.graphql';
 
 const connectionOptions: readonly { label: string; value: ProfileConnectionKind }[] = [
   { label: '팔로워', value: 'followers' },
   { label: '팔로잉', value: 'following' },
 ];
 
-const ProfileLayoutQuery = graphql`
-  query ProfileLayoutQuery($handle: String!) {
+const ProfileScreenQuery = graphql`
+  query ProfileScreenQuery(
+    $handle: String!
+    $posts: Boolean!
+    $followers: Boolean!
+    $following: Boolean!
+  ) {
+    ...ProfilePostsContent_query
+      @arguments(handle: $handle)
+      @include(if: $posts)
+      @alias(as: "posts")
     profileByHandle(handle: $handle) {
       id
       displayName
@@ -61,21 +73,38 @@ const ProfileLayoutQuery = graphql`
       ...ProfileHero_profile
       ...ContentReportOverlay_blockProfile
       ...FollowButton_profile
+      ...ProfileConnectionList_followersProfile @include(if: $followers) @alias(as: "followers")
+      ...ProfileConnectionList_followingProfile @include(if: $following) @alias(as: "following")
     }
   }
 `;
 
-export default function ProfileLayout({
-  children,
+export default function ProfileScreen({
   connectionKind,
   handle,
-  scrollKey,
 }: {
-  children: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
-  scrollKey: string;
 }) {
+  const scrollKey = `/@${handle}${connectionKind ? `/${connectionKind}` : ''}`;
+  const navigation = useNavigation();
+  const routeBoundary = useRef<RouteBoundaryHandle>(null);
+  useEffect(() => {
+    let wasBlurred = false;
+    const unsubscribeBlur = navigation.addListener('blur', () => {
+      wasBlurred = true;
+    });
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      if (wasBlurred) {
+        wasBlurred = false;
+        routeBoundary.current?.refetch();
+      }
+    });
+    return () => {
+      unsubscribeBlur();
+      unsubscribeFocus();
+    };
+  }, [connectionKind, handle, navigation]);
   const showPageHeader = connectionKind == null;
   const { width } = useWindowDimensions();
   const { status } = useSession();
@@ -102,6 +131,7 @@ export default function ProfileLayout({
 
   return (
     <RouteBoundary
+      ref={routeBoundary}
       error={
         connectionKind
           ? (retry) => (
@@ -149,28 +179,24 @@ export default function ProfileLayout({
       }
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent
+      <ProfileScreenContent
         connectionKind={connectionKind}
         handle={handle}
         headerLeading={headerLeading}
         scrollKey={scrollKey}
         showPageHeader={showPageHeader}
-      >
-        {children}
-      </ProfileLayoutContent>
+      />
     </RouteBoundary>
   );
 }
 
-function ProfileLayoutContent({
-  children,
+function ProfileScreenContent({
   connectionKind,
   handle,
   headerLeading,
   scrollKey,
   showPageHeader,
 }: {
-  children: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
   headerLeading: ReactNode;
@@ -179,11 +205,17 @@ function ProfileLayoutContent({
 }) {
   const { fetchKey } = useRouteBoundary();
   const { selectedProfileId, sessionId } = useSession();
-  const data = useLazyLoadQuery<ProfileLayoutQueryType>(
-    ProfileLayoutQuery,
-    { handle },
+  const data = useLazyLoadQuery<ProfileScreenQueryType>(
+    ProfileScreenQuery,
+    {
+      handle,
+      posts: connectionKind == null,
+      followers: connectionKind === 'followers',
+      following: connectionKind === 'following',
+    },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  const posts = useDeferredValue(data.posts, null);
   const profile = data.profileByHandle;
   const reportItem = useContentReportMenuItem({
     blockProfile: getContentReportBlockProfile(profile),
@@ -222,9 +254,20 @@ function ProfileLayoutContent({
     );
 
     return (
-      <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
-        {children}
-      </ProfileRouteProvider>
+      <ProfileRouteContainer scrollKey={scrollKey}>
+        {chrome}
+        <Suspense
+          key={fetchKey}
+          fallback={<ProfileConnectionListState kind={connectionKind} state="loading" />}
+        >
+          {connectionKind === 'followers' && profile.followers ? (
+            <ProfileConnectionList kind="followers" profile={profile.followers} />
+          ) : null}
+          {connectionKind === 'following' && profile.following ? (
+            <ProfileConnectionList kind="following" profile={profile.following} />
+          ) : null}
+        </Suspense>
+      </ProfileRouteContainer>
     );
   }
 
@@ -267,9 +310,14 @@ function ProfileLayoutContent({
   ) : null;
 
   return (
-    <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
-      {blockedProfileRoute ?? children}
-    </ProfileRouteProvider>
+    blockedProfileRoute ?? (
+      <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
+        {chrome}
+        <Suspense key={fetchKey} fallback={<PostList loading />}>
+          {posts ? <ProfilePostsContent query={posts} handle={handle} /> : <PostList loading />}
+        </Suspense>
+      </ProfileRouteContainer>
+    )
   );
 }
 

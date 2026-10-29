@@ -469,7 +469,7 @@ test('빈 본문과 긴 본문 게시글도 목록 항목으로 렌더한다', a
   );
 });
 
-test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다', async ({ context, page }) => {
+test('프로필 화면 오류 상태는 전체 조회 재시도를 제공한다', async ({ context, page }) => {
   let profilePostsRequestCount = 0;
   const viewer = await createE2ESession({
     displayName: 'E2E Profile Error Viewer',
@@ -482,7 +482,7 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
 
   await setE2ESessionCookie(context, viewer.token);
   await page.route('**/graphql', async (route) => {
-    if (isGraphQLOperation(route.request().postData(), 'ProfilePostListPageQuery')) {
+    if (isGraphQLOperation(route.request().postData(), 'ProfileScreenQuery')) {
       profilePostsRequestCount += 1;
       await route.fulfill({
         contentType: 'application/json',
@@ -497,7 +497,7 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
 
   await page.goto(`/@${targetProfile.handle}`);
 
-  await expect(page.getByRole('alert')).toContainText('게시글 목록을 불러오지 못했어요');
+  await expect(page.getByRole('alert')).toContainText('프로필을 불러오지 못했어요');
   const previousCount = profilePostsRequestCount;
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => profilePostsRequestCount).toBeGreaterThan(previousCount);

@@ -1,10 +1,8 @@
-import { Text } from 'react-native';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
-import ProfileLayout from '@/components/profile/ProfileLayout';
-import { useProfileRoute } from '@/components/profile/ProfileRouteShell';
+import ProfileScreen from '@/components/profile/ProfileScreen';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
@@ -79,17 +77,6 @@ const followResponse = (request = false) => ({
   },
 });
 
-// Expo's Slot boundary is replaced, while the production layout constructs and mounts its chrome.
-function ProfileContent() {
-  const { chrome } = useProfileRoute();
-  return (
-    <>
-      {chrome}
-      <Text>프로필 콘텐츠</Text>
-    </>
-  );
-}
-
 function Routes() {
   const pathname = usePathname();
   const router = useRouter();
@@ -98,9 +85,7 @@ function Routes() {
       <AnalyticsSessionBridge />
       <Button onPress={() => router.push('/search')}>검색으로 돌아가기</Button>
       {pathname.startsWith('/@') ? (
-        <ProfileLayout connectionKind={null} handle="conversion" scrollKey="/@conversion">
-          <ProfileContent />
-        </ProfileLayout>
+        <ProfileScreen connectionKind={null} handle="conversion" />
       ) : (
         <SearchScreen />
       )}
@@ -158,14 +143,14 @@ export const SelectedProfileVisible: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        ProfileLayoutQuery: { data: { profileByHandle: target }, delayMs: 300 },
+        ProfileScreenQuery: { data, delayMs: 300 },
       },
     },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await expect(within(canvasElement).findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await waitFor(() =>
       expect(events().map(([name]) => name)).toEqual([
         'search_result_selected',
@@ -180,7 +165,7 @@ export const SelectedProfileVisible: Story = {
 export const DirectProfileHasNoSearchSelection: Story = {
   args: { startPath: '/@conversion' },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await expect(within(canvasElement).findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await waitFor(() => expect(events()).toEqual([['profile_view_succeeded', {}]]));
   },
 };
@@ -199,8 +184,7 @@ export const ProfileMissing: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        ProfileLayoutQuery: { data: { profileByHandle: null } },
-        ProfilePostListPageQuery: {
+        ProfileScreenQuery: {
           data: { currentSession: data.currentSession, profileByHandle: null },
         },
       },
@@ -217,7 +201,7 @@ export const ProfileMissing: Story = {
 
 export const ProfileFailure: Story = {
   parameters: {
-    relay: { operationResponses: { ProfileLayoutQuery: { error: 'profile failed' } } },
+    relay: { operationResponses: { ProfileScreenQuery: { error: 'profile failed' } } },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);

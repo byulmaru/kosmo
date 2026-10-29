@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, StrictMode, useEffect } from 'react';
+import { createElement, StrictMode } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
@@ -12,6 +12,7 @@ import type { GraphQLResponse } from 'relay-runtime';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type Request = {
+  variables: Record<string, unknown>;
   environmentId: string;
   name: string;
   sink: {
@@ -32,36 +33,21 @@ let ProfilePostListPage: React.ComponentType | null = null;
 let routeHandle = '@target';
 let routePath = '/@target';
 let globalPath = '/@target';
-let activeFocusEffect: (() => void | (() => void)) | undefined;
-let activeFocusCleanup: (() => void) | undefined;
-let routeFocused = true;
-
-function useFocusEffect(effect: () => void | (() => void)) {
-  useEffect(() => {
-    activeFocusEffect = effect;
-    if (routeFocused) {
-      activeFocusCleanup = effect() ?? undefined;
-    }
-
+const listeners = { focus: new Set<() => void>(), blur: new Set<() => void>() };
+const navigation = {
+  addListener(event: 'focus' | 'blur', callback: () => void) {
+    listeners[event].add(callback);
     return () => {
-      activeFocusCleanup?.();
-      activeFocusCleanup = undefined;
-      if (activeFocusEffect === effect) {
-        activeFocusEffect = undefined;
-      }
+      listeners[event].delete(callback);
     };
-  }, [effect]);
-}
+  },
+};
 
 function blurRoute() {
-  routeFocused = false;
-  activeFocusCleanup?.();
-  activeFocusCleanup = undefined;
+  listeners.blur.forEach((callback) => callback());
 }
-
 function focusRoute() {
-  routeFocused = true;
-  activeFocusCleanup = activeFocusEffect?.() ?? undefined;
+  listeners.focus.forEach((callback) => callback());
 }
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -72,17 +58,6 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
-    if (name === 'ProfileLayoutQuery') {
-      return require(`./__generated__/${name}.graphql.ts`).default;
-    }
-    if (
-      name === 'ProfileFollowersPageQuery' ||
-      name === 'ProfileFollowingPageQuery' ||
-      name === 'ProfilePostListPageQuery'
-    ) {
-      return require(`../../app/(tabs)/(profile)/[profileHandle]/__generated__/${name}.graphql.ts`)
-        .default;
-    }
     return require(`./__generated__/${name}.graphql.ts`).default;
   },
 });
@@ -98,7 +73,7 @@ mockModule('expo-router', {
   Stack: () => null,
   useGlobalSearchParams: () => ({ profileHandle: routeHandle }),
   useCurrentRouteInfo: () => ({ params: { profileHandle: routeHandle }, pathname: routePath }),
-  useFocusEffect,
+  useNavigation: () => navigation,
   useLocalSearchParams: () => ({ profileHandle: routeHandle }),
   usePathname: () => globalPath,
   useRouter: () => ({ back: () => undefined, replace: () => undefined }),
@@ -225,16 +200,13 @@ afterEach(async () => {
   routeHandle = '@target';
   routePath = '/@target';
   globalPath = '/@target';
-  activeFocusEffect = undefined;
-  activeFocusCleanup = undefined;
-  routeFocused = true;
 });
 
 function createEnvironment(environmentId = 'default') {
   return new Environment({
-    network: Network.create((operation) =>
+    network: Network.create((operation, variables) =>
       Observable.create<GraphQLResponse>((sink) => {
-        requests.push({ environmentId, name: operation.name, sink });
+        requests.push({ environmentId, name: operation.name, sink, variables });
       }),
     ),
     store: new Store(new RecordSource()),
@@ -332,401 +304,89 @@ const emptyPostsProfile = (blockedBy = false) => ({
 });
 
 describe('Profile route with real Relay', () => {
-  it('StrictMode effect replay keeps the posts preload consumable', async () => {
-    const environment = createEnvironment();
-    await render(environment, true);
-
-    const postRequests = requests.filter(({ name }) => name === 'ProfilePostListPageQuery');
-    const layoutRequests = requests.filter(({ name }) => name === 'ProfileLayoutQuery');
-    assert.equal(postRequests.length, 1);
-    assert.ok(layoutRequests.length >= 1);
-    assert.equal(requests[0]?.name, 'ProfileLayoutQuery');
-
-    for (const request of postRequests) {
-      await respond(request, {
-        currentSession: null,
-        profileByHandle: emptyPostsProfile(),
-      });
-    }
-    for (const request of layoutRequests) {
-      await respond(request, { profileByHandle: blockedProfile(null) });
-    }
-
-    assert.equal(one('PostList').props.loading, undefined);
-    assert.ok(one('PostList').props.profile);
-  });
-
-  it('same-mounted Native blur disposes posts and focus starts a fresh posts request', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    await respond(latestRequest('ProfilePostListPageQuery'), {
+  it('StrictMode loads one operation and renders posts', async () => {
+    await render(createEnvironment(), true);
+    assert.deepEqual(
+      requests.map((r) => r.name),
+      ['ProfileScreenQuery'],
+    );
+    await respond(latestRequest('ProfileScreenQuery'), {
       currentSession: null,
       profileByHandle: emptyPostsProfile(),
     });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null),
-    });
-
-    const initialPostRequestCount = requests.filter(
-      ({ name }) => name === 'ProfilePostListPageQuery',
-    ).length;
-    const initialLayoutRequestCount = requests.filter(
-      ({ name }) => name === 'ProfileLayoutQuery',
-    ).length;
-
-    await act(async () => blurRoute());
-    assert.equal(
-      requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length,
-      initialPostRequestCount,
-    );
-
-    await act(async () => focusRoute());
-    assert.equal(
-      requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length,
-      initialPostRequestCount + 1,
-    );
-    assert.equal(
-      requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
-      initialLayoutRequestCount,
-    );
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: emptyPostsProfile(),
-    });
-    assert.ok(one('PostList').props.profile);
+    assert.equal(one('PostList').props.profile.id, 'profile-target');
   });
-
-  it('retained posts error recovers after blur and focus loads a successful reference', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      const environment = createEnvironment();
-      await render(environment);
-      await fail(latestRequest('ProfilePostListPageQuery'));
-      await respond(latestRequest('ProfileLayoutQuery'), {
-        profileByHandle: blockedProfile(null),
-      });
-      assert.equal(one('PostList').props.error, true);
-
-      await act(async () => {
-        blurRoute();
-        focusRoute();
-      });
-      await respond(latestRequest('ProfilePostListPageQuery'), {
-        currentSession: null,
-        profileByHandle: emptyPostsProfile(),
-      });
-
-      assert.equal(one('PostList').props.error, undefined);
-      assert.ok(one('PostList').props.profile);
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
-
-  it('a new posts query generation reapplies the profile block acknowledgement', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    const block = {
-      id: 'block-1',
-      targetProfile: {
-        displayName: 'Target',
-        id: 'profile-target',
-        relativeHandle: '@target',
-      },
-    };
-    const blockedPostsProfile = {
-      ...emptyPostsProfile(),
-      viewerState: {
-        ...emptyPostsProfile().viewerState,
-        profileBlock: block,
-      },
-    };
-
-    await respond(latestRequest('ProfilePostListPageQuery'), {
+  it('blockedBy retains header and hides posts', async () => {
+    await render(createEnvironment());
+    await respond(latestRequest('ProfileScreenQuery'), {
       currentSession: null,
-      profileByHandle: blockedPostsProfile,
+      profileByHandle: emptyPostsProfile(true),
     });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(block),
-    });
-
-    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
-    await act(async () => one('StateView').props.onAction());
-    assert.equal(one('PostList').props.ignoreBlock, true);
-
-    await act(async () => blurRoute());
-    await act(async () => focusRoute());
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: blockedPostsProfile,
-    });
-
-    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
-  });
-
-  it('same-frame blur and focus keeps acknowledged posts hidden while the new query is pending', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    const block = {
-      id: 'block-same-frame',
-      targetProfile: {
-        displayName: 'Target',
-        id: 'profile-target',
-        relativeHandle: '@target',
-      },
-    };
-    const blockedPostsProfile = {
-      ...emptyPostsProfile(),
-      viewerState: {
-        ...emptyPostsProfile().viewerState,
-        profileBlock: block,
-      },
-    };
-
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: blockedPostsProfile,
-    });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(block),
-    });
-    await act(async () => one('StateView').props.onAction());
-    assert.equal(one('PostList').props.ignoreBlock, true);
-
-    await act(async () => {
-      blurRoute();
-      focusRoute();
-    });
-    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
     assert.equal(all('PostList').length, 0);
-
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: blockedPostsProfile,
-    });
-    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
+    assert.equal(one('StateView').props.title, '이 프로필을 볼 수 없습니다');
   });
-
-  it('layout이 pending이어도 posts 요청을 시작하고 layout gate를 우회하지 않는다', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery', 'ProfilePostListPageQuery'],
-    );
-    assert.equal(one('ProfileHero').props.loading, true);
-
-    await respond(latestRequest('ProfilePostListPageQuery'), {
+  it('missing profile hides posts', async () => {
+    await render(createEnvironment());
+    await respond(latestRequest('ProfileScreenQuery'), {
       currentSession: null,
       profileByHandle: null,
     });
-    assert.equal(one('ProfileHero').props.loading, true);
-
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null),
-    });
-    assert.equal(one('PageHeader').props.title, 'Target');
-    assert.equal(one('PostList').props.loading, undefined);
+    assert.equal(all('PostList').length, 0);
+    assert.equal(one('StateView').props.title, '프로필을 찾을 수 없어요');
   });
-
-  it('posts leaf 오류 retry는 layout 요청을 다시 시작하지 않는다', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      const environment = createEnvironment();
-      await render(environment);
-      await fail(latestRequest('ProfilePostListPageQuery'));
-      await respond(latestRequest('ProfileLayoutQuery'), {
-        profileByHandle: blockedProfile(null),
-      });
-
-      assert.equal(one('PostList').props.error, true);
-      const layoutRequestCount = requests.filter(
-        ({ name }) => name === 'ProfileLayoutQuery',
-      ).length;
-      await act(async () => one('PostList').props.onRetry());
-
-      assert.equal(
-        requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
-        layoutRequestCount,
-      );
-      assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 2);
-      assert.equal(one('PostList').props.loading, true);
-      await fail(latestRequest('ProfilePostListPageQuery'));
-      assert.equal(one('PostList').props.error, true);
-
-      await act(async () => one('PostList').props.onRetry());
-      assert.equal(
-        requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
-        layoutRequestCount,
-      );
-      assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 3);
-      assert.equal(one('PostList').props.loading, true);
-      await respond(latestRequest('ProfilePostListPageQuery'), {
-        currentSession: null,
-        profileByHandle: emptyPostsProfile(),
-      });
-      assert.equal(one('PostList').props.error, undefined);
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
-
-  it('cold·warm·partial cache에서도 store-and-network route 요청 수를 분리한다', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery', 'ProfilePostListPageQuery'],
-    );
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: null,
-    });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null),
-    });
+  it('old actor response cannot populate new actor screen', async () => {
+    await render(createEnvironment('old'));
+    const old = latestRequest('ProfileScreenQuery', 'old');
     await act(async () => renderer?.unmount());
     renderer = null;
-
-    await render(environment);
-    assert.equal(requests.filter(({ name }) => name === 'ProfileLayoutQuery').length, 2);
-    assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 2);
-
-    await respond(latestRequest('ProfilePostListPageQuery'), {
+    await render(createEnvironment('new'));
+    await respond(old, {
       currentSession: null,
-      profileByHandle: emptyPostsProfile(),
+      profileByHandle: { ...emptyPostsProfile(), displayName: 'Old' },
     });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null),
+    assert.equal(all('PostList').length, 0);
+    await respond(latestRequest('ProfileScreenQuery', 'new'), {
+      currentSession: null,
+      profileByHandle: { ...emptyPostsProfile(), displayName: 'New' },
     });
-    await act(async () => renderer?.unmount());
-    renderer = null;
-
-    await render(environment);
-    assert.equal(requests.filter(({ name }) => name === 'ProfileLayoutQuery').length, 3);
-    assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 3);
+    assert.equal(one('PageHeader').props.title, 'New');
   });
-
-  it('이전 handle의 늦은 응답은 새 Profile 결과를 노출하지 않는다', async () => {
+  it('late old handle response does not reveal old posts', async () => {
     const environment = createEnvironment();
     await render(environment);
-    const oldLayout = latestRequest('ProfileLayoutQuery');
-    const oldPosts = latestRequest('ProfilePostListPageQuery');
-
+    const old = latestRequest('ProfileScreenQuery');
     routeHandle = '@other';
     routePath = '/@other';
-    await act(async () => {
+    await act(async () =>
       renderer?.update(
         createElement(ReactRelay.RelayEnvironmentProvider, {
           environment,
           children: createElement(ProfileLayout),
         }),
-      );
-    });
-    const nextLayout = latestRequest('ProfileLayoutQuery');
-    const nextPosts = latestRequest('ProfilePostListPageQuery');
-    await respond(oldPosts, { currentSession: null, profileByHandle: null });
-    await respond(oldLayout, { profileByHandle: blockedProfile(null) });
+      ),
+    );
+    const next = latestRequest('ProfileScreenQuery');
+    assert.notEqual(old, next);
+    await respond(old, { currentSession: null, profileByHandle: emptyPostsProfile() });
     assert.equal(all('PostList').length, 0);
-    assert.equal(one('PageHeader').props.title, '');
-
-    await respond(nextPosts, { currentSession: null, profileByHandle: null });
-    await respond(nextLayout, {
-      profileByHandle: { ...blockedProfile(null), displayName: 'Other' },
+    await respond(next, {
+      currentSession: null,
+      profileByHandle: {
+        ...emptyPostsProfile(),
+        id: 'other-id',
+        handle: 'other',
+        relativeHandle: '@other',
+        displayName: 'Other',
+      },
     });
     assert.equal(one('PageHeader').props.title, 'Other');
   });
-
-  it('actor remount 뒤 이전 actor 응답은 새 Store를 변경하지 않는다', async () => {
-    const oldEnvironment = createEnvironment('old-actor');
-    await render(oldEnvironment);
-    const oldLayout = latestRequest('ProfileLayoutQuery', 'old-actor');
-    const oldPosts = latestRequest('ProfilePostListPageQuery', 'old-actor');
-    await act(async () => renderer?.unmount());
-    renderer = null;
-
-    const newEnvironment = createEnvironment('new-actor');
-    await render(newEnvironment);
-    const newLayout = latestRequest('ProfileLayoutQuery', 'new-actor');
-    const newPosts = latestRequest('ProfilePostListPageQuery', 'new-actor');
-    await respond(oldPosts, { currentSession: null, profileByHandle: null });
-    await respond(oldLayout, { profileByHandle: { ...blockedProfile(null), displayName: 'Old' } });
-    assert.equal(all('PostList').length, 0);
-    assert.equal(one('PageHeader').props.title, '');
-
-    await respond(newPosts, { currentSession: null, profileByHandle: null });
-    await respond(newLayout, {
-      profileByHandle: { ...blockedProfile(null), displayName: 'New' },
-    });
-    assert.equal(one('PageHeader').props.title, 'New');
-  });
-
-  it('missing Profile은 posts 결과가 있어도 목록을 gating한다', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: null,
-    });
-    await respond(latestRequest('ProfileLayoutQuery'), { profileByHandle: null });
-
-    assert.equal(all('PostList').length, 0);
-    assert.equal(one('StateView').props.title, '프로필을 찾을 수 없어요');
-  });
-
-  it('blockedBy Profile은 posts 결과가 있어도 차단 상태를 유지한다', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    await respond(latestRequest('ProfilePostListPageQuery'), {
-      currentSession: null,
-      profileByHandle: emptyPostsProfile(true),
-    });
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null, true),
-    });
-
-    assert.equal(all('PostList').length, 0);
-    assert.equal(one('StateView').props.title, '이 프로필을 볼 수 없습니다');
-  });
-
-  it('followers 진입은 layout만 요청하고 posts를 prefetch하지 않는다', async () => {
-    routePath = '/@target/followers';
-    const environment = createEnvironment();
-    await render(environment);
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery'],
-    );
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(null),
-    });
-    assert.equal(
-      requests.some(({ name }) => name === 'ProfilePostListPageQuery'),
-      false,
-    );
-  });
-
-  it('router pathname이 잠시 profile home이어도 following child는 posts를 prefetch하지 않는다', async () => {
-    routePath = '/@target/following';
-    globalPath = '/@target';
-    const environment = createEnvironment();
-    await render(environment);
-
-    assert.deepEqual(
-      requests.map(({ name }) => name),
-      ['ProfileLayoutQuery'],
-    );
-  });
-
-  it('mutual block 해제 뒤 normalized Profile의 own block이 사라지면 관계 action을 숨긴다', async () => {
-    const environment = createEnvironment();
-    await render(environment);
-    await respond(latestRequest('ProfileLayoutQuery'), {
-      profileByHandle: blockedProfile(
-        {
+  it('own block acknowledgement resets on actor remount', async () => {
+    const profile = {
+      ...emptyPostsProfile(),
+      viewerState: {
+        ...emptyPostsProfile().viewerState,
+        profileBlock: {
           __typename: 'ProfileBlock',
           id: 'block-1',
           targetProfile: {
@@ -736,8 +396,141 @@ describe('Profile route with real Relay', () => {
             relativeHandle: '@target',
           },
         },
-        true,
-      ),
+      },
+    };
+    await render(createEnvironment('old'));
+    await respond(latestRequest('ProfileScreenQuery'), {
+      currentSession: null,
+      profileByHandle: profile,
+    });
+    assert.equal(all('PostList').length, 0);
+    await act(async () => one('StateView').props.onAction());
+    assert.equal(one('PostList').props.ignoreBlock, true);
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await render(createEnvironment('new'));
+    await respond(latestRequest('ProfileScreenQuery', 'new'), {
+      currentSession: null,
+      profileByHandle: profile,
+    });
+    assert.equal(all('PostList').length, 0);
+    assert.equal(one('StateView').props.title, '차단한 프로필의 게시물입니다');
+  });
+  it('same-instance blur focus refreshes the single query', async () => {
+    await render(createEnvironment());
+    await respond(latestRequest('ProfileScreenQuery'), {
+      currentSession: null,
+      profileByHandle: emptyPostsProfile(),
+    });
+    const count = requests.length;
+    await act(async () => {
+      blurRoute();
+      focusRoute();
+    });
+    assert.equal(requests.length, count + 1);
+  });
+  it('initial focus event does not duplicate the StrictMode request', async () => {
+    await render(createEnvironment(), true);
+    await act(async () => focusRoute());
+    assert.equal(requests.length, 1);
+  });
+  it('same-frame blur focus reapplies own-block acknowledgement before the fresh response', async () => {
+    const profile = {
+      ...emptyPostsProfile(),
+      viewerState: {
+        ...emptyPostsProfile().viewerState,
+        profileBlock: {
+          __typename: 'ProfileBlock',
+          id: 'block-1',
+          targetProfile: {
+            __typename: 'Profile',
+            id: 'profile-target',
+            displayName: 'Target',
+            relativeHandle: '@target',
+          },
+        },
+      },
+    };
+    await render(createEnvironment());
+    await respond(latestRequest('ProfileScreenQuery'), {
+      currentSession: null,
+      profileByHandle: profile,
+    });
+    await act(async () => one('StateView').props.onAction());
+    assert.equal(one('PostList').props.ignoreBlock, true);
+    await act(async () => {
+      blurRoute();
+      focusRoute();
+    });
+    assert.equal(requests.length, 2);
+    assert.equal(all('PostList').filter((n) => !n.props.loading).length, 0);
+    await respond(latestRequest('ProfileScreenQuery'), {
+      currentSession: null,
+      profileByHandle: profile,
+    });
+    assert.equal(one('StateView').props.title, '차단한 프로필의 게시물입니다');
+  });
+  it('whole-screen error can fail again and recover through retry', async () => {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      await render(createEnvironment());
+      await fail(latestRequest('ProfileScreenQuery'));
+      assert.equal(one('StateView').props.title, '프로필을 불러오지 못했어요');
+      await act(async () => one('StateView').props.onAction());
+      assert.equal(requests.length, 2);
+      await fail(latestRequest('ProfileScreenQuery'));
+      await act(async () => one('StateView').props.onAction());
+      assert.equal(requests.length, 3);
+      await respond(latestRequest('ProfileScreenQuery'), {
+        currentSession: null,
+        profileByHandle: emptyPostsProfile(),
+      });
+      assert.equal(one('PostList').props.profile.id, 'profile-target');
+    } finally {
+      console.error = original;
+    }
+  });
+  for (const kind of ['followers', 'following']) {
+    it(`${kind} selects its connection without posts`, async () => {
+      routePath = `/@target/${kind}`;
+      globalPath = '/@target';
+      await render(createEnvironment());
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]?.variables.posts, false);
+      assert.equal(requests[0]?.variables[kind], true);
+      await respond(latestRequest('ProfileScreenQuery'), {
+        profileByHandle: {
+          ...blockedProfile(null),
+          [kind]: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+        },
+      });
+      assert.equal(one('ProfileConnectionList').props.kind, kind);
+      assert.equal(all('PostList').length, 0);
+    });
+  }
+
+  it('mutual block 해제 뒤 normalized Profile의 own block이 사라지면 관계 action을 숨긴다', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    await respond(latestRequest('ProfileScreenQuery'), {
+      currentSession: null,
+      profileByHandle: {
+        ...emptyPostsProfile(true),
+        ...blockedProfile(
+          {
+            __typename: 'ProfileBlock',
+            id: 'block-1',
+            targetProfile: {
+              __typename: 'Profile',
+              id: 'profile-target',
+              displayName: 'Target',
+              relativeHandle: '@target',
+            },
+          },
+          true,
+        ),
+      },
     });
     assert.deepEqual(readBlockState(environment), {
       blockedBy: true,

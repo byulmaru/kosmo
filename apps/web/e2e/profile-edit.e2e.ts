@@ -280,16 +280,10 @@ async function selectReplacement(page: Page, triggerName: string, fileName: stri
 }
 
 async function waitForProfileRoute(page: Page) {
-  const responses = await Promise.all([
-    waitForGraphQLOperation(page, 'ProfileLayoutQuery'),
-    waitForGraphQLOperation(page, 'ProfilePostListPageQuery'),
-  ]);
-
-  for (const response of responses) {
-    const body = (await response.json()) as { errors?: unknown[] };
-    expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
-    expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
-  }
+  const response = await waitForGraphQLOperation(page, 'ProfileScreenQuery');
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
 }
 
 async function addProfileTag(page: Page, tag: string) {

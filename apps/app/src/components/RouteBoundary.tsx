@@ -22,7 +22,6 @@ type RouteBoundaryProps = {
   description?: string;
   error?: (resetErrorBoundary: () => void) => ReactNode;
   loading: ReactNode;
-  resetKeys?: readonly unknown[];
   title: string;
 };
 
@@ -56,10 +55,7 @@ export function useRouteBoundary(): RouteBoundaryContextValue {
 }
 
 export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>(
-  function RouteBoundary(
-    { children, description, error: renderError, loading, resetKeys = [], title },
-    ref,
-  ) {
+  function RouteBoundary({ children, description, error: renderError, loading, title }, ref) {
     const reportUnexpectedError = useUnexpectedErrorReporter();
     const [queryLifecycle, setQueryLifecycle] = useState<RouteBoundaryQueryLifecycle>(() => ({
       fetchKey: createFetchKey(),
@@ -105,7 +101,7 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
               reset();
             }
           }}
-          resetKeys={[queryLifecycle.fetchKey, ...resetKeys]}
+          resetKeys={[queryLifecycle.fetchKey]}
         >
           <Suspense fallback={loading}>{children}</Suspense>
         </ErrorBoundary>

@@ -13,11 +13,11 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import query from '../../app/(tabs)/(profile)/[profileHandle]/__generated__/ProfilePostListPageQuery.graphql';
+import query from './__generated__/PostListProfilePinsTestQuery.graphql';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type { ProfilePostListPageQuery } from '../../app/(tabs)/(profile)/[profileHandle]/__generated__/ProfilePostListPageQuery.graphql';
+import type { PostListProfilePinsTestQuery } from './__generated__/PostListProfilePinsTestQuery.graphql';
 import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction_post.graphql';
 import type { PostList as PostListType } from './PostList';
 import type { useProfilePinAction as UseProfilePinAction } from './ProfilePinAction';
@@ -121,7 +121,7 @@ afterEach(async () => {
   activeActionPostId = null;
 });
 function Harness() {
-  const data = Relay.useLazyLoadQuery<ProfilePostListPageQuery>(
+  const data = Relay.useLazyLoadQuery<PostListProfilePinsTestQuery>(
     query,
     { handle: '@owner' },
     { fetchPolicy: 'store-or-network' },
@@ -241,7 +241,7 @@ it('Local shows every pin, permits chronology duplicates, and survives deleted r
   const environment = await start();
   assert.deepEqual(
     requests.map((request) => request.name),
-    ['ProfilePostListPageQuery'],
+    ['PostListProfilePinsTestQuery'],
   );
   await respond({
     currentSession: null,
@@ -322,7 +322,11 @@ it('pin and unpin immediately synchronize the pinned segment from the mutation r
   ]);
   assert.deepEqual(
     requests.map((request) => request.name),
-    ['ProfilePostListPageQuery', 'ProfilePinActionPinMutation', 'ProfilePinActionUnpinMutation'],
+    [
+      'PostListProfilePinsTestQuery',
+      'ProfilePinActionPinMutation',
+      'ProfilePinActionUnpinMutation',
+    ],
   );
   assert.equal(environment.check(rootQueryOperation).status, 'available');
 });

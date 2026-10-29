@@ -724,7 +724,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   await expect(page.getByLabel('프로필 전환')).toBeVisible();
   const selection = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
-  const routeQuery = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
+  const routeQuery = waitForGraphQLOperation(page, 'ProfileScreenQuery');
   await page
     .getByLabel('전환할 프로필 목록')
     .getByRole('button')

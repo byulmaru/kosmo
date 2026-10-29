@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createContext, createElement, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, createElement, useContext, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -16,24 +16,12 @@ import type {
 const require = createRequire(import.meta.url);
 
 type QueryMode = 'error' | 'loading' | 'success';
-type QueryName =
-  | 'ProfileFollowersPageQuery'
-  | 'ProfileFollowingPageQuery'
-  | 'ProfileLayoutQuery'
-  | 'ProfilePostListPageQuery';
-
-const queryModes: Record<QueryName, QueryMode> = {
-  ProfileFollowersPageQuery: 'success',
-  ProfileFollowingPageQuery: 'success',
-  ProfileLayoutQuery: 'success',
-  ProfilePostListPageQuery: 'success',
-};
-const queryHistory: Array<{
-  fetchKey: string;
-  handle: string;
-  query: QueryName;
-}> = [];
-let queryLoadSequence = 0;
+type QueryName = 'ProfileScreenQuery';
+const queryModes: Record<QueryName, QueryMode> = { ProfileScreenQuery: 'success' };
+let postsFragmentMode: QueryMode = 'success';
+const queryHistory: Array<{ fetchKey: string; handle: string; query: QueryName; posts: boolean }> =
+  [];
+const queryResults = new Map<string, object>();
 const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
@@ -108,61 +96,85 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-function readMockQuery(query: QueryName, variables: { handle: string }, fetchKey: string | number) {
+function readMockQuery(
+  query: QueryName,
+  variables: { handle: string; posts: boolean; followers: boolean; following: boolean },
+  fetchKey: string | number,
+) {
   queryHistory.push({
     fetchKey: String(fetchKey),
     handle: variables.handle,
     query,
+    posts: variables.posts,
   });
-  const mode = queryModes[query];
-  if (mode === 'loading') {
+  if (queryModes[query] === 'loading') {
     throw pending;
   }
-  if (mode === 'error') {
+  if (queryModes[query] === 'error') {
     throw new Error(`${query}:${variables.handle}`);
   }
-
-  return {
-    currentSession: selectedProfileId
-      ? { selectedProfile: { id: selectedProfileId } }
-      : { selectedProfile: null },
-    profileByHandle: profileAvailable
+  const profile = profileAvailable
+    ? {
+        displayName: profileDisplayName ?? `Display ${variables.handle}`,
+        handle: variables.handle,
+        id: `profile:${variables.handle}`,
+        instance: { kind: profileInstanceKind },
+        relativeHandle: `@${variables.handle}`,
+        viewerState:
+          profileBlockStatus == null || profileViewerState == null
+            ? null
+            : {
+                ...profileViewerState,
+                blockedBy: profileBlockStatus.blockedBy,
+                profileBlock:
+                  profileViewerState.profileBlock === undefined
+                    ? profileBlockStatus.profileBlockId
+                      ? {
+                          id: profileBlockStatus.profileBlockId,
+                          targetProfile: {
+                            displayName: `Display ${variables.handle}`,
+                            id: `profile:${variables.handle}`,
+                            relativeHandle: `@${variables.handle}`,
+                          },
+                        }
+                      : null
+                    : profileViewerState.profileBlock,
+              },
+      }
+    : null;
+  const result = {
+    profileByHandle: profile
       ? {
-          displayName: profileDisplayName ?? `Display ${variables.handle}`,
-          handle: variables.handle,
-          id: `profile:${variables.handle}`,
-          instance: { kind: profileInstanceKind },
-          relativeHandle: `@${variables.handle}`,
-          viewerState:
-            query === 'ProfilePostListPageQuery'
-              ? {
+          ...profile,
+          followers: variables.followers ? profile : null,
+          following: variables.following ? profile : null,
+        }
+      : null,
+    posts: variables.posts
+      ? {
+          currentSession: { selectedProfile: selectedProfileId ? { id: selectedProfileId } : null },
+          profileByHandle: profile
+            ? {
+                ...profile,
+                viewerState: {
                   profileBlock: postListProfileBlockId ? { id: postListProfileBlockId } : null,
-                }
-              : profileBlockStatus == null || profileViewerState == null
-                ? null
-                : {
-                    ...profileViewerState,
-                    blockedBy: profileBlockStatus.blockedBy,
-                    profileBlock:
-                      profileViewerState.profileBlock === undefined
-                        ? profileBlockStatus.profileBlockId
-                          ? {
-                              id: profileBlockStatus.profileBlockId,
-                              targetProfile: {
-                                displayName: `Display ${variables.handle}`,
-                                id: `profile:${variables.handle}`,
-                                relativeHandle: `@${variables.handle}`,
-                              },
-                            }
-                          : null
-                        : profileViewerState.profileBlock,
-                  },
+                },
+              }
+            : null,
         }
       : null,
   };
+  // Match Relay's stable snapshot identity so deferred rendering can settle.
+  const key = `${fetchKey}:${JSON.stringify(result)}`;
+  if (!queryResults.has(key)) {
+    queryResults.set(key, result);
+  }
+  return queryResults.get(key);
 }
 
+const navigation = { addListener: () => () => undefined };
 mockModule('expo-router', {
+  useNavigation: () => navigation,
   Slot: () =>
     SlotContent
       ? createElement(
@@ -185,7 +197,6 @@ mockModule('expo-router', {
     ),
   useGlobalSearchParams: () => globalParams,
   useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
-  useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
   useRouter: () => ({
@@ -224,14 +235,20 @@ mockModule('react-native', {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts
-      .join('')
-      .match(
-        /query (ProfileFollowersPageQuery|ProfileFollowingPageQuery|ProfileLayoutQuery|ProfilePostListPageQuery)/,
-      )?.[1];
+    const query = parts.join('').match(/query (ProfileScreenQuery)/)?.[1];
     return (query ?? parts.join('')) as QueryName;
   },
-  useFragment: (_fragment: unknown, reference: unknown) => reference,
+  useFragment: (fragment: string, reference: unknown) => {
+    if (fragment.includes('fragment ProfilePostsContent_query')) {
+      if (postsFragmentMode === 'loading') {
+        throw pending;
+      }
+      if (postsFragmentMode === 'error') {
+        throw new Error('posts fragment failed');
+      }
+    }
+    return reference;
+  },
   useMutation: (mutation: string) => {
     const [pending, setPending] = useState(false);
     const block = mutation.includes('ProfileBlockActionBlockMutation');
@@ -277,30 +294,9 @@ mockModule('react-relay', {
   useRelayEnvironment: () => relayEnvironment,
   useLazyLoadQuery: (
     query: QueryName,
-    variables: { handle: string },
+    variables: { handle: string; posts: boolean; followers: boolean; following: boolean },
     options: { fetchKey: string },
   ) => readMockQuery(query, variables, options.fetchKey),
-  usePreloadedQuery: (
-    query: QueryName,
-    queryReference: { variables: { handle: string }; fetchKey: string },
-  ) => readMockQuery(query, queryReference.variables, queryReference.fetchKey),
-  useQueryLoader: () => {
-    const [queryReference, setQueryReference] = useState<{
-      fetchKey: string;
-      variables: { handle: string };
-    } | null>(null);
-    const loadQuery = useCallback(
-      (variables: { handle: string }, options?: { fetchPolicy?: string }) => {
-        setQueryReference({
-          fetchKey: `${options?.fetchPolicy ?? 'store-and-network'}:${++queryLoadSequence}`,
-          variables,
-        });
-      },
-      [],
-    );
-    const disposeQuery = useCallback(() => setQueryReference(null), []);
-    return [queryReference, loadQuery, disposeQuery] as const;
-  },
 });
 mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
   ProfileHero: ({
@@ -512,12 +508,10 @@ afterEach(async () => {
   routerBackCount = 0;
   routerCanGoBack = true;
   routerHistory.length = 0;
-  queryModes.ProfileFollowersPageQuery = 'success';
-  queryModes.ProfileFollowingPageQuery = 'success';
-  queryModes.ProfileLayoutQuery = 'success';
-  queryModes.ProfilePostListPageQuery = 'success';
+  queryModes.ProfileScreenQuery = 'success';
+  postsFragmentMode = 'success';
+  queryResults.clear();
   queryHistory.length = 0;
-  queryLoadSequence = 0;
   profileAvailable = true;
   profileDisplayName = null;
   profileInstanceKind = 'LOCAL';
@@ -781,10 +775,7 @@ describe('profile route parameter lifecycle', () => {
   it('followers와 following을 독립 heading과 관계 tab으로 전환한다', async () => {
     await renderRoute('@local', '/@local/followers');
 
-    assert.equal(
-      queryHistory.filter(({ query }) => query === 'ProfilePostListPageQuery').length,
-      0,
-    );
+    assert.equal(queryHistory.filter(({ posts }) => posts).length, 0);
     assert.deepEqual(identities('ProfileHero'), []);
     assert.deepEqual(identities('FollowButton'), []);
     assert.deepEqual(identities('ProfileConnectionList'), ['local']);
@@ -807,10 +798,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('IconButton').props.visualSize, 44);
 
     await renderRoute('@local', '/@local/following');
-    assert.equal(
-      queryHistory.filter(({ query }) => query === 'ProfilePostListPageQuery').length,
-      0,
-    );
+    assert.equal(queryHistory.filter(({ posts }) => posts).length, 0);
     assert.deepEqual(identities('ProfileHero'), []);
     assert.deepEqual(identities('ProfileConnectionList'), ['local']);
     assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
@@ -831,18 +819,14 @@ describe('profile route parameter lifecycle', () => {
   it('같은 Profile의 Home 재진입은 posts freshness 요청을 다시 시작한다', async () => {
     await renderRoute('@local', '/@local');
     const initialPostsQueryKeys = new Set(
-      queryHistory
-        .filter(({ query }) => query === 'ProfilePostListPageQuery')
-        .map(({ fetchKey }) => fetchKey),
+      queryHistory.filter(({ posts }) => posts).map(({ fetchKey }) => fetchKey),
     );
 
     await renderRoute('@local', '/@local/followers');
     await renderRoute('@local', '/@local');
 
     const postsQueryKeys = new Set(
-      queryHistory
-        .filter(({ query }) => query === 'ProfilePostListPageQuery')
-        .map(({ fetchKey }) => fetchKey),
+      queryHistory.filter(({ posts }) => posts).map(({ fetchKey }) => fetchKey),
     );
     assert.equal(postsQueryKeys.size, initialPostsQueryKeys.size + 1);
   });
@@ -882,7 +866,7 @@ describe('profile route parameter lifecycle', () => {
   it('handle 전환 중 layout과 nested query의 기존 loading fallback을 유지한다', async () => {
     await renderRoute('@local');
 
-    queryModes.ProfileLayoutQuery = 'loading';
+    queryModes.ProfileScreenQuery = 'loading';
     await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
     assert.equal(requireRendered('PageHeader').props.title, '');
     assert.deepEqual(identities('ProfileHero'), ['loading']);
@@ -899,19 +883,19 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => loadingLeading.props.onPress());
     assert.equal(routerBackCount, 1);
 
-    queryModes.ProfileLayoutQuery = 'success';
-    queryModes.ProfilePostListPageQuery = 'loading';
+    queryModes.ProfileScreenQuery = 'success';
+    postsFragmentMode = 'loading';
     await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
     assert.equal(requireRendered('PageHeader').props.title, 'Display remote@activitypub.example');
     assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
     assert.deepEqual(identities('PostList'), ['loading']);
   });
 
-  it('현재 handle의 layout error를 표시하고 retry에서 같은 query를 다시 실행한다', async () => {
+  it('현재 handle의 화면 error를 표시하고 retry에서 같은 query를 다시 실행한다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
-      queryModes.ProfileLayoutQuery = 'error';
+      queryModes.ProfileScreenQuery = 'error';
       await renderRoute('@remote@activitypub.example', '/@remote@activitypub.example');
       assert.equal(requireRendered('PageHeader').props.title, '');
       assert.equal(requireRendered('StateView').props.title, '프로필을 불러오지 못했어요');
@@ -930,15 +914,15 @@ describe('profile route parameter lifecycle', () => {
       await act(async () => errorLeading.props.onPress());
       assert.equal(routerBackCount, 1);
       const failedFetchKey = queryHistory.findLast(
-        ({ query }) => query === 'ProfileLayoutQuery',
+        ({ query }) => query === 'ProfileScreenQuery',
       )?.fetchKey;
 
-      queryModes.ProfileLayoutQuery = 'success';
+      queryModes.ProfileScreenQuery = 'success';
       await act(async () => requireRendered('StateView').props.onAction());
 
       assert.deepEqual(identities('ProfileHero'), ['remote@activitypub.example']);
       const latestLayoutQuery = queryHistory.findLast(
-        ({ query }) => query === 'ProfileLayoutQuery',
+        ({ query }) => query === 'ProfileScreenQuery',
       );
       assert.equal(latestLayoutQuery?.handle, 'remote@activitypub.example');
       assert.notEqual(latestLayoutQuery?.fetchKey, failedFetchKey);
@@ -951,19 +935,19 @@ describe('profile route parameter lifecycle', () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
-      queryModes.ProfileLayoutQuery = 'error';
+      queryModes.ProfileScreenQuery = 'error';
       await renderRoute('@local', '/@local/followers');
       assert.equal(requireRendered('ProfileConnectionListState').props.state, 'error');
 
-      queryModes.ProfileLayoutQuery = 'success';
+      queryModes.ProfileScreenQuery = 'success';
       await renderRoute('@local', '/@local/following');
       assert.equal(requireRendered('ProfileConnectionList').props.kind, 'following');
 
-      queryModes.ProfileLayoutQuery = 'error';
+      queryModes.ProfileScreenQuery = 'error';
       await renderRoute('@local', '/@local/following');
       assert.equal(requireRendered('ProfileConnectionListState').props.state, 'error');
 
-      queryModes.ProfileLayoutQuery = 'success';
+      queryModes.ProfileScreenQuery = 'success';
       await renderRoute('@local');
       assert.deepEqual(identities('ProfileHero'), ['local']);
     } finally {
@@ -972,10 +956,10 @@ describe('profile route parameter lifecycle', () => {
   });
 
   for (const [kind, path, query] of [
-    ['followers', '/@local/followers', 'ProfileFollowersPageQuery'],
-    ['following', '/@local/following', 'ProfileFollowingPageQuery'],
+    ['followers', '/@local/followers', 'ProfileScreenQuery'],
+    ['following', '/@local/following', 'ProfileScreenQuery'],
   ] as const) {
-    it(`${kind} leaf query error를 표시하고 retry에서 같은 query를 다시 실행한다`, async () => {
+    it(`${kind} 화면 query error를 표시하고 retry에서 같은 query를 다시 실행한다`, async () => {
       const originalConsoleError = console.error;
       console.error = () => undefined;
       try {
@@ -1000,47 +984,6 @@ describe('profile route parameter lifecycle', () => {
       }
     });
   }
-
-  it('현재 handle의 nested error와 retry 동작을 유지한다', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      queryModes.ProfilePostListPageQuery = 'error';
-      await renderRoute('@local');
-      assert.deepEqual(identities('ProfileHero'), ['local']);
-      assert.deepEqual(identities('PostList'), ['error']);
-      const layoutQueryKeys = new Set(
-        queryHistory
-          .filter(({ query }) => query === 'ProfileLayoutQuery')
-          .map(({ fetchKey }) => fetchKey),
-      );
-
-      queryModes.ProfilePostListPageQuery = 'success';
-      const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
-      assert.ok(errorPostList);
-      const failedFetchKey = queryHistory.findLast(
-        ({ query }) => query === 'ProfilePostListPageQuery',
-      )?.fetchKey;
-      await act(async () => errorPostList.props.onRetry());
-
-      assert.deepEqual(identities('PostList'), ['local']);
-      const latestPostQuery = queryHistory.findLast(
-        ({ query }) => query === 'ProfilePostListPageQuery',
-      );
-      assert.equal(latestPostQuery?.handle, 'local');
-      assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
-      assert.deepEqual(
-        new Set(
-          queryHistory
-            .filter(({ query }) => query === 'ProfileLayoutQuery')
-            .map(({ fetchKey }) => fetchKey),
-        ),
-        layoutQueryKeys,
-      );
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
 
   it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
     selectedProfileId = 'owner';
