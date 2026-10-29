@@ -3,6 +3,7 @@ import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
+import type { WorkflowDefinition } from '@kosmo/core/temporal/client';
 import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
@@ -48,3 +49,8 @@ export async function postCreateEffectsWorkflow({
       .exhaustive(),
   ]);
 }
+
+export const postCreateEffectsDefinition: WorkflowDefinition<typeof postCreateEffectsWorkflow> = {
+  workflow: postCreateEffectsWorkflow,
+  workflowIdFromArgs: ({ postId }) => `post-create-effects:${postId}`,
+};

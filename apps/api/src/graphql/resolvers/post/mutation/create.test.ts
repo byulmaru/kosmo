@@ -5,6 +5,8 @@ import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { ApplicationFailure } from '@temporalio/client';
 import {
   graphql,
   GraphQLObjectType,
@@ -174,10 +176,14 @@ test('validates createPost input before running the resolver', async () => {
 });
 
 test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
-  const serviceReached = new Error('createPost reached');
-  t.mock.method(db, 'transaction', async () => {
-    throw serviceReached;
-  });
+  const workflowReached = new Error('localPostCreateWorkflow reached');
+  const updateWithStart = t.mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async () => {
+      throw workflowReached;
+    },
+  );
 
   const result = await graphql({
     schema,
@@ -205,7 +211,50 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
     },
   });
 
-  assert.equal(result.errors?.[0]?.originalError, serviceReached);
+  assert.equal(result.errors?.[0]?.originalError, workflowReached);
+  assert.equal(updateWithStart.mock.callCount(), 1);
+});
+
+test('maps Temporal validation failures back to the GraphQL field error', async (t) => {
+  const failure = ApplicationFailure.nonRetryable(
+    'Media cannot be attached',
+    'VALIDATION',
+    'media',
+  );
+  const updateWithStart = t.mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async () => {
+      throw failure;
+    },
+  );
+
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) {
+          post { id }
+        }
+      }
+    `,
+    variableValues: { input: { bodyText: 'body', visibility: 'PUBLIC' } },
+    contextValue: {
+      session: {
+        accountId: crypto.randomUUID(),
+        profile: {
+          id: crypto.randomUUID(),
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  assert.equal(result.errors?.[0]?.message, failure.message);
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'media');
+  assert.equal(updateWithStart.mock.callCount(), 1);
 });
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {

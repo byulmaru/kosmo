@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NotificationKind } from '@kosmo/core/enums';
+import { NotificationKind, PostVisibility } from '@kosmo/core/enums';
 import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { operationalNotificationWorkflow } from '@kosmo/core/temporal/operational-notification';
 import {
@@ -41,7 +41,11 @@ import type {
   MediaUploadWorkflowInput,
   MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
-import type { RemotePostLookupInput, RemotePostLookupResult } from '@kosmo/core/temporal/workflows';
+import type {
+  ActivityPubPostCreateInput,
+  PostCreateActivityResult,
+} from '@kosmo/core/temporal/post-create';
+import type { RemotePostLookupInput } from '@kosmo/core/temporal/workflows';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
 import type { MockMediaUploadOperationInput } from './test-fixtures/media-upload-nexus-operation';
@@ -150,7 +154,17 @@ test(
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: temporalTestExecutable },
     });
-    t.after(() => environment.teardown());
+    const workerCleanup: { worker?: Worker; run?: Promise<void> } = {};
+    t.after(async () => {
+      try {
+        if (workerCleanup.worker?.getState() === 'RUNNING') {
+          workerCleanup.worker.shutdown();
+        }
+        await workerCleanup.run;
+      } finally {
+        await environment.teardown();
+      }
+    });
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
     const profileId = '00000000-0000-8000-8000-000000000201';
     const signingProfileId = '00000000-0000-8000-8000-000000000202';
@@ -187,43 +201,85 @@ test(
           }
           return { documentBytes: 100, itemUris, signingProfileId };
         },
-        lookupRemotePostActivity: async (
+        prepareRemotePostActivity: async (
           input: RemotePostLookupInput & { readonly maxDocumentBytes: number },
-        ): Promise<RemotePostLookupResult> => {
+        ) => {
           lookupCalls.push(input);
-          if (input.objectUri === itemUris[0]) {
+          if (input.objectUri === itemUris[1] && input.maxDocumentBytes === 15) {
             return {
-              authorProfileId: profileId,
-              documentBytes: 25,
-              postId: orderedPostIds[0]!,
-              status: 'created',
-            };
-          }
-          if (input.objectUri === itemUris[1]) {
-            if (input.maxDocumentBytes === 15) {
-              return {
+              result: {
                 documentBytes: 16,
                 reason: 'document_budget_exceeded',
                 status: 'rejected',
-              };
-            }
+              },
+              status: 'rejected',
+            } as const;
+          }
+
+          const documentBytes =
+            input.objectUri === itemUris[0] ? 25 : input.objectUri === wrongOwnerUri ? 10 : 15;
+          return {
+            documentBytes,
+            input: {
+              document: {
+                version: 1,
+                summary: null,
+                body: {
+                  type: 'doc',
+                  content: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Remote Note' }] },
+                  ],
+                },
+              },
+              hashtagNames: [],
+              media: [],
+              mentionProfileIds: [],
+              objectUri: input.objectUri,
+              origin: 'ACTIVITYPUB',
+              profileId,
+              publishedAt: '2026-10-29T00:00:00.000Z',
+              receivedAt: '2026-10-29T00:00:01.000Z',
+              visibility: PostVisibility.PUBLIC,
+            } satisfies ActivityPubPostCreateInput,
+            requestId: crypto.randomUUID(),
+            status: 'prepared',
+          } as const;
+        },
+        generatePostIdActivity: async () => crypto.randomUUID(),
+        createPostActivity: async ({ input }: { input: ActivityPubPostCreateInput }) => {
+          if (input.objectUri === itemUris[0]) {
             return {
-              authorProfileId: profileId,
-              documentBytes: 15,
-              postId: orderedPostIds[1]!,
-              status: 'duplicate',
-            };
+              ok: true,
+              result: {
+                authorProfileId: profileId,
+                postId: orderedPostIds[0]!,
+                status: 'created',
+              },
+            } satisfies PostCreateActivityResult;
+          }
+          if (input.objectUri === itemUris[1]) {
+            return {
+              ok: true,
+              result: {
+                authorProfileId: profileId,
+                postId: orderedPostIds[1]!,
+                status: 'duplicate',
+              },
+            } satisfies PostCreateActivityResult;
           }
           if (input.objectUri === wrongOwnerUri) {
             return {
-              authorProfileId: '00000000-0000-8000-8000-000000000299',
-              documentBytes: 10,
-              postId: orderedPostIds[0]!,
-              status: 'duplicate',
-            };
+              ok: true,
+              result: {
+                authorProfileId: '00000000-0000-8000-8000-000000000299',
+                postId: orderedPostIds[0]!,
+                status: 'duplicate',
+              },
+            } satisfies PostCreateActivityResult;
           }
           throw new Error(`Unexpected remote Note URI: ${input.objectUri}`);
         },
+        createNotificationActivity: async () => undefined,
         replaceRemoteFeaturedActivity: async (input: {
           profileId: string;
           postIds: readonly string[];
@@ -241,6 +297,8 @@ test(
       taskQueue,
       workflowsPath,
     });
+    workerCleanup.worker = worker;
+    workerCleanup.run = worker.run();
     const inputs: RemoteProfileFeaturedSyncInput[] = [
       'missing',
       'empty',
@@ -262,7 +320,7 @@ test(
         },
       );
 
-    await worker.runUntil(async () => {
+    await (async () => {
       await execute(inputs[0]!, 'missing');
       assert.deepEqual(pinSnapshot, ['00000000-0000-8000-8000-000000000399']);
       await execute(inputs[1]!, 'empty');
@@ -339,7 +397,7 @@ test(
           },
         ],
       );
-    });
+    })();
 
     const events =
       (await environment.client.workflow.getHandle(`${taskQueue}:retry`).fetchHistory()).events ??

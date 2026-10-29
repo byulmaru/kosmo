@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   createFederation,
   generateCryptoKeyPair,
@@ -37,10 +37,12 @@ import {
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
+  remotePostCreateWorkflow,
   remoteProfileLookupWorkflow,
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne, sql } from 'drizzle-orm';
+import { uniqueHref } from './activitypub-uri';
 import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -65,6 +67,7 @@ const createObservation = { activityType: 'Create', handler: 'create' } as const
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
+const nativeWorkflowExecute = temporalClient.workflow.execute.bind(temporalClient.workflow);
 
 type RemoteProfileRefreshOptions = {
   args?: readonly { actorUri: string }[];
@@ -85,6 +88,15 @@ const assertRemoteProfileRefreshCall = (workflow: unknown, options: unknown, act
   assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
   assert.equal(workflowOptions.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
 };
+
+const remoteProfileWorkflowCallCount = (
+  calls: readonly { readonly arguments: readonly unknown[] }[],
+): number =>
+  calls.filter(
+    ({ arguments: [workflow] }) =>
+      workflow === remoteProfileLookupWorkflow.workflow ||
+      workflow === remoteProfileRefreshWorkflow.workflow,
+  ).length;
 
 const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) => {
   const executions = new Map<string, Promise<string>>();
@@ -126,6 +138,10 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
         return execution;
       }
 
+      if (workflow === remotePostCreateWorkflow.workflow) {
+        return nativeWorkflowExecute(workflow as never, options as never);
+      }
+
       const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
       assert.ok(typeof actorUri === 'string');
       assertRemoteProfileRefreshCall(workflow, options, actorUri);
@@ -156,11 +172,41 @@ let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let createMentionNotification: typeof CoreServices.createMentionNotification;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
-let handleInboundCreate: typeof handleInboundCreateType;
+let runInboundCreate: typeof handleInboundCreateType;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
 let ensureDrizzleLocalProfileActor: typeof ensureDrizzleLocalProfileActorType;
 let localInstanceId: string;
+
+const handleInboundCreate = async (
+  context: Parameters<typeof handleInboundCreateType>[0],
+  create: Parameters<typeof handleInboundCreateType>[1],
+  receivedAt?: Parameters<typeof handleInboundCreateType>[2],
+): Promise<void> => {
+  await runInboundCreate(context, create, receivedAt);
+
+  const objectUri = uniqueHref(create.objectIds);
+  if (objectUri === undefined) {
+    return;
+  }
+  const post = await db
+    .select({ postId: ActivityPubPosts.postId })
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, objectUri))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (post === undefined) {
+    return;
+  }
+
+  try {
+    await temporalClient.workflow.getHandle(`post-create-effects:${post.postId}`).result();
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'WorkflowNotFoundError')) {
+      throw error;
+    }
+  }
+};
 
 describe('inbound Create dispatch', () => {
   before(async () => {
@@ -190,7 +236,7 @@ describe('inbound Create dispatch', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createMentionNotification, createPost } = await import('@kosmo/core/services'));
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
-    ({ handleInboundCreate } = await import('./inbound-create'));
+    ({ handleInboundCreate: runInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
     ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ ensureDrizzleLocalProfileActor } = await import('./local-actor-store'));
@@ -199,6 +245,7 @@ describe('inbound Create dispatch', () => {
   });
 
   beforeEach(async () => {
+    mock.restoreAll();
     await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
@@ -209,7 +256,10 @@ describe('inbound Create dispatch', () => {
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
+  afterEach(() => mock.restoreAll());
+
   after(async () => {
+    mock.restoreAll();
     await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
@@ -279,7 +329,7 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     const unrefreshedActor = await db
       .select({ profileUrl: ActivityPubActors.profileUrl })
       .from(ActivityPubActors)
@@ -336,7 +386,7 @@ describe('inbound Create dispatch', () => {
         { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
       ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
     );
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
@@ -735,7 +785,7 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: target.id },
     ]);
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
@@ -906,12 +956,21 @@ describe('inbound Create dispatch', () => {
       async (deadline: number | Date, execute: () => Promise<unknown>) => {
         const deadlineAt = deadline instanceof Date ? deadline.getTime() : deadline;
         const remainingMs = deadlineAt - Date.now();
-        if (remainingMs > 25_000) {
-          deadlineDurationMs = remainingMs;
-          void execute().catch(() => undefined);
-          throw new Error('Temporal client deadline exceeded');
-        }
-        return originalWithDeadline(deadline, execute);
+        return originalWithDeadline(deadline, () => {
+          const callIndex = executeMock.mock.calls.length;
+          const execution = execute();
+          const workflow = executeMock.mock.calls[callIndex]?.arguments[0];
+          if (
+            (workflow === remoteProfileLookupWorkflow.workflow ||
+              workflow === remoteProfileRefreshWorkflow.workflow) &&
+            remainingMs > 25_000
+          ) {
+            deadlineDurationMs = remainingMs;
+            void execution.catch(() => undefined);
+            throw new Error('Temporal client deadline exceeded');
+          }
+          return execution;
+        });
       },
     );
     const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
@@ -938,7 +997,7 @@ describe('inbound Create dispatch', () => {
     }
 
     const { content } = await getMaterializedPost(objectUri);
-    assert.equal(executeMock.mock.callCount(), 1);
+    assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
     assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs >= 29_900);
     assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs <= 30_000);
     assert.deepEqual(content.document.body.content, [
@@ -1252,7 +1311,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
     assert.equal((await db.select().from(Instances)).length, instanceCount);
     assert.equal(fetchMock.mock.callCount(), 0);
-    assert.equal(executeMock.mock.callCount(), 1);
+    assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
   });
 
   test('preserves Mention, Content Warning, and an attached Image in one inbound Post', async () => {
@@ -1377,7 +1436,7 @@ describe('inbound Create dispatch', () => {
       });
 
       assert.equal(result.status, 'created');
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal((await getMaterializedPost(objectUri)).post.profileId, author.id);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1503,7 +1562,7 @@ describe('inbound Create dispatch', () => {
       assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(workflowLookupObject.mock.callCount(), 1);
       assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
@@ -1608,7 +1667,7 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'invalid_note', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(
         await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, remoteActorUri.href)),
         1,
@@ -1694,7 +1753,7 @@ describe('inbound Create dispatch', () => {
 
       assert.deepEqual(result, { reason: 'no_active_local_mention', status: 'rejected' });
       assert.equal(lookupObject.mock.callCount(), 1);
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
       assert.equal(await db.$count(ActivityPubActors), 1);
       assert.equal(await db.$count(Profiles), 1);
       assert.equal(await db.$count(ActivityPubPosts), 0);
@@ -1908,7 +1967,7 @@ describe('inbound Create dispatch', () => {
         );
       }
 
-      assert.equal(lookupWorkflow.mock.callCount(), 5);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 5);
       assert.equal(lookupObject.mock.callCount(), 5);
     } finally {
       lookupWorkflow.mock.restore();
@@ -2092,7 +2151,7 @@ describe('inbound Create dispatch', () => {
           receivedAt,
         }),
       );
-      assert.equal(executeMock.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(executeMock.mock.calls), 1);
       assert.equal(lookupObject.mock.callCount(), 1);
     } finally {
       executeMock.mock.restore();
@@ -2880,7 +2939,7 @@ describe('inbound Create dispatch', () => {
       );
     }
 
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
     assert.equal((await db.select().from(Media)).length, 0);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
@@ -3461,7 +3520,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when effects Workflow start fails', async (t) => {
+  test('materializes an inbound Reply through the remote Post Workflow', async () => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -3482,26 +3541,16 @@ describe('inbound Create dispatch', () => {
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    const errorLog = mock.method(console, 'error', () => undefined);
-    t.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-
-    try {
-      await handleInboundCreate(
-        createContext(),
-        createRemoteCreate({
-          objectUri: replyUri,
-          replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
-        }),
-        receivedAt,
-      );
-    } finally {
-      errorLog.mock.restore();
-    }
+    await handleInboundCreate(
+      createContext(),
+      createRemoteCreate({
+        objectUri: replyUri,
+        replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
+      }),
+      receivedAt,
+    );
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
-    assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
@@ -4104,7 +4153,7 @@ describe('inbound Create dispatch', () => {
       restoreReporter();
     }
 
-    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
     assert.equal(await db.$count(Posts), 0);
   });
@@ -4199,7 +4248,7 @@ describe('inbound Create dispatch', () => {
         reason: 'note_mention_limit_exceeded',
         status: 'rejected',
       });
-      assert.equal(lookupWorkflow.mock.callCount(), 1);
+      assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
     } finally {
       lookupWorkflow.mock.restore();
       restoreReporter();
