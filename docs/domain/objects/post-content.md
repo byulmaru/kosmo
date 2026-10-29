@@ -34,13 +34,17 @@ Plain Text는 body에서 결정적으로 파생되는 읽기·검색·접근성 
 현재 구현은 본문 Hashtag를 발견하고 Hashtag 관계를 정합화한다. 원문 입력은 따로 저장하지 않으므로 재처리는 작성
 시점의 전체 parser를 다시 실행하지 않으며 Mention을 재발견·resolve하거나 Remote source를 가져오지 않는다.
 
+재처리 대상은 운영자가 지정한 Post ID로 한정하며 Post Content ID를 입력으로 받지 않는다. 각 Activity 시도는 transaction
+안에서 해당 활성 Local Post의 current Post Content를 읽어 처리한다. 시도 사이에 current content가 바뀌면 다음 시도는
+새 current content를 처리하고, 이미 같은 content와 관계가 반영된 상태면 새 revision을 만들지 않는다.
+
 원본 revision은 바꾸거나 삭제하지 않는다. 새 revision은 처리한 document나 관계가 달라질 때만 만들며, 원래 body
 text와 처리 대상이 아닌 document node, 기존 Mention node·관계, Content Warning, Sensitive Media와 Media 참조를
 보존한다. Hashtag 관계는 결과 document의 기존·신규 Hashtag node에서 계산하고 document에 없는 기존 관계는 새
 revision에 복사하지 않는다. revision 생성 시각은 재처리 시각으로 기록한다. 새 revision, 보존할 관계와 Post의
-currentContentId 교체는 한 transaction으로 원자적으로 반영한다. source revision이 실행 중 더 이상 current가 아니면
-덮어쓰지 않는다. 처리 결과와 현재 값이 같으면 새 revision을 만들지 않는다. Post ID, Post.createdAt, author,
-visibility와 그 밖의 관계는 바뀌지 않는다.
+currentContentId 교체는 한 transaction으로 원자적으로 반영한다. current pointer가 처리 중 바뀌면 transaction을
+rollback해 부분 변경이나 stale revision 덮어쓰기를 방지한다. 처리 결과와 현재 값이 같으면 새 revision을 만들지 않는다.
+Post ID, Post.createdAt, author, visibility와 그 밖의 관계는 바뀌지 않는다.
 
 Remote Note 수신은 embedded typed ActivityPub `Hashtag`의 `name`과 projected body의 `#` token이 공통
 Hashtag 정규화 identity로 일치하는 occurrence만 Hashtag node와 관계로 저장한다. 본문 표기만으로는 연결하지 않으며,

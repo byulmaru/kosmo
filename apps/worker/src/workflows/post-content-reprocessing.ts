@@ -6,16 +6,10 @@ import type {
   PostContentReprocessingStatus,
   ReprocessLocalPostContentsInput,
   ReprocessLocalPostContentsResult,
-  ReprocessLocalPostContentTarget,
 } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const BATCH_SIZE = 50;
-
-const targetSchema = z.object({
-  postId: z.uuid(),
-  postContentId: z.uuid(),
-}) satisfies z.ZodType<ReprocessLocalPostContentTarget>;
 
 const countsSchema = z.object({
   updated: z.number().int().nonnegative(),
@@ -25,7 +19,7 @@ const countsSchema = z.object({
 }) satisfies z.ZodType<PostContentReprocessingCounts>;
 
 const inputSchema = z.object({
-  targets: z.array(targetSchema),
+  postIds: z.array(z.uuid()),
   dryRun: z.boolean().optional(),
   continuation: z.object({ counts: countsSchema }).optional(),
 }) satisfies z.ZodType<ReprocessLocalPostContentsInput>;
@@ -51,23 +45,23 @@ export async function reprocessLocalPostContentsWorkflow(
     );
   }
 
-  const { targets, continuation } = parsed.data;
+  const { postIds, continuation } = parsed.data;
   const dryRun = parsed.data.dryRun ?? true;
   const counts = { ...(continuation?.counts ?? emptyCounts()) };
-  const page = targets.slice(0, BATCH_SIZE);
+  const page = postIds.slice(0, BATCH_SIZE);
 
-  for (const candidate of page) {
+  for (const postId of page) {
     const { status } = await reprocessLocalPostContentActivity({
-      ...candidate,
+      postId,
       dryRun,
     });
     counts[status] += 1;
   }
 
-  if (targets.length > page.length) {
+  if (postIds.length > page.length) {
     await continueAsNew<typeof reprocessLocalPostContentsWorkflow>({
       dryRun,
-      targets: targets.slice(page.length),
+      postIds: postIds.slice(page.length),
       continuation: { counts },
     });
   }

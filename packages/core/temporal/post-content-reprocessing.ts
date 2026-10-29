@@ -5,12 +5,8 @@ export const REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE = 'reprocessLocalPostCo
 
 export type PostContentReprocessingStatus = 'updated' | 'wouldUpdate' | 'unchanged' | 'skipped';
 
-export type ReprocessLocalPostContentTarget = {
+export type ReprocessLocalPostContentInput = {
   readonly postId: string;
-  readonly postContentId: string;
-};
-
-export type ReprocessLocalPostContentInput = ReprocessLocalPostContentTarget & {
   readonly dryRun?: boolean;
 };
 
@@ -25,7 +21,7 @@ export type ReprocessLocalPostContentsContinuation = {
 };
 
 export type ReprocessLocalPostContentsInput = {
-  readonly targets: readonly ReprocessLocalPostContentTarget[];
+  readonly postIds: readonly string[];
   readonly dryRun?: boolean;
   readonly continuation?: ReprocessLocalPostContentsContinuation;
 };
@@ -38,14 +34,12 @@ export const reprocessLocalPostContentsWorkflow: WorkflowDefinition<
   (input: ReprocessLocalPostContentsInput) => Promise<ReprocessLocalPostContentsResult>
 > = {
   workflow: REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ targets, dryRun }) => {
-    const targetScope = createHash('sha256')
-      .update(JSON.stringify(targets.map(({ postId, postContentId }) => [postId, postContentId])))
-      .digest('hex');
+  workflowIdFromArgs: ({ postIds, dryRun }) => {
+    const postIdsHash = createHash('sha256').update(JSON.stringify(postIds)).digest('hex');
     return (
       REPROCESS_LOCAL_POST_CONTENTS_WORKFLOW_TYPE +
       ':' +
-      targetScope +
+      postIdsHash +
       ':' +
       (dryRun === false ? 'apply' : 'dry-run')
     );

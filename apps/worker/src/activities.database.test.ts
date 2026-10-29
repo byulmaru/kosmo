@@ -2830,7 +2830,6 @@ test('Local PostContent hashtag processing dry-run plans changes without writing
 
   try {
     const result = await reprocessLocalPostContentActivity({
-      postContentId: fixture.content.id,
       postId: fixture.post.id,
     });
 
@@ -2932,7 +2931,6 @@ test('Local PostContent hashtag processing preserves document state, repairs rel
 
     const result = await reprocessLocalPostContentActivity({
       dryRun: false,
-      postContentId: fixture.content.id,
       postId: fixture.post.id,
     });
     assert.deepEqual(result, { status: 'updated' });
@@ -3008,19 +3006,10 @@ test('Local PostContent hashtag processing preserves document state, repairs rel
       sourceMentions.map(({ profileId }) => profileId).sort(),
     );
 
-    assert.deepEqual(
-      await reprocessLocalPostContentActivity({
-        dryRun: false,
-        postContentId: fixture.content.id,
-        postId: fixture.post.id,
-      }),
-      { status: 'skipped' },
-    );
     const contentCount = await db.$count(PostContents, eq(PostContents.postId, fixture.post.id));
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: updatedContent.id,
         postId: fixture.post.id,
       }),
       { status: 'unchanged' },
@@ -3032,6 +3021,77 @@ test('Local PostContent hashtag processing preserves document state, repairs rel
   } finally {
     await cleanupPostContentReprocessingFixture(fixture);
     await db.delete(Hashtags).where(eq(Hashtags.id, missingRelationHashtag.id));
+  }
+});
+
+test('Local PostContent reprocessing reads the current revision when the Activity runs', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const staleHashtagName = `stale${suffix}`;
+  const currentHashtagName = `current${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${staleHashtagName}`),
+  });
+
+  try {
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText(`#${currentHashtagName}`),
+        postId: fixture.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, fixture.post.id));
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({ dryRun: false, postId: fixture.post.id }),
+      { status: 'updated' },
+    );
+    const updatedPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, currentContent.id);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    const currentHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, currentHashtagName))
+      .then(firstOrThrow);
+    assert.equal(
+      postContentDocumentToText(updatedContent.document),
+      postContentDocumentToText(currentContent.document),
+    );
+    assert.deepEqual(
+      updatedContent.document.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).flatMap((node) =>
+              node.type === 'hashtag'
+                ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+                : [],
+            )
+          : [],
+      ),
+      [{ hashtagId: currentHashtag.id, token: `#${currentHashtagName}` }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, updatedContent.id)),
+      [{ hashtagId: currentHashtag.id }],
+    );
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, staleHashtagName)), 0);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
   }
 });
 
@@ -3068,7 +3128,6 @@ test('Local PostContent hashtag processing repairs relations without changing th
 
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
-        postContentId: fixture.content.id,
         postId: fixture.post.id,
       }),
       { status: 'wouldUpdate' },
@@ -3091,7 +3150,6 @@ test('Local PostContent hashtag processing repairs relations without changing th
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: fixture.content.id,
         postId: fixture.post.id,
       }),
       { status: 'updated' },
@@ -3133,7 +3191,6 @@ test('Local PostContent hashtag processing repairs relations without changing th
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: updatedContent.id,
         postId: fixture.post.id,
       }),
       { status: 'unchanged' },
@@ -3162,7 +3219,6 @@ test('Local PostContent reprocessing accepts Local Posts and skips remote or del
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: local.content.id,
         postId: local.post.id,
       }),
       { status: 'unchanged' },
@@ -3170,7 +3226,6 @@ test('Local PostContent reprocessing accepts Local Posts and skips remote or del
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: remote.content.id,
         postId: remote.post.id,
       }),
       { status: 'skipped' },
@@ -3178,7 +3233,6 @@ test('Local PostContent reprocessing accepts Local Posts and skips remote or del
     assert.deepEqual(
       await reprocessLocalPostContentActivity({
         dryRun: false,
-        postContentId: deleted.content.id,
         postId: deleted.post.id,
       }),
       { status: 'skipped' },
@@ -3217,11 +3271,10 @@ test('Local PostContent reprocessing rolls back all writes after losing the curr
       SELECT pg_backend_pid()::int AS pid
     `;
     await concurrentUpdate`
-      UPDATE post SET current_content_id = ${competingContent.id} WHERE id = ${fixture.post.id}
+      SELECT id FROM post WHERE id = ${fixture.post.id} FOR UPDATE
     `;
     activity = reprocessLocalPostContentActivity({
       dryRun: false,
-      postContentId: fixture.content.id,
       postId: fixture.post.id,
     });
 
@@ -3239,7 +3292,10 @@ test('Local PostContent reprocessing rolls back all writes after losing the curr
       }
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    assert.ok(blocked, 'PostContent reprocessing must reach the competing pointer update');
+    assert.ok(blocked, 'PostContent reprocessing must reach the current-content compare-and-set');
+    await concurrentUpdate`
+      UPDATE post SET current_content_id = ${competingContent.id} WHERE id = ${fixture.post.id}
+    `;
     await concurrentUpdate`COMMIT`;
     transactionHeld = false;
 

@@ -80,11 +80,11 @@ const applyCandidates = (
 
 const reprocessInTransaction = async (
   tx: Transaction,
-  { dryRun, postContentId, postId }: Required<ReprocessLocalPostContentInput>,
+  { dryRun, postId }: Required<ReprocessLocalPostContentInput>,
 ): Promise<ReprocessLocalPostContentResult['status']> => {
   const source = await tx
     .select({
-      currentContentId: Posts.currentContentId,
+      currentContentId: PostContents.id,
       document: PostContents.document,
       instanceKind: Instances.kind,
       postState: Posts.state,
@@ -102,7 +102,6 @@ const reprocessInTransaction = async (
 
   if (
     !source ||
-    source.currentContentId !== postContentId ||
     source.postState !== PostState.ACTIVE ||
     source.instanceKind !== InstanceKind.LOCAL ||
     source.sourcePostId !== postId
@@ -110,11 +109,12 @@ const reprocessInTransaction = async (
     return 'skipped';
   }
 
+  const sourceContentId = source.currentContentId;
   const document = source.document;
   const existingRelationRows = await tx
     .select({ hashtagId: PostContentHashtags.hashtagId })
     .from(PostContentHashtags)
-    .where(eq(PostContentHashtags.postContentId, postContentId));
+    .where(eq(PostContentHashtags.postContentId, sourceContentId));
   const existingRelationIds = new Set(existingRelationRows.map(({ hashtagId }) => hashtagId));
 
   const existingNodeIds = collectDocumentHashtagIds(document);
@@ -182,7 +182,7 @@ const reprocessInTransaction = async (
   const mentionRows = await tx
     .select({ profileId: PostMentions.profileId })
     .from(PostMentions)
-    .where(eq(PostMentions.postContentId, postContentId));
+    .where(eq(PostMentions.postContentId, sourceContentId));
   if (mentionRows.length > 0) {
     await tx
       .insert(PostMentions)
@@ -201,7 +201,7 @@ const reprocessInTransaction = async (
       and(
         eq(Posts.id, postId),
         eq(Posts.state, PostState.ACTIVE),
-        eq(Posts.currentContentId, postContentId),
+        eq(Posts.currentContentId, sourceContentId),
       ),
     )
     .returning({ id: Posts.id })
@@ -224,7 +224,6 @@ export const reprocessLocalPostContentActivity = async (
       }
       return reprocessInTransaction(tx, {
         dryRun,
-        postContentId: input.postContentId,
         postId: input.postId,
       });
     });
