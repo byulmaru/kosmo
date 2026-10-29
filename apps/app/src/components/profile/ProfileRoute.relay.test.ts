@@ -424,6 +424,90 @@ describe('Profile route with real Relay', () => {
     }
   });
 
+  it('a new posts query generation reapplies the profile block acknowledgement', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    const block = {
+      id: 'block-1',
+      targetProfile: {
+        displayName: 'Target',
+        id: 'profile-target',
+        relativeHandle: '@target',
+      },
+    };
+    const blockedPostsProfile = {
+      ...emptyPostsProfile(),
+      viewerState: {
+        ...emptyPostsProfile().viewerState,
+        profileBlock: block,
+      },
+    };
+
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: blockedPostsProfile,
+    });
+    await respond(latestRequest('ProfileLayoutQuery'), {
+      profileByHandle: blockedProfile(block),
+    });
+
+    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
+    await act(async () => one('StateView').props.onAction());
+    assert.equal(one('PostList').props.ignoreBlock, true);
+
+    await act(async () => blurRoute());
+    await act(async () => focusRoute());
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: blockedPostsProfile,
+    });
+
+    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
+  });
+
+  it('same-frame blur and focus keeps acknowledged posts hidden while the new query is pending', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    const block = {
+      id: 'block-same-frame',
+      targetProfile: {
+        displayName: 'Target',
+        id: 'profile-target',
+        relativeHandle: '@target',
+      },
+    };
+    const blockedPostsProfile = {
+      ...emptyPostsProfile(),
+      viewerState: {
+        ...emptyPostsProfile().viewerState,
+        profileBlock: block,
+      },
+    };
+
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: blockedPostsProfile,
+    });
+    await respond(latestRequest('ProfileLayoutQuery'), {
+      profileByHandle: blockedProfile(block),
+    });
+    await act(async () => one('StateView').props.onAction());
+    assert.equal(one('PostList').props.ignoreBlock, true);
+
+    await act(async () => {
+      blurRoute();
+      focusRoute();
+    });
+    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
+    assert.equal(all('PostList').length, 0);
+
+    await respond(latestRequest('ProfilePostListPageQuery'), {
+      currentSession: null,
+      profileByHandle: blockedPostsProfile,
+    });
+    assert.equal(one('StateView').props.actionLabel, '게시물 보기');
+  });
+
   it('layout이 pending이어도 posts 요청을 시작하고 layout gate를 우회하지 않는다', async () => {
     const environment = createEnvironment();
     await render(environment);
@@ -468,6 +552,18 @@ describe('Profile route with real Relay', () => {
         requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
         layoutRequestCount,
       );
+      assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 2);
+      assert.equal(one('PostList').props.loading, true);
+      await fail(latestRequest('ProfilePostListPageQuery'));
+      assert.equal(one('PostList').props.error, true);
+
+      await act(async () => one('PostList').props.onRetry());
+      assert.equal(
+        requests.filter(({ name }) => name === 'ProfileLayoutQuery').length,
+        layoutRequestCount,
+      );
+      assert.equal(requests.filter(({ name }) => name === 'ProfilePostListPageQuery').length, 3);
+      assert.equal(one('PostList').props.loading, true);
       await respond(latestRequest('ProfilePostListPageQuery'), {
         currentSession: null,
         profileByHandle: emptyPostsProfile(),

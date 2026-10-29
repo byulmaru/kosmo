@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { graphql, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
 import ProfileLayout from '@/components/profile/ProfileLayout';
@@ -45,6 +45,10 @@ export default function ProfilePostListPage() {
 function ProfilePostsQueryOwner({ handle, scrollKey }: { handle: string; scrollKey: string }) {
   const [queryReference, loadPosts, disposePosts] =
     useQueryLoader<ProfilePostListPageQueryType>(ProfilePostListPageQuery);
+  const committedQueryReference = useRef(queryReference);
+  useLayoutEffect(() => {
+    committedQueryReference.current = queryReference;
+  }, [queryReference]);
   const retryPosts = useCallback(
     () => loadPosts({ handle }, { fetchPolicy: 'network-only' }),
     [handle, loadPosts],
@@ -52,7 +56,12 @@ function ProfilePostsQueryOwner({ handle, scrollKey }: { handle: string; scrollK
 
   useFocusEffect(
     useCallback(() => {
-      loadPosts({ handle }, { fetchPolicy: 'store-and-network' });
+      const load = () => loadPosts({ handle }, { fetchPolicy: 'store-and-network' });
+      if (committedQueryReference.current) {
+        load();
+      } else {
+        startTransition(load);
+      }
       return disposePosts;
     }, [disposePosts, handle, loadPosts]),
   );
@@ -92,11 +101,16 @@ function ProfilePostListPageContent({
             }}
           />
         )}
-        key={`${handle}:${queryReference?.fetchKey ?? 'empty'}`}
+        key={handle}
         loading={<PostList loading />}
+        resetKeys={[queryReference?.fetchKey ?? 'empty']}
         title="게시글 목록을 불러오지 못했어요"
       >
-        <ProfilePostListPageData handle={handle} queryReference={queryReference} />
+        <ProfilePostListPageData
+          handle={handle}
+          key={queryReference?.fetchKey ?? 'empty'}
+          queryReference={queryReference}
+        />
       </RouteBoundary>
     </ProfileRouteContainer>
   );

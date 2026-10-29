@@ -20,6 +20,7 @@ mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
 type RouteBoundaryProps = {
   children: ReactNode;
   loading: ReactNode;
+  resetKeys?: readonly unknown[];
   title: string;
 };
 
@@ -61,11 +62,13 @@ function QueryProbe() {
 function renderBoundary(
   children: ReactNode = createElement(QueryProbe),
   ref?: RefAttributes<RouteBoundaryHandle>['ref'],
+  resetKeys?: readonly unknown[],
 ) {
   return createElement(RouteBoundary, {
     children,
     loading: null,
     ref,
+    resetKeys,
     title: 'query failed',
   });
 }
@@ -141,6 +144,29 @@ describe('RouteBoundary local query lifecycle', () => {
       const retriedFetchKey = queryProbe().props.fetchKey;
       assert.notEqual(retriedFetchKey, failedFetchKey);
       assert.equal(queryProbe().props.fetchPolicy, 'network-only');
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  it('resets an error fallback when the caller query generation changes', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+
+    try {
+      queryShouldThrow = true;
+      await act(async () => {
+        renderer = create(renderBoundary(undefined, undefined, ['empty']));
+      });
+
+      assert.equal(renderer?.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+
+      queryShouldThrow = false;
+      await act(async () => {
+        renderer?.update(renderBoundary(undefined, undefined, ['query-1']));
+      });
+
+      assert.equal(queryProbe().props.fetchPolicy, 'store-or-network');
     } finally {
       console.error = originalConsoleError;
     }
