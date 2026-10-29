@@ -54,6 +54,7 @@ let createKosmoFederation: typeof FederationModule.createKosmoFederation;
 let handleInboundAnnounce: typeof HandleInboundAnnounce;
 let handleInboundUndo: typeof HandleInboundUndo;
 let materializeRemoteProfileActor: typeof RemoteActorMaterialization.materializeRemoteProfileActor;
+let RemoteActorDiscoveryUnavailableError: typeof RemoteActorMaterialization.RemoteActorDiscoveryUnavailableError;
 let localInstanceId: string;
 
 describe('inbound Announce materialization', () => {
@@ -76,7 +77,8 @@ describe('inbound Announce materialization', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAnnounce } = await import('./inbound-announce'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
-    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
+    ({ materializeRemoteProfileActor, RemoteActorDiscoveryUnavailableError } =
+      await import('./remote-actor-materialization'));
     ({ createKosmoFederation, federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -185,8 +187,8 @@ describe('inbound Announce materialization', () => {
     assert.equal(mapping.uri, activity.id!.href);
   });
 
-  test('propagates a transient unknown sender lookup failure without creating a Repost', async (t) => {
-    await createRemoteSource();
+  test('propagates a typed transient unknown sender lookup failure without creating a Repost', async (t) => {
+    const source = await createRemoteSource();
     const activity = announce('unknown-actor-lookup-failure', sourceUri);
     const lookupError = Object.assign(new Error('Remote actor lookup failed'), {
       name: 'ApplicationFailure',
@@ -198,7 +200,11 @@ describe('inbound Announce materialization', () => {
 
     await assert.rejects(
       handleInboundAnnounce(context(), activity, receivedAt),
-      (error) => error === lookupError,
+      (error: unknown) => {
+        assert.ok(error instanceof RemoteActorDiscoveryUnavailableError);
+        assert.equal(error.cause, lookupError);
+        return true;
+      },
     );
 
     assert.equal(lookup.mock.callCount(), 1);
@@ -207,6 +213,7 @@ describe('inbound Announce materialization', () => {
         .length,
       0,
     );
+    assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 0);
   });
 
   test('treats a disabled stored sender rejected by lookup as a noop', async (t) => {

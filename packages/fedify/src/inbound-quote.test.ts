@@ -29,6 +29,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
+import { temporalTestExecutable } from '../../../apps/worker/src/temporal-test-executable.js';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -78,7 +79,7 @@ let currentContext: TestQuoteContext;
 
 before(async () => {
   environment = await TestWorkflowEnvironment.createLocal({
-    server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    server: { executable: temporalTestExecutable },
   });
   process.env.TEMPORAL_ADDRESS = environment.address;
   process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
@@ -155,21 +156,28 @@ beforeEach(async () => {
 
 after(async () => {
   mock.restoreAll();
-  for await (const info of environment.client.workflow.list({
-    query: 'ExecutionStatus = "Running" AND WorkflowType = "postQuoteOwnerWorkflow"',
-  })) {
-    const owner = environment.client.workflow.getHandle(info.workflowId);
-    await owner.signal('finishQuoteOwner');
-    await owner.result();
+  if (!environment) {
+    return;
   }
-  worker.shutdown();
-  await workerRun;
+  if (worker) {
+    for await (const info of environment.client.workflow.list({
+      query: 'ExecutionStatus = "Running" AND WorkflowType = "postQuoteOwnerWorkflow"',
+    })) {
+      const owner = environment.client.workflow.getHandle(info.workflowId);
+      await owner.signal('finishQuoteOwner');
+      await owner.result();
+    }
+    worker.shutdown();
+    await workerRun;
+  }
   await environment.teardown();
-  await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
-  await db.delete(PostContents);
-  await db.delete(Posts);
-  await db.delete(Profiles);
-  await pg.end();
+  if (db) {
+    await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
+    await db.delete(PostContents);
+    await db.delete(Posts);
+    await db.delete(Profiles);
+  }
+  await pg?.end();
 });
 
 test('production singleton serves the configured actor, follow counters, Note and authorized collection', async () => {
