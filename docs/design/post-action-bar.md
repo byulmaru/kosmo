@@ -108,6 +108,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
 
+## Action Bar 여백 이동 · PROD-1168
+
+- 타임라인과 상세 타래의 Action Bar에서 개별 버튼의 실제 입력 영역 밖인 아이콘 사이·slot의 빈 부분·위쪽 내부 여백을 클릭·탭하면 해당 행의 기존 상세 대상으로 한 번 이동한다. 일반 Post·Quote는 자신으로, 순수 Repost는 direct Source로 이동하며 Source가 Quote여도 그 아래 Source로 평탄화하지 않는다.
+- 타래 조상·하위 행은 각 행의 상세로, 현재 행은 현재 Post의 canonical 상세로 이동한다. 각 버튼의 기존 액션 대상과 Reply 가능 여부는 유지한다.
+- 버튼의 glyph·숫자·투명 내부 영역과 Web visual row 위아래로 확장된 target은 해당 액션만 실행한다. disabled/pending target도 상세 이동으로 전환하지 않으며, 그 target 밖에 남은 slot 여백은 상세 이동을 유지한다.
+- 이동하는 Web 여백은 pointer 커서를 표시한다. 드래그·영역 밖 release·스크롤로 취소된 입력은 상세를 열지 않는다. 개별 메뉴·포커스·닫힘, CW·미디어·본문 링크와 Native 버튼 target·스크롤 양보는 유지한다.
+- Action Bar를 본문·Source navigation의 sibling으로 유지하며 전체 toolbar를 하나의 Link/Pressable로 감싸지 않는다. Reaction Summary와 작성자 여백의 기존 경계는 변경하지 않는다.
+
 ## Surface 배치
 
 - `PostListItem`의 Text·Media·PureRepost·Quote root와 `PostLayout` root는 semantic `backgroundCanvas`를 직접 적용해 Web·Native host의 중립 배경이 비치지 않게 한다. 이는 feed와 같은 canvas 평면을 명시하는 계약이며, direct Quote Source preview와 feedback overlay 등 내부에서 의도적으로 투명한 요소에는 별도 resting fill을 추가하지 않는다.
