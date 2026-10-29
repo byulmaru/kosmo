@@ -436,7 +436,7 @@ function PostListRow({
           <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
             <Pressable
               accessibilityRole="link"
-              style={StyleSheet.flatten([styles.timeLink, { paddingTop: authorTopInset }])}
+              style={{ ...styles.timeLink, paddingTop: authorTopInset }}
             >
               <TimestampText style={styles.time}>
                 {formatTimelineTimestamp(post.createdAt)}
