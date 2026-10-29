@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
@@ -45,7 +46,6 @@ export function PostComposerProfileSwitcher({
   surface,
 }: Props) {
   const theme = useTheme();
-  const rootRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const pendingRef = useRef(false);
   const operationVersionRef = useRef(0);
@@ -101,38 +101,6 @@ export function PostComposerProfileSwitcher({
     return () => onDismissChange?.(null);
   }, [dismiss, onDismissChange, open]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !open) {
-      return;
-    }
-
-    const root = rootRef.current as unknown as HTMLElement | null;
-    const ownerDocument = root?.ownerDocument;
-    if (!root || !ownerDocument) {
-      return;
-    }
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!root.contains(event.target as Node)) {
-        dismiss(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      event.preventDefault();
-      dismiss(true);
-    };
-
-    ownerDocument.addEventListener('pointerdown', onPointerDown);
-    ownerDocument.addEventListener('keydown', onKeyDown);
-    return () => {
-      ownerDocument.removeEventListener('pointerdown', onPointerDown);
-      ownerDocument.removeEventListener('keydown', onKeyDown);
-    };
-  }, [dismiss, open]);
-
   const releaseDismissedSelection = () => {
     pendingRef.current = false;
     setPending(false);
@@ -182,7 +150,10 @@ export function PostComposerProfileSwitcher({
   };
 
   return (
-    <View ref={rootRef} style={styles.root}>
+    <View
+      onTouchStart={Platform.OS !== 'web' ? (event) => event.stopPropagation() : undefined}
+      style={styles.root}
+    >
       <View style={styles.trigger}>
         <Pressable
           accessibilityLabel="작성 프로필"
@@ -198,6 +169,9 @@ export function PostComposerProfileSwitcher({
               return;
             }
             setError(null);
+            if (!open && Platform.OS !== 'web') {
+              Keyboard.dismiss();
+            }
             setOpen((value) => !value);
           }}
           ref={triggerRef}
@@ -226,10 +200,18 @@ export function PostComposerProfileSwitcher({
           ) : null}
         </View>
       </View>
-      {open ? (
-        <View testID="post-composer-profile-picker" style={styles.pickerLayer}>
+      <Dropdown
+        accessibilityLabel="작성 프로필 선택"
+        minWidth={280}
+        testID="post-composer-profile-picker"
+        onRequestClose={(reason) => dismiss(Platform.OS !== 'web' || reason === 'escape')}
+        open={open}
+        triggerRef={triggerRef}
+      >
+        {(maxHeight) => (
           <ProfilePicker
             busy={disabled || pending}
+            maxHeight={maxHeight}
             footer={
               error ? (
                 <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
@@ -243,14 +225,14 @@ export function PostComposerProfileSwitcher({
             showDivider={false}
             surface={surface === 'rail' ? 'compact' : 'full'}
           />
-        </View>
-      ) : null}
+        )}
+      </Dropdown>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { position: 'relative', zIndex: 20 },
+  root: { position: 'relative', width: '100%', zIndex: 20 },
   trigger: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -261,6 +243,5 @@ const styles = StyleSheet.create({
   triggerCopy: { flex: 1, minWidth: 0 },
   triggerName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
   triggerHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
-  pickerLayer: { left: 0, position: 'absolute', top: 48, zIndex: 30 },
   error: { fontFamily: fontFamilies.ui, padding: spacing.sm, ...typography.xsm },
 });

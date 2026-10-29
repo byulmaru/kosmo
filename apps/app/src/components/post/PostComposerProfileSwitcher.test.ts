@@ -9,6 +9,7 @@ import type { PostComposerProfileSwitcher as PostComposerProfileSwitcherComponen
 
 const platform = { OS: 'ios' };
 let triggerFocusCount = 0;
+let keyboardDismissCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let PostComposerProfileSwitcher: typeof PostComposerProfileSwitcherComponent;
 
@@ -41,6 +42,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Keyboard: { dismiss: () => keyboardDismissCount++ },
   Platform: platform,
   Pressable: forwardRef(
     (
@@ -58,7 +60,8 @@ mockModule('react-native', {
       return createElement('Pressable', props, children as never);
     },
   ),
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
   Text: 'Text',
   View: 'View',
 });
@@ -75,6 +78,7 @@ mockModule('@/theme/ThemeProvider', {
     card: '#fff',
     danger: '#c00',
     surface: '#eee',
+    overlayScrim: '#0008',
     text: '#111',
     textSecondary: '#666',
   }),
@@ -95,6 +99,7 @@ afterEach(async () => {
     renderer = null;
   }
   triggerFocusCount = 0;
+  keyboardDismissCount = 0;
   platform.OS = 'ios';
   mock.restoreAll();
 });
@@ -102,7 +107,6 @@ afterEach(async () => {
 const openPicker = async () => {
   const trigger = renderer?.root.findByProps({ accessibilityLabel: '작성 프로필' });
   await act(async () => trigger?.props.onPress());
-  await act(async () => undefined);
   return renderer?.root.findByType('ProfilePicker' as never);
 };
 
@@ -127,6 +131,7 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
     assert.equal(selectionSuccessCount, 1);
+    assert.equal(renderer?.root.findAllByType('ProfilePicker' as never).length, 0);
     assert.equal(triggerFocusCount, 0);
 
     picker = await openPicker();
@@ -157,6 +162,31 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
     await openPicker();
     await act(async () => dismiss?.());
     assert.equal(triggerFocusCount, 1);
+    assert.equal(renderer?.root.findAllByType('ProfilePicker' as never).length, 0);
+  });
+
+  it('the trigger toggles the inline Native picker without changing the selection', async () => {
+    const selections: string[] = [];
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerProfileSwitcher, {
+          onSelectProfile: (id: string) => {
+            selections.push(id);
+          },
+          profiles,
+          selectedProfileId: profiles[0]!.id,
+          surface: 'overlay',
+        }),
+      );
+    });
+    await openPicker();
+    assert.equal(keyboardDismissCount, 1);
+    const trigger = renderer?.root.findByProps({ accessibilityLabel: '작성 프로필' });
+    await act(async () => trigger?.props.onPress());
+    assert.equal(keyboardDismissCount, 1);
+    assert.equal(trigger?.props.accessibilityState.expanded, false);
+    assert.equal(renderer?.root.findAllByType('ProfilePicker' as never).length, 0);
+    assert.deepEqual(selections, []);
   });
 
   it('deduplicates refreshed fragment refs by profile id', async () => {

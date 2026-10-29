@@ -651,7 +651,9 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await visibilityMenu.getByRole('menuitemradio', { name: '팔로워만', exact: true }).click();
 
   await composer.getByRole('button', { name: '작성 프로필', exact: true }).click();
-  const profilePicker = composer.getByLabel('프로필 전환');
+  const profilePicker = page
+    .getByRole('dialog', { name: '글쓰기', exact: true })
+    .getByLabel('프로필 전환');
   await expect(profilePicker).toBeVisible();
   await profilePicker
     .getByRole('button', {
@@ -952,7 +954,9 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
 
   const profileTrigger = composer.getByRole('button', { name: '작성 프로필', exact: true });
   await profileTrigger.click();
-  const profilePicker = composer.getByLabel('프로필 전환');
+  const profilePicker = page
+    .getByRole('dialog', { name: '글쓰기', exact: true })
+    .getByLabel('프로필 전환');
   await expect(profilePicker).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(profilePicker).toHaveCount(0);
