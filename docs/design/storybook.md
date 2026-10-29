@@ -82,6 +82,8 @@ apps/app/src/stories/
 
 모든 일반 story는 render 검토 표면이다. 자동화가 렌더 결과를 읽기만 하거나 수동 입력과 겹치지 않는 setup만 수행하면 같은 story에 둘 수 있지만, `userEvent`, `fireEvent`, 직접 click·focus, timer와 callback 실행처럼 상태나 Actions 기록을 바꾸는 검증은 component의 `Tests` 하위 title로 분리한다. Tests story는 결정적인 args와 비활성화된 Controls를 사용하고, main story에서는 `excludeStories`로 숨긴 뒤 얇은 `*.tests.stories.tsx` wrapper에서 한 번만 노출한다. viewport collision, fallback tab stop, timer·교체·cleanup, 환경 전환 뒤 늦은 완료 같은 전용 fixture나 lifecycle 검증도 같은 Tests 경계를 사용한다.
 
+`*.test.stories.*`와 `*.tests.stories.*`는 UI 계약 classifier의 component·pattern story 검사, 새 UI owner catalog, custom icon 대표 story 증거에서 제외되는 보조 테스트 표면이다. main `*.stories.*`가 Production component 대표 story를 담당하며, 이 classifier 제외는 Tests story에서 Production UI를 복제해도 된다는 뜻이 아니고 실제 Storybook test 실행을 끄지도 않는다.
+
 ### Page와 Screen
 
 Page·Screen에는 Controls를 억지로 추가하지 않는다. 활성·비활성, loading·error·empty·data, 관계·권한 상태처럼 사용자가 구분할 수 있는 대표 시나리오를 story로 제공한다. route·data 정책을 바꾸지 않고 Production screen이 이미 지원하는 입력과 공용 mock으로만 구성한다.

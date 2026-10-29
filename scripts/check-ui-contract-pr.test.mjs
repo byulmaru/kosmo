@@ -524,6 +524,50 @@ describe('check-ui-contract-pr', () => {
     assert.ok(result.errors.some((error) => error.includes('no production component import')));
   });
 
+  it('treats only the exact test story suffixes as supporting changes', async () => {
+    for (const suffix of ['test', 'tests']) {
+      const root = await createRepository({ 'README.md': 'fixture\n' });
+      await writeRepositoryFile(
+        root,
+        `apps/app/src/stories/patterns/Feature.${suffix}.stories.tsx`,
+        "export default { title: 'Feature tests' };\n",
+      );
+      commit(root, `support ${suffix} story`);
+      const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(result.categories, []);
+    }
+  });
+
+  it('keeps similar non-test story names under the production story guard', async () => {
+    const root = await createRepository({ 'README.md': 'fixture\n' });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.testimonial.stories.tsx',
+      "export default { title: 'Feature testimonial' };\n",
+    );
+    commit(root, 'reject similar story name');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('does not let a Tests story register a new UI owner without a main story', async () => {
+    const root = await createRepository({ 'README.md': 'fixture\n' });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/components/ui/NewButton.tsx',
+      "export const NewButton = () => <div style={{ color: 'blue' }} />;\n",
+    );
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/components/NewButton.tests.stories.tsx',
+      "import { NewButton } from '@/components/ui/NewButton';\nexport default { component: NewButton };\n",
+    );
+    commit(root, 'uncataloged UI owner with Tests story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no component/pattern story catalog')));
+  });
+
   it('allows a dedicated policy-only change once the base checker exists', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',
@@ -574,6 +618,27 @@ describe('check-ui-contract-pr', () => {
     ]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /UI contract PR check passed/);
+  });
+
+  it('does not use a Tests story as custom icon representative evidence', async () => {
+    const fixture = await createCustomIconFixture({ includeStory: false });
+    await writeRepositoryFile(
+      fixture.root,
+      'apps/app/src/stories/components/CustomBadge.tests.stories.tsx',
+      "import { CustomBadge } from '@/components/icons/CustomBadge';\nexport default { component: CustomBadge };\n",
+    );
+    commit(fixture.root, 'add Tests story only');
+    const result = checkPullRequest({
+      base: fixture.base,
+      head: git(fixture.root, ['rev-parse', 'HEAD']).trim(),
+      cwd: fixture.root,
+      prBody: customIconBody(),
+    });
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes('requires a changed representative component/pattern story'),
+      ),
+    );
   });
 
   it('keeps registered custom owners covered in follow-up source changes', async () => {

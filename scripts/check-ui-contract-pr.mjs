@@ -766,7 +766,10 @@ function buildCatalog(cwd, ref) {
 }
 
 function isStoryPath(file) {
-  return /^apps\/app\/src\/stories\/(?:components|patterns)\/.*\.stories\.[cm]?[jt]sx?$/.test(file);
+  return (
+    /^apps\/app\/src\/stories\/(?:components|patterns)\/.*\.stories\.[cm]?[jt]sx?$/.test(file) &&
+    !isTestPath(file)
+  );
 }
 
 function isScreenStory(file) {
@@ -774,7 +777,7 @@ function isScreenStory(file) {
 }
 
 function isTestPath(file) {
-  return /^apps\/app\/src\/.*(?:\.test|\.tests)\.[cm]?[jt]sx?$/.test(file);
+  return /^apps\/app\/src\/.*\.(?:test|tests)(?:\.stories)?\.[cm]?[jt]sx?$/.test(file);
 }
 
 function isAppSource(file) {
