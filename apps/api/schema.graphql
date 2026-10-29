@@ -455,6 +455,7 @@ type Post implements Node {
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
   replyParent: Post
   repostCount: Int!
+  repostProfiles(after: String, before: String, first: Int, last: Int): ProfileConnection
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
