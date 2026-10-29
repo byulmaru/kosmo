@@ -85,6 +85,7 @@ function unwrap(node) {
     (current.type === 'TSAsExpression' ||
       current.type === 'TSTypeAssertion' ||
       current.type === 'TSNonNullExpression' ||
+      current.type === 'TSSatisfiesExpression' ||
       current.type === 'ChainExpression')
   ) {
     current = current.expression;
@@ -563,9 +564,29 @@ function resolveImportPath(importer, specifier, available) {
   return choices.find((choice) => available.has(choice));
 }
 
-function storyTargets(source, storyPath, available) {
+function siblingMainStoryPath(storyPath, importedPath) {
+  const match = path.posix.basename(storyPath).match(/^(.*)\.tests\.stories(\.[cm]?[jt]sx?)$/);
+  if (!match || path.posix.dirname(storyPath) !== path.posix.dirname(importedPath)) {
+    return undefined;
+  }
+  const expected = `${match[1]}.stories${match[2]}`;
+  return path.posix.basename(importedPath) === expected ? importedPath : undefined;
+}
+
+function storyTargets(source, storyPath, available, readSiblingSource, targetExport, storyCache) {
+  if (targetExport && storyCache?.has(storyPath)) {
+    const cached = storyCache.get(storyPath);
+    const exportInfo = cached.exports.get(targetExport);
+    return {
+      exportExists: Boolean(exportInfo),
+      productionImport: Boolean(exportInfo?.productionImport),
+      targets: new Set(exportInfo?.targets ?? []),
+    };
+  }
   const ast = parseSource(source, storyPath);
   const imports = new Map();
+  const storyImports = [];
+  const localDeclarations = new Map();
   const localWrappers = new Map();
   let productionImport = false;
   for (const statement of ast.body) {
@@ -582,6 +603,14 @@ function storyTargets(source, storyPath, available) {
     for (const specifier of statement.specifiers) {
       if (specifier.local?.name && specifier.importKind !== 'type') {
         imports.set(specifier.local.name, resolved);
+        if (specifier.type === 'ImportDefaultSpecifier' || specifier.type === 'ImportSpecifier') {
+          storyImports.push({
+            imported:
+              specifier.type === 'ImportDefaultSpecifier' ? 'default' : specifier.imported.name,
+            local: specifier.local.name,
+            resolved,
+          });
+        }
       }
     }
   }
@@ -690,6 +719,7 @@ function storyTargets(source, storyPath, available) {
           ? statement.declaration
           : undefined;
     if (functionDeclaration?.id?.name) {
+      localDeclarations.set(functionDeclaration.id.name, functionDeclaration);
       localWrappers.set(functionDeclaration.id.name, collectRenderedNames(functionDeclaration));
     }
     const declaration =
@@ -700,12 +730,41 @@ function storyTargets(source, storyPath, available) {
           ? statement.declaration
           : undefined;
     for (const item of declaration?.declarations ?? []) {
+      if (item.id?.type === 'Identifier') {
+        localDeclarations.set(item.id.name, item.init);
+      }
       if (
         item.id?.type === 'Identifier' &&
         (item.init?.type === 'ArrowFunctionExpression' || item.init?.type === 'FunctionExpression')
       ) {
         localWrappers.set(item.id.name, collectRenderedNames(item.init));
       }
+    }
+  }
+
+  const exportRoots = new Map();
+  for (const statement of ast.body) {
+    if (statement.type === 'ExportDefaultDeclaration') {
+      const declaration = unwrap(statement.declaration);
+      exportRoots.set(
+        'default',
+        declaration?.type === 'Identifier' ? localDeclarations.get(declaration.name) : declaration,
+      );
+      continue;
+    }
+    if (statement.type !== 'ExportNamedDeclaration') {
+      continue;
+    }
+    for (const declaration of statement.declaration?.declarations ?? []) {
+      if (declaration.id?.type === 'Identifier') {
+        exportRoots.set(declaration.id.name, declaration.init);
+      }
+    }
+    if (statement.declaration?.id?.name) {
+      exportRoots.set(statement.declaration.id.name, statement.declaration);
+    }
+    for (const specifier of statement.specifiers ?? []) {
+      exportRoots.set(specifier.exported?.name, localDeclarations.get(specifier.local?.name));
     }
   }
 
@@ -724,20 +783,394 @@ function storyTargets(source, storyPath, available) {
     return [...rendered].flatMap((renderedName) => resolveTarget(renderedName, nextSeen));
   };
 
-  const targets = new Set();
-  walk(ast, (node) => {
-    if (node.type !== 'Property' || propertyName(node) !== 'component') {
-      return;
-    }
-    const value = unwrap(node.value);
+  const resolveValueTargets = (expression) => {
+    const value = unwrap(expression);
     if (value?.type === 'Identifier') {
-      for (const target of resolveTarget(value.name)) {
-        targets.add(target);
+      return resolveTarget(value.name);
+    }
+    if (
+      value?.type === 'ArrowFunctionExpression' ||
+      value?.type === 'FunctionExpression' ||
+      value?.type === 'FunctionDeclaration'
+    ) {
+      return [...collectRenderedNames(value)].flatMap((name) => resolveTarget(name));
+    }
+    return [];
+  };
+
+  const returnedObject = (functionNode) => {
+    const value = unwrap(functionNode);
+    if (value?.type === 'ArrowFunctionExpression' && value.body?.type === 'ObjectExpression') {
+      return value.body;
+    }
+    return value?.body?.type === 'BlockStatement'
+      ? value.body.body.find(
+          (statement) =>
+            statement.type === 'ReturnStatement' &&
+            unwrap(statement.argument)?.type === 'ObjectExpression',
+        )?.argument
+      : undefined;
+  };
+
+  const resolveStoryShape = (expression, seen = new Set()) => {
+    const value = unwrap(expression);
+    if (value?.type === 'Identifier') {
+      if (seen.has(value.name)) {
+        return { unresolved: true };
+      }
+      return resolveStoryShape(localDeclarations.get(value.name), new Set(seen).add(value.name));
+    }
+    if (
+      value?.type === 'ArrowFunctionExpression' ||
+      value?.type === 'FunctionExpression' ||
+      value?.type === 'FunctionDeclaration'
+    ) {
+      return { render: value };
+    }
+    if (value?.type === 'CallExpression' && value.callee?.type === 'Identifier') {
+      return resolveStoryShape(returnedObject(localDeclarations.get(value.callee.name)), seen);
+    }
+    if (value?.type !== 'ObjectExpression') {
+      return { unresolved: true };
+    }
+    const result = { component: undefined, render: undefined, unresolved: false };
+    for (const property of value.properties) {
+      if (property.type === 'SpreadElement') {
+        const nested = resolveStoryShape(property.argument, seen);
+        if (nested.component !== undefined) {
+          result.component = nested.component;
+        }
+        if (nested.render !== undefined) {
+          result.render = nested.render;
+        }
+        result.unresolved ||= nested.unresolved;
+      } else if (property.type === 'Property') {
+        const name = propertyName(property);
+        if (name === 'component' || name === 'render') {
+          result[name] = property.value;
+        }
       }
     }
-  });
-  productionImport = [...targets].some((target) => target.startsWith('apps/app/src/components/'));
-  return { productionImport, targets };
+    return result;
+  };
+
+  const resolveExportTargets = (exportName) => {
+    const story = resolveStoryShape(exportRoots.get(exportName));
+    if (story.unresolved) {
+      return [];
+    }
+    return resolveValueTargets(story.render ?? story.component);
+  };
+
+  const targets = new Set();
+  if (targetExport) {
+    for (const target of resolveExportTargets(targetExport)) {
+      targets.add(target);
+    }
+  } else {
+    walk(ast, (node) => {
+      if (node.type !== 'Property' || propertyName(node) !== 'component') {
+        return;
+      }
+      const value = unwrap(node.value);
+      if (value?.type === 'Identifier') {
+        for (const target of resolveTarget(value.name)) {
+          targets.add(target);
+        }
+      }
+    });
+  }
+  productionImport = [...targets].some(
+    (target) =>
+      target.startsWith('apps/app/src/components/') ||
+      (targetExport && target.startsWith('apps/app/src/app/')),
+  );
+
+  if (!productionImport && readSiblingSource && /\.tests\.stories\.[cm]?[jt]sx?$/.test(storyPath)) {
+    const defaultMetaObjects = [];
+    const defaultExportNames = new Set();
+    for (const statement of ast.body) {
+      if (statement.type !== 'ExportDefaultDeclaration') {
+        continue;
+      }
+      const declaration = unwrap(statement.declaration);
+      if (declaration?.type === 'Identifier') {
+        defaultExportNames.add(declaration.name);
+      } else if (declaration?.type === 'ObjectExpression') {
+        defaultMetaObjects.push(declaration);
+      }
+    }
+    for (const statement of ast.body) {
+      if (statement.type !== 'VariableDeclaration') {
+        continue;
+      }
+      for (const declaration of statement.declarations) {
+        const value = unwrap(declaration.init);
+        if (
+          declaration.id?.type === 'Identifier' &&
+          defaultExportNames.has(declaration.id.name) &&
+          value?.type === 'ObjectExpression'
+        ) {
+          defaultMetaObjects.push(value);
+        }
+      }
+    }
+
+    const defaultMetaImport = storyImports.find(
+      ({ imported, resolved, local }) =>
+        imported === 'default' &&
+        siblingMainStoryPath(storyPath, resolved) &&
+        defaultMetaObjects.some((object) =>
+          object.properties.some(
+            (property) =>
+              property.type === 'SpreadElement' &&
+              unwrap(property.argument)?.type === 'Identifier' &&
+              property.argument.name === local,
+          ),
+        ),
+    );
+    const hasMetaOverride = defaultMetaObjects.some((object) =>
+      object.properties.some(
+        (property) =>
+          property.type === 'Property' &&
+          (propertyName(property) === 'component' || propertyName(property) === 'render'),
+      ),
+    );
+    const hasMetaUnresolvedSpread = defaultMetaObjects.some((object) =>
+      object.properties.some((property) => {
+        if (property.type !== 'SpreadElement') {
+          return false;
+        }
+        const spread = unwrap(property.argument);
+        return spread?.type !== 'Identifier' || spread.name !== defaultMetaImport?.local;
+      }),
+    );
+
+    const siblingImportFor = (local) =>
+      storyImports.find(
+        (item) =>
+          item.local === local &&
+          item.imported !== 'default' &&
+          siblingMainStoryPath(storyPath, item.resolved),
+      );
+    const renderedSiblingImports = (name, seen = new Set()) => {
+      if (seen.has(name)) {
+        return [];
+      }
+      const imported = siblingImportFor(name);
+      if (imported) {
+        return [imported];
+      }
+      const rendered = localWrappers.get(name);
+      if (!rendered) {
+        return [];
+      }
+      const nextSeen = new Set(seen).add(name);
+      return [...rendered].flatMap((renderedName) =>
+        renderedSiblingImports(renderedName, nextSeen),
+      );
+    };
+    const renderedValueSiblingImports = (value) => {
+      const expression = unwrap(value);
+      if (expression?.type === 'Identifier') {
+        return renderedSiblingImports(expression.name);
+      }
+      if (
+        expression?.type === 'ArrowFunctionExpression' ||
+        expression?.type === 'FunctionExpression'
+      ) {
+        return [...collectRenderedNames(expression)].flatMap((name) =>
+          renderedSiblingImports(name),
+        );
+      }
+      return [];
+    };
+    const resolveTestsStoryShape = (expression, seen = new Set()) => {
+      const value = unwrap(expression);
+      if (value?.type === 'Identifier') {
+        const imported = siblingImportFor(value.name);
+        if (imported) {
+          const reference = { kind: 'import', imported };
+          return { component: reference, render: reference, unresolved: false };
+        }
+        if (seen.has(value.name)) {
+          return { unresolved: true };
+        }
+        const local = localDeclarations.get(value.name);
+        return local === undefined
+          ? { unresolved: true }
+          : resolveTestsStoryShape(local, new Set(seen).add(value.name));
+      }
+      if (value?.type !== 'ObjectExpression') {
+        return { unresolved: true };
+      }
+      const result = { component: undefined, render: undefined, unresolved: false };
+      for (const property of value.properties) {
+        if (property.type === 'SpreadElement') {
+          const nested = resolveTestsStoryShape(property.argument, seen);
+          if (nested.component !== undefined) {
+            result.component = nested.component;
+          }
+          if (nested.render !== undefined) {
+            result.render = nested.render;
+          }
+          result.unresolved ||= nested.unresolved;
+          continue;
+        }
+        if (property.type !== 'Property') {
+          result.unresolved = true;
+          continue;
+        }
+        const name = propertyName(property);
+        if (name === 'component' || name === 'render') {
+          result[name] = { kind: 'render', value: property.value };
+        }
+      }
+      return result;
+    };
+    const exportedStoryRoots = [];
+    const addExportedStoryRoot = (expression) => {
+      const story = resolveTestsStoryShape(expression);
+      if (story.unresolved) {
+        exportedStoryRoots.push({ kind: 'unresolved' });
+        return;
+      }
+      const effective = story.render ?? story.component;
+      if (!effective) {
+        exportedStoryRoots.push({ kind: 'inherited' });
+      } else if (effective.kind === 'import') {
+        exportedStoryRoots.push(effective);
+      } else if (effective.kind === 'render') {
+        exportedStoryRoots.push({
+          imports: renderedValueSiblingImports(effective.value),
+          kind: 'render',
+        });
+      } else {
+        exportedStoryRoots.push({ kind: 'unresolved' });
+      }
+    };
+    for (const statement of ast.body) {
+      if (statement.type !== 'ExportNamedDeclaration') {
+        continue;
+      }
+      if (statement.declaration?.type === 'VariableDeclaration') {
+        for (const declaration of statement.declaration.declarations) {
+          addExportedStoryRoot(declaration.init);
+        }
+      } else if (statement.declaration?.type === 'FunctionDeclaration') {
+        addExportedStoryRoot(statement.declaration);
+      }
+      for (const specifier of statement.specifiers ?? []) {
+        if (specifier.exportKind === 'type') {
+          continue;
+        }
+        addExportedStoryRoot(localDeclarations.get(specifier.local?.name));
+      }
+    }
+    const usedSiblingImports = new Set([
+      ...(defaultMetaImport ? [defaultMetaImport] : []),
+      ...exportedStoryRoots.flatMap((root) =>
+        root.kind === 'import' ? [root.imported] : root.kind === 'render' ? root.imports : [],
+      ),
+    ]);
+    const siblingImports = defaultMetaImport && !hasMetaOverride ? usedSiblingImports : new Set();
+    const siblingSources = new Map();
+    const siblingChecks = new Map();
+    const siblingStoryCache = new Map();
+    const productionSiblingImports = new Set();
+    for (const { imported, resolved } of siblingImports) {
+      const key = `${resolved}:${imported}`;
+      let check = siblingChecks.get(key);
+      if (check === undefined) {
+        let sibling = siblingSources.get(resolved);
+        if (sibling === undefined) {
+          const siblingSource = readSiblingSource(resolved);
+          if (siblingSource === undefined) {
+            continue;
+          }
+          sibling = { source: siblingSource };
+          siblingSources.set(resolved, sibling);
+        }
+        const info = storyTargets(
+          sibling.source,
+          resolved,
+          available,
+          undefined,
+          imported,
+          siblingStoryCache,
+        );
+        check = { exists: info.exportExists, production: info.productionImport };
+        siblingChecks.set(key, check);
+      }
+      if (check.exists && check.production) {
+        productionSiblingImports.add(imported);
+      }
+    }
+    const allRootsBacked = exportedStoryRoots.every(
+      (root) =>
+        root.kind === 'inherited' ||
+        (root.kind === 'import' && productionSiblingImports.has(root.imported.imported)) ||
+        (root.kind === 'render' &&
+          root.imports.length > 0 &&
+          root.imports.every((item) => productionSiblingImports.has(item.imported))),
+    );
+    if (
+      defaultMetaImport &&
+      !hasMetaOverride &&
+      !hasMetaUnresolvedSpread &&
+      allRootsBacked &&
+      productionSiblingImports.size > 0
+    ) {
+      const check = siblingChecks.get(`${defaultMetaImport.resolved}:default`);
+      productionImport = Boolean(check?.exists && check.production);
+    } else if (
+      defaultMetaImport &&
+      !hasMetaOverride &&
+      !hasMetaUnresolvedSpread &&
+      allRootsBacked &&
+      exportedStoryRoots.every((root) => root.kind === 'inherited')
+    ) {
+      const key = `${defaultMetaImport.resolved}:default`;
+      let check = siblingChecks.get(key);
+      if (check === undefined) {
+        const siblingSource = readSiblingSource(defaultMetaImport.resolved);
+        if (siblingSource === undefined) {
+          check = { exists: false, production: false };
+        } else {
+          const info = storyTargets(
+            siblingSource,
+            defaultMetaImport.resolved,
+            available,
+            undefined,
+            'default',
+          );
+          check = { exists: info.exportExists, production: info.productionImport };
+        }
+        siblingChecks.set(key, check);
+      }
+      productionImport = Boolean(check.exists && check.production);
+    }
+  }
+  if (storyCache && targetExport) {
+    const exports = new Map();
+    for (const [name, root] of exportRoots) {
+      const story = resolveStoryShape(root);
+      const targets = story.unresolved ? [] : resolveValueTargets(story.render ?? story.component);
+      exports.set(name, {
+        productionImport: targets.some(
+          (target) =>
+            target.startsWith('apps/app/src/components/') || target.startsWith('apps/app/src/app/'),
+        ),
+        targets,
+      });
+    }
+    storyCache.set(storyPath, { exports });
+  }
+  return {
+    exportExists: targetExport ? exportRoots.has(targetExport) : undefined,
+    productionImport,
+    targets,
+  };
 }
 
 function buildCatalog(cwd, ref) {
@@ -1324,7 +1757,11 @@ function classifyPullRequest({ base, head, cwd = REPOSITORY_ROOT, bootstrap = fa
       const source = headSource ?? readAtRef(cwd, analysisBase, file);
       const available = headSource !== undefined ? headCatalog.available : baseCatalog.available;
       try {
-        const info = source ? storyTargets(source, file, available) : undefined;
+        const info = source
+          ? storyTargets(source, file, available, (sibling) =>
+              readAtRef(cwd, headSource !== undefined ? head : analysisBase, sibling),
+            )
+          : undefined;
         if (!info?.productionImport) {
           errors.push(
             `${file}: changed component/pattern story has no production component import.`,

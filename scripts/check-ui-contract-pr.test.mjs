@@ -524,6 +524,230 @@ describe('check-ui-contract-pr', () => {
     assert.ok(result.errors.some((error) => error.includes('no production component import')));
   });
 
+  it('allows a Tests story that reuses a sibling production meta and wrapper', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nexport function FeatureCatalog() { return <Feature />; }\nconst baseMeta = { component: FeatureCatalog } satisfies Meta;\nexport const Existing = { render: () => <FeatureCatalog /> };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { FeatureCatalog } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nconst TestsSurface = () => <FeatureCatalog />;\nexport const Interaction = { render: () => <TestsSurface />, play: async () => {} };\n",
+    );
+    commit(root, 'add production-backed tests story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, []);
+  });
+
+  it('allows a Tests story that reuses a sibling render with an args-only spread', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nexport function FeatureCatalog() { return <Feature />; }\nconst baseMeta = { component: FeatureCatalog };\nexport const Existing = { render: () => <FeatureCatalog /> };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { Existing as existingStory, Unknown as fixture } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nconst argsOnlyStory = { args: { fixture } };\nexport const Interaction = { ...existingStory, ...argsOnlyStory, play: async () => {} };\n",
+    );
+    commit(root, 'add aliased story interaction');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, []);
+  });
+
+  it('allows an inherited production meta with a play-only story', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature } satisfies Meta;\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { play: async () => {} };\n",
+    );
+    commit(root, 'add inherited meta interaction');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, []);
+  });
+
+  it('rejects Tests meta reuse without a production-backed sibling story', async () => {
+    const root = await createRepository({
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        'const baseMeta = { component: () => <div /> };\nexport default baseMeta;\n',
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { play: async () => {} };\n",
+    );
+    commit(root, 'add unsupported tests story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects an unused sibling meta import in a Tests story', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst meta = { title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { play: async () => {} };\n",
+    );
+    commit(root, 'add unsupported tests story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects a Tests meta that overrides the reused production component', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst Fake = () => <span />;\nconst meta = { ...baseMeta, component: Fake, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { play: async () => {} };\n",
+    );
+    commit(root, 'add unsupported tests override');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects a Tests story whose render overrides reused meta with a local fixture', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nexport function FeatureCatalog() { return <Feature />; }\nconst baseMeta = { component: FeatureCatalog } satisfies Meta;\nexport const Existing = { render: () => <FeatureCatalog /> };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { Existing as existingStory } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const ValidInteraction = { ...existingStory, play: async () => {} };\nexport const InvalidInteraction = { render: () => <span />, play: async () => {} };\n",
+    );
+    commit(root, 'reject local render override');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects a Tests meta render override over reused production meta', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature } satisfies Meta;\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst meta = { ...baseMeta, render: () => <span />, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { play: async () => {} };\n",
+    );
+    commit(root, 'reject meta render override');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('allows a play-only Tests story with an unused production wrapper', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nexport function FeatureCatalog() { return <Feature />; }\nconst baseMeta = { component: FeatureCatalog } satisfies Meta;\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { FeatureCatalog } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nconst UnusedSurface = () => <FeatureCatalog />;\nexport const Interaction = { play: async () => { void UnusedSurface; } };\n",
+    );
+    commit(root, 'allow unused production wrapper');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, []);
+  });
+
+  it('allows sibling fixture data when inherited production meta renders', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature } satisfies Meta;\nexport const fixture = { id: 'feature' };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { fixture } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { args: { fixture }, play: async () => {} };\n",
+    );
+    commit(root, 'allow fixture-only story');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.categories, []);
+  });
+
+  it('rejects a Tests story whose render uses an unknown sibling export', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { Unknown as Missing } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { render: () => <Missing />, play: async () => {} };\n",
+    );
+    commit(root, 'reject unknown render export');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects a Tests story when render precedes a component override', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nexport function FeatureCatalog() { return <Feature />; }\nconst baseMeta = { component: FeatureCatalog };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta, { FeatureCatalog } from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Interaction = { render: () => <span />, component: FeatureCatalog, play: async () => { void FeatureCatalog; } };\n",
+    );
+    commit(root, 'reject render precedence override');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
+  it('rejects an exported function story without a production render', async () => {
+    const root = await createRepository({
+      'apps/app/src/components/post/Feature.tsx':
+        'export const Feature = () => <div data-testid="feature" />;\n',
+      'apps/app/src/stories/patterns/Feature.stories.tsx':
+        "import { Feature } from '@/components/post/Feature';\nconst baseMeta = { component: Feature };\nexport default baseMeta;\n",
+    });
+    await writeRepositoryFile(
+      root,
+      'apps/app/src/stories/patterns/Feature.tests.stories.tsx',
+      "import baseMeta from './Feature.stories';\nconst meta = { ...baseMeta, title: 'KOSMO/Patterns/Feature/Tests' };\nexport default meta;\nexport const Copy = () => <span />;\n",
+    );
+    commit(root, 'reject function story export');
+    const result = checkPullRequest({ ...refs(root), bootstrap: true, cwd: root });
+    assert.ok(result.errors.some((error) => error.includes('no production component import')));
+  });
+
   it('allows a dedicated policy-only change once the base checker exists', async () => {
     const root = await createRepository({
       [CHECKER_PATH]: 'export {};\n',

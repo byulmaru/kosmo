@@ -67,6 +67,8 @@ owner 판단은 `components/ui/**`와 실제 Production component를 import하�
 
 custom icon admission은 일반 enforcement-policy 완화와 구분한다. `eslint.config.mjs`의 top-level `svgOwnerFiles` literal array에 기존 entry를 그대로 두고 exact `apps/app/src/components/*` source path를 추가하는 경우만 후보가 되며, 다른 rule/config token 변경·glob·중복·traversal·runtime 혼합·catalog/story 누락은 거부한다. story와 source 관계는 현재 direct import와 bounded one-hop만 해석하고 임의의 re-export/whole-program dependency graph는 지원하지 않는다.
 
+`*.tests.stories.*` component·pattern story는 같은 디렉터리의 sibling `*.stories.*`에서 value로 가져온 default meta와 named story를 최대 한 단계 재사용할 수 있다. checker는 default meta spread와 실제 exported story의 유효한 `render`·`component`·story spread 경로, 또는 별도 render 없는 inherited meta story가 production UI로 이어지는지 확인하며, 명시적 override·unused/unknown export·해결되지 않은 spread·순환·sibling의 임의 constant는 근거로 인정하지 않는다. 이 보조 검증 경로는 객체형 Tests story만 지원하고 새 UI owner 등록 근거로 사용하지 않는다. 함수형 Tests story·barrel·re-export·whole-program traversal은 지원하지 않는다.
+
 merge queue에서는 webhook의 immutable event head/base와 exact queue entry를 사용한다. GraphQL queue 응답은 exact event head를 찾을 때까지 page를 따라가며, 누락·오류·unknown head·필요한 SHA fetch 실패·local ancestry 검증 실패는 fail closed한다. 선택된 queue entry와 PR의 base/head를 개별적으로 검증하며 moving branch tip이나 전체 repository history query를 성공 근거로 삼지 않는다. 이 CLI와 workflow는 read-only 검사 경계이며, 원격 ruleset을 변경하지 않는다.
 
 ## 검토 증거와 남은 한계
