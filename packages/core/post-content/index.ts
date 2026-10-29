@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeCustomEmojiUrl } from './schema/marks/custom-emoji';
 
 export const postContentSchemaVersion = 1 as const;
 export const postContentMentionMaxOccurrences = 16;
@@ -15,10 +16,19 @@ export interface PostContentLinkMark {
   };
 }
 
+export interface PostContentCustomEmojiMark {
+  readonly type: 'custom_emoji';
+  readonly attrs: {
+    readonly url: string;
+  };
+}
+
+export type PostContentTextMark = PostContentLinkMark | PostContentCustomEmojiMark;
+
 export interface PostContentTextNode {
   readonly type: 'text';
   readonly text: string;
-  readonly marks?: readonly PostContentLinkMark[];
+  readonly marks?: readonly PostContentTextMark[];
 }
 
 export interface PostContentHardBreakNode {
@@ -383,11 +393,17 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
     return true;
   }
 
-  if (!Array.isArray(value.marks) || !value.marks.every(isLinkMark)) {
+  if (!Array.isArray(value.marks) || !value.marks.every(isPostContentTextMark)) {
     return false;
   }
-  const hrefs = new Set(value.marks.map((mark) => new URL(mark.attrs.href).href));
+  const hrefs = new Set(
+    value.marks.filter(isLinkMark).map((mark) => new URL(mark.attrs.href).href),
+  );
   return hrefs.size <= 1;
+}
+
+function isPostContentTextMark(value: unknown): value is PostContentTextMark {
+  return isLinkMark(value) || isCustomEmojiMark(value);
 }
 
 function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'] {
@@ -422,6 +438,22 @@ function isLinkMark(value: unknown): value is PostContentLinkMark {
   try {
     const url = new URL(value.attrs.href);
     return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isCustomEmojiMark(value: unknown): value is PostContentCustomEmojiMark {
+  if (!isRecordWithKeys(value, ['type', 'attrs']) || value.type !== 'custom_emoji') {
+    return false;
+  }
+  if (!isRecordWithKeys(value.attrs, ['url']) || typeof value.attrs.url !== 'string') {
+    return false;
+  }
+
+  try {
+    normalizeCustomEmojiUrl(value.attrs.url);
+    return true;
   } catch {
     return false;
   }

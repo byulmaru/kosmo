@@ -935,6 +935,75 @@ test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', 
   );
 });
 
+test('canonicalizes Custom Emoji marks while preserving linked shortcode text', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: ':party:',
+              marks: [
+                { type: 'link', attrs: { href: 'https://example.com' } },
+                { type: 'custom_emoji', attrs: { url: 'https://emoji.example/party.png' } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      {
+        type: 'text',
+        text: ':party:',
+        marks: [
+          { type: 'custom_emoji', attrs: { url: 'https://emoji.example/party.png' } },
+          { type: 'link', attrs: { href: 'https://example.com/' } },
+        ],
+      },
+    ],
+  });
+  assert.equal(isPostContentDocumentV1(document), true);
+  assert.deepEqual(readPostContentDocumentV1(document), document);
+  assert.equal(postContentDocumentToText(document), ':party:');
+
+  for (const url of [
+    'http://emoji.example/party.png',
+    'https://user:pass@emoji.example/p.png',
+    'not-a-url',
+  ]) {
+    assert.throws(() =>
+      canonicalizePostContentDocument({
+        ...document,
+        body: {
+          ...document.body,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: ':party:',
+                  marks: [{ type: 'custom_emoji', attrs: { url } }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  }
+});
+
 test('canonicalizes line endings inside document text nodes to hard breaks', () => {
   assert.deepEqual(
     canonicalizePostContentDocument({
@@ -947,6 +1016,46 @@ test('canonicalizes line endings inside document text nodes to hard breaks', () 
     }),
     postContentDocumentFromText('a\nb\nc\nd'),
   );
+});
+
+test('preserves adjacent repeated Custom Emoji shortcode text through canonical roundtrip', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: ':cat:',
+              marks: [{ type: 'custom_emoji', attrs: { url: 'https://emoji.example/cat.png' } }],
+            },
+            {
+              type: 'text',
+              text: ':cat:',
+              marks: [{ type: 'custom_emoji', attrs: { url: 'https://emoji.example/cat.png' } }],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      {
+        type: 'text',
+        text: ':cat::cat:',
+        marks: [{ type: 'custom_emoji', attrs: { url: 'https://emoji.example/cat.png' } }],
+      },
+    ],
+  });
+  assert.deepEqual(readPostContentDocumentV1(document), document);
+  assert.equal(postContentDocumentToText(document), ':cat::cat:');
 });
 
 test('projects paragraph boundaries, hard breaks and link labels to Plain Text', () => {

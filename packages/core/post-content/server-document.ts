@@ -12,6 +12,7 @@ import {
   postContentSchemaVersion,
 } from './index';
 import { postContentSchema } from './schema';
+import { normalizeCustomEmojiUrl } from './schema/marks/custom-emoji';
 import { normalizeLinkHref } from './schema/marks/link';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
@@ -287,7 +288,7 @@ function assertPostContentJsonKeys(value: unknown): void {
         }
         assertOnlyKeys(mark, ['type', 'attrs']);
         if (isRecord(mark.attrs)) {
-          assertOnlyKeys(mark.attrs, ['href']);
+          assertOnlyKeys(mark.attrs, mark.type === 'custom_emoji' ? ['url'] : ['href']);
         }
       }
     }
@@ -332,19 +333,26 @@ function canonicalizeDuplicateLinkMarks(value: unknown): unknown {
     return value;
   }
 
-  const hrefs = new Set(
-    value.marks.map((mark) => {
-      const parsed = postContentSchema.markFromJSON(mark);
-      return normalizeLinkHref(parsed.attrs.href);
-    }),
+  const parsedMarks = value.marks.map((mark) => postContentSchema.markFromJSON(mark));
+  const linkMarks = parsedMarks.filter((mark) => mark.type === postContentSchema.marks.link);
+  const customEmojiMarks = parsedMarks.filter(
+    (mark) => mark.type === postContentSchema.marks.custom_emoji,
   );
+  const hrefs = new Set(linkMarks.map((mark) => normalizeLinkHref(mark.attrs.href)));
   if (hrefs.size > 1) {
     throw new TypeError('Text cannot contain different nested links');
   }
   const href = hrefs.values().next().value;
   return {
     ...value,
-    marks: href ? [postContentSchema.marks.link.create({ href }).toJSON()] : [],
+    marks: [
+      ...(href ? [postContentSchema.marks.link.create({ href }).toJSON()] : []),
+      ...customEmojiMarks.map((mark) =>
+        postContentSchema.marks.custom_emoji
+          .create({ url: normalizeCustomEmojiUrl(mark.attrs.url) })
+          .toJSON(),
+      ),
+    ],
   };
 }
 

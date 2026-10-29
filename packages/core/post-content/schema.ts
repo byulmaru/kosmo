@@ -1,4 +1,5 @@
 import { Schema } from 'prosemirror-model';
+import { customEmojiMarkSpec } from './schema/marks/custom-emoji';
 import { linkMarkSpec } from './schema/marks/link';
 import { docNodeSpec } from './schema/nodes/doc';
 import { hardBreakNodeSpec } from './schema/nodes/hard-break';
@@ -19,6 +20,7 @@ const nodes = {
 };
 
 const marks = {
+  custom_emoji: customEmojiMarkSpec,
   link: linkMarkSpec,
 };
 
