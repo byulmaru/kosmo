@@ -986,7 +986,9 @@ describe('Post Reply GraphQL 경계', () => {
     const mentionedProfile = await createProfile('mentioned-profile');
     const media = await createReadyMedia(auth.account.id, auth.profile.id);
     const projectedDocument = projectRemoteNoteContent({
-      content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
+      content:
+        '<p>앞쪽 :nyan: <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
+      emojis: [{ shortcode: ':nyan:', url: 'https://emoji.example/nyan.webp' }],
       mentions: [
         {
           profileId: mentionedProfile.id,
@@ -1000,7 +1002,7 @@ describe('Post Reply GraphQL 경계', () => {
       ...projectedDocument,
       body: {
         ...projectedDocument.body,
-        attrs: { sensitiveMedia: true },
+        attrs: { ...projectedDocument.body.attrs, sensitiveMedia: true },
         content: [
           ...projectedDocument.body.content,
           { attrs: { mediaId: media.id }, type: 'media' },
@@ -1026,11 +1028,14 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(result);
     const content = result.data?.node?.content;
     assert.ok(content);
-    assert.equal(content.bodyText, '앞쪽 @알 수 없는 사용자 뒤쪽');
+    assert.equal(content.bodyText, '앞쪽 :nyan: @알 수 없는 사용자 뒤쪽');
     assert.equal(content.contentWarning, '통합 검증 경고');
     const returnedDocument = content.document as {
       body: {
-        attrs?: { sensitiveMedia?: boolean };
+        attrs?: {
+          customEmojis?: Array<{ shortcode: string; url: string }>;
+          sensitiveMedia?: boolean;
+        };
         content: Array<{
           attrs?: { mediaId?: string };
           content?: Array<{
@@ -1047,6 +1052,9 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(returnedDocument.version, 1);
     assert.equal(returnedDocument.summary, '통합 검증 경고');
     assert.equal(returnedDocument.body.attrs?.sensitiveMedia, true);
+    assert.deepEqual(returnedDocument.body.attrs?.customEmojis, [
+      { shortcode: ':nyan:', url: 'https://emoji.example/nyan.webp' },
+    ]);
     assert.equal(returnedDocument.body.content[0]?.content?.[1]?.type, 'mention');
     assert.deepEqual(returnedDocument.body.content[0]?.content?.[1]?.attrs, {
       profileId: encodeGlobalId('Profile', mentionedProfile.id),

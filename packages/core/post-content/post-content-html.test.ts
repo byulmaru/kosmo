@@ -112,6 +112,28 @@ test('serializes Hashtag tokens as escaped, non-link inline text', () => {
   );
 });
 
+test('serializes Custom Emoji metadata as escaped shortcode text without an image URL', () => {
+  assert.equal(
+    postContentDocumentToHtml({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        attrs: {
+          customEmojis: [{ shortcode: ':party:', url: 'https://emoji.example/party.png' }],
+        },
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: '<:party:>' }],
+          },
+        ],
+      },
+    }),
+    '<p>&lt;:party:&gt;</p>',
+  );
+});
+
 test('serializes resolved Mentions as escaped links and keeps fallback for unmapped targets', () => {
   const mappedProfileId = '019f6678-86fa-709b-984e-1520766b8441';
   const unmappedProfileId = '019f6678-86fa-709b-984e-1520766b8442';

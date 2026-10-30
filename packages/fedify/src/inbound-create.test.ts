@@ -13,6 +13,7 @@ import {
   Create,
   CryptographicKey,
   Document,
+  Emoji,
   Hashtag,
   Image,
   LanguageString,
@@ -307,6 +308,81 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.visibility, 'UNLISTED');
     assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
+  });
+
+  // Source-derived synthetic fixture, based on Mastodon's ActivityPub Emoji contract and
+  // Misskey's MFM shortcode boundary: https://github.com/mastodon/documentation/blob/main/content/en/spec/activitypub.md#emoji
+  // and https://github.com/misskey-dev/misskey/blob/develop/packages/backend/src/core/MfmService.ts.
+  test('materializes embedded remote Custom Emoji without dereferencing icon or unrelated tag URLs', async () => {
+    await createStoredRemoteActor();
+    const objectUri = new URL('https://remote.example/notes/emoji');
+    const emojiUrl = new URL('https://misskey.example/files/nyan.webp');
+    const documentLoads: string[] = [];
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        '<p>Hi \u200B:nyan:\u200B <a href="https://example.com/:nyan:">:nyan:</a> ' +
+        ':nyan::nyan:</p>',
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Emoji({
+          name: ':nyan:',
+          icon: new Image({
+            id: new URL('https://misskey.example/files/nyan-metadata'),
+            mediaType: 'image/webp',
+            url: emojiUrl,
+          }),
+        }),
+        new Emoji({ name: ':remote:', icon: emojiUrl }),
+        new URL('https://remote.example/tags/not-loaded'),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Remote Custom Emoji must not fetch image bytes');
+    });
+    try {
+      await handleInboundCreate(
+        createContext(async (url) => {
+          documentLoads.push(url);
+          throw new Error(`Remote Custom Emoji must not load ${url}`);
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(documentLoads, []);
+    assert.equal(fetchMock.mock.callCount(), 0);
+    assert.deepEqual(content.document.body, {
+      type: 'doc',
+      attrs: {
+        customEmojis: [{ shortcode: ':nyan:', url: emojiUrl.href }],
+      },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hi \u200B:nyan:\u200B ' },
+            {
+              type: 'text',
+              text: ':nyan:',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/:nyan:' } }],
+            },
+            { type: 'text', text: ' :nyan::nyan:' },
+          ],
+        },
+      ],
+    });
+    assert.equal(
+      postContentDocumentToText(content.document),
+      'Hi \u200B:nyan:\u200B :nyan: :nyan::nyan:',
+    );
   });
 
   test('uses a refreshed Profile URL alias for new Notes without changing older Content', async () => {
