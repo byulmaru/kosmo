@@ -139,6 +139,11 @@ mockModule('relay-runtime', {
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/components/ui/Banner', { Banner: MockBanner });
+mockModule('@/components/post/PostRequestList', {
+  PostRequestHomeSummaryFallback: () => null,
+  PostRequestHomeSummaryLoading: () => null,
+  PostRequestListSummary: () => null,
+});
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });

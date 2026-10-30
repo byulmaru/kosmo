@@ -50,6 +50,11 @@ mockModule('@/components/PageHeader', {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
 mockModule('@/components/post/PostList', { PostList: () => null });
+mockModule('@/components/post/PostRequestList', {
+  PostRequestHomeSummaryFallback: () => null,
+  PostRequestHomeSummaryLoading: () => null,
+  PostRequestListSummary: () => null,
+});
 mockModule('@/components/RelayFailOpenBoundary', {
   RelayFailOpenBoundary: ({ children }: { children: ReactNode }) => children,
 });

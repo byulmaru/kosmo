@@ -316,7 +316,20 @@ test('불확실한 접수의 닫기 확인은 같은 요청을 재확인하거�
         mode: 'reply',
         onRequestClose: () => closeCount++,
         open: true,
-        parent: { id: 'post-1' } as never,
+        parent: {
+          content: { bodyText: 'Parent body', contentWarning: null, mentionedProfiles: [] },
+          createdAt: '2026-10-08T00:00:00.000Z',
+          id: 'post-1',
+          visibility: 'PUBLIC',
+          profile: {
+            avatar: null,
+            displayName: 'Parent',
+            handle: 'parent',
+            id: 'profile-parent',
+            relativeHandle: '@parent',
+          },
+          repostSource: null,
+        } as never,
         profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
       }),
     );

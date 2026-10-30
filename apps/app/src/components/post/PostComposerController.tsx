@@ -795,10 +795,14 @@ function PostComposerContents({
             ? '인용 게시글 작성'
             : '게시글 작성'
       }
+      accessibilityElementsHidden={pendingSubmission ? true : undefined}
+      aria-hidden={pendingSubmission ? true : undefined}
       onSubmit={() => submit()}
+      pointerEvents={pendingSubmission ? 'none' : undefined}
       style={[
         presentation !== undefined ? styles.productionForm : styles.standaloneForm,
         (resolvedPresentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
+        pendingSubmission && styles.hiddenPresentation,
       ]}
       submitOnModEnter
     >
@@ -1024,20 +1028,11 @@ function PostComposerContents({
       </View>
     </Form>
   ) : null;
-  const visibleForm = pendingSubmission ? (
+  const visibleForm = (
     <>
-      <View
-        accessibilityElementsHidden
-        aria-hidden
-        pointerEvents="none"
-        style={styles.hiddenPresentation}
-      >
-        {form}
-      </View>
+      {form}
       {requestRecoveryForm}
     </>
-  ) : (
-    form
   );
 
   return renderSurface
