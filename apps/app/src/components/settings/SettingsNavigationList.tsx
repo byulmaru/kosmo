@@ -175,7 +175,7 @@ function NativeNotificationSettingsAction() {
 function WebNotificationSettingsAction() {
   const theme = useTheme();
   const { showToast } = useToast();
-  const { permission, support, syncPermission } = useWebPushPermission();
+  const { permission, support, requestPermission } = useWebPushPermission();
   const [pending, setPending] = useState(false);
 
   if (support === 'checking') {
@@ -204,9 +204,9 @@ function WebNotificationSettingsAction() {
       return;
     }
 
-    let permissionRequest: Promise<NotificationPermission>;
+    let permissionRequest: Promise<void>;
     try {
-      permissionRequest = Notification.requestPermission();
+      permissionRequest = requestPermission();
     } catch {
       showToast('브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.', {
         tone: 'danger',
@@ -216,7 +216,6 @@ function WebNotificationSettingsAction() {
 
     setPending(true);
     void permissionRequest
-      .then(syncPermission)
       .catch(() => {
         showToast('브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.', {
           tone: 'danger',

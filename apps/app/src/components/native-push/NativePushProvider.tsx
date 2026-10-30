@@ -316,8 +316,13 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     [unregisterInstallation],
   );
 
+  const requestPermission = useCallback(
+    () => Notification.requestPermission().then(syncPermission),
+    [syncPermission],
+  );
+
   return (
-    <WebPushPermissionContext.Provider value={{ permission, support, syncPermission }}>
+    <WebPushPermissionContext.Provider value={{ permission, support, requestPermission }}>
       {children}
     </WebPushPermissionContext.Provider>
   );

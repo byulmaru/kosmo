@@ -32,12 +32,13 @@ let supportState: WebPushSupport = 'checking';
 let webPushConfigAvailable = true;
 let supportAvailable = true;
 let updateFails = false;
+let firebaseRegistrationFails = false;
 let installationId: string | null = null;
 let nextInstallationId = 'installation-1';
 let registeredListener: ((fid: string) => void) | null = null;
 let messageListener: ((payload: { data?: Record<string, string> }) => void) | null = null;
 let renderer: ReactTestRenderer | null = null;
-let permissionAction: ((permission: Permission) => Promise<void>) | null = null;
+let permissionAction: (() => Promise<void>) | null = null;
 let notificationPermissionRequestCalls = 0;
 let navigatorStandalone: boolean | undefined;
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
@@ -152,6 +153,9 @@ mock.module('firebase/messaging', {
     },
     register: async (_messaging: unknown, options: Record<string, unknown>) => {
       eventOrder.push('register');
+      if (firebaseRegistrationFails) {
+        throw new Error('Firebase registration failed');
+      }
       registerOptions = options;
     },
     unregister: async () => {
@@ -179,6 +183,7 @@ afterEach(async () => {
   webPushConfigAvailable = true;
   supportAvailable = true;
   updateFails = false;
+  firebaseRegistrationFails = false;
   installationId = null;
   nextInstallationId = 'installation-1';
   registeredListener = null;
@@ -227,7 +232,9 @@ describe('Web Push provider', () => {
 
     await act(async () => {
       permission = 'granted';
-      await permissionAction?.('granted');
+      const request = permissionAction?.();
+      assert.equal(notificationPermissionRequestCalls, 1);
+      await request;
       await flushMicrotasks();
     });
 
@@ -243,7 +250,7 @@ describe('Web Push provider', () => {
     const initialRegisterCount = eventOrder.filter((event) => event === 'register').length;
     await act(async () => {
       if (permissionAction) {
-        await permissionAction('granted');
+        await permissionAction();
       }
       await flushMicrotasks();
     });
@@ -252,6 +259,25 @@ describe('Web Push provider', () => {
       eventOrder.filter((event) => event === 'register').length,
       initialRegisterCount + 1,
     );
+  });
+
+  it('rejects and retries when Firebase registration fails after a permission result', async () => {
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+    firebaseRegistrationFails = true;
+    permission = 'granted';
+
+    const requestPermission = permissionAction;
+    assert.ok(requestPermission);
+    await act(async () => {
+      await assert.rejects(requestPermission(), /Firebase registration failed/);
+    });
+    assert.equal(eventOrder.filter((event) => event === 'register').length, 1);
+
+    firebaseRegistrationFails = false;
+    await act(async () => requestPermission());
+    assert.equal(eventOrder.filter((event) => event === 'register').length, 2);
   });
 
   it('registers after attaching the FID observer and stores the server-issued row ID', async () => {
@@ -583,7 +609,7 @@ async function flushMicrotasks() {
 
 function PermissionActionCapture() {
   const value = useWebPushPermission();
-  permissionAction = value.syncPermission;
+  permissionAction = value.requestPermission;
   supportState = value.support;
   return null;
 }

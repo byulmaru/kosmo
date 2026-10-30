@@ -1,33 +1,50 @@
 import { X } from 'lucide-react-native';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { readBannerDismissal, writeBannerDismissal } from '@/lib/bannerDismissalStorage';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 export type BannerProps = {
   action?: ReactNode;
+  dismissalKey?: string;
   dismissDisabled?: boolean;
   icon?: LucideIcon;
   message: string;
-  onDismiss?: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function Banner({
+export function Banner(props: BannerProps) {
+  return <BannerContent key={props.dismissalKey} {...props} />;
+}
+
+function BannerContent({
   action,
+  dismissalKey,
   dismissDisabled = false,
   icon: Icon,
   message,
-  onDismiss,
+  style,
 }: BannerProps) {
+  const [dismissed, setDismissed] = useState(
+    () => dismissalKey !== undefined && readBannerDismissal(dismissalKey),
+  );
   const theme = useTheme();
+
+  if (dismissed) {
+    return null;
+  }
 
   return (
     <View
       style={[
         styles.root,
         { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
+        style,
       ]}
     >
       {Icon ? (
@@ -43,11 +60,14 @@ export function Banner({
       ) : null}
       <Text style={[styles.message, { color: theme.foregroundPrimary }]}>{message}</Text>
       {action != null ? <View style={styles.action}>{action}</View> : null}
-      {onDismiss ? (
+      {dismissalKey !== undefined ? (
         <IconButton
           accessibilityLabel="배너 닫기"
           disabled={dismissDisabled}
-          onPress={onDismiss}
+          onPress={() => {
+            setDismissed(true);
+            writeBannerDismissal(dismissalKey);
+          }}
           style={styles.dismiss}
         >
           <X color={theme.foregroundSecondary} size={18} strokeWidth={2} />

@@ -10,7 +10,7 @@ export type WebPushSupport =
 export type WebPushPermissionContextValue = {
   permission: NotificationPermission;
   support: WebPushSupport;
-  syncPermission: (permission: NotificationPermission) => Promise<void>;
+  requestPermission: () => Promise<void>;
 };
 
 export const WebPushPermissionContext = createContext<WebPushPermissionContextValue | null>(null);

@@ -6,7 +6,7 @@ Banner는 화면 안에 계속 보이는 중립적인 맥락 정보를 담는 �
 
 Banner는 시간이 지나면 사라지는 Toast나 의미가 정해진 Info·Success·Warning·Danger feedback을 대신하지 않는다. Banner는 severity, 자동 닫힘, retry 정책을 갖지 않는다.
 
-표시할 메시지와 Banner의 visibility, 선택적 action 및 닫기 동작은 소비처가 소유한다. 닫기 control은 소비처가 `onDismiss`를 제공할 때 표시하고, 소비처는 필요한 경우 `dismissDisabled`로 닫기를 막는다.
+소비처는 Banner를 표시할 조건, 메시지와 선택적 action을 소유한다. `dismissalKey`가 있으면 Banner가 해당 브라우저에서 닫힘 상태를 복원하고 기록한다. 브라우저 기록을 읽거나 쓸 수 없어도 현재 표시에서는 닫을 수 있으며, `dismissalKey`가 없으면 닫기 control을 표시하지 않는다. 소비처는 필요한 경우 `dismissDisabled`로 닫기를 막을 수 있다.
 
 ## 중립 시각 계약
 
