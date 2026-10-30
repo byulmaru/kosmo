@@ -987,8 +987,9 @@ describe('PostComposer local author', () => {
       visibility: 'DIRECT',
     });
 
+    const toastCountBeforeUncertainError = toastCalls.length;
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
-    assert.equal(toastCalls.length, 0);
+    assert.equal(toastCalls.length, toastCountBeforeUncertainError);
     assert.ok(
       renderer?.root
         .findAllByType('Button' as never)
@@ -1372,11 +1373,10 @@ describe('PostComposer local author', () => {
         .findAllByType('Text' as never)
         .some((text) => text.props.children === '요청을 제출한 계정으로 전환해 주세요.'),
     );
-    assert.ok(
-      renderer?.root
-        .findAllByType('View' as never)
-        .some((view) => view.props.accessibilityElementsHidden && view.props['aria-hidden']),
-    );
+    const hiddenComposerForm = renderer?.root.findByProps({ accessibilityLabel: '게시글 작성' });
+    assert.equal(hiddenComposerForm?.props.accessibilityElementsHidden, true);
+    assert.equal(hiddenComposerForm?.props['aria-hidden'], true);
+    assert.equal(hiddenComposerForm?.props.pointerEvents, 'none');
 
     await act(async () => staleRetry?.());
     await act(async () => retryButton()?.props.onPress());
