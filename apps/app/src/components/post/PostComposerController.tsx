@@ -780,6 +780,12 @@ function PostComposerContents({
   }, [focusOnMount]);
 
   const productionSurface: PostComposerVisibility = visibility;
+  const showRecovery =
+    pendingSubmission !== null &&
+    (pendingSubmission.uncertain ||
+      pendingSubmission.contextGeneration !== contextGenerationRef.current ||
+      pendingSubmission.environmentGeneration !== (environmentGenerationRef?.current ?? null) ||
+      pendingSubmission.ownerAccountId !== accountId);
   const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
   const pickerProfiles =
     selectedProfileKey && !profiles.includes(selectedProfileKey)
@@ -795,14 +801,14 @@ function PostComposerContents({
             ? '인용 게시글 작성'
             : '게시글 작성'
       }
-      accessibilityElementsHidden={pendingSubmission ? true : undefined}
-      aria-hidden={pendingSubmission ? true : undefined}
+      accessibilityElementsHidden={showRecovery ? true : undefined}
+      aria-hidden={showRecovery ? true : undefined}
       onSubmit={() => submit()}
-      pointerEvents={pendingSubmission ? 'none' : undefined}
+      pointerEvents={showRecovery ? 'none' : undefined}
       style={[
         presentation !== undefined ? styles.productionForm : styles.standaloneForm,
         (resolvedPresentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
-        pendingSubmission && styles.hiddenPresentation,
+        showRecovery && styles.hiddenPresentation,
       ]}
       submitOnModEnter
     >
@@ -1004,7 +1010,7 @@ function PostComposerContents({
     </Form>
   );
 
-  const requestRecoveryForm = pendingSubmission ? (
+  const requestRecoveryForm = showRecovery ? (
     <Form
       accessibilityLabel="게시 요청 확인"
       onSubmit={() => void submit(pendingSubmission)}
@@ -1038,7 +1044,7 @@ function PostComposerContents({
   return renderSurface
     ? renderSurface({
         form: visibleForm,
-        mediaEditorOpen: mediaEditor !== null && !pendingSubmission,
+        mediaEditorOpen: mediaEditor !== null && !showRecovery,
       })
     : visibleForm;
 }
