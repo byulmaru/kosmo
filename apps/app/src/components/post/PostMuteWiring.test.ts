@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -71,6 +72,12 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: { View: (props: Record<string, unknown>) => createElement('View', props) },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('lucide-react-native', {
+  exports: { Activity: 'Activity' },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(createRequire(import.meta.url).resolve('lucide-react-native'), {
+  exports: { Activity: 'Activity' },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/profile/ProfileMuteController', {
   exports: {
