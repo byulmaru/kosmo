@@ -517,6 +517,12 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   await expect(page).toHaveURL(/\/@e2e-composer\/[^/]+$/);
   const publishedPath = decodeURIComponent(new URL(page.url()).pathname);
   expect(publishedPath).toMatch(/^\/@e2e-composer\/[^/]+$/);
+  await expect(
+    page
+      .getByTestId('post-detail-scroll')
+      .getByTestId(`post-thread-current-${publishedPath.split('/').at(-1)}`)
+      .getByText(body, { exact: true }),
+  ).toBeVisible();
   const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
     async (response) => ({
       response,
