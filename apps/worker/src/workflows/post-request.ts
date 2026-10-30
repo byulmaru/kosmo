@@ -43,6 +43,7 @@ const workflowArgsSchema = z
         .array(
           z.object({
             altText: z.string().nullable(),
+            applyNightshade: z.boolean().optional(),
             mediaId: z.uuid(),
           }),
         )
@@ -65,12 +66,14 @@ const workflowArgsSchema = z
       sensitiveMedia: z.boolean().optional(),
       visibility: z.enum(PostVisibility),
     }),
-    mediaProcessing: z.array(
-      z.object({
-        applyNightshade: z.boolean(),
-        mediaId: z.uuid(),
-      }),
-    ),
+    mediaProcessing: z
+      .array(
+        z.object({
+          applyNightshade: z.boolean(),
+          mediaId: z.uuid(),
+        }),
+      )
+      .optional(),
     postId: z.uuid().optional(),
     requestId: z.uuid(),
     submissionFingerprint: z
@@ -80,18 +83,37 @@ const workflowArgsSchema = z
     submittedAt: z.iso.datetime(),
   })
   .superRefine(({ input, mediaProcessing }, context) => {
-    const inputMediaIds = (input.media ?? []).map(({ mediaId }) => mediaId);
-    const processingMediaIds = mediaProcessing.map(({ mediaId }) => mediaId);
-    if (
-      inputMediaIds.length !== processingMediaIds.length ||
-      new Set(inputMediaIds).size !== inputMediaIds.length ||
-      new Set(processingMediaIds).size !== processingMediaIds.length ||
-      inputMediaIds.some((mediaId) => !processingMediaIds.includes(mediaId))
-    ) {
+    const inputMedia = input.media ?? [];
+    const inputMediaIds = inputMedia.map(({ mediaId }) => mediaId);
+    if (mediaProcessing !== undefined) {
+      const processingMediaIds = mediaProcessing.map(({ mediaId }) => mediaId);
+      if (
+        inputMediaIds.length !== processingMediaIds.length ||
+        new Set(inputMediaIds).size !== inputMediaIds.length ||
+        new Set(processingMediaIds).size !== processingMediaIds.length ||
+        inputMediaIds.some((mediaId) => !processingMediaIds.includes(mediaId))
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['mediaProcessing'],
+          message: 'Post request media processing must match its media snapshot',
+        });
+      }
+      return;
+    }
+
+    if (new Set(inputMediaIds).size !== inputMediaIds.length) {
       context.addIssue({
         code: 'custom',
-        path: ['mediaProcessing'],
+        path: ['input', 'media'],
         message: 'Post request media processing must match its media snapshot',
+      });
+    }
+    if (inputMedia.some(({ applyNightshade }) => applyNightshade === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['input', 'media'],
+        message: 'Post request media must include processing settings',
       });
     }
   });
@@ -115,7 +137,12 @@ const domainErrorCodes: readonly ErrorCode[] = [
   'VALIDATION',
 ];
 
-const parseInput = (value: unknown): PostRequestWorkflowArgs => {
+const parseInput = (
+  value: unknown,
+): {
+  readonly snapshot: PostRequestSnapshot;
+  readonly uploadMediaIds: readonly string[];
+} => {
   const parsed = workflowArgsSchema.safeParse(value);
   if (!parsed.success) {
     throw ApplicationFailure.nonRetryable(
@@ -123,7 +150,42 @@ const parseInput = (value: unknown): PostRequestWorkflowArgs => {
       'PostRequestInputInvalid',
     );
   }
-  return parsed.data;
+  const inputMedia = parsed.data.input.media;
+  const legacyMediaProcessing = parsed.data.mediaProcessing;
+  const legacyNightshadeByMediaId = new Map(
+    legacyMediaProcessing?.map(({ applyNightshade, mediaId }) => [mediaId, applyNightshade]),
+  );
+  const snapshot: PostRequestSnapshot = {
+    input: {
+      ...parsed.data.input,
+      ...(inputMedia === undefined
+        ? {}
+        : {
+            media: inputMedia.map(({ altText, applyNightshade, mediaId }) => ({
+              altText,
+              applyNightshade:
+                legacyMediaProcessing === undefined
+                  ? (applyNightshade ?? false)
+                  : legacyNightshadeByMediaId.get(mediaId)!,
+              mediaId,
+            })),
+          }),
+    },
+    ...(parsed.data.postId === undefined ? {} : { postId: parsed.data.postId }),
+    requestId: parsed.data.requestId,
+    ...(parsed.data.submissionFingerprint === undefined
+      ? {}
+      : { submissionFingerprint: parsed.data.submissionFingerprint }),
+    submittedAt: parsed.data.submittedAt,
+  };
+
+  return {
+    snapshot,
+    uploadMediaIds:
+      legacyMediaProcessing?.map(({ mediaId }) => mediaId) ??
+      inputMedia?.map(({ mediaId }) => mediaId) ??
+      [],
+  };
 };
 
 const upsertPostRequestSearchAttributes = (
@@ -199,29 +261,34 @@ const isTerminalStatus = (status: PostRequestState['status']): boolean =>
 
 const uploadMedia = async (
   snapshot: PostRequestSnapshot,
+  uploadMediaIds: readonly string[],
   isCancelled: () => boolean,
   setCancellationScope: (scope: CancellationScope | undefined) => void,
 ): Promise<void> => {
-  if (snapshot.mediaProcessing.length === 0) {
+  if (uploadMediaIds.length === 0) {
     return;
   }
 
+  const mediaById = new Map(
+    (snapshot.input.media ?? []).map((media) => [media.mediaId, media] as const),
+  );
   const ready = await getPostRequestMediaStateActivity({
     accountId: snapshot.input.accountId,
-    mediaIds: snapshot.mediaProcessing.map(({ mediaId }) => mediaId),
+    mediaIds: uploadMediaIds,
   });
-  for (const media of snapshot.mediaProcessing) {
+  for (const mediaId of uploadMediaIds) {
     if (isCancelled()) {
       return;
     }
-    if (ready.readyMediaIds.includes(media.mediaId)) {
+    if (ready.readyMediaIds.includes(mediaId)) {
       continue;
     }
 
+    const media = mediaById.get(mediaId)!;
     const childArgs = {
       accountId: snapshot.input.accountId,
       applyNightshade: media.applyNightshade,
-      mediaId: media.mediaId,
+      mediaId,
     };
     const cancellationScope = new CancellationScope();
     setCancellationScope(cancellationScope);
@@ -243,7 +310,7 @@ const uploadMedia = async (
         await cancellationScope.run(() =>
           waitForPostRequestMediaUploadActivity({
             accountId: snapshot.input.accountId,
-            mediaId: media.mediaId,
+            mediaId,
           }),
         );
       }
@@ -258,11 +325,17 @@ const uploadMedia = async (
 
 const createPost = async (
   snapshot: PostRequestSnapshot & { readonly postId: string },
-): Promise<PostCreateWorkflowResult> =>
-  runChildWorkflow(postCreateWorkflowV2, {
+): Promise<PostCreateWorkflowResult> => {
+  const { media } = snapshot.input;
+  return runChildWorkflow(postCreateWorkflowV2, {
     args: [
       {
-        input: snapshot.input,
+        input: {
+          ...snapshot.input,
+          ...(media === undefined
+            ? {}
+            : { media: media.map(({ altText, mediaId }) => ({ altText, mediaId })) }),
+        },
         postId: snapshot.postId,
         revalidateAuthorization: true,
         requestId: workflowInfo().runId,
@@ -271,12 +344,13 @@ const createPost = async (
     mode: 'execute',
     workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
   });
+};
 
 export async function postRequestWorkflow(
   input: PostRequestWorkflowArgs,
 ): Promise<PostRequestState> {
-  const parsed = parseInput(input);
-  let snapshot = parsed;
+  const { snapshot: parsedSnapshot, uploadMediaIds } = parseInput(input);
+  let snapshot = parsedSnapshot;
   let state: PostRequestState = { snapshot, status: PostRequestStatus.QUEUED };
   let activeMediaCancellationScope: CancellationScope | undefined;
   const setStatus = (
@@ -306,6 +380,7 @@ export async function postRequestWorkflow(
   try {
     await uploadMedia(
       snapshot,
+      uploadMediaIds,
       () => state.status === PostRequestStatus.CANCELLED,
       (scope) => {
         activeMediaCancellationScope = scope;

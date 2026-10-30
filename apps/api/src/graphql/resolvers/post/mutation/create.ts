@@ -4,7 +4,10 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { submitPostRequest } from '../../post-request/mutation/submit';
+import { PostRequest } from '../../post-request/ref';
 import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
 import { rethrowPostWorkflowFailure } from './errors';
@@ -21,11 +24,13 @@ builder.mutationField('createPost', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('CreatePostPayload', {
       fields: (field) => ({
-        post: field.field({ type: Post }),
+        post: field.field({ type: Post, nullable: true }),
+        request: field.field({ type: PostRequest, nullable: true }),
       }),
     }),
     typeOptions: { validate: localPostCreateInputSchema },
     input: {
+      requestId: t.input.string({ required: false, validate: z.uuid().nullish() }),
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({
@@ -44,6 +49,11 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
+      if (input.requestId) {
+        const request = await submitPostRequest(input, input.requestId, ctx);
+        return { post: null, request };
+      }
+
       const localInput = await prepareLocalPostInput(input, ctx);
       const args: PostCreateWorkflowArgs = {
         requestId: crypto.randomUUID(),
@@ -67,7 +77,7 @@ builder.mutationField('createPost', (t) =>
         .limit(1)
         .then(firstOrThrow);
 
-      return { post };
+      return { post, request: null };
     },
   }),
 );

@@ -3,8 +3,6 @@ type Account implements Node {
   id: ID!
   metadata(keys: [String!]!): [AccountMetadata!]!
   name: String!
-  postRequest(profileId: ID!, requestId: String!): PostRequest
-  postRequests(after: String, first: Int!, profileId: ID!, statuses: [PostRequestStatus!]): PostRequestConnection!
   profiles: [Profile!]!
 }
 
@@ -148,13 +146,29 @@ input CreatePostInput {
   mentions: [CreatePostMentionInput!]
   replyParentId: ID
   repostSourceId: ID
+  requestId: String
   sensitiveMedia: Boolean
   visibility: PostVisibility!
 }
 
+type CreatePostMedia {
+  altText: String
+  applyNightshade: Boolean!
+  media: Media
+  mediaId: ID!
+}
+
 input CreatePostMediaInput {
   altText: String
+  applyNightshade: Boolean = false
   mediaId: ID!
+}
+
+type CreatePostMention {
+  end: Int!
+  profile: Profile
+  profileId: ID!
+  start: Int!
 }
 
 input CreatePostMentionInput {
@@ -164,7 +178,8 @@ input CreatePostMentionInput {
 }
 
 type CreatePostPayload {
-  post: Post!
+  post: Post
+  request: PostRequest
 }
 
 input CreateProfileInput {
@@ -388,7 +403,6 @@ type Mutation {
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   setAccountMetadata(input: SetAccountMetadataInput!): SetAccountMetadataPayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
-  submitPostRequest(input: SubmitPostRequestInput!): SubmitPostRequestPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
@@ -500,57 +514,28 @@ scalar PostContentDocument
 
 type PostRequest implements Node {
   authorProfile: Profile
-  draft: PostRequestDraft!
+  bodyText: String!
+  contentWarning: String
   errorCode: String
   errorMessage: String
   id: ID!
+  media: [CreatePostMedia!]!
+  mentions: [CreatePostMention!]!
   post: Post
-  requestId: String!
-  status: PostRequestStatus!
-  submittedAt: DateTime!
-}
-
-type PostRequestConnection {
-  edges: [PostRequestConnectionEdge!]!
-  pageInfo: PageInfo!
-}
-
-type PostRequestConnectionEdge {
-  cursor: String!
-  node: PostRequest!
-}
-
-type PostRequestDraft {
-  bodyText: String!
-  contentWarning: String
-  media: [PostRequestDraftMedia!]!
-  mentions: [PostRequestDraftMention!]!
   replyParent: Post
   replyParentId: ID
   repostSource: Post
   repostSourceId: ID
+  requestId: String!
   sensitiveMedia: Boolean!
+  status: PostRequestStatus!
+  submittedAt: DateTime!
   visibility: PostVisibility!
 }
 
-type PostRequestDraftMedia {
-  altText: String
-  applyNightshade: Boolean!
-  media: Media
-  mediaId: ID!
-}
-
-type PostRequestDraftMention {
-  end: Int!
-  profile: Profile
-  profileId: ID!
-  start: Int!
-}
-
-input PostRequestMediaInput {
-  altText: String
-  applyNightshade: Boolean!
-  mediaId: ID!
+type PostRequestPage {
+  nextPageToken: String
+  requests: [PostRequest!]!
 }
 
 enum PostRequestStatus {
@@ -757,6 +742,8 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  postRequest(profileId: ID!, requestId: String!): PostRequest
+  postRequests(pageToken: String, profileId: ID!, statuses: [PostRequestStatus!]): PostRequestPage!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }
@@ -888,23 +875,6 @@ input SubmitContentReportInput {
 
 type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
-}
-
-input SubmitPostRequestInput {
-  actorProfileId: ID
-  bodyText: String!
-  contentWarning: String
-  media: [PostRequestMediaInput!]
-  mentions: [CreatePostMentionInput!]
-  replyParentId: ID
-  repostSourceId: ID
-  requestId: String!
-  sensitiveMedia: Boolean
-  visibility: PostVisibility!
-}
-
-type SubmitPostRequestPayload {
-  request: PostRequest!
 }
 
 input UnblockProfileInput {

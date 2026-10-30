@@ -25,6 +25,7 @@ const snapshot: PostRequestState['snapshot'] = {
     media: [
       {
         altText: 'Image alt text',
+        applyNightshade: true,
         mediaId: '00000000-0000-4000-8000-000000000004',
       },
     ],
@@ -34,12 +35,6 @@ const snapshot: PostRequestState['snapshot'] = {
     sensitiveMedia: false,
     visibility: 'PUBLIC',
   },
-  mediaProcessing: [
-    {
-      applyNightshade: true,
-      mediaId: '00000000-0000-4000-8000-000000000004',
-    },
-  ],
   postId: '00000000-0000-4000-8000-000000000005',
   requestId,
   submittedAt: '2026-10-29T00:00:00.000Z',

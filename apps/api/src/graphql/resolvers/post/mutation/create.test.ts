@@ -31,6 +31,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostInput));
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
+  assert.equal(String(createPostInput.getFields().requestId?.type), 'String');
   assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
   assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
   assert.equal(String(createPostInput.getFields().repostSourceId?.type), 'ID');
@@ -40,14 +41,35 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostMediaInput));
   assert.equal(String(createPostMediaInput.getFields().mediaId?.type), 'ID!');
   assert.equal(String(createPostMediaInput.getFields().altText?.type), 'String');
+  assert.equal(String(createPostMediaInput.getFields().applyNightshade?.type), 'Boolean');
+  assert.equal(createPostMediaInput.getFields().applyNightshade?.defaultValue, false);
   assert.equal(schema.getType('TipTapDocument'), undefined);
   assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 
   const createPostPayload = schema.getType('CreatePostPayload');
   assert.ok(isObjectType(createPostPayload));
-  assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
-  assert.deepEqual(Object.keys(createPostPayload.getFields()), ['post']);
+  assert.equal(String(createPostPayload.getFields().post.type), 'Post');
+  assert.equal(String(createPostPayload.getFields().request.type), 'PostRequest');
+  assert.deepEqual(Object.keys(createPostPayload.getFields()).sort(), ['post', 'request']);
+
+  assert.equal(schema.getType('SubmitPostRequestInput'), undefined);
+  assert.equal(schema.getType('SubmitPostRequestPayload'), undefined);
+  assert.equal(schema.getType('PostRequestMediaInput'), undefined);
+  assert.equal(schema.getType('PostRequestDraft'), undefined);
+  assert.equal(schema.getType('PostRequestConnection'), undefined);
+  const postRequest = schema.getType('PostRequest');
+  assert.ok(isObjectType(postRequest));
+  assert.ok(postRequest.getFields().bodyText);
+  assert.ok(postRequest.getFields().media);
+  assert.ok(postRequest.getFields().mentions);
+  assert.equal(postRequest.getFields().draft, undefined);
+
+  const query = schema.getQueryType();
+  assert.ok(query);
+  assert.ok(query.getFields().postRequest);
+  assert.ok(query.getFields().postRequests);
+  assert.equal(query.getFields().account, undefined);
 });
 
 test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
@@ -176,6 +198,35 @@ test('validates createPost input before running the resolver', async () => {
   }
 });
 
+test('createPost validates an optional request ID as a UUID before resolving', async (t) => {
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } request { id } }
+      }
+    `,
+    variableValues: {
+      input: { bodyText: 'post body', requestId: 'not-a-uuid', visibility: 'PUBLIC' },
+    },
+    contextValue: {
+      session: {
+        accountId: '00000000-0000-4000-8000-000000000002',
+        profile: {
+          id: '00000000-0000-4000-8000-000000000001',
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'requestId');
+  assert.equal(execute.mock.callCount(), 0);
+});
+
 test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
   const workflowReached = new Error('postCreateWorkflow reached');
   const execute = t.mock.method(
@@ -229,6 +280,65 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   });
 
   assert.equal(result.errors?.[0]?.originalError, workflowReached);
+  assert.equal(execute.mock.callCount(), 1);
+});
+
+test('createPost without a request ID returns the committed Post from the synchronous workflow', async (t) => {
+  const postId = '00000000-0000-4000-8000-000000000020';
+  const profileId = '00000000-0000-4000-8000-000000000001';
+  const execute = t.mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postCreateWorkflow.workflow);
+      const args = (
+        options as { args: readonly [{ requestId: string; input: { origin: string } }] }
+      ).args;
+      assert.equal(args.length, 1);
+      assert.equal(args[0]?.input.origin, 'LOCAL');
+      assert.ok(args[0]?.requestId);
+      return { authorProfileId: profileId, postId, status: 'created' } as never;
+    },
+  );
+  t.mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from: () => ({
+          where: () => ({
+            limit: async (limit: number) => {
+              assert.equal(limit, 1);
+              return [{ id: postId, profileId }];
+            },
+          }),
+        }),
+      }) as never,
+  );
+
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } request { id } }
+      }
+    `,
+    variableValues: { input: { bodyText: 'synchronous post', visibility: 'PUBLIC' } },
+    contextValue: {
+      session: {
+        accountId: '00000000-0000-4000-8000-000000000002',
+        profile: { id: profileId, role: AccountProfileRole.MEMBER },
+      },
+    },
+  });
+
+  assert.deepEqual(result.errors, undefined);
+  const createPost = result.data?.createPost as {
+    post: { id: string } | null;
+    request: { id: string } | null;
+  };
+  assert.equal(createPost.post?.id, encodeGlobalId('Post', postId));
+  assert.equal(createPost.request, null);
   assert.equal(execute.mock.callCount(), 1);
 });
 

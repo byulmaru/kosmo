@@ -1,4 +1,4 @@
-import './field';
+import './query';
 import './mutation';
 
-export { PostRequest, PostRequestConnection } from './ref';
+export { PostRequest, PostRequestPage } from './ref';

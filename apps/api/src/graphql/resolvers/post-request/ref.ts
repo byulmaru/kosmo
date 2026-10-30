@@ -6,91 +6,40 @@ import { Media } from '../media/ref';
 import { Post } from '../post/ref';
 import { Profile } from '../profile/ref';
 import { loadPostRequestStateForAccount } from './state';
-import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
 import type { UserContext } from '@/context';
 
-type PostRequestDraftMentionSource = {
-  end: number;
-  profileId: string;
-  profileNodeId: string;
-  start: number;
-};
+type CreatePostMediaSource = NonNullable<PostRequestSnapshot['input']['media']>[number];
+type CreatePostMentionSource = NonNullable<PostRequestSnapshot['input']['mentions']>[number];
 
-type PostRequestDraftMediaSource = {
-  altText: string | null;
-  applyNightshade: boolean;
-  mediaId: string;
-  mediaNodeId: string;
-};
+export const CreatePostMedia = builder.objectRef<CreatePostMediaSource>('CreatePostMedia');
 
-type PostRequestDraftSource = {
-  bodyText: string;
-  contentWarning: string | null;
-  media: readonly PostRequestDraftMediaSource[];
-  mentions: readonly PostRequestDraftMentionSource[];
-  replyParentId: string | null;
-  replyParentNodeId: string | null;
-  repostSourceId: string | null;
-  repostSourceNodeId: string | null;
-  sensitiveMedia: boolean;
-  visibility: PostVisibility;
-};
-
-export const PostRequestDraftMention =
-  builder.objectRef<PostRequestDraftMentionSource>('PostRequestDraftMention');
-
-PostRequestDraftMention.implement({
+CreatePostMedia.implement({
   fields: (t) => ({
-    start: t.exposeInt('start'),
-    end: t.exposeInt('end'),
-    profileId: t.exposeID('profileId'),
-    profile: t.field({
-      type: Profile,
-      nullable: true,
-      resolve: (mention) => mention.profileNodeId,
-    }),
-  }),
-});
-
-export const PostRequestDraftMedia =
-  builder.objectRef<PostRequestDraftMediaSource>('PostRequestDraftMedia');
-
-PostRequestDraftMedia.implement({
-  fields: (t) => ({
-    mediaId: t.exposeID('mediaId'),
     altText: t.exposeString('altText', { nullable: true }),
     applyNightshade: t.exposeBoolean('applyNightshade'),
+    mediaId: t.globalID({ resolve: ({ mediaId }) => encodeGlobalId('Media', mediaId) }),
     media: t.field({
       type: Media,
       nullable: true,
       grantScopes: ['readMedia'],
-      resolve: (draftMedia) => draftMedia.mediaNodeId,
+      resolve: ({ mediaId }) => mediaId,
     }),
   }),
 });
 
-export const PostRequestDraft = builder.objectRef<PostRequestDraftSource>('PostRequestDraft');
+export const CreatePostMention = builder.objectRef<CreatePostMentionSource>('CreatePostMention');
 
-PostRequestDraft.implement({
+CreatePostMention.implement({
   fields: (t) => ({
-    bodyText: t.exposeString('bodyText'),
-    contentWarning: t.exposeString('contentWarning', { nullable: true }),
-    visibility: t.expose('visibility', { type: PostVisibility }),
-    replyParentId: t.exposeID('replyParentId', { nullable: true }),
-    replyParent: t.field({
-      type: Post,
+    start: t.exposeInt('start'),
+    end: t.exposeInt('end'),
+    profileId: t.globalID({ resolve: ({ profileId }) => encodeGlobalId('Profile', profileId) }),
+    profile: t.field({
+      type: Profile,
       nullable: true,
-      resolve: (draft) => draft.replyParentNodeId,
+      resolve: ({ profileId }) => profileId,
     }),
-    repostSourceId: t.exposeID('repostSourceId', { nullable: true }),
-    repostSource: t.field({
-      type: Post,
-      nullable: true,
-      resolve: (draft) => draft.repostSourceNodeId,
-    }),
-    mentions: t.field({ type: [PostRequestDraftMention], resolve: (draft) => draft.mentions }),
-    media: t.field({ type: [PostRequestDraftMedia], resolve: (draft) => draft.media }),
-    sensitiveMedia: t.exposeBoolean('sensitiveMedia'),
   }),
 });
 
@@ -136,49 +85,61 @@ PostRequest.implement({
       nullable: true,
       resolve: (request) => request.result?.postId ?? null,
     }),
-    draft: t.field({
-      type: PostRequestDraft,
-      resolve: (request): PostRequestDraftSource => {
-        const { input, mediaProcessing } = request.snapshot;
-        const mediaProcessingById = new Map(
-          mediaProcessing.map(({ applyNightshade, mediaId }) => [mediaId, applyNightshade]),
-        );
-
-        return {
-          bodyText: input.bodyText,
-          contentWarning: input.contentWarning ?? null,
-          visibility: input.visibility,
-          replyParentId: input.replyParentId ? encodeGlobalId('Post', input.replyParentId) : null,
-          replyParentNodeId: input.replyParentId ?? null,
-          repostSourceId: input.repostSourceId
-            ? encodeGlobalId('Post', input.repostSourceId)
-            : null,
-          repostSourceNodeId: input.repostSourceId ?? null,
-          mentions: (input.mentions ?? []).map(({ end, profileId, start }) => ({
-            end,
-            profileId: encodeGlobalId('Profile', profileId),
-            profileNodeId: profileId,
-            start,
-          })),
-          media: (input.media ?? []).map(({ altText, mediaId }) => ({
-            altText,
-            applyNightshade: mediaProcessingById.get(mediaId) ?? false,
-            mediaId: encodeGlobalId('Media', mediaId),
-            mediaNodeId: mediaId,
-          })),
-          sensitiveMedia: input.sensitiveMedia ?? false,
-        };
+    bodyText: t.string({ resolve: (request) => request.snapshot.input.bodyText }),
+    contentWarning: t.string({
+      nullable: true,
+      resolve: (request) => request.snapshot.input.contentWarning ?? null,
+    }),
+    visibility: t.field({
+      type: PostVisibility,
+      resolve: (request) => request.snapshot.input.visibility,
+    }),
+    replyParentId: t.globalID({
+      nullable: true,
+      resolve: (request) => {
+        const id = request.snapshot.input.replyParentId;
+        return id ? encodeGlobalId('Post', id) : null;
       },
+    }),
+    replyParent: t.field({
+      type: Post,
+      nullable: true,
+      resolve: (request) => request.snapshot.input.replyParentId ?? null,
+    }),
+    repostSourceId: t.globalID({
+      nullable: true,
+      resolve: (request) => {
+        const id = request.snapshot.input.repostSourceId;
+        return id ? encodeGlobalId('Post', id) : null;
+      },
+    }),
+    repostSource: t.field({
+      type: Post,
+      nullable: true,
+      resolve: (request) => request.snapshot.input.repostSourceId ?? null,
+    }),
+    mentions: t.field({
+      type: [CreatePostMention],
+      resolve: (request) => request.snapshot.input.mentions ?? [],
+    }),
+    media: t.field({
+      type: [CreatePostMedia],
+      resolve: (request) => request.snapshot.input.media ?? [],
+    }),
+    sensitiveMedia: t.boolean({
+      resolve: (request) => request.snapshot.input.sensitiveMedia ?? false,
     }),
   }),
 });
 
-export const PostRequestConnection = builder.connectionObject(
-  {
-    type: PostRequest,
-    name: 'PostRequestConnection',
-  },
-  {
-    name: 'PostRequestConnectionEdge',
-  },
-);
+export type PostRequestPageShape = {
+  readonly nextPageToken: string | null;
+  readonly requests: readonly PostRequestState[];
+};
+
+export const PostRequestPage = builder.simpleObject('PostRequestPage', {
+  fields: (t) => ({
+    requests: t.field({ type: [PostRequest], resolve: (page) => page.requests }),
+    nextPageToken: t.string({ nullable: true }),
+  }),
+});

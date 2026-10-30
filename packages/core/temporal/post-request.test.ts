@@ -10,11 +10,17 @@ test('Post Request Workflow ID scopes a request to its Account and request ID', 
     input: {
       accountId,
       bodyText: 'Post body',
+      media: [
+        {
+          altText: null,
+          applyNightshade: false,
+          mediaId: '00000000-0000-4000-8000-000000000005',
+        },
+      ],
       origin: 'LOCAL',
       profileId: '00000000-0000-4000-8000-000000000003',
       visibility: 'PUBLIC',
     },
-    mediaProcessing: [],
     postId: '00000000-0000-4000-8000-000000000004',
     requestId,
     submittedAt: '2026-10-29T00:00:00.000Z',
@@ -26,7 +32,6 @@ test('Post Request Workflow ID scopes a request to its Account and request ID', 
 
   const snapshotWithoutPostId: PostRequestWorkflowArgs = {
     input: args.input,
-    mediaProcessing: args.mediaProcessing,
     requestId,
     submittedAt: args.submittedAt,
   };

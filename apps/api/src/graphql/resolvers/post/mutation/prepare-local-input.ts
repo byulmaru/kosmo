@@ -26,6 +26,7 @@ export type LocalPostMutationInput = {
   media?:
     | readonly {
         readonly altText?: string | null;
+        readonly applyNightshade?: boolean | null;
         readonly mediaId: { readonly id: string };
       }[]
     | null;
@@ -45,6 +46,7 @@ export type LocalPostMutationInput = {
 export const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
+    applyNightshade: t.boolean({ required: false, defaultValue: false }),
     mediaId: t.globalID({ for: Media }),
   }),
 });
@@ -98,12 +100,6 @@ const withLocalPostContentValidation = <Schema extends z.ZodType>(schema: Schema
   });
 
 export const localPostCreateInputSchema = withLocalPostContentValidation(localPostInputBaseSchema);
-
-export const localPostRequestInputSchema = withLocalPostContentValidation(
-  localPostInputBaseSchema.extend({
-    requestId: z.uuid(),
-  }),
-);
 
 export async function prepareLocalPostInput(
   input: LocalPostMutationInput,

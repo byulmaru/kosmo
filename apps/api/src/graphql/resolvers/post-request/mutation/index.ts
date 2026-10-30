@@ -1,2 +1,1 @@
 import './cancel';
-import './submit';

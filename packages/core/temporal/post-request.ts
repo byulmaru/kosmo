@@ -23,18 +23,17 @@ export const PostRequestStatus = {
 } as const;
 
 export type PostRequestStatus = (typeof PostRequestStatus)[keyof typeof PostRequestStatus];
-export type PostRequestMediaProcessing = {
-  readonly applyNightshade: boolean;
-  readonly mediaId: string;
-};
-
-export type PostRequestLocalPostInput = Omit<LocalPostInput, 'accountId'> & {
+export type PostRequestLocalPostInput = Omit<LocalPostInput, 'accountId' | 'media'> & {
   readonly accountId: string;
+  readonly media?: readonly {
+    readonly altText: string | null;
+    readonly applyNightshade: boolean;
+    readonly mediaId: string;
+  }[];
 };
 
 export type PostRequestSnapshot = {
   readonly input: PostRequestLocalPostInput;
-  readonly mediaProcessing: readonly PostRequestMediaProcessing[];
   readonly postId?: string;
   readonly requestId: string;
   readonly submissionFingerprint?: string;
