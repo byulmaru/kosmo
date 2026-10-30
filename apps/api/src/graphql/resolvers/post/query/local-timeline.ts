@@ -3,7 +3,7 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
-import { z } from 'zod';
+import { additionalLocalTimelineInstanceIds } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
@@ -17,19 +17,6 @@ builder.queryField('localTimeline', (t) =>
       nullable: true,
       resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
-        const additionalInstanceIds = (process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS ?? '')
-          .split(',')
-          .map((instanceId) => instanceId.trim())
-          .filter(Boolean)
-          .map((instanceId) => {
-            if (!z.uuid().safeParse(instanceId).success) {
-              throw new Error(
-                'KOSMO_LOCAL_TIMELINE_INSTANCE_IDS configuration must contain only UUIDs',
-              );
-            }
-
-            return instanceId;
-          });
 
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
@@ -46,7 +33,10 @@ builder.queryField('localTimeline', (t) =>
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  inArray(Profiles.instanceId, [localInstance.id, ...additionalInstanceIds]),
+                  inArray(Profiles.instanceId, [
+                    localInstance.id,
+                    ...additionalLocalTimelineInstanceIds,
+                  ]),
                   eq(Posts.visibility, PostVisibility.PUBLIC),
                   isNotNull(Posts.currentContentId),
                   isNull(Posts.replyParentId),

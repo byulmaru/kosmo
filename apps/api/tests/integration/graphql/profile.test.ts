@@ -45,6 +45,11 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
+const configuredLocalTimelineInstanceIds = [
+  '019f8ed1-0000-7000-8000-000000000a01',
+  '019f8ed1-0000-7000-8000-000000000a02',
+  '019f8ed1-0000-7000-8000-000000000a03',
+] as const;
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
@@ -92,7 +97,7 @@ describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
-    delete process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
+    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = `${configuredLocalTimelineInstanceIds[0].toUpperCase()}, ${configuredLocalTimelineInstanceIds[1]}, ${configuredLocalTimelineInstanceIds[2]}`;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
     process.env.ENVIRONMENT = 'test';
@@ -4938,14 +4943,17 @@ describe('GraphQL remote profile boundary', () => {
     const planetAuthor = await createStoredActivityPubAuthor({
       domain: 'planet.moe',
       handle: 'configured-planet-author',
+      instanceId: configuredLocalTimelineInstanceIds[0],
     });
     const selectedAuthor = await createStoredActivityPubAuthor({
       domain: 'configured-extra.example',
       handle: 'configured-extra-author',
+      instanceId: configuredLocalTimelineInstanceIds[1],
     });
     const mutedAuthor = await createStoredActivityPubAuthor({
       domain: 'configured-muted.example',
       handle: 'configured-muted-author',
+      instanceId: configuredLocalTimelineInstanceIds[2],
     });
     const unlistedUri = 'https://planet.moe/notes/configured-unlisted';
     const parentUri = 'https://planet.moe/notes/configured-parent';
@@ -5012,34 +5020,24 @@ describe('GraphQL remote profile boundary', () => {
         auth.token,
       );
     const configuredInstanceIds = process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
+    const expected = [localPost.id, planetPost.post.id, selectedPost.post.id].toSorted(
+      (left, right) => (left < right ? 1 : left > right ? -1 : 0),
+    );
+    const assertConfiguredTimeline = async () => {
+      const result = await read({ first: 20 });
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        connectionIds(result.data?.localTimeline),
+        expected.map((id) => globalId('Post', id)),
+      );
+    };
 
     try {
-      delete process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
-      const absent = await read({ first: 20 });
-      assertNoGraphQLErrors(absent);
-      assert.deepEqual(connectionIds(absent.data?.localTimeline), [globalId('Post', localPost.id)]);
+      await assertConfiguredTimeline();
 
-      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = '';
-      const empty = await read({ first: 20 });
-      assertNoGraphQLErrors(empty);
-      assert.deepEqual(connectionIds(empty.data?.localTimeline), [globalId('Post', localPost.id)]);
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = 'not-a-uuid';
+      await assertConfiguredTimeline();
 
-      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = ' \t, , \n';
-      const blank = await read({ first: 20 });
-      assertNoGraphQLErrors(blank);
-      assert.deepEqual(connectionIds(blank.data?.localTimeline), [globalId('Post', localPost.id)]);
-
-      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = [
-        '',
-        planetAuthor.instance.id.toUpperCase(),
-        selectedAuthor.instance.id,
-        mutedAuthor.instance.id,
-        crypto.randomUUID(),
-        '',
-      ].join(' , ');
-      const expected = [localPost.id, planetPost.post.id, selectedPost.post.id].toSorted(
-        (left, right) => (left < right ? 1 : left > right ? -1 : 0),
-      );
       const firstPage = await read({ first: 2 });
       assertNoGraphQLErrors(firstPage);
       assert.deepEqual(
@@ -5058,12 +5056,6 @@ describe('GraphQL remote profile boundary', () => {
         expected.slice(2).map((id) => globalId('Post', id)),
       );
       assert.equal(secondPage.data?.localTimeline?.pageInfo.hasNextPage, false);
-
-      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = `${planetAuthor.instance.id}, not-a-uuid`;
-      const malformed = await read({ first: 20 });
-      assert.equal(malformed.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
-      assert.equal(malformed.errors?.[0]?.path?.[0], 'localTimeline');
-      assert.equal(malformed.data?.localTimeline, null);
     } finally {
       if (configuredInstanceIds === undefined) {
         delete process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
@@ -6447,9 +6439,11 @@ const assertRemotePostReadDenied = (
 
 const createRemoteInstance = async ({
   domain = remoteDomain,
+  id,
   state = InstanceState.ACTIVE,
 }: {
   domain?: string;
+  id?: string;
   state?: InstanceState;
 } = {}) =>
   db
@@ -6459,6 +6453,7 @@ const createRemoteInstance = async ({
       domain,
       kind: InstanceKind.ACTIVITYPUB,
       state,
+      ...(id === undefined ? {} : { id }),
     })
     .returning()
     .then(firstOrThrow);
@@ -6517,11 +6512,16 @@ const createProfile = async ({
 const createStoredActivityPubAuthor = async ({
   domain,
   handle,
+  instanceId,
 }: {
   domain: string;
   handle: string;
+  instanceId?: string;
 }) => {
-  const instance = await createRemoteInstance({ domain });
+  const instance = await createRemoteInstance({
+    domain,
+    ...(instanceId === undefined ? {} : { id: instanceId }),
+  });
   const profile = await createProfile({ handle, instanceId: instance.id });
   const actorUri = `https://${domain}/users/${handle}`;
   await db.insert(ActivityPubActors).values({

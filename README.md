@@ -110,7 +110,8 @@ existing server-only Vault environment. For local development, set it in
 `secret/kubernetes/kosmo/local`. Use a comma-separated list of Instance UUIDs;
 entries are trimmed and blank entries are ignored. The configured Local Instance
 is always included. If the value is absent or blank, no additional Instances are
-included. A malformed nonblank UUID causes `localTimeline` resolution to error.
+included. The API validates this list once at startup; a malformed nonblank UUID
+prevents the API from starting. Changes to this value apply after an API restart.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
