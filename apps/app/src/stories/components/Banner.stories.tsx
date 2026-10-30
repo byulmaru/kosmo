@@ -1,7 +1,7 @@
 import { Bell, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { Banner } from '@/components/ui/Banner';
 import { Button } from '@/components/ui/Button';
 import { space } from '@/theme/tokens';
@@ -9,10 +9,23 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { BannerProps } from '@/components/ui/Banner';
 
 const longMessage = '내 프로필의 표시 이름과 소개, 대표 이미지가 최신 정보인지 확인해 주세요.';
+const dismissalKey = 'kosmo:storybook:banner-dismissal';
+const persistentDismissalKey = 'kosmo:storybook:banner-persistence';
+const alternateDismissalKey = 'kosmo:storybook:banner-persistence-alternate';
+const failingDismissalKey = 'kosmo:storybook:banner-storage-failure';
 
 const meta = {
   args: { message: '프로필을 완성해 보세요' },
-  argTypes: { onDismiss: { control: false } },
+  beforeEach: () => {
+    for (const key of [
+      dismissalKey,
+      persistentDismissalKey,
+      alternateDismissalKey,
+      failingDismissalKey,
+    ]) {
+      globalThis.localStorage?.removeItem(key);
+    }
+  },
   component: Banner,
   decorators: [
     (Story) => (
@@ -27,6 +40,9 @@ const meta = {
     'LongMessage320Contract',
     'CallerPendingContract',
     'OptionalControlsContract',
+    'DismissalPersistenceContract',
+    'StorageReadFailureContract',
+    'StorageWriteFailureContract',
   ],
   title: 'KOSMO/Components/Banner',
 } satisfies Meta<typeof Banner>;
@@ -51,7 +67,7 @@ const banner320Viewport = {
 } satisfies Pick<Story, 'globals' | 'parameters'>;
 
 export const Playground: Story = {
-  args: { icon: UserRound, onDismiss: fn() },
+  args: { dismissalKey, icon: UserRound },
   parameters: { controls: { include: ['message'] } },
   render: (args) => <InteractiveBanner {...args} />,
 };
@@ -63,75 +79,74 @@ export const Plain: Story = {
 
 export const LongMessage320: Story = {
   ...banner320Viewport,
-  args: { message: longMessage },
+  args: { dismissalKey, message: longMessage },
   parameters: { ...banner320Viewport.parameters, controls: { disable: true } },
-  render: ({ message }) => (
+  render: ({ dismissalKey: key, message }) => (
     <Banner
       action={<Button size="compact">프로필 확인</Button>}
+      dismissalKey={key}
       icon={UserRound}
       message={message}
-      onDismiss={() => {}}
     />
   ),
 };
 
 export const HomeNotification: Story = {
   ...banner320Viewport,
-  args: { icon: Bell, message: '푸시 알림 받기', onDismiss: fn() },
+  args: { dismissalKey, icon: Bell, message: '푸시 알림 받기' },
   parameters: { ...banner320Viewport.parameters, controls: { disable: true } },
-  render: ({ icon, message, onDismiss }) => (
-    <View style={{ marginHorizontal: space[12] }}>
-      <Banner
-        action={
-          <Button accessibilityLabel="푸시 알림 켜기" size="compact">
-            켜기
-          </Button>
-        }
-        icon={icon}
-        message={message}
-        onDismiss={onDismiss}
-      />
-    </View>
+  render: ({ dismissalKey: key, icon, message }) => (
+    <Banner
+      action={
+        <Button accessibilityLabel="푸시 알림 켜기" size="compact">
+          켜기
+        </Button>
+      }
+      dismissalKey={key}
+      icon={icon}
+      message={message}
+      style={{ marginHorizontal: space[12], marginVertical: space[12] }}
+    />
   ),
 };
 
 export const Dark: Story = {
-  args: { icon: UserRound, message: '프로필을 완성해 보세요', onDismiss: fn() },
+  args: { dismissalKey, icon: UserRound, message: '프로필을 완성해 보세요' },
   globals: { theme: 'dark' },
   parameters: { controls: { disable: true } },
-  render: ({ icon, message, onDismiss }) => (
+  render: ({ dismissalKey: key, icon, message }) => (
     <Banner
       action={<Button size="compact">프로필 확인</Button>}
+      dismissalKey={key}
       icon={icon}
       message={message}
-      onDismiss={onDismiss}
     />
   ),
 };
 
 export const CallerPending: Story = {
-  args: { icon: UserRound, message: '프로필을 완성해 보세요', onDismiss: fn() },
+  args: { dismissalKey, icon: UserRound, message: '프로필을 완성해 보세요' },
   parameters: { controls: { disable: true } },
-  render: ({ icon, message, onDismiss }) => (
+  render: ({ dismissalKey: key, icon, message }) => (
     <Banner
       action={
         <Button loading size="compact">
           프로필 확인
         </Button>
       }
+      dismissalKey={key}
       dismissDisabled
       icon={icon}
       message={message}
-      onDismiss={onDismiss}
     />
   ),
 };
 
 export const CallerPendingContract: Story = {
   ...LongMessage320,
-  args: { icon: UserRound, message: longMessage, onDismiss: fn() },
-  render: ({ icon, message, onDismiss }) => (
-    <PendingInteractiveBanner icon={icon} message={message} onDismiss={onDismiss} />
+  args: { dismissalKey, icon: UserRound, message: longMessage },
+  render: ({ dismissalKey: key, icon, message }) => (
+    <PendingInteractiveBanner dismissalKey={key} icon={icon} message={message} />
   ),
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -157,7 +172,7 @@ export const CallerPendingContract: Story = {
     expect(pendingAction.getBoundingClientRect().width).toBeLessThanOrEqual(actionWidth + 1);
     expect(message.getBoundingClientRect().width).toBeGreaterThanOrEqual(messageWidth - 1);
     expect(banner?.scrollWidth).toBeLessThanOrEqual(banner?.clientWidth ?? 0);
-    expect(args.onDismiss).not.toHaveBeenCalled();
+    expect(canvas.getByText(args.message)).toBeVisible();
   },
 };
 
@@ -194,6 +209,7 @@ export const OptionalControlsContract: Story = {
 
 export const InteractionContract: Story = {
   ...Playground,
+  args: { dismissalKey, icon: UserRound, message: '프로필을 완성해 보세요' },
   parameters: { controls: { disable: true } },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
@@ -212,8 +228,7 @@ export const InteractionContract: Story = {
     expect(dismiss).toHaveFocus();
     await userEvent.keyboard('{Enter}');
 
-    expect(args.onDismiss).toHaveBeenCalledOnce();
-    expect(canvas.queryByText(args.message)).not.toBeInTheDocument();
+    await expect(canvas.queryByText(args.message)).not.toBeInTheDocument();
   },
 };
 
@@ -244,13 +259,55 @@ export const LongMessage320Contract: Story = {
   },
 };
 
+export const DismissalPersistenceContract: Story = {
+  args: { dismissalKey: persistentDismissalKey },
+  parameters: { controls: { disable: true } },
+  render: () => <DismissalFixture />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '배너 닫기' }));
+    await expect(canvas.queryByText('첫 번째 배너')).not.toBeInTheDocument();
+    expect(globalThis.localStorage.getItem(persistentDismissalKey)).toBe('1');
+
+    await userEvent.click(canvas.getByRole('button', { name: '배너 다시 마운트' }));
+    expect(canvas.queryByText('첫 번째 배너')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다른 배너 표시' }));
+    expect(canvas.getByText('다른 배너')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '첫 번째 배너 표시' }));
+    expect(canvas.queryByText('첫 번째 배너')).not.toBeInTheDocument();
+  },
+};
+
+export const StorageReadFailureContract: Story = {
+  args: { dismissalKey: failingDismissalKey, message: '저장소를 읽을 수 없는 배너' },
+  beforeEach: () => overrideLocalStorageMethod('getItem'),
+  parameters: { controls: { disable: true } },
+  play: async ({ args, canvasElement }) => {
+    await expect(within(canvasElement).findByText(args.message)).resolves.toBeVisible();
+  },
+};
+
+export const StorageWriteFailureContract: Story = {
+  args: { dismissalKey: failingDismissalKey, message: '저장소에 쓸 수 없는 배너' },
+  beforeEach: () => overrideLocalStorageMethod('setItem'),
+  parameters: { controls: { disable: true } },
+  render: ({ dismissalKey: key, message }) => (
+    <RemountingBanner dismissalKey={key} message={message} />
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '배너 닫기' }));
+    await expect(canvas.queryByText(args.message)).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '배너 다시 마운트' }));
+    await expect(canvas.findByText(args.message)).resolves.toBeVisible();
+  },
+};
+
 function InteractiveBanner(props: BannerProps) {
   const [actionPerformed, setActionPerformed] = useState(false);
-  const [visible, setVisible] = useState(true);
-
-  if (!visible) {
-    return null;
-  }
 
   return (
     <Banner
@@ -260,17 +317,65 @@ function InteractiveBanner(props: BannerProps) {
           {actionPerformed ? '프로필 다시 확인' : '프로필 확인'}
         </Button>
       }
-      onDismiss={() => {
-        props.onDismiss?.();
-        setVisible(false);
-      }}
     />
   );
 }
 
+function DismissalFixture() {
+  const [currentKey, setCurrentKey] = useState(persistentDismissalKey);
+  const [mountKey, setMountKey] = useState(0);
+
+  return (
+    <View style={{ gap: space[8] }}>
+      <Button onPress={() => setMountKey((key) => key + 1)}>배너 다시 마운트</Button>
+      <Button onPress={() => setCurrentKey(alternateDismissalKey)}>다른 배너 표시</Button>
+      <Button onPress={() => setCurrentKey(persistentDismissalKey)}>첫 번째 배너 표시</Button>
+      <Banner
+        key={mountKey}
+        dismissalKey={currentKey}
+        message={currentKey === persistentDismissalKey ? '첫 번째 배너' : '다른 배너'}
+        style={{ marginVertical: space[12] }}
+      />
+    </View>
+  );
+}
+
+function RemountingBanner({
+  dismissalKey: key,
+  message,
+}: Pick<BannerProps, 'dismissalKey' | 'message'>) {
+  const [mountKey, setMountKey] = useState(0);
+
+  return (
+    <View style={{ gap: space[8] }}>
+      <Button onPress={() => setMountKey((current) => current + 1)}>배너 다시 마운트</Button>
+      <Banner key={mountKey} dismissalKey={key} message={message} />
+    </View>
+  );
+}
+
+function overrideLocalStorageMethod(method: 'getItem' | 'setItem') {
+  const storage = globalThis.localStorage;
+  const descriptor = Object.getOwnPropertyDescriptor(storage, method);
+
+  Object.defineProperty(storage, method, {
+    configurable: true,
+    value: () => {
+      throw new Error('storage unavailable');
+    },
+  });
+
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(storage, method, descriptor);
+    } else {
+      Reflect.deleteProperty(storage, method);
+    }
+  };
+}
+
 function OptionalControlsFixture() {
   const [actionPerformed, setActionPerformed] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   return (
     <View style={{ gap: space[8] }}>
@@ -282,18 +387,16 @@ function OptionalControlsFixture() {
         }
         message="공개 프로필의 정보를 확인해 주세요."
       />
-      {dismissed ? null : (
-        <Banner message="현재 공개 범위를 확인해 주세요." onDismiss={() => setDismissed(true)} />
-      )}
+      <Banner dismissalKey={dismissalKey} message="현재 공개 범위를 확인해 주세요." />
     </View>
   );
 }
 
 function PendingInteractiveBanner({
+  dismissalKey,
   icon,
   message,
-  onDismiss,
-}: Pick<BannerProps, 'icon' | 'message' | 'onDismiss'>) {
+}: Pick<BannerProps, 'dismissalKey' | 'icon' | 'message'>) {
   const [pending, setPending] = useState(false);
 
   return (
@@ -303,10 +406,10 @@ function PendingInteractiveBanner({
           프로필 확인
         </Button>
       }
+      dismissalKey={dismissalKey}
       dismissDisabled={pending}
       icon={icon}
       message={message}
-      onDismiss={onDismiss}
     />
   );
 }

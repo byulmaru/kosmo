@@ -21,6 +21,7 @@ const emptyHomeTimeline = {
   edges: [],
   pageInfo: { endCursor: null, hasNextPage: false },
 };
+const homePushBannerDismissalKey = 'kosmo:home-notification-permission-banner-dismissed';
 const selectedProfileData = {
   currentSession: { id: 'home-session', selectedProfile: { id: 'home-profile' } },
   homeTimeline: emptyHomeTimeline,
@@ -193,6 +194,7 @@ export const EmptyTimelineFull: Story = {
 };
 
 export const PushPermissionBanner: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
     relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
@@ -213,7 +215,32 @@ export const PushPermissionBanner: Story = {
   render: () => <HomePushPermissionStory />,
 };
 
+export const PushPermissionBannerDismissal: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const message = await canvas.findByText('푸시 알림 받기');
+    const banner = message.parentElement!;
+    const bannerHeight = banner.getBoundingClientRect().height;
+    const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
+    const initialTitleY = emptyTitle.getBoundingClientRect().top;
+
+    await userEvent.click(canvas.getByRole('button', { name: '배너 닫기' }));
+    await waitFor(() => expect(canvas.queryByText('푸시 알림 받기')).not.toBeInTheDocument());
+    expect(globalThis.localStorage.getItem(homePushBannerDismissalKey)).toBe('1');
+
+    const nextTitleY = canvas.getByText('아직 게시글이 없어요').getBoundingClientRect().top;
+    expect(initialTitleY - nextTitleY).toBeGreaterThan(bannerHeight + 16);
+  },
+  render: () => <HomePushPermissionStory />,
+};
+
 export const PushPermissionBannerNarrow320: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
   globals: { viewport: { isRotated: false, value: 'homePushBanner320' } },
   parameters: {
     relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
