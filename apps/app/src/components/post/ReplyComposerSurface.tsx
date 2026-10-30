@@ -361,7 +361,10 @@ function ReplyComposerSurfaceContents({
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
-  const handlePostRequestAccepted = useCallback(() => closeImmediately(), [closeImmediately]);
+  const handlePostRequestAccepted = useCallback(() => {
+    closeImmediately();
+    showToast('게시 요청을 접수했어요', { tone: 'success' });
+  }, [closeImmediately, showToast]);
 
   useEffect(() => {
     if (!closeConfirmationOpen || uncertainCloseOpen || Platform.OS !== 'web') {

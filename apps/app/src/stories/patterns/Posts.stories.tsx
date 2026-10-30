@@ -2515,6 +2515,7 @@ function ReplyComposerContractContents({
 
 function ReplyComposerContextIsolationStory() {
   const [acceptedRequestCount, setAcceptedRequestCount] = useState(0);
+  const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
   const [firstCommittedBody, setFirstCommittedBody] = useState<string | null>(null);
   const [alternateProfile, setAlternateProfile] = useState(false);
   const [parentId, setParentId] = useState('post-parent-a');
@@ -2537,10 +2538,10 @@ function ReplyComposerContextIsolationStory() {
             } as GraphQLResponse;
           }
           if (request.name === 'PostComposerCreatePostMutation') {
+            const input = variables as PostComposerCreatePostMutation$variables;
+            setRequests((current) => [...current, input.input]);
             await new Promise((resolve) => setTimeout(resolve, 200));
-            return acceptedCreatePostResponse(
-              variables as PostComposerCreatePostMutation$variables,
-            );
+            return acceptedCreatePostResponse(input);
           }
           if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
             return {
@@ -2595,6 +2596,7 @@ function ReplyComposerContextIsolationStory() {
           </Suspense>
         </Profiler>
       </View>
+      <Text testID="reply-context-request-log">{JSON.stringify(requests)}</Text>
       <Pressable
         accessibilityLabel="다른 Parent로 전환"
         accessibilityRole="button"
@@ -6243,7 +6245,7 @@ export const PostDetailReplyTargetedRefetch: Story = {
       Readonly<{ replyParentId: string; visibility: string }>;
     expect(submittedInput).toMatchObject({
       actorProfileId: composerProfile.id,
-      bodyText: '현재 상세에 반영할 Reply',
+      bodyText: '@kosmo 현재 상세에 반영할 Reply',
       media: [],
       replyParentId: routeCurrentPost.id,
       requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
@@ -6749,7 +6751,7 @@ export const ProductionComposerAdapterFailure: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(body).toHaveValue('실패 뒤 보존할 본문');
@@ -8047,7 +8049,7 @@ export const ComposerErrorInteraction: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveAttribute(
@@ -8087,7 +8089,7 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ComposerStory />,
@@ -8167,7 +8169,7 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
       actorProfileId: composerProfile.id,
       bodyText: '@kosmo 오류가 나도 보존할 답글입니다.',
       media: [],
-      replyParentId: 'post-parent',
+      replyParentId: shortPost.id,
       requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
@@ -8392,18 +8394,65 @@ export const ComposerReplyContextIsolation: Story = {
 
     await userEvent.type(body, '이전 Parent의 늦은 답글');
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[];
+      expect(requests).toHaveLength(1);
+    });
+    const originalInput = (
+      JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[]
+    )[0]!;
+    expect(originalInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '이전 Parent의 늦은 답글',
+      media: [],
+      replyParentId: 'post-parent-a',
+      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
     await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
 
     await waitFor(() =>
       expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
     );
-    const currentBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    await expect(canvas.findByRole('button', { name: '접수 다시 확인' })).resolves.toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).not.toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
+    expect(
+      JSON.parse(canvas.getByTestId('reply-context-request-log').textContent ?? '[]'),
+    ).toHaveLength(1);
+
+    await userEvent.click(canvas.getByRole('button', { name: '접수 다시 확인' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[];
+      expect(requests).toHaveLength(2);
+    });
+    const retriedInput = (
+      JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[]
+    )[1]!;
+    expect(retriedInput).toEqual(originalInput);
+    expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('1'),
+    );
+    const currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
+    );
     expect(currentBody).toHaveValue('');
     await userEvent.type(currentBody, '새 Parent의 답글');
-    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
     expect(currentBody).toHaveValue('새 Parent의 답글');
-    expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
   },
   render: () => <ReplyComposerContextIsolationStory />,
 };
@@ -9007,7 +9056,7 @@ export const QuoteModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
@@ -9038,7 +9087,7 @@ export const QuoteModalFailureLifecycle: Story = {
       }),
     );
     expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
@@ -9225,7 +9274,7 @@ export const ReplyModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(body).toHaveValue('@kosmo 실패 뒤 유지할 답글');
