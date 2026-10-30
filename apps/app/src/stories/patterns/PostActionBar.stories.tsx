@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useRef, useState } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, UIManager, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   createOperationDescriptor,
@@ -1540,7 +1540,28 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
 
     expect(topLeftTrigger).toHaveAttribute('aria-haspopup', 'dialog');
     expect(topLeftTrigger).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(topLeftTrigger!);
+
+    const delayedMeasurement = () => {
+      const pendingMeasurements: Array<() => void> = [];
+      const measureSpy = spyOn(UIManager, 'measureInWindow').mockImplementation(
+        (node, callback) => {
+          pendingMeasurements.push(() => {
+            const bounds = (node as unknown as HTMLElement).getBoundingClientRect();
+            callback(bounds.x, bounds.y, bounds.width, bounds.height);
+          });
+        },
+      );
+      return { measureSpy, pendingMeasurements };
+    };
+    const { measureSpy, pendingMeasurements } = delayedMeasurement();
+    try {
+      await userEvent.click(topLeftTrigger!);
+      expect(pendingMeasurements).toHaveLength(1);
+      expect(screen.queryByTestId('full-reaction-overlay-position')).toBeNull();
+      pendingMeasurements[0]!();
+    } finally {
+      measureSpy.mockRestore();
+    }
     const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
     let position = screen.getByTestId('full-reaction-overlay-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
@@ -1572,7 +1593,16 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     await userEvent.click(topLeftTrigger!);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
-    await userEvent.click(topLeftTrigger!);
+    const { measureSpy: reopenMeasureSpy, pendingMeasurements: pendingReopenMeasurements } =
+      delayedMeasurement();
+    try {
+      await userEvent.click(topLeftTrigger!);
+      expect(pendingReopenMeasurements).toHaveLength(1);
+      expect(screen.queryByTestId('full-reaction-overlay-position')).toBeNull();
+      pendingReopenMeasurements[0]!();
+    } finally {
+      reopenMeasureSpy.mockRestore();
+    }
     const reopenedSearch = within(
       await screen.findByRole('dialog', { name: '반응 선택' }),
     ).getByRole('searchbox', { name: '반응 검색' });

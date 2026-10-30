@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
@@ -7,7 +7,7 @@ import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { OverlayPortal } from '@/components/ui/OverlayPortal';
 import { breakpoints, spacing } from '@/theme/tokens';
 import type React from 'react';
-import type { LayoutChangeEvent, LayoutRectangle, View as ViewType, ViewStyle } from 'react-native';
+import type { LayoutRectangle, View as ViewType, ViewStyle } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
 
 export type FullReactionOverlayProps = Readonly<{
@@ -45,7 +45,6 @@ export function FullReactionOverlay({
   const web = Platform.OS === 'web';
   const compactWeb = web && viewportWidth < breakpoints.compact;
   const [anchor, setAnchor] = useState<Anchor | null>(null);
-  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const contentRef = useRef<ViewType>(null);
 
   const measureAnchor = useCallback(
@@ -62,16 +61,17 @@ export function FullReactionOverlay({
     }
   }, [onClose, triggerRef, web]);
   const restoreNativeFocus = useCallback(() => triggerRef.current?.focus(), [triggerRef]);
-  const onContentLayout = useCallback((event: LayoutChangeEvent) => {
-    setContentHeight(event.nativeEvent.layout.height);
-  }, []);
 
-  useEffect(() => {
-    if (!open) {
+  // Clear the previous position before paint while the trigger is measured again.
+  useLayoutEffect(() => {
+    if (!web) {
       return;
     }
-    measureAnchor();
-  }, [measureAnchor, open]);
+    setAnchor(null);
+    if (open) {
+      measureAnchor();
+    }
+  }, [measureAnchor, open, web]);
 
   useEffect(() => {
     if (!web || !open) {
@@ -96,7 +96,7 @@ export function FullReactionOverlay({
     };
   }, [close, measureAnchor, open, triggerRef, web]);
 
-  if (web && !open) {
+  if (web && (!open || !anchor)) {
     return null;
   }
 
@@ -124,13 +124,10 @@ export function FullReactionOverlay({
   const requestedTop = anchor
     ? placement === 'bottom'
       ? anchor.y + anchor.height + spacing.xs
-      : anchor.y - (contentHeight ?? 0) - spacing.xs
+      : anchor.y - webHeight - spacing.xs
     : insets.top + spacing.sm;
   const minTop = insets.top + spacing.sm;
-  const maxTop = Math.max(
-    minTop,
-    viewportHeight - insets.bottom - (contentHeight ?? 0) - spacing.sm,
-  );
+  const maxTop = Math.max(minTop, viewportHeight - insets.bottom - webHeight - spacing.sm);
   const top = Math.min(Math.max(requestedTop, minTop), maxTop);
   const webPlacementProps: Record<string, unknown> = {
     dataSet: { placement },
@@ -159,11 +156,7 @@ export function FullReactionOverlay({
       webHeight={web ? webHeight : undefined}
     />
   );
-  const webPicker = (
-    <View onLayout={onContentLayout} ref={contentRef}>
-      {picker}
-    </View>
-  );
+  const webPicker = <View ref={contentRef}>{picker}</View>;
 
   if (web) {
     return (
