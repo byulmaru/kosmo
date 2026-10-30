@@ -158,7 +158,7 @@ function actor(profile: {
     avatarUrl: profile.avatar?.url,
     id: profile.id,
     name: profile.displayName || profile.handle,
-    profileHref: `/${profile.relativeHandle}`,
+    profileHref: `/${profile.relativeHandle}` as const,
   };
 }
 

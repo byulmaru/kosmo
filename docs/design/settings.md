@@ -271,8 +271,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   parent는 `/settings/info`다. direct·deep link로 연 경우에도 같은 parent를 사용한다. Web에서는
   앱 내부 이동으로 돌아가며 문서와 세션을 다시 로드하지 않는다. 설정 내부에서 진입한 뒤 돌아간 경우
   브라우저의 앞으로 가기는 방금 본 detail을 다시 연다.
-- `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
-  [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 shell이 back action과
+- `< compact` mobile Web의 root에서는 route가 메뉴 action과 `설정` heading을 가진 공용
+  [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 각 route가 back action과
   현재 destination heading을 렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
 - Android·iOS와 compact Web에서는 root 또는 category·detail destination route가 자기 text `PageHeader`를
   scroll content의 첫 heading으로 렌더링한다. category·detail header는 back action을 제공하고 Native safe

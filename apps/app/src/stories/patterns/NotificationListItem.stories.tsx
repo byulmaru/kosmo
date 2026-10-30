@@ -184,7 +184,7 @@ export function NotificationExample(args: Args) {
   const actor = {
     id: 'notification-actor',
     name: args.name,
-    profileHref: '/@notification-actor',
+    profileHref: '/@notification-actor' as const,
   };
   const shared = {
     disabled: args.disabled,
@@ -264,6 +264,7 @@ async function clickAtBottomOfTarget(target: HTMLElement) {
 }
 
 const meta = {
+  component: NotificationExample,
   title: 'KOSMO/Patterns/Notification List Item',
   args: {
     kind: 'follow',

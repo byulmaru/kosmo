@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -33,9 +34,9 @@ export default function SettingsProfileRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="프로필 설정" />
-      ) : null}
+      </MobileWebRouteChrome>
       <SettingsProfileDetail />
     </RouteScrollContainer>
   );

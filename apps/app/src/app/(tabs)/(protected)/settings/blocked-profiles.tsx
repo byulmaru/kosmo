@@ -6,6 +6,7 @@ import { PaginationScrollView } from '@/components/pagination/PaginationScrollVi
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -33,9 +34,9 @@ export default function SettingsBlockedProfilesRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="차단한 프로필" />
-      ) : null}
+      </MobileWebRouteChrome>
       <SettingsBlockedProfiles />
     </PaginationScrollView>
   );

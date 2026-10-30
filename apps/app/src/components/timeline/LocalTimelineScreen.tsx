@@ -7,11 +7,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import {
-  getShellLayout,
-  getWebMobileShellHeaderStickyOffset,
-} from '@/components/shell/shellLayout';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -98,9 +97,16 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   return (
     <View style={styles.root}>
       {publicEntry ? (
-        getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
-          <PageHeader title="타임라인 둘러보기" />
-        ) : null
+        <MobileWebRouteChrome>
+          <PageHeader
+            leading={
+              Platform.OS === 'web' && getShellLayout(true, width) === 'mobile' ? (
+                <NavigationDrawerTrigger />
+              ) : undefined
+            }
+            title="타임라인 둘러보기"
+          />
+        </MobileWebRouteChrome>
       ) : (
         <LocalHeader width={width} />
       )}
@@ -138,34 +144,29 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
 
 function LocalHeader({ width }: { width: number }) {
   const shellChrome = useShellChrome();
-  const routeOwnsHeader =
-    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
   return (
-    <>
-      {routeOwnsHeader ? (
-        <PageHeader
-          accessibilityLabel="로컬"
-          brandAccessibilityLabel="홈"
-          brandCurrent
-          brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? shellChrome?.reselectHome : undefined}
-          variant="brand"
-        />
-      ) : null}
+    <MobileWebRouteChrome>
+      <PageHeader
+        accessibilityLabel="로컬"
+        brandAccessibilityLabel="홈"
+        brandCurrent
+        brandHref={Platform.OS === 'web' && !mobileWeb ? '/home' : undefined}
+        leading={mobileWeb ? <NavigationDrawerTrigger /> : undefined}
+        onBrandCurrentNavigate={
+          Platform.OS === 'web' && !mobileWeb ? shellChrome?.reselectHome : undefined
+        }
+        variant="brand"
+      />
       <View
         style={
-          Platform.OS === 'web'
-            ? [
-                styles.webTimelineTabs,
-                { top: shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0 },
-              ]
-            : undefined
+          Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
         }
       >
         <TimelineTabs value="local" />
       </View>
-    </>
+    </MobileWebRouteChrome>
   );
 }
 

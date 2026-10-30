@@ -225,14 +225,6 @@ mockModule('./PublicContentInvitation', {
   PublicContentInvitation: MockPublicContentInvitation,
 });
 mockModule('./shellLayout', {
-  getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
-    route === '/settings/profile' || route === '/settings/default-post-visibility'
-      ? { leading: 'back', title: '프로필 설정' }
-      : route === '/settings/profile-migration'
-        ? { leading: 'back', title: '다른 서비스에서 이전' }
-        : route === '/settings/following-import'
-          ? { leading: 'back', title: '팔로잉 가져오기' }
-          : null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
@@ -241,8 +233,6 @@ mockModule('./shellLayout', {
   isNativeDrawerSwipeEnabled,
   isSettingsRoute: (route: string) => route.startsWith('/settings/'),
   isTimelineRoute: (route: string) => route === '/home' || route === '/local',
-  isWebMobileRouteOwnedHeader: () => false,
-  webMobileShellHeaderHeight: 64,
 });
 
 let UniversalShell: typeof UniversalShellComponent;
@@ -452,35 +442,26 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal('focusable' in root.props, false);
   });
 
-  it('mobile Web Settings shell back은 명시한 parent route로 dismiss한다', async () => {
+  it('mobile Web은 route가 렌더링한 메뉴를 중복하지 않는다', async () => {
     platform.OS = 'web';
     layout = 'mobile';
-    pathname = '/settings/profile';
-    await renderShell();
-
-    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
-    assert.ok(back);
-    await act(async () => back.props.onPress());
-
-    assert.deepEqual(dismissedToPaths, ['/settings']);
-    assert.equal(router.back.mock.callCount(), 0);
-  });
-
-  it('mobile Web migration route는 shared title과 /settings back을 사용한다', async () => {
-    platform.OS = 'web';
-    layout = 'mobile';
-    pathname = '/settings/profile-migration';
-    await renderShell();
-
-    const header = renderer?.root.findByType('PageHeader' as ElementType);
-    assert.ok(header);
-    assert.equal(header.props.title, '다른 서비스에서 이전');
-    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
-    assert.ok(back);
-    await act(async () => back.props.onPress());
-
-    assert.deepEqual(dismissedToPaths, ['/settings']);
-    assert.equal(router.back.mock.callCount(), 0);
+    pathname = '/bookmarks';
+    await act(async () => {
+      renderer = create(
+        createElement(
+          UniversalShell,
+          null,
+          createElement('Pressable', { accessibilityLabel: '메뉴 열기' }),
+        ),
+      );
+    });
+    assert.equal(
+      renderer!.root.findAll(
+        (node) =>
+          (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === '메뉴 열기',
+      ).length,
+      1,
+    );
   });
 
   it('Native에서는 shell root를 실제 focusable 접근성 target으로 만든다', async () => {
@@ -593,8 +574,7 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(modal.props.visible, false);
     assert.equal(renderer?.root.findAllByType('Drawer' as ElementType).length, 0);
 
-    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(menu);
+    assert.ok(shellChromeProps?.openNavigationDrawer);
 
     const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -609,7 +589,7 @@ describe('UniversalShell screen fallback focus target', () => {
     });
 
     try {
-      await act(async () => menu.props.onPress());
+      await act(async () => shellChromeProps?.openNavigationDrawer());
       assert.equal(modal.props.visible, true);
     } finally {
       await act(async () => renderer?.unmount());

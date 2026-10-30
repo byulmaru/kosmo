@@ -114,6 +114,10 @@ mockModule('relay-runtime', {
   getRequest: () => ({}),
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -130,7 +134,6 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
-  getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });

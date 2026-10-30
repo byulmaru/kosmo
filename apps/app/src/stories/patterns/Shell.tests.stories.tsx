@@ -1,3 +1,4 @@
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
@@ -363,7 +364,7 @@ export const UniversalMobileProfilePickerKeyboard: Story = {
     expect(profileTrigger).toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
-    expect(menuButton).toHaveFocus();
+    await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
   },
 };
 
@@ -463,4 +464,36 @@ export const ProfileSwitcherDrawerGuardedErrors: Story = {
       );
     }
   },
+};
+
+export const MobileRouteHeaderSafeArea: Story = {
+  ...universalMobile,
+  decorators: [
+    (Story) => (
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 24, left: 0, right: 0, bottom: 16 },
+        }}
+      >
+        <Story />
+      </SafeAreaProvider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const view = canvasElement.ownerDocument.defaultView!;
+    const header = canvas.getByRole('heading', { name: '홈' }).parentElement!.parentElement!;
+    expect(header.getBoundingClientRect().top).toBe(24);
+    expect(header.getBoundingClientRect().height).toBe(64);
+    view.scrollTo(0, 40);
+    await waitFor(() => expect(view.scrollY).toBeGreaterThan(0));
+    expect(header.getBoundingClientRect().top).toBe(24);
+    expect(canvas.getAllByRole('button', { name: '메뉴 열기' })).toHaveLength(1);
+    view.scrollTo(0, 0);
+  },
+};
+export const MobileRouteHeaderSafeAreaDark: Story = {
+  ...MobileRouteHeaderSafeArea,
+  globals: { ...universalMobile.globals, theme: 'dark' },
 };

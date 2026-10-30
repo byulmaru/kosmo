@@ -8,6 +8,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { AccountDeletionScreen } from '@/components/settings/AccountDeletionScreen';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
@@ -72,9 +73,9 @@ export default function SettingsAccountDeletionRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="코스모 탈퇴" />
-      ) : null}
+      </MobileWebRouteChrome>
       <RouteBoundary
         error={(retry) => <AccountDeletionScreen onRetry={retry} state={{ phase: 'load-error' }} />}
         loading={<AccountDeletionScreen state={{ phase: 'loading' }} />}
