@@ -114,6 +114,11 @@ Post·Reply·Quote 요청은 Media 준비가 끝나기 전에 접수될 수 있�
 없으면 Post를 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤
 저장 결과가 확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
 
+`PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
+`sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
+nullable list item으로 반환한다. `createPost`의 `request`만 선택하면 접수 응답을 바로 받을 수 있고, non-null
+`post`를 선택하면 publication 결과를 기다린다.
+
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 

@@ -44,7 +44,14 @@
   재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.
   처리 실패나 publication 전 취소는 각각 `FAILED`·`CANCELLED`를 반환하고 Workflow를 닫는다. 상태와 상세는
   Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
-  만들지 않는다.
+  만들지 않는다. GraphQL projection은 [Post domain contract](../../docs/domain/objects/post.md)을 따르며,
+  immutable input 전체나 public error detail을 복원하지 않는다. `createPost`의 `request`만 선택하면 접수 뒤 바로
+  반환하고, non-null `post`를 선택한 경우에만
+  기존 request Workflow의 `result()`를 30초 API deadline으로 기다린 뒤, published `postId`와 snapshot의 원본
+  `profileId`를 함께 조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
+  result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를
+  취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있지만,
+  `request`만 선택한 acknowledgement는 영향을 받지 않는다.
 - inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.
   Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에 `USE_EXISTING`, `REJECT_DUPLICATE`,
   `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction Activity가 공통 결과를 commit한 뒤

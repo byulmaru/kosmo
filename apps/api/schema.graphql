@@ -151,24 +151,10 @@ input CreatePostInput {
   visibility: PostVisibility!
 }
 
-type CreatePostMedia {
-  altText: String
-  applyNightshade: Boolean!
-  media: Media
-  mediaId: ID!
-}
-
 input CreatePostMediaInput {
   altText: String
   applyNightshade: Boolean = false
   mediaId: ID!
-}
-
-type CreatePostMention {
-  end: Int!
-  profile: Profile
-  profileId: ID!
-  start: Int!
 }
 
 input CreatePostMentionInput {
@@ -178,7 +164,7 @@ input CreatePostMentionInput {
 }
 
 type CreatePostPayload {
-  post: Post
+  post: Post!
   request: PostRequest
 }
 
@@ -516,21 +502,12 @@ type PostRequest implements Node {
   authorProfile: Profile
   bodyText: String!
   contentWarning: String
-  errorCode: String
-  errorMessage: String
   id: ID!
-  media: [CreatePostMedia!]!
-  mentions: [CreatePostMention!]!
+  media: [Media]!
   post: Post
-  replyParent: Post
-  replyParentId: ID
-  repostSource: Post
-  repostSourceId: ID
   requestId: String!
   sensitiveMedia: Boolean!
   status: PostRequestStatus!
-  submittedAt: DateTime!
-  visibility: PostVisibility!
 }
 
 type PostRequestPage {

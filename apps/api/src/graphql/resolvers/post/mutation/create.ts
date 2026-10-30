@@ -1,7 +1,9 @@
 import { db, firstOrThrow, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
-import { runWorkflow } from '@kosmo/core/temporal/client';
+import { ConflictError, KosmoError } from '@kosmo/core/error';
+import { runWorkflow, temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
+import { PostRequestStatus, postRequestWorkflowId } from '@kosmo/core/temporal/post-request';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -19,15 +21,73 @@ import {
   prepareLocalPostInput,
 } from './prepare-local-input';
 import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
+import type { PostRequestState, PostRequestWorkflowArgs } from '@kosmo/core/temporal/post-request';
+
+type PostRequestWorkflow = (args: PostRequestWorkflowArgs) => Promise<PostRequestState>;
+
+type CreatePostPayloadSource = {
+  readonly post: () => Promise<typeof Posts.$inferSelect>;
+  readonly request: PostRequestState | null;
+};
+
+const CreatePostPayload = builder.objectRef<CreatePostPayloadSource>('CreatePostPayload');
+
+CreatePostPayload.implement({
+  fields: (t) => ({
+    post: t.field({ type: Post, resolve: ({ post }) => post() }),
+    request: t.field({ type: PostRequest, nullable: true, resolve: ({ request }) => request }),
+  }),
+});
+
+const getPostForRequest = async (
+  accountId: string,
+  request: PostRequestState,
+): Promise<typeof Posts.$inferSelect> => {
+  const state = await temporalClient
+    .withDeadline(Date.now() + 30_000, () =>
+      temporalClient.workflow
+        .getHandle<PostRequestWorkflow>(
+          postRequestWorkflowId(accountId, request.snapshot.requestId),
+        )
+        .result(),
+    )
+    .catch(rethrowPostWorkflowFailure);
+
+  if (state.status === PostRequestStatus.PUBLISHED) {
+    if (!state.result?.postId) {
+      throw new Error('Published Post request has no Post ID');
+    }
+
+    return db
+      .select()
+      .from(Posts)
+      .where(
+        and(
+          eq(Posts.id, state.result.postId),
+          eq(Posts.profileId, request.snapshot.input.profileId),
+        ),
+      )
+      .limit(1)
+      .then(firstOrThrow);
+  }
+
+  if (state.status === PostRequestStatus.FAILED) {
+    if (state.error && state.error.code !== 'INTERNAL_SERVER_ERROR') {
+      throw new KosmoError({ code: state.error.code, message: state.error.message });
+    }
+    throw new Error(state.error?.message ?? 'Post request failed');
+  }
+
+  if (state.status === PostRequestStatus.CANCELLED) {
+    throw new ConflictError({ message: 'Post request is already finished' });
+  }
+
+  throw new Error(`Post request completed with unexpected status: ${state.status}`);
+};
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
-    type: builder.simpleObject('CreatePostPayload', {
-      fields: (field) => ({
-        post: field.field({ type: Post, nullable: true }),
-        request: field.field({ type: PostRequest, nullable: true }),
-      }),
-    }),
+    type: CreatePostPayload,
     typeOptions: { validate: localPostCreateInputSchema },
     input: {
       requestId: t.input.string({ required: false, validate: z.uuid().nullish() }),
@@ -51,7 +111,10 @@ builder.mutationField('createPost', (t) =>
     resolve: async (_, { input }, ctx) => {
       if (input.requestId) {
         const request = await submitPostRequest(input, input.requestId, ctx);
-        return { post: null, request };
+        return {
+          post: () => getPostForRequest(ctx.session.accountId, request),
+          request,
+        };
       }
 
       const localInput = await prepareLocalPostInput(input, ctx);
@@ -77,7 +140,7 @@ builder.mutationField('createPost', (t) =>
         .limit(1)
         .then(firstOrThrow);
 
-      return { post, request: null };
+      return { post: async () => post, request: null };
     },
   }),
 );

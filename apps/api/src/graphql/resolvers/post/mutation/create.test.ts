@@ -2,11 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
-import { ValidationError } from '@kosmo/core/error';
+import { ConflictError, KosmoError, ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
+import {
+  PostRequestStatus,
+  postRequestWorkflow,
+  postRequestWorkflowId,
+} from '@kosmo/core/temporal/post-request';
 import { ApplicationFailure } from '@temporalio/client';
 import {
   graphql,
@@ -16,6 +21,97 @@ import {
   isObjectType,
 } from 'graphql';
 import { schema } from '@/graphql/schema';
+import type { TestContext } from 'node:test';
+import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+
+const requestOwnerAccountId = '00000000-0000-4000-8000-000000000011';
+const requestProfileId = '00000000-0000-4000-8000-000000000012';
+
+const createPostRequest = (requestId: string, selection: string) =>
+  graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { ${selection} }
+      }
+    `,
+    variableValues: {
+      input: { bodyText: 'post body', requestId, visibility: 'PUBLIC' },
+    },
+    contextValue: {
+      session: {
+        accountId: requestOwnerAccountId,
+        profile: { id: requestProfileId, role: AccountProfileRole.MEMBER },
+      },
+    },
+  });
+
+const completedRequest = (
+  requestId: string,
+  status: PostRequestState['status'],
+  fields: Pick<PostRequestState, 'error' | 'result'> = {},
+): PostRequestState => ({
+  snapshot: {
+    input: {
+      accountId: requestOwnerAccountId,
+      bodyText: 'post body',
+      contentWarning: null,
+      media: [],
+      mentions: [],
+      origin: 'LOCAL',
+      profileId: requestProfileId,
+      sensitiveMedia: false,
+      visibility: 'PUBLIC',
+    },
+    requestId,
+    submittedAt: '2026-10-29T00:00:00.000Z',
+  },
+  status,
+  ...fields,
+});
+
+const setupPostRequestWorkflow = (
+  t: TestContext,
+  requestId: string,
+  result: PostRequestState | Error | Promise<PostRequestState>,
+) => {
+  const workflowId = postRequestWorkflowId(requestOwnerAccountId, requestId);
+  let resultCallCount = 0;
+  const start = t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postRequestWorkflow.workflow);
+      assert.equal((options as { workflowId: string }).workflowId, workflowId);
+      return { workflowId } as never;
+    },
+  );
+  t.mock.method(temporalClient.workflow, 'getHandle', (requestedWorkflowId: string) => {
+    assert.equal(requestedWorkflowId, workflowId);
+    return {
+      query: async () => null,
+      result: async () => {
+        resultCallCount += 1;
+        if (result instanceof Error) {
+          throw result;
+        }
+        return result;
+      },
+    } as never;
+  });
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  return {
+    get resultCallCount() {
+      return resultCallCount;
+    },
+    start,
+  };
+};
 
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
@@ -49,7 +145,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
 
   const createPostPayload = schema.getType('CreatePostPayload');
   assert.ok(isObjectType(createPostPayload));
-  assert.equal(String(createPostPayload.getFields().post.type), 'Post');
+  assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
   assert.equal(String(createPostPayload.getFields().request.type), 'PostRequest');
   assert.deepEqual(Object.keys(createPostPayload.getFields()).sort(), ['post', 'request']);
 
@@ -58,11 +154,13 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(schema.getType('PostRequestMediaInput'), undefined);
   assert.equal(schema.getType('PostRequestDraft'), undefined);
   assert.equal(schema.getType('PostRequestConnection'), undefined);
+  assert.equal(schema.getType('CreatePostMedia'), undefined);
+  assert.equal(schema.getType('CreatePostMention'), undefined);
   const postRequest = schema.getType('PostRequest');
   assert.ok(isObjectType(postRequest));
   assert.ok(postRequest.getFields().bodyText);
   assert.ok(postRequest.getFields().media);
-  assert.ok(postRequest.getFields().mentions);
+  assert.equal(postRequest.getFields().mentions, undefined);
   assert.equal(postRequest.getFields().draft, undefined);
 
   const query = schema.getQueryType();
@@ -334,12 +432,126 @@ test('createPost without a request ID returns the committed Post from the synchr
 
   assert.deepEqual(result.errors, undefined);
   const createPost = result.data?.createPost as {
-    post: { id: string } | null;
+    post: { id: string };
     request: { id: string } | null;
   };
   assert.equal(createPost.post?.id, encodeGlobalId('Post', postId));
   assert.equal(createPost.request, null);
   assert.equal(execute.mock.callCount(), 1);
+});
+
+test('createPost request-only selection acknowledges without waiting for workflow result', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000013';
+  const workflow = setupPostRequestWorkflow(
+    t,
+    requestId,
+    completedRequest(requestId, PostRequestStatus.PUBLISHED, {
+      result: { postId: '00000000-0000-4000-8000-000000000014' },
+    }),
+  );
+
+  const result = await createPostRequest(requestId, 'request { id status }');
+
+  assert.deepEqual(result.errors, undefined);
+  assert.equal(
+    (result.data?.createPost as { request: { status: string } }).request.status,
+    'QUEUED',
+  );
+  assert.equal(workflow.start.mock.callCount(), 1);
+  assert.equal(workflow.resultCallCount, 0);
+});
+
+test('createPost waits for publication only when selected and returns the published Post row', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000015';
+  const postId = '00000000-0000-4000-8000-000000000016';
+  const published = completedRequest(requestId, PostRequestStatus.PUBLISHED, {
+    result: { postId },
+  });
+  let publishRequest!: (state: PostRequestState) => void;
+  const deferredResult = new Promise<PostRequestState>((resolve) => {
+    publishRequest = resolve;
+  });
+  const workflow = setupPostRequestWorkflow(t, requestId, deferredResult);
+  const select = t.mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from: () => ({
+          where: () => ({
+            limit: async (limit: number) => {
+              assert.equal(limit, 1);
+              return [{ id: postId, profileId: requestProfileId }];
+            },
+          }),
+        }),
+      }) as never,
+  );
+
+  let settled = false;
+  const resultPromise = createPostRequest(requestId, 'post { id } request { status }').then(
+    (result) => {
+      settled = true;
+      return result;
+    },
+  );
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    assert.equal(select.mock.callCount(), 0);
+    assert.equal(workflow.start.mock.callCount(), 1);
+  } finally {
+    publishRequest(published);
+    await resultPromise;
+  }
+  const result = await resultPromise;
+
+  assert.deepEqual(result.errors, undefined);
+  assert.equal(
+    (result.data?.createPost as { post: { id: string } }).post.id,
+    encodeGlobalId('Post', postId),
+  );
+  assert.equal(workflow.start.mock.callCount(), 1);
+  assert.equal(select.mock.callCount(), 1);
+});
+
+test('createPost maps a failed request error and non-null post selection bubbles the error', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000017';
+  setupPostRequestWorkflow(
+    t,
+    requestId,
+    completedRequest(requestId, PostRequestStatus.FAILED, {
+      error: { code: 'VALIDATION', message: 'Post content is invalid' },
+    }),
+  );
+
+  const result = await createPostRequest(requestId, 'post { id }');
+
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.message, 'Post content is invalid');
+  assert.ok(result.errors?.[0]?.originalError instanceof KosmoError);
+  assert.equal((result.errors?.[0]?.originalError as KosmoError).code, 'VALIDATION');
+});
+
+test('createPost maps a cancelled request to ConflictError and non-null post selection bubbles', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000018';
+  setupPostRequestWorkflow(t, requestId, completedRequest(requestId, PostRequestStatus.CANCELLED));
+
+  const result = await createPostRequest(requestId, 'post { id }');
+
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.originalError instanceof ConflictError, true);
+});
+
+test('createPost keeps workflow wait failures as failures when post is selected', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000019';
+  const waitFailure = new Error('post request wait failed');
+  setupPostRequestWorkflow(t, requestId, waitFailure);
+
+  const result = await createPostRequest(requestId, 'post { id }');
+
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.originalError, waitFailure);
 });
 
 test('maps Temporal validation failures back to the GraphQL field error', async (t) => {

@@ -15,9 +15,6 @@ const nonOwnerAccountId = '00000000-0000-4000-8000-000000000010';
 const profileId = '00000000-0000-4000-8000-000000000002';
 const requestId = '00000000-0000-4000-8000-000000000003';
 const mediaId = '00000000-0000-4000-8000-000000000004';
-const mentionedProfileId = '00000000-0000-4000-8000-000000000005';
-const replyParentId = '00000000-0000-4000-8000-000000000006';
-const repostSourceId = '00000000-0000-4000-8000-000000000007';
 
 const requestState = (
   overrides: Partial<PostRequestState['snapshot']['input']> = {},
@@ -35,19 +32,8 @@ const requestState = (
           mediaId,
         },
       ],
-      mentions: [
-        {
-          end: 7,
-          handle: '@missing',
-          profileId: mentionedProfileId,
-          relativeHandle: '@missing',
-          start: 0,
-        },
-      ],
       origin: 'LOCAL',
       profileId,
-      replyParentId,
-      repostSourceId,
       sensitiveMedia: true,
       visibility: 'UNLISTED',
       ...overrides,
@@ -70,16 +56,11 @@ const requestQuery = async (requestedProfileId: string, accountId = ownerAccount
         postRequest(profileId: $profileId, requestId: $requestId) {
           id
           requestId
+          status
           bodyText
           contentWarning
-          visibility
-          replyParentId
-          repostSourceId
           sensitiveMedia
-          replyParent { id }
-          repostSource { id }
-          media { altText applyNightshade mediaId media { id } }
-          mentions { start end profileId profile { id } }
+          media { id altText }
         }
       }
     `,
@@ -108,7 +89,7 @@ const emptySelectChain = (): EmptySelectChain => {
   return chain;
 };
 
-test('postRequest exposes its flat immutable draft and retains IDs for unavailable references', async (t) => {
+test('postRequest exposes its thin summary and a nullable unavailable Media node', async (t) => {
   const state = requestState();
   t.mock.method(temporalClient.workflow, 'getHandle', (workflowId: string) => {
     assert.equal(workflowId, postRequestWorkflowId(ownerAccountId, requestId));
@@ -126,55 +107,19 @@ test('postRequest exposes its flat immutable draft and retains IDs for unavailab
   const request = result.data?.postRequest as {
     id: string;
     requestId: string;
+    status: string;
     bodyText: string;
     contentWarning: string;
-    visibility: string;
-    replyParentId: string;
-    repostSourceId: string;
     sensitiveMedia: boolean;
-    replyParent: { id: string } | null;
-    repostSource: { id: string } | null;
-    media: {
-      altText: string;
-      applyNightshade: boolean;
-      mediaId: string;
-      media: { id: string } | null;
-    }[];
-    mentions: {
-      start: number;
-      end: number;
-      profileId: string;
-      profile: { id: string } | null;
-    }[];
+    media: ({ id: string; altText: string | null } | null)[];
   };
   assert.equal(request.id, encodeGlobalId('PostRequest', requestId));
   assert.equal(request.requestId, requestId);
+  assert.equal(request.status, 'QUEUED');
   assert.equal(request.bodyText, 'draft body');
   assert.equal(request.contentWarning, 'Spoiler');
-  assert.equal(request.visibility, 'UNLISTED');
-  assert.equal(request.replyParentId, encodeGlobalId('Post', replyParentId));
-  assert.equal(request.repostSourceId, encodeGlobalId('Post', repostSourceId));
   assert.equal(request.sensitiveMedia, true);
-  assert.equal(request.replyParent, null);
-  assert.equal(request.repostSource, null);
-  assert.deepEqual(
-    request.media.map(({ altText, applyNightshade, mediaId: id, media }) => [
-      altText,
-      applyNightshade,
-      id,
-      media?.id ?? null,
-    ]),
-    [['alt text', true, encodeGlobalId('Media', mediaId), null]],
-  );
-  assert.deepEqual(
-    request.mentions.map(({ start, end, profileId: id, profile }) => [
-      start,
-      end,
-      id,
-      profile?.id ?? null,
-    ]),
-    [[0, 7, encodeGlobalId('Profile', mentionedProfileId), null]],
-  );
+  assert.deepEqual(request.media, [null]);
 });
 
 test('postRequest allows owner history reads without current profile membership and scopes by profile and account', async (t) => {

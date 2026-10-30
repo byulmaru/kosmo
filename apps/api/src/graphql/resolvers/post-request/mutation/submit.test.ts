@@ -21,7 +21,6 @@ import type { ExecutionResult } from 'graphql';
 
 type CreatePostResult = {
   createPost: {
-    post: { id: string } | null;
     request: { status: string } | null;
   };
 };
@@ -37,7 +36,7 @@ const requestSubmit = (input: {
     source: `
       mutation CreatePost($input: CreatePostInput!) {
         createPost(input: $input) {
-          post { id } request { status }
+          request { status }
         }
       }
     `,
@@ -241,7 +240,6 @@ test('createPost checks raw uploads before start and keeps READY media choices i
     visibility: 'PUBLIC',
   });
   assert.deepEqual(uploadingResult.errors, undefined);
-  assert.equal(uploadingResult.data?.createPost.post, null);
   assert.equal(uploadingResult.data?.createPost.request?.status, 'QUEUED');
   assert.deepEqual(metadataRequests, [
     {
@@ -279,7 +277,6 @@ test('createPost checks raw uploads before start and keeps READY media choices i
     visibility: 'PUBLIC',
   });
   assert.deepEqual(readyResult.errors, undefined);
-  assert.equal(readyResult.data?.createPost.post, null);
   assert.equal(readyResult.data?.createPost.request?.status, 'QUEUED');
   assert.equal(metadataRequests.length, 1);
   assert.deepEqual(started[1]?.args?.[0]?.input.media, [
@@ -565,7 +562,6 @@ test('createPost recovers a lost acknowledgement after an upload source disappea
   };
   const initial = await requestSubmit(input);
   assert.deepEqual(initial.errors, undefined);
-  assert.equal(initial.data?.createPost.post, null);
   assert.equal(initial.data?.createPost.request?.status, 'QUEUED');
 
   const currentAfterStart = readCurrent();
@@ -578,12 +574,10 @@ test('createPost recovers a lost acknowledgement after an upload source disappea
   };
   const replay = await requestSubmit(input);
   assert.deepEqual(replay.errors, undefined);
-  assert.equal(replay.data?.createPost.post, null);
   assert.equal(replay.data?.createPost.request?.status, 'PUBLISHED');
   current = { ...currentAfterStart, status: PostRequestStatus.FAILED };
   const failedReplay = await requestSubmit(input);
   assert.deepEqual(failedReplay.errors, undefined);
-  assert.equal(failedReplay.data?.createPost.post, null);
   assert.equal(failedReplay.data?.createPost.request?.status, 'FAILED');
   assert.equal(queryCount, 3);
   assert.equal(fetchCount, 1);
@@ -632,7 +626,6 @@ test('createPost confirms a matching racing start and rejects different content'
     visibility: 'PUBLIC',
   });
   assert.deepEqual(matching.errors, undefined);
-  assert.equal(matching.data?.createPost.post, null);
   assert.equal(matching.data?.createPost.request?.status, 'PROCESSING');
 
   const changed = await requestSubmit({
