@@ -105,10 +105,10 @@ export function PostActionSurface({
     target.content &&
     authentication.selectedProfileId === target.profile.id
       ? {
-          accessibilityLabel: '게시 활동 보기',
+          accessibilityLabel: '재게시한 사람 보기',
           icon: Activity,
           key: 'post-activity',
-          label: '게시 활동 보기',
+          label: '재게시한 사람 보기',
           onSelect: () =>
             router.push(`/${target.profile.relativeHandle}/${target.id}/activity` as Href),
         }

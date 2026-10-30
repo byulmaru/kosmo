@@ -46,8 +46,8 @@ export function PostRepostProfileList({
   if (!connection) {
     return (
       <StateView
-        description="이 게시글의 게시 활동을 확인할 수 없어요."
-        title="게시 활동을 볼 수 없어요"
+        description="이 게시글을 재게시한 사람을 확인할 수 없어요."
+        title="재게시한 사람을 볼 수 없어요"
       />
     );
   }
@@ -60,10 +60,10 @@ export function PostRepostProfileList({
       <PaginationSurface
         endRef={endRef}
         error={loadError}
-        errorMessage="게시 활동을 더 불러오지 못했어요"
+        errorMessage="재게시한 사람을 더 불러오지 못했어요"
         hasNext={pagination.hasNext}
         isLoading={pagination.isLoadingNext}
-        loadingLabel="게시 활동을 더 불러오는 중"
+        loadingLabel="재게시한 사람을 더 불러오는 중"
         onRetry={loadNextPage}
         style={styles.pagination}
       />
@@ -71,7 +71,7 @@ export function PostRepostProfileList({
   ) : (
     <StateView
       description="이 게시글을 재게시한 프로필이 생기면 여기에 표시돼요."
-      title="아직 게시 활동이 없어요"
+      title="아직 재게시한 사람이 없어요"
     />
   );
 }

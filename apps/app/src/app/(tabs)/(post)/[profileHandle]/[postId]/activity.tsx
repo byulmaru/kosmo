@@ -67,7 +67,7 @@ export default function PostActivityRoute() {
           error={(retry) => <PostActivityRouteState onRetry={retry} state="error" />}
           key={`${handle}:${postId}`}
           loading={<PostActivityRouteState state="loading" />}
-          title="게시 활동을 불러오지 못했어요"
+          title="재게시한 사람을 불러오지 못했어요"
         >
           <PostActivityRouteContent postId={postId} routeRelativeHandle={routeRelativeHandle} />
         </RouteBoundary>
@@ -123,7 +123,7 @@ function PostActivityHeader({ onBack }: { onBack: () => void }) {
             <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
           </IconButton>
         }
-        title="게시 활동"
+        title="재게시한 사람"
       />
     </View>
   );
@@ -162,19 +162,19 @@ function PostActivityRouteState({
   state: 'error' | 'loading' | 'missing';
 }) {
   return state === 'loading' ? (
-    <StateView loading title="게시 활동을 불러오는 중입니다." />
+    <StateView loading title="재게시한 사람을 불러오는 중입니다." />
   ) : state === 'error' ? (
     <StateView
       actionLabel="다시 시도"
       alert
       description="잠시 후 다시 시도해주세요."
       onAction={onRetry}
-      title="게시 활동을 불러오지 못했어요"
+      title="재게시한 사람을 불러오지 못했어요"
     />
   ) : (
     <StateView
       description="이미 삭제되었거나 존재하지 않는 게시글이에요."
-      title="게시 활동을 볼 수 없어요"
+      title="재게시한 사람을 볼 수 없어요"
     />
   );
 }

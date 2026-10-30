@@ -183,7 +183,7 @@ describe('PostActionSurface mute wiring', () => {
     assert.deepEqual(menuProps.items, [{ key: 'copy-link', label: '링크 복사' }, muteItem]);
   });
 
-  it('작성자의 ACTIVE contentful 게시글에만 게시 활동 메뉴를 추가하고 경로를 연다', async () => {
+  it('작성자의 ACTIVE contentful 게시글에만 재게시한 사람 메뉴를 추가하고 경로를 연다', async () => {
     selectedProfileId = 'profile:author';
 
     await act(async () => {
@@ -200,7 +200,7 @@ describe('PostActionSurface mute wiring', () => {
       items.map(({ key, label }) => ({ key, label })),
       [
         { key: 'copy-link', label: '링크 복사' },
-        { key: 'post-activity', label: '게시 활동 보기' },
+        { key: 'post-activity', label: '재게시한 사람 보기' },
       ],
     );
 
@@ -208,7 +208,7 @@ describe('PostActionSurface mute wiring', () => {
     assert.deepEqual(routerPushes, ['/@author/post:1/activity']);
   });
 
-  it('작성자 외 selected Profile과 삭제된 게시글에는 게시 활동 메뉴를 노출하지 않는다', async () => {
+  it('작성자 외 selected Profile과 삭제된 게시글에는 재게시한 사람 메뉴를 노출하지 않는다', async () => {
     selectedProfileId = 'profile:viewer';
 
     await act(async () => {

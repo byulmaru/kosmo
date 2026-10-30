@@ -142,7 +142,7 @@ test('missing or repeated route params render unavailable state without a GraphQ
   assert.equal(network.requests, 0);
   assert.equal(
     renderer!.root.findAll((node) => String(node.type) === 'StateView')[0]?.props.title,
-    '게시 활동을 볼 수 없어요',
+    '재게시한 사람을 볼 수 없어요',
   );
 });
 

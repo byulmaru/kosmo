@@ -48,7 +48,7 @@ export const ProfileRowsHideBioAndNavigate: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('heading', { name: '게시 활동' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '재게시한 사람' })).toBeVisible();
     expect(await canvas.findByText('별빛 여행자')).toBeVisible();
     expect(canvas.queryByText('목록에서 숨겨야 하는 소개입니다.')).not.toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@activity-starlight"]')).toBeInTheDocument();
@@ -67,7 +67,7 @@ export const InitialErrorKeepsHeaderAndRetries: Story = {
     relay: {
       operationResponses: {
         PostActivityRouteQuery: {
-          sequence: [{ error: '게시 활동 최초 조회 실패' }, { data: activityPost() }],
+          sequence: [{ error: '재게시한 사람 최초 조회 실패' }, { data: activityPost() }],
         },
       },
     },
@@ -75,8 +75,8 @@ export const InitialErrorKeepsHeaderAndRetries: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    expect(await page.findByRole('alert')).toHaveTextContent('게시 활동을 불러오지 못했어요');
-    expect(canvas.getByRole('heading', { name: '게시 활동' })).toBeVisible();
+    expect(await page.findByRole('alert')).toHaveTextContent('재게시한 사람을 불러오지 못했어요');
+    expect(canvas.getByRole('heading', { name: '재게시한 사람' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     expect(await canvas.findByText('별빛 여행자')).toBeVisible();
     expect(page.queryByRole('alert')).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ export const PaginationFailureKeepsRowsAndRetries: Story = {
         PostActivityRouteQuery: { data: activityPost(activityProfiles, true) },
       },
       paginationResponses: [
-        { error: '게시 활동 다음 page 실패' },
+        { error: '재게시한 사람 다음 page 실패' },
         { data: activityPost(switchedActivityProfiles) },
       ],
     },
@@ -104,7 +104,9 @@ export const PaginationFailureKeepsRowsAndRetries: Story = {
     const storyWindow = canvasElement.ownerDocument.defaultView!;
     storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
     storyWindow.dispatchEvent(new Event('scroll'));
-    expect(await page.findByRole('alert')).toHaveTextContent('게시 활동을 더 불러오지 못했어요');
+    expect(await page.findByRole('alert')).toHaveTextContent(
+      '재게시한 사람을 더 불러오지 못했어요',
+    );
     expect(canvas.getByText('별빛 여행자')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     expect(await canvas.findByText('전환된 혜성')).toBeVisible();
@@ -143,7 +145,7 @@ export const ActorSwitchDoesNotReusePreviousRows: Story = {
     const canvas = within(canvasElement);
     expect(await canvas.findByText('별빛 여행자')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '활성 프로필 전환' }));
-    expect(await canvas.findByText('게시 활동을 볼 수 없어요')).toBeVisible();
+    expect(await canvas.findByText('재게시한 사람을 볼 수 없어요')).toBeVisible();
     expect(canvas.queryByText('별빛 여행자')).not.toBeInTheDocument();
   },
   render: () => <ActorSwitchScreen />,
@@ -166,9 +168,9 @@ export const LateActorResponseDoesNotLeak: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText('게시 활동을 불러오는 중입니다.')).toBeVisible();
+    expect(canvas.getByText('재게시한 사람을 불러오는 중입니다.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '활성 프로필 전환' }));
-    expect(await canvas.findByText('게시 활동을 볼 수 없어요')).toBeVisible();
+    expect(await canvas.findByText('재게시한 사람을 볼 수 없어요')).toBeVisible();
     await new Promise((resolve) => setTimeout(resolve, 2_100));
     expect(canvas.queryByText('별빛 여행자')).not.toBeInTheDocument();
   },

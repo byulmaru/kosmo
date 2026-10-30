@@ -223,9 +223,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## Post Activity route
 
-- Post Activity는 Repost action menu와 별개인 목록 surface다. More의 `게시 활동 보기`는 현재 Post의 Author와
-  동일한 selected Profile에만 표시하며, 선택하면 modal이나 action sheet가 아닌 `게시 활동` 전용 route로 이동한다.
-- 첫 출시 화면은 `PageHeader(게시 활동) → Repost Profile 목록` 순서로 고정한다. 목록은 기존
+- Post Activity는 Repost action menu와 별개인 목록 surface다. More의 `재게시한 사람 보기`는 현재 Post의 Author와
+  동일한 selected Profile에만 표시하며, 선택하면 modal이나 action sheet가 아닌 `재게시한 사람` 전용 route로 이동한다.
+- 첫 출시 화면은 `PageHeader(재게시한 사람) → Repost Profile 목록` 순서로 고정한다. 목록은 기존
   `ProfileListItem`의 `Bio=False, Action=Follow` 계약을 사용하고 관계에 따라 `팔로우`, `팔로잉`, `요청됨`
   상태를 노출한다. Reaction People의 pill filter와 합치지 않는다.
 - Quote tab과 Quote Post 목록은 `PROD-904`로 보류한다. 첫 출시에는 Quote tab이나 비활성·placeholder tab을
