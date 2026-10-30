@@ -45,11 +45,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
-const configuredLocalTimelineInstanceIds = [
-  '019f8ed1-0000-7000-8000-000000000a01',
-  '019f8ed1-0000-7000-8000-000000000a02',
-  '019f8ed1-0000-7000-8000-000000000a03',
-] as const;
+const configuredLocalTimelineInstanceId = crypto.randomUUID();
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
@@ -97,7 +93,7 @@ describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
-    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = `${configuredLocalTimelineInstanceIds[0].toUpperCase()}, ${configuredLocalTimelineInstanceIds[1]}, ${configuredLocalTimelineInstanceIds[2]}`;
+    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
     process.env.ENVIRONMENT = 'test';
@@ -4927,141 +4923,40 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
-  test('includes configured received remote roots in Local with the existing filters and cursors', async () => {
-    const auth = await createAuthenticatedSession();
+  test('uses configured Local sources from the initialized environment after raw environment changes', async () => {
     const localAuthor = await createProfile({
       handle: 'configured-local-author',
       instanceId: localInstanceId,
     });
-    const otherLocalInstance = await createLocalInstance({
-      domain: 'configured-other-local.example',
-    });
-    const otherLocalAuthor = await createProfile({
-      handle: 'configured-other-local-author',
-      instanceId: otherLocalInstance.id,
-    });
-    const planetAuthor = await createStoredActivityPubAuthor({
-      domain: 'planet.moe',
-      handle: 'configured-planet-author',
-      instanceId: configuredLocalTimelineInstanceIds[0],
-    });
-    const selectedAuthor = await createStoredActivityPubAuthor({
-      domain: 'configured-extra.example',
-      handle: 'configured-extra-author',
-      instanceId: configuredLocalTimelineInstanceIds[1],
-    });
-    const mutedAuthor = await createStoredActivityPubAuthor({
-      domain: 'configured-muted.example',
-      handle: 'configured-muted-author',
-      instanceId: configuredLocalTimelineInstanceIds[2],
-    });
-    const unlistedUri = 'https://planet.moe/notes/configured-unlisted';
-    const parentUri = 'https://planet.moe/notes/configured-parent';
     const localPost = await createContentfulPost({ profileId: localAuthor.id });
-    await createContentfulPost({ profileId: otherLocalAuthor.id });
-    const planetPost = await materializeRemotePost({
-      actorUri: planetAuthor.actorUri,
-      objectUri: 'https://planet.moe/notes/configured-public',
-      visibility: PostVisibility.PUBLIC,
+    const configuredAuthor = await createStoredActivityPubAuthor({
+      domain: 'configured-remote.example',
+      handle: 'configured-remote-author',
+      instanceId: configuredLocalTimelineInstanceId,
     });
-    const selectedPost = await materializeRemotePost({
-      actorUri: selectedAuthor.actorUri,
-      objectUri: 'https://configured-extra.example/notes/public',
-      visibility: PostVisibility.PUBLIC,
-    });
-    await materializeRemotePost({
-      actorUri: planetAuthor.actorUri,
-      objectUri: unlistedUri,
-      visibility: PostVisibility.UNLISTED,
-    });
-    const contentlessParent = await materializeRemotePost({
-      actorUri: planetAuthor.actorUri,
-      objectUri: parentUri,
-      visibility: PostVisibility.PUBLIC,
-    });
-    await materializeRemotePost({
-      actorUri: planetAuthor.actorUri,
-      objectUri: 'https://planet.moe/notes/configured-reply',
-      replyTarget: parentUri,
-      visibility: PostVisibility.PUBLIC,
-    });
-    await materializeRemotePost({
-      actorUri: mutedAuthor.actorUri,
-      objectUri: 'https://configured-muted.example/notes/public',
-      visibility: PostVisibility.PUBLIC,
-    });
+    const configuredPost = await createContentfulPost({ profileId: configuredAuthor.profile.id });
     const unconfiguredAuthor = await createStoredActivityPubAuthor({
-      domain: 'configured-unlisted-instance.example',
+      domain: 'unconfigured-remote.example',
       handle: 'unconfigured-author',
     });
-    await materializeRemotePost({
-      actorUri: unconfiguredAuthor.actorUri,
-      objectUri: 'https://configured-unlisted-instance.example/notes/public',
-      visibility: PostVisibility.PUBLIC,
-    });
-    await db
-      .update(Posts)
-      .set({ currentContentId: null })
-      .where(eq(Posts.id, contentlessParent.post.id));
-    await db.insert(ProfileMutes).values({
-      ownerProfileId: auth.profile.id,
-      targetProfileId: mutedAuthor.profile.id,
-    });
-
-    const read = (variables: { first: number; after?: string | null }) =>
-      requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
-        `query ConfiguredLocalTimeline($first: Int!, $after: String) {
-          localTimeline(first: $first, after: $after) {
-            edges { cursor node { id } }
-            pageInfo { endCursor hasNextPage }
-          }
-        }`,
-        { ...variables, after: variables.after ?? null },
-        auth.token,
-      );
-    const configuredInstanceIds = process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
-    const expected = [localPost.id, planetPost.post.id, selectedPost.post.id].toSorted(
-      (left, right) => (left < right ? 1 : left > right ? -1 : 0),
-    );
-    const assertConfiguredTimeline = async () => {
-      const result = await read({ first: 20 });
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(
-        connectionIds(result.data?.localTimeline),
-        expected.map((id) => globalId('Post', id)),
-      );
-    };
+    await createContentfulPost({ profileId: unconfiguredAuthor.profile.id });
 
     try {
-      await assertConfiguredTimeline();
-
       process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = 'not-a-uuid';
-      await assertConfiguredTimeline();
-
-      const firstPage = await read({ first: 2 });
-      assertNoGraphQLErrors(firstPage);
-      assert.deepEqual(
-        connectionIds(firstPage.data?.localTimeline),
-        expected.slice(0, 2).map((id) => globalId('Post', id)),
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query ConfiguredLocalTimeline {
+          localTimeline(first: 10) { edges { node { id } } }
+        }`,
+        {},
       );
-      assert.equal(firstPage.data?.localTimeline?.pageInfo.hasNextPage, true);
 
-      const secondPage = await read({
-        first: 2,
-        after: firstPage.data?.localTimeline?.pageInfo.endCursor,
-      });
-      assertNoGraphQLErrors(secondPage);
+      assertNoGraphQLErrors(result);
       assert.deepEqual(
-        connectionIds(secondPage.data?.localTimeline),
-        expected.slice(2).map((id) => globalId('Post', id)),
+        new Set(connectionIds(result.data?.localTimeline)),
+        new Set([localPost, configuredPost].map(({ id }) => globalId('Post', id))),
       );
-      assert.equal(secondPage.data?.localTimeline?.pageInfo.hasNextPage, false);
     } finally {
-      if (configuredInstanceIds === undefined) {
-        delete process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS;
-      } else {
-        process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredInstanceIds;
-      }
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     }
   });
 

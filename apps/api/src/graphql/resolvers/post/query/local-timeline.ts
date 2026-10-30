@@ -3,7 +3,7 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
-import { additionalLocalTimelineInstanceIds } from '@/env';
+import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
@@ -35,7 +35,7 @@ builder.queryField('localTimeline', (t) =>
                 and(
                   inArray(Profiles.instanceId, [
                     localInstance.id,
-                    ...additionalLocalTimelineInstanceIds,
+                    ...env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS,
                   ]),
                   eq(Posts.visibility, PostVisibility.PUBLIC),
                   isNotNull(Posts.currentContentId),

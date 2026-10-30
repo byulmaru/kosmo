@@ -1,15 +1,16 @@
 import { z } from 'zod';
 
-export const additionalLocalTimelineInstanceIds = (
-  process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS ?? ''
-)
-  .split(',')
-  .map((instanceId) => instanceId.trim())
-  .filter(Boolean)
-  .map((instanceId) => {
-    if (!z.uuid().safeParse(instanceId).success) {
-      throw new Error('KOSMO_LOCAL_TIMELINE_INSTANCE_IDS configuration must contain only UUIDs');
-    }
+export const envSchema = z.object({
+  KOSMO_LOCAL_TIMELINE_INSTANCE_IDS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((instanceId) => instanceId.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.uuid())),
+});
 
-    return instanceId;
-  });
+export const env = envSchema.parse(process.env);
