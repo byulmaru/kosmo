@@ -87,6 +87,14 @@ function ActivityStorySurface() {
 
 const meta = {
   component: ActivityStorySurface,
+  excludeStories: [
+    'ActorSwitchActivity',
+    'activityOwner',
+    'activityPost',
+    'activityPostId',
+    'activityProfiles',
+    'switchedActivityProfiles',
+  ],
   parameters: {
     layout: 'fullscreen',
     relay: { operationResponses: { PostActivityRouteQuery: { data: activityPost() } } },

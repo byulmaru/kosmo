@@ -1,5 +1,6 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { useRouter } from 'expo-router';
+import { Activity } from 'lucide-react-native';
 import { useContext } from 'react';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -105,6 +106,7 @@ export function PostActionSurface({
     authentication.selectedProfileId === target.profile.id
       ? {
           accessibilityLabel: '게시 활동 보기',
+          icon: Activity,
           key: 'post-activity',
           label: '게시 활동 보기',
           onSelect: () =>
