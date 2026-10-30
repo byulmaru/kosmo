@@ -7772,7 +7772,7 @@ export const ComposerSubmitting: Story = {
   parameters: {
     relay: {
       mutationLoading: true,
-      operationResponses: { PostComposerCreatePostMutation: undefined },
+      operationResponses: { PostComposerCreatePostMutation: () => undefined },
     },
   },
   play: async ({ canvasElement }) => {
@@ -9137,7 +9137,7 @@ export const ReplyModalPendingLifecycle: Story = {
   parameters: {
     relay: {
       mutationLoading: true,
-      operationResponses: { PostComposerCreatePostMutation: undefined },
+      operationResponses: { PostComposerCreatePostMutation: () => undefined },
     },
   },
   play: async ({ canvasElement }) => {
@@ -9164,7 +9164,7 @@ export const ReplyDetailModalPendingLifecycle: Story = {
     relay: {
       mutationLoading: true,
       operationResponses: {
-        PostComposerCreatePostMutation: undefined,
+        PostComposerCreatePostMutation: () => undefined,
         PostDetailThreadIdentityStoryQuery: {
           data: {
             node: {
