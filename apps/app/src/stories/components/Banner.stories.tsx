@@ -77,12 +77,16 @@ export const LongMessage320: Story = {
 
 export const HomeNotification: Story = {
   ...banner320Viewport,
-  args: { icon: Bell, message: '알림 받기', onDismiss: fn() },
+  args: { icon: Bell, message: '푸시 알림 받기', onDismiss: fn() },
   parameters: { ...banner320Viewport.parameters, controls: { disable: true } },
   render: ({ icon, message, onDismiss }) => (
     <View style={{ marginHorizontal: space[12] }}>
       <Banner
-        action={<Button size="compact">알림 켜기</Button>}
+        action={
+          <Button accessibilityLabel="푸시 알림 켜기" size="compact">
+            켜기
+          </Button>
+        }
         icon={icon}
         message={message}
         onDismiss={onDismiss}

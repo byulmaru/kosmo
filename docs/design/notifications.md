@@ -206,7 +206,7 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 
 - Web Push는 지원 조건을 충족하는 Android·Desktop browser/PWA와 iOS/iPadOS 홈 화면 앱에서 제공한다.
 - Web에서는 앱 시작·로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 활성화하거나
-  Home 알림 배너의 `알림 켜기`를 누를 때만 OS 권한 요청을 시작한다.
+  Home 알림 배너의 `켜기`를 누를 때만 OS 권한 요청을 시작한다.
 - Home 알림 배너는 로그인한 사용자가 선택된 Profile의 Home을 보고 있고, 브라우저가 Web Push를 지원하며 권한이
   미결정인 경우에만 표시한다. 권한이 허용되거나 거부된 경우, 지원하지 않는 browser와 Native에서는 표시하지 않는다.
 - Home 알림 배너를 닫으면 해당 브라우저에서는 다시 표시하지 않으며, reload·로그인·선택 Profile 전환 뒤에도 유지한다.

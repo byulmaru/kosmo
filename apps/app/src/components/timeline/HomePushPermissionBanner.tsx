@@ -50,13 +50,18 @@ export function HomePushPermissionBanner() {
     <View style={{ marginHorizontal: space[12], marginVertical: space[12] }}>
       <Banner
         action={
-          <Button loading={pending} onPress={handleEnable} size="compact">
-            알림 켜기
+          <Button
+            accessibilityLabel="푸시 알림 켜기"
+            loading={pending}
+            onPress={handleEnable}
+            size="compact"
+          >
+            켜기
           </Button>
         }
         dismissDisabled={pending}
         icon={Bell}
-        message="알림 받기"
+        message="푸시 알림 받기"
         onDismiss={handleDismiss}
       />
     </View>

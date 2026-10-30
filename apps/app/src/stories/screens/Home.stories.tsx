@@ -199,7 +199,7 @@ export const PushPermissionBanner: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const enableButton = await canvas.findByRole('button', { name: '알림 켜기' });
+    const enableButton = await canvas.findByRole('button', { name: '푸시 알림 켜기' });
     const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
 
     expect(
@@ -207,7 +207,7 @@ export const PushPermissionBanner: Story = {
     ).toBeTruthy();
     await userEvent.click(enableButton);
     await waitFor(() =>
-      expect(canvas.queryByRole('button', { name: '알림 켜기' })).not.toBeInTheDocument(),
+      expect(canvas.queryByRole('button', { name: '푸시 알림 켜기' })).not.toBeInTheDocument(),
     );
   },
   render: () => <HomePushPermissionStory />,
@@ -229,7 +229,7 @@ export const PushPermissionBannerNarrow320: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const enableButton = await canvas.findByRole('button', { name: '알림 켜기' });
+    const enableButton = await canvas.findByRole('button', { name: '푸시 알림 켜기' });
     const dismissButton = canvas.getByRole('button', { name: '배너 닫기' });
     const canvasBounds = canvasElement.getBoundingClientRect();
     const enableBounds = enableButton.getBoundingClientRect();
