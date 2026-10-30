@@ -150,14 +150,14 @@ const parseInput = (
       'PostRequestInputInvalid',
     );
   }
-  const inputMedia = parsed.data.input.media;
+  const { media: inputMedia, ...inputWithoutMedia } = parsed.data.input;
   const legacyMediaProcessing = parsed.data.mediaProcessing;
   const legacyNightshadeByMediaId = new Map(
     legacyMediaProcessing?.map(({ applyNightshade, mediaId }) => [mediaId, applyNightshade]),
   );
   const snapshot: PostRequestSnapshot = {
     input: {
-      ...parsed.data.input,
+      ...inputWithoutMedia,
       ...(inputMedia === undefined
         ? {}
         : {

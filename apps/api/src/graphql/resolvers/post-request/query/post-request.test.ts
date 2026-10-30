@@ -5,10 +5,13 @@ import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { POST_REQUEST_STATE_QUERY, postRequestWorkflowId } from '@kosmo/core/temporal/post-request';
 import { graphql } from 'graphql';
+import { deriveContext } from '@/context';
 import { schema } from '@/graphql/schema';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+import type { ServerContext } from '@/context';
 
 const ownerAccountId = '00000000-0000-4000-8000-000000000001';
+const nonOwnerAccountId = '00000000-0000-4000-8000-000000000010';
 const profileId = '00000000-0000-4000-8000-000000000002';
 const requestId = '00000000-0000-4000-8000-000000000003';
 const mediaId = '00000000-0000-4000-8000-000000000004';
@@ -55,8 +58,12 @@ const requestState = (
   status: 'QUEUED',
 });
 
-const requestQuery = (requestedProfileId: string, accountId = ownerAccountId) =>
-  graphql({
+const requestQuery = async (requestedProfileId: string, accountId = ownerAccountId) => {
+  const requestContext = await deriveContext({
+    req: { header: () => undefined },
+  } as unknown as ServerContext);
+
+  return graphql({
     schema,
     source: `
       query PostRequest($profileId: ID!, $requestId: String!) {
@@ -80,8 +87,9 @@ const requestQuery = (requestedProfileId: string, accountId = ownerAccountId) =>
       profileId: encodeGlobalId('Profile', requestedProfileId),
       requestId,
     },
-    contextValue: { session: { accountId, profile: null } },
+    contextValue: { ...requestContext, session: { accountId, profile: null } },
   });
+};
 
 type EmptySelectChain = {
   from: (...args: unknown[]) => EmptySelectChain;
@@ -178,6 +186,7 @@ test('postRequest allows owner history reads without current profile membership 
       query: async () => current,
     } as never;
   });
+  t.mock.method(db, 'select', () => emptySelectChain() as never);
 
   const ownerResult = await requestQuery(profileId);
   assert.deepEqual(ownerResult.errors, undefined);
@@ -229,12 +238,15 @@ test('PostRequest Node requires the owning account and hides missing states', as
   assert.equal(node.id, encodeGlobalId('PostRequest', requestId));
   assert.equal(node.requestId, requestId);
 
-  const nonOwnerResult = await execute('00000000-0000-4000-8000-000000000010');
+  const nonOwnerResult = await execute(nonOwnerAccountId);
   assert.deepEqual(nonOwnerResult.errors, undefined);
   assert.equal(nonOwnerResult.data?.node, null);
 
   const unauthenticatedResult = await execute(null);
   assert.deepEqual(unauthenticatedResult.errors, undefined);
   assert.equal(unauthenticatedResult.data?.node, null);
-  assert.deepEqual(workflowIds, [postRequestWorkflowId(ownerAccountId, requestId)]);
+  assert.deepEqual(workflowIds, [
+    postRequestWorkflowId(ownerAccountId, requestId),
+    postRequestWorkflowId(nonOwnerAccountId, requestId),
+  ]);
 });
