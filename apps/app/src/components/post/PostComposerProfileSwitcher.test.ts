@@ -69,6 +69,9 @@ mockModule('react-relay', {
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: (props: Record<string, unknown>) => createElement('ProfilePicker', props),
 });
+mockModule('@/components/profile/ProfileNameBlock', {
+  ProfileNameBlock: 'ProfileNameBlock',
+});
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
