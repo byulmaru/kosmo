@@ -472,21 +472,25 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   await expect(page).toHaveURL(/\/@e2e-composer\/[^/]+$/);
   const publishedPath = decodeURIComponent(new URL(page.url()).pathname);
   expect(publishedPath).toMatch(/^\/@e2e-composer\/[^/]+$/);
-  const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          node?: {
+            __typename?: string | null;
+            id?: string | null;
+            profile?: { relativeHandle?: string | null } | null;
+            replyParent?: { id?: string | null } | null;
+          } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
   await page.reload();
-  const publishedPost = await publishedPostResponse;
+  const { response: publishedPost, body: publishedBody } = await publishedPostResponse;
   const publishedOperation = readGraphQLOperation(publishedPost.request().postData());
-  const publishedBody = (await publishedPost.json()) as {
-    data?: {
-      node?: {
-        __typename?: string | null;
-        id?: string | null;
-        profile?: { relativeHandle?: string | null } | null;
-        replyParent?: { id?: string | null } | null;
-      } | null;
-    };
-    errors?: unknown[];
-  };
   expect(publishedPost.ok(), JSON.stringify(publishedBody, null, 2)).toBe(true);
   expect(publishedBody.errors, JSON.stringify(publishedBody, null, 2)).toBeUndefined();
   expect(publishedOperation?.variables?.postId).toEqual(expect.any(String));
@@ -824,14 +828,19 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
     },
   });
 
-  const refreshedHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const refreshedHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
   await page.reload();
-  const refreshedHomeBody = (await (await refreshedHomeResponse).json()) as {
-    data?: {
-      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
-    };
-    errors?: unknown[];
-  };
+  const { body: refreshedHomeBody } = await refreshedHomeResponse;
   expect(refreshedHomeBody.errors, JSON.stringify(refreshedHomeBody, null, 2)).toBeUndefined();
   expect(refreshedHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
 
@@ -894,21 +903,25 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await showBody.click();
   await expect(publishedArticle.getByText(body, { exact: true })).toBeVisible();
 
-  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          node?: {
+            __typename?: string | null;
+            id?: string | null;
+            profile?: { relativeHandle?: string | null } | null;
+            replyParent?: { id?: string | null } | null;
+          } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
   await page.reload();
-  const detail = await detailResponse;
+  const { response: detail, body: detailBody } = await detailResponse;
   const detailOperation = readGraphQLOperation(detail.request().postData());
-  const detailBody = (await detail.json()) as {
-    data?: {
-      node?: {
-        __typename?: string | null;
-        id?: string | null;
-        profile?: { relativeHandle?: string | null } | null;
-        replyParent?: { id?: string | null } | null;
-      } | null;
-    };
-    errors?: unknown[];
-  };
   expect(detail.ok(), JSON.stringify(detailBody, null, 2)).toBe(true);
   expect(detailBody.errors, JSON.stringify(detailBody, null, 2)).toBeUndefined();
   expect(detailOperation?.variables?.postId).toBe(publishedHref?.split('/').at(-1));

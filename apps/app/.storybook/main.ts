@@ -44,6 +44,10 @@ const config: StorybookConfig = {
           replacement: fileURLToPath(new URL('./mocks/expo-secure-store.ts', import.meta.url)),
         },
         {
+          find: /^expo-crypto$/,
+          replacement: fileURLToPath(new URL('./mocks/expo-crypto.ts', import.meta.url)),
+        },
+        {
           find: /^@\/components\/post\/postClipboard$/,
           replacement: fileURLToPath(new URL('./mocks/postClipboard.ts', import.meta.url)),
         },
