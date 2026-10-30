@@ -5,75 +5,45 @@ import { ReactionCount } from '@/graphql/resolvers/post/field/post';
 import { Profile } from '@/graphql/resolvers/profile';
 import { Reaction } from '@/graphql/resolvers/reaction/ref';
 import { ReactionNotificationGroup } from '../group-ref';
-import { reactionNotificationGroupMembersLoader } from '../loader/group';
-import type { UserContext } from '@/context';
-import type {
-  ReactionNotificationGroupFeedRow,
-  ReactionNotificationGroupMemberRow,
-  ReactionNotificationGroupRow,
-} from '../group-ref';
-
-const groupMembers = async (
-  group: ReactionNotificationGroupRow | ReactionNotificationGroupFeedRow,
-  ctx: UserContext,
-): Promise<readonly ReactionNotificationGroupMemberRow[]> =>
-  'members' in group ? group.members : reactionNotificationGroupMembersLoader(ctx).load(group.id);
-
-const groupProjection = async (
-  group: ReactionNotificationGroupRow | ReactionNotificationGroupFeedRow,
-  ctx: UserContext,
-) => {
-  const members = await groupMembers(group, ctx);
-  const source = members[0] ? await Reaction.getDataloader(ctx).load(members[0].reactionId) : null;
-
-  return { members, source };
-};
 
 builder.objectFields(ReactionNotificationGroup, (t) => ({
+  id: t.exposeID('id'),
   latestAt: t.field({
     type: 'DateTime',
-    resolve: async (group, _, ctx) => {
-      if ('latestAt' in group) {
-        return (group as ReactionNotificationGroupFeedRow).latestAt;
-      }
-
-      const members = await groupMembers(group, ctx);
-      return members.reduce(
-        (latest, member) =>
-          Temporal.Instant.compare(member.createdAt, latest) > 0 ? member.createdAt : latest,
-        group.startedAt,
-      );
-    },
+    resolve: (group) => group.latestAt,
   }),
   unread: t.boolean({
-    resolve: async (group, _, ctx) =>
-      (await groupMembers(group, ctx)).some((member) => member.readAt === null),
+    resolve: (group) => group.unread,
   }),
   notificationIds: t.field({
     type: ['ID'],
-    resolve: async (group, _, ctx) =>
-      (await groupMembers(group, ctx)).map(({ notificationId }) =>
+    resolve: (group) =>
+      group.members.map(({ notificationId }) =>
         encodeGlobalId('ReactionNotification', notificationId),
       ),
   }),
   participantCount: t.int({
     nullable: true,
     resolve: async (group, _, ctx) => {
-      const { members, source } = await groupProjection(group, ctx);
-      return source ? new Set(members.map(({ profileId }) => profileId)).size : null;
+      const source = group.members[0]
+        ? await Reaction.getDataloader(ctx).load(group.members[0].reactionId)
+        : null;
+      return source ? new Set(group.members.map(({ profileId }) => profileId)).size : null;
     },
   }),
   reactionCounts: t.field({
     type: [ReactionCount],
     nullable: true,
     resolve: async (group, _, ctx) => {
-      const { members, source } = await groupProjection(group, ctx);
+      const source = group.members[0]
+        ? await Reaction.getDataloader(ctx).load(group.members[0].reactionId)
+        : null;
       if (!source) {
         return null;
       }
 
       const counts = new Map<string, number>();
-      for (const member of members) {
+      for (const member of group.members) {
         counts.set(member.reactionType, (counts.get(member.reactionType) ?? 0) + 1);
       }
 
@@ -85,14 +55,16 @@ builder.objectFields(ReactionNotificationGroup, (t) => ({
   recentProfiles: t.field({
     type: [Profile],
     resolve: async (group, _, ctx) => {
-      const { members, source } = await groupProjection(group, ctx);
+      const source = group.members[0]
+        ? await Reaction.getDataloader(ctx).load(group.members[0].reactionId)
+        : null;
       if (!source) {
         return [];
       }
 
       const profileIds: string[] = [];
       const seen = new Set<string>();
-      for (const member of members) {
+      for (const member of group.members) {
         if (!seen.has(member.profileId)) {
           seen.add(member.profileId);
           profileIds.push(member.profileId);

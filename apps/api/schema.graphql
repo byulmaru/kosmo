@@ -726,7 +726,7 @@ type ReactionNotification implements Node & Notification {
   type: String
 }
 
-type ReactionNotificationGroup implements Node {
+type ReactionNotificationGroup {
   id: ID!
   latestAt: DateTime!
   notificationIds: [ID!]!

@@ -322,33 +322,6 @@ export const Notifications = pgTable(
   ],
 );
 
-export type NotificationFeedSnapshotItem = {
-  readonly id: string;
-  readonly kind: 'NOTIFICATION' | 'REACTION_GROUP';
-};
-
-export const NotificationFeedSnapshots = pgTable(
-  'notification_feed_snapshot',
-  {
-    id: id(),
-    recipientAccountId: uuid('recipient_account_id')
-      .notNull()
-      .references(() => Accounts.id, { onDelete: 'cascade' }),
-    recipientProfileId: uuid('recipient_profile_id')
-      .notNull()
-      .references(() => Profiles.id, { onDelete: 'cascade' }),
-    items: jsonb('items').$type<readonly NotificationFeedSnapshotItem[]>().notNull(),
-    expiresAt: datetime('expires_at')
-      .notNull()
-      .default(sql`now() + interval '30 minutes'`),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    index().on(table.expiresAt),
-    index().on(table.recipientAccountId, table.recipientProfileId),
-  ],
-);
-
 export type OperationalNotificationData = {
   readonly title: string;
   readonly body?: string;
@@ -729,40 +702,6 @@ export const Reactions = pgTable(
     index().on(table.profileId),
     index().on(table.postId, table.type, table.createdAt.desc(), table.id.desc()),
   ],
-);
-
-export const ReactionNotificationGroups = pgTable(
-  'reaction_notification_group',
-  {
-    id: id(),
-    recipientAccountId: uuid('recipient_account_id')
-      .notNull()
-      .references(() => Accounts.id, { onDelete: 'cascade' }),
-    recipientProfileId: uuid('recipient_profile_id')
-      .notNull()
-      .references(() => Profiles.id, { onDelete: 'cascade' }),
-    postId: uuid('post_id')
-      .notNull()
-      .references(() => Posts.id, { onDelete: 'cascade' }),
-    startedAt: datetime('started_at').notNull(),
-    anchorNotificationId: uuid('anchor_notification_id').notNull().unique(),
-  },
-  (table) => [
-    index().on(table.recipientAccountId, table.recipientProfileId, table.postId, table.startedAt),
-  ],
-);
-
-export const ReactionNotificationGroupMembers = pgTable(
-  'reaction_notification_group_member',
-  {
-    notificationId: uuid('notification_id')
-      .primaryKey()
-      .references(() => Notifications.id, { onDelete: 'cascade' }),
-    groupId: uuid('group_id')
-      .notNull()
-      .references(() => ReactionNotificationGroups.id, { onDelete: 'cascade' }),
-  },
-  (table) => [index().on(table.groupId)],
 );
 
 export const Sessions = pgTable(

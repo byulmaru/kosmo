@@ -39,7 +39,6 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
-let NotificationFeedSnapshots: typeof CoreDb.NotificationFeedSnapshots;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let PostMentions: typeof CoreDb.PostMentions;
@@ -69,7 +68,6 @@ describe('Notification GraphQL Node boundary', () => {
       firstOrThrow,
       Instances,
       Notifications,
-      NotificationFeedSnapshots,
       pg,
       PostContents,
       PostMentions,
@@ -2297,26 +2295,31 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(await notificationReadAt(follow.id), null);
   });
 
-  test('groups Reaction Notifications into a mixed feed and reads the member snapshot', async () => {
+  test('groups Reaction Notifications into fixed buckets and keeps late arrivals unread', async () => {
     const auth = await createAuthenticatedSession();
     const authorA = await createProfile('reaction-feed-author-a');
     const authorB = await createProfile('reaction-feed-author-b');
     const authorC = await createProfile('reaction-feed-author-c');
     const post = await createContentPost(auth.profile.id);
-    const firstAt = Temporal.Instant.from('2026-10-01T00:00:00.123456Z');
+    const firstAt = Temporal.Instant.from('2026-10-03T23:58:00.000000Z');
     const firstReactions = await Promise.all([
       createReactionNotificationForPost(post.id, authorA.id, '❤️', firstAt),
-      createReactionNotificationForPost(post.id, authorA.id, '🎉', firstAt.add({ hours: 1 })),
-      createReactionNotificationForPost(post.id, authorB.id, '❤️', firstAt.add({ hours: 1 })),
-      createReactionNotificationForPost(post.id, authorC.id, '🔥', firstAt.add({ hours: 1 })),
+      createReactionNotificationForPost(post.id, authorA.id, '🎉', firstAt.add({ seconds: 30 })),
+      createReactionNotificationForPost(post.id, authorB.id, '❤️', firstAt.add({ seconds: 30 })),
+      createReactionNotificationForPost(post.id, authorC.id, '🔥', firstAt.add({ seconds: 30 })),
     ]);
-    await createReactionNotificationForPost(post.id, authorA.id, '👏', firstAt.add({ hours: 48 }));
+    const boundaryReaction = await createReactionNotificationForPost(
+      post.id,
+      authorA.id,
+      '👏',
+      Temporal.Instant.from('2026-10-04T00:00:00.000000Z'),
+    );
     const follow = await createFollowNotification(
       auth.profile.id,
       await createProfile('reaction-feed-follow-author').then(({ id }) => id),
       '00000000-0000-8006-8000-00000000feed',
       auth.account.id,
-      firstAt.add({ hours: 48 }),
+      Temporal.Instant.from('2026-10-04T00:00:00.000000Z'),
     );
     const profileId = encodeGlobalId('Profile', auth.profile.id);
 
@@ -2367,6 +2370,15 @@ describe('Notification GraphQL Node boundary', () => {
       ),
     );
     assert.equal(pages.filter((node) => node.__typename === 'ReactionNotificationGroup').length, 2);
+    const boundaryGroup = pages.find(
+      (node) =>
+        node.__typename === 'ReactionNotificationGroup' &&
+        node.notificationIds.includes(
+          encodeGlobalId('ReactionNotification', boundaryReaction.notification.id),
+        ),
+    );
+    assert.ok(boundaryGroup);
+    assert.notEqual(firstGroup.id, boundaryGroup.id);
     assert.equal(
       pages.some((node) => node.id === encodeGlobalId('FollowNotification', follow.id)),
       true,
@@ -2378,7 +2390,7 @@ describe('Notification GraphQL Node boundary', () => {
       post.id,
       authorB.id,
       '🥳',
-      firstAt.add({ hours: 2 }),
+      firstAt.add({ seconds: 60 }),
     );
     const read = await markNotificationRead(memberIds, auth.token);
     assertNoGraphQLErrors(read);
@@ -2394,6 +2406,8 @@ describe('Notification GraphQL Node boundary', () => {
         )
       ).every(Boolean),
     );
+    const retainedReadAt = await notificationReadAt(firstReactions[1]!.notification.id);
+    assert.ok(retainedReadAt);
     assert.equal(await notificationReadAt(late.notification.id), null);
     const latePage = await loadNotificationFeed(profileId, auth.token, { first: 10 });
     assertNoGraphQLErrors(latePage);
@@ -2403,145 +2417,61 @@ describe('Notification GraphQL Node boundary', () => {
         node.notificationIds.includes(encodeGlobalId('ReactionNotification', late.notification.id)),
     )?.node;
     assert.equal(lateGroup?.__typename, 'ReactionNotificationGroup');
+    assert.equal(lateGroup?.id, firstGroup.id);
     assert.equal(lateGroup?.notificationIds.length, 5);
     assert.equal(lateGroup?.unread, true);
     assert.equal(latePage.data?.node?.unreadNotificationFeedCount, 3);
-  });
 
-  test('keeps a continuation complete when a later group moves before its cursor', async () => {
-    const auth = await createAuthenticatedSession();
-    const authors = await Promise.all([
-      createProfile('reaction-feed-snapshot-order-a'),
-      createProfile('reaction-feed-snapshot-order-b'),
-      createProfile('reaction-feed-snapshot-order-c'),
-    ]);
-    const posts = await Promise.all(authors.map(() => createContentPost(auth.profile.id)));
-    const at = (seconds: number) =>
-      Temporal.Instant.from('2026-10-10T00:00:00.000000Z').add({ seconds });
-    const groups = await Promise.all(
-      posts.map((post, index) =>
-        createReactionNotificationForPost(post.id, authors[index]!.id, '❤️', at(100 - index * 10)),
-      ),
-    );
-    const profileId = encodeGlobalId('Profile', auth.profile.id);
-    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 2 });
-    assertNoGraphQLErrors(firstPage);
-    const firstEdges = firstPage.data?.node?.notificationFeed.edges ?? [];
-    assert.deepEqual(
-      firstEdges.map(({ node }) => node.post?.id),
-      [posts[0]!, posts[1]!].map(({ id }) => encodeGlobalId('Post', id)),
-    );
-    assert.ok(firstPage.data?.node?.notificationFeed.pageInfo.endCursor);
-
-    const late = await createReactionNotificationForPost(
-      posts[2]!.id,
-      authors[2]!.id,
-      '🎉',
-      at(110),
-    );
-    const secondPage = await loadNotificationFeed(profileId, auth.token, {
-      first: 1,
-      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
+    const cancelledFirst = firstReactions[0]!;
+    const retainedRead = firstReactions[1]!;
+    const { deleteReaction, deleteReactionNotification } = await import('@kosmo/core/services');
+    await deleteReaction({
+      actorProfileId: authorA.id,
+      expectedReactionId: cancelledFirst.reaction.id,
+      origin: 'LOCAL',
+      postId: post.id,
+      type: cancelledFirst.reaction.type,
     });
-    assertNoGraphQLErrors(secondPage);
-    const secondEdges = secondPage.data?.node?.notificationFeed.edges ?? [];
-    assert.equal(secondEdges.length, 1);
-    assert.equal(secondEdges[0]?.node.__typename, 'ReactionNotificationGroup');
-    assert.equal(secondEdges[0]?.node.post?.id, encodeGlobalId('Post', posts[2]!.id));
-    assert.deepEqual(
-      new Set(secondEdges[0]?.node.notificationIds),
-      new Set([
-        encodeGlobalId('ReactionNotification', groups[2]!.notification.id),
-        encodeGlobalId('ReactionNotification', late.notification.id),
-      ]),
-    );
-
-    const [freshOnly] = await db
-      .insert(Notifications)
-      .values({
-        kind: NotificationKind.OPERATIONAL,
-        recipientAccountId: auth.account.id,
-        recipientProfileId: null,
-        sourceId: crypto.randomUUID(),
-        createdAt: at(120),
-      })
-      .returning();
-    const continuedAfterFreshInsert = await loadNotificationFeed(profileId, auth.token, {
+    await deleteReactionNotification(cancelledFirst.reaction.id);
+    const afterMemberCancellation = await loadNotificationFeed(profileId, auth.token, {
       first: 10,
-      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
     });
-    assertNoGraphQLErrors(continuedAfterFreshInsert);
-    assert.equal(
-      continuedAfterFreshInsert.data?.node?.notificationFeed.edges.some(
-        ({ node }) => node.id === encodeGlobalId('OperationalNotification', freshOnly!.id),
-      ),
-      false,
-    );
-    const freshPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
-    assertNoGraphQLErrors(freshPage);
-    assert.equal(
-      freshPage.data?.node?.notificationFeed.edges[0]?.node.id,
-      encodeGlobalId('OperationalNotification', freshOnly!.id),
-    );
-  });
-
-  test('does not duplicate a group when an earlier member is deleted between pages', async () => {
-    const auth = await createAuthenticatedSession();
-    const authors = await Promise.all([
-      createProfile('reaction-feed-snapshot-delete-a'),
-      createProfile('reaction-feed-snapshot-delete-b'),
-      createProfile('reaction-feed-snapshot-delete-c'),
-    ]);
-    const posts = await Promise.all(authors.map(() => createContentPost(auth.profile.id)));
-    const at = (seconds: number) =>
-      Temporal.Instant.from('2026-10-11T00:00:00.000000Z').add({ seconds });
-    const aFirst = await createReactionNotificationForPost(
-      posts[0]!.id,
-      authors[0]!.id,
-      '❤️',
-      at(70),
-    );
-    const aLatest = await createReactionNotificationForPost(
-      posts[0]!.id,
-      authors[0]!.id,
-      '🎉',
-      at(100),
-    );
-    await createReactionNotificationForPost(posts[1]!.id, authors[1]!.id, '❤️', at(90));
-    await createReactionNotificationForPost(posts[2]!.id, authors[2]!.id, '🔥', at(80));
-    const profileId = encodeGlobalId('Profile', auth.profile.id);
-    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 2 });
-    assertNoGraphQLErrors(firstPage);
-    assert.deepEqual(
-      firstPage.data?.node?.notificationFeed.edges.map(({ node }) => node.post?.id),
-      [posts[0]!, posts[1]!].map(({ id }) => encodeGlobalId('Post', id)),
-    );
-    assert.ok(firstPage.data?.node?.notificationFeed.pageInfo.endCursor);
-
-    await db.delete(Notifications).where(eq(Notifications.id, aLatest.notification.id));
-    await db.delete(Reactions).where(eq(Reactions.id, aLatest.reaction.id));
-
-    const secondPage = await loadNotificationFeed(profileId, auth.token, {
-      first: 10,
-      after: firstPage.data!.node!.notificationFeed.pageInfo.endCursor,
-    });
-    assertNoGraphQLErrors(secondPage);
-    const secondEdges = secondPage.data?.node?.notificationFeed.edges ?? [];
-    assert.deepEqual(
-      secondEdges.map(({ node }) => node.post?.id),
-      [encodeGlobalId('Post', posts[2]!.id)],
-    );
-    assert.equal(
-      secondEdges.some(({ node }) =>
+    assertNoGraphQLErrors(afterMemberCancellation);
+    const survivingGroup = afterMemberCancellation.data?.node?.notificationFeed.edges.find(
+      ({ node }) =>
+        node.__typename === 'ReactionNotificationGroup' &&
         node.notificationIds.includes(
-          encodeGlobalId('ReactionNotification', aFirst.notification.id),
+          encodeGlobalId('ReactionNotification', retainedRead.notification.id),
         ),
+    )?.node;
+    assert.equal(survivingGroup?.__typename, 'ReactionNotificationGroup');
+    assert.equal(survivingGroup?.id, firstGroup.id);
+    assert.equal(
+      (await notificationReadAt(retainedRead.notification.id))?.toString(),
+      retainedReadAt?.toString(),
+    );
+
+    await deleteReaction({
+      actorProfileId: authorA.id,
+      expectedReactionId: boundaryReaction.reaction.id,
+      origin: 'LOCAL',
+      postId: post.id,
+      type: boundaryReaction.reaction.type,
+    });
+    await deleteReactionNotification(boundaryReaction.reaction.id);
+    const afterEmptyGroupCancellation = await loadNotificationFeed(profileId, auth.token, {
+      first: 10,
+    });
+    assertNoGraphQLErrors(afterEmptyGroupCancellation);
+    assert.equal(
+      afterEmptyGroupCancellation.data?.node?.notificationFeed.edges.some(
+        ({ node }) => node.id === boundaryGroup.id,
       ),
       false,
     );
   });
 
-  test('fills a continuation after more than one empty snapshot batch', async () => {
+  test('pages ordinary notifications with a stateless keyset cursor', async () => {
     const auth = await createAuthenticatedSession();
     const profileId = encodeGlobalId('Profile', auth.profile.id);
     const base = Temporal.Instant.from('2026-10-12T00:00:00.000000Z');
@@ -2599,58 +2529,7 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('rejects an expired snapshot and allows a fresh feed request', async () => {
-    const auth = await createAuthenticatedSession();
-    const profileId = encodeGlobalId('Profile', auth.profile.id);
-    await db.insert(Notifications).values({
-      kind: NotificationKind.OPERATIONAL,
-      recipientAccountId: auth.account.id,
-      recipientProfileId: null,
-      sourceId: crypto.randomUUID(),
-    });
-    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
-    assertNoGraphQLErrors(firstPage);
-    const cursor = firstPage.data?.node?.notificationFeed.pageInfo.endCursor;
-    assert.ok(cursor);
-    const [snapshotId] = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as [string];
-    await db
-      .update(NotificationFeedSnapshots)
-      .set({ expiresAt: Temporal.Instant.from('2020-01-01T00:00:00Z') })
-      .where(eq(NotificationFeedSnapshots.id, snapshotId));
-
-    const expired = await loadNotificationFeed(profileId, auth.token, {
-      first: 1,
-      after: cursor,
-    });
-    assert.equal(expired.errors?.[0]?.extensions?.code, 'NOTIFICATION_FEED_SNAPSHOT_EXPIRED');
-
-    const fresh = await loadNotificationFeed(profileId, auth.token, { first: 1 });
-    assertNoGraphQLErrors(fresh);
-    assert.equal(fresh.data?.node?.notificationFeed.edges.length, 1);
-    const freshCursor = fresh.data?.node?.notificationFeed.pageInfo.endCursor;
-    assert.ok(freshCursor);
-    const [freshSnapshotId] = JSON.parse(
-      Buffer.from(freshCursor, 'base64url').toString('utf8'),
-    ) as [string];
-    assert.equal(
-      await db
-        .select({ id: NotificationFeedSnapshots.id })
-        .from(NotificationFeedSnapshots)
-        .where(eq(NotificationFeedSnapshots.id, snapshotId))
-        .then((rows) => rows.length),
-      0,
-    );
-    assert.equal(
-      await db
-        .select({ id: NotificationFeedSnapshots.id })
-        .from(NotificationFeedSnapshots)
-        .where(eq(NotificationFeedSnapshots.id, freshSnapshotId))
-        .then((rows) => rows.length),
-      1,
-    );
-  });
-
-  test('preserves snapshot order for reverse before and last pagination', async () => {
+  test('supports reverse stateless keyset pagination', async () => {
     const auth = await createAuthenticatedSession();
     const profileId = encodeGlobalId('Profile', auth.profile.id);
     const base = Temporal.Instant.from('2026-10-13T00:00:00.000000Z');
@@ -2711,82 +2590,7 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(reversePage.data?.node?.notificationFeed.pageInfo.hasNextPage, true);
   });
 
-  test('rejects foreign, membership-lost, cross-snapshot, and out-of-range cursors', async () => {
-    const auth = await createAuthenticatedSession();
-    const foreign = await createAuthenticatedSession();
-    const profileId = encodeGlobalId('Profile', auth.profile.id);
-    await db.insert(Notifications).values({
-      kind: NotificationKind.OPERATIONAL,
-      recipientAccountId: auth.account.id,
-      recipientProfileId: null,
-      sourceId: crypto.randomUUID(),
-    });
-
-    const firstPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
-    assertNoGraphQLErrors(firstPage);
-    const firstCursor = firstPage.data?.node?.notificationFeed.pageInfo.endCursor;
-    assert.ok(firstCursor);
-    const firstSnapshot = JSON.parse(Buffer.from(firstCursor, 'base64url').toString('utf8')) as [
-      string,
-      number,
-    ];
-
-    const foreignResult = await loadNotificationFeed(profileId, foreign.token, {
-      first: 1,
-      after: firstCursor,
-    });
-    assert.equal(foreignResult.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-
-    const foreignSnapshotScope = await loadNotificationFeed(
-      encodeGlobalId('Profile', foreign.profile.id),
-      foreign.token,
-      { first: 1, after: firstCursor },
-    );
-    assert.equal(foreignSnapshotScope.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-
-    const freshPage = await loadNotificationFeed(profileId, auth.token, { first: 1 });
-    assertNoGraphQLErrors(freshPage);
-    const freshCursor = freshPage.data?.node?.notificationFeed.pageInfo.endCursor;
-    assert.ok(freshCursor);
-    const freshSnapshot = JSON.parse(Buffer.from(freshCursor, 'base64url').toString('utf8')) as [
-      string,
-      number,
-    ];
-    assert.notEqual(firstSnapshot[0], freshSnapshot[0]);
-
-    const mixed = await loadNotificationFeed(profileId, auth.token, {
-      first: 1,
-      after: firstCursor,
-      before: freshCursor,
-    });
-    assert.equal(mixed.errors?.[0]?.message, 'Invalid Notification Feed cursor');
-
-    const outOfRange = Buffer.from(
-      JSON.stringify([firstSnapshot[0], Number.MAX_SAFE_INTEGER]),
-      'utf8',
-    ).toString('base64url');
-    const invalidPosition = await loadNotificationFeed(profileId, auth.token, {
-      first: 1,
-      after: outOfRange,
-    });
-    assert.equal(invalidPosition.errors?.[0]?.message, 'Invalid Notification Feed cursor');
-
-    await db
-      .delete(AccountProfiles)
-      .where(
-        and(
-          eq(AccountProfiles.accountId, auth.account.id),
-          eq(AccountProfiles.profileId, auth.profile.id),
-        ),
-      );
-    const membershipLost = await loadNotificationFeed(profileId, auth.token, {
-      first: 1,
-      after: firstCursor,
-    });
-    assert.equal(membershipLost.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-  });
-
-  test('validates feed cursors and protects group membership and source details', async () => {
+  test('validates feed cursors and protects group scope and source details', async () => {
     const auth = await createAuthenticatedSession();
     const foreign = await createAuthenticatedSession();
     const visibleAuthor = await createProfile('reaction-feed-visible-author');
@@ -2797,6 +2601,19 @@ describe('Notification GraphQL Node boundary', () => {
       '❤️',
       Temporal.Instant.from('2026-10-05T00:00:00Z'),
     );
+    const hiddenAuthor = await createProfile('reaction-feed-hidden-author');
+    const hiddenPost = await createContentPost(auth.profile.id);
+    const hiddenReaction = await createReactionNotificationForPost(
+      hiddenPost.id,
+      hiddenAuthor.id,
+      '🔥',
+      Temporal.Instant.from('2026-10-05T00:00:01Z'),
+    );
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenAuthor.id));
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hiddenPost.id));
 
     const invalid = await loadNotificationFeed(
       encodeGlobalId('Profile', auth.profile.id),
@@ -2804,17 +2621,6 @@ describe('Notification GraphQL Node boundary', () => {
       { first: 1, after: 'not-a-cursor' },
     );
     assert.equal(invalid.errors?.[0]?.message, 'Invalid Notification Feed cursor');
-
-    const hiddenOwner = await createProfile('reaction-feed-hidden-owner');
-    const hiddenAuthor = await createProfile('reaction-feed-hidden-author');
-    const hiddenPost = await createContentPost(hiddenOwner.id, PostVisibility.FOLLOWERS);
-    await createReactionNotificationForPost(
-      hiddenPost.id,
-      hiddenAuthor.id,
-      '🎉',
-      Temporal.Instant.from('2026-10-05T01:00:00Z'),
-      auth.profile.id,
-    );
 
     const feed = await loadNotificationFeed(
       encodeGlobalId('Profile', auth.profile.id),
@@ -2828,15 +2634,21 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(visibleGroup?.__typename, 'ReactionNotificationGroup');
     const hiddenGroup = feed.data?.node?.notificationFeed.edges.find(
       ({ node }) =>
-        node.__typename === 'ReactionNotificationGroup' && node.participantCount === null,
+        node.__typename === 'ReactionNotificationGroup' &&
+        node.notificationIds.includes(
+          encodeGlobalId('ReactionNotification', hiddenReaction.notification.id),
+        ),
     )?.node;
     assert.equal(hiddenGroup?.__typename, 'ReactionNotificationGroup');
+    assert.equal(hiddenGroup?.participantCount, null);
     assert.equal(hiddenGroup?.reactionCounts, null);
     assert.deepEqual(hiddenGroup?.recentProfiles, []);
-    assert.equal(hiddenGroup?.post, null);
-
-    const foreignNode = await loadReactionNotificationGroupNode(visibleGroup!.id, foreign.token);
-    assert.equal(foreignNode.data?.node, null);
+    const foreignResult = await loadNotificationFeed(
+      encodeGlobalId('Profile', auth.profile.id),
+      foreign.token,
+      { first: 1 },
+    );
+    assert.equal(foreignResult.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
   });
 
   test('integrates Repost rows into concrete Node, mixed list, unread count and Read', async () => {
@@ -4299,21 +4111,6 @@ const loadNotificationFeed = (
       }
     }`,
     { id, ...variables },
-    token,
-  );
-
-const loadReactionNotificationGroupNode = (id: string, token?: string) =>
-  requestGraphQL<{
-    node: {
-      id: string;
-    } | null;
-  }>(
-    `query ReactionNotificationGroupNode($id: ID!) {
-      node(id: $id) {
-        ... on ReactionNotificationGroup { id }
-      }
-    }`,
-    { id },
     token,
   );
 

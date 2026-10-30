@@ -1,60 +1,62 @@
-import {
-  db,
-  NotificationFeedSnapshots,
-  Notifications,
-  ReactionNotificationGroupMembers,
-  ReactionNotificationGroups,
-  Reactions,
-  withPrimaryDatabase,
-} from '@kosmo/core/db';
+import { db, Notifications, Reactions, withPrimaryDatabase } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
-import {
-  NotificationFeedSnapshotExpiredError,
-  PermissionDeniedError,
-  ValidationError,
-} from '@kosmo/core/error';
-import { ensureReactionNotificationGroups } from '@kosmo/core/services';
+import { ValidationError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import {
-  and,
-  count,
-  countDistinct,
-  eq,
-  getColumns,
-  inArray,
-  isNull,
-  max,
-  ne,
-  sql,
-} from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { NotificationFeedConnection, NotificationFeedItem } from '../feed-ref';
-import { loadReactionNotificationGroupMembers } from '../loader/group';
+import {
+  loadReactionNotificationGroupMembers,
+  parseReactionNotificationGroupId,
+  reactionNotificationGroupBucket,
+  reactionNotificationGroupIdentity,
+} from '../group-query';
 import { requireProfileNotificationMembership } from './profile';
-import type { NotificationFeedSnapshotItem, Transaction } from '@kosmo/core/db';
+import type { DatabaseHandle } from '@kosmo/core/db';
 import type {
-  ReactionNotificationGroupFeedRow,
   ReactionNotificationGroupMemberRow,
-} from '../group-ref';
+  ReactionNotificationGroupRow,
+} from '../group-query';
 import type { NotificationRow } from '../ref';
 
-type NotificationFeedRow = NotificationRow | ReactionNotificationGroupFeedRow;
-type NotificationFeedCandidate =
-  | NotificationRow
-  | Omit<ReactionNotificationGroupFeedRow, '__typename' | 'members'>;
-type SnapshotFeedRow = NotificationFeedRow & {
-  readonly snapshotId: string;
-  readonly snapshotPosition: number;
+type FeedCandidate = {
+  readonly id: string;
+  readonly kind: 'NOTIFICATION' | 'REACTION_GROUP';
+  readonly sortAt: Temporal.Instant;
 };
-type FeedCursor = { readonly snapshotId: string; readonly position: number };
+
+type FeedCursor = {
+  readonly createdAt: Temporal.Instant;
+  readonly id: string;
+};
+
+type FeedRow =
+  | NotificationRow
+  | (ReactionNotificationGroupRow & { readonly feedSortAt: Temporal.Instant });
 
 const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
 
-const encodeFeedCursor = (row: SnapshotFeedRow) =>
-  Buffer.from(JSON.stringify([row.snapshotId, row.snapshotPosition])).toString('base64url');
+const encodeFeedCursor = (row: FeedRow) => {
+  const sortAt = 'feedSortAt' in row ? row.feedSortAt : row.createdAt;
+  return Buffer.from(JSON.stringify([sortAt.toString(), row.id])).toString('base64url');
+};
+
+const isValidFeedId = (id: string) => {
+  try {
+    parseUuid(id);
+    return true;
+  } catch {
+    try {
+      parseReactionNotificationGroupId(id);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
 
 const decodeFeedCursor = (cursor: string): FeedCursor => {
   try {
@@ -72,253 +74,167 @@ const decodeFeedCursor = (cursor: string): FeedCursor => {
       !Array.isArray(value) ||
       value.length !== 2 ||
       typeof value[0] !== 'string' ||
-      typeof value[1] !== 'number' ||
-      !Number.isSafeInteger(value[1]) ||
-      value[1] < 0
+      typeof value[1] !== 'string'
     ) {
       throw new Error('Invalid cursor payload');
     }
 
-    parseUuid(value[0]);
-    return { snapshotId: value[0], position: value[1] };
+    const createdAt = Temporal.Instant.from(value[0]);
+    if (!isValidFeedId(value[1])) {
+      throw new Error('Invalid cursor ID');
+    }
+
+    return { createdAt, id: value[1] };
   } catch {
     throw new ValidationError('Invalid Notification Feed cursor');
   }
 };
 
-const compareFeedRows = (left: NotificationFeedCandidate, right: NotificationFeedCandidate) => {
-  const leftTimestamp = 'latestAt' in left ? left.latestAt : left.createdAt;
-  const rightTimestamp = 'latestAt' in right ? right.latestAt : right.createdAt;
-  const timestamp = Temporal.Instant.compare(leftTimestamp, rightTimestamp);
-  if (timestamp !== 0) {
-    return -timestamp;
-  }
-
-  const id = left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-  return -id;
-};
-
-const snapshotItems = (items: readonly NotificationFeedSnapshotItem[]) =>
-  items.map((item, position) => ({ ...item, position }));
-
-const loadSnapshot = async (
-  database: Transaction,
-  cursor: FeedCursor,
-  accountId: string,
-  profileId: string,
-) => {
-  const snapshot = await database
-    .select({
-      ...getColumns(NotificationFeedSnapshots),
-      expired: sql<boolean>`${NotificationFeedSnapshots.expiresAt} <= now()`,
-    })
-    .from(NotificationFeedSnapshots)
-    .where(eq(NotificationFeedSnapshots.id, cursor.snapshotId))
-    .then((rows) => rows[0]);
-
-  if (!snapshot) {
-    throw new NotificationFeedSnapshotExpiredError();
-  }
-  if (snapshot.recipientAccountId !== accountId || snapshot.recipientProfileId !== profileId) {
-    throw new PermissionDeniedError('Profile membership is required');
-  }
-  if (snapshot.expired) {
-    throw new NotificationFeedSnapshotExpiredError();
-  }
-
-  const items = snapshotItems(snapshot.items);
-  if (cursor.position >= items.length) {
-    throw new ValidationError('Invalid Notification Feed cursor');
-  }
-
-  return { snapshot, items };
-};
-
-const loadGroupRows = async (
-  database: Transaction,
-  accountId: string,
+const loadFeedCandidates = async (
+  database: DatabaseHandle,
   profileId: string,
   ctx: Parameters<typeof visibleViewerNotificationWhere>[0]['ctx'],
-  groupIds?: readonly string[],
-) => {
-  if (groupIds && groupIds.length === 0) {
-    return [] as Array<Omit<ReactionNotificationGroupFeedRow, '__typename' | 'members'>>;
-  }
+  before: FeedCursor | undefined,
+  after: FeedCursor | undefined,
+  inverted: boolean,
+  limit: number,
+): Promise<FeedCandidate[]> => {
+  const identity = reactionNotificationGroupIdentity();
+  const bucket = reactionNotificationGroupBucket();
+  const reactionWhere = visibleViewerNotificationWhere({ ctx, profileId });
+  const notificationWhere = visibleViewerNotificationWhere({ ctx, profileId });
+  const bounds = [
+    after
+      ? sql`("sortAt" < ${after.createdAt.toString()} OR ("sortAt" = ${after.createdAt.toString()} AND "id" < ${after.id}))`
+      : undefined,
+    before
+      ? sql`("sortAt" > ${before.createdAt.toString()} OR ("sortAt" = ${before.createdAt.toString()} AND "id" > ${before.id}))`
+      : undefined,
+  ].filter((value): value is Exclude<typeof value, undefined> => value !== undefined);
 
-  const latestAt = max(Notifications.createdAt);
-  return (await database
-    .select({
-      ...getColumns(ReactionNotificationGroups),
-      latestAt,
-    })
-    .from(ReactionNotificationGroups)
-    .innerJoin(
-      ReactionNotificationGroupMembers,
-      eq(ReactionNotificationGroupMembers.groupId, ReactionNotificationGroups.id),
+  const rows = await database.execute(sql`
+    WITH reaction_groups AS (
+      SELECT
+        ${identity} AS "id",
+        'REACTION_GROUP'::text AS "kind",
+        max(${Notifications.createdAt}) AS "sortAt"
+      FROM ${Notifications}
+      INNER JOIN ${Reactions} ON ${eq(Reactions.id, Notifications.sourceId)}
+      WHERE ${and(eq(Notifications.kind, NotificationKind.REACTION), reactionWhere)}
+      GROUP BY
+        ${Notifications.recipientAccountId},
+        ${Notifications.recipientProfileId},
+        ${Reactions.postId},
+        ${bucket}
+    ), ordinary_notifications AS (
+      SELECT
+        ${Notifications.id}::text AS "id",
+        'NOTIFICATION'::text AS "kind",
+        ${Notifications.createdAt} AS "sortAt"
+      FROM ${Notifications}
+      WHERE ${and(ne(Notifications.kind, NotificationKind.REACTION), notificationWhere)}
+    ), feed AS (
+      SELECT "id", "kind", "sortAt" FROM reaction_groups
+      UNION ALL
+      SELECT "id", "kind", "sortAt" FROM ordinary_notifications
     )
-    .innerJoin(Notifications, eq(Notifications.id, ReactionNotificationGroupMembers.notificationId))
-    .innerJoin(Reactions, eq(Reactions.id, Notifications.sourceId))
-    .where(
-      and(
-        eq(ReactionNotificationGroups.recipientAccountId, accountId),
-        eq(ReactionNotificationGroups.recipientProfileId, profileId),
-        eq(Notifications.kind, NotificationKind.REACTION),
-        groupIds ? inArray(ReactionNotificationGroups.id, groupIds) : undefined,
-        visibleViewerNotificationWhere({ ctx, profileId }),
-      ),
-    )
-    .groupBy(
-      ReactionNotificationGroups.id,
-      ReactionNotificationGroups.recipientAccountId,
-      ReactionNotificationGroups.recipientProfileId,
-      ReactionNotificationGroups.postId,
-      ReactionNotificationGroups.startedAt,
-      ReactionNotificationGroups.anchorNotificationId,
-    )) as Array<Omit<ReactionNotificationGroupFeedRow, '__typename' | 'members'>>;
+    SELECT "id", "kind", "sortAt"
+    FROM feed
+    ${bounds.length > 0 ? sql`WHERE ${sql.join(bounds, sql` AND `)}` : sql``}
+    ORDER BY "sortAt" ${inverted ? sql`ASC` : sql`DESC`}, "id" ${inverted ? sql`ASC` : sql`DESC`}
+    LIMIT ${limit}
+  `);
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    kind: row.kind === 'REACTION_GROUP' ? ('REACTION_GROUP' as const) : ('NOTIFICATION' as const),
+    sortAt: Temporal.Instant.from(String(row.sortAt)),
+  }));
 };
 
 const loadNotificationRows = async (
-  database: Transaction,
+  database: DatabaseHandle,
   profileId: string,
   ctx: Parameters<typeof visibleViewerNotificationWhere>[0]['ctx'],
-  notificationIds?: readonly string[],
+  ids: readonly string[],
 ) => {
-  if (notificationIds && notificationIds.length === 0) {
+  if (ids.length === 0) {
     return [] as NotificationRow[];
   }
 
   return (await database
-    .select(getColumns(Notifications))
+    .select()
     .from(Notifications)
     .where(
       and(
-        notificationIds ? inArray(Notifications.id, notificationIds) : undefined,
+        inArray(Notifications.id, ids),
         ne(Notifications.kind, NotificationKind.REACTION),
         visibleViewerNotificationWhere({ ctx, profileId }),
       ),
     )) as NotificationRow[];
 };
 
-const createSnapshot = async (
-  database: Transaction,
-  accountId: string,
+const loadFeedRows = async (
+  database: DatabaseHandle,
   profileId: string,
   ctx: Parameters<typeof visibleViewerNotificationWhere>[0]['ctx'],
-) => {
-  const groups = await loadGroupRows(database, accountId, profileId, ctx);
-  const notifications = await loadNotificationRows(database, profileId, ctx);
-  const rows = [...groups, ...notifications].sort(compareFeedRows) as NotificationFeedRow[];
-  const items: NotificationFeedSnapshotItem[] = rows.map((row) => ({
-    id: row.id,
-    kind: 'latestAt' in row ? 'REACTION_GROUP' : 'NOTIFICATION',
-  }));
-  const snapshot = await database
-    .insert(NotificationFeedSnapshots)
-    .values({
-      recipientAccountId: accountId,
-      recipientProfileId: profileId,
-      items,
-    })
-    .returning()
-    .then((rows) => rows[0]!);
-
-  return { snapshot, items: snapshotItems(items) };
-};
-
-const loadSnapshotRows = async (
-  database: Transaction,
-  items: readonly (NotificationFeedSnapshotItem & { readonly position: number })[],
-  snapshotId: string,
-  accountId: string,
-  profileId: string,
-  ctx: Parameters<typeof visibleViewerNotificationWhere>[0]['ctx'],
-  inverted: boolean,
   before: FeedCursor | undefined,
   after: FeedCursor | undefined,
+  inverted: boolean,
   limit: number,
 ) => {
-  const start = after?.position ?? -1;
-  const end = before?.position ?? items.length;
-  const candidates = items.filter(({ position }) => position > start && position < end);
-  const orderedCandidates = inverted ? [...candidates].reverse() : candidates;
-  const rows: SnapshotFeedRow[] = [];
-  const batchSize = 200;
-  for (
-    let offset = 0;
-    offset < orderedCandidates.length && rows.length < limit;
-    offset += batchSize
-  ) {
-    const batch = orderedCandidates.slice(offset, offset + batchSize);
-    const groupIds = batch.filter(({ kind }) => kind === 'REACTION_GROUP').map(({ id }) => id);
-    const notificationIds = batch.filter(({ kind }) => kind === 'NOTIFICATION').map(({ id }) => id);
-    const [groups, notifications] = await Promise.all([
-      loadGroupRows(database, accountId, profileId, ctx, groupIds),
-      loadNotificationRows(database, profileId, ctx, notificationIds),
-    ]);
-    const rowsById = new Map<string, NotificationFeedRow>([
-      ...groups.map(
-        (group) =>
-          [
-            `REACTION_GROUP:${group.id}`,
-            { ...group, __typename: 'ReactionNotificationGroup', members: [] },
-          ] as const,
-      ),
-      ...notifications.map(
-        (notification) => [`NOTIFICATION:${notification.id}`, notification] as const,
-      ),
-    ]);
-    for (const item of batch) {
-      const row = rowsById.get(`${item.kind}:${item.id}`);
-      if (row) {
-        rows.push({ ...row, snapshotId, snapshotPosition: item.position });
-        if (rows.length >= limit) {
-          break;
-        }
-      }
-    }
-  }
-
-  return rows;
-};
-
-const cleanupExpiredSnapshots = async () => {
-  // shortcut: idle periods do not clean snapshots; switch to scheduled cleanup if hard retention is needed.
-  await db.delete(NotificationFeedSnapshots).where(
-    sql`${NotificationFeedSnapshots.id} IN (
-      SELECT ${NotificationFeedSnapshots.id}
-      FROM ${NotificationFeedSnapshots}
-      WHERE ${NotificationFeedSnapshots.expiresAt} <= now()
-      ORDER BY ${NotificationFeedSnapshots.expiresAt} ASC
-      LIMIT 100
-    )`,
+  const candidates = await loadFeedCandidates(
+    database,
+    profileId,
+    ctx,
+    before,
+    after,
+    inverted,
+    limit,
   );
-};
-
-const attachGroupMembers = async (
-  rows: readonly SnapshotFeedRow[],
-  database: Transaction,
-): Promise<SnapshotFeedRow[]> => {
-  const groupIds = rows.flatMap((row) => ('latestAt' in row ? [row.id] : []));
-  if (groupIds.length === 0) {
-    return [...rows];
-  }
-
-  const members = await loadReactionNotificationGroupMembers(groupIds, database);
+  const groupIds = candidates.filter(({ kind }) => kind === 'REACTION_GROUP').map(({ id }) => id);
+  const notificationIds = candidates
+    .filter(({ kind }) => kind === 'NOTIFICATION')
+    .map(({ id }) => id);
+  const [members, notifications] = await Promise.all([
+    loadReactionNotificationGroupMembers(database, ctx, profileId, groupIds),
+    loadNotificationRows(database, profileId, ctx, notificationIds),
+  ]);
   const membersByGroup = new Map<string, ReactionNotificationGroupMemberRow[]>();
   for (const member of members) {
     const groupMembers = membersByGroup.get(member.groupId) ?? [];
     groupMembers.push(member);
     membersByGroup.set(member.groupId, groupMembers);
   }
+  const groupsById = new Map<string, ReactionNotificationGroupRow>();
+  for (const [id, groupMembers] of membersByGroup) {
+    const latestMember = groupMembers[0];
+    if (!latestMember) {
+      continue;
+    }
 
-  return rows.map((row) =>
-    'latestAt' in row
-      ? {
-          ...row,
-          members: membersByGroup.get(row.id) ?? [],
-        }
-      : row,
-  ) as SnapshotFeedRow[];
+    groupsById.set(id, {
+      __typename: 'ReactionNotificationGroup',
+      id,
+      latestAt: latestMember.createdAt,
+      members: groupMembers,
+      postId: latestMember.postId,
+      unread: groupMembers.some(({ readAt }) => readAt === null),
+    });
+  }
+  const notificationsById = new Map(
+    notifications.map((notification) => [notification.id, notification]),
+  );
+
+  return candidates.flatMap((candidate): FeedRow[] => {
+    if (candidate.kind === 'REACTION_GROUP') {
+      const group = groupsById.get(candidate.id);
+      return group ? [{ ...group, feedSortAt: candidate.sortAt }] : [];
+    }
+
+    const notification = notificationsById.get(candidate.id);
+    return notification ? [notification] : [];
+  });
 };
 
 builder.objectField(Profile, 'notificationFeed', (t) =>
@@ -328,88 +244,16 @@ builder.objectField(Profile, 'notificationFeed', (t) =>
       resolve: async (profile, args, ctx) => {
         await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
-        return withPrimaryDatabase(async () => {
-          await ensureReactionNotificationGroups({
-            recipientAccountId: ctx.session.accountId,
-            recipientProfileId: profile.id,
-          });
-
-          let snapshotCreated = false;
-          const connection = await resolveCursorConnection<Promise<SnapshotFeedRow[]>>(
+        return withPrimaryDatabase(() =>
+          resolveCursorConnection<Promise<FeedRow[]>>(
             { args, toCursor: encodeFeedCursor },
-            async ({ before, after, limit, inverted }) => {
+            ({ before, after, limit, inverted }) => {
               const beforeCursor = before ? decodeFeedCursor(before) : undefined;
               const afterCursor = after ? decodeFeedCursor(after) : undefined;
-              if (
-                beforeCursor &&
-                afterCursor &&
-                beforeCursor.snapshotId !== afterCursor.snapshotId
-              ) {
-                throw new ValidationError('Invalid Notification Feed cursor');
-              }
-
-              const rows = await db.transaction(
-                async (tx) => {
-                  let snapshotId: string;
-                  let items: readonly (NotificationFeedSnapshotItem & {
-                    readonly position: number;
-                  })[];
-                  if (beforeCursor || afterCursor) {
-                    const cursor = afterCursor ?? beforeCursor!;
-                    const loaded = await loadSnapshot(
-                      tx,
-                      cursor,
-                      ctx.session.accountId,
-                      profile.id,
-                    );
-                    if (
-                      (beforeCursor && beforeCursor.position >= loaded.items.length) ||
-                      (afterCursor && afterCursor.position >= loaded.items.length)
-                    ) {
-                      throw new ValidationError('Invalid Notification Feed cursor');
-                    }
-                    snapshotId = loaded.snapshot.id;
-                    items = loaded.items;
-                  } else {
-                    const created = await createSnapshot(
-                      tx,
-                      ctx.session.accountId,
-                      profile.id,
-                      ctx,
-                    );
-                    snapshotCreated = true;
-                    snapshotId = created.snapshot.id;
-                    items = created.items;
-                  }
-
-                  return attachGroupMembers(
-                    await loadSnapshotRows(
-                      tx,
-                      items,
-                      snapshotId,
-                      ctx.session.accountId,
-                      profile.id,
-                      ctx,
-                      inverted,
-                      beforeCursor,
-                      afterCursor,
-                      limit,
-                    ),
-                    tx,
-                  );
-                },
-                { isolationLevel: 'repeatable read' },
-              );
-
-              if (snapshotCreated) {
-                await cleanupExpiredSnapshots();
-              }
-              return rows;
+              return loadFeedRows(db, profile.id, ctx, beforeCursor, afterCursor, inverted, limit);
             },
-          );
-
-          return connection;
-        });
+          ),
+        );
       },
     },
     NotificationFeedConnection as never,
@@ -424,46 +268,34 @@ builder.objectField(Profile, 'unreadNotificationFeedCount', (t) =>
       await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
       return withPrimaryDatabase(async () => {
-        await ensureReactionNotificationGroups({
-          recipientAccountId: ctx.session.accountId,
-          recipientProfileId: profile.id,
-        });
-
-        const [unreadGroups, unreadNotifications] = await Promise.all([
-          db
-            .select({ count: countDistinct(ReactionNotificationGroups.id) })
-            .from(ReactionNotificationGroups)
-            .innerJoin(
-              ReactionNotificationGroupMembers,
-              eq(ReactionNotificationGroupMembers.groupId, ReactionNotificationGroups.id),
-            )
-            .innerJoin(
-              Notifications,
-              eq(Notifications.id, ReactionNotificationGroupMembers.notificationId),
-            )
-            .innerJoin(Reactions, eq(Reactions.id, Notifications.sourceId))
-            .where(
-              and(
-                eq(ReactionNotificationGroups.recipientAccountId, ctx.session.accountId),
-                eq(ReactionNotificationGroups.recipientProfileId, profile.id),
-                eq(Notifications.kind, NotificationKind.REACTION),
-                isNull(Notifications.readAt),
-                visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
-              ),
+        const groupRows = await db.execute(sql`
+          SELECT count(*) AS "count"
+          FROM (
+            SELECT ${Reactions.postId}, ${reactionNotificationGroupBucket()}
+            FROM ${Notifications}
+            INNER JOIN ${Reactions} ON ${eq(Reactions.id, Notifications.sourceId)}
+            WHERE ${and(
+              eq(Notifications.kind, NotificationKind.REACTION),
+              sql`${Notifications.recipientAccountId} = ${ctx.session.accountId}`,
+              eq(Notifications.recipientProfileId, profile.id),
+              visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
+            )}
+            GROUP BY ${Reactions.postId}, ${reactionNotificationGroupBucket()}
+            HAVING bool_or(${Notifications.readAt} IS NULL)
+          ) unread_groups
+        `);
+        const ordinaryRows = await db
+          .select({ count: count() })
+          .from(Notifications)
+          .where(
+            and(
+              ne(Notifications.kind, NotificationKind.REACTION),
+              sql`${Notifications.readAt} IS NULL`,
+              visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
             ),
-          db
-            .select({ count: count() })
-            .from(Notifications)
-            .where(
-              and(
-                ne(Notifications.kind, NotificationKind.REACTION),
-                isNull(Notifications.readAt),
-                visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
-              ),
-            ),
-        ]);
+          );
 
-        return (unreadGroups[0]?.count ?? 0) + (unreadNotifications[0]?.count ?? 0);
+        return Number(groupRows[0]?.count ?? 0) + Number(ordinaryRows[0]?.count ?? 0);
       });
     },
   }),
