@@ -318,6 +318,9 @@ describe('PostComposerHost', () => {
 
     let confirmation = renderer?.root.findByProps({ role: 'alertdialog' });
     assert.equal(confirmation?.props.accessibilityLabel, '접수 결과 확인');
+    const clippedSurface = renderer?.root.findByProps({ accessibilityElementsHidden: true });
+    assert.equal(clippedSurface?.props['aria-hidden'], true);
+    assert.equal(clippedSurface?.props.importantForAccessibility, 'no-hide-descendants');
     assert.ok(
       renderer?.root
         .findAllByType('Text' as ElementType)
