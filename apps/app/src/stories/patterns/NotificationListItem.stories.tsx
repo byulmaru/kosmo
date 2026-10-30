@@ -264,6 +264,7 @@ async function clickAtBottomOfTarget(target: HTMLElement) {
 }
 
 const meta = {
+  component: NotificationExample,
   title: 'KOSMO/Patterns/Notification List Item',
   args: {
     kind: 'follow',
