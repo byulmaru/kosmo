@@ -14,7 +14,7 @@ const PUBLIC_POLICY_PATHS = new Set([
   '/child-safety',
 ]);
 const PUBLIC_PROFILE_PATH =
-  /^\/@(?:\w{3,30}|[\w.]+@(?:[\w.-]+|\[[\da-f:.]+\])(?::\d+)?)(?:\/[\w-]+(?:\/reactions)?)?\/?$/i;
+  /^\/@(?:\w{3,30}|[\w.]+@(?:[\w.-]+|\[[\da-f:.]+\])(?::\d+)?)(?:\/[\w-]+(?:\/(?:reactions|activity))?)?\/?$/i;
 const isPublicDocumentPath = (path: string) =>
   PUBLIC_POLICY_PATHS.has(path) || PUBLIC_PROFILE_PATH.test(path);
 const acceptsDocument = (c: Context) => {

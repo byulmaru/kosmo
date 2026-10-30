@@ -49,16 +49,17 @@ QuoteAuthorization을 대신하지 않는다. 정책 변경 뒤에는 같은 Not
 
 ## 관계
 
-| 관계              | 대상                              | 방향                                  | cardinality | 존재 조건                                             | 조회 조건                                             | 조회 권한        |
-| ----------------- | --------------------------------- | ------------------------------------- | ----------- | ----------------------------------------------------- | ----------------------------------------------------- | ---------------- |
-| Author Profile    | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 1      | 항상                                                  | Post 조회 정책 통과                                   | 없음             |
-| Current Content   | [Post Content](./post-content.md) | Post -> Post Content                  | 1 -> 0..1   | Repost가 아닐 때                                      | Post 조회 정책 통과                                   | 없음             |
-| Reply Parent      | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                     | Post와 Parent가 각각 조회 정책을 통과할 때 표시       | 없음             |
-| Repost Source     | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때 | Post와 Source를 독립 판정해 조회 가능한 Source만 표시 | 없음             |
-| Mentioned Profile | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 0..N   | Post에 Content가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
-| Hashtag           | [Hashtag](./hashtag.md)           | Post -> Hashtag (via Current Content) | 1 -> 0..N   | Current Post Content에 Hashtag가 있을 때              | Post 조회 정책 통과                                   | 없음             |
-| Reaction          | [Reaction](./reaction.md)         | Post <- Reaction                      | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                   | 없음             |
-| Bookmark          | [Bookmark](./bookmark.md)         | Post <- Bookmark                      | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
+| 관계                  | 대상                              | 방향                                  | cardinality | 존재 조건                                             | 조회 조건                                                                   | 조회 권한        |
+| --------------------- | --------------------------------- | ------------------------------------- | ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------- | ---------------- |
+| Author Profile        | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 1      | 항상                                                  | Post 조회 정책 통과                                                         | 없음             |
+| Current Content       | [Post Content](./post-content.md) | Post -> Post Content                  | 1 -> 0..1   | Repost가 아닐 때                                      | Post 조회 정책 통과                                                         | 없음             |
+| Reply Parent          | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                     | Post와 Parent가 각각 조회 정책을 통과할 때 표시                             | 없음             |
+| Repost Source         | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때 | Post와 Source를 독립 판정해 조회 가능한 Source만 표시                       | 없음             |
+| Repost Author Profile | [Profile](./profile.md)           | Post -> Profile (via Repost)          | 1 -> 0..N   | Post를 직접 Repost한 Active pure Repost가 있을 때     | Post Author가 조회할 때, 각 Repost와 Author Profile의 조회 정책을 독립 적용 | `Post.Author`    |
+| Mentioned Profile     | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 0..N   | Post에 Content가 있을 때                              | Post 조회 정책 통과                                                         | 없음             |
+| Hashtag               | [Hashtag](./hashtag.md)           | Post -> Hashtag (via Current Content) | 1 -> 0..N   | Current Post Content에 Hashtag가 있을 때              | Post 조회 정책 통과                                                         | 없음             |
+| Reaction              | [Reaction](./reaction.md)         | Post <- Reaction                      | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                                         | 없음             |
+| Bookmark              | [Bookmark](./bookmark.md)         | Post <- Bookmark                      | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                                                  | `Bookmark.Owner` |
 
 Reply Parent가 Tombstone으로 전이되어도 저장된 직접 관계를 유지한다. 현재 Parent Post row를 물리적으로
 제거하는 행동은 제공하지 않지만, Reply Parent FK는 향후 실제 row 제거 시 Reply Post를 cascade 삭제하지 않고
@@ -225,6 +226,15 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   따른다. PROD-828의 Domain Gate 전환 승인은 해당 ADR에서 별도로 추적한다.
 - Post의 Repost 수는 해당 Post를 Repost Source로 직접 참조하면서 Content와 Reply Parent가 없는 eligible
   Active Repost만 포함하고 Quote는 포함하지 않는다.
+- Post Author만 자신의 Post를 직접 Repost한 Profile 목록을 조회할 수 있다. 인증되지 않은 viewer, 현재
+  선택된 Profile이 없는 viewer, Post Author가 아닌 Profile(같은 Account의 다른 Profile 포함)은 이 목록을
+  조회할 수 없다. 조회 권한이 있는 Author에게 직접 Repost가 없으면 빈 목록을 제공한다.
+- 후보는 현재 Post를 직접 Repost Source로 참조하고 Content와 Reply Parent가 모두 없으며 Lifecycle State가
+  Active인 Post다. 후보 Post의 조회 정책과 후보 Author Profile/Instance의 visibility를 적용하고, Source
+  Post와 후보 Author Profile은 서로 독립적으로 조회 가능해야 한다. Remote Profile도 같은 정책을 통과하면
+  포함한다.
+- Repost 수와 Repost Author Profile 목록은 서로 다른 조회 의미를 가지므로 결과 수가 다를 수 있다. Repost
+  Author Profile 목록은 Repost 수를 변경하거나 재집계하지 않는다.
 
 ### Reply 수
 

@@ -303,6 +303,7 @@ export const OwnerMenuAndConfirmedActions: Story = {
     await userEvent.click(trigger);
     expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
       '링크 복사',
+      '재게시한 사람 보기',
       '프로필에 고정',
       '신고',
       '삭제',
@@ -347,6 +348,7 @@ export const OwnerMenuAndConfirmedActions: Story = {
     await userEvent.click(trigger);
     expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
       '링크 복사',
+      '재게시한 사람 보기',
       '프로필에 고정',
       '신고',
       '삭제',
@@ -473,6 +475,7 @@ export const ProductionWithoutPinFixture: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
     expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
       '링크 복사',
+      '재게시한 사람 보기',
       '프로필에 고정',
       '신고',
       '삭제',
