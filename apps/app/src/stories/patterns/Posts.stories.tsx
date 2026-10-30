@@ -3185,7 +3185,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
-    'PostDetailConversationRetryPreservesState',
+    'PostDetailConversationRetryPreservesCurrentAndDraft',
   ],
   decorators: [
     (Story) => (
@@ -6325,7 +6325,7 @@ export const PostDetailReplyTargetedRefetch: Story = {
   ),
 };
 
-export const PostDetailConversationRetryPreservesState: Story = {
+export const PostDetailConversationRetryPreservesCurrentAndDraft: Story = {
   parameters: {
     controls: { disable: true },
     relay: {
@@ -6401,7 +6401,7 @@ export const PostDetailConversationRetryPreservesState: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const currentRow = await canvas.findByTestId('post-thread-current-route-current');
-    const existingReplyRow = await canvas.findByTestId('post-thread-item-route-child');
+    await expect(canvas.findByTestId('post-thread-item-route-child')).resolves.toBeVisible();
 
     await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
     const firstDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
@@ -6419,7 +6419,7 @@ export const PostDetailConversationRetryPreservesState: Story = {
 
     await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오지 못했어요'));
     expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
-    expect(canvas.getByTestId('post-thread-item-route-child')).toBe(existingReplyRow);
+    expect(canvas.queryByTestId('post-thread-item-route-child')).not.toBeInTheDocument();
     expect(draft).toHaveValue('@kosmo 실패 중에도 남는 draft');
 
     await userEvent.click(within(pendingDialog).getByRole('button', { name: '닫기' }));
@@ -6440,7 +6440,7 @@ export const PostDetailConversationRetryPreservesState: Story = {
       expect(canvasElement).toHaveTextContent('targeted refetch로 반영된 새 Reply'),
     );
     expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
-    expect(canvas.getByTestId('post-thread-item-route-child')).toBe(existingReplyRow);
+    expect(canvas.getByTestId('post-thread-item-route-child')).toBeVisible();
     expect(recoveryDraft).toHaveValue('@kosmo 복구 중에도 남는 draft');
   },
   render: () => (

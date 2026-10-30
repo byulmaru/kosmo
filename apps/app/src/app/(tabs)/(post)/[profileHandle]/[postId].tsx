@@ -232,7 +232,10 @@ function PostDetailRouteTree({
   }, []);
   const updateConversation = useCallback(
     (update: RelayQueryUpdate<PostDetailConversationQuery>) => {
-      setConversation((previous) => applyRelayQueryUpdate(previous, update));
+      setConversation((previous) => {
+        const next = applyRelayQueryUpdate(previous, update);
+        return update.kind === 'success' || next.props === null ? next : { ...next, props: null };
+      });
     },
     [],
   );
@@ -276,7 +279,6 @@ function PostDetailRouteTree({
         />
         <PostDetailQueryRetentions
           hasComposer={composer.props !== null}
-          hasConversation={conversation.props !== null}
           hasCurrent={current.props !== null}
           postId={postId}
         />
@@ -343,12 +345,10 @@ function PostDetailRouteTree({
 // Keep displayed records retained when a failed query reader unmounts.
 function PostDetailQueryRetentions({
   hasComposer,
-  hasConversation,
   hasCurrent,
   postId,
 }: {
   hasComposer: boolean;
-  hasConversation: boolean;
   hasCurrent: boolean;
   postId: string;
 }) {
@@ -362,11 +362,6 @@ function PostDetailQueryRetentions({
       {hasComposer ? (
         <PostDetailQueryRetention>
           <PostDetailComposerQueryRetention />
-        </PostDetailQueryRetention>
-      ) : null}
-      {hasConversation ? (
-        <PostDetailQueryRetention>
-          <PostDetailConversationQueryRetention postId={postId} />
         </PostDetailQueryRetention>
       ) : null}
     </>
@@ -394,15 +389,6 @@ function PostDetailComposerQueryRetention() {
   useLazyLoadQuery<PostDetailComposerQuery>(
     ComposerQuery,
     {},
-    { UNSTABLE_renderPolicy: 'partial', fetchPolicy: 'store-only' },
-  );
-  return null;
-}
-
-function PostDetailConversationQueryRetention({ postId }: { postId: string }) {
-  useLazyLoadQuery<PostDetailConversationQuery>(
-    ConversationQuery,
-    { postId },
     { UNSTABLE_renderPolicy: 'partial', fetchPolicy: 'store-only' },
   );
   return null;

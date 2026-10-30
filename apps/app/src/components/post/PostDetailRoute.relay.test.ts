@@ -190,11 +190,7 @@ const conversationPayload = {
 
 describe('Post detail independent Relay operations', () => {
   it('renders current Post before conversation/composer responses and preserves the tree on retry', async () => {
-    const store = new Store(new RecordSource(), {
-      gcReleaseBufferSize: 0,
-      gcScheduler: (run) => run(),
-    });
-    const environment = createEnvironment(store);
+    const environment = createEnvironment();
     await act(async () => {
       renderer = create(tree(environment));
     });
@@ -233,18 +229,15 @@ describe('Post detail independent Relay operations', () => {
     assert.equal(node('CurrentPost'), currentBefore);
     assert.equal(node('Providers').props.draft, 'typed draft');
     assert.ok(conversation.props.conversationKey);
-    const conversationKeyBeforeRetry = conversation.props.conversationKey;
 
     await act(async () => conversation.props.onConversationRetry());
     const retryRequest = pending.at(-1);
     assert.equal(retryRequest?.request.name, 'PostDetailConversationQuery');
-    assert.equal(node('Conversation').props.conversationKey, conversationKeyBeforeRetry);
+    assert.equal(node('Conversation').props.conversationKey, null);
     await act(async () => retryRequest?.fail(new Error('conversation failed')));
     assert.equal(node('CurrentPost'), currentBefore);
     assert.equal(node('Providers').props.draft, 'typed draft');
-    assert.equal(node('Conversation').props.conversationKey, conversationKeyBeforeRetry);
-    store.scheduleGC();
-    assert.ok(store.getSource().get('reply-existing'));
+    assert.equal(node('Conversation').props.conversationKey, null);
 
     await act(async () => node('Conversation').props.onConversationRetry());
     const recoveredRequest = pending.at(-1);
