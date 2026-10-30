@@ -1,6 +1,14 @@
 import { Link, Redirect, useRouter } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
-import { startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
@@ -241,7 +249,21 @@ function HomeContentView({
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
+  const accountId = data.me?.id ?? null;
+  const selectedProfileId = selectedProfile?.id ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+  const postRequestHeader = useMemo(() => {
+    if (accountId === null || selectedProfileId === null) {
+      return null;
+    }
+
+    return (
+      <HomePostRequestSummaryHeader
+        key={`${accountId}:${selectedProfileId}`}
+        profileId={selectedProfileId}
+      />
+    );
+  }, [accountId, selectedProfileId]);
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {
     return <Redirect href="/first-profile/handle" />;
@@ -267,13 +289,6 @@ function HomeContentView({
       </View>
     );
   }
-
-  const postRequestHeader = data.me ? (
-    <HomePostRequestSummaryHeader
-      key={`${data.me.id}:${selectedProfile.id}`}
-      profileId={selectedProfile.id}
-    />
-  ) : null;
 
   return (
     <View style={styles.timeline}>
