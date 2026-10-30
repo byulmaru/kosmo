@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { afterEach, before, test } from 'node:test';
+import { after, afterEach, before, test } from 'node:test';
 import {
   AccountState,
   InstanceKind,
@@ -24,10 +24,11 @@ let Instances: typeof coreDb.Instances;
 let Posts: typeof coreDb.Posts;
 let Profiles: typeof coreDb.Profiles;
 let firstOrThrow: typeof coreDb.firstOrThrow;
+let pg: typeof coreDb.pg;
 let capturePostCreatedActivity: typeof CapturePostCreatedActivity;
 
 before(async () => {
-  ({ Accounts, Instances, Posts, Profiles, db, firstOrThrow } = await import('@kosmo/core/db'));
+  ({ Accounts, Instances, Posts, Profiles, db, firstOrThrow, pg } = await import('@kosmo/core/db'));
   ({ capturePostCreatedActivity } = await import('./post-created'));
 });
 
@@ -124,6 +125,8 @@ afterEach(async () => {
     accountIds.clear();
   }
 });
+
+after(async () => pg.end());
 
 test('post_created capture skips development, missing Posts, and Posts without an Account', async (t) => {
   let requests = 0;
