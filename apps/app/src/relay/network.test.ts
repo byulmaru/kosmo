@@ -1,7 +1,22 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import { executeGraphQLRequest, formatGraphQLError, GraphQLHttpError } from './network';
+import { before, beforeEach, describe, it, mock } from 'node:test';
 import { RelayTransportError } from './transportError';
+import type * as NetworkModule from './network';
+
+let analyticsPlatform: 'web' | 'native' | undefined;
+let network!: typeof NetworkModule;
+
+mock.module('../analytics/client', {
+  exports: { getPostAnalyticsPlatform: () => analyticsPlatform },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+before(async () => {
+  network = await import('./network');
+});
+
+beforeEach(() => {
+  analyticsPlatform = undefined;
+});
 
 const request = {
   cacheID: 'test',
@@ -25,10 +40,11 @@ describe('Relay 네트워크', () => {
       });
     };
 
+    analyticsPlatform = 'native';
     const restoreNavigator = stubNavigatorProduct('ReactNative');
 
     try {
-      await executeGraphQLRequest(request, {}, 'native-token', fakeFetch);
+      await network.executeGraphQLRequest(request, {}, 'native-token', fakeFetch);
     } finally {
       restoreNavigator();
     }
@@ -38,6 +54,10 @@ describe('Relay 네트워크', () => {
     assert.equal(
       (captured?.headers as Record<string, string>).authorization,
       'Bearer native-token',
+    );
+    assert.equal(
+      (captured?.headers as Record<string, string>)['x-kosmo-analytics-platform'],
+      'native',
     );
     assert.deepEqual(JSON.parse(String(captured?.body)), {
       operationName: 'ViewerQuery',
@@ -53,7 +73,7 @@ describe('Relay 네트워크', () => {
       return new Response(JSON.stringify({ data: { viewer: null } }), { status: 200 });
     };
 
-    await executeGraphQLRequest(request, {}, null, fakeFetch, 'profile-selected');
+    await network.executeGraphQLRequest(request, {}, null, fakeFetch, 'profile-selected');
 
     assert.deepEqual(JSON.parse(String(captured?.body)), {
       operationName: 'ViewerQuery',
@@ -71,7 +91,12 @@ describe('Relay 네트워크', () => {
         return new Response(JSON.stringify({ data: { currentSession: null } }), { status: 200 });
       };
 
-      await executeGraphQLRequest(request, {}, null, fakeFetch, selectedProfileId);
+      await network.executeGraphQLRequest(request, {}, null, fakeFetch, selectedProfileId);
+
+      assert.equal(
+        (captured?.headers as Record<string, string>)['x-kosmo-analytics-platform'],
+        undefined,
+      );
 
       assert.deepEqual(JSON.parse(String(captured?.body)), {
         operationName: 'ViewerQuery',
@@ -97,11 +122,16 @@ describe('Relay 네트워크', () => {
     });
 
     try {
-      await executeGraphQLRequest(request, {}, 'must-not-leave-web', fakeFetch);
+      analyticsPlatform = 'web';
+      await network.executeGraphQLRequest(request, {}, 'must-not-leave-web', fakeFetch);
 
       assert.equal(capturedUrl, 'https://kos.moe/graphql');
       assert.equal(captured?.credentials, 'include');
       assert.equal((captured?.headers as Record<string, string>).authorization, undefined);
+      assert.equal(
+        (captured?.headers as Record<string, string>)['x-kosmo-analytics-platform'],
+        'web',
+      );
     } finally {
       if (windowDescriptor) {
         Object.defineProperty(globalThis, 'window', windowDescriptor);
@@ -115,7 +145,7 @@ describe('Relay 네트워크', () => {
     const cause = new TypeError('fetch failed');
 
     await assert.rejects(
-      executeGraphQLRequest(request, {}, null, async () => {
+      network.executeGraphQLRequest(request, {}, null, async () => {
         throw cause;
       }),
       (error: unknown) => {
@@ -131,7 +161,7 @@ describe('Relay 네트워크', () => {
     const cause = new Error('fetch setup failed');
 
     await assert.rejects(
-      executeGraphQLRequest(request, {}, null, () => {
+      network.executeGraphQLRequest(request, {}, null, () => {
         throw cause;
       }),
       (error: unknown) => {
@@ -146,7 +176,7 @@ describe('Relay 네트워크', () => {
     const variables = { invalid: BigInt(1) } as unknown as Record<string, unknown>;
 
     await assert.rejects(
-      executeGraphQLRequest(request, variables, null, async () => {
+      network.executeGraphQLRequest(request, variables, null, async () => {
         assert.fail('fetch should not be called');
       }),
       (error: unknown) => {
@@ -159,7 +189,7 @@ describe('Relay 네트워크', () => {
 
   it('HTTP 오류와 GraphQL 오류는 transport marker를 사용하지 않는다', async () => {
     await assert.rejects(
-      executeGraphQLRequest(
+      network.executeGraphQLRequest(
         request,
         {},
         null,
@@ -169,7 +199,7 @@ describe('Relay 네트워크', () => {
           }),
       ),
       (error: unknown) => {
-        assert.ok(error instanceof GraphQLHttpError);
+        assert.ok(error instanceof network.GraphQLHttpError);
         assert.equal(error.message, 'server unavailable');
         assert.equal(error.name, 'Error');
         assert.equal(error.operationName, request.name);
@@ -182,9 +212,14 @@ describe('Relay 네트워크', () => {
     );
 
     await assert.rejects(
-      executeGraphQLRequest(request, {}, null, async () => new Response(null, { status: 502 })),
+      network.executeGraphQLRequest(
+        request,
+        {},
+        null,
+        async () => new Response(null, { status: 502 }),
+      ),
       (error: unknown) => {
-        assert.ok(error instanceof GraphQLHttpError);
+        assert.ok(error instanceof network.GraphQLHttpError);
         assert.equal(error.message, 'GraphQL request failed with HTTP 502.');
         assert.equal(error.operationName, request.name);
         assert.equal(error.status, 502);
@@ -193,7 +228,7 @@ describe('Relay 네트워크', () => {
       },
     );
 
-    const response = await executeGraphQLRequest(
+    const response = await network.executeGraphQLRequest(
       request,
       {},
       null,
@@ -207,7 +242,7 @@ describe('Relay 네트워크', () => {
 
   it('응답 JSON parsing 오류는 transport marker를 사용하지 않는다', async () => {
     await assert.rejects(
-      executeGraphQLRequest(
+      network.executeGraphQLRequest(
         request,
         {},
         null,
@@ -223,8 +258,8 @@ describe('Relay 네트워크', () => {
   });
 
   it('Error와 알 수 없는 실패를 공통 boundary 형식으로 변환한다', () => {
-    assert.equal(formatGraphQLError(new Error('network down')), 'network down');
-    assert.equal(formatGraphQLError(null), '요청을 처리하지 못했습니다.');
+    assert.equal(network.formatGraphQLError(new Error('network down')), 'network down');
+    assert.equal(network.formatGraphQLError(null), '요청을 처리하지 못했습니다.');
   });
 });
 

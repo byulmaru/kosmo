@@ -454,11 +454,13 @@ describe('GraphQL proxy', () => {
 
   test.each([
     {
+      expectedAnalyticsPlatform: undefined,
       expectedAuthorization: 'Bearer cookie-token',
       headers: { cookie: 'kosmo_session=cookie-token' },
       name: 'cookie session',
     },
     {
+      expectedAnalyticsPlatform: undefined,
       expectedAuthorization: 'Bearer native-token',
       headers: {
         authorization: 'Bearer native-token',
@@ -467,48 +469,77 @@ describe('GraphQL proxy', () => {
       name: 'explicit bearer session',
     },
     {
+      expectedAnalyticsPlatform: undefined,
       expectedAuthorization: undefined,
       headers: {},
       name: 'anonymous request',
     },
-  ])('forwards a $name', async ({ expectedAuthorization, headers: requestHeaders }) => {
-    let body = '';
-    fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
-      body = await new Response(init?.body).text();
-      return new Response('upstream-body', {
-        headers: { 'content-type': 'application/graphql-response+json', 'x-upstream': 'yes' },
-        status: 202,
+    {
+      expectedAnalyticsPlatform: 'web',
+      expectedAuthorization: 'Bearer cookie-token',
+      headers: {
+        cookie: 'kosmo_session=cookie-token',
+        'x-kosmo-analytics-platform': 'web',
+      },
+      name: 'web analytics platform',
+    },
+    {
+      expectedAnalyticsPlatform: 'native',
+      expectedAuthorization: undefined,
+      headers: { 'x-kosmo-analytics-platform': 'native' },
+      name: 'native analytics platform',
+    },
+    {
+      expectedAnalyticsPlatform: undefined,
+      expectedAuthorization: undefined,
+      headers: { 'x-kosmo-analytics-platform': 'mobile', 'x-untrusted': 'drop-me' },
+      name: 'unsupported analytics platform',
+    },
+  ])(
+    'forwards a $name',
+    async ({ expectedAnalyticsPlatform, expectedAuthorization, headers: requestHeaders }) => {
+      let body = '';
+      fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+        body = await new Response(init?.body).text();
+        return new Response('upstream-body', {
+          headers: { 'content-type': 'application/graphql-response+json', 'x-upstream': 'yes' },
+          status: 202,
+        });
       });
-    });
-    vi.stubGlobal('fetch', fetch);
-    const headers = new Headers({
-      accept: 'application/graphql-response+json',
-      'content-type': 'application/json',
-    });
-    for (const [name, value] of Object.entries(requestHeaders)) {
-      if (value) {
-        headers.set(name, value);
+      vi.stubGlobal('fetch', fetch);
+      const headers = new Headers({
+        accept: 'application/graphql-response+json',
+        'content-type': 'application/json',
+      });
+      for (const [name, value] of Object.entries(requestHeaders)) {
+        if (value) {
+          headers.set(name, value);
+        }
       }
-    }
-    const response = await app.request('/graphql', {
-      body: '{"query":"{ __typename }"}',
-      headers,
-      method: 'POST',
-    });
-    const [input, init] = fetch.mock.calls[0] ?? [];
-    const forwardedHeaders = new Headers(init?.headers);
+      const response = await app.request('/graphql', {
+        body: '{"query":"{ __typename }"}',
+        headers,
+        method: 'POST',
+      });
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      const forwardedHeaders = new Headers(init?.headers);
 
-    expect(String(input)).toBe('https://api.example/graphql');
-    expect(init?.method).toBe('POST');
-    expect(init?.redirect).toBe('manual');
-    expect(forwardedHeaders.get('content-type')).toBe('application/json');
-    expect(forwardedHeaders.get('accept')).toBe('application/graphql-response+json');
-    expect(forwardedHeaders.get('authorization') ?? undefined).toBe(expectedAuthorization);
-    expect(body).toBe('{"query":"{ __typename }"}');
-    expect(response.status).toBe(202);
-    expect(response.headers.get('x-upstream')).toBe('yes');
-    expect(await response.text()).toBe('upstream-body');
-  });
+      expect(String(input)).toBe('https://api.example/graphql');
+      expect(init?.method).toBe('POST');
+      expect(init?.redirect).toBe('manual');
+      expect(forwardedHeaders.get('content-type')).toBe('application/json');
+      expect(forwardedHeaders.get('accept')).toBe('application/graphql-response+json');
+      expect(forwardedHeaders.get('authorization') ?? undefined).toBe(expectedAuthorization);
+      expect(forwardedHeaders.get('x-kosmo-analytics-platform') ?? undefined).toBe(
+        expectedAnalyticsPlatform,
+      );
+      expect(forwardedHeaders.get('x-untrusted')).toBeNull();
+      expect(body).toBe('{"query":"{ __typename }"}');
+      expect(response.status).toBe(202);
+      expect(response.headers.get('x-upstream')).toBe('yes');
+      expect(await response.text()).toBe('upstream-body');
+    },
+  );
 
   test('rejects unsupported methods without calling the API', async () => {
     const response = await app.request('/graphql', {

@@ -30,6 +30,8 @@ class FakePostHog {
   captureFails = false;
   identifyFails = false;
   resetFails = false;
+  capturing = true;
+  optedOut = false;
   distinctId = 'anonymous-id';
   userId: string | undefined;
 
@@ -93,6 +95,14 @@ class FakePostHog {
 
   get_property(name: string) {
     return name === '$user_id' ? this.userId : undefined;
+  }
+
+  is_capturing() {
+    return this.capturing;
+  }
+
+  has_opted_out_capturing() {
+    return this.optedOut;
   }
 
   setPersistedIdentity(accountId: string) {
@@ -165,6 +175,57 @@ describe('PostHog Web client', () => {
 
     assert.equal(initCalls.length, 0);
     assert.equal(instances.length, 0);
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
+  });
+
+  it('초기화하지 않고 기존 수집 중인 SDK만 web 플랫폼으로 보고한다', () => {
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
+    assert.equal(initCalls.length, 0);
+
+    analytics.clearAnalytics();
+
+    assert.equal(analytics.getPostAnalyticsPlatform(), 'web');
+  });
+
+  it('loopback에서는 초기화된 SDK가 있어도 web 플랫폼을 보고하지 않는다', () => {
+    analytics.clearAnalytics();
+    const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { hostname: 'localhost' } },
+    });
+
+    try {
+      assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
+    } finally {
+      if (windowDescriptor) {
+        Object.defineProperty(globalThis, 'window', windowDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
+  it('SDK가 수집을 비활성화했거나 opted out이면 web 플랫폼을 보고하지 않는다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+
+    instance.capturing = false;
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
+
+    instance.capturing = true;
+    instance.optedOut = true;
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
+  });
+
+  it('analytics 설정이 없으면 초기화나 플랫폼을 노출하지 않는다', () => {
+    globals.__KOSMO_CHANNEL__ = 'dev';
+
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.equal(initCalls.length, 0);
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
   });
 
   it('prod 채널에서는 채널 설정과 권장 baseline으로 한 번 초기화한다', () => {
@@ -399,6 +460,7 @@ describe('PostHog Web client', () => {
   it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', async () => {
     constructorFails = true;
     assert.doesNotThrow(() => analytics.clearAnalytics());
+    assert.equal(analytics.getPostAnalyticsPlatform(), undefined);
 
     constructorFails = false;
     analytics = await import(

@@ -64,6 +64,27 @@ function initializeAnalytics(): PostHog | null {
   return client;
 }
 
+export function getPostAnalyticsPlatform(): 'web' | undefined {
+  try {
+    const browserHostname = typeof window === 'undefined' ? undefined : window.location.hostname;
+    const analyticsClient = client;
+    if (
+      browserHostname === 'localhost' ||
+      browserHostname === '127.0.0.1' ||
+      browserHostname === '[::1]' ||
+      !analyticsClient ||
+      !analyticsClient.is_capturing() ||
+      analyticsClient.has_opted_out_capturing()
+    ) {
+      return undefined;
+    }
+
+    return 'web';
+  } catch {
+    return undefined;
+  }
+}
+
 export function trackAnalytics<Name extends AnalyticsEventName>(
   eventName: Name,
   properties: AnalyticsEventProperties[Name],

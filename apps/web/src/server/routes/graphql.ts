@@ -17,9 +17,13 @@ graphqlRoutes.post('/graphql', async (c) => {
   const accept = c.req.header('accept');
   const explicitAuthorization = c.req.header('authorization');
   const sessionToken = getCookie(c, sessionName);
+  const analyticsPlatform = c.req.header('x-kosmo-analytics-platform');
   headers.set('content-type', c.req.header('content-type') ?? 'application/json');
   if (accept) {
     headers.set('accept', accept);
+  }
+  if (analyticsPlatform === 'web' || analyticsPlatform === 'native') {
+    headers.set('x-kosmo-analytics-platform', analyticsPlatform);
   }
   if (explicitAuthorization) {
     if (!/^Bearer\s+\S+$/i.test(explicitAuthorization)) {
