@@ -19,6 +19,8 @@ export type PostCreateActivityInput = {
   revalidateAuthorization?: boolean;
 };
 
+export type PostAnalyticsPlatform = 'web' | 'native';
+
 export type PostCreateActivityErrorKind =
   | 'note_media_validation_rejected'
   | 'reply_profile_blocked';
@@ -44,6 +46,7 @@ export type PostCreateActivityResult =
     };
 
 export type PostCreateWorkflowArgs = {
+  readonly analyticsPlatform?: PostAnalyticsPlatform;
   readonly input: LocalPostInput | ActivityPubPostCreateInput;
   readonly postId?: string;
   readonly revalidateAuthorization?: boolean;

@@ -38,8 +38,10 @@ import type {
 } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState, PostRequestWorkflowArgs } from '@kosmo/core/temporal/post-request';
 import type * as activities from './activities';
+import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
+type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 const mediaUploadNexusWorkflowPath = new URL(
   './test-fixtures/media-upload-nexus-operation.ts',
   import.meta.url,
@@ -787,11 +789,15 @@ test(
     t.after(() => environment.teardown());
 
     const taskQueue = `post-request-effects-${process.pid}-${randomUUID()}`;
-    const args = createPostRequest();
+    const args = { ...createPostRequest(), analyticsPlatform: 'native' as const };
     const postCreateInputs: PostCreateActivityInput[] = [];
     const effectsStarted = Promise.withResolvers<void>();
     const releaseEffects = Promise.withResolvers<void>();
+    const captureStarted = Promise.withResolvers<void>();
+    const releaseCapture = Promise.withResolvers<void>();
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     let effectsCompleted = false;
+    let captureCompleted = false;
     const worker = await createWorker(environment, taskQueue, {
       createPostActivityV2: async (input) => {
         postCreateInputs.push(input);
@@ -804,17 +810,25 @@ test(
         await releaseEffects.promise;
         effectsCompleted = true;
       },
+      capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+        analyticsCalls.push(input);
+        captureStarted.resolve();
+        await releaseCapture.promise;
+        captureCompleted = true;
+      },
     });
 
     await worker.runUntil(async () => {
       const handle = await startPostRequest(environment, taskQueue, args);
       const resultPromise = handle.result();
-      await effectsStarted.promise;
+      await Promise.all([effectsStarted.promise, captureStarted.promise]);
       const result = await resultPromise;
 
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
       assert.equal(result.result?.postId, args.postId);
       assert.equal(effectsCompleted, false);
+      assert.equal(captureCompleted, false);
+      assert.deepEqual(analyticsCalls, [{ analyticsPlatform: 'native', postId: args.postId! }]);
       assert.deepEqual(postCreateInputs, [
         {
           input: args.input,
@@ -836,12 +850,13 @@ test(
       );
 
       releaseEffects.resolve();
-      await effectsStarted.promise;
+      releaseCapture.resolve();
       const effectHandle = environment.client.workflow.getHandle(
         `post-create-effects:${args.postId}`,
       );
       await effectHandle.result();
       assert.equal(effectsCompleted, true);
+      assert.equal(captureCompleted, true);
     });
   },
 );
@@ -854,16 +869,18 @@ test(
     t.after(() => environment.teardown());
 
     const taskQueue = `post-request-reconcile-${process.pid}-${randomUUID()}`;
-    const args = withoutPostId(createPostRequest());
+    const args = { ...withoutPostId(createPostRequest()), analyticsPlatform: 'web' as const };
     const generatedPostId = randomUUID();
     const lateReconciliationStarted = Promise.withResolvers<void>();
     const releaseLateReconciliation = Promise.withResolvers<void>();
     const effectsStarted = Promise.withResolvers<void>();
     const releaseEffects = Promise.withResolvers<void>();
+    const captureStarted = Promise.withResolvers<void>();
     let createAttempts = 0;
     let reconciliationAttempts = 0;
     let postIdGenerationCalls = 0;
     let effectsCompleted = false;
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     const postCreateInputs: PostCreateActivityInput[] = [];
     const worker = await createWorker(environment, taskQueue, {
       ...postCreateEffectsActivities,
@@ -900,6 +917,10 @@ test(
         await releaseEffects.promise;
         effectsCompleted = true;
       },
+      capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+        analyticsCalls.push(input);
+        captureStarted.resolve();
+      },
     });
 
     await worker.runUntil(async () => {
@@ -921,11 +942,12 @@ test(
 
       releaseLateReconciliation.resolve();
       const resultPromise = handle.result();
-      await effectsStarted.promise;
+      await Promise.all([effectsStarted.promise, captureStarted.promise]);
       const result = await resultPromise;
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
       assert.equal(result.result?.postId, generatedPostId);
       assert.equal(effectsCompleted, false);
+      assert.deepEqual(analyticsCalls, [{ analyticsPlatform: 'web', postId: generatedPostId }]);
       assert.equal(createAttempts, 2);
       assert.equal(reconciliationAttempts, 2);
       assert.equal(postIdGenerationCalls, 1);
@@ -965,11 +987,12 @@ test(
 
     const taskQueue = `post-request-reconcile-effects-existing-${process.pid}-${randomUUID()}`;
     const postId = randomUUID();
-    const args = { ...createPostRequest(), postId };
+    const args = { ...createPostRequest(), analyticsPlatform: 'native' as const, postId };
     const effectsStarted = Promise.withResolvers<void>();
     const releaseEffects = Promise.withResolvers<void>();
     let effectCalls = 0;
     let effectsCompleted = false;
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     const worker = await createWorker(environment, taskQueue, {
       ...postCreateEffectsActivities,
       createPostActivityV2: async () => {
@@ -988,12 +1011,15 @@ test(
         await releaseEffects.promise;
         effectsCompleted = true;
       },
+      capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+        analyticsCalls.push(input);
+      },
     });
 
     await worker.runUntil(async () => {
       const effectsWorkflowId = `post-create-effects:${postId}`;
       const effectsHandle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
-        args: [{ origin: 'LOCAL', postId }],
+        args: [{ analyticsPlatform: 'native', origin: 'LOCAL', postId }],
         taskQueue,
         workflowId: effectsWorkflowId,
       });
@@ -1010,6 +1036,7 @@ test(
       await effectsHandle.result();
       assert.equal(effectCalls, 1);
       assert.equal(effectsCompleted, true);
+      assert.deepEqual(analyticsCalls, [{ analyticsPlatform: 'native', postId }]);
     });
   },
 );

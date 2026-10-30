@@ -52,6 +52,10 @@
   result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를
   취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있지만,
   `request`만 선택한 acknowledgement는 영향을 받지 않는다.
+- 선택적인 내부 `PostAnalyticsPlatform`은 Post request snapshot에서 V2 create child와 stable effects child까지
+  전달한다. 각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
+  순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만
+  실행하므로 capture retry/failure가 publication 결과를 바꾸지 않는다.
 - inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.
   Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에 `USE_EXISTING`, `REJECT_DUPLICATE`,
   `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction Activity가 공통 결과를 commit한 뒤

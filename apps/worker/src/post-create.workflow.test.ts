@@ -24,8 +24,10 @@ import type {
   PostCreateWorkflowResult,
 } from '@kosmo/core/temporal/post-create';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities/notification';
+import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
+type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
@@ -91,10 +93,12 @@ test(
     const generatedIds: string[] = [];
     const createAttempts: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     let retryFirstLocalActivity = true;
     let blockedPostId = '';
     let effectStarted = Promise.withResolvers<void>();
     let effectReleased = Promise.withResolvers<void>();
+    let captureStarted = Promise.withResolvers<void>();
 
     const worker = await Worker.create({
       activities: {
@@ -133,6 +137,13 @@ test(
         },
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
+        },
+        capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+          analyticsCalls.push(input);
+          if (input.postId === blockedPostId) {
+            captureStarted.resolve();
+            await effectReleased.promise;
+          }
         },
       },
       connection: environment.nativeConnection,
@@ -178,6 +189,7 @@ test(
         const cases = [
           {
             args: {
+              analyticsPlatform: 'web',
               futureField: true,
               input: futureLocalInput,
               requestId: randomUUID(),
@@ -187,6 +199,7 @@ test(
           },
           {
             args: {
+              analyticsPlatform: undefined,
               futureField: true,
               input: futureRemoteInput,
               requestId: randomUUID(),
@@ -200,8 +213,12 @@ test(
           blockedPostId = item.postId;
           effectStarted = Promise.withResolvers<void>();
           effectReleased = Promise.withResolvers<void>();
+          captureStarted = Promise.withResolvers<void>();
           const resultPromise = runPostCreate(environment, taskQueue, item.args);
           await effectStarted.promise;
+          if (item.args.analyticsPlatform !== undefined) {
+            await captureStarted.promise;
+          }
 
           const expectedResult = {
             authorProfileId: item.expectedInput.profileId,
@@ -233,6 +250,12 @@ test(
             index === 0
               ? [expectedLocalInput, expectedLocalInput]
               : [{ ...expectedRemoteInput, media: [remoteMedia] }],
+          );
+          assert.deepEqual(
+            analyticsCalls.filter(({ postId: capturedPostId }) => capturedPostId === item.postId),
+            item.args.analyticsPlatform === undefined
+              ? []
+              : [{ analyticsPlatform: item.args.analyticsPlatform, postId: item.postId }],
           );
 
           effectReleased.resolve();

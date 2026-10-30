@@ -1,6 +1,7 @@
 import type { ErrorCode } from '../error';
 import type { LocalPostInput } from '../services/post';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
+import type { PostAnalyticsPlatform } from './post-create';
 
 export const POST_REQUEST_WORKFLOW_TYPE = 'postRequestWorkflow';
 export const POST_REQUEST_STATE_QUERY = 'postRequestState';
@@ -33,6 +34,7 @@ export type PostRequestLocalPostInput = Omit<LocalPostInput, 'accountId' | 'medi
 };
 
 export type PostRequestSnapshot = {
+  readonly analyticsPlatform?: PostAnalyticsPlatform;
   readonly input: PostRequestLocalPostInput;
   readonly postId?: string;
   readonly requestId: string;

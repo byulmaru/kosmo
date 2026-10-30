@@ -25,6 +25,7 @@ export {
 export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export { createPostActivity as createPostActivityV2 } from './activities/post-create';
+export { capturePostCreatedActivity } from './activities/post-created';
 export {
   getPostRequestMediaStateActivity,
   reconcilePostRequestActivity,

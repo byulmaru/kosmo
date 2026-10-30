@@ -5,6 +5,7 @@ import {
   ChildWorkflowCancellationType,
   log,
   ParentClosePolicy,
+  patched,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
@@ -14,6 +15,7 @@ import { runChildWorkflow } from './child';
 import { postCreateEffectsDefinition } from './create';
 import type {
   ActivityPubPostCreateInput,
+  PostAnalyticsPlatform,
   PostCreateWorkflowArgs,
   PostCreateWorkflowResult,
 } from '@kosmo/core/temporal/post-create';
@@ -65,6 +67,7 @@ const activityPubPostCreateInputSchema = z.object({
   visibility: z.enum(PostVisibility),
 });
 const workflowArgsSchema = z.object({
+  analyticsPlatform: z.enum(['web', 'native']).optional(),
   input: z.discriminatedUnion('origin', [
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
@@ -95,10 +98,20 @@ const parseInput = (value: unknown): PostCreateWorkflowArgs => {
 export const startPostCreateEffects = async (
   origin: PostCreateWorkflowArgs['input']['origin'],
   postId: string,
+  analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<void> => {
   try {
     await runChildWorkflow(postCreateEffectsDefinition, {
-      args: [{ origin, postId }],
+      args: [
+        {
+          origin,
+          postId,
+          ...(analyticsPlatform !== undefined &&
+          patched('post-create-effects-analytics-platform-v1')
+            ? { analyticsPlatform }
+            : {}),
+        },
+      ],
       cancellationType: ChildWorkflowCancellationType.ABANDON,
       mode: 'start',
       parentClosePolicy: ParentClosePolicy.ABANDON,
@@ -150,7 +163,11 @@ export async function postCreateWorkflow(
   }
 
   if (execution.result.status === 'created') {
-    await startPostCreateEffects(parsed.input.origin, execution.result.postId);
+    await startPostCreateEffects(
+      parsed.input.origin,
+      execution.result.postId,
+      parsed.analyticsPlatform,
+    );
   }
 
   return execution.result;

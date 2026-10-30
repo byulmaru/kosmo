@@ -37,6 +37,7 @@ import type * as activities from '../activities';
 
 const workflowArgsSchema = z
   .object({
+    analyticsPlatform: z.enum(['web', 'native']).optional(),
     input: z.object({
       accountId: z.uuid(),
       bodyText: z.string(),
@@ -158,6 +159,9 @@ const parseInput = (
     legacyMediaProcessing?.map(({ applyNightshade, mediaId }) => [mediaId, applyNightshade]),
   );
   const snapshot: PostRequestSnapshot = {
+    ...(parsed.data.analyticsPlatform === undefined
+      ? {}
+      : { analyticsPlatform: parsed.data.analyticsPlatform }),
     input: {
       ...inputWithoutMedia,
       ...(inputMedia === undefined
@@ -338,6 +342,10 @@ const createPost = async (
             ? {}
             : { media: media.map(({ altText, mediaId }) => ({ altText, mediaId })) }),
         },
+        ...(snapshot.analyticsPlatform !== undefined &&
+        patched('post-request-create-analytics-platform-v1')
+          ? { analyticsPlatform: snapshot.analyticsPlatform }
+          : {}),
         postId: snapshot.postId,
         revalidateAuthorization: true,
         requestId: workflowInfo().runId,
@@ -451,7 +459,7 @@ export async function postRequestWorkflow(
 
       if (reconciliation.status === 'PUBLISHED') {
         if (patched('post-request-reconcile-post-create-effects-v1')) {
-          await startPostCreateEffects('LOCAL', reconciliation.postId);
+          await startPostCreateEffects('LOCAL', reconciliation.postId, snapshot.analyticsPlatform);
         }
         setStatus(PostRequestStatus.PUBLISHED, {
           result: { postId: reconciliation.postId },
