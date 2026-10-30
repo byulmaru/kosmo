@@ -28,11 +28,9 @@ const PostRequestCardFragment = graphql`
     bodyText
     contentWarning
     media {
+      id
+      url
       altText
-      media {
-        id
-        url
-      }
     }
     sensitiveMedia
     id
@@ -73,15 +71,15 @@ type CancelledPostRequest = { requestNodeId: string };
 
 type PostRequestCardProps = {
   onCancelled?: (request: CancelledPostRequest) => void;
+  onCompose?: () => void;
   onPublished?: (post: PublishedPost) => void;
-  onRewrite?: (requestId: string) => void;
   request: PostRequestCard_request$key;
 };
 
 export function PostRequestCard({
   onCancelled,
+  onCompose,
   onPublished,
-  onRewrite,
   request: requestKey,
 }: PostRequestCardProps) {
   const theme = useTheme();
@@ -201,13 +199,13 @@ export function PostRequestCard({
 
   const statusLabel = getStatusLabel(request.status);
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
-  const canRewrite = request.status === 'FAILED' || request.status === 'CANCELLED';
+  const canCompose = request.status === 'FAILED' || request.status === 'CANCELLED';
   const contentWarning = request.contentWarning?.trim();
   const excerpt = contentWarning || request.bodyText.trim();
   const thumbnail =
     contentWarning || request.sensitiveMedia
       ? undefined
-      : request.media.find((item) => Boolean(item.media?.url));
+      : request.media.find((item) => Boolean(item?.url));
   const publishedHref = request.post?.profile.relativeHandle
     ? `/${request.post.profile.relativeHandle}/${request.post.id}`
     : undefined;
@@ -248,18 +246,18 @@ export function PostRequestCard({
         <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{statusLabel}</Text>
       </View>
 
-      {excerpt || thumbnail?.media?.url ? (
+      {excerpt || thumbnail?.url ? (
         <View style={styles.preview}>
           {excerpt ? (
             <Text numberOfLines={2} style={[styles.excerpt, { color: theme.foregroundPrimary }]}>
               {excerpt}
             </Text>
           ) : null}
-          {thumbnail?.media?.url ? (
+          {thumbnail?.url ? (
             <Image
               accessibilityLabel={thumbnail.altText || '첨부 이미지'}
               resizeMode="cover"
-              source={{ uri: thumbnail.media.url }}
+              source={{ uri: thumbnail.url }}
               style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
             />
           ) : null}
@@ -297,9 +295,9 @@ export function PostRequestCard({
             취소
           </Button>
         ) : null}
-        {canRewrite && onRewrite ? (
-          <Button onPress={() => onRewrite(request.requestId)} size="compact" tone="secondary">
-            다시 작성
+        {canCompose && onCompose ? (
+          <Button onPress={onCompose} size="compact" tone="secondary">
+            새 글 작성
           </Button>
         ) : null}
         {request.status === 'PUBLISHED' && publishedHref ? (

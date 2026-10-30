@@ -54,6 +54,7 @@ let shellChromeProps:
   | Pick<
       ComponentProps<typeof ShellChromeProvider>,
       | 'navigationDrawerOpen'
+      | 'openComposer'
       | 'openNavigationDrawer'
       | 'openProfileSwitcher'
       | 'registerTabReselection'
@@ -410,12 +411,13 @@ describe('UniversalShell screen fallback focus target', () => {
     platform.OS = 'android';
     await renderShell();
     assert.ok(shellChromeProps);
-    const { openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
+    const { openComposer, openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
 
     pathname = '/@other/post-id';
     await act(async () => renderer!.update(createElement(UniversalShell)));
 
     assert.equal(shellChromeProps.openNavigationDrawer, openNavigationDrawer);
+    assert.equal(shellChromeProps.openComposer, openComposer);
     assert.equal(shellChromeProps.openProfileSwitcher, openProfileSwitcher);
     assert.equal(shellChromeProps.navigationDrawerOpen, false);
 
@@ -681,6 +683,12 @@ describe('UniversalShell screen fallback focus target', () => {
     layout = 'compact';
     sessionProfile = { id: 'profile-1' };
     await renderShell();
+
+    assert.ok(shellChromeProps?.openComposer);
+    await act(async () => shellChromeProps?.openComposer?.());
+    assert.equal(rightRailProps?.mode, 'overlay');
+    assert.equal(rightRailProps?.open, true);
+    assert.equal(router.push.mock.callCount(), 0);
 
     assert.ok(sidebarNavigationProps?.onComposeOpen);
     await act(async () => sidebarNavigationProps?.onComposeOpen?.());

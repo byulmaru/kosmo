@@ -103,10 +103,12 @@ mockModule('@/theme/tokens', {
 mockModule('./PostRequestCard', {
   PostRequestCard: ({
     onCancelled,
+    onCompose,
     onPublished,
     request,
   }: {
     onCancelled?: (result: { requestNodeId: string }) => void;
+    onCompose?: () => void;
     onPublished?: (result: {
       authorProfileId: string;
       postId: string;
@@ -116,6 +118,7 @@ mockModule('./PostRequestCard', {
   }) =>
     createElement('PostRequestCard', {
       onCancelled,
+      onCompose,
       onPublished,
       requestId: request.requestId,
       requestNodeId: request.id,
@@ -350,13 +353,13 @@ async function updateList(
   assert.ok(renderer);
 }
 
-async function renderSummary(environment: Environment) {
+async function renderSummary(environment: Environment, onCompose: () => void = () => undefined) {
   const view = createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
     children: createElement(Suspense, {
       fallback: null,
       children: createElement(PostRequestListSummary, {
-        onRewrite: () => undefined,
+        onCompose,
         profileId: PROFILE_ID,
       }),
     }),
@@ -627,6 +630,20 @@ describe('PostRequestList', () => {
       'node:request-a',
       'node:request-b',
     ]);
+  });
+
+  it('passes the shell compose action to the failed request in the Home summary', async () => {
+    const environment = createEnvironment();
+    seedPostRequestPages(environment, [makeRequest('request-a', 'FAILED')]);
+    const onCompose = mock.fn();
+
+    await renderSummary(environment, onCompose);
+
+    const card = all('PostRequestCard')[0];
+    assert.ok(card);
+    assert.equal(card.props.onCompose, onCompose);
+    card.props.onCompose();
+    assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
   });
 
   it('moves a normalized published request into Home once when its author is the selected profile', async () => {

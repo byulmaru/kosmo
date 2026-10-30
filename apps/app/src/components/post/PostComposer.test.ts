@@ -57,7 +57,6 @@ const mediaValue = {
     return [{ altText: '대체 텍스트', applyNightshade: false, mediaId: 'media-1' }];
   },
   requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
-  restorePostRequestMedia: () => undefined,
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
 let reselectionMediaIds: string[] = [];
@@ -313,7 +312,6 @@ mockModule('./PostComposerMediaControls', {
     items: [],
     sensitiveMedia: false,
     requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
-    restorePostRequestMedia: () => undefined,
   },
   PostComposerMediaControls: ({
     onValueChange,

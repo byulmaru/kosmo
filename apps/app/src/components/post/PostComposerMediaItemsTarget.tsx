@@ -98,7 +98,7 @@ export function PostComposerMediaItemsTarget({
           const ready = item.state === 'ready';
           const failed = item.state === 'failed';
           const canEdit = ready || item.requiresReselection;
-          const previewUri = item.previewUri ?? item.asset?.uri ?? null;
+          const previewUri = item.asset.uri;
           const previewStyle = [
             styles.preview,
             item.state === 'uploading' ? styles.pendingPreview : null,

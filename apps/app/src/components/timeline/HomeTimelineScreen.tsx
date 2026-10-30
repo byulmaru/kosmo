@@ -1,4 +1,4 @@
-import { Link, Redirect, useRouter } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import {
   startTransition,
@@ -306,17 +306,9 @@ function HomeContentView({
 }
 
 function HomePostRequestSummaryHeader({ profileId }: { profileId: string }) {
-  const router = useRouter();
+  const onCompose = useShellChrome()?.openComposer;
   const theme = useTheme();
   const [fetchKey, setFetchKey] = useState(0);
-  const onRewrite = useCallback(
-    (requestId: string) =>
-      router.push({
-        pathname: '/post-requests',
-        params: { edit: '1', profileId, requestId },
-      }),
-    [profileId, router],
-  );
 
   return (
     <View style={[styles.postRequestHeader, { borderBottomColor: theme.borderSubtle }]}>
@@ -341,7 +333,7 @@ function HomePostRequestSummaryHeader({ profileId }: { profileId: string }) {
         <Suspense fallback={<PostRequestHomeSummaryLoading />}>
           <PostRequestListSummary
             fetchKey={String(fetchKey)}
-            onRewrite={onRewrite}
+            onCompose={onCompose}
             profileId={profileId}
           />
         </Suspense>

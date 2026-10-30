@@ -10,6 +10,7 @@ export type HomeReselectionHandler = () => void;
 type ShellChromeActions = {
   navigationDrawerOpen: boolean;
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
+  openComposer?: () => void;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
@@ -29,6 +30,7 @@ export function ShellChromeProvider({
   children,
   navigationDrawerOpen,
   navigationDrawerTriggerRef,
+  openComposer,
   openNavigationDrawer,
   openProfileSwitcher,
   registerHomeReselection,
@@ -40,6 +42,7 @@ export function ShellChromeProvider({
     () => ({
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
+      openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
       registerHomeReselection,
@@ -50,6 +53,7 @@ export function ShellChromeProvider({
     [
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
+      openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
       registerHomeReselection,

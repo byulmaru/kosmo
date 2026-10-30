@@ -228,143 +228,40 @@ describe('PostComposerMediaControls post request media', () => {
     assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
   });
 
-  it('restores ordered media references without starting local uploads', async () => {
+  it('requires a new file after admission rejects an uploaded image and replaces only that slot', async () => {
+    pickerResult = { assets: [asset(), asset()], canceled: false };
     await renderControls();
-
-    mediaValues.at(-1)?.restorePostRequestMedia(
-      [
-        {
-          altText: 'First saved description',
-          applyNightshade: true,
-          mediaId: 'saved-uploading-media',
-          mediaState: 'UPLOADING',
-          uri: 'https://private-preview.example/first',
-        },
-        {
-          altText: null,
-          applyNightshade: false,
-          mediaId: 'saved-ready-media',
-          mediaState: 'READY',
-          uri: null,
-        },
-      ],
-      true,
-    );
+    await act(async () => mediaRenderProps?.onMediaAction());
     await flush();
 
-    assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      {
-        altText: 'First saved description',
-        applyNightshade: true,
-        mediaId: 'saved-uploading-media',
-      },
-      { altText: null, applyNightshade: false, mediaId: 'saved-ready-media' },
-    ]);
-    assert.equal(mediaValues.at(-1)?.sensitiveMedia, true);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => ({
-        asset: item.asset,
-        altText: item.altText,
-        previewUri: item.previewUri,
-        state: item.state,
-      })),
-      [
-        {
-          asset: null,
-          altText: 'First saved description',
-          previewUri: 'https://private-preview.example/first',
-          state: 'ready',
-        },
-        { asset: null, altText: '', previewUri: null, state: 'ready' },
-      ],
-    );
-    assert.equal(uploadCalls, 0);
-    assert.equal(issueCalls.length, 0);
-  });
-
-  it('requires reselection for one unavailable restored ID and keeps it blocked if its flag is reverted', async () => {
-    await renderControls();
-    mediaValues.at(-1)?.restorePostRequestMedia([
-      {
-        altText: 'First saved ALT',
-        applyNightshade: false,
-        mediaId: 'available-media',
-        mediaState: 'READY',
-      },
-      {
-        altText: 'Unavailable saved ALT',
-        applyNightshade: false,
-        mediaId: 'unavailable-media',
-        mediaState: 'UPLOADING',
-      },
-    ]);
-    await flush();
-
-    mediaValues.at(-1)?.requirePostRequestMediaReselection('unavailable-media');
-    await flush();
-    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
-    assert.equal(mediaRenderProps?.items[1]?.requiresReselection, true);
-    assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
-
-    const unavailable = mediaRenderProps?.items[1];
-    assert.ok(unavailable);
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(unavailable.key, true));
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(unavailable.key, false));
-    await flush();
-
-    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
-    assert.equal(mediaRenderProps?.items[1]?.requiresReselection, true);
-    assert.equal(mediaRenderProps?.items[1]?.state, 'failed');
-    assert.equal(uploadCalls, 0);
-    assert.equal(issueCalls.length, 0);
-  });
-
-  it('requires a fresh file for a restored Nightshade change and replaces only that slot', async () => {
-    await renderControls();
-    mediaValues.at(-1)?.restorePostRequestMedia([
-      {
-        altText: 'Keep this ALT',
-        applyNightshade: false,
-        mediaId: 'saved-uploading-media',
-        mediaState: 'UPLOADING',
-        uri: 'https://protected-derivative.example/first',
-      },
-      {
-        altText: 'Keep sibling ALT',
-        applyNightshade: true,
-        mediaId: 'saved-ready-media',
-        mediaState: 'READY',
-        uri: 'https://private-preview.example/second',
-      },
-    ]);
-    await flush();
-
-    const restoredFirst = mediaRenderProps?.items[0];
-    assert.ok(restoredFirst);
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(restoredFirst.key, true));
+    const [first, second] = mediaRenderProps?.items ?? [];
+    assert.ok(first);
+    assert.ok(second);
+    await act(async () => {
+      mediaRenderProps?.onAltTextChange(first.key, 'Replace this ALT');
+      mediaRenderProps?.onApplyNightshadeChange(first.key, true);
+      mediaRenderProps?.onAltTextChange(second.key, 'Keep sibling ALT');
+    });
+    mediaValues.at(-1)?.requirePostRequestMediaReselection(first.mediaId!);
     await flush();
 
     assert.equal(mediaRenderProps?.items[0]?.requiresReselection, true);
     assert.equal(mediaRenderProps?.items[0]?.state, 'failed');
+    assert.equal(mediaRenderProps?.items[1]?.state, 'ready');
     assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
-    assert.equal(uploadCalls, 0);
-    assert.equal(issueCalls.length, 0);
 
-    await act(async () => mediaRenderProps?.onAltTextChange(restoredFirst.key, 'Edited saved ALT'));
-    await flush();
     const needsReselection = mediaRenderProps?.items[0];
     assert.ok(needsReselection);
     await act(async () => mediaRenderProps?.onMediaRetry(needsReselection));
     await flush();
 
-    assert.equal(uploadCalls, 1);
-    assert.equal(issueCalls.length, 1);
+    assert.equal(uploadCalls, 3);
+    assert.equal(issueCalls.length, 3);
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      { altText: 'Edited saved ALT', applyNightshade: true, mediaId: 'media-1' },
-      { altText: 'Keep sibling ALT', applyNightshade: true, mediaId: 'saved-ready-media' },
+      { altText: 'Replace this ALT', applyNightshade: true, mediaId: 'media-3' },
+      { altText: 'Keep sibling ALT', applyNightshade: false, mediaId: 'media-2' },
     ]);
-    assert.equal(mediaRenderProps?.items[0]?.kind, 'local');
     assert.equal(mediaRenderProps?.items[0]?.asset?.uri, 'file:///local/image.jpg');
-    assert.equal(mediaRenderProps?.items[1]?.mediaId, 'saved-ready-media');
+    assert.equal(mediaRenderProps?.items[1]?.mediaId, 'media-2');
   });
 });

@@ -1,11 +1,10 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
-import { PostRequestComposer } from '@/components/post/PostRequestComposer';
 import { PostRequestList } from '@/components/post/PostRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { useSession } from '@/session/SessionProvider';
 import type { PostRequestListDetailPageQuery } from './__generated__/PostRequestListDetailPageQuery.graphql';
@@ -13,37 +12,20 @@ import type { PostRequestListDetailPageQuery } from './__generated__/PostRequest
 const PostRequestListDetailQuery = graphql`
   query PostRequestListDetailPageQuery($profileId: ID!, $requestId: String!) {
     postRequest(profileId: $profileId, requestId: $requestId) {
-      status
       ...PostRequestCard_request
-      ...PostRequestComposer_request
     }
   }
 `;
 
 export default function PostRequestsScreen() {
-  const router = useRouter();
   const { accountId, selectedProfileId } = useSession();
-  const {
-    edit,
-    profileId: requestedProfileId,
-    requestId,
-  } = useLocalSearchParams<{
-    edit?: string;
+  const { profileId: requestedProfileId, requestId } = useLocalSearchParams<{
     profileId?: string;
     requestId?: string;
   }>();
   const profileId = requestedProfileId || selectedProfileId;
   const focusedRequestId = requestId || undefined;
-  const editing = edit === '1' && Boolean(focusedRequestId);
-  const onRewrite = useCallback(
-    (nextRequestId: string) =>
-      router.setParams({ edit: '1', profileId: profileId ?? undefined, requestId: nextRequestId }),
-    [profileId, router],
-  );
-  const onBack = useCallback(
-    () => router.setParams({ edit: undefined, requestId: undefined }),
-    [router],
-  );
+  const onCompose = useShellChrome()?.openComposer;
 
   if (!profileId) {
     return <PostRequestListState state="profileRequired" />;
@@ -51,15 +33,13 @@ export default function PostRequestsScreen() {
 
   return (
     <RouteBoundary
-      key={`${accountId ?? 'account'}:${profileId}:${focusedRequestId ?? ''}:${editing ? 'edit' : 'view'}`}
+      key={`${accountId ?? 'account'}:${profileId}:${focusedRequestId ?? ''}`}
       loading={<PostRequestListState state="loading" />}
       title="게시 요청을 불러오지 못했어요"
     >
       <PostRequestListRouteContent
-        editing={editing}
         focusedRequestId={focusedRequestId}
-        onBack={onBack}
-        onRewrite={onRewrite}
+        onCompose={onCompose}
         profileId={profileId}
       />
     </RouteBoundary>
@@ -67,41 +47,35 @@ export default function PostRequestsScreen() {
 }
 
 function PostRequestListRouteContent({
-  editing,
   focusedRequestId,
-  onBack,
-  onRewrite,
+  onCompose,
   profileId,
 }: {
-  editing: boolean;
   focusedRequestId?: string;
-  onBack: () => void;
-  onRewrite: (requestId: string) => void;
+  onCompose?: () => void;
   profileId: string;
 }) {
   const { fetchKey } = useRouteBoundary();
 
   return focusedRequestId ? (
     <PostRequestListDetailContent
-      editing={editing}
       fetchKey={fetchKey}
       focusedRequestId={focusedRequestId}
-      onBack={onBack}
-      onRewrite={onRewrite}
+      onCompose={onCompose}
       profileId={profileId}
     />
   ) : (
-    <PostRequestListPageContent fetchKey={fetchKey} onRewrite={onRewrite} profileId={profileId} />
+    <PostRequestListPageContent fetchKey={fetchKey} onCompose={onCompose} profileId={profileId} />
   );
 }
 
 function PostRequestListPageContent({
   fetchKey,
-  onRewrite,
+  onCompose,
   profileId,
 }: {
   fetchKey: string;
-  onRewrite: (requestId: string) => void;
+  onCompose?: () => void;
   profileId: string;
 }) {
   return (
@@ -109,25 +83,21 @@ function PostRequestListPageContent({
       fetchKey={fetchKey}
       key={fetchKey}
       header={<PageHeader title="게시 요청" />}
-      onRewrite={onRewrite}
+      onCompose={onCompose}
       profileId={profileId}
     />
   );
 }
 
 function PostRequestListDetailContent({
-  editing,
   fetchKey,
   focusedRequestId,
-  onBack,
-  onRewrite,
+  onCompose,
   profileId,
 }: {
-  editing: boolean;
   fetchKey: string;
   focusedRequestId: string;
-  onBack: () => void;
-  onRewrite: (requestId: string) => void;
+  onCompose?: () => void;
   profileId: string;
 }) {
   const data = useLazyLoadQuery<PostRequestListDetailPageQuery>(
@@ -136,16 +106,10 @@ function PostRequestListDetailContent({
     { fetchKey },
   );
   const request = data.postRequest ?? null;
-  const editingRequest =
-    editing && (request?.status === 'FAILED' || request?.status === 'CANCELLED');
   const header = (
     <>
       <PageHeader title="게시 요청" />
-      {editingRequest && request ? (
-        <PostRequestComposer onBack={onBack} request={request} />
-      ) : !request ? (
-        <StateView style={styles.missingRequest} title="요청을 찾을 수 없어요" />
-      ) : null}
+      {!request ? <StateView style={styles.missingRequest} title="요청을 찾을 수 없어요" /> : null}
     </>
   );
 
@@ -153,10 +117,10 @@ function PostRequestListDetailContent({
     <PostRequestList
       fetchKey={fetchKey}
       key={fetchKey}
-      focusedRequest={editingRequest ? null : request}
+      focusedRequest={request}
       focusedRequestId={focusedRequestId}
       header={header}
-      onRewrite={onRewrite}
+      onCompose={onCompose}
       profileId={profileId}
     />
   );
