@@ -16,6 +16,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
 import { loadPostRequestStateForAccount } from '../state';
+import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
 import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type { SessionContext } from '@/context';
@@ -93,6 +94,7 @@ export async function submitPostRequest(
   input: LocalPostMutationInput,
   requestId: string,
   ctx: SessionContext,
+  analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<PostRequestState> {
   const submittedMedia = input.media ?? [];
   if (new Set(submittedMedia.map(({ mediaId }) => mediaId.id)).size !== submittedMedia.length) {
@@ -148,6 +150,7 @@ export async function submitPostRequest(
     requestId,
     submissionFingerprint,
     submittedAt: new Date().toISOString(),
+    ...(analyticsPlatform ? { analyticsPlatform } : {}),
   };
   const state: PostRequestState = {
     snapshot,

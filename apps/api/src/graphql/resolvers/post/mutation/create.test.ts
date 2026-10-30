@@ -381,20 +381,26 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   assert.equal(execute.mock.callCount(), 1);
 });
 
-test('createPost without a request ID returns the committed Post from the synchronous workflow', async (t) => {
+test('createPost without a request ID returns the committed Post and forwards only supported platforms', async (t) => {
   const postId = '00000000-0000-4000-8000-000000000020';
   const profileId = '00000000-0000-4000-8000-000000000001';
+  const startedArgs: Array<{ analyticsPlatform?: string }> = [];
   const execute = t.mock.method(
     temporalClient.workflow,
     'execute',
     async (workflow: unknown, options: unknown) => {
       assert.equal(workflow, postCreateWorkflow.workflow);
       const args = (
-        options as { args: readonly [{ requestId: string; input: { origin: string } }] }
+        options as {
+          args: readonly [
+            { analyticsPlatform?: string; requestId: string; input: { origin: string } },
+          ];
+        }
       ).args;
       assert.equal(args.length, 1);
       assert.equal(args[0]?.input.origin, 'LOCAL');
       assert.ok(args[0]?.requestId);
+      startedArgs.push(args[0]!);
       return { authorProfileId: profileId, postId, status: 'created' } as never;
     },
   );
@@ -414,30 +420,53 @@ test('createPost without a request ID returns the committed Post from the synchr
       }) as never,
   );
 
-  const result = await graphql({
-    schema,
-    source: `
-      mutation CreatePost($input: CreatePostInput!) {
-        createPost(input: $input) { post { id } request { id } }
-      }
-    `,
-    variableValues: { input: { bodyText: 'synchronous post', visibility: 'PUBLIC' } },
-    contextValue: {
-      session: {
-        accountId: '00000000-0000-4000-8000-000000000002',
-        profile: { id: profileId, role: AccountProfileRole.MEMBER },
+  for (const { expected, header } of [
+    { expected: 'web', header: 'web' },
+    { expected: 'native', header: 'native' },
+    { expected: undefined, header: 'Web' },
+    { expected: undefined, header: undefined },
+  ]) {
+    const result = await graphql({
+      schema,
+      source: `
+        mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) { post { id } request { id } }
+        }
+      `,
+      variableValues: { input: { bodyText: 'synchronous post', visibility: 'PUBLIC' } },
+      contextValue: {
+        session: {
+          accountId: '00000000-0000-4000-8000-000000000002',
+          profile: { id: profileId, role: AccountProfileRole.MEMBER },
+        },
+        ...(header === undefined
+          ? {}
+          : {
+              c: {
+                req: {
+                  header: (name: string) =>
+                    name === 'x-kosmo-analytics-platform' ? header : undefined,
+                },
+              },
+            }),
       },
-    },
-  });
+    });
 
-  assert.deepEqual(result.errors, undefined);
-  const createPost = result.data?.createPost as {
-    post: { id: string };
-    request: { id: string } | null;
-  };
-  assert.equal(createPost.post?.id, encodeGlobalId('Post', postId));
-  assert.equal(createPost.request, null);
-  assert.equal(execute.mock.callCount(), 1);
+    assert.deepEqual(result.errors, undefined);
+    const createPost = result.data?.createPost as {
+      post: { id: string };
+      request: { id: string } | null;
+    };
+    assert.equal(createPost.post?.id, encodeGlobalId('Post', postId));
+    assert.equal(createPost.request, null);
+    assert.equal(startedArgs.at(-1)?.analyticsPlatform, expected);
+    assert.equal(
+      Object.hasOwn(startedArgs.at(-1) ?? {}, 'analyticsPlatform'),
+      expected !== undefined,
+    );
+  }
+
+  assert.equal(execute.mock.callCount(), 4);
 });
 
 test('createPost request-only selection acknowledges without waiting for workflow result', async (t) => {

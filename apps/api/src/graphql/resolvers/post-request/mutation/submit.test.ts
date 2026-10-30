@@ -25,12 +25,15 @@ type CreatePostResult = {
   };
 };
 
-const requestSubmit = (input: {
-  bodyText: string;
-  media?: readonly { applyNightshade?: boolean; mediaId: string }[];
-  requestId: string;
-  visibility: 'PUBLIC';
-}) =>
+const requestSubmit = (
+  input: {
+    bodyText: string;
+    media?: readonly { applyNightshade?: boolean; mediaId: string }[];
+    requestId: string;
+    visibility: 'PUBLIC';
+  },
+  analyticsPlatformHeader?: string,
+) =>
   graphql({
     schema,
     source: `
@@ -49,6 +52,16 @@ const requestSubmit = (input: {
           role: 'MEMBER',
         },
       },
+      ...(analyticsPlatformHeader === undefined
+        ? {}
+        : {
+            c: {
+              req: {
+                header: (name: string) =>
+                  name === 'x-kosmo-analytics-platform' ? analyticsPlatformHeader : undefined,
+              },
+            },
+          }),
     },
   }) as Promise<ExecutionResult<CreatePostResult>>;
 
@@ -58,6 +71,87 @@ const noExistingPostRequestHandle = {
     return null;
   },
 };
+
+test('createPost snapshots supported analytics platforms and keeps the first request value', async (t) => {
+  const accountId = '00000000-0000-4000-8000-000000000001';
+  const states = new Map<string, PostRequestState>();
+  const startedSnapshots: PostRequestState['snapshot'][] = [];
+  t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    (workflowId: string) =>
+      ({
+        query: async (queryName: string) => {
+          assert.equal(queryName, POST_REQUEST_STATE_QUERY);
+          return states.get(workflowId) ?? null;
+        },
+      }) as never,
+  );
+  const start = t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postRequestWorkflow.workflow);
+      const snapshot = (options as { args: readonly [PostRequestState['snapshot']] }).args[0];
+      startedSnapshots.push(snapshot);
+      const workflowId = postRequestWorkflowId(accountId, snapshot.requestId);
+      states.set(workflowId, { snapshot, status: PostRequestStatus.QUEUED });
+      return { workflowId } as never;
+    },
+  );
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  const submit = (requestId: string, platformHeader?: string) =>
+    requestSubmit({ bodyText: 'post body', requestId, visibility: 'PUBLIC' }, platformHeader);
+  const webRequestId = '00000000-0000-4000-8000-000000000006';
+  const web = await submit(webRequestId, 'web');
+  assert.deepEqual(web.errors, undefined);
+  assert.equal(startedSnapshots[0]?.analyticsPlatform, 'web');
+  const firstSnapshot = states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot;
+  assert.ok(firstSnapshot);
+  assert.ok(firstSnapshot.submissionFingerprint);
+
+  const replay = await submit(webRequestId, 'native');
+  assert.deepEqual(replay.errors, undefined);
+  assert.equal(startedSnapshots.length, 1);
+  assert.equal(
+    states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot.analyticsPlatform,
+    'web',
+  );
+  assert.equal(
+    states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot.submissionFingerprint,
+    firstSnapshot.submissionFingerprint,
+  );
+
+  const native = await submit('00000000-0000-4000-8000-000000000007', 'native');
+  assert.deepEqual(native.errors, undefined);
+  assert.equal(startedSnapshots[1]?.analyticsPlatform, 'native');
+
+  const invalid = await submit('00000000-0000-4000-8000-000000000008', 'Web');
+  assert.deepEqual(invalid.errors, undefined);
+  assert.equal(Object.hasOwn(startedSnapshots[2] ?? {}, 'analyticsPlatform'), false);
+
+  const missing = await submit('00000000-0000-4000-8000-000000000009');
+  assert.deepEqual(missing.errors, undefined);
+  assert.equal(Object.hasOwn(startedSnapshots[3] ?? {}, 'analyticsPlatform'), false);
+
+  const missingReplay = await submit('00000000-0000-4000-8000-000000000009', 'web');
+  assert.deepEqual(missingReplay.errors, undefined);
+  assert.equal(startedSnapshots.length, 4);
+  assert.equal(
+    Object.hasOwn(
+      states.get(postRequestWorkflowId(accountId, '00000000-0000-4000-8000-000000000009'))
+        ?.snapshot ?? {},
+      'analyticsPlatform',
+    ),
+    false,
+  );
+  assert.equal(start.mock.callCount(), 4);
+});
 
 test('createPost rejects duplicate media before checking uploads or starting the workflow', async (t) => {
   t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);

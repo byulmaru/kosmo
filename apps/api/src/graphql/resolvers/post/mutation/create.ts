@@ -20,7 +20,10 @@ import {
   localPostMediaArraySchema,
   prepareLocalPostInput,
 } from './prepare-local-input';
-import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
+import type {
+  PostAnalyticsPlatform,
+  PostCreateWorkflowArgs,
+} from '@kosmo/core/temporal/post-create';
 import type { PostRequestState, PostRequestWorkflowArgs } from '@kosmo/core/temporal/post-request';
 
 type PostRequestWorkflow = (args: PostRequestWorkflowArgs) => Promise<PostRequestState>;
@@ -109,8 +112,12 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
+      const headerPlatform = ctx.c?.req.header('x-kosmo-analytics-platform');
+      const analyticsPlatform: PostAnalyticsPlatform | undefined =
+        headerPlatform === 'web' || headerPlatform === 'native' ? headerPlatform : undefined;
+
       if (input.requestId) {
-        const request = await submitPostRequest(input, input.requestId, ctx);
+        const request = await submitPostRequest(input, input.requestId, ctx, analyticsPlatform);
         return {
           post: () => getPostForRequest(ctx.session.accountId, request),
           request,
@@ -121,6 +128,7 @@ builder.mutationField('createPost', (t) =>
       const args: PostCreateWorkflowArgs = {
         requestId: crypto.randomUUID(),
         input: localInput,
+        ...(analyticsPlatform ? { analyticsPlatform } : {}),
       };
       const result = await runWorkflow(postCreateWorkflow, {
         args: [args],
