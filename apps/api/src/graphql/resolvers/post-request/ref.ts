@@ -137,9 +137,11 @@ export type PostRequestPageShape = {
   readonly requests: readonly PostRequestState[];
 };
 
-export const PostRequestPage = builder.simpleObject('PostRequestPage', {
+export const PostRequestPage = builder.objectRef<PostRequestPageShape>('PostRequestPage');
+
+PostRequestPage.implement({
   fields: (t) => ({
     requests: t.field({ type: [PostRequest], resolve: (page) => page.requests }),
-    nextPageToken: t.string({ nullable: true }),
+    nextPageToken: t.exposeString('nextPageToken', { nullable: true }),
   }),
 });

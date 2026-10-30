@@ -346,6 +346,7 @@ test(
     let joinCalls = 0;
     let postIdGenerationCalls = 0;
     const postCreateInputs: PostCreateActivityInput[] = [];
+    const readPostCreateInputs = (): readonly PostCreateActivityInput[] => postCreateInputs;
     const preparedMedia: {
       readonly applyNightshade: boolean | undefined;
       readonly mediaId: string;
@@ -402,7 +403,7 @@ test(
         assert.equal(joinCalls, 1);
         assert.equal(prepareCalls, 1);
         assert.equal(postIdGenerationCalls, 0);
-        assert.deepEqual(postCreateInputs, []);
+        assert.deepEqual(readPostCreateInputs(), []);
         const secondState = await secondHandle.query<PostRequestState>(POST_REQUEST_STATE_QUERY);
         assert.equal(secondState.status, PostRequestStatus.PROCESSING);
         assert.deepEqual(secondState.snapshot.input.media, args.input.media);
@@ -426,7 +427,7 @@ test(
         assert.equal(firstResult.status, PostRequestStatus.PUBLISHED);
         assert.equal(secondResult.status, PostRequestStatus.PUBLISHED);
         assert.deepEqual(
-          new Set(postCreateInputs.map(({ postId }) => postId)),
+          new Set(readPostCreateInputs().map(({ postId }) => postId)),
           new Set([args.postId, generatedPostId]),
         );
         assert.equal(postIdGenerationCalls, 1);
@@ -437,7 +438,7 @@ test(
         assert.ok(args.input.media);
         const childMedia = args.input.media.map(({ altText, mediaId }) => ({ altText, mediaId }));
         assert.deepEqual(
-          postCreateInputs.map(({ input }) => input.media),
+          readPostCreateInputs().map(({ input }) => input.media),
           [childMedia, childMedia],
         );
       });

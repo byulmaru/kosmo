@@ -166,7 +166,7 @@ const parseInput = (
               applyNightshade:
                 legacyMediaProcessing === undefined
                   ? (applyNightshade ?? false)
-                  : legacyNightshadeByMediaId.get(mediaId)!,
+                  : (legacyNightshadeByMediaId.get(mediaId) ?? false),
               mediaId,
             })),
           }),
