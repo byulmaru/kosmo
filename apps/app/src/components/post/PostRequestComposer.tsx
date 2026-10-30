@@ -32,35 +32,33 @@ const PostRequestComposerFragment = graphql`
     authorProfile {
       ...PostComposer_profile
     }
-    draft {
-      bodyText
-      contentWarning
+    bodyText
+    contentWarning
+    media {
+      altText
+      applyNightshade
+      mediaId
       media {
-        altText
-        applyNightshade
-        mediaId
-        media {
-          id
-          state
-          url
-        }
+        id
+        state
+        url
       }
-      mentions {
-        end
-        profileId
-        start
-      }
-      replyParentId
-      replyParent {
-        ...PostRequestComposer_parent
-      }
-      repostSourceId
-      repostSource {
-        ...PostSourcePreview_source
-      }
-      sensitiveMedia
-      visibility
     }
+    mentions {
+      end
+      profileId
+      start
+    }
+    replyParentId
+    replyParent {
+      ...PostRequestComposer_parent
+    }
+    repostSourceId
+    repostSource {
+      ...PostSourcePreview_source
+    }
+    sensitiveMedia
+    visibility
   }
 `;
 
@@ -101,9 +99,9 @@ function createRestoredDraft(
   visibility: PostComposerVisibility,
 ): PostComposerInitialDraft {
   return {
-    bodyText: request.draft.bodyText,
-    contentWarning: request.draft.contentWarning ?? null,
-    media: request.draft.media.map((item) => ({
+    bodyText: request.bodyText,
+    contentWarning: request.contentWarning ?? null,
+    media: request.media.map((item) => ({
       altText: item.altText ?? null,
       applyNightshade: item.applyNightshade,
       mediaId: item.mediaId,
@@ -116,14 +114,14 @@ function createRestoredDraft(
           }
         : {}),
     })),
-    mentions: request.draft.mentions.map(({ end, profileId, start }) => ({
+    mentions: request.mentions.map(({ end, profileId, start }) => ({
       end,
       profileId,
       start,
     })),
     // This keys media restoration only. PostComposerController creates a fresh request ID on submit.
     requestId: request.requestId,
-    sensitiveMedia: request.draft.sensitiveMedia,
+    sensitiveMedia: request.sensitiveMedia,
     visibility,
   };
 }
@@ -142,7 +140,7 @@ export function PostRequestComposer({
   >(PostRequestComposerFragment, requestKey);
   const replyParent = useFragment<PostRequestComposer_parent$key>(
     PostRequestComposerParentFragment,
-    request.draft.replyParent,
+    request.replyParent,
   );
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -194,7 +192,7 @@ export function PostRequestComposer({
     return null;
   }
 
-  const draft = request.draft;
+  const draft = request;
   const composerVisibility = toComposerVisibility(draft.visibility);
   const missingContextReason = !request.authorProfile
     ? '작성 프로필을 불러올 수 없어요.'

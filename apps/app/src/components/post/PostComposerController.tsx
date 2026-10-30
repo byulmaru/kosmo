@@ -3,14 +3,9 @@ import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { randomUUID } from 'expo-crypto';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppState, Keyboard, Platform, StyleSheet, Text, View } from 'react-native';
-import {
-  graphql,
-  useFragment,
-  useLazyLoadQuery,
-  useMutation,
-  useRelayEnvironment,
-} from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
+import { commitLocalUpdate } from 'relay-runtime';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -38,14 +33,13 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
-import { getPostRequestConnectionIds } from './postRequestConnection';
+import { prependPostRequestToLoadedPages } from './postRequestCache';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerAccountQuery } from './__generated__/PostComposerAccountQuery.graphql';
+import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
-import type { PostComposerSubmitPostRequestMutation } from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
 import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue, RestoredPostRequestMedia } from './PostComposerMediaControls';
@@ -93,10 +87,9 @@ export type PostComposerInitialDraft = Readonly<{
 }>;
 
 type PostRequestSubmission = Readonly<{
-  connections: readonly string[];
   contextGeneration: number;
   environmentGeneration: number | null;
-  input: PostComposerSubmitPostRequestMutation['variables']['input'];
+  input: PostComposerCreatePostMutation['variables']['input'];
   ownerAccountId: string | null;
   requestId: string;
   uncertain: boolean;
@@ -118,25 +111,14 @@ const PostComposerFragment = graphql`
   }
 `;
 
-const SubmitPostRequestMutation = graphql`
-  mutation PostComposerSubmitPostRequestMutation(
-    $input: SubmitPostRequestInput!
-    $connections: [ID!]!
-  ) {
-    submitPostRequest(input: $input) {
-      request @prependNode(connections: $connections, edgeTypeName: "PostRequestConnectionEdge") {
+const CreatePostMutation = graphql`
+  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+    createPost(input: $input) {
+      request {
         id
         requestId
         ...PostRequestCard_request
       }
-    }
-  }
-`;
-
-const PostComposerAccountQuery = graphql`
-  query PostComposerAccountQuery {
-    me {
-      id
     }
   }
 `;
@@ -270,26 +252,7 @@ export function PostComposerController({
       ? { ...contentsCommonProps, repostSourceId }
       : contentsCommonProps;
 
-  return accountId ? (
-    <PostComposerContents {...contentsProps} accountId={accountId} key={contentsKey} />
-  ) : (
-    <PostComposerAccountQueryFallback contentsProps={contentsProps} key={contentsKey} />
-  );
-}
-
-function PostComposerAccountQueryFallback({
-  contentsProps,
-}: {
-  contentsProps: PostComposerContentsInputProps;
-}) {
-  const data = useLazyLoadQuery<PostComposerAccountQuery>(
-    PostComposerAccountQuery,
-    {},
-    { fetchPolicy: 'store-or-network' },
-  );
-  const accountId = data.me?.id ?? null;
-  contentsProps.currentAccountIdRef.current = accountId;
-  return <PostComposerContents {...contentsProps} accountId={accountId} />;
+  return <PostComposerContents key={contentsKey} {...contentsProps} accountId={accountId} />;
 }
 
 type CurrentAccountIdRef = { current: string | null };
@@ -475,8 +438,7 @@ function PostComposerContents({
     setProfilePickerOpen(dismiss !== null);
   }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
-  const [commit, submitting] =
-    useMutation<PostComposerSubmitPostRequestMutation>(SubmitPostRequestMutation);
+  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
@@ -491,6 +453,7 @@ function PostComposerContents({
   const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
   const remaining = postBodyMaxLength - [...bodyText].length - [...contentWarningText].length;
   const disabled =
+    accountId === null ||
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
     media.hasPendingMedia ||
@@ -591,7 +554,6 @@ function PostComposerContents({
           mentions.map((mention) => Object.freeze({ ...mention })),
         );
         submission = Object.freeze({
-          connections: Object.freeze(getPostRequestConnectionIds(accountId, profile.id)),
           contextGeneration: submissionGeneration,
           environmentGeneration: submissionEnvironmentGeneration,
           input: Object.freeze({
@@ -627,16 +589,19 @@ function PostComposerContents({
     setPendingSubmission(finalSubmission);
 
     commit({
-      variables: {
-        connections: finalSubmission.connections,
-        input: finalSubmission.input,
-      },
+      variables: { input: finalSubmission.input },
       onCompleted: (response, errors) => {
         if (!isCurrentSubmission()) {
           return;
         }
-        const acceptedRequest = response?.submitPostRequest?.request;
-        if (acceptedRequest?.requestId === finalSubmission.requestId) {
+        const acceptedRequest = response?.createPost?.request;
+        if (acceptedRequest?.id && acceptedRequest.requestId === finalSubmission.requestId) {
+          const actorProfileId = finalSubmission.input.actorProfileId;
+          if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
+            commitLocalUpdate(environment, (store) => {
+              prependPostRequestToLoadedPages(store, actorProfileId, acceptedRequest.id);
+            });
+          }
           setPendingSubmission(null);
           onPostRequestUncertainChange?.(false);
           onBodyReset();

@@ -9,27 +9,13 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useSession } from '@/session/SessionProvider';
 import type { PostRequestListDetailPageQuery } from './__generated__/PostRequestListDetailPageQuery.graphql';
-import type { PostRequestListPageQuery } from './__generated__/PostRequestListPageQuery.graphql';
-
-const PostRequestListQuery = graphql`
-  query PostRequestListPageQuery($profileId: ID!) {
-    me {
-      id
-      ...PostRequestList_account @arguments(profileId: $profileId)
-    }
-  }
-`;
 
 const PostRequestListDetailQuery = graphql`
   query PostRequestListDetailPageQuery($profileId: ID!, $requestId: String!) {
-    me {
-      id
-      ...PostRequestList_account @arguments(profileId: $profileId)
-      postRequest(profileId: $profileId, requestId: $requestId) {
-        status
-        ...PostRequestCard_request
-        ...PostRequestComposer_request
-      }
+    postRequest(profileId: $profileId, requestId: $requestId) {
+      status
+      ...PostRequestCard_request
+      ...PostRequestComposer_request
     }
   }
 `;
@@ -118,21 +104,14 @@ function PostRequestListPageContent({
   onRewrite: (requestId: string) => void;
   profileId: string;
 }) {
-  const data = useLazyLoadQuery<PostRequestListPageQuery>(
-    PostRequestListQuery,
-    { profileId },
-    { fetchKey },
-  );
-
-  return data.me ? (
+  return (
     <PostRequestList
-      account={data.me}
+      fetchKey={fetchKey}
+      key={fetchKey}
       header={<PageHeader title="게시 요청" />}
       onRewrite={onRewrite}
       profileId={profileId}
     />
-  ) : (
-    <PostRequestListMissingAccount />
   );
 }
 
@@ -156,8 +135,7 @@ function PostRequestListDetailContent({
     { profileId, requestId: focusedRequestId },
     { fetchKey },
   );
-  const account = data.me;
-  const request = account?.postRequest ?? null;
+  const request = data.postRequest ?? null;
   const editingRequest =
     editing && (request?.status === 'FAILED' || request?.status === 'CANCELLED');
   const header = (
@@ -171,26 +149,16 @@ function PostRequestListDetailContent({
     </>
   );
 
-  return account ? (
+  return (
     <PostRequestList
-      account={account}
+      fetchKey={fetchKey}
+      key={fetchKey}
       focusedRequest={editingRequest ? null : request}
       focusedRequestId={focusedRequestId}
       header={header}
       onRewrite={onRewrite}
       profileId={profileId}
     />
-  ) : (
-    <PostRequestListMissingAccount />
-  );
-}
-
-function PostRequestListMissingAccount() {
-  return (
-    <View style={styles.root}>
-      <PageHeader title="게시 요청" />
-      <StateView style={styles.missingRequest} title="게시 요청을 불러올 수 없어요" />
-    </View>
   );
 }
 

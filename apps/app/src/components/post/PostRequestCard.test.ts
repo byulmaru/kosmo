@@ -18,7 +18,7 @@ type RefetchOptions = {
 type MutationConfig = {
   onCompleted?: (response: unknown) => void;
   onError?: (error: Error) => void;
-  variables: { connections: string[]; input: { requestId: string } };
+  variables: { input: { requestId: string } };
 };
 
 type RequestData = {
@@ -29,18 +29,16 @@ type RequestData = {
     id: string;
     relativeHandle: string;
   } | null;
-  draft: {
-    bodyText: string;
-    contentWarning: string | null;
-    media: Array<{
-      altText: string | null;
-      media: { id: string; url: string | null } | null;
-    }>;
-    sensitiveMedia: boolean;
-  };
+  bodyText: string;
+  contentWarning: string | null;
+  media: Array<{
+    altText: string | null;
+    media: { id: string; url: string | null } | null;
+  }>;
   id: string;
   post: { id: string; profile: { id: string; relativeHandle: string } } | null;
   requestId: string;
+  sensitiveMedia: boolean;
   status: string;
 };
 
@@ -140,15 +138,13 @@ function makeRequest(status: string, overrides: Partial<RequestData> = {}) {
       id: 'profile-writer',
       relativeHandle: '@writer',
     },
-    draft: {
-      bodyText: '요청 본문 미리보기',
-      contentWarning: null,
-      media: [],
-      sensitiveMedia: false,
-    },
+    bodyText: '요청 본문 미리보기',
+    contentWarning: null,
+    media: [],
     id: 'request-node-id',
     post: null,
     requestId: 'request-id',
+    sensitiveMedia: false,
     status,
     ...overrides,
   };
@@ -199,7 +195,7 @@ describe('PostRequestCard', () => {
     await renderCard(makeRequest('QUEUED'), props);
 
     await act(async () => button('취소')?.props.onPress());
-    assert.deepEqual(config?.variables, { connections: [], input: { requestId: 'request-id' } });
+    assert.deepEqual(config?.variables, { input: { requestId: 'request-id' } });
     assert.equal(visibleText()?.includes('접수됨'), true);
     assert.equal(button('취소') !== undefined, true);
     assert.equal(button('다시 작성'), undefined);
@@ -210,24 +206,10 @@ describe('PostRequestCard', () => {
     assert.equal(visibleText()?.includes('취소됨'), true);
   });
 
-  it('removes a cancelled row from the supplied active connection only', async () => {
-    let config: MutationConfig | undefined;
-    cancelCommit = (nextConfig) => {
-      config = nextConfig;
-    };
-    await renderCard(makeRequest('PROCESSING'), { activeConnectionId: 'active-requests' });
-
-    await act(async () => button('취소')?.props.onPress());
-    assert.deepEqual(config?.variables, {
-      connections: ['active-requests'],
-      input: { requestId: 'request-id' },
-    });
-  });
-
   it('only reports cancellation to the active list after the Node reflects CANCELLED', async () => {
     cancelCommit = (config) => config.onError?.(new Error('response lost'));
     const onCancelled = mock.fn();
-    const props = { activeConnectionId: 'active-requests', onCancelled };
+    const props = { onCancelled };
     await renderCard(makeRequest('PROCESSING'), props);
 
     await act(async () => button('취소')?.props.onPress());
@@ -265,12 +247,10 @@ describe('PostRequestCard', () => {
     ];
     await renderCard(
       makeRequest('QUEUED', {
-        draft: {
-          bodyText: '비공개 미리보기',
-          contentWarning: '민감한 내용',
-          media,
-          sensitiveMedia: false,
-        },
+        bodyText: '비공개 미리보기',
+        contentWarning: '민감한 내용',
+        media,
+        sensitiveMedia: false,
       }),
     );
     assert.equal(visibleText()?.includes('비공개 미리보기'), false);
@@ -279,12 +259,10 @@ describe('PostRequestCard', () => {
 
     await updateCard(
       makeRequest('QUEUED', {
-        draft: {
-          bodyText: '민감한 미리보기',
-          contentWarning: null,
-          media,
-          sensitiveMedia: true,
-        },
+        bodyText: '민감한 미리보기',
+        contentWarning: null,
+        media,
+        sensitiveMedia: true,
       }),
     );
     assert.equal(visibleText()?.includes('민감한 미리보기'), true);
@@ -292,12 +270,10 @@ describe('PostRequestCard', () => {
 
     await updateCard(
       makeRequest('QUEUED', {
-        draft: {
-          bodyText: '공개 미리보기',
-          contentWarning: null,
-          media,
-          sensitiveMedia: false,
-        },
+        bodyText: '공개 미리보기',
+        contentWarning: null,
+        media,
+        sensitiveMedia: false,
       }),
     );
     assert.equal(visibleText()?.includes('공개 미리보기'), true);

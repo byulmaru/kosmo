@@ -25,18 +25,16 @@ const PostRequestCardFragment = graphql`
       handle
       relativeHandle
     }
-    draft {
-      bodyText
-      contentWarning
+    bodyText
+    contentWarning
+    media {
+      altText
       media {
-        altText
-        media {
-          id
-          url
-        }
+        id
+        url
       }
-      sensitiveMedia
     }
+    sensitiveMedia
     id
     post {
       id
@@ -56,10 +54,9 @@ const PostRequestCardFragment = graphql`
 `;
 
 const CancelPostRequestMutation = graphql`
-  mutation PostRequestCardCancelMutation($connections: [ID!]!, $input: CancelPostRequestInput!) {
+  mutation PostRequestCardCancelMutation($input: CancelPostRequestInput!) {
     cancelPostRequest(input: $input) {
       request {
-        id @deleteEdge(connections: $connections)
         ...PostRequestCard_request
       }
     }
@@ -75,7 +72,6 @@ type PublishedPost = {
 type CancelledPostRequest = { requestNodeId: string };
 
 type PostRequestCardProps = {
-  activeConnectionId?: string;
   onCancelled?: (request: CancelledPostRequest) => void;
   onPublished?: (post: PublishedPost) => void;
   onRewrite?: (requestId: string) => void;
@@ -83,7 +79,6 @@ type PostRequestCardProps = {
 };
 
 export function PostRequestCard({
-  activeConnectionId,
   onCancelled,
   onPublished,
   onRewrite,
@@ -107,7 +102,6 @@ export function PostRequestCard({
 
   useEffect(() => {
     if (
-      activeConnectionId &&
       previousRequest.id === request.id &&
       ACTIVE_STATUSES.has(previousRequest.status) &&
       request.status === 'CANCELLED'
@@ -129,15 +123,7 @@ export function PostRequestCard({
     if (previousRequest.id !== request.id || previousRequest.status !== request.status) {
       setPreviousRequest({ id: request.id, status: request.status });
     }
-  }, [
-    activeConnectionId,
-    onCancelled,
-    onPublished,
-    previousRequest,
-    request.id,
-    request.post,
-    request.status,
-  ]);
+  }, [onCancelled, onPublished, previousRequest, request.id, request.post, request.status]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -207,7 +193,6 @@ export function PostRequestCard({
   const cancel = () => {
     commitCancel({
       variables: {
-        connections: activeConnectionId ? [activeConnectionId] : [],
         input: { requestId: request.requestId },
       },
       onError: () => refreshRequest(),
@@ -217,12 +202,12 @@ export function PostRequestCard({
   const statusLabel = getStatusLabel(request.status);
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
   const canRewrite = request.status === 'FAILED' || request.status === 'CANCELLED';
-  const contentWarning = request.draft.contentWarning?.trim();
-  const excerpt = contentWarning || request.draft.bodyText.trim();
+  const contentWarning = request.contentWarning?.trim();
+  const excerpt = contentWarning || request.bodyText.trim();
   const thumbnail =
-    contentWarning || request.draft.sensitiveMedia
+    contentWarning || request.sensitiveMedia
       ? undefined
-      : request.draft.media.find((item) => Boolean(item.media?.url));
+      : request.media.find((item) => Boolean(item.media?.url));
   const publishedHref = request.post?.profile.relativeHandle
     ? `/${request.post.profile.relativeHandle}/${request.post.id}`
     : undefined;

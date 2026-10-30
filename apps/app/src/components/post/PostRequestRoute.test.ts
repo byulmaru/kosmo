@@ -15,7 +15,7 @@ type RequestData = Readonly<{
   status: string;
 }>;
 type RouteData = Readonly<{
-  me: Readonly<{ id: string; postRequest?: RequestData | null }> | null;
+  postRequest: RequestData | null;
 }>;
 type NavigationEvent = Readonly<{ method: 'push' | 'setParams'; value: unknown }>;
 
@@ -23,7 +23,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 const routeParams: RouteParams = {};
-const routeData: { current: RouteData } = { current: { me: { id: 'account-a' } } };
+const routeData: { current: RouteData } = { current: { postRequest: null } };
 const session = { accountId: 'account-a', selectedProfileId: 'profile-b' as string | null };
 const queryCalls: Array<{ name: string; options: object; variables: object }> = [];
 const navigationEvents: NavigationEvent[] = [];
@@ -83,7 +83,7 @@ afterEach(async () => {
   routeParams.edit = undefined;
   routeParams.profileId = undefined;
   routeParams.requestId = undefined;
-  routeData.current = { me: { id: 'account-a' } };
+  routeData.current = { postRequest: null };
   session.selectedProfileId = 'profile-b';
   queryCalls.length = 0;
   navigationEvents.length = 0;
@@ -127,7 +127,7 @@ describe('post request route', () => {
     routeParams.edit = '1';
     routeParams.profileId = 'profile-a';
     routeParams.requestId = 'request-a';
-    routeData.current = { me: { id: 'account-a', postRequest: request() } };
+    routeData.current = { postRequest: request() };
 
     await renderScreen();
 
@@ -157,7 +157,7 @@ describe('post request route', () => {
 
   it('focuses the requested card for ordinary detail viewing and defaults the profile from the session', async () => {
     routeParams.requestId = 'request-a';
-    routeData.current = { me: { id: 'account-a', postRequest: request('PROCESSING') } };
+    routeData.current = { postRequest: request('PROCESSING') };
 
     await renderScreen();
 
@@ -172,17 +172,13 @@ describe('post request route', () => {
     assert.equal(findAllByType('PostRequestComposer').length, 0);
   });
 
-  it('loads the full history when no request is focused', async () => {
+  it('renders the full-history list without a route-owned list query', async () => {
     routeParams.profileId = 'profile-a';
-    routeData.current = { me: { id: 'account-a' } };
+    routeData.current = { postRequest: null };
 
     await renderScreen();
 
-    assert.deepEqual(queryCalls[0], {
-      name: 'PostRequestListPageQuery',
-      options: { fetchKey: '0' },
-      variables: { profileId: 'profile-a' },
-    });
+    assert.equal(queryCalls.length, 0);
     assert.equal(list().props.profileId, 'profile-a');
     assert.equal(list().props.focusedRequestId, undefined);
   });
