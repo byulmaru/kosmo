@@ -3185,6 +3185,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'PostDetailConversationRetryPreservesCurrentAndDraft',
   ],
   decorators: [
     (Story) => (
@@ -5173,7 +5174,7 @@ export const PostMediaViewerWide: Story = {
     const thread = await viewer.findByTestId('post-thread');
     const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
     expect(wideDetail.getBoundingClientRect().width).toBe(320);
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
       'post-thread-item-route-parent',
@@ -5647,7 +5648,7 @@ export const ReplyThreadPresentation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
+    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
 
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-thread-root',
@@ -5810,6 +5811,28 @@ export const PostDetailThreadRoute: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPost,
+              reactionCounts: routeCurrentPostReactionCounts,
+              replyAncestors: [
+                { ...routeParentPost, repostSource: routeSourcePost },
+                routeRootPost,
+              ],
+              replyDescendants: {
+                edges: [
+                  { cursor: 'route-child', node: routeChildPost },
+                  { cursor: 'route-sibling', node: routeSiblingPost },
+                  { cursor: 'route-reply-quote', node: routeReplyQuotePost },
+                  { cursor: 'route-source-null', node: routeSourceNullPost },
+                ],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6006,6 +6029,20 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...withReactionViewerState(quotePost),
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6081,6 +6118,17 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...withReactionViewerState(pureRepost),
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6123,6 +6171,16 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeBoundaryCurrentPostWithoutReactions,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
     },
     router: {
@@ -6199,6 +6257,43 @@ export const PostDetailReplyTargetedRefetch: Story = {
             },
           ],
         },
+        PostDetailConversationQuery: {
+          sequence: [
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [{ cursor: routeCreatedReply.id, node: routeCreatedReply }],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        PostDetailComposerQuery: {
+          data: {
+            currentSession: {
+              __typename: 'Session',
+              id: 'session',
+              selectedProfile: composerProfile,
+            },
+          },
+        },
       },
     },
     router: {
@@ -6222,7 +6317,137 @@ export const PostDetailReplyTargetedRefetch: Story = {
     expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
     expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
   },
-  render: () => <PostDetailScreen />,
+  // UniversalShell keeps SessionProvider outside the actor boundary; mirror that lifecycle here.
+  render: () => (
+    <RelayActorBoundary>
+      <PostDetailScreen />
+    </RelayActorBoundary>
+  ),
+};
+
+export const PostDetailConversationRetryPreservesCurrentAndDraft: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      mutationResponse: {
+        createPost: { post: routeCreatedReply },
+      },
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+        PostDetailConversationQuery: {
+          sequence: [
+            {
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [
+                      { cursor: routeChildPost.id, node: routeChildPost },
+                      ...paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                    ],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+            { delayMs: 1000, error: '답글을 불러오지 못했어요.' },
+            {
+              delayMs: 700,
+              data: {
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [
+                      { cursor: routeChildPost.id, node: routeChildPost },
+                      ...paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                      { cursor: routeCreatedReply.id, node: routeCreatedReply },
+                    ],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        PostDetailComposerQuery: {
+          data: {
+            currentSession: {
+              __typename: 'Session',
+              id: 'session',
+              selectedProfile: composerProfile,
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const currentRow = await canvas.findByTestId('post-thread-current-route-current');
+    await expect(canvas.findByTestId('post-thread-item-route-child')).resolves.toBeVisible();
+
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const firstDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await userEvent.type(
+      within(firstDialog).getByRole('textbox', { name: '답글 본문' }),
+      '첫 번째 답글',
+    );
+    await userEvent.click(within(firstDialog).getByRole('button', { name: '답글 게시' }));
+
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오는 중입니다.'));
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const pendingDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const draft = within(pendingDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(draft, '실패 중에도 남는 draft');
+
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오지 못했어요'));
+    expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
+    expect(canvas.queryByTestId('post-thread-item-route-child')).not.toBeInTheDocument();
+    expect(draft).toHaveValue('@kosmo 실패 중에도 남는 draft');
+
+    await userEvent.click(within(pendingDialog).getByRole('button', { name: '닫기' }));
+    const discardDialog = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(discardDialog).getByRole('button', { name: '작성 취소' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(canvasElement).toHaveTextContent('답글을 불러오는 중입니다.'));
+    await userEvent.click(within(currentRow).getByRole('button', { name: '답글' }));
+    const recoveryDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const recoveryDraft = within(recoveryDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(recoveryDraft, '복구 중에도 남는 draft');
+
+    await waitFor(() =>
+      expect(canvasElement).toHaveTextContent('targeted refetch로 반영된 새 Reply'),
+    );
+    expect(canvas.getByTestId('post-thread-current-route-current')).toBe(currentRow);
+    expect(canvas.getByTestId('post-thread-item-route-child')).toBeVisible();
+    expect(recoveryDraft).toHaveValue('@kosmo 복구 중에도 남는 draft');
+  },
+  render: () => (
+    <RelayActorBoundary>
+      <PostDetailScreen />
+    </RelayActorBoundary>
+  ),
 };
 
 export const PostDetailThreadShortContentAutoFills: Story = {
@@ -6242,6 +6467,19 @@ export const PostDetailThreadShortContentAutoFills: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationInitialReply.id, node: paginationInitialReply }],
+                pageInfo: { endCursor: paginationInitialReply.id, hasNextPage: true },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
       paginationResponses: [
         {
@@ -6293,6 +6531,22 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: null } },
       },
       paginationResponses: [
         {
@@ -6368,6 +6622,22 @@ export const PostDetailThreadPageLoading: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: defaultSession.currentSession } },
       },
       paginationLoading: true,
     },
@@ -6411,6 +6681,22 @@ export const PostDetailThreadPageFailureRetries: Story = {
             },
           },
         },
+        PostDetailConversationQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+        PostDetailComposerQuery: { data: { currentSession: defaultSession.currentSession } },
       },
       paginationResponses: [
         { error: '다음 Reply page를 불러오지 못했습니다.' },

@@ -20,6 +20,7 @@ import baseMeta, {
   ContentWarningSourcePreviewRevealInteraction as contentWarningSourcePreviewInteraction,
   LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
+  PostDetailConversationRetryPreservesCurrentAndDraft as postDetailConversationRetryPreservesCurrentAndDraft,
   ProductionMoreShareReferences as productionMoreShareReferences,
   ReactionSummaryPostNavigation as reactionSummaryPostNavigation,
   ReactionSummaryQuoteNavigation as reactionSummaryQuoteNavigation,
@@ -59,6 +60,8 @@ export const LinkedSourceQuoteDark: Story = {
 
 export const ProductionMoreShareReferences: Story = productionMoreShareReferences;
 export const ReplyModalComposerMediaEditorGeometry: Story = replyModalComposerMediaEditorGeometry;
+export const PostDetailConversationRetryPreservesCurrentAndDraft: Story =
+  postDetailConversationRetryPreservesCurrentAndDraft;
 
 export const ReactionSummaryPostNavigation: Story = reactionSummaryPostNavigation;
 export const ReactionSummaryQuoteNavigation: Story = reactionSummaryQuoteNavigation;

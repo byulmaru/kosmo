@@ -4,13 +4,18 @@ import { createElement, Fragment, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { PostDetailThread as PostDetailThreadComponent } from './PostDetailThread';
+import type {
+  PostDetailThread as PostDetailThreadComponent,
+  PostDetailThreadData as PostDetailThreadDataComponent,
+  PostDetailThreadViewport as PostDetailThreadViewportComponent,
+} from './PostDetailThread';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let renderer: ReactTestRenderer | null = null;
 let documentScrollListener: (() => void) | null = null;
 const documentScrollListeners = new Set<() => void>();
+const documentKeydownListeners = new Set<(event: KeyboardEvent) => void>();
 let loadNextCalls = 0;
 let loadNextCompletions: Array<(error: Error | null) => void> = [];
 let loadNextCallsByKey: Record<string, number> = {};
@@ -39,6 +44,9 @@ globalThis.addEventListener = ((type: string, listener: EventListenerOrEventList
     documentScrollListeners.add(listener as () => void);
     documentScrollListener = () => documentScrollListeners.forEach((callback) => callback());
   }
+  if (type === 'keydown') {
+    documentKeydownListeners.add(listener as (event: KeyboardEvent) => void);
+  }
 }) as typeof globalThis.addEventListener;
 globalThis.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
   if (type === 'scroll') {
@@ -46,6 +54,9 @@ globalThis.removeEventListener = ((type: string, listener: EventListenerOrEventL
     if (documentScrollListeners.size === 0) {
       documentScrollListener = null;
     }
+  }
+  if (type === 'keydown') {
+    documentKeydownListeners.delete(listener as (event: KeyboardEvent) => void);
   }
 }) as typeof globalThis.removeEventListener;
 
@@ -138,6 +149,10 @@ mock.module('@/components/ui/Button', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/components/ui/StateView', {
+  exports: { StateView: (props: Record<string, unknown>) => createElement('StateView', props) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('@/theme/ThemeProvider', {
   exports: { useTheme: () => ({ border: '#cccccc', card: '#ffffff', divider: '#dddddd' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -151,9 +166,12 @@ mock.module('@/theme/tokens', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PostDetailThread: typeof PostDetailThreadComponent;
+let PostDetailThreadData: typeof PostDetailThreadDataComponent;
+let PostDetailThreadViewport: typeof PostDetailThreadViewportComponent;
 
 before(async () => {
-  ({ PostDetailThread } = await import('./PostDetailThread'));
+  ({ PostDetailThread, PostDetailThreadData, PostDetailThreadViewport } =
+    await import('./PostDetailThread'));
 });
 
 afterEach(async () => {
@@ -169,6 +187,7 @@ afterEach(async () => {
   documentElement.scrollHeight = 2401;
   documentScrollListener = null;
   documentScrollListeners.clear();
+  documentKeydownListeners.clear();
   loadNextCalls = 0;
   loadNextCompletions = [];
   loadNextCallsByKey = {};
@@ -305,6 +324,35 @@ async function render(presentation: 'route' | 'viewer') {
 }
 
 describe('PostDetailThread Native initial target scroll', () => {
+  it('늦게 마운트된 pagination child가 먼저 도착한 짧은 viewport metrics를 재생한다', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThreadViewport, {
+          children: null,
+          header: createElement('Header'),
+        }),
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 100 } } });
+      scroll.props.onContentSizeChange(390, 150);
+    });
+    assert.equal(loadNextCalls, 0);
+
+    await act(async () => {
+      renderer!.update(
+        createElement(PostDetailThreadViewport, {
+          children: createElement(PostDetailThreadData, { post: {} as never }),
+          header: createElement('Header'),
+        }),
+      );
+    });
+
+    assert.equal(loadNextCalls, 1);
+  });
+
   it('진입 prop 없이 대상 답글부터 표시하고 지연 이미지 보정과 수동 이동을 유지한다', async () => {
     platform.OS = 'ios';
     let offset = 0;
@@ -369,6 +417,7 @@ describe('PostDetailThread Native initial target scroll', () => {
         }
       });
     };
+    await act(async () => scroll.props.onLayout({ nativeEvent: { layout: { height: 700 } } }));
     await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
     await flush();
     assert.equal(offset, 2036);
@@ -392,6 +441,159 @@ describe('PostDetailThread Native initial target scroll', () => {
     await act(async () => scroll.props.onContentSizeChange(390, 7500));
     await flush();
     assert.equal(offset, 2400);
+  });
+
+  it('사용자 스크롤 뒤 상단 조상이 추가되면 보이는 current 위치만 보정하고 초기 anchor는 재설정하지 않는다', async () => {
+    platform.OS = 'ios';
+    let offset = 300;
+    let currentDocumentTop = 950;
+    const frames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'native-late-ancestor',
+          post: {} as never,
+          presentation: 'route',
+        }),
+        {
+          createNodeMock: (element) => {
+            const testID = (element.props as Record<string, unknown>).testID;
+            if (testID === 'post-detail-scroll') {
+              return {
+                getNativeScrollRef: () => ({
+                  measureInWindow: (done: (...args: number[]) => void) => done(0, 100, 390, 700),
+                }),
+                scrollTo: ({ y }: { y: number }) => {
+                  offset = y;
+                  renderer!.root.findByProps({ testID: 'post-detail-scroll' }).props.onScroll({
+                    nativeEvent: {
+                      contentOffset: { y },
+                      layoutMeasurement: { height: 700 },
+                      contentSize: { height: 8000 },
+                    },
+                  });
+                },
+              };
+            }
+            if (testID === 'post-thread-current-post-current') {
+              return {
+                measureInWindow: (done: (...args: number[]) => void) =>
+                  done(0, 100 + currentDocumentTop - offset, 390, 200),
+              };
+            }
+            return {
+              measureInWindow: (done: (...args: number[]) => void) => done(0, 0, 390, 64),
+            };
+          },
+        },
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    await act(async () => scroll.props.onLayout({ nativeEvent: { layout: { height: 700 } } }));
+    await act(async () => scroll.props.onScrollBeginDrag());
+    await act(async () =>
+      scroll.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: offset },
+          layoutMeasurement: { height: 700 },
+          contentSize: { height: 8000 },
+        },
+      }),
+    );
+    assert.equal(100 + currentDocumentTop - offset, 750);
+
+    currentDocumentTop += 200;
+    await act(async () => scroll.props.onContentSizeChange(390, 8200));
+    assert.equal(offset, 500);
+    assert.equal(100 + currentDocumentTop - offset, 750);
+
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+    assert.equal(offset, 500);
+  });
+
+  it('사용자 스크롤 중 완료된 layout 측정 결과는 다음 offset에 섞이지 않는다', async () => {
+    platform.OS = 'ios';
+    let offset = 300;
+    let currentDocumentTop = 950;
+    const pendingCurrentMeasures: Array<(...args: number[]) => void> = [];
+    const frames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'native-stale-layout',
+          post: {} as never,
+          presentation: 'route',
+        }),
+        {
+          createNodeMock: (element) => {
+            const testID = (element.props as Record<string, unknown>).testID;
+            if (testID === 'post-detail-scroll') {
+              return {
+                getNativeScrollRef: () => ({
+                  measureInWindow: (done: (...args: number[]) => void) => done(0, 100, 390, 700),
+                }),
+                scrollTo: ({ y }: { y: number }) => {
+                  offset = y;
+                },
+              };
+            }
+            if (testID === 'post-thread-current-post-current') {
+              return {
+                measureInWindow: (done: (...args: number[]) => void) => {
+                  pendingCurrentMeasures.push(done);
+                },
+              };
+            }
+            return {
+              measureInWindow: (done: (...args: number[]) => void) => done(0, 0, 390, 64),
+            };
+          },
+        },
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    await act(async () => scroll.props.onScrollBeginDrag());
+    await act(async () =>
+      scroll.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: offset },
+          layoutMeasurement: { height: 700 },
+          contentSize: { height: 8000 },
+        },
+      }),
+    );
+    currentDocumentTop += 200;
+    await act(async () => scroll.props.onContentSizeChange(390, 8200));
+    offset = 400;
+    await act(async () =>
+      scroll.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: offset },
+          layoutMeasurement: { height: 700 },
+          contentSize: { height: 8200 },
+        },
+      }),
+    );
+
+    for (const measure of pendingCurrentMeasures.splice(0)) {
+      measure(0, 100 + currentDocumentTop - offset, 390, 200);
+    }
+    assert.equal(offset, 400);
+    assert.equal(frames.length, 1);
   });
 });
 
@@ -583,6 +785,94 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
 
     assert.equal(measureCalls, 0);
     assert.equal(scrollTo.mock.callCount(), 0);
+  });
+
+  it('초기 history 복원이 끝나면 같은 route 인스턴스의 positioning을 재개한다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    let preservingScrollPosition = true;
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'history-restored-forward-route',
+          preserveScrollPosition: () => preservingScrollPosition,
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              const current =
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current';
+              done(0, current ? 1200 : 0, 390, current ? 200 : 64);
+            },
+          }),
+        },
+      );
+    });
+    assert.equal(scrollTo.mock.callCount(), 0);
+
+    preservingScrollPosition = false;
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const header = scroll.findAllByType('View' as never).find((node) => node.props.onLayout)!;
+    await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(scrollTo.mock.callCount(), 1);
+  });
+
+  it('editable 입력의 Space는 초기 anchor를 취소하지 않는다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = mock.fn();
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'editable-space',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              const current =
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current';
+              done(0, current ? 1200 : 0, 390, current ? 200 : 64);
+            },
+          }),
+        },
+      );
+    });
+
+    await act(async () => {
+      for (const listener of documentKeydownListeners) {
+        listener({
+          defaultPrevented: false,
+          key: ' ',
+          target: { isContentEditable: false, tagName: 'TEXTAREA' },
+        } as unknown as KeyboardEvent);
+      }
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+
+    assert.equal(scrollTo.mock.callCount(), 1);
   });
 
   it('mount 후 초기 positioning을 끄면 대기 중인 alignment도 취소한다', async () => {
