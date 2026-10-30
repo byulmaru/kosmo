@@ -48,7 +48,6 @@ const setAccountMetadataMutation = graphql`
 type CoachmarkControllerOptions = Readonly<{
   account: CoachmarkController_account$key | null | undefined;
   guide: CoachmarkGuide;
-  onExit?: () => void;
   preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
   ready: boolean;
   steps: readonly CoachmarkStep[];
@@ -62,7 +61,6 @@ type CoachmarkController = Readonly<{
 export function useCoachmarkController({
   account: accountKey,
   guide,
-  onExit,
   preferredFocusRef,
   ready,
   steps,
@@ -97,14 +95,13 @@ export function useCoachmarkController({
         accountId: account?.id,
         guide,
         mode,
-        onExit,
         onShown,
         preferredFocusRef,
         ready,
         steps,
       });
     },
-    [account, guide, onExit, onShown, preferredFocusRef, ready, request, steps],
+    [account, guide, onShown, preferredFocusRef, ready, request, steps],
   );
 
   return {

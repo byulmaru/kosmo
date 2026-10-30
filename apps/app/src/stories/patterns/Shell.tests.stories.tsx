@@ -49,14 +49,13 @@ async function exerciseTimelineCoachmark(canvasElement: HTMLElement) {
   });
   await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
   let profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
-  const drawer = await page.findByRole('navigation', { name: '주요 메뉴', hidden: true });
-  expect(drawer).toBeVisible();
+  expect(page.queryByRole('navigation', { name: '주요 메뉴', hidden: true })).toBeNull();
   expect(profileDialog).toBeVisible();
   await waitFor(() =>
     expect(within(profileDialog).getByRole('button', { name: '이전' })).toBeEnabled(),
   );
   await userEvent.click(within(profileDialog).getByRole('button', { name: '이전' }));
-  await waitFor(() => expect(drawer).not.toBeInTheDocument());
+  await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
   localDialog = await page.findByRole('dialog', {
     name: '새로운 사람들을 만나보세요',
   });
