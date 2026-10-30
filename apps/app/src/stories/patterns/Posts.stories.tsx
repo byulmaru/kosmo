@@ -993,15 +993,10 @@ function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$va
           contentWarning: input.contentWarning ?? null,
           id: `post-request-${input.requestId}`,
           media: (input.media ?? []).map((item) => ({
-            __typename: 'CreatePostMedia',
+            __typename: 'Media',
             altText: item.altText ?? null,
-            applyNightshade: item.applyNightshade ?? false,
-            media: {
-              __typename: 'Media',
-              id: item.mediaId,
-              url: postMediaImageUri,
-            },
-            mediaId: item.mediaId,
+            id: item.mediaId,
+            url: postMediaImageUri,
           })),
           post: null,
           requestId: input.requestId,

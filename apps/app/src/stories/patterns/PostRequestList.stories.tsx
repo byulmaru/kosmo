@@ -24,18 +24,18 @@ const failedRequest = {
   sensitiveMedia: false,
 };
 
-function PostRequestListFixture({ onRewrite }: { onRewrite: (requestId: string) => void }) {
+function PostRequestListFixture({ onCompose }: { onCompose: () => void }) {
   return (
     <Catalog>
-      <PostRequestList onRewrite={onRewrite} profileId={profileId} />
+      <PostRequestList onCompose={onCompose} profileId={profileId} />
     </Catalog>
   );
 }
 
 const meta = {
-  args: { onRewrite: fn() },
+  args: { onCompose: fn() },
   argTypes: {
-    onRewrite: { action: 'rewrite', control: false },
+    onCompose: { action: 'compose', control: false },
   },
   component: PostRequestListFixture,
   parameters: {

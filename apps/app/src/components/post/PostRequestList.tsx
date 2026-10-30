@@ -77,7 +77,7 @@ type RequestListProps = Readonly<{
   focusedRequest?: PostRequestCard_request$key | null;
   header?: ReactElement | null;
   profileId: string;
-  onRewrite?: (requestId: string) => void;
+  onCompose?: () => void;
 }>;
 
 function usePostRequestCardHandlers(profileId: string) {
@@ -136,7 +136,7 @@ export function PostRequestList({
   focusedRequestId,
   focusedRequest,
   header,
-  onRewrite,
+  onCompose,
   profileId,
 }: RequestListProps) {
   const theme = useTheme();
@@ -298,8 +298,8 @@ export function PostRequestList({
       {header}
       <PostRequestCard
         onCancelled={onCancelled}
+        onCompose={onCompose}
         onPublished={onPublished}
-        onRewrite={onRewrite}
         request={focusedRequest}
       />
     </>
@@ -335,8 +335,8 @@ export function PostRequestList({
       renderItem={({ item }) => (
         <PostRequestCard
           onCancelled={onCancelled}
+          onCompose={onCompose}
           onPublished={onPublished}
-          onRewrite={onRewrite}
           request={item}
         />
       )}
@@ -347,11 +347,11 @@ export function PostRequestList({
 
 export function PostRequestListSummary({
   fetchKey,
-  onRewrite,
+  onCompose,
   profileId,
 }: {
   fetchKey?: string;
-  onRewrite: (requestId: string) => void;
+  onCompose?: () => void;
   profileId: string;
 }) {
   const data = useLazyLoadQuery<PostRequestListQuery>(
@@ -388,8 +388,8 @@ export function PostRequestListSummary({
   return request ? (
     <PostRequestCard
       onCancelled={onCancelled}
+      onCompose={onCompose}
       onPublished={onPublished}
-      onRewrite={onRewrite}
       request={request}
     />
   ) : null;

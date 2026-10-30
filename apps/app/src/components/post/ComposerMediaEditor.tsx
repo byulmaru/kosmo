@@ -312,7 +312,7 @@ function MediaPreview({
   readonly selectedIndex: number;
 }) {
   const theme = useTheme();
-  const selectedPreviewUri = selected?.previewUri ?? selected?.asset?.uri ?? null;
+  const selectedPreviewUri = selected?.asset.uri ?? null;
   const selectedPreview = selected ? (
     selectedPreviewUri ? (
       <Image
@@ -390,7 +390,7 @@ function MediaGallery({
     >
       {media.map((item, index) => {
         const selected = item.key === selectedKey;
-        const previewUri = item.previewUri ?? item.asset?.uri ?? null;
+        const previewUri = item.asset.uri;
         return (
           <Pressable
             accessibilityLabel={`첨부 이미지 ${index + 1} 선택`}

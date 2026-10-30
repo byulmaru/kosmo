@@ -17,7 +17,6 @@ type RequestData = Readonly<{
 type RouteData = Readonly<{
   postRequest: RequestData | null;
 }>;
-type NavigationEvent = Readonly<{ method: 'push' | 'setParams'; value: unknown }>;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -26,17 +25,12 @@ const routeParams: RouteParams = {};
 const routeData: { current: RouteData } = { current: { postRequest: null } };
 const session = { accountId: 'account-a', selectedProfileId: 'profile-b' as string | null };
 const queryCalls: Array<{ name: string; options: object; variables: object }> = [];
-const navigationEvents: NavigationEvent[] = [];
-const router = {
-  push: (value: unknown) => navigationEvents.push({ method: 'push', value }),
-  setParams: (value: unknown) => navigationEvents.push({ method: 'setParams', value }),
-};
+const openComposer = mock.fn();
 let renderer: ReactTestRenderer | null = null;
 let PostRequestsScreen: ComponentType;
 
 mockModule('expo-router', {
   useLocalSearchParams: () => routeParams,
-  useRouter: () => router,
 });
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
@@ -58,13 +52,12 @@ mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({ children }: { children?: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: '0' }),
 });
-mockModule('@/components/post/PostRequestComposer', {
-  PostRequestComposer: ({ onBack, request }: { onBack: () => void; request: RequestData }) =>
-    createElement('PostRequestComposer', { onBack, requestId: request.requestId }),
-});
 mockModule('@/components/post/PostRequestList', {
   PostRequestList: ({ header, ...props }: { header?: ReactNode; [key: string]: unknown }) =>
     createElement('PostRequestList', props, header),
+});
+mockModule('@/components/shell/ShellChromeContext', {
+  useShellChrome: () => ({ openComposer }),
 });
 mockModule('@/components/ui/StateView', {
   StateView: (props: object) => createElement('StateView', props),
@@ -86,7 +79,7 @@ afterEach(async () => {
   routeData.current = { postRequest: null };
   session.selectedProfileId = 'profile-b';
   queryCalls.length = 0;
-  navigationEvents.length = 0;
+  openComposer.mock.resetCalls();
 });
 
 function request(status = 'FAILED'): RequestData {
@@ -105,13 +98,9 @@ async function renderScreen() {
   assert.ok(renderer);
 }
 
-function findAllByType(type: string) {
-  assert.ok(renderer);
-  return renderer.root.findAll((node) => node.type === type);
-}
-
 function findByType(type: string) {
-  const matches = findAllByType(type);
+  assert.ok(renderer);
+  const matches = renderer.root.findAll((node) => node.type === type);
   assert.equal(matches.length, 1, `Expected one ${type}`);
   const match = matches[0];
   assert.ok(match);
@@ -123,7 +112,7 @@ function list() {
 }
 
 describe('post request route', () => {
-  it('uses an explicit profile deep link without changing the selected actor and opens rewrite inline', async () => {
+  it('treats legacy edit links as request details and calls the shell composer unchanged', async () => {
     routeParams.edit = '1';
     routeParams.profileId = 'profile-a';
     routeParams.requestId = 'request-a';
@@ -141,18 +130,12 @@ describe('post request route', () => {
     assert.equal(session.selectedProfileId, 'profile-b');
     assert.equal(list().props.profileId, 'profile-a');
     assert.equal(list().props.focusedRequestId, 'request-a');
-    assert.equal(list().props.focusedRequest, null);
-    assert.equal(findByType('PostRequestComposer').props.requestId, 'request-a');
+    assert.equal(list().props.focusedRequest, routeData.current.postRequest);
+    assert.equal(list().props.onCompose, openComposer);
 
-    await act(async () => list().props.onRewrite('request-b'));
-    await act(async () => findByType('PostRequestComposer').props.onBack());
-    assert.deepEqual(navigationEvents, [
-      {
-        method: 'setParams',
-        value: { edit: '1', profileId: 'profile-a', requestId: 'request-b' },
-      },
-      { method: 'setParams', value: { edit: undefined, requestId: undefined } },
-    ]);
+    await act(async () => list().props.onCompose());
+    assert.deepEqual(openComposer.mock.calls[0]?.arguments, []);
+    assert.equal(session.selectedProfileId, 'profile-b');
   });
 
   it('focuses the requested card for ordinary detail viewing and defaults the profile from the session', async () => {
@@ -169,7 +152,6 @@ describe('post request route', () => {
     assert.equal(list().props.profileId, 'profile-b');
     assert.equal(list().props.focusedRequestId, 'request-a');
     assert.equal(list().props.focusedRequest.requestId, 'request-a');
-    assert.equal(findAllByType('PostRequestComposer').length, 0);
   });
 
   it('renders the full-history list without a route-owned list query', async () => {

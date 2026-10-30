@@ -49,15 +49,7 @@ function request({
     bodyText,
     contentWarning,
     id: `post-request-card-node-${id}`,
-    media: [
-      {
-        __typename: 'CreatePostMedia' as const,
-        altText: media.altText,
-        applyNightshade: false,
-        media,
-        mediaId: media.id,
-      },
-    ],
+    media: [media],
     post: publishedPost,
     requestId: `post-request-card-${id}`,
     status,
@@ -124,10 +116,10 @@ function requireRequest(requests: ReturnType<typeof useStoryRequests>, requestNo
 }
 
 function PostRequestCardFixture({
-  onRewrite,
+  onCompose,
   requestNodeId = processing.id,
 }: {
-  onRewrite: (requestId: string) => void;
+  onCompose: () => void;
   requestNodeId?: string;
 }) {
   const storyRequests = useStoryRequests();
@@ -135,12 +127,12 @@ function PostRequestCardFixture({
 
   return (
     <Catalog>
-      <PostRequestCard onRewrite={onRewrite} request={selected.request} />
+      <PostRequestCard onCompose={onCompose} request={selected.request} />
     </Catalog>
   );
 }
 
-function RepresentativeStatesCatalog({ onRewrite }: { onRewrite: (requestId: string) => void }) {
+function RepresentativeStatesCatalog({ onCompose }: { onCompose: () => void }) {
   const storyRequests = useStoryRequests();
 
   return (
@@ -148,9 +140,9 @@ function RepresentativeStatesCatalog({ onRewrite }: { onRewrite: (requestId: str
       <Section title="Processing">
         <PostRequestCard request={requireRequest(storyRequests, processing.id).request} />
       </Section>
-      <Section title="Failed, available to rewrite">
+      <Section title="Failed, available to compose">
         <PostRequestCard
-          onRewrite={onRewrite}
+          onCompose={onCompose}
           request={requireRequest(storyRequests, failed.id).request}
         />
       </Section>
@@ -162,9 +154,9 @@ function RepresentativeStatesCatalog({ onRewrite }: { onRewrite: (requestId: str
 }
 
 const meta = {
-  args: { onRewrite: fn(), requestNodeId: processing.id },
+  args: { onCompose: fn(), requestNodeId: processing.id },
   argTypes: {
-    onRewrite: { action: 'rewrite', control: false, table: { disable: true } },
+    onCompose: { action: 'compose', control: false, table: { disable: true } },
     requestNodeId: { control: 'select', options: requestNodeIds },
   },
   component: PostRequestCardFixture,
@@ -189,5 +181,5 @@ export const Playground: Story = {
 
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },
-  render: ({ onRewrite }) => <RepresentativeStatesCatalog onRewrite={onRewrite} />,
+  render: ({ onCompose }) => <RepresentativeStatesCatalog onCompose={onCompose} />,
 };

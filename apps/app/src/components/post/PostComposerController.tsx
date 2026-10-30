@@ -42,14 +42,13 @@ import type { PostComposerCreatePostMutation } from './__generated__/PostCompose
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
 import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
-import type { PostComposerMediaValue, RestoredPostRequestMedia } from './PostComposerMediaControls';
+import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type {
   PostComposerDraft,
   PostComposerMentionCandidate,
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
-  PostComposerMentionRange,
   PostComposerMentionSearchState,
   PostComposerTextSelection,
 } from './postComposerState';
@@ -75,16 +74,6 @@ function postRequestSubmissionError(error: unknown): { code: string; field?: str
       : {}),
   };
 }
-
-export type PostComposerInitialDraft = Readonly<{
-  bodyText: string;
-  contentWarning: string | null;
-  media: readonly RestoredPostRequestMedia[];
-  mentions: readonly PostComposerMentionRange[];
-  requestId: string;
-  sensitiveMedia: boolean;
-  visibility: Visibility;
-}>;
 
 type PostRequestSubmission = Readonly<{
   contextGeneration: number;
@@ -156,7 +145,6 @@ type PostComposerBaseProps = {
   focusOnMount?: boolean;
   initialBodyText?: string;
   initialContentWarning?: string | null;
-  initialDraft?: PostComposerInitialDraft;
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onPostRequestAccepted?: () => void;
@@ -230,11 +218,9 @@ export function PostComposerController({
   }
   const [pendingSubmission, setPendingSubmission] = useState<PostRequestSubmission | null>(null);
 
-  const contentsKey = [
-    contextGenerationRef.current,
-    environmentGenerationRef?.current ?? 0,
-    props.initialDraft?.requestId ?? '',
-  ].join(':');
+  const contentsKey = [contextGenerationRef.current, environmentGenerationRef?.current ?? 0].join(
+    ':',
+  );
   const contentsCommonProps: PostComposerContentsCommonProps = {
     ...props,
     contextGenerationRef,
@@ -292,7 +278,6 @@ function PostComposerContents({
   focusOnMount = false,
   initialBodyText,
   initialContentWarning,
-  initialDraft,
   onPostRequestAccepted,
   onPostRequestUncertainChange,
   pendingSubmission,
@@ -324,11 +309,11 @@ function PostComposerContents({
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
   const [draft, setDraft] = useState<PostComposerDraft>(() => {
-    const initialBody = initialDraft?.bodyText ?? initialBodyText ?? '';
+    const initialBody = initialBodyText ?? '';
     const end = initialBody.length;
     return {
       body: initialBody,
-      mentionRanges: initialDraft?.mentions.map((mention) => ({ ...mention })) ?? [],
+      mentionRanges: [],
       previousSelection: { start: end, end },
       selection: { start: end, end },
       selectionToApply: { start: end, end },
@@ -396,34 +381,19 @@ function PostComposerContents({
     [profile.id],
   );
   const [contentWarning, setContentWarning] = useState(() =>
-    normalizePostContentPlainText(initialDraft?.contentWarning ?? initialContentWarning ?? ''),
+    normalizePostContentPlainText(initialContentWarning ?? ''),
   );
-  const [contentWarningExpanded, setContentWarningExpanded] = useState(() =>
-    initialDraft?.contentWarning !== null && initialDraft?.contentWarning !== undefined
-      ? initialDraft.contentWarning.length > 0
-      : initialContentWarning !== null && initialContentWarning !== undefined,
+  const [contentWarningExpanded, setContentWarningExpanded] = useState(
+    () => initialContentWarning !== null && initialContentWarning !== undefined,
   );
   const defaultVisibility = resolvePostComposerVisibility(
     profile.private?.defaultPostVisibility,
     replyParentVisibility,
   );
-  const [visibility, setVisibility] = useState<Visibility>(
-    () => initialDraft?.visibility ?? defaultVisibility,
-  );
+  const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
   const defaultVisibilityRef = useRef(defaultVisibility);
   const visibilityProfileIdRef = useRef(profile.id);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
-  const restoredMediaRequestIdRef = useRef<string | null>(null);
-  const onMediaValueChange = useCallback(
-    (value: PostComposerMediaValue) => {
-      if (initialDraft && restoredMediaRequestIdRef.current !== initialDraft.requestId) {
-        restoredMediaRequestIdRef.current = initialDraft.requestId;
-        value.restorePostRequestMedia(initialDraft.media, initialDraft.sensitiveMedia);
-      }
-      setMedia(value);
-    },
-    [initialDraft],
-  );
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
     tool: ComposerMediaEditorTool;
@@ -858,7 +828,7 @@ function PostComposerContents({
               editorRef={editor}
               key={mediaGeneration}
               profileId={profile.id}
-              onValueChange={onMediaValueChange}
+              onValueChange={setMedia}
               render={({
                 items,
                 onAltTextChange,

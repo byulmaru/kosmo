@@ -33,8 +33,9 @@ type RequestData = {
   contentWarning: string | null;
   media: Array<{
     altText: string | null;
-    media: { id: string; url: string | null } | null;
-  }>;
+    id: string;
+    url: string | null;
+  } | null>;
   id: string;
   post: { id: string; profile: { id: string; relativeHandle: string } } | null;
   requestId: string;
@@ -186,24 +187,28 @@ function visibleText() {
 }
 
 describe('PostRequestCard', () => {
-  it('only offers cancellation while queued or processing, then waits for server status before showing rewrite', async () => {
+  it('waits for server-confirmed cancellation before offering a fresh composition', async () => {
     let config: MutationConfig | undefined;
     cancelCommit = (nextConfig) => {
       config = nextConfig;
     };
-    const props = { onRewrite: () => undefined };
+    const onCompose = mock.fn();
+    const props = { onCompose };
     await renderCard(makeRequest('QUEUED'), props);
 
     await act(async () => button('취소')?.props.onPress());
     assert.deepEqual(config?.variables, { input: { requestId: 'request-id' } });
     assert.equal(visibleText()?.includes('접수됨'), true);
     assert.equal(button('취소') !== undefined, true);
-    assert.equal(button('다시 작성'), undefined);
+    assert.equal(button('새 글 작성'), undefined);
+    assert.equal(onCompose.mock.callCount(), 0);
 
     await updateCard(makeRequest('CANCELLED'), props);
     assert.equal(button('취소'), undefined);
-    assert.equal(button('다시 작성') !== undefined, true);
+    assert.equal(button('새 글 작성') !== undefined, true);
     assert.equal(visibleText()?.includes('취소됨'), true);
+    await act(async () => button('새 글 작성')?.props.onPress());
+    assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
   });
 
   it('only reports cancellation to the active list after the Node reflects CANCELLED', async () => {
@@ -231,41 +236,47 @@ describe('PostRequestCard', () => {
     assert.equal(button('취소'), undefined);
   });
 
-  it('shows failed requests as rewriteable without a cancel action', async () => {
-    const onRewrite = mock.fn();
-    await renderCard(makeRequest('FAILED'), { onRewrite });
+  it('starts a fresh composition from failed requests without passing request data', async () => {
+    const onCompose = mock.fn();
+    await renderCard(makeRequest('FAILED'), { onCompose });
 
-    await act(async () => button('다시 작성')?.props.onPress());
-    assert.deepEqual(onRewrite.mock.calls[0]?.arguments, ['request-id']);
+    await act(async () => button('새 글 작성')?.props.onPress());
+    assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
     assert.equal(visibleText()?.includes('게시 실패'), true);
     assert.equal(button('취소'), undefined);
+
+    await updateCard(makeRequest('FAILED'));
+    assert.equal(button('새 글 작성'), undefined);
   });
 
-  it('shows the content warning instead of the body and keeps sensitive media images concealed', async () => {
+  it('uses the content warning instead of the body, hides sensitive media, and labels a thin media preview', async () => {
     const media = [
-      { altText: '산', media: { id: 'media-id', url: 'https://example.test/image.jpg' } },
+      null,
+      { altText: '사용하지 않는 이미지', id: 'missing-url', url: null },
+      { altText: '산', id: 'first-image', url: 'https://example.test/first.jpg' },
+      { altText: '두 번째 이미지', id: 'second-image', url: 'https://example.test/second.jpg' },
     ];
     await renderCard(
       makeRequest('QUEUED', {
-        bodyText: '비공개 미리보기',
+        bodyText: '본문을 함께 보여줘요',
         contentWarning: '민감한 내용',
         media,
         sensitiveMedia: false,
       }),
     );
-    assert.equal(visibleText()?.includes('비공개 미리보기'), false);
+    assert.equal(visibleText()?.includes('본문을 함께 보여줘요'), false);
     assert.equal(visibleText()?.includes('민감한 내용'), true);
     assert.equal(findAllByType('Image').length, 0);
 
     await updateCard(
       makeRequest('QUEUED', {
-        bodyText: '민감한 미리보기',
+        bodyText: '민감한 이미지 외 본문',
         contentWarning: null,
         media,
         sensitiveMedia: true,
       }),
     );
-    assert.equal(visibleText()?.includes('민감한 미리보기'), true);
+    assert.equal(visibleText()?.includes('민감한 이미지 외 본문'), true);
     assert.equal(findAllByType('Image').length, 0);
 
     await updateCard(
@@ -277,7 +288,22 @@ describe('PostRequestCard', () => {
       }),
     );
     assert.equal(visibleText()?.includes('공개 미리보기'), true);
-    assert.equal(findAllByType('Image').length, 1);
+    const [image] = findAllByType('Image');
+    assert.ok(image);
+    assert.equal(image.props.source.uri, 'https://example.test/first.jpg');
+    assert.equal(image.props.accessibilityLabel, '산');
+
+    await updateCard(
+      makeRequest('QUEUED', {
+        bodyText: '공개 미리보기',
+        contentWarning: null,
+        media: media.map((item) =>
+          item?.id === 'first-image' ? { ...item, altText: null } : item,
+        ),
+        sensitiveMedia: false,
+      }),
+    );
+    assert.equal(findAllByType('Image')[0]?.props.accessibilityLabel, '첨부 이미지');
   });
 
   it('links to the published post and emits completion only after observing an active-to-published transition', async () => {

@@ -38,24 +38,11 @@ type ComposerMediaItemFields = {
   readonly altText: string;
   readonly applyNightshade?: boolean;
   readonly requiresReselection?: boolean;
-  readonly restoredApplyNightshade?: boolean;
-  readonly unavailable?: boolean;
-  readonly previewUri?: string | null;
 };
 
-export type ComposerMediaItem = ComposerMediaItemFields &
-  (
-    | { readonly asset: ImagePicker.ImagePickerAsset; readonly kind?: 'local' }
-    | { readonly asset: null; readonly kind: 'restored' }
-  );
-
-export type RestoredPostRequestMedia = Readonly<{
-  readonly altText: string | null;
-  readonly applyNightshade: boolean;
-  readonly mediaId: string;
-  readonly mediaState?: 'UPLOADING' | 'READY';
-  readonly uri?: string | null;
-}>;
+export type ComposerMediaItem = ComposerMediaItemFields & {
+  readonly asset: ImagePicker.ImagePickerAsset;
+};
 
 export type PostComposerMediaValue = {
   readonly getPostRequestMedia: () => readonly PostRequestMediaItem[];
@@ -65,10 +52,6 @@ export type PostComposerMediaValue = {
     readonly mediaId: string;
   }[];
   readonly requirePostRequestMediaReselection: (mediaId: string) => void;
-  readonly restorePostRequestMedia: (
-    items: readonly RestoredPostRequestMedia[],
-    sensitiveMedia?: boolean,
-  ) => void;
   readonly sensitiveMedia: boolean;
 };
 
@@ -78,13 +61,9 @@ export type PostRequestMediaItem = Readonly<{
   readonly mediaId: string;
 }>;
 
-const getPreviewUri = (item: ComposerMediaItem): string | null =>
-  item.previewUri ?? item.asset?.uri ?? null;
-
 const releaseMediaPreview = (item: ComposerMediaItem) => {
-  const previewUri = getPreviewUri(item);
-  if (Platform.OS === 'web' && previewUri) {
-    releaseImagePreview(previewUri);
+  if (Platform.OS === 'web' && item.asset.uri) {
+    releaseImagePreview(item.asset.uri);
   }
 };
 
@@ -104,7 +83,6 @@ export const emptyPostComposerMediaValue: PostComposerMediaValue = {
   hasPendingMedia: false,
   items: [],
   requirePostRequestMediaReselection: () => undefined,
-  restorePostRequestMedia: () => undefined,
   sensitiveMedia: false,
 };
 
@@ -167,12 +145,8 @@ export function PostComposerMediaControls({
               ...item,
               asset,
               failure: undefined,
-              kind: 'local' as const,
               mediaId: undefined,
-              previewUri: asset.uri,
               requiresReselection: undefined,
-              restoredApplyNightshade: undefined,
-              unavailable: undefined,
               state: 'uploading',
             }
           : item,
@@ -232,8 +206,6 @@ export function PostComposerMediaControls({
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
-      kind: 'local' as const,
-      previewUri: asset.uri,
       state: 'uploading' as const,
     }));
     if (selected.length === 0) {
@@ -388,37 +360,6 @@ export function PostComposerMediaControls({
       );
     };
 
-    const restorePostRequestMedia = (
-      references: readonly RestoredPostRequestMedia[],
-      restoredSensitiveMedia?: boolean,
-    ) => {
-      if (!mounted.current) {
-        return;
-      }
-
-      for (const item of mediaRef.current) {
-        removedMediaKeys.current.add(item.key);
-        releaseMediaPreview(item);
-      }
-
-      updateMedia(() =>
-        references.map((reference) => ({
-          altText: reference.altText ?? '',
-          applyNightshade: reference.applyNightshade,
-          asset: null,
-          key: `composer-media-${++nextMediaKey.current}`,
-          kind: 'restored' as const,
-          mediaId: reference.mediaId,
-          previewUri: reference.uri ?? null,
-          restoredApplyNightshade: reference.applyNightshade,
-          state: 'ready',
-        })),
-      );
-      if (restoredSensitiveMedia !== undefined || references.length === 0) {
-        setSensitiveMedia(references.length > 0 && (restoredSensitiveMedia ?? false));
-      }
-    };
-
     const requirePostRequestMediaReselection = (mediaId: string) => {
       if (!mounted.current) {
         return;
@@ -426,9 +367,7 @@ export function PostComposerMediaControls({
 
       updateMedia((items) =>
         items.map((item) =>
-          item.kind === 'restored' && item.mediaId === mediaId
-            ? { ...item, requiresReselection: true, state: 'failed', unavailable: true }
-            : item,
+          item.mediaId === mediaId ? { ...item, requiresReselection: true, state: 'failed' } : item,
         ),
       );
     };
@@ -438,7 +377,6 @@ export function PostComposerMediaControls({
       hasPendingMedia: media.some((item) => item.state !== 'ready'),
       items,
       requirePostRequestMediaReselection,
-      restorePostRequestMedia,
       sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
     });
   }, [media, onValueChange, sensitiveMedia]);
@@ -468,31 +406,16 @@ export function PostComposerMediaControls({
           return;
         }
 
-        const requiresReselection =
-          item.kind === 'restored' &&
-          (item.unavailable === true ||
-            (item.restoredApplyNightshade !== undefined && item.restoredApplyNightshade !== value));
         updateMedia((items) =>
           items.map((current) =>
-            current.key === key
-              ? {
-                  ...current,
-                  applyNightshade: value,
-                  requiresReselection,
-                  state: requiresReselection
-                    ? 'failed'
-                    : current.requiresReselection
-                      ? 'ready'
-                      : current.state,
-                }
-              : current,
+            current.key === key ? { ...current, applyNightshade: value } : current,
           ),
         );
       },
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,
       onMediaRetry: (item) =>
-        item.requiresReselection || item.kind === 'restored'
+        item.requiresReselection
           ? void reselectMedia(item.key)
           : void uploadMedia(item.key, item.asset),
       onSensitiveMediaChange: setSensitiveMedia,
@@ -512,7 +435,7 @@ export function PostComposerMediaControls({
         }
         onRemove={removeMedia}
         onRetry={(item) =>
-          item.requiresReselection || item.kind === 'restored'
+          item.requiresReselection
             ? void reselectMedia(item.key)
             : void uploadMedia(item.key, item.asset)
         }
@@ -566,8 +489,6 @@ export function PostComposerMediaItems({
             : item.state === 'ready'
               ? '업로드 완료'
               : '업로드 실패';
-        const previewUri = getPreviewUri(item);
-
         return (
           <View
             accessibilityLabel={`첨부 이미지 ${index + 1}, ${status}`}
@@ -576,13 +497,13 @@ export function PostComposerMediaItems({
             style={styles.mediaItem}
           >
             <View style={styles.mediaPreviewContainer}>
-              {previewUri ? (
+              {item.asset.uri ? (
                 <Image
                   accessibilityIgnoresInvertColors
                   accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
                   accessibilityRole="image"
                   fadeDuration={0}
-                  source={{ uri: previewUri }}
+                  source={{ uri: item.asset.uri }}
                   style={styles.mediaPreview}
                 />
               ) : (
