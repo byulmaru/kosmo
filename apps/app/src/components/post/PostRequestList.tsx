@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { graphql, usePaginationFragment, useRelayEnvironment } from 'react-relay';
-import { commitLocalUpdate, ConnectionHandler } from 'relay-runtime';
+import { graphql, useFragment, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import {
+  commitLocalUpdate,
+  ConnectionHandler,
+  createOperationDescriptor,
+  fetchQuery,
+  getRequest,
+} from 'relay-runtime';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -9,47 +15,39 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import { PostRequestCard } from './PostRequestCard';
 import {
-  getPostRequestConnectionIds,
   POST_REQUEST_HOME_ACTIVE_STATUSES,
-} from './postRequestConnection';
+  removePostRequestFromHomePage,
+} from './postRequestCache';
+import { PostRequestCard } from './PostRequestCard';
 import type { ReactElement } from 'react';
 import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
-import type { PostRequestList_account$key } from './__generated__/PostRequestList_account.graphql';
-import type { PostRequestListNextPageQuery } from './__generated__/PostRequestListNextPageQuery.graphql';
+import type { PostRequestList_request$key } from './__generated__/PostRequestList_request.graphql';
+import type { PostRequestListQuery } from './__generated__/PostRequestListQuery.graphql';
 
-const PostRequestListFragment = graphql`
-  fragment PostRequestList_account on Account
-  @argumentDefinitions(
-    count: { type: "Int", defaultValue: 20 }
-    cursor: { type: "String" }
-    profileId: { type: "ID!" }
-    statuses: { type: "[PostRequestStatus!]" }
-  )
-  @refetchable(queryName: "PostRequestListNextPageQuery") {
+const PostRequestListRequestFragment = graphql`
+  fragment PostRequestList_request on PostRequest @relay(plural: true) {
     id
-    postRequests(profileId: $profileId, first: $count, after: $cursor, statuses: $statuses)
-      @connection(key: "PostRequestList_postRequests", filters: ["profileId", "statuses"]) {
-      edges {
-        cursor
-        node {
-          id
-          requestId
-          status
-          post {
-            id
-            profile {
-              id
-            }
-          }
-          ...PostRequestCard_request
-        }
+    requestId
+    status
+    post {
+      id
+      profile {
+        id
       }
-      pageInfo {
-        endCursor
-        hasNextPage
+    }
+    ...PostRequestCard_request
+  }
+`;
+
+const PostRequestListQuery = graphql`
+  query PostRequestListQuery($profileId: ID!, $statuses: [PostRequestStatus!], $pageToken: String) {
+    postRequests(profileId: $profileId, statuses: $statuses, pageToken: $pageToken) {
+      requests {
+        id
+        ...PostRequestList_request
       }
+      nextPageToken
     }
   }
 `;
@@ -60,9 +58,21 @@ type PublishedPost = Readonly<{
   requestNodeId: string;
 }>;
 type CancelledRequest = Readonly<{ requestNodeId: string }>;
+type RequestKey = PostRequestList_request$key[number] & Readonly<{ id: string }>;
+type RetainedPage = {
+  retain: { dispose: () => void };
+  subscription: { unsubscribe: () => void } | null;
+};
+type PageState = Readonly<{
+  environment: ReturnType<typeof useRelayEnvironment>;
+  isLoadingNext: boolean;
+  nextPageToken: string | null;
+  profileId: string;
+  requests: readonly RequestKey[];
+}>;
 
 type RequestListProps = Readonly<{
-  account: PostRequestList_account$key;
+  fetchKey?: string;
   focusedRequestId?: string;
   focusedRequest?: PostRequestCard_request$key | null;
   header?: ReactElement | null;
@@ -72,30 +82,19 @@ type RequestListProps = Readonly<{
 
 function usePostRequestCardHandlers(profileId: string) {
   const environment = useRelayEnvironment();
-  const { accountId, selectedProfileId } = useSession();
-  const [, activeConnectionId] = getPostRequestConnectionIds(accountId, profileId);
-  const removeActiveRequest = useCallback(
-    (requestNodeId: string) => {
-      if (!activeConnectionId) {
-        return;
-      }
+  const { selectedProfileId } = useSession();
+  const onCancelled = useCallback(
+    ({ requestNodeId }: CancelledRequest) => {
       commitLocalUpdate(environment, (store) => {
-        const connection = store.get(activeConnectionId);
-        if (connection) {
-          ConnectionHandler.deleteNode(connection, requestNodeId);
-        }
+        removePostRequestFromHomePage(store, profileId, requestNodeId);
       });
     },
-    [activeConnectionId, environment],
+    [environment, profileId],
   );
-
   const onPublished = useCallback(
     ({ authorProfileId, postId, requestNodeId }: PublishedPost) => {
       commitLocalUpdate(environment, (store) => {
-        const activeConnection = activeConnectionId ? store.get(activeConnectionId) : null;
-        if (activeConnection) {
-          ConnectionHandler.deleteNode(activeConnection, requestNodeId);
-        }
+        removePostRequestFromHomePage(store, profileId, requestNodeId);
 
         if (!postId || !authorProfileId || authorProfileId !== selectedProfileId) {
           return;
@@ -126,18 +125,14 @@ function usePostRequestCardHandlers(profileId: string) {
         ConnectionHandler.insertEdgeBefore(homeConnection, edge);
       });
     },
-    [activeConnectionId, environment, selectedProfileId],
-  );
-  const onCancelled = useCallback(
-    ({ requestNodeId }: CancelledRequest) => removeActiveRequest(requestNodeId),
-    [removeActiveRequest],
+    [environment, profileId, selectedProfileId],
   );
 
-  return { activeConnectionId, onCancelled, onPublished };
+  return { onCancelled, onPublished };
 }
 
 export function PostRequestList({
-  account,
+  fetchKey,
   focusedRequestId,
   focusedRequest,
   header,
@@ -145,16 +140,130 @@ export function PostRequestList({
   profileId,
 }: RequestListProps) {
   const theme = useTheme();
-  const pagination = usePaginationFragment<
-    PostRequestListNextPageQuery,
-    PostRequestList_account$key
-  >(PostRequestListFragment, account);
-  const edges = (pagination.data.postRequests?.edges ?? []).filter(
-    ({ node }) => node.requestId !== focusedRequestId,
-  );
-  const { activeConnectionId, onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
+  const environment = useRelayEnvironment();
   const { showToast } = useToast();
+  const pageResources = useRef(new Set<RetainedPage>());
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
+  const data = useLazyLoadQuery<PostRequestListQuery>(
+    PostRequestListQuery,
+    { pageToken: null, profileId, statuses: null },
+    {
+      fetchKey,
+      fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
+    },
+  );
+  const firstPage = data.postRequests;
+  const [pageState, setPageState] = useState<PageState>(() => ({
+    environment,
+    isLoadingNext: false,
+    nextPageToken: firstPage.nextPageToken,
+    profileId,
+    requests: [],
+  }));
+  const currentPageState =
+    pageState.environment === environment && pageState.profileId === profileId ? pageState : null;
+  const additionalRequests = currentPageState?.requests ?? [];
+  const nextPageToken = currentPageState ? currentPageState.nextPageToken : firstPage.nextPageToken;
+  const isLoadingNext = currentPageState?.isLoadingNext ?? false;
+  const requestKeys = useMemo(() => {
+    const requestsById = new Map<string, RequestKey>();
+    for (const request of [...firstPage.requests, ...additionalRequests]) {
+      if (!requestsById.has(request.id)) {
+        requestsById.set(request.id, request);
+      }
+    }
+    return [...requestsById.values()];
+  }, [additionalRequests, firstPage.requests]);
+  const requests = useFragment<PostRequestList_request$key>(
+    PostRequestListRequestFragment,
+    requestKeys,
+  );
+  const displayRequests = requests.filter((request) => request.requestId !== focusedRequestId);
+  const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
+
+  useEffect(() => {
+    setPageState({
+      environment,
+      isLoadingNext: false,
+      nextPageToken: firstPage.nextPageToken,
+      profileId,
+      requests: [],
+    });
+
+    return () => {
+      for (const resource of pageResources.current) {
+        resource.subscription?.unsubscribe();
+        resource.retain.dispose();
+      }
+      pageResources.current.clear();
+    };
+  }, [environment, firstPage.nextPageToken, profileId]);
+
+  const loadNext = useCallback(
+    (_count: number, { onComplete }: { onComplete: (error: Error | null) => void }) => {
+      if (!nextPageToken) {
+        onComplete(null);
+        return;
+      }
+
+      const variables = { pageToken: nextPageToken, profileId, statuses: null };
+      const operation = createOperationDescriptor(getRequest(PostRequestListQuery), variables);
+      const retain = environment.retain(operation);
+      const resource: RetainedPage = { retain, subscription: null };
+      let nextPage: PostRequestListQuery['response']['postRequests'] | null = null;
+      pageResources.current.add(resource);
+      setPageState((previous) =>
+        previous.environment === environment && previous.profileId === profileId
+          ? { ...previous, isLoadingNext: true }
+          : previous,
+      );
+
+      const releaseFailedPage = (error: Error) => {
+        resource.subscription?.unsubscribe();
+        retain.dispose();
+        pageResources.current.delete(resource);
+        setPageState((previous) =>
+          previous.environment === environment && previous.profileId === profileId
+            ? { ...previous, isLoadingNext: false }
+            : previous,
+        );
+        onComplete(error);
+      };
+
+      resource.subscription = fetchQuery(environment, PostRequestListQuery, variables, {
+        fetchPolicy: 'network-only',
+      }).subscribe({
+        complete: () => {
+          const completedPage = nextPage;
+          if (!completedPage) {
+            releaseFailedPage(new Error('The post request page was empty.'));
+            return;
+          }
+
+          resource.subscription?.unsubscribe();
+          setPageState((previous) =>
+            previous.environment === environment && previous.profileId === profileId
+              ? {
+                  ...previous,
+                  isLoadingNext: false,
+                  nextPageToken: completedPage.nextPageToken,
+                  requests: [...previous.requests, ...completedPage.requests],
+                }
+              : previous,
+          );
+          onComplete(null);
+        },
+        error: (error) => {
+          releaseFailedPage(error instanceof Error ? error : new Error(String(error)));
+        },
+        next: (response) => {
+          nextPage = response.postRequests;
+        },
+      });
+    },
+    [environment, nextPageToken, profileId],
+  );
+
   const handleLoadErrorChange = useCallback(
     (loadError: boolean, onRetryNextPage: () => void) => {
       if (loadError && !loadErrorToastCleanup.current) {
@@ -169,6 +278,7 @@ export function PostRequestList({
     },
     [showToast],
   );
+
   useEffect(
     () => () => {
       loadErrorToastCleanup.current?.();
@@ -182,7 +292,6 @@ export function PostRequestList({
     <>
       {header}
       <PostRequestCard
-        activeConnectionId={activeConnectionId}
         onCancelled={onCancelled}
         onPublished={onPublished}
         onRewrite={onRewrite}
@@ -195,18 +304,18 @@ export function PostRequestList({
 
   return (
     <InfiniteList
-      data={edges}
-      empty={edges.length === 0 && !focusedRequestId ? empty : null}
-      hasNext={pagination.hasNext}
-      isLoadingNext={pagination.isLoadingNext}
-      key={`post-requests:${pagination.data.id}:${profileId}`}
-      keyExtractor={(edge) => edge.node.id}
-      loadNext={pagination.loadNext}
+      data={displayRequests}
+      empty={displayRequests.length === 0 && !focusedRequestId ? empty : null}
+      hasNext={nextPageToken !== null}
+      isLoadingNext={isLoadingNext}
+      key={`post-requests:${profileId}`}
+      keyExtractor={(request) => request.id}
+      loadNext={loadNext}
       onLoadErrorChange={handleLoadErrorChange}
       pageSize={20}
       header={listHeader}
       footer={
-        pagination.isLoadingNext ? (
+        isLoadingNext ? (
           <View style={styles.loadingNext}>
             <ActivityIndicator
               accessibilityLabel="게시 요청을 더 불러오는 중"
@@ -220,11 +329,10 @@ export function PostRequestList({
       }
       renderItem={({ item }) => (
         <PostRequestCard
-          activeConnectionId={activeConnectionId}
           onCancelled={onCancelled}
           onPublished={onPublished}
           onRewrite={onRewrite}
-          request={item.node}
+          request={item}
         />
       )}
       style={styles.root}
@@ -233,41 +341,49 @@ export function PostRequestList({
 }
 
 export function PostRequestListSummary({
-  account,
+  fetchKey,
   onRewrite,
   profileId,
 }: {
-  account: PostRequestList_account$key;
+  fetchKey?: string;
   onRewrite: (requestId: string) => void;
   profileId: string;
 }) {
-  const pagination = usePaginationFragment<
-    PostRequestListNextPageQuery,
-    PostRequestList_account$key
-  >(PostRequestListFragment, account);
-  const { activeConnectionId, onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
-  const edges = pagination.data.postRequests?.edges ?? [];
+  const data = useLazyLoadQuery<PostRequestListQuery>(
+    PostRequestListQuery,
+    { pageToken: null, profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
+    {
+      fetchKey,
+      fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
+    },
+  );
+  const requests = useFragment<PostRequestList_request$key>(
+    PostRequestListRequestFragment,
+    data.postRequests.requests,
+  );
+  const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
 
   useEffect(() => {
-    for (const { node } of edges) {
-      if (node.status === 'PUBLISHED') {
+    for (const request of requests) {
+      if (request.status === 'PUBLISHED') {
         onPublished({
-          authorProfileId: node.post?.profile.id ?? null,
-          postId: node.post?.id ?? null,
-          requestNodeId: node.id,
+          authorProfileId: request.post?.profile?.id ?? null,
+          postId: request.post?.id ?? null,
+          requestNodeId: request.id,
         });
-      } else if (node.status === 'CANCELLED') {
-        onCancelled({ requestNodeId: node.id });
+      } else if (request.status === 'CANCELLED') {
+        onCancelled({ requestNodeId: request.id });
       }
     }
-  }, [edges, onCancelled, onPublished]);
+  }, [onCancelled, onPublished, requests]);
 
-  const request = edges.find(({ node }) =>
-    POST_REQUEST_HOME_ACTIVE_STATUSES.some((status) => status === node.status),
-  )?.node;
+  const request = requests.find((item) =>
+    POST_REQUEST_HOME_ACTIVE_STATUSES.some((status) => status === item.status),
+  );
   return request ? (
     <PostRequestCard
-      activeConnectionId={activeConnectionId}
+      onCancelled={onCancelled}
+      onPublished={onPublished}
       onRewrite={onRewrite}
       request={request}
     />

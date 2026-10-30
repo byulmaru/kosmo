@@ -7,7 +7,6 @@ import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
-import { POST_REQUEST_HOME_ACTIVE_STATUSES } from '@/components/post/postRequestConnection';
 import {
   PostRequestHomeSummaryFallback,
   PostRequestHomeSummaryLoading,
@@ -30,7 +29,6 @@ import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
-import type { HomePostRequestSummaryQuery } from './__generated__/HomePostRequestSummaryQuery.graphql';
 
 const HomeQuery = graphql`
   query HomePageQuery {
@@ -49,15 +47,6 @@ const HomeQuery = graphql`
       }
     }
     ...PostList_home @arguments(count: 20)
-  }
-`;
-
-const HomePostRequestSummary = graphql`
-  query HomePostRequestSummaryQuery($profileId: ID!, $statuses: [PostRequestStatus!]!) {
-    me {
-      id
-      ...PostRequestList_account @arguments(profileId: $profileId, statuses: $statuses)
-    }
   }
 `;
 
@@ -281,7 +270,6 @@ function HomeContentView({
 
   const postRequestHeader = data.me ? (
     <HomePostRequestSummaryHeader
-      accountId={data.me.id}
       key={`${data.me.id}:${selectedProfile.id}`}
       profileId={selectedProfile.id}
     />
@@ -302,13 +290,7 @@ function HomeContentView({
   );
 }
 
-function HomePostRequestSummaryHeader({
-  accountId,
-  profileId,
-}: {
-  accountId: string;
-  profileId: string;
-}) {
+function HomePostRequestSummaryHeader({ profileId }: { profileId: string }) {
   const router = useRouter();
   const theme = useTheme();
   const [fetchKey, setFetchKey] = useState(0);
@@ -342,8 +324,7 @@ function HomePostRequestSummaryHeader({
         resetKeys={[fetchKey]}
       >
         <Suspense fallback={<PostRequestHomeSummaryLoading />}>
-          <HomePostRequestSummaryContent
-            accountId={accountId}
+          <PostRequestListSummary
             fetchKey={String(fetchKey)}
             onRewrite={onRewrite}
             profileId={profileId}
@@ -352,31 +333,6 @@ function HomePostRequestSummaryHeader({
       </ErrorBoundary>
     </View>
   );
-}
-
-function HomePostRequestSummaryContent({
-  accountId,
-  fetchKey,
-  onRewrite,
-  profileId,
-}: {
-  accountId: string;
-  fetchKey: string;
-  onRewrite: (requestId: string) => void;
-  profileId: string;
-}) {
-  const data = useLazyLoadQuery<HomePostRequestSummaryQuery>(
-    HomePostRequestSummary,
-    { profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
-    {
-      fetchKey,
-      fetchPolicy: fetchKey === '0' ? 'store-or-network' : 'network-only',
-    },
-  );
-
-  return data.me?.id === accountId && data.me ? (
-    <PostRequestListSummary account={data.me} onRewrite={onRewrite} profileId={profileId} />
-  ) : null;
 }
 
 const styles = StyleSheet.create({

@@ -119,37 +119,35 @@ afterEach(async () => {
 function request(status: string, overrides: Record<string, unknown> = {}) {
   return {
     authorProfile: { id: 'profile-author' },
-    draft: {
-      bodyText: '복원 본문',
-      contentWarning: '복원 경고',
-      media: [
-        {
-          altText: '첫 이미지 ALT',
-          applyNightshade: true,
-          media: { id: 'media-1', state: 'READY', url: 'https://img.example/1.jpg' },
-          mediaId: 'media-1',
-        },
-        {
-          altText: '둘째 이미지 ALT',
-          applyNightshade: false,
-          media: { id: 'media-2', state: 'UPLOADING', url: null },
-          mediaId: 'media-2',
-        },
-        {
-          altText: null,
-          applyNightshade: true,
-          media: null,
-          mediaId: 'media-3',
-        },
-      ],
-      mentions: [{ end: 11, profileId: 'profile-mentioned', start: 0 }],
-      replyParent: null,
-      replyParentId: null,
-      repostSource: null,
-      repostSourceId: null,
-      sensitiveMedia: true,
-      visibility: 'DIRECT',
-    },
+    bodyText: '복원 본문',
+    contentWarning: '복원 경고',
+    media: [
+      {
+        altText: '첫 이미지 ALT',
+        applyNightshade: true,
+        media: { id: 'media-1', state: 'READY', url: 'https://img.example/1.jpg' },
+        mediaId: 'media-1',
+      },
+      {
+        altText: '둘째 이미지 ALT',
+        applyNightshade: false,
+        media: { id: 'media-2', state: 'UPLOADING', url: null },
+        mediaId: 'media-2',
+      },
+      {
+        altText: null,
+        applyNightshade: true,
+        media: null,
+        mediaId: 'media-3',
+      },
+    ],
+    mentions: [{ end: 11, profileId: 'profile-mentioned', start: 0 }],
+    replyParent: null,
+    replyParentId: null,
+    repostSource: null,
+    repostSourceId: null,
+    sensitiveMedia: true,
+    visibility: 'DIRECT',
     requestId: 'source-request-id',
     status,
     ...overrides,
@@ -248,11 +246,8 @@ test('restored reply keeps its relation and the original visibility', async () =
   };
   fragmentData.set(replyParentKey, replyParent);
   requestData = request('FAILED', {
-    draft: {
-      ...(request('FAILED') as { draft: object }).draft,
-      replyParent: replyParentKey,
-      replyParentId: 'post-parent-id',
-    },
+    replyParent: replyParentKey,
+    replyParentId: 'post-parent-id',
   });
   mount();
 
@@ -268,12 +263,7 @@ test('restored reply keeps its relation and the original visibility', async () =
 });
 
 test('missing reply context blocks restoration and refetches the same request from the network', async () => {
-  requestData = request('FAILED', {
-    draft: {
-      ...(request('FAILED') as { draft: object }).draft,
-      replyParentId: 'missing-parent-id',
-    },
-  });
+  requestData = request('FAILED', { replyParentId: 'missing-parent-id' });
   mount();
 
   assert.equal(
@@ -329,11 +319,8 @@ test('an uncertain submission lets the user confirm closing', async () => {
 test('restored quote keeps its source relation', async () => {
   const repostSourceKey = {};
   requestData = request('FAILED', {
-    draft: {
-      ...(request('FAILED') as { draft: object }).draft,
-      repostSource: repostSourceKey,
-      repostSourceId: 'post-source-id',
-    },
+    repostSource: repostSourceKey,
+    repostSourceId: 'post-source-id',
   });
   mount();
 
@@ -363,10 +350,7 @@ test('missing author and missing quote source both block restoration', async () 
   renderer = null;
 
   requestData = request('FAILED', {
-    draft: {
-      ...(request('FAILED') as { draft: object }).draft,
-      repostSourceId: 'missing-source-id',
-    },
+    repostSourceId: 'missing-source-id',
   });
   mount();
   assert.equal(

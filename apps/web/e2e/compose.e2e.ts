@@ -46,19 +46,26 @@ async function pasteComposerImage(input: Locator) {
   });
 }
 
+type PostRequestAcknowledgementInput = {
+  bodyText: string;
+  contentWarning?: string | null;
+  media: readonly { altText: string | null; applyNightshade?: boolean; mediaId: string }[];
+  mentions?: readonly { end: number; profileId: string; start: number }[];
+  replyParentId?: string | null;
+  requestId: string;
+  repostSourceId?: string | null;
+  sensitiveMedia: boolean;
+  visibility: string;
+};
+
 function acknowledgedPostRequest(
-  input: {
-    bodyText: string;
-    contentWarning?: string | null;
-    media: readonly { altText: string | null; mediaId: string }[];
-    requestId: string;
-    sensitiveMedia: boolean;
-  },
+  input: PostRequestAcknowledgementInput,
   author: { displayName: string; handle: string; id: string },
 ) {
   return {
     data: {
-      submitPostRequest: {
+      createPost: {
+        post: null,
         request: {
           authorProfile: {
             avatar: null,
@@ -67,19 +74,29 @@ function acknowledgedPostRequest(
             id: toGlobalId('Profile', author.id),
             relativeHandle: `@${author.handle}`,
           },
-          draft: {
-            bodyText: input.bodyText,
-            contentWarning: input.contentWarning ?? null,
-            media: input.media.map(({ altText, mediaId }) => ({
-              altText,
-              media: { id: mediaId, url: `https://media.example/${mediaId}.webp` },
-            })),
-            sensitiveMedia: input.sensitiveMedia,
-          },
+          bodyText: input.bodyText,
+          contentWarning: input.contentWarning ?? null,
           id: toGlobalId('PostRequest', input.requestId),
-          post: null,
+          media: input.media.map(({ altText, applyNightshade, mediaId }) => ({
+            altText,
+            applyNightshade: applyNightshade ?? false,
+            media: { id: mediaId, url: `https://media.example/${mediaId}.webp` },
+            mediaId,
+          })),
+          mentions: (input.mentions ?? []).map(({ end, profileId, start }) => ({
+            end,
+            profile: { id: profileId },
+            profileId,
+            start,
+          })),
+          replyParent: input.replyParentId ? { id: input.replyParentId } : null,
+          replyParentId: input.replyParentId ?? null,
+          repostSource: input.repostSourceId ? { id: input.repostSourceId } : null,
+          repostSourceId: input.repostSourceId ?? null,
           requestId: input.requestId,
+          sensitiveMedia: input.sensitiveMedia,
           status: 'QUEUED',
+          visibility: input.visibility,
         },
       },
     },
@@ -417,21 +434,21 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   await expect(visibilityMenu).toHaveCount(0);
   await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeFocused();
 
-  const mutationResponse = waitForGraphQLOperation(page, 'PostComposerSubmitPostRequestMutation');
+  const mutationResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
   const response = await mutationResponse;
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      submitPostRequest?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: { request?: { requestId?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
-  const acceptedRequestId = responseBody.data?.submitPostRequest?.request?.requestId;
+  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
-  expect(operation?.operationName).toBe('PostComposerSubmitPostRequestMutation');
+  expect(operation?.operationName).toBe('PostComposerCreatePostMutation');
   expect(operation?.variables).toMatchObject({
     input: {
       requestId: acceptedRequestId,
@@ -589,16 +606,13 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
   await input.fill(body);
-  const submitResponsePromise = waitForGraphQLOperation(
-    page,
-    'PostComposerSubmitPostRequestMutation',
-  );
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
   const submitResponse = await submitResponsePromise;
   const submitOperation = readGraphQLOperation(submitResponse.request().postData());
   const submitBody = (await submitResponse.json()) as {
     data?: {
-      submitPostRequest?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: { request?: { requestId?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
@@ -608,11 +622,11 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   expect(submitOperation?.variables).toMatchObject({
     input: {
       bodyText: body,
-      requestId: submitBody.data?.submitPostRequest?.request?.requestId,
+      requestId: submitBody.data?.createPost?.request?.requestId,
       visibility: 'PUBLIC',
     },
   });
-  expect(submitBody.data?.submitPostRequest?.request?.requestId).toEqual(expect.any(String));
+  expect(submitBody.data?.createPost?.request?.requestId).toEqual(expect.any(String));
   await expect
     .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
       timeout: 30_000,
@@ -783,20 +797,17 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await composer.getByRole('button', { name: '첨부 이미지 1 제거', exact: true }).click();
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toHaveCount(0);
 
-  const submitResponsePromise = waitForGraphQLOperation(
-    page,
-    'PostComposerSubmitPostRequestMutation',
-  );
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   const response = await submitResponsePromise;
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      submitPostRequest?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: { request?: { requestId?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
-  const acceptedRequestId = responseBody.data?.submitPostRequest?.request?.requestId;
+  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
@@ -832,11 +843,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await page.goto(`/post-requests?${requestSearch.toString()}`);
   const postRequestDetail = await postRequestDetailResponse;
   const postRequestDetailBody = (await postRequestDetail.json()) as {
-    data?: {
-      me?: {
-        postRequest?: { requestId?: string | null; status?: string | null } | null;
-      } | null;
-    };
+    data?: { postRequest?: { requestId?: string | null; status?: string | null } | null };
     errors?: unknown[];
   };
   expect(postRequestDetail.ok(), JSON.stringify(postRequestDetailBody, null, 2)).toBe(true);
@@ -844,7 +851,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
     postRequestDetailBody.errors,
     JSON.stringify(postRequestDetailBody, null, 2),
   ).toBeUndefined();
-  expect(postRequestDetailBody.data?.me?.postRequest?.requestId).toBe(acceptedRequestId);
+  expect(postRequestDetailBody.data?.postRequest?.requestId).toBe(acceptedRequestId);
 
   const terminalStatus = page.getByText(/^게시 (완료|실패)$/).first();
   await expect
@@ -910,7 +917,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
 
   let mediaCount = 0;
   const rawUploads: Array<{ byteLength: number; contentType?: string; url: string }> = [];
-  let submitPostRequestVariables: Record<string, unknown> | null = null;
+  let createPostVariables: Record<string, unknown> | null = null;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
@@ -929,15 +936,9 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
       });
       return;
     }
-    if (operation?.operationName === 'PostComposerSubmitPostRequestMutation') {
-      submitPostRequestVariables = operation.variables ?? null;
-      const input = operation.variables?.input as {
-        bodyText: string;
-        contentWarning?: string | null;
-        media: readonly { altText: string | null; mediaId: string }[];
-        requestId: string;
-        sensitiveMedia: boolean;
-      };
+    if (operation?.operationName === 'PostComposerCreatePostMutation') {
+      createPostVariables = operation.variables ?? null;
+      const input = operation.variables?.input as PostRequestAcknowledgementInput;
       await route.fulfill({
         body: JSON.stringify(
           acknowledgedPostRequest(input, {
@@ -1015,21 +1016,17 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   await expect(input).toHaveValue('기존 본문');
   await expect(composer.getByLabel('첨부 이미지 2, 업로드 완료')).toBeVisible();
 
-  const submitResponsePromise = waitForGraphQLOperation(
-    page,
-    'PostComposerSubmitPostRequestMutation',
-  );
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
   const response = await submitResponsePromise;
   const responseBody = (await response.json()) as {
-    data?: { submitPostRequest?: { request?: { requestId?: string | null } | null } | null };
+    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
     errors?: unknown[];
   };
   expect(response.status()).toBe(200);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
-  const requestId = (submitPostRequestVariables?.input as { requestId?: string } | undefined)
-    ?.requestId;
-  expect(responseBody.data?.submitPostRequest?.request?.requestId).toBe(requestId);
+  const requestId = (createPostVariables?.input as { requestId?: string } | undefined)?.requestId;
+  expect(responseBody.data?.createPost?.request?.requestId).toBe(requestId);
   expect(rawUploads.map(({ url }) => url)).toEqual([
     'https://upload.example/clipboard-1',
     'https://upload.example/clipboard-2',
@@ -1040,7 +1037,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
         byteLength > 0 && /^image\/(png|webp)$/.test(contentType ?? ''),
     ),
   ).toBe(true);
-  expect(submitPostRequestVariables).toMatchObject({
+  expect(createPostVariables).toMatchObject({
     input: {
       requestId: expect.any(String),
       bodyText: '기존 본문',
@@ -1076,7 +1073,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   });
   const firstProfileId = toGlobalId('Profile', session.profile!.id);
   const secondProfileId = toGlobalId('Profile', secondProfile.id);
-  let submitPostRequestVariables: Record<string, unknown> | null = null;
+  let createPostVariables: Record<string, unknown> | null = null;
   let issueMediaProfileId: string | null = null;
   const rawUploads: Array<{ byteLength: number; contentType?: string; url: string }> = [];
 
@@ -1101,15 +1098,9 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
       });
       return;
     }
-    if (operation?.operationName === 'PostComposerSubmitPostRequestMutation') {
-      submitPostRequestVariables = operation.variables ?? null;
-      const input = operation.variables?.input as {
-        bodyText: string;
-        contentWarning?: string | null;
-        media: readonly { altText: string | null; mediaId: string }[];
-        requestId: string;
-        sensitiveMedia: boolean;
-      };
+    if (operation?.operationName === 'PostComposerCreatePostMutation') {
+      createPostVariables = operation.variables ?? null;
+      const input = operation.variables?.input as PostRequestAcknowledgementInput;
       await route.fulfill({
         body: JSON.stringify(
           acknowledgedPostRequest(input, {
@@ -1185,22 +1176,18 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   await expect(composer.getByRole('switch', { name: '민감한 이미지' })).toBeChecked();
   await composer.getByRole('button', { name: '완료', exact: true }).click();
 
-  const submitResponsePromise = waitForGraphQLOperation(
-    page,
-    'PostComposerSubmitPostRequestMutation',
-  );
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   const submitResponse = await submitResponsePromise;
   const submitBody = (await submitResponse.json()) as {
-    data?: { submitPostRequest?: { request?: { requestId?: string | null } | null } | null };
+    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
     errors?: unknown[];
   };
-  const requestId = (submitPostRequestVariables?.input as { requestId?: string } | undefined)
-    ?.requestId;
+  const requestId = (createPostVariables?.input as { requestId?: string } | undefined)?.requestId;
   expect(submitResponse.ok(), JSON.stringify(submitBody, null, 2)).toBe(true);
   expect(submitBody.errors, JSON.stringify(submitBody, null, 2)).toBeUndefined();
   expect(requestId).toEqual(expect.any(String));
-  expect(submitBody.data?.submitPostRequest?.request?.requestId).toBe(requestId);
+  expect(submitBody.data?.createPost?.request?.requestId).toBe(requestId);
   expect(rawUploads).toHaveLength(1);
   expect(rawUploads[0]).toMatchObject({
     byteLength: expect.any(Number),
@@ -1208,7 +1195,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   });
   expect(rawUploads[0]!.byteLength).toBeGreaterThan(0);
   expect(rawUploads[0]!.contentType).toMatch(/^image\/(png|webp)$/);
-  expect(submitPostRequestVariables).toMatchObject({
+  expect(createPostVariables).toMatchObject({
     input: {
       requestId: expect.any(String),
       bodyText: body,

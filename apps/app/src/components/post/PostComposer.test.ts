@@ -5,12 +5,22 @@ import { createElement, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import * as RelayRuntime from 'relay-runtime';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import CreatePostMutation from './__generated__/PostComposerCreatePostMutation.graphql';
 import PostComposerMentionSuggestionsQueryNode from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
-import SubmitPostRequestMutation from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
+import PostRequestListQueryNode from './__generated__/PostRequestListQuery.graphql';
+import { POST_REQUEST_HOME_ACTIVE_STATUSES } from './postRequestCache';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type { PostComposerSubmitPostRequestMutation } from './__generated__/PostComposerSubmitPostRequestMutation.graphql';
+import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerController as PostComposerComponent } from './PostComposerController';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -88,20 +98,23 @@ let targetProps:
   | undefined;
 let mutationCalls: Array<{
   onCompleted: (
-    response: { submitPostRequest: { request: { requestId: string } | null } | null } | null,
+    response: {
+      createPost: {
+        request: { id: string; requestId: string } | null;
+      } | null;
+    } | null,
     errors?: Array<{ extensions?: { code?: unknown; field?: unknown }; message: string }> | null,
   ) => void;
   onError: (error: Error) => void;
   variables: {
-    connections: string[];
     input: Record<string, unknown>;
   };
 }> = [];
 let sessionAccountId: string | null = 'account-1';
-let accountQueryCalls: Array<{ fetchPolicy: string }> = [];
 const acceptedRequestResponse = (callIndex: number) => ({
-  submitPostRequest: {
+  createPost: {
     request: {
+      id: `post-request-node-${callIndex}`,
       requestId: String(mutationCalls[callIndex]?.variables.input.requestId),
     },
   },
@@ -218,10 +231,6 @@ mockModule('react-relay', {
       : {};
   },
   useFragment: (_fragment: unknown, key: typeof profileA) => key,
-  useLazyLoadQuery: (_query: unknown, _variables: unknown, options: { fetchPolicy: string }) => {
-    accountQueryCalls.push(options);
-    return { me: { id: 'account-1' } };
-  },
   useMutation: () => [
     (config: (typeof mutationCalls)[number]) => {
       mutationCalls.push(config);
@@ -384,7 +393,6 @@ beforeEach(() => {
   relayEnvironment = createRelayEnvironment();
   relayEnvironmentGeneration = null;
   sessionAccountId = 'account-1';
-  accountQueryCalls = [];
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
@@ -410,7 +418,7 @@ afterEach(async () => {
 });
 
 describe('PostComposer initial body', () => {
-  it('loads the Account owner when session context does not provide it for request connections', async () => {
+  it('waits for the Session owner identity before submitting a request', async () => {
     sessionAccountId = null;
     await act(async () => {
       renderer = create(createElement(PostComposer, { profile: profileA as never }));
@@ -418,11 +426,7 @@ describe('PostComposer initial body', () => {
     await act(async () => targetProps?.onBodyChange('게시 요청'));
     await act(async () => targetProps?.onSubmit());
 
-    assert.deepEqual(accountQueryCalls, [{ fetchPolicy: 'store-or-network' }]);
-    assert.deepEqual(mutationCalls[0]?.variables.connections, [
-      'account-1:PostRequestList_postRequests:profile-a:all',
-      'account-1:PostRequestList_postRequests:profile-a:home',
-    ]);
+    assert.equal(mutationCalls.length, 0);
   });
 
   it('seeds an editable reply and submits its plain text when mention search is off', async () => {
@@ -557,85 +561,108 @@ describe('PostComposer character count', () => {
 });
 
 describe('PostComposer request acknowledgement cache projection', () => {
-  it('inserts the acknowledged request with card preview data in both request connections', () => {
+  it('prepends a rechecked request only to the original actor first-page arrays', async () => {
     const requestId = 'request-acknowledged';
     const requestNodeId = 'post-request-node';
-    const connectionIds = ['request-connection-all', 'request-connection-home'];
-    const source = new RecordSource();
-    for (const connectionId of connectionIds) {
-      source.set(connectionId, {
-        __id: connectionId,
-        __typename: 'PostRequestConnection',
-        edges: { __refs: [] },
-      });
-    }
-    const environment = new Environment({
-      network: Network.create(() =>
-        Observable.create<GraphQLResponse>((sink) => {
-          sink.next({
-            data: {
-              submitPostRequest: {
-                request: {
-                  authorProfile: {
-                    avatar: null,
-                    displayName: '작성자',
-                    handle: '@writer',
-                    id: 'profile-a',
-                    relativeHandle: '@writer',
-                  },
-                  draft: {
-                    bodyText: '접수된 본문',
-                    contentWarning: '접수된 경고',
-                    media: [],
-                    sensitiveMedia: true,
-                  },
-                  id: requestNodeId,
-                  post: null,
-                  requestId,
-                  status: 'QUEUED',
-                },
-              },
-            },
-          });
-          sink.complete();
-        }),
-      ),
-      store: new Store(source),
-    });
-    let acknowledgedRequestId: string | undefined;
+    const query = getRequest(PostRequestListQueryNode);
+    const environment = relayEnvironment;
+    const seedPage = (
+      profileId: string,
+      statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
+    ) => {
+      environment.commitPayload(
+        createOperationDescriptor(query, { pageToken: null, profileId, statuses }),
+        { postRequests: { nextPageToken: null, requests: [] } },
+      );
+    };
+    seedPage('profile-a', null);
+    seedPage('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
+    seedPage('profile-b', null);
+    seedPage('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
 
-    ReactRelay.commitMutation<PostComposerSubmitPostRequestMutation>(environment, {
-      mutation: SubmitPostRequestMutation,
-      variables: {
-        connections: connectionIds,
-        input: {
-          actorProfileId: 'profile-a',
+    let retryUncertainRequest: (() => void) | undefined;
+    const composerProps = (profile: typeof profileA) => ({
+      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
+        retryUncertainRequest = uncertain ? retry : undefined;
+      },
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profile as never,
+    });
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, composerProps(profileA)));
+    });
+    await act(async () => targetProps?.onBodyChange('접수된 본문'));
+    await act(async () => targetProps?.onSubmit());
+
+    const originalSubmission = mutationCalls[0]?.variables;
+    assert.equal(originalSubmission?.input.actorProfileId, profileA.id);
+    await act(async () => mutationCalls[0]?.onError(new Error('접수 결과 확인 불가')));
+    assert.ok(retryUncertainRequest);
+
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, composerProps(profileB)));
+    });
+    assert.ok(retryUncertainRequest);
+    await act(async () => retryUncertainRequest?.());
+
+    const call = mutationCalls[1];
+    assert.ok(call);
+    assert.deepEqual(call.variables, originalSubmission);
+    const variables = call.variables as PostComposerCreatePostMutation['variables'];
+    const mutationOperation = createOperationDescriptor(getRequest(CreatePostMutation), variables);
+    environment.commitPayload(mutationOperation, {
+      createPost: {
+        request: {
+          __typename: 'PostRequest',
+          authorProfile: {
+            __typename: 'Profile',
+            avatar: null,
+            displayName: '작성자',
+            handle: '@writer',
+            id: 'profile-a',
+            relativeHandle: '@writer',
+          },
           bodyText: '접수된 본문',
           contentWarning: '접수된 경고',
+          id: requestNodeId,
           media: [],
+          post: null,
           requestId,
           sensitiveMedia: true,
-          visibility: 'PUBLIC',
+          status: 'QUEUED',
         },
       },
-      onCompleted: (response) => {
-        acknowledgedRequestId = response.submitPostRequest?.request?.requestId;
-      },
     });
+    await act(async () =>
+      call.onCompleted({ createPost: { request: { id: requestNodeId, requestId } } }),
+    );
 
-    const normalizedSource = environment.getStore().getSource();
-    assert.equal(acknowledgedRequestId, requestId);
-    for (const connectionId of connectionIds) {
-      const edges = normalizedSource.get(connectionId)?.edges?.__refs ?? [];
-      assert.equal(edges.length, 1);
-      assert.equal(normalizedSource.get(edges[0]!)?.node?.__ref, requestNodeId);
-    }
+    const requestIds = (
+      profileId: string,
+      statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
+    ) => {
+      const operation = createOperationDescriptor(query, {
+        pageToken: null,
+        profileId,
+        statuses,
+      });
+      const data = environment.lookup(operation.fragment).data as {
+        postRequests: { requests: ReadonlyArray<{ id: string }> };
+      };
+      return data.postRequests.requests.map((request) => request.id);
+    };
 
-    const draftId = normalizedSource.get(requestNodeId)?.draft?.__ref;
-    assert.ok(draftId);
-    assert.equal(normalizedSource.get(draftId)?.bodyText, '접수된 본문');
-    assert.equal(normalizedSource.get(draftId)?.contentWarning, '접수된 경고');
-    assert.equal(normalizedSource.get(draftId)?.sensitiveMedia, true);
+    assert.deepEqual(requestIds('profile-a', null), [requestNodeId]);
+    assert.deepEqual(requestIds('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES), [requestNodeId]);
+    assert.deepEqual(requestIds('profile-b', null), []);
+    assert.deepEqual(requestIds('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+    const requestRecord = environment.getStore().getSource().get(requestNodeId);
+    assert.equal(requestRecord?.bodyText, '접수된 본문');
+    assert.equal(requestRecord?.contentWarning, '접수된 경고');
+    assert.equal(requestRecord?.sensitiveMedia, true);
+    assert.equal(requestRecord?.draft, undefined);
   });
 });
 
@@ -937,10 +964,6 @@ describe('PostComposer local author', () => {
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
-    assert.deepEqual(mutationCalls[0]?.variables.connections, [
-      'account-1:PostRequestList_postRequests:profile-b:all',
-      'account-1:PostRequestList_postRequests:profile-b:home',
-    ]);
     const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
     assert.equal(typeof requestId, 'string');
     assert.deepEqual(submittedInput, {
@@ -1213,7 +1236,7 @@ describe('PostComposer local author', () => {
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
   });
 
-  it('keeps the original actor, request ID, and connections when retrying after an unknown outcome', async () => {
+  it('keeps the original actor and request ID when retrying after an unknown outcome', async () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
@@ -1229,10 +1252,6 @@ describe('PostComposer local author', () => {
     await act(async () => targetProps?.onSubmit());
     const originalSubmission = mutationCalls[0]?.variables;
     assert.equal(originalSubmission?.input.actorProfileId, profileA.id);
-    assert.deepEqual(originalSubmission?.connections, [
-      'account-1:PostRequestList_postRequests:profile-a:all',
-      'account-1:PostRequestList_postRequests:profile-a:home',
-    ]);
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
     assert.equal(reselectionMediaIds.length, 0);
     assert.ok(
@@ -1263,7 +1282,11 @@ describe('PostComposer local author', () => {
     const retryRequestId = String(originalSubmission?.input.requestId);
     await act(async () =>
       mutationCalls[1]?.onCompleted(
-        { submitPostRequest: { request: { requestId: retryRequestId } } },
+        {
+          createPost: {
+            request: { id: 'request-node-a', requestId: retryRequestId },
+          },
+        },
         [{ message: 'ignored field error', extensions: { code: 'VALIDATION', field: 'mentions' } }],
       ),
     );
@@ -1277,10 +1300,6 @@ describe('PostComposer local author', () => {
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls[2]?.variables.input.actorProfileId, profileB.id);
     assert.equal(mutationCalls[2]?.variables.input.visibility, 'PUBLIC');
-    assert.deepEqual(mutationCalls[2]?.variables.connections, [
-      'account-1:PostRequestList_postRequests:profile-b:all',
-      'account-1:PostRequestList_postRequests:profile-b:home',
-    ]);
   });
 
   it('blocks an uncertain request recheck under another account and allows it after switching back', async () => {
@@ -1354,7 +1373,9 @@ describe('PostComposer local author', () => {
     });
     await act(async () =>
       mutationCalls[1]?.onCompleted({
-        submitPostRequest: { request: { requestId: originalRequestId } },
+        createPost: {
+          request: { id: 'request-node-a', requestId: originalRequestId },
+        },
       }),
     );
     assert.equal(acceptedCount, 0);
@@ -1371,7 +1392,9 @@ describe('PostComposer local author', () => {
     assert.deepEqual(mutationCalls[2]?.variables, originalSubmission);
     await act(async () =>
       mutationCalls[2]?.onCompleted({
-        submitPostRequest: { request: { requestId: originalRequestId } },
+        createPost: {
+          request: { id: 'request-node-a', requestId: originalRequestId },
+        },
       }),
     );
     assert.equal(acceptedCount, 1);
@@ -1410,8 +1433,11 @@ describe('PostComposer local author', () => {
     assert.ok(retryUncertainRequest);
     await act(async () =>
       mutationCalls[0]?.onCompleted({
-        submitPostRequest: {
-          request: { requestId: String(originalSubmission.input.requestId) },
+        createPost: {
+          request: {
+            id: 'request-node-a',
+            requestId: String(originalSubmission.input.requestId),
+          },
         },
       }),
     );
@@ -1426,15 +1452,13 @@ describe('PostComposer local author', () => {
     assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
     assert.equal(mutationCalls[1]?.variables.input.actorProfileId, profileA.id);
     assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission.input.requestId);
-    assert.deepEqual(mutationCalls[1]?.variables.connections, [
-      'account-1:PostRequestList_postRequests:profile-a:all',
-      'account-1:PostRequestList_postRequests:profile-a:home',
-    ]);
-
     await act(async () =>
       mutationCalls[1]?.onCompleted({
-        submitPostRequest: {
-          request: { requestId: String(originalSubmission.input.requestId) },
+        createPost: {
+          request: {
+            id: 'request-node-a',
+            requestId: String(originalSubmission.input.requestId),
+          },
         },
       }),
     );

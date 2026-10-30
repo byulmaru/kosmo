@@ -497,18 +497,15 @@ async function createPost(page: Page, body: string) {
   await expect(composer).toBeVisible();
 
   await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
-  const submitResponsePromise = waitForGraphQLOperation(
-    page,
-    'PostComposerSubmitPostRequestMutation',
-  );
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   const submitResponse = await submitResponsePromise;
   const responseBody = (await submitResponse.json()) as {
-    data?: { submitPostRequest?: { request?: { requestId?: string | null } | null } | null };
+    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
     errors?: unknown[];
   };
   const operation = readGraphQLOperation(submitResponse.request().postData());
-  const acceptedRequestId = responseBody.data?.submitPostRequest?.request?.requestId;
+  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
 
   expect(submitResponse.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();

@@ -16,11 +16,11 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { POST_REQUEST_HOME_ACTIVE_STATUSES } from './postRequestCache';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
-import type { PostRequestList_account$key } from './__generated__/PostRequestList_account.graphql';
 import type {
   PostRequestList as PostRequestListComponent,
   PostRequestListSummary as PostRequestListSummaryComponent,
@@ -28,30 +28,26 @@ import type {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type RequestNode = Readonly<{
+type RequestRow = Readonly<{
   id: string;
-  post: Readonly<{ id: string; profile: Readonly<{ id: string }> }> | null;
-  requestId: string;
-  status: string;
-}>;
-type Edge = Readonly<{ cursor: string; node: RequestNode }>;
-type InfiniteListMockProps = Readonly<{
-  data: ReadonlyArray<Edge>;
-  empty?: ReactNode;
-  footer?: ReactNode;
-  header?: ReactNode;
-  renderItem: (params: { index: number; item: Edge }) => ReactNode;
-  [key: string]: unknown;
-}>;
-type PostRequestRow = Readonly<{
-  id: string;
-  post?: Readonly<{
+  post: Readonly<{
     id: string;
     profileId: string;
     replyParent?: Readonly<{ id: string; replyCount: number }> | null;
   }> | null;
   requestId: string;
   status: string;
+}>;
+type InfiniteListMockProps = Readonly<{
+  data: ReadonlyArray<{ id: string; requestId: string; status: string }>;
+  empty?: ReactNode;
+  footer?: ReactNode;
+  header?: ReactNode;
+  renderItem: (params: {
+    index: number;
+    item: { id: string; requestId: string; status: string };
+  }) => ReactNode;
+  [key: string]: unknown;
 }>;
 
 const require = createRequire(import.meta.url);
@@ -94,7 +90,7 @@ mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast: () => () => undefined }),
 });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId: 'account-a', selectedProfileId }),
+  useSession: () => ({ selectedProfileId }),
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ foregroundSecondary: '#555', danger: '#900' }),
@@ -106,22 +102,19 @@ mockModule('@/theme/tokens', {
 });
 mockModule('./PostRequestCard', {
   PostRequestCard: ({
-    activeConnectionId,
     onCancelled,
     onPublished,
     request,
   }: {
-    activeConnectionId?: string;
     onCancelled?: (result: { requestNodeId: string }) => void;
     onPublished?: (result: {
       authorProfileId: string;
       postId: string;
       requestNodeId: string;
     }) => void;
-    request: RequestNode;
+    request: { id: string; requestId: string; status: string };
   }) =>
     createElement('PostRequestCard', {
-      activeConnectionId,
       onCancelled,
       onPublished,
       requestId: request.requestId,
@@ -135,10 +128,9 @@ let PostRequestList: typeof PostRequestListComponent;
 let PostRequestListSummary: typeof PostRequestListSummaryComponent;
 let selectedProfileId = 'profile-a';
 
-const ACCOUNT_ID = 'account-a';
 const PROFILE_ID = 'profile-a';
-const ACTIVE_STATUSES = ['CONFIRMING', 'FAILED', 'PROCESSING', 'PUBLISHING', 'QUEUED'] as const;
-const postRequestListQuery = generated('PostRequestListNextPageQuery');
+const HOME_STATUSES = POST_REQUEST_HOME_ACTIVE_STATUSES;
+const postRequestListQuery = generated('PostRequestListQuery');
 const postRequestCardRefetchQuery = generated('PostRequestCardRefetchQuery');
 
 before(async () => {
@@ -161,80 +153,102 @@ function createEnvironment() {
   });
 }
 
-function makeRequest(requestId: string, status: string): PostRequestRow {
-  return { id: `node:${requestId}`, requestId, status };
+function makeRequest(requestId: string, status: string): RequestRow {
+  return { id: `node:${requestId}`, post: null, requestId, status };
 }
 
-function makeAccountPayload(requests: ReadonlyArray<PostRequestRow>) {
+function makeRequestPayload(request: RequestRow) {
   return {
-    node: {
-      __typename: 'Account',
-      id: ACCOUNT_ID,
-      postRequests: {
-        __typename: 'PostRequestConnection',
-        edges: requests.map((request, index) => ({
-          __typename: 'PostRequestConnectionEdge',
-          cursor: `cursor:${index}`,
-          node: {
-            __typename: 'PostRequest',
-            id: request.id,
-            requestId: request.requestId,
-            status: request.status,
-            post: request.post
-              ? {
-                  __typename: 'Post',
-                  id: request.post.id,
-                  profile: {
-                    __typename: 'Profile',
-                    id: request.post.profileId,
-                    relativeHandle: `@${request.post.profileId}`,
-                  },
-                }
-              : null,
+    __typename: 'PostRequest',
+    authorProfile: {
+      __typename: 'Profile',
+      avatar: null,
+      displayName: '작성자',
+      handle: '@writer',
+      id: 'profile-writer',
+      relativeHandle: '@writer',
+    },
+    bodyText: `본문 ${request.requestId}`,
+    contentWarning: null,
+    id: request.id,
+    media: [],
+    post: request.post
+      ? {
+          __typename: 'Post',
+          content: { __typename: 'PostContent', id: `content:${request.post.id}` },
+          id: request.post.id,
+          profile: {
+            __typename: 'Profile',
+            avatar: null,
+            displayName: '작성자',
+            handle: `@${request.post.profileId}`,
+            id: request.post.profileId,
+            relativeHandle: `@${request.post.profileId}`,
           },
-        })),
-        pageInfo: {
-          __typename: 'PageInfo',
-          endCursor: requests.length ? `cursor:${requests.length - 1}` : null,
-          hasNextPage: false,
-        },
-      },
+          replyParent: request.post.replyParent
+            ? {
+                __typename: 'Post',
+                id: request.post.replyParent.id,
+                profile: {
+                  __typename: 'Profile',
+                  displayName: '답글 대상',
+                  id: `profile:${request.post.replyParent.id}`,
+                },
+                replyCount: request.post.replyParent.replyCount,
+              }
+            : null,
+        }
+      : null,
+    requestId: request.requestId,
+    sensitiveMedia: false,
+    status: request.status,
+  };
+}
+
+function makePagePayload(requests: ReadonlyArray<RequestRow>, nextPageToken: string | null = null) {
+  return {
+    postRequests: {
+      __typename: 'PostRequestPage',
+      nextPageToken,
+      requests: requests.map(makeRequestPayload),
     },
   };
 }
 
-function seedPostRequestConnections(
+function listOperation(
   environment: Environment,
-  requests: ReadonlyArray<PostRequestRow>,
+  statuses: readonly string[] | null,
+  profileId = PROFILE_ID,
 ) {
-  const historyOperation = createOperationDescriptor(getRequest(postRequestListQuery), {
-    id: ACCOUNT_ID,
-    profileId: PROFILE_ID,
-    statuses: null,
+  return createOperationDescriptor(getRequest(postRequestListQuery), {
+    pageToken: null,
+    profileId,
+    statuses,
   });
-  environment.commitPayload(historyOperation, makeAccountPayload(requests));
-
-  const activeOperation = createOperationDescriptor(getRequest(postRequestListQuery), {
-    id: ACCOUNT_ID,
-    profileId: PROFILE_ID,
-    statuses: ACTIVE_STATUSES,
-  });
-  environment.commitPayload(
-    activeOperation,
-    makeAccountPayload(
-      requests.filter((request) => ACTIVE_STATUSES.includes(request.status as never)),
-    ),
-  );
-
-  return historyOperation;
 }
 
-function accountKey(owner: ReturnType<typeof createOperationDescriptor>) {
-  return {
-    __id: ACCOUNT_ID,
-    __fragments: { PostRequestList_account: { profileId: PROFILE_ID, statuses: null } },
-    __fragmentOwner: owner.request,
-  } as unknown as PostRequestList_account$key;
+function seedPostRequestPages(
+  environment: Environment,
+  requests: ReadonlyArray<RequestRow>,
+  profileId = PROFILE_ID,
+  nextPageToken: string | null = null,
+) {
+  environment.commitPayload(
+    listOperation(environment, null, profileId),
+    makePagePayload(requests, nextPageToken),
+  );
+  environment.commitPayload(
+    listOperation(environment, HOME_STATUSES, profileId),
+    makePagePayload(requests.filter((request) => HOME_STATUSES.includes(request.status as never))),
+  );
+}
+
+function pageRequestIds(environment: Environment, statuses: readonly string[] | null) {
+  const snapshot = environment.lookup(listOperation(environment, statuses).fragment);
+  const data = snapshot.data as {
+    postRequests: { requests: ReadonlyArray<{ id: string }> };
+  };
+  return data.postRequests.requests.map((request) => request.id);
 }
 
 function seedHomeConnection(environment: Environment) {
@@ -254,38 +268,15 @@ function seedHomeConnection(environment: Environment) {
 
 function updateRequestStatus(
   environment: Environment,
-  request: PostRequestRow,
+  request: RequestRow,
   status: string,
-  post?: PostRequestRow['post'],
+  post?: RequestRow['post'],
 ) {
   const operation = createOperationDescriptor(getRequest(postRequestCardRefetchQuery), {
     id: request.id,
   });
   environment.commitPayload(operation, {
-    node: {
-      __typename: 'PostRequest',
-      id: request.id,
-      requestId: request.requestId,
-      status,
-      post: post
-        ? {
-            __typename: 'Post',
-            id: post.id,
-            profile: {
-              __typename: 'Profile',
-              id: post.profileId,
-              relativeHandle: `@${post.profileId}`,
-            },
-            replyParent: post.replyParent
-              ? {
-                  __typename: 'Post',
-                  id: post.replyParent.id,
-                  replyCount: post.replyParent.replyCount,
-                }
-              : null,
-          }
-        : null,
-    },
+    node: makeRequestPayload({ ...request, post: post ?? null, status }),
   });
 }
 
@@ -304,47 +295,48 @@ function connectionNodeIds(environment: Environment, connectionId: string) {
   });
 }
 
-function connectionNodeIdsForRequestList(environment: Environment, active: boolean) {
-  const connectionId = ConnectionHandler.getConnectionID(
-    ACCOUNT_ID,
-    'PostRequestList_postRequests',
-    {
-      profileId: PROFILE_ID,
-      statuses: active ? ACTIVE_STATUSES : null,
-    },
-  );
-  return connectionNodeIds(environment, connectionId);
-}
-
 async function renderList(
   environment: Environment,
-  account: PostRequestList_account$key,
   overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
 ) {
-  const view = createElement(ReactRelay.RelayEnvironmentProvider, {
+  await act(async () => {
+    renderer = create(listView(environment, overrides));
+  });
+  assert.ok(renderer);
+}
+
+function listView(
+  environment: Environment,
+  overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
+) {
+  return createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
     children: createElement(Suspense, {
       fallback: null,
       children: createElement(PostRequestList, {
-        account,
         profileId: PROFILE_ID,
         ...overrides,
       }),
     }),
   });
+}
+
+async function updateList(
+  environment: Environment,
+  overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
+) {
   await act(async () => {
-    renderer = create(view);
+    renderer?.update(listView(environment, overrides));
   });
   assert.ok(renderer);
 }
 
-async function renderSummary(environment: Environment, account: PostRequestList_account$key) {
+async function renderSummary(environment: Environment) {
   const view = createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
     children: createElement(Suspense, {
       fallback: null,
       children: createElement(PostRequestListSummary, {
-        account,
         onRewrite: () => undefined,
         profileId: PROFILE_ID,
       }),
@@ -362,13 +354,230 @@ function all(type: string) {
 }
 
 describe('PostRequestList', () => {
+  it('refetches the first page when the route retry fetch key changes', async () => {
+    const request = makeRequest('request-a', 'FAILED');
+    const requestedVariables: Record<string, unknown>[] = [];
+    const environment = new Environment({
+      network: Network.create((_operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requestedVariables.push(variables);
+          sink.next({ data: makePagePayload([request]) });
+          sink.complete();
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(listOperation(environment, null), makePagePayload([request]));
+
+    await renderList(environment, { fetchKey: '0' });
+    assert.deepEqual(requestedVariables, []);
+
+    await updateList(environment, { fetchKey: '1' });
+
+    assert.deepEqual(requestedVariables, [
+      { pageToken: null, profileId: PROFILE_ID, statuses: null },
+    ]);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-a'],
+    );
+  });
+
+  it('loads the next page once, then keeps its rows when the returned token is null', async () => {
+    const firstRequest = makeRequest('request-a', 'FAILED');
+    const nextRequest = makeRequest('request-b', 'CANCELLED');
+    const requestedVariables: Record<string, unknown>[] = [];
+    const environment = new Environment({
+      network: Network.create((_operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requestedVariables.push(variables);
+          sink.next({ data: makePagePayload([nextRequest]) });
+          sink.complete();
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(
+      listOperation(environment, null),
+      makePagePayload([firstRequest], 'next-token'),
+    );
+    environment.commitPayload(
+      listOperation(environment, HOME_STATUSES),
+      makePagePayload([firstRequest]),
+    );
+
+    await renderList(environment);
+
+    let completion: Error | null | undefined;
+    const requestNextPage = () => {
+      const props = all('InfiniteList')[0]?.props;
+      assert.ok(props);
+      props.loadNext(20, { onComplete: (error: Error | null) => (completion = error) });
+    };
+    await act(async () => requestNextPage());
+
+    assert.equal(completion, null);
+    assert.deepEqual(requestedVariables, [
+      { pageToken: 'next-token', profileId: PROFILE_ID, statuses: null },
+    ]);
+    assert.equal(all('InfiniteList')[0]?.props.hasNext, false);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-a', 'request-b'],
+    );
+
+    await act(async () => requestNextPage());
+
+    assert.equal(requestedVariables.length, 1);
+    assert.equal(all('InfiniteList')[0]?.props.hasNext, false);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-a', 'request-b'],
+    );
+  });
+
+  it('keeps all loaded rows and the retry token when a later page fails', async () => {
+    const firstRequest = makeRequest('request-a', 'FAILED');
+    const nextRequest = makeRequest('request-b', 'CANCELLED');
+    const environment = new Environment({
+      network: Network.create((_operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          if (variables['pageToken'] === 'next-token') {
+            sink.next({ data: makePagePayload([nextRequest], 'last-token') });
+            sink.complete();
+            return;
+          }
+
+          sink.error(new Error('Network unavailable'));
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(
+      listOperation(environment, null),
+      makePagePayload([firstRequest], 'next-token'),
+    );
+
+    await renderList(environment);
+
+    const loadNext = async () => {
+      const props = all('InfiniteList')[0]?.props;
+      assert.ok(props);
+      let completion: Error | null | undefined;
+      await act(async () =>
+        props.loadNext(20, { onComplete: (error: Error | null) => (completion = error) }),
+      );
+      return completion;
+    };
+
+    assert.equal(await loadNext(), null);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-a', 'request-b'],
+    );
+
+    const error = await loadNext();
+
+    assert.equal(error?.message, 'Network unavailable');
+    assert.equal(all('InfiniteList')[0]?.props.hasNext, true);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-a', 'request-b'],
+    );
+  });
+
+  it('disposes retained next-page requests when the profile or Relay environment changes and on unmount', async () => {
+    let firstEnvironmentDisposals = 0;
+    const firstEnvironment = new Environment({
+      network: Network.create(() =>
+        Observable.create<GraphQLResponse>(() => () => {
+          firstEnvironmentDisposals += 1;
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    seedPostRequestPages(
+      firstEnvironment,
+      [makeRequest('request-a', 'FAILED')],
+      PROFILE_ID,
+      'token-a',
+    );
+
+    await renderList(firstEnvironment);
+    const loadNext = async () => {
+      const props = all('InfiniteList')[0]?.props;
+      assert.ok(props);
+      await act(async () => props.loadNext(20, { onComplete: () => undefined }));
+    };
+
+    await loadNext();
+    assert.equal(firstEnvironmentDisposals, 0);
+
+    seedPostRequestPages(
+      firstEnvironment,
+      [makeRequest('request-b', 'FAILED')],
+      'profile-b',
+      'token-b',
+    );
+    await updateList(firstEnvironment, { profileId: 'profile-b' });
+    assert.equal(firstEnvironmentDisposals, 1);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-b'],
+    );
+
+    await loadNext();
+    assert.equal(firstEnvironmentDisposals, 1);
+
+    let secondEnvironmentDisposals = 0;
+    const secondEnvironment = new Environment({
+      network: Network.create(() =>
+        Observable.create<GraphQLResponse>(() => () => {
+          secondEnvironmentDisposals += 1;
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    seedPostRequestPages(
+      secondEnvironment,
+      [makeRequest('request-c', 'FAILED')],
+      'profile-b',
+      'token-c',
+    );
+    await updateList(secondEnvironment, { profileId: 'profile-b' });
+    assert.equal(firstEnvironmentDisposals, 2);
+    assert.deepEqual(
+      (all('InfiniteList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
+      ['request-c'],
+    );
+
+    await loadNext();
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    assert.equal(secondEnvironmentDisposals, 1);
+  });
+
   it('shows a focused request once above the remaining status history', async () => {
     const environment = createEnvironment();
     const requests = [makeRequest('request-a', 'FAILED'), makeRequest('request-b', 'CANCELLED')];
-    const owner = seedPostRequestConnections(environment, requests);
-    const focused = { ...requests[0]!, post: null };
+    seedPostRequestPages(environment, requests);
+    const focused = makeRequestPayload(requests[0]!);
 
-    await renderList(environment, accountKey(owner), {
+    await renderList(environment, {
       focusedRequestId: 'request-a',
       focusedRequest: focused as unknown as PostRequestCard_request$key,
     });
@@ -378,37 +587,36 @@ describe('PostRequestList', () => {
       ['request-a', 'request-b'],
     );
     assert.deepEqual(
-      (all('InfiniteList')[0]!.props.data as ReadonlyArray<Edge>).map(({ node }) => node.requestId),
+      (all('InfiniteList')[0]!.props.data as ReadonlyArray<{ requestId: string }>).map(
+        ({ requestId }) => requestId,
+      ),
       ['request-b'],
     );
   });
 
-  it('uses the profile-scoped active connection for the home summary card', async () => {
+  it('uses the profile-scoped active root page for the Home summary', async () => {
     const environment = createEnvironment();
-    const owner = seedPostRequestConnections(environment, [
+    seedPostRequestPages(environment, [
       makeRequest('request-a', 'CONFIRMING'),
       makeRequest('request-b', 'FAILED'),
     ]);
 
-    await renderSummary(environment, accountKey(owner));
+    await renderSummary(environment);
 
     assert.equal(all('PostRequestCard')[0]?.props.requestId, 'request-a');
-    assert.equal(
-      all('PostRequestCard')[0]?.props.activeConnectionId,
-      ConnectionHandler.getConnectionID(ACCOUNT_ID, 'PostRequestList_postRequests', {
-        profileId: PROFILE_ID,
-        statuses: ACTIVE_STATUSES,
-      }),
-    );
+    assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), [
+      'node:request-a',
+      'node:request-b',
+    ]);
   });
 
   it('moves a normalized published request into Home once when its author is the selected profile', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
-    const owner = seedPostRequestConnections(environment, [request]);
+    seedPostRequestPages(environment, [request]);
     seedHomeConnection(environment);
 
-    await renderSummary(environment, accountKey(owner));
+    await renderSummary(environment);
     assert.equal(all('PostRequestCard').length, 1);
 
     await act(async () => {
@@ -425,8 +633,8 @@ describe('PostRequestList', () => {
     });
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, true), []);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, false), [request.id]);
+    assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), []);
+    assert.deepEqual(pageRequestIds(environment, null), [request.id]);
     assert.deepEqual(
       connectionNodeIds(
         environment,
@@ -436,14 +644,14 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('handles first-seen terminal rechecks in Home while preserving history and reply counts', async () => {
+  it('reconciles first-seen terminal requests in Home while preserving history and reply counts', async () => {
     const environment = createEnvironment();
     const requests = [
       makeRequest('request-published-a', 'PROCESSING'),
       makeRequest('request-published-b', 'PROCESSING'),
       makeRequest('request-cancelled', 'PROCESSING'),
     ];
-    const owner = seedPostRequestConnections(environment, requests);
+    seedPostRequestPages(environment, requests);
     seedHomeConnection(environment);
 
     updateRequestStatus(environment, requests[0]!, 'PUBLISHED', {
@@ -457,12 +665,12 @@ describe('PostRequestList', () => {
     });
     updateRequestStatus(environment, requests[2]!, 'CANCELLED');
 
-    await renderSummary(environment, accountKey(owner));
+    await renderSummary(environment);
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, true), []);
+    assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), []);
     assert.deepEqual(
-      connectionNodeIdsForRequestList(environment, false),
+      pageRequestIds(environment, null),
       requests.map(({ id }) => id),
     );
     assert.deepEqual(
@@ -496,14 +704,14 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('removes a published request from the active connection without inserting another profile’s post', async () => {
+  it('removes a published request from Home without inserting another profile’s Post', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
-    const owner = seedPostRequestConnections(environment, [request]);
+    seedPostRequestPages(environment, [request]);
     seedHomeConnection(environment);
     selectedProfileId = 'profile-a';
 
-    await renderSummary(environment, accountKey(owner));
+    await renderSummary(environment);
     await act(async () => {
       updateRequestStatus(environment, request, 'PUBLISHED', {
         id: 'post-b',
@@ -512,7 +720,7 @@ describe('PostRequestList', () => {
     });
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, true), []);
+    assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), []);
     assert.deepEqual(
       connectionNodeIds(
         environment,
@@ -522,20 +730,20 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('cleans the active connection after a cancelled request is confirmed by refetch', async () => {
+  it('prunes a cancelled request only from the Home first page after refetch confirms it', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
-    const owner = seedPostRequestConnections(environment, [request]);
+    seedPostRequestPages(environment, [request]);
     seedHomeConnection(environment);
 
-    await renderSummary(environment, accountKey(owner));
+    await renderSummary(environment);
     assert.equal(all('PostRequestCard').length, 1);
 
     await act(async () => updateRequestStatus(environment, request, 'CANCELLED'));
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, true), []);
-    assert.deepEqual(connectionNodeIdsForRequestList(environment, false), [request.id]);
+    assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), []);
+    assert.deepEqual(pageRequestIds(environment, null), [request.id]);
     assert.deepEqual(
       connectionNodeIds(
         environment,

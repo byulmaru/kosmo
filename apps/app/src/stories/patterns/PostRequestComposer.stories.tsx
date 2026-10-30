@@ -29,22 +29,19 @@ function request({
   return {
     __typename: 'PostRequest' as const,
     authorProfile,
-    draft: {
-      __typename: 'PostRequestDraft' as const,
-      bodyText,
-      contentWarning: null,
-      media: [],
-      mentions: [],
-      replyParent: null,
-      replyParentId,
-      repostSource: null,
-      repostSourceId,
-      sensitiveMedia: false,
-      visibility: 'UNLISTED' as const,
-    },
+    bodyText,
+    contentWarning: null,
     id: 'post-request-composer-node-' + id,
+    media: [],
+    mentions: [],
+    replyParent: null,
+    replyParentId,
+    repostSource: null,
+    repostSourceId,
     requestId: 'post-request-composer-' + id,
     status,
+    sensitiveMedia: false,
+    visibility: 'UNLISTED' as const,
   };
 }
 
@@ -157,16 +154,7 @@ const meta = {
   component: PostRequestComposerFixture,
   parameters: {
     layout: 'padded',
-    relay: {
-      data: { nodes: storyRequests },
-      operationResponses: {
-        PostComposerAccountQuery: {
-          data: {
-            me: { __typename: 'Account', id: 'post-request-composer-account' },
-          },
-        },
-      },
-    },
+    relay: { data: { nodes: storyRequests } },
   },
   title: 'KOSMO/Patterns/PostRequestComposer',
 } satisfies Meta<typeof PostRequestComposerFixture>;

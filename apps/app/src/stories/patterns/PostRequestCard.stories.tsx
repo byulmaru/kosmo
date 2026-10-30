@@ -46,17 +46,22 @@ function request({
   return {
     __typename: 'PostRequest' as const,
     authorProfile: author,
-    draft: {
-      __typename: 'PostRequestDraft' as const,
-      bodyText,
-      contentWarning,
-      media: [{ __typename: 'PostRequestDraftMedia' as const, altText: media.altText, media }],
-      sensitiveMedia,
-    },
+    bodyText,
+    contentWarning,
     id: `post-request-card-node-${id}`,
+    media: [
+      {
+        __typename: 'CreatePostMedia' as const,
+        altText: media.altText,
+        applyNightshade: false,
+        media,
+        mediaId: media.id,
+      },
+    ],
     post: publishedPost,
     requestId: `post-request-card-${id}`,
     status,
+    sensitiveMedia,
   };
 }
 
