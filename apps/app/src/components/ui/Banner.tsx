@@ -27,7 +27,7 @@ export function Banner({
     <View
       style={[
         styles.root,
-        { backgroundColor: theme.actionPrimarySubtle, borderColor: theme.borderSubtle },
+        { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
       ]}
     >
       {Icon ? (
@@ -36,12 +36,12 @@ export function Banner({
           accessibilityElementsHidden
           aria-hidden
           importantForAccessibility="no-hide-descendants"
-          style={[styles.iconBadge, { backgroundColor: theme.actionPrimaryBase }]}
+          style={styles.icon}
         >
-          <Icon color={theme.actionPrimaryOnBase} size={20} strokeWidth={2} />
+          <Icon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
         </View>
       ) : null}
-      <Text style={[styles.message, { color: theme.actionPrimaryOnSubtle }]}>{message}</Text>
+      <Text style={[styles.message, { color: theme.foregroundPrimary }]}>{message}</Text>
       {action != null ? <View style={styles.action}>{action}</View> : null}
       {onDismiss ? (
         <IconButton
@@ -60,21 +60,17 @@ export function Banner({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    borderRadius: radius[16],
+    borderRadius: radius[8],
     borderWidth: borderWidths[1],
     flexDirection: 'row',
     gap: space[8],
-    padding: space[8],
+    paddingHorizontal: space[12],
+    paddingVertical: space[8],
   },
-  iconBadge: {
-    alignItems: 'center',
-    borderRadius: radius.full,
+  icon: {
     flexShrink: 0,
-    height: space[32],
-    justifyContent: 'center',
-    width: space[32],
   },
-  message: { flex: 1, minWidth: 0, ...textStyles.uiLabelM },
+  message: { flex: 1, minWidth: 0, ...textStyles.uiCopyL },
   action: { flexShrink: 0 },
   dismiss: { flexShrink: 0 },
 });
