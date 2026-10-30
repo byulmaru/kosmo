@@ -21,8 +21,10 @@ type RelayMockValue = {
     | StoryOperationResponse
     | StoryOperationResponse[]
     | StoryOperationResponseSequence
-    | ((selectedProfileId: string | null, variables: Variables) => StoryOperationResponse)
-    | undefined
+    | ((
+        selectedProfileId: string | null,
+        variables: Variables,
+      ) => StoryOperationResponse | undefined)
   >;
   queryData?: unknown;
   queryRequestObserver?: (request: RequestParameters, variables: Variables) => void;
