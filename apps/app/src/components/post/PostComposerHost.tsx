@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -54,6 +54,7 @@ export function PostComposerHost({
   const [submitting, setSubmitting] = useState(false);
   const [uncertainRequest, setUncertainRequest] = useState<{ retry?: () => void } | null>(null);
   const [uncertainCloseOpen, setUncertainCloseOpen] = useState(false);
+  const uncertainCloseRef = useRef<View>(null);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -95,17 +96,30 @@ export function PostComposerHost({
   }, []);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
+    focusScopeRef: uncertainCloseOpen ? uncertainCloseRef : undefined,
     onRequestClose: requestClose,
-    open: overlayVisible,
+    open: overlayVisible || uncertainCloseOpen,
     preferredFocusRef: expandControlRef,
     triggerFocusRef,
   });
+
+  useEffect(() => {
+    if (!uncertainCloseOpen || !web || typeof document === 'undefined') {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const confirmation = uncertainCloseRef.current as unknown as HTMLElement | null;
+      confirmation?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [uncertainCloseOpen, web]);
 
   const uncertainCloseConfirmation = uncertainCloseOpen ? (
     <View style={[styles.uncertainCloseBackdrop, { backgroundColor: theme.overlayScrim }]}>
       <View
         accessibilityLabel="접수 결과 확인"
         accessibilityViewIsModal
+        ref={uncertainCloseRef}
         role="alertdialog"
         style={[
           styles.uncertainCloseDialog,
@@ -123,6 +137,18 @@ export function PostComposerHost({
               const retry = uncertainRequest?.retry;
               setUncertainCloseOpen(false);
               retry?.();
+              if (web && typeof document !== 'undefined') {
+                requestAnimationFrame(() => {
+                  const surface = dialogRef.current as unknown as HTMLElement | null;
+                  if (
+                    surface &&
+                    document.contains(surface) &&
+                    surface.getClientRects().length > 0
+                  ) {
+                    surface.focus();
+                  }
+                });
+              }
             }}
             tone="secondary"
           >
@@ -182,6 +208,7 @@ export function PostComposerHost({
             onAccessibilityEscape={requestNativeBack}
             ref={dialogRef}
             role={overlayVisible ? 'dialog' : undefined}
+            tabIndex={web ? -1 : undefined}
             style={[
               styles.dialog,
               mode !== 'rail' && !nativeMobile && elevation.overlay,
@@ -196,6 +223,9 @@ export function PostComposerHost({
             testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
           >
             <View
+              accessibilityElementsHidden={uncertainCloseOpen}
+              aria-hidden={uncertainCloseOpen || undefined}
+              importantForAccessibility={uncertainCloseOpen ? 'no-hide-descendants' : 'auto'}
               style={[
                 styles.clippedSurface,
                 mode === 'overlay' ? { borderRadius: radii.lg } : null,
