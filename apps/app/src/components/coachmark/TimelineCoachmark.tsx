@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { CircleHelp } from 'lucide-react-native';
-import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffectEvent, useLayoutEffect, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useShellChrome } from '../shell/ShellChromeContext';
@@ -57,7 +57,9 @@ type TimelineShellChrome = NonNullable<ReturnType<typeof useShellChrome>>;
 
 export function TimelineCoachmark(props: TimelineCoachmarkProps) {
   const shellChrome = useShellChrome();
-  const profileAnchorRef = shellChrome?.timelineProfileRef;
+  const profileAnchorRef = props.mobile
+    ? shellChrome?.navigationDrawerTriggerRef
+    : shellChrome?.timelineProfileRef;
   const composerAnchorRef = shellChrome?.timelineComposerRef;
 
   if (!shellChrome || !profileAnchorRef || (props.hasSelectedProfile && !composerAnchorRef)) {
@@ -91,31 +93,8 @@ function TimelineCoachmarkConnected({
   profileAnchorRef: RefObject<NativeView | null>;
   shellChrome: TimelineShellChrome;
 }) {
-  const {
-    closeNavigationDrawer,
-    navigationDrawerOpen,
-    openNavigationDrawer,
-    registerTimelineHelp,
-    timelineHelpTriggerRef,
-  } = shellChrome;
+  const { registerTimelineHelp, timelineHelpTriggerRef } = shellChrome;
   const [targetReady, setTargetReady] = useState(false);
-  const guideOwnsDrawerRef = useRef(false);
-
-  const openGuideDrawer = useEffectEvent(() => {
-    if (mobile && !navigationDrawerOpen && !guideOwnsDrawerRef.current) {
-      guideOwnsDrawerRef.current = true;
-      openNavigationDrawer();
-    }
-  });
-  const releaseGuideDrawer = useEffectEvent(() => {
-    if (!guideOwnsDrawerRef.current) {
-      return;
-    }
-
-    guideOwnsDrawerRef.current = false;
-    closeNavigationDrawer?.();
-  });
-  const onGuideExit = useEffectEvent(() => releaseGuideDrawer());
 
   useLayoutEffect(() => {
     setTargetReady(Boolean(homeTabAnchorRef.current && localTabAnchorRef.current));
@@ -124,23 +103,26 @@ function TimelineCoachmarkConnected({
     {
       anchorRef: homeTabAnchorRef,
       description: homeDescription,
-      onEnter: releaseGuideDrawer,
       title: '팔로우한 사람들의 소식',
     },
     {
       anchorRef: localTabAnchorRef,
       description: localDescription,
-      onEnter: releaseGuideDrawer,
       title: '새로운 사람들을 만나보세요',
     },
     {
       anchorRef: profileAnchorRef,
-      description: hasSelectedProfile
-        ? `지금은 ‘${profileName ?? '현재 프로필'}’으로 활동하고 있어요. 다른 프로필로 바꾸고 싶을 때 여기를 눌러 주세요.`
-        : hasProfiles
-          ? '활동할 프로필을 선택할 수 있어요.'
-          : '여기에서 활동할 프로필을 만들 수 있어요.',
-      onEnter: openGuideDrawer,
+      description: mobile
+        ? hasSelectedProfile
+          ? `지금은 ‘${profileName ?? '현재 프로필'}’으로 활동하고 있어요. 메뉴를 열면 다른 프로필로 바꿀 수 있어요.`
+          : hasProfiles
+            ? '메뉴에서 활동할 프로필을 선택할 수 있어요.'
+            : '메뉴에서 활동할 프로필을 만들 수 있어요.'
+        : hasSelectedProfile
+          ? `지금은 ‘${profileName ?? '현재 프로필'}’으로 활동하고 있어요. 다른 프로필로 바꾸고 싶을 때 여기를 눌러 주세요.`
+          : hasProfiles
+            ? '활동할 프로필을 선택할 수 있어요.'
+            : '여기에서 활동할 프로필을 만들 수 있어요.',
       title: '지금 활동 중인 프로필',
     },
     ...(hasSelectedProfile
@@ -148,7 +130,6 @@ function TimelineCoachmarkConnected({
           {
             anchorRef: composerAnchorRef!,
             description: '떠오른 생각이나 나누고 싶은 이야기를 새 글로 남겨 보세요.',
-            onEnter: releaseGuideDrawer,
             title: '내 이야기를 들려주세요',
           },
         ]
@@ -157,7 +138,6 @@ function TimelineCoachmarkConnected({
   const controller = useCoachmarkController({
     account,
     guide: 'TIMELINE',
-    onExit: onGuideExit,
     preferredFocusRef: timelineHelpTriggerRef,
     ready: targetReady,
     steps,

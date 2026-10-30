@@ -600,7 +600,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           onClose={closeDrawer}
           onHomeReselect={queueDrawerHomeReselection}
           onSwitcherOpenChange={setSwitcherOpen}
-          profileTriggerRef={timelineProfileRef}
           query={data}
           switcherOpen={switcherOpen}
           guestPublicContent={guestPublicContent}
@@ -617,7 +616,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         onClose={closeDrawer}
         onOpen={openNavigationDrawer}
         onSwitcherOpenChange={setSwitcherOpen}
-        profileTriggerRef={timelineProfileRef}
         query={data}
         switcherOpen={switcherOpen}
         swipeEnabled={nativeDrawerSwipeEnabled}
@@ -630,7 +628,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
 
   return (
     <ShellChromeProvider
-      closeNavigationDrawer={closeDrawer}
       navigationDrawerOpen={drawerOpen}
       navigationDrawerTriggerRef={menuButtonRef}
       openComposer={openComposer}

@@ -9,7 +9,6 @@ export type { TabReselectionDestination, TabReselectionHandler } from './tabRese
 export type HomeReselectionHandler = () => void;
 
 type ShellChromeActions = {
-  closeNavigationDrawer?: () => void;
   navigationDrawerOpen: boolean;
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
   openComposer?: () => void;
@@ -36,7 +35,6 @@ const ShellChromeContext = createContext<ShellChromeActions | null>(null);
 
 export function ShellChromeProvider({
   children,
-  closeNavigationDrawer,
   navigationDrawerOpen,
   navigationDrawerTriggerRef,
   openComposer,
@@ -55,7 +53,6 @@ export function ShellChromeProvider({
 }: ShellChromeProviderProps) {
   const value = useMemo(
     () => ({
-      closeNavigationDrawer,
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
       openComposer,
@@ -73,7 +70,6 @@ export function ShellChromeProvider({
       reselectHome,
     }),
     [
-      closeNavigationDrawer,
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
       openComposer,
