@@ -92,7 +92,7 @@ const parseInput = (value: unknown): PostCreateWorkflowArgs => {
   return result.data;
 };
 
-const startPostCreateEffects = async (
+export const startPostCreateEffects = async (
   origin: PostCreateWorkflowArgs['input']['origin'],
   postId: string,
 ): Promise<void> => {

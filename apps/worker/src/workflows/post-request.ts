@@ -14,6 +14,7 @@ import {
   defineQuery,
   defineUpdate,
   ParentClosePolicy,
+  patched,
   proxyActivities,
   setHandler,
   sleep,
@@ -24,6 +25,7 @@ import {
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
+import { startPostCreateEffects } from './post-create';
 import type { ErrorCode } from '@kosmo/core/error';
 import type { PostCreateWorkflowResult } from '@kosmo/core/temporal/post-create';
 import type {
@@ -448,6 +450,9 @@ export async function postRequestWorkflow(
       }
 
       if (reconciliation.status === 'PUBLISHED') {
+        if (patched('post-request-reconcile-post-create-effects-v1')) {
+          await startPostCreateEffects('LOCAL', reconciliation.postId);
+        }
         setStatus(PostRequestStatus.PUBLISHED, {
           result: { postId: reconciliation.postId },
         });

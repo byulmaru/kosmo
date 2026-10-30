@@ -858,11 +858,15 @@ test(
     const generatedPostId = randomUUID();
     const lateReconciliationStarted = Promise.withResolvers<void>();
     const releaseLateReconciliation = Promise.withResolvers<void>();
+    const effectsStarted = Promise.withResolvers<void>();
+    const releaseEffects = Promise.withResolvers<void>();
     let createAttempts = 0;
     let reconciliationAttempts = 0;
     let postIdGenerationCalls = 0;
+    let effectsCompleted = false;
     const postCreateInputs: PostCreateActivityInput[] = [];
     const worker = await createWorker(environment, taskQueue, {
+      ...postCreateEffectsActivities,
       createPostActivityV2: async (input) => {
         createAttempts += 1;
         postCreateInputs.push(input);
@@ -891,6 +895,11 @@ test(
         await releaseLateReconciliation.promise;
         return { postId, status: 'PUBLISHED' as const };
       },
+      sendLocalPostCreateActivity: async () => {
+        effectsStarted.resolve();
+        await releaseEffects.promise;
+        effectsCompleted = true;
+      },
     });
 
     await worker.runUntil(async () => {
@@ -911,9 +920,12 @@ test(
       assert.equal(cancelResult.status, PostRequestStatus.CONFIRMING);
 
       releaseLateReconciliation.resolve();
-      const result = await handle.result();
+      const resultPromise = handle.result();
+      await effectsStarted.promise;
+      const result = await resultPromise;
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
       assert.equal(result.result?.postId, generatedPostId);
+      assert.equal(effectsCompleted, false);
       assert.equal(createAttempts, 2);
       assert.equal(reconciliationAttempts, 2);
       assert.equal(postIdGenerationCalls, 1);
@@ -921,6 +933,83 @@ test(
         postCreateInputs.map(({ postId }) => postId),
         [generatedPostId, generatedPostId],
       );
+
+      const history = await handle.fetchHistory();
+      const effectsChild = (history.events ?? []).find(
+        (event) =>
+          event.childWorkflowExecutionStartedEventAttributes?.workflowType?.name ===
+          'postCreateEffectsWorkflow',
+      );
+      assert.ok(effectsChild);
+      assert.equal(
+        effectsChild.childWorkflowExecutionStartedEventAttributes?.workflowExecution?.workflowId,
+        `post-create-effects:${generatedPostId}`,
+      );
+
+      releaseEffects.resolve();
+      const effectsHandle = environment.client.workflow.getHandle(
+        `post-create-effects:${generatedPostId}`,
+      );
+      await effectsHandle.result();
+      assert.equal(effectsCompleted, true);
+    });
+  },
+);
+
+test(
+  'Post Request reconciliation tolerates an already-running effects child',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    t.after(() => environment.teardown());
+
+    const taskQueue = `post-request-reconcile-effects-existing-${process.pid}-${randomUUID()}`;
+    const postId = randomUUID();
+    const args = { ...createPostRequest(), postId };
+    const effectsStarted = Promise.withResolvers<void>();
+    const releaseEffects = Promise.withResolvers<void>();
+    let effectCalls = 0;
+    let effectsCompleted = false;
+    const worker = await createWorker(environment, taskQueue, {
+      ...postCreateEffectsActivities,
+      createPostActivityV2: async () => {
+        throw ApplicationFailure.nonRetryable(
+          'The Post Create V2 workflow type is unavailable',
+          'TypeNotFound',
+        );
+      },
+      reconcilePostRequestActivity: async ({ postId: reconciledPostId }) => ({
+        postId: reconciledPostId,
+        status: 'PUBLISHED' as const,
+      }),
+      sendLocalPostCreateActivity: async () => {
+        effectCalls += 1;
+        effectsStarted.resolve();
+        await releaseEffects.promise;
+        effectsCompleted = true;
+      },
+    });
+
+    await worker.runUntil(async () => {
+      const effectsWorkflowId = `post-create-effects:${postId}`;
+      const effectsHandle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+        args: [{ origin: 'LOCAL', postId }],
+        taskQueue,
+        workflowId: effectsWorkflowId,
+      });
+      await effectsStarted.promise;
+
+      const requestHandle = await startPostRequest(environment, taskQueue, args);
+      const result = await requestHandle.result();
+      assert.equal(result.status, PostRequestStatus.PUBLISHED);
+      assert.equal(result.result?.postId, postId);
+      assert.equal(effectCalls, 1);
+      assert.equal(effectsCompleted, false);
+
+      releaseEffects.resolve();
+      await effectsHandle.result();
+      assert.equal(effectCalls, 1);
+      assert.equal(effectsCompleted, true);
     });
   },
 );
