@@ -47,8 +47,8 @@ function MockPostList({ identityKey }: { identityKey?: string }) {
   return createElement('TimelineRows', { identityKey });
 }
 
-function MockNotificationPermissionBanner() {
-  return createElement('NotificationPermissionBanner');
+function MockBanner() {
+  return createElement('Banner');
 }
 
 function localData() {
@@ -106,8 +106,11 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
+mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
+  UserRoundPlus: 'UserRoundPlus',
+});
 mockModule('react-native', {
   Platform: platform,
   StyleSheet: { create: (styles: object) => styles },
@@ -135,9 +138,7 @@ mockModule('relay-runtime', {
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
-mockModule('@/components/ui/NotificationPermissionBanner', {
-  NotificationPermissionBanner: MockNotificationPermissionBanner,
-});
+mockModule('@/components/ui/Banner', { Banner: MockBanner });
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });
@@ -204,11 +205,9 @@ describe('Timeline refresh', () => {
     });
 
     const contentOrder = renderer?.root
-      .findAll(
-        (node) => node.type === MockNotificationPermissionBanner || node.type === MockPostList,
-      )
+      .findAll((node) => node.type === MockBanner || node.type === MockPostList)
       .map((node) => node.type);
-    assert.deepEqual(contentOrder, [MockNotificationPermissionBanner, MockPostList]);
+    assert.deepEqual(contentOrder, [MockBanner, MockPostList]);
   });
 
   it('iOS Home root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {

@@ -3,24 +3,33 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
-import type { ComponentType } from 'react';
+import type { ComponentProps, ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { WebPushSupport } from '@/components/native-push/webPushPermissionContext';
+import type { Banner } from '@/components/ui/Banner';
+import type { Button } from '@/components/ui/Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type BannerProps = {
-  onDismiss: () => void;
-  onEnable: () => void;
-  pending: boolean;
-};
+type BannerProps = ComponentProps<typeof Banner>;
+type ButtonProps = ComponentProps<typeof Button>;
 
 function MockBanner(props: BannerProps) {
-  return createElement('NotificationPermissionBanner', props);
+  return createElement('Banner', props, props.action);
 }
 
-mock.module('@/components/ui/NotificationPermissionBanner', {
-  exports: { NotificationPermissionBanner: MockBanner },
+function MockButton(props: ButtonProps) {
+  return createElement('Button', props);
+}
+
+mock.module('@/components/ui/Banner', {
+  exports: { Banner: MockBanner },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/ui/Button', {
+  exports: { Button: MockButton },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('lucide-react-native', {
+  exports: { Bell: 'Bell' },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: { View: 'View' },
@@ -88,6 +97,18 @@ async function mount() {
 
 function banner() {
   return renderer?.root.findAllByType(MockBanner)[0];
+}
+
+function enableButton() {
+  return renderer?.root.findAllByType(MockButton)[0];
+}
+
+async function pressEnableButton() {
+  const button = enableButton();
+  assert.ok(button);
+  await act(async () => {
+    (button.props.onPress as (() => void) | undefined)?.();
+  });
 }
 
 function exposeBrowserStorage() {
@@ -168,10 +189,10 @@ describe('Home Web Push permission banner', () => {
       });
     await mount();
 
-    const onEnable = banner()?.props.onEnable as () => void;
-    await act(async () => onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 1);
-    assert.equal(banner()?.props.pending, true);
+    assert.equal(enableButton()?.props.loading, true);
+    assert.equal(banner()?.props.dismissDisabled, true);
 
     await act(async () => resolvePrompt('granted'));
     assert.equal(banner(), undefined);
@@ -183,7 +204,7 @@ describe('Home Web Push permission banner', () => {
     promptResult = () => Promise.resolve('denied');
     await mount();
 
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 1);
     assert.equal(banner(), undefined);
 
@@ -204,12 +225,13 @@ describe('Home Web Push permission banner', () => {
     promptResult = () => Promise.resolve('default');
     await mount();
 
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 1);
     assert.ok(banner());
-    assert.equal(banner()?.props.pending, false);
+    assert.equal(enableButton()?.props.loading, false);
+    assert.equal(banner()?.props.dismissDisabled, false);
 
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 2);
     assert.ok(banner());
   });
@@ -219,10 +241,11 @@ describe('Home Web Push permission banner', () => {
     throwPromptSynchronously = true;
     await mount();
 
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 1);
     assert.ok(banner());
-    assert.equal(banner()?.props.pending, false);
+    assert.equal(enableButton()?.props.loading, false);
+    assert.equal(banner()?.props.dismissDisabled, false);
     assert.deepEqual(toasts, [
       {
         message: '브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
@@ -231,7 +254,7 @@ describe('Home Web Push permission banner', () => {
     ]);
 
     throwPromptSynchronously = false;
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 2);
     assert.ok(banner());
   });
@@ -246,7 +269,9 @@ describe('Home Web Push permission banner', () => {
     await mount();
 
     await act(async () => {
-      banner()?.props.onEnable();
+      const button = enableButton();
+      assert.ok(button);
+      (button.props.onPress as (() => void) | undefined)?.();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -260,7 +285,7 @@ describe('Home Web Push permission banner', () => {
     ]);
 
     rejectPrompt = false;
-    await act(async () => banner()?.props.onEnable());
+    await pressEnableButton();
     assert.equal(promptCalls, 2);
     assert.ok(banner());
 

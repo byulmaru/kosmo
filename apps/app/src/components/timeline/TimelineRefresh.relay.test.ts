@@ -122,11 +122,13 @@ mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
 mockModule('lucide-react-native', {
+  Bell: 'Bell',
   UserRoundPlus: 'UserRoundPlus',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',
 });
 mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
   UserRoundPlus: 'UserRoundPlus',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',

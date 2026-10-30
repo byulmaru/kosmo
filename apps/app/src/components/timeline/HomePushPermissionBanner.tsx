@@ -1,7 +1,9 @@
+import { Bell } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useWebPushPermission } from '@/components/native-push/webPushPermissionContext';
-import { NotificationPermissionBanner } from '@/components/ui/NotificationPermissionBanner';
+import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { space } from '@/theme/tokens';
 
@@ -46,10 +48,16 @@ export function HomePushPermissionBanner() {
 
   return (
     <View style={{ marginHorizontal: space[12], marginVertical: space[12] }}>
-      <NotificationPermissionBanner
+      <Banner
+        action={
+          <Button loading={pending} onPress={handleEnable} size="compact">
+            알림 켜기
+          </Button>
+        }
+        dismissDisabled={pending}
+        icon={Bell}
+        message="알림 받기"
         onDismiss={handleDismiss}
-        onEnable={handleEnable}
-        pending={pending}
       />
     </View>
   );
