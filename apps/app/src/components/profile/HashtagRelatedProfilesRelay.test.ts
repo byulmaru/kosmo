@@ -52,6 +52,7 @@ mockModule('react-native', {
 mockModule('lucide-react-native', { ArrowLeftIcon: 'span' });
 mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'span' });
 mockModule(new URL('../../analytics/client.ts', import.meta.url), {
+  getPostAnalyticsPlatform: () => undefined,
   trackAnalytics: (event: string, properties: Record<string, unknown>) =>
     events.push([event, properties]),
 });
