@@ -2,6 +2,7 @@ import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { PostContentMention } from './PostContentMention';
@@ -77,7 +78,7 @@ export function PostContentRenderer({
   const mentionedProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
-    <Text numberOfLines={numberOfLines} style={bodyStyle}>
+    <Text selectable numberOfLines={numberOfLines} style={bodyStyle}>
       {bodyText}
     </Text>
   ) : (
@@ -140,7 +141,7 @@ type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostCo
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text key={key} numberOfLines={context.numberOfLines} style={context.bodyStyle}>
+      <Text key={key} numberOfLines={context.numberOfLines} selectable style={context.bodyStyle}>
         {document.content
           .filter((child) => child.type === 'paragraph')
           .map((child, index) => (
@@ -169,6 +170,32 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
           linkColor={context.linkColor}
           profile={profile}
         />
+      );
+    })
+    .with({ type: 'hashtag' }, (hashtag) => {
+      if (!context.interactive) {
+        return hashtag.attrs.token;
+      }
+
+      return (
+        <NavigationLink
+          key={key}
+          href={
+            {
+              pathname: '/hashtags/[hashtagId]/posts',
+              params: { hashtagId: hashtag.attrs.hashtagId },
+            } as const
+          }
+        >
+          <Text
+            accessibilityLabel={`${hashtag.attrs.token}, 게시글 보기`}
+            accessibilityRole="link"
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.link, { color: context.linkColor }]}
+          >
+            {hashtag.attrs.token}
+          </Text>
+        </NavigationLink>
       );
     })
     .otherwise(() => null);

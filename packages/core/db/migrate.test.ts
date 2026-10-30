@@ -3,12 +3,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { asc, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { fraciBinary } from 'fraci';
 import postgres from 'postgres';
 import drizzleConfig from '../drizzle.config';
 import { migrationLock, runDatabaseMigrations } from './migrate';
+import { ProfilePinnedPosts } from './tables';
+import type { FractionalIndexOf } from 'fraci';
 
 const databaseUrl = process.env.DATABASE_URL;
+
+const preBackfillProfilePinOrderKey = sql<Buffer>`coalesce(${ProfilePinnedPosts.orderKey}, decode('94', 'hex') || int4send(coalesce(${ProfilePinnedPosts.position}, 2147483647)) || case when ${ProfilePinnedPosts.position} is null then decode('01', 'hex') else decode('00', 'hex') end || uuid_send(${ProfilePinnedPosts.id}))`;
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL is required for migration integration tests.');
@@ -31,6 +38,37 @@ async function migrationFolder(
   }
 
   return root;
+}
+
+const profilePinBackfillName = '20261028152656_prod1253_profile_pin_order_backfill';
+const profilePinBaseMigration: MigrationFixture = {
+  name: '20261028152655_prod1253_profile_pin_order_backfill_base',
+  sql: `
+    CREATE TABLE profile_pinned_post (
+      id uuid PRIMARY KEY,
+      profile_id uuid NOT NULL,
+      post_id uuid NOT NULL,
+      position integer,
+      order_key bytea,
+      UNIQUE (profile_id, post_id),
+      UNIQUE (profile_id, position),
+      UNIQUE (profile_id, order_key)
+    );
+  `,
+};
+
+async function profilePinMigrationFolders() {
+  const migrationSql = await readFile(
+    new URL(`../../../drizzle/${profilePinBackfillName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  return [
+    await migrationFolder(profilePinBaseMigration.name, profilePinBaseMigration.sql),
+    await migrationFolder([
+      profilePinBaseMigration,
+      { name: profilePinBackfillName, sql: migrationSql },
+    ]),
+  ] as const;
 }
 
 test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async () => {
@@ -294,6 +332,200 @@ test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async 
     await control.end({ timeout: 5 });
     await rm(baseMigrations, { force: true, recursive: true });
     await rm(expandedMigrations, { force: true, recursive: true });
+  }
+});
+
+test('고정글 순서 키 Backfill은 기존 유효 순서와 키를 보존하고 구버전 NULL 쓰기를 허용한다', async () => {
+  const [baseMigrations, backfillMigrations] = await profilePinMigrationFolders();
+  const control = postgres(databaseUrl, { max: 1 });
+  const pinDb = drizzle({ client: control, schema: { ProfilePinnedPosts } });
+  const localProfileId = '10000000-0000-7000-8000-000000000001';
+  const remoteProfileId = '10000000-0000-7000-8000-000000000002';
+  const localNullId = '90000000-0000-7000-8000-000000000002';
+  const localExistingKeyId = '90000000-0000-7000-8000-000000000003';
+  const localNullAfterId = '90000000-0000-7000-8000-000000000004';
+  const remoteZeroId = '90000000-0000-7000-8000-000000000011';
+  const remoteMaxId = '90000000-0000-7000-8000-000000000012';
+  const remoteExistingKeyId = '90000000-0000-7000-8000-000000000013';
+  const remoteNullId = '90000000-0000-7000-8000-000000000014';
+  const existingKey = Buffer.from('947fffffff0100000000000000000000000000000001', 'hex');
+  const profilePinKeys = fraciBinary();
+  const readEffectivePins = (profileId: string) =>
+    pinDb
+      .select({ id: ProfilePinnedPosts.id, key: preBackfillProfilePinOrderKey })
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, profileId))
+      .orderBy(asc(preBackfillProfilePinOrderKey), asc(ProfilePinnedPosts.id));
+  const readPhysicalPins = (profileId: string) =>
+    pinDb
+      .select({ id: ProfilePinnedPosts.id, key: ProfilePinnedPosts.orderKey })
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, profileId))
+      .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
+  const readStoredPins = () =>
+    control<
+      {
+        id: string;
+        profileId: string;
+        postId: string;
+        position: number | null;
+        key: Buffer | null;
+      }[]
+    >`
+      SELECT id::text AS id, profile_id::text AS "profileId", post_id::text AS "postId",
+        position, order_key AS key
+      FROM profile_pinned_post
+      ORDER BY profile_id, id
+    `;
+
+  try {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`
+      INSERT INTO profile_pinned_post (id, profile_id, post_id, position, order_key) VALUES
+        (${localNullId}, ${localProfileId}, ${localNullId}, null, null),
+        (${localExistingKeyId}, ${localProfileId}, ${localExistingKeyId}, null, ${existingKey}),
+        (${localNullAfterId}, ${localProfileId}, ${localNullAfterId}, null, null),
+        (${remoteZeroId}, ${remoteProfileId}, ${remoteZeroId}, 0, null),
+        (${remoteMaxId}, ${remoteProfileId}, ${remoteMaxId}, 2147483647, null),
+        (${remoteExistingKeyId}, ${remoteProfileId}, ${remoteExistingKeyId}, 1, ${existingKey}),
+        (${remoteNullId}, ${remoteProfileId}, ${remoteNullId}, null, null)
+    `;
+
+    const localBefore = await readEffectivePins(localProfileId);
+    const remoteBefore = await readEffectivePins(remoteProfileId);
+    assert.deepEqual(
+      localBefore.map(({ id }) => id),
+      [localExistingKeyId, localNullId, localNullAfterId],
+    );
+    assert.deepEqual(
+      remoteBefore.map(({ id }) => id),
+      [remoteZeroId, remoteMaxId, remoteExistingKeyId, remoteNullId],
+    );
+    const effectiveKeys = new Map(
+      [...localBefore, ...remoteBefore].map(({ id, key }) => [id, key]),
+    );
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: backfillMigrations });
+
+    const localAfter = await readPhysicalPins(localProfileId);
+    const remoteAfter = await readPhysicalPins(remoteProfileId);
+    assert.deepEqual(
+      localAfter.map(({ id }) => id),
+      localBefore.map(({ id }) => id),
+    );
+    assert.deepEqual(
+      remoteAfter.map(({ id }) => id),
+      remoteBefore.map(({ id }) => id),
+    );
+    for (const { id, key } of [...localAfter, ...remoteAfter]) {
+      assert.ok(Buffer.isBuffer(key));
+      assert.deepEqual(key, effectiveKeys.get(id));
+      const nextKey = profilePinKeys
+        .generateKeyBetween(new Uint8Array(key) as FractionalIndexOf<typeof profilePinKeys>, null)
+        .next().value;
+      assert.ok(Buffer.compare(key, Buffer.from(nextKey)) < 0);
+    }
+
+    const backfill = readMigrationFiles({ migrationsFolder: backfillMigrations }).find(
+      ({ name }) => name === profilePinBackfillName,
+    );
+    assert.ok(backfill);
+    const beforeRerun = Array.from(await readStoredPins());
+    await control.begin(async (transaction) => {
+      for (const statement of backfill.sql) {
+        await transaction.unsafe(statement);
+      }
+    });
+    assert.deepEqual(Array.from(await readStoredPins()), beforeRerun);
+
+    const oldWriterId = '90000000-0000-7000-8000-000000000015';
+    await control`
+      INSERT INTO profile_pinned_post (id, profile_id, post_id, position)
+      VALUES (${oldWriterId}, ${localProfileId}, ${oldWriterId}, null)
+    `;
+    const [oldWriterPin] = await control<{ key: Buffer | null }[]>`
+      SELECT order_key AS key FROM profile_pinned_post WHERE id = ${oldWriterId}
+    `;
+    assert.equal(oldWriterPin?.key, null);
+  } finally {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(backfillMigrations, { force: true, recursive: true });
+  }
+});
+
+test('고정글 순서 키 Backfill 충돌은 행과 migration history를 함께 롤백한다', async () => {
+  const [baseMigrations, backfillMigrations] = await profilePinMigrationFolders();
+  const control = postgres(databaseUrl, { max: 1 });
+  const pinDb = drizzle({ client: control, schema: { ProfilePinnedPosts } });
+  const profileId = '10000000-0000-7000-8000-000000000003';
+  const nullId = '90000000-0000-7000-8000-000000000021';
+  const collisionId = '90000000-0000-7000-8000-000000000022';
+
+  try {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`
+      INSERT INTO profile_pinned_post (id, profile_id, post_id, position)
+      VALUES (${nullId}, ${profileId}, ${nullId}, null)
+    `;
+    const [nullPin] = await pinDb
+      .select({ key: preBackfillProfilePinOrderKey })
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.id, nullId));
+    assert.ok(nullPin);
+    await control`
+      INSERT INTO profile_pinned_post (id, profile_id, post_id, position, order_key)
+      VALUES (${collisionId}, ${profileId}, ${collisionId}, 0, ${nullPin.key})
+    `;
+    const rowsBefore = Array.from(
+      await control<{ id: string; position: number | null; key: Buffer | null }[]>`
+        SELECT id::text AS id, position, order_key AS key
+        FROM profile_pinned_post
+        ORDER BY id
+      `,
+    );
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: backfillMigrations }),
+      (error: unknown) => (error as { code?: string }).code === '23505',
+    );
+    const rowsAfter = Array.from(
+      await control<{ id: string; position: number | null; key: Buffer | null }[]>`
+        SELECT id::text AS id, position, order_key AS key
+        FROM profile_pinned_post
+        ORDER BY id
+      `,
+    );
+    assert.deepEqual(rowsAfter, rowsBefore);
+    const history = Array.from(
+      await control<{ name: string | null }[]>`
+        SELECT name FROM drizzle.__drizzle_migrations ORDER BY id
+      `,
+    );
+    assert.deepEqual(
+      history.map(({ name }) => name),
+      [profilePinBaseMigration.name],
+    );
+  } finally {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(backfillMigrations, { force: true, recursive: true });
   }
 });
 

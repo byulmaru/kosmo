@@ -137,31 +137,28 @@ const createPostForLocal = async (
           .from(Profiles)
           .where(inArray(Profiles.id, uniqueMentionProfileIds));
   const mentionProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
-  let authoredBodyText = `local mention ${crypto.randomUUID()}`;
+  let bodyText = `local mention ${crypto.randomUUID()}`;
   const mentions = uniqueMentionProfileIds.map((mentionProfileId) => {
     const profile = mentionProfilesById.get(mentionProfileId);
     if (!profile) {
       throw new Error(`Mention fixture Profile ${mentionProfileId} does not exist`);
     }
     const relativeHandle = `@${profile.handle}`;
-    authoredBodyText += ` ${relativeHandle}`;
-    const end = authoredBodyText.length;
+    bodyText += ` ${relativeHandle}`;
+    const end = bodyText.length;
     return {
       end,
+      handle: relativeHandle,
       profileId: profile.id,
       relativeHandle,
       start: end - relativeHandle.length,
     };
   });
-  const document =
-    mentions.length > 0
-      ? postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, mentions)
-      : postContentDocumentFromText(authoredBodyText);
 
   const result = await persistPost({
     accountId: accountIdsByProfile.get(profileId),
-    authoredBodyText: mentions.length > 0 ? authoredBodyText : undefined,
-    document,
+    bodyText,
+    mentions,
     origin: 'LOCAL',
     profileId,
     replyParentId,
@@ -708,6 +705,7 @@ test('an eligible Reply wins over Quote and Mention concurrently and preserves i
   const document = postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
     {
       end,
+      handle: relativeHandle,
       profileId: recipient.id,
       relativeHandle,
       start: end - relativeHandle.length,

@@ -14,6 +14,7 @@ import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
 import { post, profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactElement } from 'react';
 import type { NotificationListItemViewProps } from '@/components/notification/NotificationListItemView';
 import type { NotificationListItemNullableReactionQuery as NullableReactionQuery } from './__generated__/NotificationListItemNullableReactionQuery.graphql';
 import type { NotificationListItemStoriesQuery as Query } from './__generated__/NotificationListItemStoriesQuery.graphql';
@@ -70,8 +71,32 @@ export type NotificationStoryArgs = {
   unavailable: boolean;
   containerWidth: 'auto' | number;
   onNavigate: ReturnType<typeof fn>;
+  notification?: PlaygroundNotification;
 };
+
+type SerializableNotification<T = NotificationListItemViewProps> = T extends unknown
+  ? T extends { children: ReactElement }
+    ? never
+    : Omit<T, 'onNavigate'>
+  : never;
+type PlaygroundNotification = SerializableNotification;
 type Args = NotificationStoryArgs;
+
+const defaultPlaygroundActor = {
+  id: 'notification-actor',
+  name: '별빛 여행자',
+  profileHref: '/@notification-actor',
+};
+const defaultPlaygroundNotification: Omit<
+  Extract<NotificationListItemViewProps, { kind: 'follow' | 'followRequest' }>,
+  'onNavigate'
+> = {
+  actors: [defaultPlaygroundActor],
+  href: '/@kosmo',
+  kind: 'follow',
+  timestamp: '5분 전',
+  unread: false,
+};
 
 type PostNotificationKind = 'mention' | 'quote' | 'reply';
 
@@ -149,6 +174,13 @@ function NullableReaction() {
 }
 
 export function NotificationExample(args: Args) {
+  if (args.notification) {
+    if ('sourceUnavailable' in args.notification) {
+      return <NotificationListItemView {...args.notification} />;
+    }
+    return <NotificationListItemView {...args.notification} onNavigate={args.onNavigate} />;
+  }
+
   const actor = {
     id: 'notification-actor',
     name: args.name,
@@ -251,6 +283,7 @@ const meta = {
     onNavigate: fn(),
   },
   argTypes: {
+    onNavigate: { action: 'navigate', control: false },
     kind: {
       control: 'select',
       options: ['follow', 'followRequest', 'reaction', 'repost', 'reply', 'operational'],
@@ -296,6 +329,7 @@ const meta = {
     'PostNotificationRailActivationContract',
   ],
   parameters: {
+    controls: { disable: true },
     layout: 'fullscreen',
     relay: {
       operationResponses: {
@@ -320,7 +354,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {};
+export const Playground: Story = {
+  args: { notification: defaultPlaygroundNotification },
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['notification', 'containerWidth'],
+    },
+  },
+};
 
 export const GroupedKinds: Story = {
   parameters: { controls: { disable: true } },

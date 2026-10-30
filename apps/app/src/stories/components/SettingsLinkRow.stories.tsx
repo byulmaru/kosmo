@@ -112,7 +112,7 @@ export const RepresentativeStates: Story = {
     });
 
     await expect(selected).toHaveAttribute('href', '/settings/default-post-visibility');
-    await expect(selected).toHaveStyle({
+    await expect(selected.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
     });

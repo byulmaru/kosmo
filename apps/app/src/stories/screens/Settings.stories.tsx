@@ -4,7 +4,7 @@ import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import SettingsProfileMigrationRoute from '@/app/(tabs)/(protected)/settings/profile-migration';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
-import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -113,9 +113,17 @@ const meta = {
   component: SettingsRouteLayout,
   decorators: [
     (Story) => (
-      <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
-        <Story />
-      </View>
+      <WebPushPermissionContext.Provider
+        value={{
+          permission: 'default',
+          support: 'supported',
+          syncPermission: async () => undefined,
+        }}
+      >
+        <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
+          <Story />
+        </View>
+      </WebPushPermissionContext.Provider>
     ),
   ],
   parameters: {
@@ -158,13 +166,16 @@ export const FullMasterDetail: Story = {
     expect(canvas.getByRole('heading', { name: /^프로필 설정$/ })).toBeVisible();
     expect(migrationEntry).toHaveAttribute('href', '/settings/profile-migration');
     expect(canvas.queryByTestId('profile-migration-source-control')).toBeNull();
-    expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
+    expect(account).toHaveAttribute('href', 'https://id.byulmaru.co');
+    expect(account).toHaveAttribute('target', '_blank');
+    expect(account).toHaveAttribute('rel', 'noopener noreferrer');
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
-    expect(profileEntry).toHaveStyle({
+    expect(profileEntry.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
     });
     expect(profileEntry).not.toHaveAttribute('aria-current');
+    expect(canvas.getByRole('button', { name: '브라우저 알림 켜기' })).toBeVisible();
     expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(canvasElement.querySelectorAll('[role="navigation"]')).toHaveLength(1);
   },

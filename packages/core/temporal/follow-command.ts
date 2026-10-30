@@ -16,6 +16,7 @@ import { temporalClient } from './client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
   HydratedProfileFollowPairTransition,
+  ProfileFollowInboundFollow,
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
   ProfileFollowRemovalInput,
@@ -60,7 +61,9 @@ export const profileFollowRemovalWorkflowId = (
  * or while its effect queue is being drained.
  */
 export const executeProfileFollowPairTransition = async (
-  input: ProfileFollowPairTransitionInput,
+  input: ProfileFollowPairTransitionInput & {
+    readonly inboundFollow?: ProfileFollowInboundFollow;
+  },
 ): Promise<HydratedProfileFollowPairTransition> => {
   let execution: ProfileFollowPairTransitionOutcome;
   try {
@@ -68,7 +71,10 @@ export const executeProfileFollowPairTransition = async (
       Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
       () =>
         temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_PAIR_UPDATE_NAME, {
-          args: [input.command],
+          args:
+            input.inboundFollow === undefined
+              ? [input.command]
+              : [input.command, input.inboundFollow],
           // Leave Update IDs to the SDK: one call's RPC retries share an ID,
           // while each distinct Follow attempt reaches the Workflow afresh.
           startWorkflowOperation: new WithStartWorkflowOperation(

@@ -16,10 +16,16 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
+type RelayOperationName =
+  | QueryName
+  | 'WebPushRegisterInstallationMutation'
+  | 'WebPushUpdateInstallationMutation'
+  | 'WebPushUnregisterInstallationMutation';
 type QueryMode = 'error' | 'pending' | 'success';
 type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
 
 const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
+const mockCommitMutation = () => undefined;
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
@@ -80,7 +86,9 @@ let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
 
 type MockBrowserWindow = {
+  addEventListener: () => void;
   location: { href: string };
+  removeEventListener: () => void;
 };
 
 let browserWindow: MockBrowserWindow;
@@ -238,10 +246,11 @@ mockModule('react-native-safe-area-context', {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts.join('').match(/query (\w+)/)?.[1];
-    assert.ok(query);
-    return query as QueryName;
+    const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
+    assert.ok(operation);
+    return operation as RelayOperationName;
   },
+  useMutation: () => [mockCommitMutation],
   useLazyLoadQuery: (
     query: QueryName,
     _variables: Record<string, unknown>,
@@ -287,6 +296,9 @@ mockModule('@/components/feedback/FeedbackOverlay', {
 });
 mockModule('@/components/content-report/ContentReportContext', {
   ContentReportProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule('@/components/coachmark/CoachmarkProvider', {
+  CoachmarkProvider: ({ children }: PropsWithChildren) => children,
 });
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
@@ -413,7 +425,9 @@ beforeEach(() => {
   selectedProfileWrites = [];
   routerReplacements.length = 0;
   browserWindow = {
+    addEventListener: () => undefined,
     location: { href: 'https://kos.moe/home' },
+    removeEventListener: () => undefined,
   };
   Object.defineProperty(globalThis, 'window', {
     configurable: true,

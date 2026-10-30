@@ -1871,22 +1871,17 @@ describe('PostMediaViewerSurface', () => {
     );
   });
 
-  it('viewer control halo는 플랫폼에서 지원되는 shadow를 사용한다', async () => {
+  it('닫기 버튼은 Native 그림자 없이 Web 아이콘 그림자를 유지한다', async () => {
     for (const platform of ['web', 'ios', 'android'] as const) {
       mockPlatform.OS = platform;
       await render({ currentIndex: 0 });
 
-      for (const label of ['이미지 뷰어 닫기']) {
-        const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
-        assert.equal(
-          visualStyle.boxShadow,
-          platform === 'web' ? undefined : '0 1px 2px rgba(0, 0, 0, 0.9)',
-        );
-        assert.equal(
-          visualStyle.filter,
-          platform === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
-        );
-      }
+      const closeStyle = resolveStyle(findByLabel('이미지 뷰어 닫기').props.visualStyle);
+      assert.equal(closeStyle.boxShadow, undefined);
+      assert.equal(
+        closeStyle.filter,
+        platform === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
+      );
 
       for (const label of ['이전 이미지', '다음 이미지']) {
         const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);

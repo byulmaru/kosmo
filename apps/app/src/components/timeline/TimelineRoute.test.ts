@@ -12,6 +12,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  Redirect: () => null,
   useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
 });
@@ -65,6 +66,7 @@ mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
 mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () => null });
 mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });

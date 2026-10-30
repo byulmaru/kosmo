@@ -31,13 +31,6 @@ const PostListRowFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      media {
-        id
-        altText
-        url
-      }
-      contentWarning
     }
     repostSource {
       ...PostSourcePreview_source
@@ -64,14 +57,6 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       id
-      bodyText
-      contentWarning
-      document
-      media {
-        id
-        altText
-        url
-      }
     }
     profile {
       avatar {
@@ -199,6 +184,9 @@ export function PostListItem({
       </PostAttributionRow>
     ) : null;
 
+  const authorTopInset =
+    pinnedAttribution || replyAttribution ? 0 : post.repostSource ? spacing.sm : spacing.md;
+
   const renderWithReplySurface = (presentation: ReactNode) => (
     <>
       {presentation}
@@ -216,6 +204,7 @@ export function PostListItem({
         {replyAttribution}
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
+          authorTopInset={authorTopInset}
           post={post}
           reply={reply}
         />
@@ -266,7 +255,10 @@ export function PostListItem({
     <PostListItemCard onBackgroundPress={openDetail} style={compactCardStyle}>
       {pinnedAttribution}
       {replyAttribution}
-      <PostDetailBackground onBackgroundPress={openDetail} style={styles.quoteRow}>
+      <PostDetailBackground
+        onBackgroundPress={openDetail}
+        style={[styles.quoteRow, { marginTop: -authorTopInset }]}
+      >
         <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
@@ -274,7 +266,7 @@ export function PostListItem({
             accessible={false}
             focusable={false}
             importantForAccessibility="no-hide-descendants"
-            style={styles.avatar}
+            style={[styles.avatar, { paddingTop: authorTopInset }]}
             tabIndex={-1}
           >
             <Avatar
@@ -286,6 +278,7 @@ export function PostListItem({
         </NavigationLink>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
+            authorTopInset={authorTopInset}
             onBackgroundPress={openDetail}
             onMediaOpen={handleQuoteMediaOpen}
             post={post}
@@ -294,6 +287,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            onActionBarBackgroundPress={openDetail}
             onReactionSummaryBackgroundPress={openDetail}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -382,11 +376,13 @@ function PostAttributionRow({
 
 function PostListRow({
   actionBarStyle,
+  authorTopInset = 0,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  authorTopInset?: number;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -411,7 +407,7 @@ function PostListRow({
   return (
     <PostDetailBackground
       onBackgroundPress={openDetail}
-      style={styles.standardRow}
+      style={[styles.standardRow, { marginTop: -authorTopInset }]}
       testID="post-list-standard-row"
     >
       <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
@@ -421,7 +417,7 @@ function PostListRow({
           accessible={false}
           focusable={false}
           importantForAccessibility="no-hide-descendants"
-          style={styles.avatar}
+          style={[styles.avatar, { paddingTop: authorTopInset }]}
           tabIndex={-1}
         >
           <Avatar
@@ -433,9 +429,16 @@ function PostListRow({
       </NavigationLink>
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
-          <ProfileNameBlock href={profileHref} profile={post.profile} />
+          <ProfileNameBlock
+            href={profileHref}
+            profile={post.profile}
+            style={[styles.authorText, { paddingTop: authorTopInset }]}
+          />
           <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
-            <Pressable accessibilityRole="link" style={styles.timeLink}>
+            <Pressable
+              accessibilityRole="link"
+              style={{ ...styles.timeLink, paddingTop: authorTopInset }}
+            >
               <TimestampText style={styles.time}>
                 {formatTimelineTimestamp(post.createdAt)}
               </TimestampText>
@@ -452,6 +455,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onActionBarBackgroundPress={openDetail}
           onReactionSummaryBackgroundPress={openDetail}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
@@ -499,6 +503,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
+  authorText: { flex: -1 },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: {
     minHeight: 44,

@@ -3,6 +3,31 @@ import { describe, it } from 'node:test';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 
 describe('public content invitation placement', () => {
+  it('pins the mobile root to the viewport edge even at narrow or short sizes', () => {
+    for (const width of [320, 390, 767]) {
+      for (const height of [480, 844]) {
+        assert.deepEqual(
+          getPublicContentInvitationPlacement({
+            height,
+            width,
+            safeAreaBottom: 24,
+            pinToBottom: true,
+          }),
+          { bottom: 0, left: 0, mode: 'fixed', right: 0 },
+        );
+      }
+    }
+    assert.deepEqual(
+      getPublicContentInvitationPlacement({
+        height: 480,
+        width: 768,
+        safeAreaBottom: 24,
+        pinToBottom: true,
+      }),
+      { mode: 'flow' },
+    );
+  });
+
   it('keeps the invitation in the document when the viewport is too short', () => {
     assert.deepEqual(
       getPublicContentInvitationPlacement({ height: 480, safeAreaBottom: 0, width: 390 }),

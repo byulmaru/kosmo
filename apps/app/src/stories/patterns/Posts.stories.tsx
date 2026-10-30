@@ -52,6 +52,7 @@ import {
   resetImagePickerMock,
   setNextImagePickerResult,
 } from '../../../.storybook/mocks/expo-image-picker';
+import { RouterMockProvider } from '../../../.storybook/mocks/expo-router';
 import {
   getCopiedStrings,
   resetClipboardMock,
@@ -63,6 +64,12 @@ import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
+import {
+  checkActionBarCancelledPresses,
+  checkActionBarScrollCancelledPress,
+  checkActionBarWhitespace,
+  pressActionBarPoint,
+} from '../postActionBarHitTest';
 import {
   checkReactionSummaryExcludedTouches,
   tapReactionSummaryWhitespace,
@@ -81,6 +88,7 @@ const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
 const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
+const actionBarNavigationObserver = fn().mockName('Action Bar route request');
 
 async function dispatchPointerBoundary(
   target: HTMLElement,
@@ -880,6 +888,23 @@ const threadStoryPosts = [
   threadReplyQuotePost,
   threadQuoteSourcePost,
 ];
+const authorBoundaryPosts = [
+  ['long-name', '이름이 더 길게 표시되는 작성자', '@a'],
+  ['long-handle', '가', '@longer-author@remote.example'],
+  ['short', '가', '@a'],
+  [
+    'truncated',
+    '좁은 화면에서 잘리는 아주 긴 작성자 이름입니다',
+    '@very-long-author-handle@remote.example',
+  ],
+].map(([id, displayName, relativeHandle]) =>
+  post({
+    id: `author-boundary-${id}`,
+    bodyText: '작성자 이동 경계를 확인하는 게시글입니다.',
+    profile: profile({ id: `author-boundary-profile-${id}`, displayName, relativeHandle }),
+  }),
+);
+
 const storyPosts = [
   shortPost,
   longPost,
@@ -937,6 +962,7 @@ const storyPosts = [
   loadErrorMediaPost,
   loadErrorThreeMediaPost,
   replyPost,
+  ...authorBoundaryPosts,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -2131,9 +2157,31 @@ function ContentWarningRevealStory() {
   return (
     <Catalog>
       <PostContentRenderer
-        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        bodyText="가림 해제 뒤 표시되는 #원문 본문입니다."
         contentWarning="민감한 내용이 포함되어 있습니다."
-        document={null}
+        document={{
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '가림 해제 뒤 표시되는 ' },
+                  {
+                    type: 'hashtag',
+                    attrs: {
+                      hashtagId: '019f6678-86fa-709b-984e-1520766b8447',
+                      token: '#원문',
+                    },
+                  },
+                  { type: 'text', text: ' 본문입니다.' },
+                ],
+              },
+            ],
+          },
+        }}
         media={[
           {
             altText: '가림 해제 뒤 표시되는 이미지',
@@ -3106,11 +3154,26 @@ const meta = {
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
     quoteMutationRequestObserver.mockClear();
+    actionBarNavigationObserver.mockClear();
     resetClipboardMock();
     resetImagePickerMock();
   },
   component: PostCatalog,
   excludeStories: [
+    'ActionBarPostNavigation',
+    'ActionBarQuoteNavigation',
+    'ActionBarRepostNavigation',
+    'ActionBarRepostOfQuoteNavigation',
+    'ActionBarThreadNavigation',
+    'ActionBarPendingNavigation',
+
+    'AuthorNavigationLongName',
+    'AuthorNavigationLongHandle',
+    'AuthorNavigationShort',
+    'AuthorNavigationTruncated',
+    'AuthorNavigationQuote',
+    'AuthorNavigationRepost',
+    'AuthorNavigationRepostOfQuote',
     'ComposerBeforeUnloadContract',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
     'ContentWarningCardPressableFeedbackInteraction',
@@ -6750,7 +6813,8 @@ export const ContentWarningRevealInteraction: Story = {
   ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
     const toggle = canvas.getByRole('button', {
@@ -6767,12 +6831,19 @@ export const ContentWarningRevealInteraction: Story = {
     toggle.focus();
     expect(toggle).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
+    const body = canvas.getByText(/가림 해제 뒤 표시되는/);
+    expect(body).toBeVisible();
+    expect(body).toHaveTextContent('가림 해제 뒤 표시되는 #원문 본문입니다.');
+    expect(canvas.getByRole('link', { name: '#원문, 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/hashtags/[hashtagId]/posts',
+    );
     const gallery = canvas.getByTestId('post-media-gallery');
     expect(gallery).toBeVisible();
 
     await userEvent.keyboard('{Enter}');
-    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByText(/가림 해제 뒤 표시되는/)).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '#원문, 게시글 보기' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
 };
@@ -9014,3 +9085,301 @@ export const ReactionSummaryQuoteNavigation: Story = {
 export const ReactionSummaryRepostNavigation: Story = {
   ...reactionSummaryNavigationStory('post-repost', '/@source@remote.example/post-source'),
 };
+
+function actionBarNavigationStory(postId: string, expectedPath: string): Story {
+  return {
+    render: () => <ProductionPostListItemStory postId={postId} presentation="wide" />,
+    parameters: {
+      router: { onNavigate: actionBarNavigationObserver },
+      relay: {
+        operationResponses: {
+          PostBookmarkActionCreateBookmarkMutation: {
+            data: {
+              createBookmark: {
+                bookmark: {
+                  __typename: 'Bookmark',
+                  id: 'action-bar-bookmark',
+                  post: {
+                    __typename: 'Post',
+                    id: expectedPath.split('/').at(-1),
+                    viewerBookmark: { __typename: 'Bookmark', id: 'action-bar-bookmark' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    play: async ({ canvasElement }) => {
+      await within(canvasElement).findByRole('toolbar', { name: '액션 바' });
+      actionBarNavigationObserver.mockClear();
+      await checkActionBarCancelledPresses(canvasElement, () => {
+        expect(actionBarNavigationObserver).not.toHaveBeenCalled();
+      });
+      let count = 0;
+      await checkActionBarWhitespace(canvasElement, () => {
+        expect(actionBarNavigationObserver).toHaveBeenCalledTimes(++count);
+        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(expectedPath);
+      });
+      const toolbar = within(canvasElement).getByRole('toolbar', { name: '액션 바' });
+      for (const name of ['reply', 'repost', 'reaction', 'more']) {
+        const button = within(toolbar).getByTestId(`post-action-${name}`);
+        const blocked = button.getAttribute('aria-disabled') === 'true';
+        const bounds = button.getBoundingClientRect();
+        // Includes the transparent target above the 28px visual row and count's right edge.
+        await pressActionBarPoint(canvasElement, { x: bounds.right - 1, y: bounds.top + 1 });
+        if (!blocked) {
+          await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'true'));
+          await userEvent.keyboard('{Escape}');
+          if (name === 'reply') {
+            const confirm = await screen.findByRole('alertdialog', {
+              name: '답글 작성을 취소할까요?',
+            });
+            await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+            await waitFor(() =>
+              expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull(),
+            );
+          }
+          await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'false'));
+          await waitFor(() => expect(button).toHaveFocus());
+        }
+        expect(actionBarNavigationObserver).toHaveBeenCalledTimes(count);
+      }
+      const bookmark = within(toolbar).getByTestId('post-action-bookmark');
+      await userEvent.click(bookmark);
+      await waitFor(() => expect(bookmark).toHaveAttribute('aria-pressed', 'true'));
+      expect(actionBarNavigationObserver).toHaveBeenCalledTimes(count);
+    },
+  };
+}
+
+function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
+  const onNavigate = fn();
+  return {
+    render: () => (
+      <RouterMockProvider onNavigate={onNavigate}>
+        <View style={{ alignSelf: 'center', maxWidth: '100%', width }}>
+          <ProductionPostListItemStory postId={surfacePost.id} presentation="mobile" />
+        </View>
+      </RouterMockProvider>
+    ),
+    play: async ({ canvasElement }) => {
+      await canvasElement.ownerDocument.fonts.ready;
+      const user = userEvent.setup();
+      const canvas = within(canvasElement);
+      const card = canvas.getByTestId('post-list-item-card');
+      const pathname = canvas.getByTestId('presentation-story-pathname');
+      const primary = surfacePost.content ? surfacePost : surfacePost.repostSource!;
+      const targets = primary.repostSource ? [primary, primary.repostSource] : [primary];
+      const tap = async (x: number, y: number, expectedPath: string, drag = false) => {
+        const target = canvasElement.ownerDocument.elementFromPoint(x, y);
+        expect(target).not.toBeNull();
+        expect(card.contains(target)).toBe(true);
+        onNavigate.mockClear();
+        const before = pathname.textContent;
+        const coords = {
+          clientX: x,
+          clientY: y,
+          pageX: x + window.scrollX,
+          pageY: y + window.scrollY,
+        };
+        await user.pointer([
+          { keys: '[MouseLeft>]', target: target!, coords },
+          ...(drag
+            ? [
+                {
+                  target: target!,
+                  coords: { ...coords, clientY: y + 30, pageY: coords.pageY + 30 },
+                },
+                { target: target!, coords },
+              ]
+            : []),
+          { keys: '[/MouseLeft]', target: target!, coords },
+        ]);
+        await waitFor(() => {
+          expect(pathname.textContent).toBe(drag ? before : expectedPath);
+          expect(onNavigate).toHaveBeenCalledTimes(drag ? 0 : 1);
+        });
+      };
+      for (const targetPost of targets) {
+        const name = within(card).getByText(targetPost.profile.displayName);
+        const handle = within(card).getByText(targetPost.profile.relativeHandle);
+        const link = name.closest('a')!;
+        expect(link).not.toBeNull();
+        link.scrollIntoView({ block: 'center' });
+        const profilePath = `/${targetPost.profile.relativeHandle}`;
+        const detailPath = `${profilePath}/${targetPost.id}`;
+        expect(link).toHaveAttribute('href', profilePath);
+        const bounds = link.getBoundingClientRect();
+        expect(bounds.width).toBeGreaterThan(0);
+        const nameBounds = name.getBoundingClientRect();
+        const handleBounds = handle.getBoundingClientRect();
+        const renderedWidth = (text: HTMLElement) => {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          return Math.min(range.getBoundingClientRect().width, text.getBoundingClientRect().width);
+        };
+        const textRight = nameBounds.left + Math.max(renderedWidth(name), renderedWidth(handle));
+        expect(Math.abs(bounds.right - textRight)).toBeLessThan(2);
+        expect(bounds.right).toBeLessThan(card.getBoundingClientRect().right);
+        for (const rowBounds of [nameBounds, handleBounds]) {
+          await tap(bounds.right - 1, rowBounds.top + rowBounds.height / 2, profilePath);
+          await tap(bounds.right + 2, rowBounds.top + rowBounds.height / 2, detailPath);
+        }
+        if (targetPost !== primary || (surfacePost.content && !surfacePost.replyParent)) {
+          await tap(nameBounds.left + 2, nameBounds.top - 2, profilePath);
+        }
+        await tap(bounds.right + 2, nameBounds.top + nameBounds.height / 2, detailPath, true);
+        const avatar = within(card).getByLabelText(
+          `${targetPost.profile.displayName || targetPost.profile.handle} 프로필 이미지`,
+        );
+        const avatarBounds = avatar.getBoundingClientRect();
+        await tap(
+          avatarBounds.left + avatarBounds.width / 2,
+          avatarBounds.top + avatarBounds.height / 2,
+          profilePath,
+        );
+        const timestamp = [...card.querySelectorAll('a')].find(
+          (anchor) => anchor.getAttribute('href') === detailPath,
+        )!;
+        expect(timestamp).not.toBeUndefined();
+        const timeBounds = timestamp.getBoundingClientRect();
+        await tap(
+          timeBounds.left + timeBounds.width / 2,
+          timeBounds.top + timeBounds.height / 2,
+          detailPath,
+        );
+        onNavigate.mockClear();
+        link.focus();
+        await user.keyboard('{Enter}');
+        expect(pathname.textContent).toBe(profilePath);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+        onNavigate.mockClear();
+        await user.keyboard('{Control>}');
+        await user.click(link);
+        await user.keyboard('{/Control}');
+        expect(pathname.textContent).toBe(profilePath);
+        expect(onNavigate).not.toHaveBeenCalled();
+      }
+      if (!surfacePost.content) {
+        const attribution = within(card).getByRole('link', {
+          name: `${surfacePost.profile.displayName} 프로필 보기`,
+        });
+        onNavigate.mockClear();
+        await user.click(attribution);
+        expect(pathname.textContent).toBe(`/${surfacePost.profile.relativeHandle}`);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+      }
+    },
+  };
+}
+
+export const ActionBarPostNavigation: Story = actionBarNavigationStory('short', '/@kosmo/short');
+export const ActionBarQuoteNavigation: Story = actionBarNavigationStory(
+  'post-quote',
+  '/@reposter/post-quote',
+);
+export const ActionBarRepostNavigation: Story = actionBarNavigationStory(
+  'post-repost',
+  '/@source@remote.example/post-source',
+);
+export const ActionBarRepostOfQuoteNavigation: Story = actionBarNavigationStory(
+  'post-repost-of-quote',
+  '/@source@remote.example/post-source-quote',
+);
+
+export const ActionBarPendingNavigation: Story = {
+  ...ActionBarPostNavigation,
+  parameters: {
+    router: { onNavigate: actionBarNavigationObserver },
+    relay: { mutationLoading: true },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByTestId('post-action-bookmark');
+    bookmark.scrollIntoView({ block: 'center' });
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    actionBarNavigationObserver.mockClear();
+    const bounds = bookmark.getBoundingClientRect();
+    for (const point of [
+      { x: bounds.left + 1, y: bounds.top + 1 },
+      { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 },
+    ]) {
+      await pressActionBarPoint(canvasElement, point);
+      expect(actionBarNavigationObserver).not.toHaveBeenCalled();
+    }
+    const slot = canvas.getByTestId('post-action-bookmark-slot').getBoundingClientRect();
+    await pressActionBarPoint(canvasElement, { x: slot.left + 1, y: (slot.top + slot.bottom) / 2 });
+    expect(actionBarNavigationObserver).toHaveBeenCalledTimes(1);
+    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith('/@kosmo/short');
+    expect(bookmark).toHaveAttribute('aria-busy', 'true');
+  },
+};
+
+export const ActionBarThreadNavigation: Story = {
+  ...PostDetailThreadRoute,
+  parameters: {
+    ...PostDetailThreadRoute.parameters,
+    router: {
+      ...PostDetailThreadRoute.parameters?.router,
+      onNavigate: actionBarNavigationObserver,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId('post-thread');
+    const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
+    const current = canvas.getByTestId('post-thread-current-route-current');
+    await waitFor(() =>
+      expect(
+        Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
+      ).toBeLessThanOrEqual(1),
+    );
+    // Ancestor navigation starts with user scrolling, which releases the initial current-row anchor.
+    canvas
+      .getByTestId('post-thread')
+      .dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+    actionBarNavigationObserver.mockClear();
+    await checkActionBarScrollCancelledPress(
+      canvas.getByTestId('post-thread-item-route-root'),
+      () => expect(actionBarNavigationObserver).not.toHaveBeenCalled(),
+    );
+    const routeFocus = canvas
+      .getByTestId('post-detail-scroll')
+      .closest<HTMLElement>('[tabindex="-1"]')!;
+    let count = 0;
+    for (const [rowId, postId] of [
+      ['post-thread-item-route-root', 'route-root'],
+      ['post-thread-item-route-parent', 'route-parent'],
+      ['post-thread-current-route-current', 'route-current'],
+      ['post-thread-item-route-child', 'route-child'],
+      ['post-thread-item-route-reply-quote', 'route-reply-quote'],
+    ]) {
+      const row = canvas.getByTestId(rowId!);
+      // A pointer click must survive focus moving from the screen ancestor to its background host.
+      routeFocus.focus({ preventScroll: true });
+      expect(routeFocus).toHaveFocus();
+      await checkActionBarWhitespace(row, () => {
+        expect(actionBarNavigationObserver).toHaveBeenCalledTimes(++count);
+        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(`/@kosmo/${postId}`);
+      });
+    }
+    const toolbar = within(current).getByRole('toolbar', { name: '액션 바' });
+    toolbar.parentElement!.focus({ preventScroll: true });
+    // Background hosts stay outside the sequential Tab order between existing actions.
+    for (const action of ['reply', 'repost', 'reaction', 'bookmark', 'more']) {
+      await userEvent.tab();
+      expect(within(current).getByTestId(`post-action-${action}`)).toHaveFocus();
+    }
+    expect(actionBarNavigationObserver).toHaveBeenCalledTimes(count);
+  },
+};
+export const AuthorNavigationLongName: Story = authorNavigationStory(authorBoundaryPosts[0]!);
+export const AuthorNavigationLongHandle: Story = authorNavigationStory(authorBoundaryPosts[1]!);
+export const AuthorNavigationShort: Story = authorNavigationStory(authorBoundaryPosts[2]!, 390);
+export const AuthorNavigationTruncated: Story = authorNavigationStory(authorBoundaryPosts[3]!, 320);
+export const AuthorNavigationQuote: Story = authorNavigationStory(quotePost);
+export const AuthorNavigationRepost: Story = authorNavigationStory(pureRepost);
+export const AuthorNavigationRepostOfQuote: Story = authorNavigationStory(pureRepostOfQuote);

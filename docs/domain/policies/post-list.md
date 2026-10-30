@@ -34,6 +34,10 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - viewer Profile의 Post에 달린 Reply, viewer Profile이 작성한 Reply, viewer Profile이 팔로우한 Profile의
   Post에 viewer Profile이 팔로우한 Profile이 작성한 Reply를 포함한다.
 - viewer Profile 또는 viewer Profile이 팔로우한 Active/Normal Profile이 작성한 Repost를 포함한다.
+- viewer Profile이 작성한 Home 후보와 Reply Parent가 없는 Content Post는 기존 정책을 유지한다. 다른 Profile이
+  작성한 Reply 후보의 Current Content에 Mentioned Profile 관계가 하나 이상 있으면, 그중 하나 이상이 viewer
+  Profile이거나 viewer가 현재 팔로우하는 Profile일 때만 포함한다. Mentioned Profile 관계가 없는 Reply와 Content
+  없는 Repost는 기존 후보 정책을 유지한다.
 - Author 또는 Mentioned Profile이 아닌 viewer Profile은 Author Profile과 현재 Follow Relationship이 없을 때
   Followee가 작성한 Followers Only Post의 후보가 될 수 없다. 기존 Post Visibility가 Author 또는 Mentioned
   Profile에 부여한 접근은 유지한다.
@@ -43,7 +47,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. Local first-party UI는
   조회 가능한 고정 Post 전체를 이 순서대로 별도 pinned segment에 표시하고 개별 관리한다. Remote inbound UI도 검증된
   Featured collection 전체를 원격 순서의 pinned segment로 표시한다.
-- pin 관계가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. visibility filtering은 남은 visible pin의 상대 순서를
+- 고정 관계와 저장 순서가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. Local 순서 변경 성공 후에는 현재 고정 목록과
+  이후 조회에 저장된 순서를 반영한다. 고정 관계의 구성과 기존 chronology에는 영향을 주지 않는다. visibility filtering은 남은 visible pin의 상대 순서를
   바꾸지 않는다.
 - Local pin/unpin 성공 뒤에도 이미 표시 중인 pinned segment는 이전 목록 구성과 순서를 유지할 수 있다. 이후 Profile 목록을 다시
   조회할 때 서버에 저장된 목록과 순서를 반영한다. 고정 목록은 페이지네이션 없이 조회 가능한 전체를 반환하며, 기존 chronology의
@@ -54,6 +59,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Local Post List
 
+- Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
+- 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
 - configured Local Instance에 속한 Active/Normal Local Profile이 작성한 Public Post 중 Content가 있고 Reply
   Parent가 없는 eligible Post를 포함한다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.

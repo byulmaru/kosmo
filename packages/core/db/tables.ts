@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  bytea,
   check,
   index,
   integer,
@@ -15,9 +16,11 @@ import {
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { fraciBinary, FractionalIndexOf } from 'fraci';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
+export type ProfilePinOrderKey = Buffer & FractionalIndexOf<ReturnType<typeof fraciBinary>>;
 
 const createdAt = () =>
   datetime('created_at')
@@ -39,6 +42,7 @@ export const Accounts = pgTable('account', {
   oidcSubject: text('oidc_subject').unique().notNull(),
   displayName: text('display_name').notNull(),
   featureFlags: text('feature_flags').array().notNull().default([]),
+  metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
   state: Enum.accountState('state').notNull(),
   createdAt: createdAt(),
 });
@@ -217,6 +221,10 @@ export const Instances = pgTable(
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    activityPubKeyPairs:
+      jsonb('activitypub_key_pairs').$type<
+        { publicKeyJwk: JsonWebKeyRecord; privateKeyJwk: JsonWebKeyRecord }[]
+      >(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -464,6 +472,22 @@ export const PostContents = pgTable(
   (table) => [index().on(table.postId)],
 );
 
+export const PostContentHashtags = pgTable(
+  'post_content_hashtag',
+  {
+    postContentId: uuid('post_content_id')
+      .notNull()
+      .references(() => PostContents.id, { onDelete: 'cascade' }),
+    hashtagId: uuid('hashtag_id')
+      .notNull()
+      .references(() => Hashtags.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.postContentId, table.hashtagId] }),
+    index().on(table.hashtagId, table.postContentId),
+  ],
+);
+
 export const PostMentions = pgTable(
   'post_mentions',
   {
@@ -670,10 +694,12 @@ export const ProfilePinnedPosts = pgTable(
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
     position: integer('position'),
+    orderKey: bytea('order_key').$type<ProfilePinOrderKey>().notNull(),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
     unique().on(table.profileId, table.position),
+    unique().on(table.profileId, table.orderKey),
     index().on(table.profileId, table.id),
     check(
       'profile_pinned_post_position_nonnegative',

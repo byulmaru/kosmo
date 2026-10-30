@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { Badge } from '#lib/components/ui/badge/index.js';
+  import { Button } from '#lib/components/ui/button/index.js';
+  import * as Card from '#lib/components/ui/card/index.js';
+  import { safeHttpUrl } from '#lib/profile-url.js';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import * as Card from '$lib/components/ui/card';
-  import { safeHttpUrl } from '$lib/profile-url';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -68,7 +68,7 @@
       </Card.Header>
       <Card.Content class="text-2xl font-semibold tabular-nums">
         <a
-          href={resolve(`/profiles/${data.profile.id}/posts`)}
+          href={resolve('/profiles/[id]/posts', { id: data.profile.id })}
           aria-label={`${data.profile.postCount} PUBLIC and UNLISTED posts for ${data.profile.relativeHandle}`}
           class="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

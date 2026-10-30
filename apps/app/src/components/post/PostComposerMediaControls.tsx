@@ -1,18 +1,13 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlusIcon, RefreshCwIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
-import { releaseImagePreview, uploadImage } from '@/components/media/imageUpload';
+import {
+  releaseImagePreview,
+  reportImageUploadError,
+  uploadImage,
+} from '@/components/media/imageUpload';
 import {
   asImageUploadError,
   formatImageUploadFailureMessage,
@@ -23,6 +18,7 @@ import {
   getIconButtonOverlayGeometry,
   IconButton,
 } from '@/components/ui/IconButton';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -46,9 +42,11 @@ export type ComposerMediaItem = {
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
+  readonly applyNightshade?: boolean;
 };
 
 export type PostComposerMediaValue = {
+  readonly completeUploads: () => Promise<void>;
   readonly hasPendingMedia: boolean;
   readonly items: readonly {
     readonly altText: string | null;
@@ -60,6 +58,7 @@ export type PostComposerMediaValue = {
 export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -68,6 +67,7 @@ export type PostComposerMediaControlsRenderProps = {
 };
 
 export const emptyPostComposerMediaValue: PostComposerMediaValue = {
+  completeUploads: async () => undefined,
   hasPendingMedia: false,
   items: [],
   sensitiveMedia: false,
@@ -104,6 +104,7 @@ export function PostComposerMediaControls({
   const [sensitiveMedia, setSensitiveMedia] = useState(false);
   const mounted = useRef(true);
   const removedMediaKeys = useRef(new Set<string>());
+  const submittedCompletionMediaIds = useRef(new Set<string>());
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
   const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
@@ -138,27 +139,20 @@ export function PostComposerMediaControls({
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
     updateMedia((items) =>
       items.map((item) =>
-        item.key === key ? { ...item, failure: undefined, state: 'uploading' } : item,
+        item.key === key
+          ? {
+              ...item,
+              failure: undefined,
+              mediaId: undefined,
+              state: 'uploading',
+            }
+          : item,
       ),
     );
 
     try {
       const mediaId = await uploadImage({
         asset,
-        complete: (id) =>
-          new Promise<void>((resolve, reject) => {
-            commitCompleteMediaUpload({
-              variables: { input: { id } },
-              onCompleted: (response, errors) => {
-                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                  return;
-                }
-                resolve();
-              },
-              onError: reject,
-            });
-          }),
         isActive: () => mounted.current && !removedMediaKeys.current.has(key),
         issue: () =>
           new Promise((resolve, reject) => {
@@ -205,6 +199,7 @@ export function PostComposerMediaControls({
     }
 
     const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
+      applyNightshade: false,
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
@@ -302,16 +297,75 @@ export function PostComposerMediaControls({
   };
 
   useEffect(() => {
+    const items = media.flatMap((item) =>
+      item.state === 'ready' && item.mediaId
+        ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
+        : [],
+    );
+
+    const completeUploads = async () => {
+      const mediaChanged = new Error('Composer media changed before completion');
+      if (
+        !mounted.current ||
+        mediaRef.current !== media ||
+        media.some((item) => item.state !== 'ready' || !item.mediaId)
+      ) {
+        throw mediaChanged;
+      }
+
+      const completions = await Promise.allSettled(
+        items.map(({ mediaId }, index) => {
+          submittedCompletionMediaIds.current.add(mediaId);
+          return new Promise<void>((resolve, reject) => {
+            commitCompleteMediaUpload({
+              variables: {
+                input: { id: mediaId, applyNightshade: media[index]?.applyNightshade ?? false },
+              },
+              onCompleted: (response, errors) => {
+                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
+                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
+                  return;
+                }
+                resolve();
+              },
+              onError: reject,
+            });
+          });
+        }),
+      );
+      if (!mounted.current || mediaRef.current !== media) {
+        throw mediaChanged;
+      }
+
+      const firstFailure = completions.find((completion) => completion.status === 'rejected');
+      if (firstFailure?.status === 'rejected') {
+        const next = media.map((item, index) => {
+          const completion = completions[index];
+          if (!completion || completion.status !== 'rejected') {
+            return item;
+          }
+
+          const uploadError = asImageUploadError(completion.reason, 'complete', 'complete');
+          reportImageUploadError(uploadError, 'complete');
+          showToast(
+            formatImageUploadFailureMessage(`${index + 1}번째 이미지`, uploadError.failure),
+            { tone: 'danger' },
+          );
+          return { ...item, failure: uploadError.failure, state: 'failed' as const };
+        });
+        mediaRef.current = next;
+        setMedia(next);
+        throw firstFailure.reason;
+      }
+    };
+
     onValueChange({
+      completeUploads,
       hasPendingMedia: media.some((item) => item.state !== 'ready'),
-      items: media.flatMap((item) =>
-        item.state === 'ready' && item.mediaId
-          ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
-          : [],
-      ),
+      items,
       sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
     });
-  }, [media, onValueChange, sensitiveMedia]);
+  }, [commitCompleteMediaUpload, media, onValueChange, sensitiveMedia, showToast]);
 
   useEffect(() => {
     mounted.current = true;
@@ -334,6 +388,21 @@ export function PostComposerMediaControls({
         updateMedia((items) =>
           items.map((item) => (item.key === key ? { ...item, altText } : item)),
         ),
+      onApplyNightshadeChange: (key, value) => {
+        const item = mediaRef.current.find((current) => current.key === key);
+        if (!item || (item.applyNightshade ?? false) === value) {
+          return;
+        }
+
+        updateMedia((items) =>
+          items.map((current) =>
+            current.key === key ? { ...current, applyNightshade: value } : current,
+          ),
+        );
+        if (item.mediaId && submittedCompletionMediaIds.current.has(item.mediaId)) {
+          void uploadMedia(item.key, item.asset);
+        }
+      },
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,
       onMediaRetry: (item) => void uploadMedia(item.key, item.asset),
@@ -414,6 +483,7 @@ export function PostComposerMediaItems({
               accessibilityIgnoresInvertColors
               accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
               accessibilityRole="image"
+              fadeDuration={0}
               source={{ uri: item.asset.uri }}
               style={styles.mediaPreview}
             />
@@ -422,7 +492,7 @@ export function PostComposerMediaItems({
                 <View style={[StyleSheet.absoluteFill, styles.mediaOverlayBackdrop]} />
                 {item.state === 'uploading' ? (
                   <View style={[StyleSheet.absoluteFill, styles.mediaOverlay]}>
-                    <ActivityIndicator
+                    <LoadingIndicator
                       accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
                       color={colors.light.fixedWhite}
                     />

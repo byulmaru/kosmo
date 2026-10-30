@@ -30,6 +30,25 @@ Canonical 문서와 Linear에는 비즈니스 요구사항·관찰 가능한 보
 - 감수한 결과:
 - 관련 근거:
 
+## UI 계약과 consumer 경계
+
+<!-- UI를 변경하지 않는 backend·data PR은 "해당 없음"이라고 적어도 됩니다. 이 항목의 작성이나 UI Contract classifier 결과만으로 승인·분리가 확정되는 것은 아닙니다. -->
+
+- 기존 UI 계약을 재사용했다면 component의 named prop·variant·조합 지점과 Production story/source 경로를 적어 주세요.
+- 새 component·variant·public visual prop 또는 작은 시각 계약을 바꿨다면 canonical component와 대표 story의 근거를 적어 주세요.
+- layout·placement와 component-owned visual override를 구분하고, route·data·Relay·API·mutation·cache·권한·feature flag 변경은 대응 runtime 경로의 근거와 함께 적어 주세요.
+- UI 시각 변경과 runtime 기능 변경이 함께 있다면 이는 리뷰 참고 근거이며 PR 분리를 강제하지 않습니다. 불필요한 중복 UI는 canonical component 재사용을 우선하고, variant/public visual prop 변경은 상태와 근거를 자세히 적어 주세요.
+
+## 커스텀 아이콘 (해당하는 경우에만)
+
+<!--
+새 custom icon과 예외 등록은 canonical UI component와 대표 component/pattern story의 근거를 함께 적어 주세요.
+실제 runtime consumer·Relay·route·feature flag 연결의 영향과 검증도 적어 주세요. 해당하지 않는 PR에서는 이 항목을 지워도 됩니다.
+-->
+
+- 고려한 Lucide 대안:
+- 미채택 이유:
+
 ## 어떻게 확인할 수 있나요
 
 <!-- 자동 테스트, 수동 검증과 재현 가능한 명령을 적어 주세요. 확인하지 못한 항목은 이유를 명시해 주세요. -->

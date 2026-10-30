@@ -2,11 +2,16 @@
 
 ## Core Services
 
-- 기존 non-Temporal에서 여러 진입점이 공유할 state-changing application action은 `packages/core/services`에 두고, core service는 `packages/core/db`에 의존한다. 새 Temporal-first mutation은 core state-changing service를 필수로 두지 않으며, Worker Activity가 transaction, persistence와 멱등성 경계를 소유한다. 특정 진입점에서만 의미가 있는 기존 state change는 그 진입점의 query/persistence 계층에 둘 수 있다. read-only query와 loader는 service를 거치지 않고 query 계층에서 DB와 공유 조회 policy를 사용한다. core가 특정 진입점의 타입이나 표현에 의존하게 하지 않는다.
+- 새 durable state-changing capability는 Temporal Workflow/Activity를 기본 실행 경계로 설계한다. 이 문서의
+  core-first 규칙은 기존 non-Temporal/shared action에 적용하며 새 capability의 기본값이 아니다. 기존 action은
+  별도 migration 결정 전까지 현행 경계를 유지한다.
+- 새 Temporal-first capability의 domain policy, transaction 시점 재검증, state transition, transaction, persistence와
+  멱등성은 Worker Activity가 소유한다. state-changing core service는 필수가 아니다.
+- 기존 non-Temporal에서 여러 진입점이 공유할 state-changing application action은 `packages/core/services`에 두고, core service는 `packages/core/db`에 의존한다. 특정 진입점에서만 의미가 있는 기존 state change는 그 진입점의 query/persistence 계층에 둘 수 있다. read-only query와 loader는 service를 거치지 않고 query 계층에서 DB와 공유 조회 policy를 사용한다. core가 특정 진입점의 타입이나 표현에 의존하게 하지 않는다.
 - 진입점은 transport·protocol의 인증과 actor context를 처리한다. 기존 non-Temporal/shared action에서는 core가 검증된 actor와 business input에 대한 공통 domain policy, transaction, persistence와 멱등성을 처리한다. Temporal-first caller는 검증된 actor와 serializable business input, exported `WorkflowDefinition`과 capability별 `mode`·conflict·reuse 옵션을 generic `runWorkflow`에 한 번 전달하고, state-changing core service나 task queue·deadline·native Temporal 호출을 직접 조합하지 않는다. 상세 책임은 `docs/architecture/core-services.md`와 `memory/temporal/orchestration.md`를 따른다.
 - Local GraphQL의 Account/session/selected Profile membership, ActivityPub의 signature/actor/object/recipient 검증처럼 caller마다 다른 권한 증거는 진입점이 소유한다. GraphQL의 selected Profile은 membership과 조회 가능 상태가 검증되지만 Instance 종류는 제한하지 않는다. core service에는 검증된 actor identity와 business input만 전달한다.
 - 기본 소셜 행동 주체는 Profile이다. Account 자체가 domain participant이거나 commit 시점의 Account 권한 재검증이 명시된 불변식인 경우가 아니라면, GraphQL context 검증을 반복하기 위해 core public action에 `accountId`를 추가하지 않는다. 현재 caller가 Local이라는 이유만으로 공통 action에 `InstanceKind.LOCAL`을 강제하지 않는다.
-- 기존 non-Temporal/shared core service는 caller들이 공유하는 Profile/Post lifecycle, 관계 구조, visibility·eligibility, domain error, transaction, persistence, uniqueness와 idempotency를 소유할 수 있다. 여러 진입점이 같은 entity를 materialize하면 공통 검증·정책과 idempotent persistence를 한 경계에서 재사용하고 최종 insert만 공유하지 않는다. 새 Temporal-first mutation에서는 실제 state transition과 retry/idempotency 판정이 Worker Activity의 실행 경계이며, 기존 core policy/service는 migration 중 필요한 경우에만 내부에서 재사용한다. 진입점별 envelope·inbox relevance 검증은 각 entry boundary에 남긴다.
+- 기존 non-Temporal/shared core service는 caller들이 공유하는 Profile/Post lifecycle, 관계 구조, visibility·eligibility, domain error, transaction, persistence, uniqueness와 idempotency를 소유할 수 있다. 여러 진입점이 같은 entity를 materialize하면 공통 검증·정책과 idempotent persistence를 한 경계에서 재사용하고 최종 insert만 공유하지 않는다. 새 Temporal-first mutation에서는 domain policy, state transition, commit-time revalidation과 retry/idempotency 판정이 Worker Activity의 실행 경계이며, 기존 core policy/service는 migration 중 필요한 경우에만 내부에서 재사용한다. 진입점별 envelope·inbox relevance 검증은 각 entry boundary에 남긴다.
 - 예상 가능한 domain policy 거절은 각 caller의 observability·retry 경계에서 internal failure와 구분한다. 선언된 거절 관측은 공통 경계 또는 우회할 수 없는 caller가 맡아 같은 처리에서 누락·중복 기록하지 않는다. 실제 내부 오류의 전파·재시도 계약은 유지한다.
 - core는 transport-neutral domain 결과만 반환한다. GraphQL payload, object ref, connection이나 resolver 편의에만 필요한 조회 결과는 resolver·loader에서 조합하고, 모든 caller가 알아야 하는 domain outcome일 때만 core 반환값에 포함한다.
 - core가 Fedify 같은 protocol/delivery package를 호출하는 사실만으로 경계 위반으로 판단하지 않는다. core public contract가 protocol 전용 타입에 의존하는지를 기준으로 판단한다.

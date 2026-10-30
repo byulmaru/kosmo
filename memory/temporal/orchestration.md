@@ -7,9 +7,10 @@
 
 ## Ownership And Flow
 
-- 새 Temporal-first capability의 state transition, transaction, persistence와 멱등성 판정은 Worker Activity가
-  소유한다. Workflow는 결정론적 orchestration만 수행하고, Activity가 필요한 기존 transport-neutral core
-  policy나 service를 내부에서 재사용할 수는 있지만 state-changing core service는 필수가 아니다.
+- 새 Temporal-first capability의 domain policy, state transition과 commit 시점 재검증, transaction, persistence와
+  멱등성 판정은 Worker Activity가 소유한다. Workflow는 결정론적 orchestration만 수행한다. Activity는 필요한
+  기존 transport-neutral core policy나 service를 내부에서 재사용할 수 있지만 state-changing core service는 필수가
+  아니다.
 - Temporal-first caller는 caller 검증 뒤 generic `runWorkflow`에 exported `WorkflowDefinition`, serializable
   input과 capability별 `mode`·conflict·reuse 옵션을 한 번 전달한다. GraphQL·HTTP·ActivityPub caller가
   state-changing core service를 직접 호출하거나 task queue·deadline·native Temporal 호출을 반복 조합하지
@@ -29,8 +30,19 @@
   상태를 평가해 effect plan을 반환한다. commit 전에 실패한 시도의 retry가 다른 상태를 관찰하면 delivery를
   포함하거나 생략할 수 있다. commit 뒤 completion 응답이 유실되어 retry가 기존 create row를 관찰하면 이번
   transition의 commit이라고 추론해 create effect를 재구성하지 않는다. Workflow는 반환된 plan을 그대로 실행하고
-  effect Activity는 이후 mutable 상태를 다시 조회해 delivery를 추가하거나 취소하지 않는다.
+  effect Activity는 이후 mutable 상태를 다시 조회해 delivery를 추가하거나 취소하지 않는다. Inbound ActivityPub
+  Follow의 exact local APPROVE는 예외로, 같은 request identity의 별도 Accept effect를 재구성해야 한다. Workflow history에
+  원본 Follow envelope가 있으면 ID와 published를 보존해 보내고, envelope가 없으면 exact approved pair의 현재 remote
+  actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
+  Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
+- Local GraphQL과 inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`를 공유하고 ID는
+  `post-create:${requestId}`로 만든다. Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에
+  `USE_EXISTING`, `REJECT_DUPLICATE`, `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction
+  Activity가 공통 결과를 commit한 뒤 Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다.
+  ID가 일치하는 `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
+  `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
+  그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
 
 ## Workflow Source Structure
 
@@ -55,7 +67,10 @@
   callback을 한 plain object로 묶고, 해당 Workflow가 정의한 input-to-ID 규칙을 함께 참조하게 한다. 이 interface는
   기존 `packages/core/temporal/client.ts`에 둔다.
 - `runWorkflow`는 definition의 callback에 native args를 한 번 전달해 ID 문자열을 얻고, 공통 task queue와
-  bounded deadline을 적용해 native `start` 또는 `execute`를 호출한다. Caller는 task queue·deadline·native client
+  bounded deadline을 적용해 native `start` 또는 `execute`를 호출한다. `WorkflowDefinition.timeoutMs`로 특정
+  capability의 caller 대기 deadline을 좁게 조정할 수 있고, 생략하면 30초 기본값을 유지한다. 이는 caller wait만
+  제한하며 이미 시작된 Workflow나 원격 처리를 취소하거나 그 최대 실행 시간을 보장하지 않는다. Caller는
+  task queue·deadline·native client
   호출을 조합하지 않는다. Callback 오류는 native 호출 전에 원본 그대로 전파한다. Native rejection은
   `Error.cause` chain에서 첫 `ApplicationFailure`를 동일 객체로 전파하고, 없으면 최초 rejection 객체를 그대로
   전파한다. Remote profile lookup caller는 `ApplicationFailure.type`을 분류하지 않고 모든 native rejection을
@@ -69,7 +84,7 @@
 - Workflow 안에서 다른 Workflow를 native child로 실행해야 하는 경우에는 `apps/worker/src/workflows/child.ts`의 `runChildWorkflow<T>`를 사용한다. 이 helper는 기존 `packages/core/temporal/client.ts`의 `WorkflowDefinition<T>`를 `import type`으로 재사용하고, definition의 ID callback에 실제 args를 한 번 전달해 ID를 만든다. `mode: 'start'`는 native child start handle/acknowledgement를 반환하고 `mode: 'execute'`는 native child result를 반환한다. Native child options·error·queue inheritance를 그대로 보존하며 client `runWorkflow`의 KOSMO task queue와 bounded deadline을 복사하지 않는다. `parentClosePolicy`와 `cancellationType`을 생략하면 Temporal 기본값을 사용하고, helper가 `ABANDON`을 자동으로 정하지 않는다. 실제 remote async child caller가 있는 경우에만 caller가 두 옵션을 명시한다.
 - 명시적 qualified handle 검색은 `RemoteProfileLookupInput { domain, handle, profileId? }`로 `remoteProfileLookupWorkflow`를 dispatch한다. Workflow ID는 기존 pure handle normalization으로 계산한 `normalizedHandle`, domain과 acting `profileId`에서 만들며 `normalizedHandle`을 wire input에 중복해 넣지 않는다. Workflow는 `lookupRemoteActorUriActivity`로 저장된 canonical actor URI를 먼저 재사용하고, 없을 때만 WebFinger의 ActivityPub self link에서 URI를 확인한다. 이어 `getRemoteProfileActorStateActivity`가 사용 가능한 저장 Profile과 7일 freshness를 확인한다. Fresh cache는 반환하고 stale cache는 별도 refresh ID prefix child를 시작한 뒤 기다리지 않고 반환한다. Allowed miss는 같은 Workflow에서 `fetchRemoteProfileActorActivity`와 `applyRemoteProfileActorActivity`를 차례로 실행한다. Missing actor는 local origin, Instance kind 또는 Suspended 상태로 거부된다. WebFinger 응답만으로 Instance를 추출하거나 상태를 판정하지 않는다. Caller의 bounded 5초 대기 deadline에는 URI discovery가 포함되며 이미 시작된 Workflow는 caller가 더 기다리지 않아도 계속 실행할 수 있다. Materialization 이후 connection·visibility DB 조회는 기존 검색 경계가 유지한다.
 - URI lookup은 `{ actorUri, contextOrigin?, profileId?, receipt? }`로 기존 `remoteProfileLookupWorkflow`를 한 번 호출하며 Workflow ID 형식은 그대로 유지한다. Workflow는 `getRemoteProfileActorStateActivity`로 먼저 저장 상태를 읽는다. Cache hit의 verified receipt만 `recoverRemoteProfileActorActivity`에 전달하며 이 Activity는 같은 usable actor URI를 다시 확인하고 Unresponsive Instance를 CAS로 복구한다. Recovery는 actor freshness timestamp를 바꾸지 않는다. Fresh cache는 바로 반환하고 stale cache는 ABANDON refresh child를 시작해 바로 반환한다. Allowed miss는 같은 Workflow 안에서 fetch와 apply를 실행한다. 신규 Workflow history는 `patched('remote-profile-activity-split-v1')`로 새 Activity sequence를 사용하고, marker 이전 history는 기존 `materializeRemoteProfileActorActivity`·`refreshRemoteProfileActorActivity` call trace를 유지한다. 두 legacy Activity adapter는 이 history가 drain될 때 제거한다.
-- Inbound ActivityPub Update는 별도 `remoteProfileUpdateWorkflow`와 `RemoteProfileUpdateInput`을 사용하며 Workflow ID는 기존 actor URI와 receipt identity에서 만든다. Workflow는 저장된 usable Profile state가 없으면 `null`을 반환하고, 있으면 supplied actor document를 offline apply Activity로 보낸다. `receivedAt`은 validated document apply가 성공했을 때 actor freshness timestamp가 되고, apply는 Unresponsive Instance를 같은 persistence transaction에서 복구할 수 있다. Update는 별도 receipt-only recovery Activity를 호출하지 않는다. Handle input, legacy refresh Workflow ID 문자열, public Workflow ID는 유지한다. 각 Worker Workflow는 Activity 호출 전 strict wire schema를 검증한다. Stale refresh child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작하고 acknowledgement 뒤 cached ID를 반환한다. Child start 실패는 관측하고 cached ID를 유지한다. Public Workflow 자체의 start failure는 기존 오류 경계로 전달한다.
+- Inbound ActivityPub Update는 별도 `remoteProfileUpdateWorkflow`와 `RemoteProfileUpdateInput`을 사용하며 Workflow ID는 기존 actor URI와 receipt identity에서 만든다. Workflow는 저장된 usable Profile state가 없으면 `null`을 반환하고, 있으면 supplied actor document를 offline apply Activity로 보낸다. `receivedAt`은 validated document apply가 성공했을 때 actor freshness timestamp가 되고, apply는 Unresponsive Instance를 같은 persistence transaction에서 복구할 수 있다. Update는 별도 receipt-only recovery Activity를 호출하지 않는다. Handle input, legacy refresh Workflow ID 문자열, public Workflow ID는 유지한다. 각 Worker Workflow는 Activity 호출 전 wire schema를 검증한다. Stale refresh child는 `parentClosePolicy: ABANDON`과 `cancellationType: ABANDON`으로 시작하고 acknowledgement 뒤 cached ID를 반환한다. Child start 실패는 관측하고 cached ID를 유지한다. Public Workflow 자체의 start failure는 기존 오류 경계로 전달한다.
 - 조건별 Workflow start가 대부분 하나이고 각 start 오류를 이미 격리한다면 Promise를 `effects` 배열에 push한 뒤 `Promise.all`로 모으지 않는다. 한 transaction 결과에서 두 Workflow가 필요한 경우에도 각 조건에서 직접 `await`해 type, input과 Workflow별 ID 규칙을 가까이 둔다. 실제 동시 start가 계약인 경우에만 배열과 병렬 대기를 사용한다.
 - Capability caller는 `runWorkflow`에 `mode`와 capability별 conflict/reuse policy를 전달한다. 예를 들어 일반적인
   새 실행은 `USE_EXISTING` conflict policy와 `REJECT_DUPLICATE` reuse policy를 사용하지만, directed Profile pair

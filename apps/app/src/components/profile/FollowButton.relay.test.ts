@@ -429,3 +429,59 @@ function unblockPayload(profileBlockId: string) {
     },
   };
 }
+
+test('actor A의 늦은 Follow 응답은 actor B의 action과 Store를 변경하지 않는다', async () => {
+  const actorA = createEnvironment();
+  clearProfileBlock(actorA);
+  await render(actorA);
+  assert.equal(button().props.children, '팔로우');
+  await act(async () => button().props.onPress());
+  assert.equal(requests[0]?.name, 'FollowButtonFollowProfileMutation');
+
+  selectedProfileId = 'owner-b';
+  const actorB = createEnvironment();
+  clearProfileBlock(actorB);
+  await render(actorB);
+  assert.equal(button().props.children, '팔로우');
+  await act(async () => button().props.onPress());
+  assert.equal(requests.length, 2);
+  assert.equal(button().props.disabled, true);
+  const actorBBeforeACompletes = structuredClone(actorB.getStore().getSource().toJSON());
+
+  const response = (actorId: string): GraphQLResponse => ({
+    data: {
+      followProfile: {
+        result: { __typename: 'ProfileFollow', id: `follow-${actorId}` },
+        followerProfile: { id: actorId, followingCount: 1 },
+        followeeProfile: {
+          displayName: '대상',
+          followPolicy: 'OPEN',
+          followersCount: 1,
+          handle: 'target',
+          id: targetId,
+          relativeHandle: '@target',
+          viewerState: {
+            follow: {
+              id: `follow-${actorId}`,
+              follower: { id: actorId, followingCount: 1 },
+            },
+            followRequest: null,
+            isSelf: false,
+            profileBlock: null,
+          },
+        },
+      },
+    },
+  });
+
+  await respond(0, response('owner-a'));
+  assert.equal(button().props.children, '팔로잉');
+  assert.equal(button().props.disabled, true, 'actor B still owns its pending mutation');
+  assert.deepEqual(actorB.getStore().getSource().toJSON(), actorBBeforeACompletes);
+
+  await respond(1, response('owner-b'));
+  assert.equal(button().props.children, '팔로잉');
+  assert.equal(button().props.disabled, false);
+  assert.equal(actorB.getStore().getSource().get('owner-b')?.followingCount, 1);
+  assert.deepEqual(toasts, []);
+});

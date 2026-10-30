@@ -20,9 +20,22 @@ const standardEasing = (value: number) => value;
 const timingCalls: {
   duration: number;
   easing: (value: number) => number;
-  toValue: number;
+  toValue: unknown;
   useNativeDriver: boolean;
 }[] = [];
+const theme = {
+  actionPrimaryBase: 'primary',
+  backgroundCanvas: 'canvas',
+  backgroundSurface: 'surface',
+  borderDefault: 'border',
+  borderSubtle: 'border-subtle',
+  foregroundPrimary: 'text',
+  foregroundSecondary: 'text-secondary',
+  stateDisabledForeground: 'disabled-foreground',
+  stateFocusRing: 'focus',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+};
 
 class AnimatedValueMock {
   value: number;
@@ -37,6 +50,18 @@ class AnimatedValueMock {
 
   stopAnimation(callback?: (value: number) => void) {
     callback?.(this.value);
+  }
+}
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+
+  setValue(value: string) {
+    this.value = value;
+  }
+
+  stopAnimation(callback?: () => void) {
+    callback?.();
   }
 }
 
@@ -69,25 +94,30 @@ const animationGroup = (animations: AnimationMock[]): AnimationMock => ({
 });
 
 mockModule('react-native', {
+  processColor: () => undefined,
   Animated: {
+    Color: AnimatedColorMock,
+    Text: 'Text',
     Value: AnimatedValueMock,
     View: ViewHost,
     subtract: (minuend: AnimatedValueMock, subtrahend: AnimatedValueMock) =>
       new AnimatedSubtractMock(minuend, subtrahend),
     parallel: animationGroup,
     timing: (
-      value: AnimatedValueMock,
+      value: { setValue: (value: unknown) => void },
       config: {
         duration: number;
         easing: (value: number) => number;
-        toValue: number;
+        toValue: unknown;
         useNativeDriver: boolean;
       },
     ): AnimationMock => {
       timingCalls.push(config);
       return {
         start: (callback) => {
-          value.setValue(config.toValue);
+          const target =
+            config.toValue instanceof AnimatedColorMock ? config.toValue.value : config.toValue;
+          value.setValue(target);
           callback?.({ finished: true });
         },
         stop: () => undefined,
@@ -126,18 +156,7 @@ mockModule('react-native', {
 });
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => reducedMotion,
-  useTheme: () => ({
-    actionPrimaryBase: 'primary',
-    backgroundCanvas: 'canvas',
-    backgroundSurface: 'surface',
-    borderDefault: 'border',
-    borderSubtle: 'border-subtle',
-    foregroundPrimary: 'text',
-    foregroundSecondary: 'text-secondary',
-    stateFocusRing: 'focus',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-  }),
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1, 2: 2 },
@@ -311,12 +330,12 @@ test('Tabs animate Web feedback with the shared motion contract', () => {
   pressState = { hovered: true, pressed: false };
   reducedMotion = false;
   const hoverStyle = feedbackStyles(renderTab('underline'))[0];
-  assert.equal(hoverStyle.transitionDuration, '120ms');
-  assert.equal(hoverStyle.transitionProperty, 'background-color');
-  assert.equal(hoverStyle.transitionTimingFunction, 'standard-easing');
+  assert.equal(hoverStyle.transitionDuration, undefined);
+  assert.equal(hoverStyle.transitionProperty, undefined);
+  assert.equal(hoverStyle.backgroundColor, 'hover');
 
   reducedMotion = true;
-  assert.equal(feedbackStyles(renderTab('underline'))[0].transitionDuration, '0ms');
+  assert.equal(feedbackStyles(renderTab('underline'))[0].backgroundColor, 'hover');
 
   platformOS = 'ios';
   reducedMotion = false;
@@ -328,30 +347,35 @@ test('Tabs animate Native pressed feedback with the shared motion contract', () 
   platformOS = 'ios';
   pressState = { hovered: false, pressed: false };
   const renderer = renderTab('underline');
-  assert.equal((feedbackStyles(renderer)[0].opacity as AnimatedValueMock).value, 0);
+  assert.equal(feedbackStyles(renderer)[0].backgroundColor, 'transparent');
   timingCalls.length = 0;
 
   pressState = { hovered: false, pressed: true };
   act(() => renderer.update(tabListElement('underline')));
-  assert.deepEqual(timingCalls, [
-    { duration: 120, easing: standardEasing, toValue: 1, useNativeDriver: true },
-  ]);
-  assert.equal((feedbackStyles(renderer)[0].opacity as AnimatedValueMock).value, 1);
+  assert.equal(timingCalls.length, 1);
+  assert.equal(timingCalls[0].duration, 120);
+  assert.equal(timingCalls[0].useNativeDriver, false);
+  assert.equal((timingCalls[0].toValue as AnimatedColorMock).value, 'pressed');
+  assert.equal((feedbackStyles(renderer)[0].backgroundColor as AnimatedColorMock).value, 'pressed');
 
   timingCalls.length = 0;
   pressState = { hovered: false, pressed: false };
   act(() => renderer.update(tabListElement('underline')));
-  assert.deepEqual(timingCalls, [
-    { duration: 120, easing: standardEasing, toValue: 0, useNativeDriver: true },
-  ]);
-  assert.equal((feedbackStyles(renderer)[0].opacity as AnimatedValueMock).value, 0);
+  assert.equal(timingCalls.length, 1);
+  assert.equal(timingCalls[0].duration, 120);
+  assert.equal(timingCalls[0].useNativeDriver, false);
+  assert.equal((timingCalls[0].toValue as AnimatedColorMock).value, 'transparent');
+  assert.equal(
+    (feedbackStyles(renderer)[0].backgroundColor as AnimatedColorMock).value,
+    'transparent',
+  );
 
   timingCalls.length = 0;
   reducedMotion = true;
   pressState = { hovered: false, pressed: true };
   act(() => renderer.update(tabListElement('underline')));
   assert.deepEqual(timingCalls, []);
-  assert.equal((feedbackStyles(renderer)[0].opacity as AnimatedValueMock).value, 1);
+  assert.equal(feedbackStyles(renderer)[0].backgroundColor, 'pressed');
 });
 
 test('Tabs keep a shared 32px pill visual on Web and Native', () => {
@@ -390,9 +414,11 @@ test('Underline Tabs move and stretch the shared indicator between measured tabs
 
   timingCalls.length = 0;
   act(() => renderer.update(underlineTabsElement('two')));
-  assert.equal(timingCalls.length, 2);
+  assert.equal(timingCalls.length, 4);
+  const indicatorTimingCalls = timingCalls.filter(({ toValue }) => typeof toValue === 'number');
+  assert.equal(indicatorTimingCalls.length, 2);
   assert.deepEqual(
-    timingCalls.map(({ duration, toValue, useNativeDriver }) => ({
+    indicatorTimingCalls.map(({ duration, toValue, useNativeDriver }) => ({
       duration,
       toValue,
       useNativeDriver,
@@ -402,10 +428,11 @@ test('Underline Tabs move and stretch the shared indicator between measured tabs
       { duration: 200, toValue: 182, useNativeDriver: false },
     ],
   );
-  assertEasingValues(timingCalls[0].easing, [0, 1 - Math.cos(Math.PI / 4), 1]);
-  assertEasingValues(timingCalls[1].easing, [0, Math.sin(Math.PI / 4), 1]);
-  const rightEdgeAt = (progress: number) => 18 + (118 - 18) * timingCalls[0].easing(progress);
-  const rightFrontAt = (progress: number) => 82 + (182 - 82) * timingCalls[1].easing(progress);
+  const indicatorEasing = timingCalls.filter(({ toValue }) => typeof toValue === 'number');
+  assertEasingValues(indicatorEasing[0].easing, [0, 1 - Math.cos(Math.PI / 4), 1]);
+  assertEasingValues(indicatorEasing[1].easing, [0, Math.sin(Math.PI / 4), 1]);
+  const rightEdgeAt = (progress: number) => 18 + (118 - 18) * indicatorEasing[0].easing(progress);
+  const rightFrontAt = (progress: number) => 82 + (182 - 82) * indicatorEasing[1].easing(progress);
   assertClose(rightFrontAt(0) - rightEdgeAt(0), 64);
   assertClose((rightFrontAt(0) + rightEdgeAt(0)) / 2, 50);
   assert.ok(Math.abs(rightFrontAt(0.5) - rightEdgeAt(0.5) - 105.42135623730951) < 1e-12);
@@ -424,9 +451,13 @@ test('Underline Tabs move and stretch the shared indicator between measured tabs
   (indicatorStyle(renderer)?.left as AnimatedValueMock).setValue(43);
   (indicatorStyle(renderer)?.width as AnimatedSubtractMock).setValue(114);
   act(() => renderer.update(underlineTabsElement('one')));
-  assert.equal(timingCalls.length, 2);
+  const reverseIndicatorTimingCalls = timingCalls.filter(
+    ({ toValue }) => typeof toValue === 'number',
+  );
+  assert.equal(timingCalls.length, 4);
+  assert.equal(reverseIndicatorTimingCalls.length, 2);
   assert.deepEqual(
-    timingCalls.map(({ duration, toValue, useNativeDriver }) => ({
+    reverseIndicatorTimingCalls.map(({ duration, toValue, useNativeDriver }) => ({
       duration,
       toValue,
       useNativeDriver,
@@ -436,10 +467,12 @@ test('Underline Tabs move and stretch the shared indicator between measured tabs
       { duration: 200, toValue: 82, useNativeDriver: false },
     ],
   );
-  assertEasingValues(timingCalls[0].easing, [0, Math.sin(Math.PI / 4), 1]);
-  assertEasingValues(timingCalls[1].easing, [0, 1 - Math.cos(Math.PI / 4), 1]);
-  const leftEdgeAt = (progress: number) => 43 + (18 - 43) * timingCalls[0].easing(progress);
-  const leftFrontAt = (progress: number) => 157 + (82 - 157) * timingCalls[1].easing(progress);
+  assertEasingValues(reverseIndicatorTimingCalls[0].easing, [0, Math.sin(Math.PI / 4), 1]);
+  assertEasingValues(reverseIndicatorTimingCalls[1].easing, [0, 1 - Math.cos(Math.PI / 4), 1]);
+  const leftEdgeAt = (progress: number) =>
+    43 + (18 - 43) * reverseIndicatorTimingCalls[0].easing(progress);
+  const leftFrontAt = (progress: number) =>
+    157 + (82 - 157) * reverseIndicatorTimingCalls[1].easing(progress);
   assertClose(leftFrontAt(0) - leftEdgeAt(0), 114);
   assertClose((leftFrontAt(0) + leftEdgeAt(0)) / 2, 100);
   assert.ok(Math.abs(leftFrontAt(0.5) - leftEdgeAt(0.5) - 109.71067811865476) < 1e-12);

@@ -102,7 +102,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   않는다.
 - Account 진입점은 모든 플랫폼에서 Expo Router의 실제 external `Link`와 canonical HTTPS `href`를 사용한다.
   브라우저 또는 OS가 외부 navigation을 소유하며 URL 지원 확인, navigation 성공·실패,
-  loading·error·retry·lock 상태를 Kosmo가 소유하지 않는다. 이 계약은 PROD-645가 소유한다.
+  loading·error·retry·lock 상태를 Kosmo가 소유하지 않는다. Web에서는 외부 Account Settings를 새 탭으로
+  열어 현재 Kosmo 설정 탭을 보존하고 사용자가 그 탭으로 돌아올 수 있게 한다. Native에서는 기존 OS 외부
+  navigation을 유지한다. 외부 navigation은 PROD-645가, Web 탭 보존 동작은 PROD-1133이 소유한다.
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.

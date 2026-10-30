@@ -13,6 +13,9 @@ import type { PropsWithChildren, ReactNode } from 'react';
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
 type RouterContextValue = {
+  back: () => void;
+  canGoBack: () => boolean;
+  replacePathname: (href: Href) => void;
   params: Record<string, string | undefined>;
   pathname: string;
   segments: readonly string[];
@@ -33,6 +36,9 @@ type LinkPressEvent = {
 };
 
 const RouterContext = createContext<RouterContextValue>({
+  back: () => undefined,
+  canGoBack: () => false,
+  replacePathname: () => undefined,
   params: {},
   pathname: '/home',
   segments: [],
@@ -43,23 +49,44 @@ const RouterContext = createContext<RouterContextValue>({
 export function RouterMockProvider({
   children,
   params = {},
+  onNavigate,
   pathname: initialPathname = '/home',
   segments = [],
   slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
+  onNavigate?: (href: Href) => void;
   pathname?: string;
   segments?: readonly string[];
   slot?: ReactNode;
   slotLabel?: string;
 }>) {
-  const [pathname, setCurrentPathname] = useState(initialPathname);
-  const setPathname = (href: Href) =>
-    setCurrentPathname(typeof href === 'string' ? href : href.pathname);
+  const [history, setHistory] = useState([initialPathname]);
+  const pathname = history.at(-1)!;
   const value = useMemo(
-    () => ({ params, pathname, segments, setPathname, slot, slotLabel }),
-    [params, pathname, segments, slot, slotLabel],
+    () => ({
+      back: () => setHistory((paths) => (paths.length > 1 ? paths.slice(0, -1) : paths)),
+      canGoBack: () => history.length > 1,
+      params,
+      pathname,
+      replacePathname: (href: Href) =>
+        setHistory((paths) => {
+          const next = typeof href === 'string' ? href : href.pathname;
+          return paths.at(-1) === next ? paths : [...paths.slice(0, -1), next];
+        }),
+      segments,
+      setPathname: (href: Href) => {
+        onNavigate?.(href);
+        setHistory((paths) => {
+          const next = typeof href === 'string' ? href : href.pathname;
+          return paths.at(-1) === next ? paths : [...paths, next];
+        });
+      },
+      slot,
+      slotLabel,
+    }),
+    [history, onNavigate, params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -87,15 +114,16 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
 }
 
 export function useRouter() {
-  const { setPathname } = useContext(RouterContext);
+  const { back, canGoBack, replacePathname, setPathname } = useContext(RouterContext);
   return useMemo(
     () => ({
-      back: () => undefined,
+      back,
+      canGoBack,
       dismissTo: setPathname,
       push: setPathname,
-      replace: setPathname,
+      replace: replacePathname,
     }),
-    [setPathname],
+    [back, canGoBack, replacePathname, setPathname],
   );
 }
 
@@ -106,17 +134,25 @@ export function Link({
   children,
   href,
   onPress,
+  rel,
+  replace = false,
+  target,
 }: PropsWithChildren<{
   asChild?: boolean;
   href: Href;
+  rel?: string;
+  replace?: boolean;
+  target?: string;
   onPress?: (event: LinkPressEvent) => void;
 }>) {
-  const { setPathname } = useContext(RouterContext);
+  const { replacePathname, setPathname } = useContext(RouterContext);
   if (
     !asChild ||
     !isValidElement<{
       href?: string;
       onPress?: (event: LinkPressEvent) => void;
+      rel?: string;
+      target?: string;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
@@ -126,7 +162,7 @@ export function Link({
     const shouldNavigate = shouldHandleNavigation(event);
     event.preventDefault?.();
     if (shouldNavigate) {
-      setPathname(href);
+      (replace ? replacePathname : setPathname)(href);
     }
   };
   const handlePress = (event: LinkPressEvent) => {
@@ -135,6 +171,7 @@ export function Link({
   };
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
+    ...(Platform.OS === 'web' ? { rel, target } : {}),
     ...(Platform.OS === 'web'
       ? {
           onClick: handlePress,

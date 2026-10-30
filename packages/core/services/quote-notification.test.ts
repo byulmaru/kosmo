@@ -32,7 +32,6 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { postContentDocumentFromText } from '../post-content/server';
 import { createPost } from './post';
 import { createQuoteNotification } from './quote-notification';
 
@@ -88,7 +87,7 @@ const createProfile = async () => {
 const createContentPost = async (profileId: string, repostSourceId?: string) => {
   const result = await createPost({
     accountId: accountIdsByProfile.get(profileId)!,
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId,
     repostSourceId,
@@ -475,7 +474,7 @@ test('Profile Tag checks Quote Author, then keeps a suppressed first judgment af
   const quoteReplyParent = await createContentPost(sourceAuthorWithoutTag.id);
   const quoteAuthorMatched = await createPost({
     accountId: accountIdsByProfile.get(quoteAuthorWithTag.id)!,
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: quoteAuthorWithTag.id,
     replyParentId: quoteReplyParent.id,

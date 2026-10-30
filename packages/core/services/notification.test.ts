@@ -35,10 +35,6 @@ import {
   PostVisibility,
   ProfileFollowPolicy,
 } from '../enums';
-import {
-  postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
-} from '../post-content/server';
 import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
 import {
@@ -180,7 +176,7 @@ const createReaction = async (
 const createContentPost = (profileId: string, content: string = crypto.randomUUID()) =>
   createPost({
     accountId: accountIdsByProfile.get(profileId),
-    document: postContentDocumentFromText(content),
+    bodyText: content,
     origin: 'LOCAL',
     profileId,
     visibility: PostVisibility.PUBLIC,
@@ -240,7 +236,7 @@ const createProfileTargetSource = async (
       const parent = await createContentPost(recipientProfileId, postText);
       const reply = await createPost({
         accountId: getAccountId(relatedProfileId),
-        document: postContentDocumentFromText(postText),
+        bodyText: postText,
         origin: 'LOCAL',
         profileId: relatedProfileId,
         replyParentId: parent.id,
@@ -268,16 +264,16 @@ const createProfileTargetSource = async (
       const authoredBodyText = `${postText} ${relativeHandle}`;
       const post = await createPost({
         accountId: getAccountId(relatedProfileId),
-        authoredBodyText,
-        document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+        bodyText: authoredBodyText,
+        mentions: [
           {
             start: postText.length + 1,
             end: authoredBodyText.length,
-            handle: recipient.handle,
+            handle: relativeHandle,
             profileId: recipientProfileId,
             relativeHandle,
           },
-        ]),
+        ],
         origin: 'LOCAL',
         profileId: relatedProfileId,
         visibility: PostVisibility.PUBLIC,
@@ -887,7 +883,7 @@ test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 sou
   const replyParent = await createContentPost(followee.id);
   const reply = await createPost({
     accountId: getAccountId(follower.id),
-    document: postContentDocumentFromText('policy failure reply'),
+    bodyText: 'policy failure reply',
     origin: 'LOCAL',
     profileId: follower.id,
     replyParentId: replyParent.id,
@@ -1761,7 +1757,7 @@ test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부
         const parent = await createContentPost(recipient.id);
         const reply = await createPost({
           accountId: getAccountId(author.id),
-          document: postContentDocumentFromText(`mute policy reply ${crypto.randomUUID()}`),
+          bodyText: `mute policy reply ${crypto.randomUUID()}`,
           origin: 'LOCAL',
           profileId: author.id,
           replyParentId: parent.id,

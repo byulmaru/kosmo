@@ -1,0 +1,1 @@
+ALTER TABLE "instance" ADD COLUMN "activitypub_key_pairs" jsonb;

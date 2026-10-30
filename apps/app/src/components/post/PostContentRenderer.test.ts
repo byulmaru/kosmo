@@ -658,6 +658,76 @@ describe('PostContentRenderer', () => {
     );
     assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
   });
+
+  it('links Hashtag occurrences by Global ID and keeps noninteractive previews static', async () => {
+    const bodyText = 'Topic #MiXeD and #mixed';
+    const hashtagId = 'SGFzaHRhZy0x';
+    const document = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Topic ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId, token: '#MiXeD' },
+              },
+              { type: 'text', text: ' and ' },
+              {
+                type: 'hashtag',
+                attrs: { hashtagId, token: '#mixed' },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    for (const interactive of [true, false]) {
+      let stoppedEvents = 0;
+      await render({
+        bodyText,
+        contentWarning: null,
+        document,
+        interactive,
+        media: [],
+        mentionedProfiles: [],
+        ...(interactive ? { onBodyPress: () => assert.fail('post press must not run') } : {}),
+        postId: `post-hashtag-${interactive}`,
+      });
+
+      assert.equal(
+        rendered('Text').some((node) => renderedText(node) === bodyText),
+        true,
+      );
+      const links = rendered('Text').filter((node) => node.props.accessibilityRole === 'link');
+      if (interactive) {
+        assert.deepEqual(
+          rendered('NavigationLink').map(({ props }) => props.href),
+          [
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+            { pathname: '/hashtags/[hashtagId]/posts', params: { hashtagId } },
+          ],
+        );
+        assert.deepEqual(
+          links.map(({ props }) => props.accessibilityLabel),
+          ['#MiXeD, 게시글 보기', '#mixed, 게시글 보기'],
+        );
+        for (const link of links) {
+          link.props.onPress({ stopPropagation: () => stoppedEvents++ });
+        }
+        assert.equal(stoppedEvents, 2);
+      } else {
+        assert.equal(links.length, 0);
+        assert.deepEqual(rendered('NavigationLink'), []);
+      }
+      assert.equal(rendered('Pressable').length, interactive ? 1 : 0);
+    }
+  });
 });
 
 async function render(props: RendererProps) {

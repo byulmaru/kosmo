@@ -22,6 +22,7 @@
 
 ## Web·Native 접근성
 
+- 표시 중인 본문 텍스트는 각 플랫폼의 표준 방식으로 범위를 선택하고 복사할 수 있다. 본문 탭의 게시글 이동, inline link·Mention의 기존 대상 이동, Content Warning으로 가린 본문 처리는 유지한다.
 - Mention은 본문 안의 inline link 또는 text로 표시한다. 기존 Post body의 `onBodyPress` callback과 그에 따른 부모 Post navigation은 유지한다. 활성 Mention link의 press는 event propagation을 막아 부모 `onBodyPress`가 함께 실행되지 않게 하며, Mention을 독립 icon button으로 바꾸지 않는다.
 - Web link는 keyboard로 도달·실행할 수 있고 link role, visible `relativeHandle`·target Profile `displayName`을 식별하는 accessible name과 `focus-visible`을 제공한다. link가 아닌 fallback text는 tab 순서에 들어가지 않는다.
 - Native Post Content Mention은 이 component에 한정해 기존 navigation/text primitive를 사용하는 inline text-link로 렌더링한다. 활성 link는 link role, visible `relativeHandle`과 target Profile `displayName`을 식별하는 accessible name, 기존 Profile route navigation과 parent propagation 차단을 유지하지만 독립적인 minimum touch target이나 별도 focus boundary를 약속하지 않는다. 다른 interactive control의 global accessibility baseline은 변경하지 않는다.

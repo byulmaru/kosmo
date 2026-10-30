@@ -121,6 +121,16 @@ describe('getShellLayout', () => {
     assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
   });
 
+  it('gives only confirmed mobile Web guests the public Local menu header', () => {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/', [], true), {
+      leading: 'menu',
+      title: '타임라인 둘러보기',
+    });
+    assert.equal(getWebMobileShellHeader(true, 390, '/', [], false), null);
+    assert.equal(getWebMobileShellHeader(false, 390, '/', [], true), null);
+    assert.equal(getWebMobileShellHeader(true, 1024, '/', [], true), null);
+  });
+
   it('treats only the canonical Settings route family as Settings', () => {
     assert.equal(isSettingsRoute('/settings'), true);
     assert.equal(isSettingsRoute('/settings/profile'), true);

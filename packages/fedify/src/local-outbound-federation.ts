@@ -3,7 +3,8 @@ import {
   ensureDrizzleLocalProfileActor,
   loadDrizzleLocalProfileActorKeyPairs,
 } from './local-actor-store';
-import { fedifyQueue } from './queue';
+import { fedifyMeterProvider } from './metrics';
+import { fedifyKv, fedifyQueue } from './queue';
 
 export type LocalOutboundContextData = {
   readonly localInstanceId: string;
@@ -11,7 +12,8 @@ export type LocalOutboundContextData = {
 
 export const localOutboundFederation = createFederation<LocalOutboundContextData>({
   allowPrivateAddress: false,
-  kv: new MemoryKvStore(),
+  kv: fedifyKv ?? new MemoryKvStore(),
+  meterProvider: fedifyMeterProvider,
   ...(fedifyQueue
     ? {
         // Use the same inbox/outbox/fan-out transport as the main federation.

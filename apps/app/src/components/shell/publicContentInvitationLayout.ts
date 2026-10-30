@@ -11,13 +11,19 @@ export type PublicContentInvitationPlacement =
 
 export function getPublicContentInvitationPlacement({
   height,
+  pinToBottom = false,
   safeAreaBottom,
   width,
 }: {
   height: number;
+  pinToBottom?: boolean;
   safeAreaBottom: number;
   width: number;
 }): PublicContentInvitationPlacement {
+  if (pinToBottom && width < breakpoints.compact) {
+    return { bottom: 0, left: 0, mode: 'fixed', right: 0 };
+  }
+
   if (height < 520 || width < 360) {
     return { mode: 'flow' };
   }

@@ -106,9 +106,6 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
-  const { selectedProfileId } = useSession();
-  const { showToast } = useToast();
-  const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
   const [commitCancel, cancelling] = useMutation<FollowButtonCancelProfileFollowRequestMutation>(
@@ -116,10 +113,13 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
+  const loading = following || cancelling || unfollowing;
+  const { selectedProfileId } = useSession();
+  const { showToast } = useToast();
+  const data = useFragment(followButtonProfileFragment, profile);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
-  const loading = following || cancelling || unfollowing;
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };

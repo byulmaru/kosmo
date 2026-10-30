@@ -23,7 +23,7 @@ import {
 } from '@kosmo/core/enums';
 import {
   postContentDocumentFromText,
-  postContentDocumentFromTextAndMedia,
+  postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
@@ -34,6 +34,7 @@ import {
 import { MockActivityEnvironment } from '@temporalio/testing';
 import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
+import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
   createPost as CreatePost,
   deletePost as DeletePost,
@@ -61,6 +62,7 @@ import type {
   finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
   prepareMediaUploadActivity as PrepareMediaUploadActivity,
 } from './activities/media-upload';
+import type { reprocessLocalPostContentActivity as ReprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -72,6 +74,7 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
@@ -79,7 +82,9 @@ let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
 let pg: typeof CoreDb.pg;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -104,6 +109,7 @@ let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNot
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
 let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
+let reprocessLocalPostContentActivity: typeof ReprocessLocalPostContentActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -116,6 +122,7 @@ before(async () => {
     Applications,
     db,
     firstOrThrow,
+    Hashtags,
     Instances,
     Media,
     NotificationQuoteJudgments,
@@ -123,7 +130,9 @@ before(async () => {
     OAuthAuthorizationCodes,
     OAuthTokens,
     pg,
+    PostContentHashtags,
     PostContents,
+    PostMentions,
     Posts,
     ProfileBlocks,
     ProfileFollows,
@@ -148,6 +157,7 @@ before(async () => {
   } = await import('./activities'));
   ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
     await import('./activities/media-upload'));
+  ({ reprocessLocalPostContentActivity } = await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
@@ -902,13 +912,13 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -929,13 +939,13 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   const recipient = await createProfile();
   const author = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Combined source'),
+    bodyText: 'Combined source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Combined quote'),
+    bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: source.id,
@@ -960,14 +970,14 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   const replyRecipient = await createProfile();
   const author = await createProfile();
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote and reply'),
+    bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
     repostSourceId: quoteSource.id,
@@ -1181,7 +1191,7 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1215,11 +1225,11 @@ test('Post deletion Notification Activity removes exact related rows and is idem
   const actor = await createProfile();
   const mentionContent = (profile: { handle: string; id: string }) => {
     const relativeHandle = `@${profile.handle}`;
-    const authoredBodyText = `Mention ${relativeHandle}`;
-    const start = authoredBodyText.indexOf(relativeHandle);
+    const bodyText = `Mention ${relativeHandle}`;
+    const start = bodyText.indexOf(relativeHandle);
     return {
-      authoredBodyText,
-      document: postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+      bodyText,
+      mentions: [
         {
           end: start + relativeHandle.length,
           handle: relativeHandle,
@@ -1227,7 +1237,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
           relativeHandle,
           start,
         },
-      ]),
+      ],
     };
   };
   const { post } = await createCorePost({
@@ -1249,7 +1259,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: post.id,
@@ -1356,33 +1366,33 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
   const repostRecipient = await createProfile();
   const actor = await createProfile();
   const { post: replyParent } = await createCorePost({
-    document: postContentDocumentFromText('Reply parent'),
+    bodyText: 'Reply parent',
     origin: 'LOCAL',
     profileId: replyRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: reply } = await createCorePost({
-    document: postContentDocumentFromText('Reply body'),
+    bodyText: 'Reply body',
     origin: 'LOCAL',
     profileId: actor.id,
     replyParentId: replyParent.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quoteSource } = await createCorePost({
-    document: postContentDocumentFromText('Quote source'),
+    bodyText: 'Quote source',
     origin: 'LOCAL',
     profileId: quoteRecipient.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
-    document: postContentDocumentFromText('Quote body'),
+    bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
     repostSourceId: quoteSource.id,
     visibility: PostVisibility.PUBLIC,
   });
   const { post: repostSource } = await createCorePost({
-    document: postContentDocumentFromText('Repost source'),
+    bodyText: 'Repost source',
     origin: 'LOCAL',
     profileId: repostRecipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1440,7 +1450,7 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   const recipient = await createProfile();
   const actor = await createProfile();
   const { post: source } = await createCorePost({
-    document: postContentDocumentFromText('Deleted Repost source'),
+    bodyText: 'Deleted Repost source',
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
@@ -1705,6 +1715,12 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(Profiles)
       .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
       .where(eq(Profiles.id, actor.id));
+    const { post } = await createCorePost({
+      bodyText: 'Read the article',
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
     const document = {
       version: 1,
       summary: null,
@@ -1725,12 +1741,6 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         ],
       },
     } as const;
-    const { post } = await createCorePost({
-      document,
-      origin: 'LOCAL',
-      profileId: recipient.id,
-      visibility: PostVisibility.PUBLIC,
-    });
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
@@ -1770,7 +1780,9 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const nativeInstallationId = installationIds[0]!;
+    const webInstallationId = installationIds[1]!;
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     const payload = sent[0];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
@@ -1783,10 +1795,40 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
       href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.ok('token' in payload);
+    assert.equal('fid' in payload, false);
+    assert.equal(
+      payload.token,
+      installationRows.find(({ id }) => id === nativeInstallationId)?.token,
+    );
     assert.equal(payload.android?.priority, undefined);
     assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-reaction' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    const webPayload = sent[1];
+    assert.ok(webPayload);
+    assert.ok('fid' in webPayload);
+    assert.equal(webPayload.fid, 'web-fid-reaction');
+    assert.equal('token' in webPayload, false);
+    assert.equal(webPayload.notification, undefined);
+    assert.equal(webPayload.android, undefined);
+    assert.equal(webPayload.apns, undefined);
+    assert.deepEqual(webPayload.data, {
+      notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      title: '혜주',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
+    });
+    const webTtl = webPayload.webpush?.headers?.TTL;
+    assert.match(webTtl ?? '', /^\d+$/);
+    assert.ok(Number(webTtl) <= 24 * 60 * 60);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
@@ -1809,18 +1851,18 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         },
       })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[1]?.notification?.body,
+      sent[2]?.notification?.body,
       `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
     );
     assert.ok(
       new TextEncoder().encode(
         JSON.stringify({
-          android: sent[1]?.android,
-          apns: sent[1]?.apns,
-          data: sent[1]?.data,
-          notification: sent[1]?.notification,
+          android: sent[2]?.android,
+          apns: sent[2]?.apns,
+          data: sent[2]?.data,
+          notification: sent[2]?.notification,
         }),
       ).byteLength < 4096,
     );
@@ -1829,12 +1871,15 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[2]?.notification?.body,
+      sent[3]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
+    assert.equal(sent[3]?.notification?.body.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[4]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[4]?.data?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1844,16 +1889,20 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[3]?.notification?.body,
+      sent[5]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
+    assert.equal(sent[5]?.notification?.body.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[6]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[6]?.data?.body.includes('Read the article'), false);
 
     await db.delete(AccountProfiles).where(eq(AccountProfiles.profileId, recipient.id));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent.length, 4);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent.length, 7);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
@@ -1888,14 +1937,14 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       .where(eq(Profiles.id, actor.id));
 
     const { post: target } = await createCorePost({
-      document: postContentDocumentFromText('target'),
+      bodyText: 'target',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
     postIds.push(target.id);
     const { post: reply } = await createCorePost({
-      document: postContentDocumentFromText('reply'),
+      bodyText: 'reply',
       origin: 'LOCAL',
       profileId: actor.id,
       replyParentId: target.id,
@@ -1903,7 +1952,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
-      document: postContentDocumentFromText('quote'),
+      bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
       repostSourceId: target.id,
@@ -2359,7 +2408,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
   }
 });
 
-test('Push Notification Activity는 등록되지 않은 token만 정확히 제거한다', async (t) => {
+test('Push Notification Activity는 등록되지 않은 FID만 제거하고 invalid-argument는 보존한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
@@ -2369,7 +2418,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
     const { post } = await createCorePost({
-      document: postContentDocumentFromText('Token cleanup'),
+      bodyText: 'Token cleanup',
       origin: 'LOCAL',
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
@@ -2393,24 +2442,37 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
         projectId: process.env.FIREBASE_PROJECT_ID,
       });
     const messaging = getMessaging(app);
+    let providerCode = 'messaging/installation-id-not-registered';
     t.mock.method(messaging, 'send', async () => {
       throw new FirebaseError({
-        code: 'messaging/registration-token-not-registered',
-        message: 'Registration token is no longer registered',
+        code: providerCode,
+        message: 'Push target is no longer registered',
       });
     });
 
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    const invalidInstallationId = installationIds[0]!;
-    await sendPushNotificationActivity(notificationId, invalidInstallationId);
+    const webInstallationId = installationIds[0]!;
+    const nativeInstallationId = installationIds[1]!;
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-stale' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
     assert.equal(
-      await db.$count(PushInstallations, eq(PushInstallations.id, invalidInstallationId)),
+      await db.$count(PushInstallations, eq(PushInstallations.id, webInstallationId)),
       0,
     );
     assert.equal(
       await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
+      1,
+    );
+
+    providerCode = 'messaging/invalid-argument';
+    await assert.rejects(() => sendPushNotificationActivity(notificationId, nativeInstallationId));
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.id, nativeInstallationId)),
       1,
     );
   } finally {
@@ -2669,7 +2731,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2679,7 +2744,10 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const retriedReady = await db
-      .select({ readyAt: Media.readyAt, state: Media.state })
+      .select({
+        readyAt: Media.readyAt,
+        state: Media.state,
+      })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
@@ -2689,6 +2757,32 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
+    );
+
+    const nightshade = await createUploadingMedia();
+    const nightshadeResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: nightshade.remoteUploadId,
+      url: 'https://media.example/nightshade.webp',
+    };
+    const nightshadeInput = {
+      mediaId: nightshade.mediaId,
+      accountId: fixture.account.id,
+      remoteUploadId: nightshade.remoteUploadId,
+      applyNightshade: true,
+      result: nightshadeResult,
+    };
+    assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
+    const nightshadeReady = await db
+      .select({ state: Media.state })
+      .from(Media)
+      .where(eq(Media.id, nightshade.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
+      nightshadeResult,
     );
 
     const concurrent = await createUploadingMedia();
@@ -2726,3 +2820,619 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     await cleanupAccountDeletionFixture(fixture);
   }
 });
+
+test('Local PostContent hashtag processing dry-run plans changes without writing rows', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtagName = `dryrun${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${hashtagName}`),
+  });
+
+  try {
+    const result = await reprocessLocalPostContentActivity({
+      postId: fixture.post.id,
+    });
+
+    assert.deepEqual(result, { status: 'wouldUpdate' });
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 1);
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, hashtagName)), 0);
+    assert.equal(
+      await db.$count(
+        PostContentHashtags,
+        eq(PostContentHashtags.postContentId, fixture.content.id),
+      ),
+      0,
+    );
+    const current = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(current.currentContentId, fixture.content.id);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+test('Local PostContent hashtag processing preserves document state, repairs relations, and converges on retry', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const [existingHashtag, orphanHashtag, missingRelationHashtag] = await db
+    .insert(Hashtags)
+    .values([
+      { name: `old${suffix}`, displayName: `Old${suffix}` },
+      { name: `orphan${suffix}`, displayName: `Orphan${suffix}` },
+      { name: `missing${suffix}`, displayName: `Missing${suffix}` },
+    ])
+    .returning();
+  assert.ok(existingHashtag);
+  assert.ok(orphanHashtag);
+  assert.ok(missingRelationHashtag);
+  const document = (mentionProfileIds: readonly string[]): PostContentDocumentV1 => ({
+    version: 1,
+    summary: 'content warning',
+    body: {
+      type: 'doc',
+      attrs: { sensitiveMedia: true },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'before ' },
+            {
+              type: 'mention',
+              attrs: { handle: '@mentioned', profileId: mentionProfileIds[0]! },
+            },
+            { type: 'text', text: `#adjacent #Ｆoo${suffix} #foo${suffix} and ` },
+            {
+              type: 'text',
+              text: 'https://example.com/path/#url',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/path/#url' } }],
+            },
+            { type: 'text', text: ' and ' },
+            {
+              type: 'text',
+              text: '#linked-label',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/label' } }],
+            },
+            { type: 'text', text: ' ' },
+            {
+              type: 'hashtag',
+              attrs: { hashtagId: existingHashtag.id, token: `#old${suffix}` },
+            },
+            { type: 'text', text: ' ' },
+            {
+              type: 'hashtag',
+              attrs: { hashtagId: missingRelationHashtag.id, token: `#missing${suffix}` },
+            },
+          ],
+        },
+        { type: 'media', attrs: { mediaId: crypto.randomUUID() } },
+      ],
+    },
+  });
+  const fixture = await createPostContentReprocessingFixture({
+    document,
+    hashtagIds: [existingHashtag.id, orphanHashtag.id],
+    mentionCount: 2,
+    visibility: PostVisibility.DIRECT,
+  });
+
+  try {
+    const sourcePost = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    const sourceMentions = await db
+      .select({ profileId: PostMentions.profileId })
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, fixture.content.id));
+    assert.equal(sourceMentions.length, 2);
+
+    const result = await reprocessLocalPostContentActivity({
+      dryRun: false,
+      postId: fixture.post.id,
+    });
+    assert.deepEqual(result, { status: 'updated' });
+
+    const updatedPost = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, fixture.content.id);
+    assert.deepEqual({ ...updatedPost, currentContentId: sourcePost.currentContentId }, sourcePost);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    assert.equal(updatedContent.postId, fixture.post.id);
+    assert.ok(Temporal.Instant.compare(updatedContent.createdAt, fixture.content.createdAt) > 0);
+    assert.equal(
+      postContentDocumentToText(updatedContent.document),
+      postContentDocumentToText(fixture.content.document),
+    );
+    assert.equal(updatedContent.document.summary, fixture.content.document.summary);
+    assert.deepEqual(updatedContent.document.body.attrs, fixture.content.document.body.attrs);
+    assert.deepEqual(
+      updatedContent.document.body.content.at(-1),
+      fixture.content.document.body.content.at(-1),
+    );
+
+    const hashtagNodes = updatedContent.document.body.content.flatMap((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    );
+    const foo = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, `foo${suffix}`))
+      .then(firstOrThrow);
+    assert.equal(foo.displayName, `Foo${suffix}`);
+    assert.deepEqual(hashtagNodes, [
+      { hashtagId: foo.id, token: `#Ｆoo${suffix}` },
+      { hashtagId: foo.id, token: `#foo${suffix}` },
+      { hashtagId: existingHashtag.id, token: `#old${suffix}` },
+      { hashtagId: missingRelationHashtag.id, token: `#missing${suffix}` },
+    ]);
+    const updatedRelations = await db
+      .select({ hashtagId: PostContentHashtags.hashtagId })
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, updatedContent.id));
+    assert.deepEqual(
+      updatedRelations.map(({ hashtagId }) => hashtagId).sort(),
+      [existingHashtag.id, missingRelationHashtag.id, foo.id].sort(),
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id))
+        .then((rows) => rows.map(({ hashtagId }) => hashtagId).sort()),
+      [existingHashtag.id, orphanHashtag.id].sort(),
+    );
+    assert.deepEqual(
+      await db
+        .select({ profileId: PostMentions.profileId })
+        .from(PostMentions)
+        .where(eq(PostMentions.postContentId, updatedContent.id))
+        .then((rows) => rows.map(({ profileId }) => profileId).sort()),
+      sourceMentions.map(({ profileId }) => profileId).sort(),
+    );
+
+    const contentCount = await db.$count(PostContents, eq(PostContents.postId, fixture.post.id));
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.equal(
+      await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)),
+      contentCount,
+    );
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+    await db.delete(Hashtags).where(eq(Hashtags.id, missingRelationHashtag.id));
+  }
+});
+
+test('Local PostContent reprocessing reads the current revision when the Activity runs', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const staleHashtagName = `stale${suffix}`;
+  const currentHashtagName = `current${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${staleHashtagName}`),
+  });
+
+  try {
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText(`#${currentHashtagName}`),
+        postId: fixture.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, fixture.post.id));
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({ dryRun: false, postId: fixture.post.id }),
+      { status: 'updated' },
+    );
+    const updatedPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, currentContent.id);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    const currentHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, currentHashtagName))
+      .then(firstOrThrow);
+    assert.equal(
+      postContentDocumentToText(updatedContent.document),
+      postContentDocumentToText(currentContent.document),
+    );
+    assert.deepEqual(
+      updatedContent.document.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).flatMap((node) =>
+              node.type === 'hashtag'
+                ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+                : [],
+            )
+          : [],
+      ),
+      [{ hashtagId: currentHashtag.id, token: `#${currentHashtagName}` }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, updatedContent.id)),
+      [{ hashtagId: currentHashtag.id }],
+    );
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, staleHashtagName)), 0);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+test('Local PostContent hashtag processing repairs relations without changing the document', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtag = await db
+    .insert(Hashtags)
+    .values({ name: `relationonly${suffix}`, displayName: `Relationonly${suffix}` })
+    .returning()
+    .then(firstOrThrow);
+  const document: PostContentDocumentV1 = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'hashtag', attrs: { hashtagId: hashtag.id, token: `#relationonly${suffix}` } },
+          ],
+        },
+      ],
+    },
+  };
+  const fixture = await createPostContentReprocessingFixture({ document: () => document });
+
+  try {
+    const sourceRelationRows = await db
+      .select({ hashtagId: PostContentHashtags.hashtagId })
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, fixture.content.id));
+    assert.deepEqual(sourceRelationRows, []);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        postId: fixture.post.id,
+      }),
+      { status: 'wouldUpdate' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 1);
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id)),
+      sourceRelationRows,
+    );
+    const dryRunPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(dryRunPost.currentContentId, fixture.content.id);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'updated' },
+    );
+    const updatedPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, fixture.content.id);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    assert.deepEqual(updatedContent.document, fixture.content.document);
+    const oldContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, fixture.content.id))
+      .then(firstOrThrow);
+    assert.deepEqual(oldContent.document, fixture.content.document);
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, updatedContent.id)),
+      [{ hashtagId: hashtag.id }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id)),
+      sourceRelationRows,
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+    await db.delete(Hashtags).where(eq(Hashtags.id, hashtag.id));
+  }
+});
+
+test('Local PostContent reprocessing accepts Local Posts and skips remote or deleted Posts', async () => {
+  const local = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('local'),
+  });
+  const remote = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('remote'),
+    kind: InstanceKind.ACTIVITYPUB,
+  });
+  const deleted = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('deleted'),
+    postState: PostState.DELETED,
+  });
+
+  try {
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: local.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: remote.post.id,
+      }),
+      { status: 'skipped' },
+    );
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: deleted.post.id,
+      }),
+      { status: 'skipped' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, remote.post.id)), 1);
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, deleted.post.id)), 1);
+  } finally {
+    await cleanupPostContentReprocessingFixture(local);
+    await cleanupPostContentReprocessingFixture(remote);
+    await cleanupPostContentReprocessingFixture(deleted);
+  }
+});
+
+test('Local PostContent reprocessing rolls back all writes after losing the current-content CAS', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtagName = `race${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${hashtagName}`),
+  });
+  const competingContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText('competing revision'),
+      postId: fixture.post.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const concurrentUpdate = await pg.reserve();
+  let transactionHeld = false;
+  let activity: ReturnType<typeof reprocessLocalPostContentActivity> | undefined;
+
+  try {
+    await concurrentUpdate`BEGIN`;
+    transactionHeld = true;
+    const [{ pid }] = await concurrentUpdate<{ pid: number }[]>`
+      SELECT pg_backend_pid()::int AS pid
+    `;
+    await concurrentUpdate`
+      SELECT id FROM post WHERE id = ${fixture.post.id} FOR UPDATE
+    `;
+    activity = reprocessLocalPostContentActivity({
+      dryRun: false,
+      postId: fixture.post.id,
+    });
+
+    let blocked = false;
+    for (let attempt = 0; attempt < 250; attempt += 1) {
+      const [activityState] = await pg<{ blocked: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE ${pid} = ANY(pg_blocking_pids(pid))
+        ) AS blocked
+      `;
+      if (activityState?.blocked) {
+        blocked = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(blocked, 'PostContent reprocessing must reach the current-content compare-and-set');
+    await concurrentUpdate`
+      UPDATE post SET current_content_id = ${competingContent.id} WHERE id = ${fixture.post.id}
+    `;
+    await concurrentUpdate`COMMIT`;
+    transactionHeld = false;
+
+    assert.deepEqual(await activity, { status: 'skipped' });
+    const current = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(current.currentContentId, competingContent.id);
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, hashtagName)), 0);
+    assert.equal(
+      await db.$count(
+        PostContentHashtags,
+        eq(PostContentHashtags.postContentId, competingContent.id),
+      ),
+      0,
+    );
+  } finally {
+    if (transactionHeld) {
+      await concurrentUpdate`ROLLBACK`;
+    }
+    if (activity) {
+      await Promise.allSettled([activity]);
+    }
+    concurrentUpdate.release();
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+type PostContentReprocessingFixture = {
+  readonly content: typeof CoreDb.PostContents.$inferSelect;
+  readonly hashtagIds: readonly string[];
+  readonly instanceId: string;
+  readonly mentionProfileIds: readonly string[];
+  readonly post: typeof CoreDb.Posts.$inferSelect;
+  readonly profileId: string;
+};
+
+const createPostContentReprocessingFixture = async ({
+  document,
+  hashtagIds = [],
+  kind = InstanceKind.LOCAL,
+  mentionCount = 0,
+  postState = PostState.ACTIVE,
+  visibility = PostVisibility.DIRECT,
+}: {
+  readonly document: (mentionProfileIds: readonly string[]) => PostContentDocumentV1;
+  readonly hashtagIds?: readonly string[];
+  readonly kind?: InstanceKind;
+  readonly mentionCount?: number;
+  readonly postState?: PostState;
+  readonly visibility?: PostVisibility;
+}): Promise<PostContentReprocessingFixture> => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const profile = await createProfile({ accountId: null, instanceKind: kind });
+  const createMentionProfile = (handleSuffix: string) =>
+    db
+      .insert(Profiles)
+      .values({
+        displayName: handleSuffix,
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: handleSuffix,
+        normalizedHandle: handleSuffix,
+        instanceId: profile.instanceId,
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+  const mentionProfiles = await Promise.all(
+    Array.from({ length: mentionCount }, (_, index) =>
+      createMentionProfile(`${suffix}-mention-${index}`),
+    ),
+  );
+  const content = await db
+    .insert(PostContents)
+    .values({ document: document(mentionProfiles.map(({ id }) => id)), postId: null })
+    .returning()
+    .then(firstOrThrow);
+  const post = await db
+    .insert(Posts)
+    .values({
+      currentContentId: content.id,
+      profileId: profile.id,
+      state: postState,
+      visibility,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db.update(PostContents).set({ postId: post.id }).where(eq(PostContents.id, content.id));
+  if (mentionProfiles.length > 0) {
+    await db
+      .insert(PostMentions)
+      .values(mentionProfiles.map(({ id }) => ({ postContentId: content.id, profileId: id })));
+  }
+  if (hashtagIds.length > 0) {
+    await db
+      .insert(PostContentHashtags)
+      .values(hashtagIds.map((hashtagId) => ({ hashtagId, postContentId: content.id })));
+  }
+  return {
+    content,
+    hashtagIds,
+    instanceId: profile.instanceId,
+    mentionProfileIds: mentionProfiles.map(({ id }) => id),
+    post,
+    profileId: profile.id,
+  };
+};
+
+const cleanupPostContentReprocessingFixture = async (
+  fixture: PostContentReprocessingFixture,
+): Promise<void> => {
+  const contents = await db
+    .select({ id: PostContents.id })
+    .from(PostContents)
+    .where(eq(PostContents.postId, fixture.post.id));
+  const contentIds = [...new Set([fixture.content.id, ...contents.map(({ id }) => id)])];
+  const relatedHashtags =
+    contentIds.length === 0
+      ? []
+      : await db
+          .select({ hashtagId: PostContentHashtags.hashtagId })
+          .from(PostContentHashtags)
+          .where(inArray(PostContentHashtags.postContentId, contentIds))
+          .then((rows) => rows.map(({ hashtagId }) => hashtagId));
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, fixture.post.id));
+  await db.update(PostContents).set({ postId: null }).where(inArray(PostContents.id, contentIds));
+  await db.delete(Posts).where(eq(Posts.id, fixture.post.id));
+  await db.delete(PostContents).where(inArray(PostContents.id, contentIds));
+  await db
+    .delete(Profiles)
+    .where(inArray(Profiles.id, [fixture.profileId, ...fixture.mentionProfileIds]));
+  await db.delete(Instances).where(eq(Instances.id, fixture.instanceId));
+  const hashtagIds = [...new Set([...fixture.hashtagIds, ...relatedHashtags])];
+  if (hashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, hashtagIds));
+  }
+};

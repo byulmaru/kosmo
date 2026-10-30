@@ -22,8 +22,11 @@
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
     "./temporal/follow-command": "./temporal/follow-command.ts",
+    "./temporal/local-post-create": "./temporal/local-post-create.ts",
     "./temporal/media-upload": "./temporal/media-upload.ts",
     "./temporal/operational-notification": "./temporal/operational-notification.ts",
+    "./temporal/post-create": "./temporal/post-create.ts",
+    "./temporal/post-content-reprocessing": "./temporal/post-content-reprocessing.ts",
     "./temporal/hashtag-mute": "./temporal/hashtag-mute.ts",
     "./temporal/push-notification": "./temporal/push-notification.ts",
     "./temporal/profile-block": "./temporal/profile-block.ts",
@@ -43,6 +46,7 @@
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
     "emoji-datasource-google": "16.0.0",
+    "fraci": "0.19.0",
     "jsdom": "^29.1.1",
     "linkify-it": "6.1.0",
     "postgres": "^3.4.9",
@@ -50,7 +54,7 @@
     "temporal-polyfill": "^0.3.2",
     "tsx": "^4.22.4",
     "uuid": "^14.0.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "scripts": {
     "db:migrate": "node --import tsx db/migrate.ts",

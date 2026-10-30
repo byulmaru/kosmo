@@ -8,11 +8,13 @@ import {
   CancelledFailure,
   ServiceError,
   TimeoutFailure,
+  WorkflowExecutionAlreadyStartedError,
   WorkflowFailedError,
   WorkflowUpdateFailedError,
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
+import type { PostCreateWorkflowArgs, PostCreateWorkflowResult } from './post-create';
 import type { RemoteProfileLookupInput, RemoteProfileUpdateInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -23,6 +25,17 @@ const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow, remoteProfile
   await import('./remote-profile');
 const { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES, remotePostLookupWorkflow } =
   await import('./remote-post');
+const { POST_CREATE_WORKFLOW_TYPE, postCreateWorkflow } = await import('./post-create');
+
+const localPostCreateArgs = (requestId: string): PostCreateWorkflowArgs => ({
+  input: {
+    bodyText: 'body',
+    origin: 'LOCAL',
+    profileId: '00000000-0000-4000-8000-000000000001',
+    visibility: 'PUBLIC',
+  },
+  requestId,
+});
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
   spawnSync(
@@ -284,6 +297,219 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
     releaseStart();
     deadline.mock.restore();
     start.mock.restore();
+  }
+});
+
+test('execute mode는 opt-in 된 기존 Post 실행 결과를 같은 Workflow ID에서 반환한다', async () => {
+  const input = localPostCreateArgs('00000000-0000-4000-8000-000000000002');
+  const workflowId = 'post-create:' + input.requestId;
+  let workflowIdCallbackCount = 0;
+  const definition = {
+    ...postCreateWorkflow,
+    workflowIdFromArgs: (args: PostCreateWorkflowArgs) => {
+      workflowIdCallbackCount += 1;
+      return postCreateWorkflow.workflowIdFromArgs(args);
+    },
+  };
+  const result: PostCreateWorkflowResult = {
+    authorProfileId: input.input.profileId,
+    postId: '00000000-0000-4000-8000-000000000003',
+    status: 'created',
+  };
+  let activeDeadlineCallbacks = 0;
+  const handleResult = mock.fn(async () => {
+    assert.equal(activeDeadlineCallbacks, 1);
+    return result;
+  });
+  const alreadyStarted = new WorkflowExecutionAlreadyStartedError(
+    'Workflow execution already started',
+    workflowId,
+    POST_CREATE_WORKFLOW_TYPE,
+  );
+  const execute = mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(activeDeadlineCallbacks, 1);
+      assert.equal(workflow, postCreateWorkflow.workflow);
+      assert.ok(options && typeof options === 'object');
+      const workflowOptions = options as {
+        args?: readonly PostCreateWorkflowArgs[];
+        workflowId?: string;
+        workflowIdConflictPolicy?: string;
+        workflowIdReusePolicy?: string;
+      };
+      assert.deepEqual(workflowOptions.args, [input]);
+      assert.equal(workflowOptions.workflowId, workflowId);
+      assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+      assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
+      assert.equal('returnExistingResult' in workflowOptions, false);
+      throw alreadyStarted;
+    },
+  );
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
+    assert.equal(activeDeadlineCallbacks, 1);
+    assert.equal(id, workflowId);
+    return { result: handleResult } as never;
+  });
+  const deadlines: Array<number | Date> = [];
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value);
+      activeDeadlineCallbacks += 1;
+      try {
+        return await callback();
+      } finally {
+        activeDeadlineCallbacks -= 1;
+      }
+    },
+  );
+  const now = mock.method(Date, 'now', () => 1_000_000);
+
+  try {
+    const options = {
+      args: [input],
+      mode: 'execute' as const,
+      returnExistingResult: true,
+      workflowIdConflictPolicy: 'USE_EXISTING' as const,
+      workflowIdReusePolicy: 'REJECT_DUPLICATE' as const,
+    };
+    assert.strictEqual(await runWorkflow(definition, options), result);
+    assert.strictEqual(await runWorkflow(definition, options), result);
+
+    assert.equal(workflowIdCallbackCount, 2);
+    assert.equal(execute.mock.calls.length, 2);
+    assert.equal(getHandle.mock.calls.length, 2);
+    assert.deepEqual(
+      getHandle.mock.calls.map(({ arguments: callArguments }) => callArguments),
+      [[workflowId], [workflowId]],
+    );
+    assert.equal(handleResult.mock.calls.length, 2);
+    assert.equal(deadline.mock.calls.length, 2);
+    assert.deepEqual(deadlines, [1_030_000, 1_030_000]);
+  } finally {
+    now.mock.restore();
+    deadline.mock.restore();
+    getHandle.mock.restore();
+    execute.mock.restore();
+  }
+});
+
+test('execute mode는 opt-in이 없거나 ID가 다른 오류를 결과 조회로 바꾸지 않는다', async () => {
+  const input = localPostCreateArgs('00000000-0000-4000-8000-000000000004');
+  const workflowId = postCreateWorkflow.workflowIdFromArgs(input);
+  let workflowIdCallbackCount = 0;
+  const definition = {
+    ...postCreateWorkflow,
+    workflowIdFromArgs: (args: PostCreateWorkflowArgs) => {
+      workflowIdCallbackCount += 1;
+      return postCreateWorkflow.workflowIdFromArgs(args);
+    },
+  };
+  const failures = [
+    {
+      error: new WorkflowExecutionAlreadyStartedError(
+        'Workflow execution already started',
+        workflowId,
+        POST_CREATE_WORKFLOW_TYPE,
+      ),
+      returnExistingResult: undefined,
+    },
+    { error: new Error('Temporal unavailable'), returnExistingResult: true },
+    {
+      error: new WorkflowExecutionAlreadyStartedError(
+        'Workflow execution already started',
+        'another-workflow-id',
+        POST_CREATE_WORKFLOW_TYPE,
+      ),
+      returnExistingResult: true,
+    },
+  ] as const;
+  let failureIndex = 0;
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => {
+    const failure = failures[failureIndex++];
+    assert.ok(failure);
+    throw failure.error;
+  });
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', () => {
+    throw new Error('unmatched native errors must not retrieve a result');
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_value: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    for (const failure of failures) {
+      const result =
+        failure.returnExistingResult === true
+          ? runWorkflow(definition, {
+              args: [input],
+              mode: 'execute',
+              returnExistingResult: true,
+            })
+          : runWorkflow(definition, { args: [input], mode: 'execute' });
+      await assert.rejects(result, (error: unknown) => error === failure.error);
+    }
+    assert.equal(failureIndex, failures.length);
+    assert.equal(workflowIdCallbackCount, failures.length);
+    assert.equal(execute.mock.calls.length, failures.length);
+    assert.equal(getHandle.mock.calls.length, 0);
+    assert.equal(deadline.mock.calls.length, failures.length);
+  } finally {
+    deadline.mock.restore();
+    getHandle.mock.restore();
+    execute.mock.restore();
+  }
+});
+
+test('기존 Post 실행 결과 조회 중의 ApplicationFailure를 그대로 전파한다', async () => {
+  const input = localPostCreateArgs('00000000-0000-4000-8000-000000000005');
+  const workflowId = postCreateWorkflow.workflowIdFromArgs(input);
+  const alreadyStarted = new WorkflowExecutionAlreadyStartedError(
+    'Workflow execution already started',
+    workflowId,
+    POST_CREATE_WORKFLOW_TYPE,
+  );
+  const domainFailure = ApplicationFailure.nonRetryable('Post creation rejected', 'VALIDATION');
+  const workflowFailure = new WorkflowFailedError(
+    'Workflow execution failed',
+    domainFailure,
+    'NON_RETRYABLE_FAILURE',
+  );
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => {
+    throw alreadyStarted;
+  });
+  const result = mock.fn(async () => {
+    throw workflowFailure;
+  });
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', () => ({ result }) as never);
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_value: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      runWorkflow(postCreateWorkflow, {
+        args: [input],
+        mode: 'execute',
+        returnExistingResult: true,
+      }),
+      (error: unknown) => error === domainFailure,
+    );
+    assert.equal(execute.mock.calls.length, 1);
+    assert.equal(getHandle.mock.calls.length, 1);
+    assert.equal(result.mock.calls.length, 1);
+    assert.equal(deadline.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    getHandle.mock.restore();
+    execute.mock.restore();
   }
 });
 
@@ -603,6 +829,45 @@ test('공용 task queue를 적용한다', async () => {
     assert.ok(executeOptions);
     assert.equal(executeOptions.taskQueue, 'kosmo');
   } finally {
+    execute.mock.restore();
+  }
+});
+
+test('WorkflowDefinition은 caller deadline만 capability별로 조정하고 기본 30초를 유지한다', async () => {
+  type TimeoutWorkflow = () => Promise<string>;
+  const deadlines: number[] = [];
+  const execute = mock.method(temporalClient.workflow, 'execute', async () => 'ok' as never);
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value instanceof Date ? value.getTime() : value);
+      return callback();
+    },
+  );
+  const now = mock.method(Date, 'now', () => 1_000_000);
+
+  try {
+    await runWorkflow(
+      {
+        workflow: 'mediaUploadWorkflow',
+        workflowIdFromArgs: () => 'media-upload',
+        timeoutMs: 60_000,
+      } satisfies WorkflowDefinition<TimeoutWorkflow>,
+      { mode: 'execute' },
+    );
+    await runWorkflow(
+      {
+        workflow: 'defaultWorkflow',
+        workflowIdFromArgs: () => 'default',
+      } satisfies WorkflowDefinition<TimeoutWorkflow>,
+      { mode: 'execute' },
+    );
+
+    assert.deepEqual(deadlines, [1_060_000, 1_030_000]);
+  } finally {
+    now.mock.restore();
+    deadline.mock.restore();
     execute.mock.restore();
   }
 });
