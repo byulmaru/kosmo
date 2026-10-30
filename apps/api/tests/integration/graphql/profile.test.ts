@@ -45,6 +45,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
+const configuredLocalTimelineInstanceId = crypto.randomUUID();
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
@@ -92,6 +93,7 @@ describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
+    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
     process.env.ENVIRONMENT = 'test';
@@ -4921,6 +4923,43 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
+  test('uses configured Local sources from the initialized environment after raw environment changes', async () => {
+    const localAuthor = await createProfile({
+      handle: 'configured-local-author',
+      instanceId: localInstanceId,
+    });
+    const localPost = await createContentfulPost({ profileId: localAuthor.id });
+    const configuredAuthor = await createStoredActivityPubAuthor({
+      domain: 'configured-remote.example',
+      handle: 'configured-remote-author',
+      instanceId: configuredLocalTimelineInstanceId,
+    });
+    const configuredPost = await createContentfulPost({ profileId: configuredAuthor.profile.id });
+    const unconfiguredAuthor = await createStoredActivityPubAuthor({
+      domain: 'unconfigured-remote.example',
+      handle: 'unconfigured-author',
+    });
+    await createContentfulPost({ profileId: unconfiguredAuthor.profile.id });
+
+    try {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = 'not-a-uuid';
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query ConfiguredLocalTimeline {
+          localTimeline(first: 10) { edges { node { id } } }
+        }`,
+        {},
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        new Set(connectionIds(result.data?.localTimeline)),
+        new Set([localPost, configuredPost].map(({ id }) => globalId('Post', id))),
+      );
+    } finally {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
+    }
+  });
+
   test('keeps public Local Quote bodies while applying Source visibility and consent', async () => {
     const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const author = await createProfile({
@@ -6295,9 +6334,11 @@ const assertRemotePostReadDenied = (
 
 const createRemoteInstance = async ({
   domain = remoteDomain,
+  id,
   state = InstanceState.ACTIVE,
 }: {
   domain?: string;
+  id?: string;
   state?: InstanceState;
 } = {}) =>
   db
@@ -6307,6 +6348,7 @@ const createRemoteInstance = async ({
       domain,
       kind: InstanceKind.ACTIVITYPUB,
       state,
+      ...(id === undefined ? {} : { id }),
     })
     .returning()
     .then(firstOrThrow);
@@ -6365,11 +6407,16 @@ const createProfile = async ({
 const createStoredActivityPubAuthor = async ({
   domain,
   handle,
+  instanceId,
 }: {
   domain: string;
   handle: string;
+  instanceId?: string;
 }) => {
-  const instance = await createRemoteInstance({ domain });
+  const instance = await createRemoteInstance({
+    domain,
+    ...(instanceId === undefined ? {} : { id: instanceId }),
+  });
   const profile = await createProfile({ handle, instanceId: instance.id });
   const actorUri = `https://${domain}/users/${handle}`;
   await db.insert(ActivityPubActors).values({

@@ -85,13 +85,16 @@ type Story = StoryObj<typeof meta>;
 
 function expectHomeBrandHeader(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
-  const headings = canvas.getAllByRole('heading', { name: '홈' });
-  const mark = canvasElement.querySelector<HTMLImageElement>('[aria-hidden="true"] img');
 
-  expect(headings).toHaveLength(1);
-  expect(mark).not.toBeNull();
-  expect(mark?.getBoundingClientRect().width).toBe(38);
-  expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
+  return waitFor(() => {
+    const headings = canvas.getAllByRole('heading', { name: '홈' });
+    const mark = canvasElement.querySelector<HTMLImageElement>('[aria-hidden="true"] img');
+
+    expect(headings).toHaveLength(1);
+    expect(mark).not.toBeNull();
+    expect(mark?.getBoundingClientRect().width).toBe(38);
+    expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
 }
 
 function HomeRefreshStory() {
@@ -189,7 +192,7 @@ export const EmptyTimelineFull: Story = {
     expect(emptyTitle).toBeVisible();
     expect(timeline).not.toBeNull();
     expect(timeline).toHaveStyle({ paddingBottom: '0px', paddingTop: '0px' });
-    expectHomeBrandHeader(canvasElement);
+    await expectHomeBrandHeader(canvasElement);
   },
 };
 
@@ -325,7 +328,7 @@ export const ErrorFull: Story = {
     expect(canvas.queryByText('사용할 프로필을 선택해주세요')).not.toBeInTheDocument();
     expect(canvas.queryByText('프로필을 만들어 시작하세요')).not.toBeInTheDocument();
     expect(canvas.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
-    expectHomeBrandHeader(canvasElement);
+    await expectHomeBrandHeader(canvasElement);
   },
 };
 

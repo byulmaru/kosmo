@@ -7,12 +7,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## Post List Type
 
-| 값      | 의미                                       |
-| ------- | ------------------------------------------ |
-| Home    | viewer Profile의 기본 Post List            |
-| Local   | configured Local Instance의 공개 Post List |
-| Profile | Target Profile이 작성한 Post List          |
-| Hashtag | Target Hashtag가 포함된 공개 Post List     |
+| 값      | 의미                                                                       |
+| ------- | -------------------------------------------------------------------------- |
+| Home    | viewer Profile의 기본 Post List                                            |
+| Local   | configured Local Instance와 운영자가 추가 설정한 Instance의 공개 Post List |
+| Profile | Target Profile이 작성한 Post List                                          |
+| Hashtag | Target Hashtag가 포함된 공개 Post List                                     |
 
 ## Control Decision
 
@@ -61,8 +61,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 - Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
 - 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
-- configured Local Instance에 속한 Active/Normal Local Profile이 작성한 Public Post 중 Content가 있고 Reply
-  Parent가 없는 eligible Post를 포함한다.
+- configured Local Instance 또는 운영자가 추가 설정한 Instance에 속한 Active/Normal Profile이 작성한 Public Post 중 Content가 있고 Reply Parent가 없는 eligible Post를 포함한다.
+- 이미 기존 수신 경로를 통해 Kosmo에 수신·저장된 Post만 조회한다. Instance 설정은 새 Post를 수집하지 않으며, 선택한 Instance의 모든 Post가 노출됨을 보장하지 않는다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
 - Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
 
