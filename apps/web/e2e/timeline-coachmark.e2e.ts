@@ -38,7 +38,7 @@ for (const width of [390, 1440]) {
     const profileGuide = page.getByRole('dialog', { name: '지금 활동 중인 프로필' });
     await expect(profileGuide).toBeVisible();
     if (width === 390) {
-      await expect(page.locator('#mobile-sidebar')).toBeVisible();
+      await expect(page.locator('#mobile-sidebar')).toHaveCount(0);
     }
     await profileGuide.getByRole('button', { name: '다음', exact: true }).click();
     const composerGuide = page.getByRole('dialog', { name: '내 이야기를 들려주세요' });
