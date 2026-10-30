@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -10,6 +11,8 @@ import type { Banner } from '@/components/ui/Banner';
 import type { Button } from '@/components/ui/Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const require = createRequire(import.meta.url);
 
 type BannerProps = ComponentProps<typeof Banner>;
 type ButtonProps = ComponentProps<typeof Button>;
@@ -29,6 +32,9 @@ mock.module('@/components/ui/Button', {
   exports: { Button: MockButton },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('lucide-react-native', {
+  exports: { Bell: 'Bell' },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(require.resolve('lucide-react-native'), {
   exports: { Bell: 'Bell' },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
