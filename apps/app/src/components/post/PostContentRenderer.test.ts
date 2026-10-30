@@ -16,6 +16,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 const require = createRequire(import.meta.url);
 const openedURLs: string[] = [];
+const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
+  getSize: (_url: string, success: (width: number, height: number) => void) => success(40, 20),
+});
 
 mockModule('react-native', {
   Linking: {
@@ -23,6 +26,7 @@ mockModule('react-native', {
       openedURLs.push(url);
     },
   },
+  Image: MockImage,
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
   StyleSheet: {
@@ -104,6 +108,205 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
+  it('같은 URL map으로 연결된 인접 shortcode도 각각 image로 렌더링한다', async () => {
+    const bodyText = ':cat::cat: 이후 본문';
+    await render({
+      bodyText,
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          attrs: {
+            customEmojis: [{ shortcode: ':cat:', url: 'https://emoji.example/cat.png' }],
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: bodyText,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-custom-emoji-adjacent',
+    });
+
+    assert.equal(rendered('Image').length, 2);
+    assert.equal(renderedText(rendered('Text')[0]!), bodyText);
+  });
+
+  it('Note map에 없는 shortcode는 원문으로 유지한다', async () => {
+    const shortcode = ':unmapped:';
+    await render({
+      bodyText: shortcode,
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          attrs: {
+            customEmojis: [{ shortcode: ':other:', url: 'https://emoji.example/other.png' }],
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: shortcode,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-custom-emoji-ambiguous',
+    });
+
+    assert.equal(rendered('Image').length, 0);
+    assert.equal(renderedText(rendered('Text')[0]!), shortcode);
+  });
+
+  it('숨겨진 Content Warning은 custom emoji image를 mount하지 않는다', async () => {
+    await render({
+      bodyText: ':hidden:',
+      contentWarning: '민감한 내용',
+      document: {
+        version: 1,
+        summary: '민감한 내용',
+        body: {
+          type: 'doc',
+          attrs: {
+            customEmojis: [{ shortcode: ':hidden:', url: 'https://emoji.example/hidden.png' }],
+            sensitiveMedia: true,
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: ':hidden:',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [
+        {
+          altText: null,
+          id: 'sensitive-media',
+          url: 'https://media.example/sensitive.png',
+        },
+      ],
+      mentionedProfiles: [],
+      postId: 'post-custom-emoji-warning',
+    });
+
+    assert.equal(rendered('Image').length, 0);
+    const warning = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning',
+    );
+    assert.ok(warning);
+    await act(async () => warning.props.onPress({ stopPropagation: () => undefined }));
+    assert.equal(rendered('Image').length, 1);
+    assert.equal(rendered('PostMediaGallery')[0]?.props.sensitive, true);
+  });
+
+  it('link mark 안의 custom emoji도 링크 동작과 본문 형제를 유지한다', async () => {
+    const url = 'https://emoji.example/linked.png';
+    await render({
+      bodyText: ':linked: 뒤 텍스트',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          attrs: {
+            customEmojis: [{ shortcode: ':linked:', url }],
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: ':linked:',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/post' } }],
+                },
+                { type: 'text', text: ' 뒤 텍스트' },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-custom-emoji-link',
+    });
+
+    const link = rendered('Text').find((node) => node.props.accessibilityRole === 'link');
+    assert.ok(link);
+    assert.equal(renderedText(rendered('Text')[0]!), ':linked: 뒤 텍스트');
+    link.props.onPress({
+      stopPropagation: () => undefined,
+      preventDefault: () => undefined,
+    });
+    assert.deepEqual(openedURLs, ['https://example.com/post']);
+  });
+
+  it('링크 label 자체인 URL은 shortcode map이 있어도 image로 치환하지 않는다', async () => {
+    const linkLabel = 'https://example.com/:linked:';
+    await render({
+      bodyText: linkLabel,
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          attrs: {
+            customEmojis: [{ shortcode: ':linked:', url: 'https://emoji.example/linked.png' }],
+          },
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: linkLabel,
+                  marks: [{ type: 'link', attrs: { href: linkLabel } }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-custom-emoji-url-label',
+    });
+
+    assert.equal(rendered('Image').length, 0);
+    assert.equal(
+      renderedText(rendered('Text').find((node) => node.props.accessibilityRole === 'link')!),
+      linkLabel,
+    );
+  });
+
   it('일반 링크는 외부 URL을 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
     await render({
       bodyText: '외부 링크',
