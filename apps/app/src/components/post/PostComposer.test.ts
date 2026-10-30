@@ -562,7 +562,6 @@ describe('PostComposer character count', () => {
 
 describe('PostComposer request acknowledgement cache projection', () => {
   it('prepends a rechecked request only to the original actor first-page arrays', async () => {
-    const requestId = 'request-acknowledged';
     const requestNodeId = 'post-request-node';
     const query = getRequest(PostRequestListQueryNode);
     const environment = relayEnvironment;
@@ -597,7 +596,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
     await act(async () => targetProps?.onSubmit());
 
     const originalSubmission = mutationCalls[0]?.variables;
-    assert.equal(originalSubmission?.input.actorProfileId, profileA.id);
+    assert.ok(originalSubmission);
+    assert.equal(originalSubmission.input.actorProfileId, profileA.id);
+    const requestId = originalSubmission.input.requestId;
+    assert.ok(typeof requestId === 'string');
     await act(async () => mutationCalls[0]?.onError(new Error('접수 결과 확인 불가')));
     assert.ok(retryUncertainRequest);
 

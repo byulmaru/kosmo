@@ -866,6 +866,21 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await expect(terminalStatus).toHaveText('게시 완료');
 
   const publishedPostLink = page.getByRole('link', { name: '게시물 보기' });
+  await expect(publishedPostLink).toHaveCount(0);
+
+  await page.getByRole('button', { name: '프로필 목록' }).first().click();
+  const profileSwitcher = page.getByLabel('프로필 전환');
+  await expect(profileSwitcher).toBeVisible();
+  await page
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
+    .filter({ hasText: `@${selectedProfile.handle}` })
+    .click();
+
+  await expect(
+    page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${selectedProfile.handle}` }),
+  ).toBeVisible();
+  await expect(publishedPostLink).toBeVisible();
   const publishedHref = await publishedPostLink.getAttribute('href');
   expect(publishedHref).toMatch(/^\/@e2e-composer-profile-b\/[^/]+$/);
   await publishedPostLink.click();
@@ -1044,7 +1059,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
       media: [
         {
           altText: '보존할 이미지 설명',
-          applyNightshade: true,
+          applyNightshade: false,
           mediaId: 'media-clipboard-e2e-1',
         },
         { altText: null, applyNightshade: false, mediaId: 'media-clipboard-e2e-2' },
@@ -1199,7 +1214,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
     input: {
       requestId: expect.any(String),
       bodyText: body,
-      media: [{ altText, applyNightshade: true, mediaId }],
+      media: [{ altText, applyNightshade: false, mediaId }],
       actorProfileId: secondProfileId,
       sensitiveMedia: true,
     },

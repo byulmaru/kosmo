@@ -156,14 +156,16 @@ export function PostRequestList({
   const [pageState, setPageState] = useState<PageState>(() => ({
     environment,
     isLoadingNext: false,
-    nextPageToken: firstPage.nextPageToken,
+    nextPageToken: firstPage.nextPageToken ?? null,
     profileId,
     requests: [],
   }));
   const currentPageState =
     pageState.environment === environment && pageState.profileId === profileId ? pageState : null;
   const additionalRequests = currentPageState?.requests ?? [];
-  const nextPageToken = currentPageState ? currentPageState.nextPageToken : firstPage.nextPageToken;
+  const nextPageToken = currentPageState
+    ? currentPageState.nextPageToken
+    : (firstPage.nextPageToken ?? null);
   const isLoadingNext = currentPageState?.isLoadingNext ?? false;
   const requestKeys = useMemo(() => {
     const requestsById = new Map<string, RequestKey>();
@@ -185,7 +187,7 @@ export function PostRequestList({
     setPageState({
       environment,
       isLoadingNext: false,
-      nextPageToken: firstPage.nextPageToken,
+      nextPageToken: firstPage.nextPageToken ?? null,
       profileId,
       requests: [],
     });
@@ -230,9 +232,12 @@ export function PostRequestList({
         onComplete(error);
       };
 
-      resource.subscription = fetchQuery(environment, PostRequestListQuery, variables, {
-        fetchPolicy: 'network-only',
-      }).subscribe({
+      resource.subscription = fetchQuery<PostRequestListQuery>(
+        environment,
+        PostRequestListQuery,
+        variables,
+        { fetchPolicy: 'network-only' },
+      ).subscribe({
         complete: () => {
           const completedPage = nextPage;
           if (!completedPage) {
@@ -246,14 +251,14 @@ export function PostRequestList({
               ? {
                   ...previous,
                   isLoadingNext: false,
-                  nextPageToken: completedPage.nextPageToken,
+                  nextPageToken: completedPage.nextPageToken ?? null,
                   requests: [...previous.requests, ...completedPage.requests],
                 }
               : previous,
           );
           onComplete(null);
         },
-        error: (error) => {
+        error: (error: unknown) => {
           releaseFailedPage(error instanceof Error ? error : new Error(String(error)));
         },
         next: (response) => {
