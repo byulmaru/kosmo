@@ -251,7 +251,10 @@ function pageRequestIds(environment: Environment, statuses: readonly string[] | 
   return data.postRequests.requests.map((request) => request.id);
 }
 
-function seedHomeConnection(environment: Environment) {
+function seedHomeConnection(
+  environment: Environment,
+  existingPosts: ReadonlyArray<{ cursor: string; id: string }> = [],
+) {
   commitLocalUpdate(environment, (store) => {
     const root = store.getRoot();
     const connectionId = ConnectionHandler.getConnectionID(
@@ -259,6 +262,22 @@ function seedHomeConnection(environment: Environment) {
       'PostList_homeTimeline',
     );
     const connection = store.create(connectionId, 'PostConnection');
+    if (existingPosts.length > 0) {
+      const edges = existingPosts.map(({ cursor, id }) => {
+        const post = store.create(id, 'Post');
+        const edge = ConnectionHandler.createEdge(store, connection, post, 'PostConnectionEdge');
+        edge.setValue(cursor, 'cursor');
+        return edge;
+      });
+      connection.setLinkedRecords(edges, 'edges');
+
+      const pageInfo = store.create('client:homeTimeline-pageInfo', 'PageInfo');
+      pageInfo.setValue(existingPosts[0]?.cursor ?? null, 'startCursor');
+      pageInfo.setValue(existingPosts[existingPosts.length - 1]?.cursor ?? null, 'endCursor');
+      pageInfo.setValue(true, 'hasNextPage');
+      pageInfo.setValue(false, 'hasPreviousPage');
+      connection.setLinkedRecord(pageInfo, 'pageInfo');
+    }
     root.setLinkedRecord(
       connection,
       getRelayHandleKey('connection', 'PostList_homeTimeline', null),
@@ -614,7 +633,10 @@ describe('PostRequestList', () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
     seedPostRequestPages(environment, [request]);
-    seedHomeConnection(environment);
+    seedHomeConnection(environment, [
+      { cursor: 'cursor-home-first-page', id: 'post-home-first-page' },
+      { cursor: 'cursor-home-next-page', id: 'post-home-next-page' },
+    ]);
 
     await renderSummary(environment);
     assert.equal(all('PostRequestCard').length, 1);
@@ -635,12 +657,44 @@ describe('PostRequestList', () => {
     assert.equal(all('PostRequestCard').length, 0);
     assert.deepEqual(pageRequestIds(environment, HOME_STATUSES), []);
     assert.deepEqual(pageRequestIds(environment, null), [request.id]);
+    const homeConnectionId = ConnectionHandler.getConnectionID(
+      'client:root',
+      'PostList_homeTimeline',
+    );
+    assert.deepEqual(connectionNodeIds(environment, homeConnectionId), [
+      'post-a',
+      'post-home-first-page',
+      'post-home-next-page',
+    ]);
+
+    const source = environment.getStore().getSource();
+    const connection = source.get(homeConnectionId) as Record<string, unknown> | null;
+    assert.ok(connection);
+    const edgeIds = (connection['edges'] as { __refs?: ReadonlyArray<string | null> } | undefined)
+      ?.__refs;
+    assert.ok(edgeIds);
     assert.deepEqual(
-      connectionNodeIds(
-        environment,
-        ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
-      ),
-      ['post-a'],
+      edgeIds.map((edgeId) => (edgeId ? source.get(edgeId)?.['cursor'] : null)),
+      [null, 'cursor-home-first-page', 'cursor-home-next-page'],
+    );
+
+    const pageInfoId = (connection['pageInfo'] as { __ref?: string } | undefined)?.__ref;
+    assert.ok(pageInfoId);
+    const pageInfo = source.get(pageInfoId) as Record<string, unknown> | null;
+    assert.ok(pageInfo);
+    assert.deepEqual(
+      {
+        endCursor: pageInfo['endCursor'],
+        hasNextPage: pageInfo['hasNextPage'],
+        hasPreviousPage: pageInfo['hasPreviousPage'],
+        startCursor: pageInfo['startCursor'],
+      },
+      {
+        endCursor: 'cursor-home-next-page',
+        hasNextPage: true,
+        hasPreviousPage: false,
+        startCursor: 'cursor-home-first-page',
+      },
     );
   });
 
