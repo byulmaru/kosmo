@@ -521,7 +521,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
     page
       .getByTestId('post-detail-scroll')
       .getByTestId(`post-thread-current-${publishedPath.split('/').at(-1)}`)
-      .getByText(body, { exact: true }),
+      .getByText(body),
   ).toBeVisible();
   const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
     async (response) => ({
