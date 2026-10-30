@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -6,6 +7,7 @@ import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const require = createRequire(import.meta.url);
 
 type QueryMode = 'error' | 'loading' | 'success';
 
@@ -39,6 +41,7 @@ mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ top: 0, left: 0, right: 0, bottom: 0 }),
 });
 mockModule('lucide-react-native', { Menu: 'Menu' });
+mockModule(require.resolve('lucide-react-native'), { Menu: 'Menu' });
 mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: PropsWithChildren) =>
     createElement('Pressable', props, children),
