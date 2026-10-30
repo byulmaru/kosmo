@@ -326,6 +326,9 @@ function PostDetailRouteTree({
               currentDetail={currentPost.detail ?? null}
               currentId={currentPost.id}
               currentPostReplyAvailable
+              onCurrentPostBackgroundPress={() =>
+                router.push(`/${currentPost.profile.relativeHandle}/${currentPost.id}`)
+              }
               onConversationRetry={conversation.retry ?? undefined}
               onPostDeleted={onPostDeleted}
               presentation="route"

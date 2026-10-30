@@ -86,6 +86,20 @@ let testHashtagIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
 
+const backfilledProfilePinOrderKey = (
+  id: string,
+  position: number | null = null,
+): CoreDb.ProfilePinOrderKey => {
+  const rank = Buffer.alloc(4);
+  rank.writeInt32BE(position ?? 0x7fffffff);
+  return Buffer.concat([
+    Buffer.from([0x94]),
+    rank,
+    Buffer.from([position === null ? 1 : 0]),
+    Buffer.from(id.replaceAll('-', ''), 'hex'),
+  ]) as CoreDb.ProfilePinOrderKey;
+};
+
 describe('ActivityPub Local Post Note', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
@@ -1392,11 +1406,15 @@ describe('ActivityPub Local Post Note', () => {
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const directPost = await createPost(author.id, { visibility: PostVisibility.DIRECT });
     await db.insert(ProfilePinnedPosts).values(
-      [publicPost, unlistedPost, followersPost, directPost].map((post, index) => ({
-        id: `00000000-0000-7000-8002-${String(index).padStart(12, '0')}`,
-        profileId: author.id,
-        postId: post.id,
-      })),
+      [publicPost, unlistedPost, followersPost, directPost].map((post, index) => {
+        const id = `00000000-0000-7000-8002-${String(index).padStart(12, '0')}`;
+        return {
+          id,
+          orderKey: backfilledProfilePinOrderKey(id),
+          profileId: author.id,
+          postId: post.id,
+        };
+      }),
     );
 
     await reorderProfilePost({
@@ -1523,13 +1541,20 @@ describe('ActivityPub Local Post Note', () => {
       handle: 'featured-boundary',
       kind: InstanceKind.LOCAL,
     });
-    const boundaryPins: { id: string; postId: string; profileId: string }[] = [];
+    const boundaryPins: {
+      id: string;
+      orderKey: CoreDb.ProfilePinOrderKey;
+      postId: string;
+      profileId: string;
+    }[] = [];
     for (let index = 0; index < 50; index++) {
       const post = await createPost(boundaryAuthor.id, {
         visibility: PostVisibility.FOLLOWERS,
       });
+      const id = `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`;
       boundaryPins.push({
-        id: `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+        id,
+        orderKey: backfilledProfilePinOrderKey(id),
         postId: post.id,
         profileId: boundaryAuthor.id,
       });
@@ -1537,8 +1562,10 @@ describe('ActivityPub Local Post Note', () => {
     const boundaryVisiblePost = await createPost(boundaryAuthor.id, {
       visibility: PostVisibility.PUBLIC,
     });
+    const visibleBoundaryPinId = '00000000-0000-7000-8000-000000000050';
     boundaryPins.push({
-      id: '00000000-0000-7000-8000-000000000050',
+      id: visibleBoundaryPinId,
+      orderKey: backfilledProfilePinOrderKey(visibleBoundaryPinId),
       postId: boundaryVisiblePost.id,
       profileId: boundaryAuthor.id,
     });
@@ -1573,8 +1600,10 @@ describe('ActivityPub Local Post Note', () => {
     for (let index = 0; index < 55; index++) {
       const post = await createPost(author.id, { visibility: PostVisibility.PUBLIC });
       postIds.push(post.id);
+      const id = `00000000-0000-7000-8001-${String(index).padStart(12, '0')}`;
       await db.insert(ProfilePinnedPosts).values({
-        id: `00000000-0000-7000-8001-${String(index).padStart(12, '0')}`,
+        id,
+        orderKey: backfilledProfilePinOrderKey(id),
         profileId: author.id,
         postId: post.id,
       });

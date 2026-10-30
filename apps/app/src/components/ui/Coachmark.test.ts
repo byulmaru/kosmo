@@ -190,6 +190,32 @@ test('onExited only fires after an actual exit, including an unready target exit
   await act(async () => renderer.unmount());
 });
 
+test('exit completes when the live anchor unmounts with the hidden presentation', async () => {
+  dimensions = { height: 40, width: 120 };
+  let exited = 0;
+  const liveAnchorRef = { current: anchor } as unknown as RefObject<NativeView | null>;
+  let renderer!: ReactTestRenderer;
+  const renderCoachmark = (visible: boolean) =>
+    createElement(coachmarkModule.Coachmark, {
+      anchorRef: liveAnchorRef,
+      description: '대상을 확인하세요.',
+      onClose: () => {},
+      onComplete: () => {},
+      onExited: () => {
+        exited += 1;
+      },
+      visible,
+    });
+
+  await act(async () => {
+    renderer = create(renderCoachmark(true));
+  });
+  liveAnchorRef.current = null;
+  await act(async () => renderer.update(renderCoachmark(false)));
+  assert.equal(exited, 1);
+  await act(async () => renderer.unmount());
+});
+
 test('renders validated multi-step progress with one accessible progressbar', async () => {
   dimensions = { height: 40, width: 120 };
   let renderer!: ReactTestRenderer;

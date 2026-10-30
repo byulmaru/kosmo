@@ -108,6 +108,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
 
+## Action Bar 여백 이동 · PROD-1168
+
+- 타임라인과 상세 타래의 Action Bar에서 개별 버튼의 실제 입력 영역 밖인 아이콘 사이·slot의 빈 부분·위쪽 내부 여백을 클릭·탭하면 해당 행의 기존 상세 대상으로 한 번 이동한다. 일반 Post·Quote는 자신으로, 순수 Repost는 direct Source로 이동하며 Source가 Quote여도 그 아래 Source로 평탄화하지 않는다.
+- 타래 조상·하위 행은 각 행의 상세로, 현재 행은 현재 Post의 canonical 상세로 이동한다. 각 버튼의 기존 액션 대상과 Reply 가능 여부는 유지한다.
+- 버튼의 glyph·숫자·투명 내부 영역과 Web visual row 위아래로 확장된 target은 해당 액션만 실행한다. disabled/pending target도 상세 이동으로 전환하지 않으며, 그 target 밖에 남은 slot 여백은 상세 이동을 유지한다.
+- 이동하는 Web 여백은 pointer 커서를 표시한다. 드래그·영역 밖 release·스크롤로 취소된 입력은 상세를 열지 않는다. 개별 메뉴·포커스·닫힘, CW·미디어·본문 링크와 Native 버튼 target·스크롤 양보는 유지한다.
+- Action Bar를 본문·Source navigation의 sibling으로 유지하며 전체 toolbar를 하나의 Link/Pressable로 감싸지 않는다. Reaction Summary와 작성자 여백의 기존 경계는 변경하지 않는다.
+
 ## Surface 배치
 
 - `PostListItem`의 Text·Media·PureRepost·Quote root와 `PostLayout` root는 semantic `backgroundCanvas`를 직접 적용해 Web·Native host의 중립 배경이 비치지 않게 한다. 이는 feed와 같은 canvas 평면을 명시하는 계약이며, direct Quote Source preview와 feedback overlay 등 내부에서 의도적으로 투명한 요소에는 별도 resting fill을 추가하지 않는다.
@@ -159,6 +167,24 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Repost와 Reply attribution은 icon column, text slot, `typography.sm` line box와 바로 아래 Post 행 사이의
   간격을 공유한다. Repost의 Profile link 의미와 Reply의 비대화형 텍스트 의미는 각 변형이 따로 소유하며,
   공용 행이 링크 여부를 추론하지 않는다.
+
+## 게시글 작성자 이동 영역
+
+[PROD-1176](https://linear.app/byulmaru/issue/PROD-1176)의 2026-10-20 사용자 결정에 따라 게시글 카드의
+프로필 영역과 상세 이동 여백을 구분한다.
+
+- 작성자 프로필 영역에 대응하는 바로 위의 여백은 같은 작성자의 프로필로 이동한다.
+- 닉네임·핸들 중 더 넓게 표시된 텍스트를 프로필 텍스트 묶음의 공통 오른쪽 경계로 삼는다. 짧은 줄의
+  오른쪽 여백도 묶음 안에서는 프로필 영역이다. 텍스트가 잘리면 숨겨진 원래 길이 대신 실제 표시를 기준으로 한다.
+- 그 경계 오른쪽의 남는 헤더 여백은 해당 행이 나타내는 게시글 상세로 한 번 이동한다. 작성 시각은 기존의
+  독립 상세 링크를 유지하며 프로필 링크가 작성 시각 앞까지 남는 가로 폭을 채우지 않는다.
+- 일반 Post·Quote·순수 Repost와 목록·타래에서 표시 작성자와 기존 상세 대상을 따른다. Quote 자체와 직접
+  Source, 재게시자 attribution과 Source 작성자를 구분하고 관계를 더 깊은 Source로 평탄화하지 않는다.
+- Avatar, 프로필 아래 배경·본문·작성 시각·미디어·CW·각 링크·게시글 액션의 기존 입력을 유지한다.
+  경계 부근에서 프로필과 상세가 함께 열리거나 인접 target이 겹치지 않게 한다. 비대화형 preview와 다른
+  프로필 정보 표시 소비자의 입력 계약은 유지한다.
+- 실제 경계 안팎과 위쪽 여백을 입력해 목적지·중복 이동 여부를 확인하고 플랫폼·화면·빌드 기준을 남긴다.
+  코드·Web 검증과 Native runtime·실기기 검증은 구분한다.
 
 ## Source가 Quote인 순수 Repost
 

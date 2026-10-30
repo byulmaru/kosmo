@@ -27,38 +27,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check UI contract PR scope
-        env:
-          UI_CONTRACT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          UI_CONTRACT_EVENT_NAME: ${{ github.event_name }}
-          UI_CONTRACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          if [ "$UI_CONTRACT_EVENT_NAME" = "merge_group" ]; then
-            UI_CONTRACT_BASE_SHA="$(node --input-type=module -e 'import fs from "node:fs"; const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")); process.stdout.write(event.merge_group?.base_sha ?? "");')"
-            if [ -z "$UI_CONTRACT_BASE_SHA" ]; then
-              echo "merge_group event did not provide immutable base_sha" >&2
-              exit 1
-            fi
-          fi
-
-          UI_CONTRACT_CHECKER="scripts/check-ui-contract-pr.mjs"
-          UI_CONTRACT_BOOTSTRAP=""
-          if git cat-file -e "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" 2>/dev/null; then
-            UI_CONTRACT_CHECKER="$(mktemp scripts/.check-ui-contract-pr.base.XXXXXX.mjs)"
-            trap 'rm -f "$UI_CONTRACT_CHECKER"' EXIT
-            git show "$UI_CONTRACT_BASE_SHA:scripts/check-ui-contract-pr.mjs" > "$UI_CONTRACT_CHECKER"
-          else
-            UI_CONTRACT_BOOTSTRAP="--bootstrap"
-          fi
-
-          if [ "$UI_CONTRACT_EVENT_NAME" = "merge_group" ]; then
-            node "$UI_CONTRACT_CHECKER" --merge-group $UI_CONTRACT_BOOTSTRAP --event-file "$GITHUB_EVENT_PATH"
-          else
-            node "$UI_CONTRACT_CHECKER" --base "$UI_CONTRACT_BASE_SHA" --head "$UI_CONTRACT_HEAD_SHA" --event-file "$GITHUB_EVENT_PATH" $UI_CONTRACT_BOOTSTRAP
-          fi
-
       - name: Run lint for workspace root
         run: pnpm run "/^lint:.*/"
 

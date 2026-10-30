@@ -3,9 +3,11 @@ import test from 'node:test';
 import { projectRemoteNoteContent } from '../activitypub-note-content';
 import { isPostContentDocumentV1, readPostContentDocumentV1 } from './index';
 import {
+  applyPostContentHashtags,
   applyRemotePostContentHashtags,
   arePostContentRevisionsEqual,
   canonicalizePostContentDocument,
+  findLocalPostContentHashtagCandidates,
   findRemotePostContentHashtags,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
@@ -14,6 +16,7 @@ import {
   postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
 } from './server';
+import type { PostContentDocumentV1 } from './index';
 
 const aliceProfileId = '019f6678-86fa-709b-984e-1520766b8441';
 const otherProfileId = '019f6678-86fa-709b-984e-1520766b8442';
@@ -224,6 +227,86 @@ test('finds normalized local hashtag candidates without URL or mention occurrenc
   );
 });
 
+test('applies local hashtag candidates while preserving unrelated document structure and marks', () => {
+  const document: PostContentDocumentV1 = {
+    version: 1,
+    summary: 'warning',
+    body: {
+      type: 'doc',
+      attrs: { sensitiveMedia: false },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'prefix' },
+            { type: 'mention', attrs: { handle: '@alice', profileId: aliceProfileId } },
+            { type: 'text', text: '#mention-adjacent #before' },
+            { type: 'hashtag', attrs: { hashtagId, token: '#old' } },
+            { type: 'text', text: '#hashtag-adjacent #Ｆoo and ' },
+            {
+              type: 'text',
+              text: 'https://example.com/path/#linked',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/path/#linked' } }],
+            },
+            { type: 'text', text: ' and ' },
+            {
+              type: 'text',
+              text: '#linked-label',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/label' } }],
+            },
+          ],
+        },
+        { type: 'paragraph', content: [{ type: 'text', text: 'second #Tag' }] },
+        { type: 'media', attrs: { mediaId: otherProfileId } },
+      ],
+    },
+  };
+  const candidates = findLocalPostContentHashtagCandidates(document);
+  assert.deepEqual(
+    candidates.map(({ paragraphIndex, token }) => ({ paragraphIndex, token })),
+    [
+      { paragraphIndex: 0, token: '#before' },
+      { paragraphIndex: 0, token: '#Ｆoo' },
+      { paragraphIndex: 1, token: '#Tag' },
+    ],
+  );
+
+  const enriched = applyPostContentHashtags(
+    document,
+    candidates.map((candidate) => ({ ...candidate, hashtagId: otherHashtagId })),
+  );
+
+  assert.equal(enriched.summary, 'warning');
+  assert.deepEqual(enriched.body.attrs, { sensitiveMedia: false });
+  assert.deepEqual(enriched.body.content.at(-1), document.body.content.at(-1));
+  assert.equal(postContentDocumentToText(enriched), postContentDocumentToText(document));
+  const paragraphs = enriched.body.content.filter((block) => block.type === 'paragraph');
+  assert.deepEqual(
+    paragraphs.flatMap((paragraph) =>
+      paragraph.type === 'paragraph'
+        ? (paragraph.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    ),
+    [
+      { hashtagId: otherHashtagId, token: '#before' },
+      { hashtagId, token: '#old' },
+      { hashtagId: otherHashtagId, token: '#Ｆoo' },
+      { hashtagId: otherHashtagId, token: '#Tag' },
+    ],
+  );
+  const linkedText = paragraphs
+    .flatMap((paragraph) => (paragraph.type === 'paragraph' ? (paragraph.content ?? []) : []))
+    .find((node) => node.type === 'text' && node.text.startsWith('https://'));
+  assert.deepEqual(linkedText?.type === 'text' ? linkedText.marks : undefined, [
+    { type: 'link', attrs: { href: 'https://example.com/path/#linked' } },
+  ]);
+  assert.equal(applyPostContentHashtags(document, []), document);
+});
+
 test('keeps 64-codepoint hashtags and preserves longer tokens as Plain Text', () => {
   const acceptedToken = '#' + '𐐀'.repeat(64);
   const longerToken = '#' + '𐐀'.repeat(65);
@@ -270,6 +353,7 @@ test('matches typed remote Hashtags across projected linked markup and preserves
     '#remote-tag🔥',
     '#two words',
   ]);
+  assert.equal(applyRemotePostContentHashtags(document, []), document);
 
   assert.deepEqual(matches, [
     { name: '#Mixed', paragraphIndex: 0, start: 6, end: 12, token: '#ＭｉXeD' },

@@ -51,6 +51,12 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 - thread 안의 `PostListItem`은 자체 row divider를 끄고 `PostThreadLayout`의 구분선만 사용한다. Home·Profile·Bookmark 등 thread 밖 목록의 기본 divider는 유지한다.
 - Home timeline과는 `border/subtle` token과 1px 시각 무게만 공유하며 geometry는 thread 관계 표현에 맞게 독립적으로 유지한다.
 
+## Action Bar 여백 이동 · PROD-1168
+
+- 조상·하위 행의 Action Bar 비버튼 여백은 해당 행의 기존 상세로, 현재 행은 현재 Post의 canonical 상세로 한 번 이동한다. 현재 행의 대상 ID를 다른 행의 액션에 적용하지 않는다.
+- 아이콘 사이·slot 비버튼 영역·Action Bar 위쪽 내부 여백을 포함하며, 버튼의 확장 target·숫자·disabled/pending 영역과 메뉴 입력은 제외한다. 기존 행 geometry와 구분선·connector·CW·미디어·본문 링크의 입력은 유지한다.
+- Web pointer와 드래그·영역 이탈·스크롤 취소 및 Native 입력 경계는 [Post Action Bar](./post-action-bar.md#action-bar-여백-이동--prod-1168)를 따른다.
+
 ## Connector
 
 - connector metadata는 caller가 공급하되 canonical Center thread는 조상 구간과 마지막 조상→현재 경계만

@@ -27,6 +27,14 @@ const commonPublicConfig = {
   oidcIssuer: 'https://id.byulmaru.co',
   sentryDsn:
     'https://07f92d1f243d540b91a3edb9e22eafa2@o4507210007117824.ingest.us.sentry.io/4507210010329088',
+  webPush: {
+    apiKey: 'AIzaSyBDuX-H9OHs2qYgGulLD8PFxukdzqw-mYI',
+    appId: '1:923646593571:web:a80a73956feb357bc2bf96',
+    messagingSenderId: '923646593571',
+    projectId: 'byulmaru-kosmo',
+    vapidKey:
+      'BFWDc9gACcGvTzCZlUKUBd7qAuyF8rkRHpJVMbT2VBcZ4-dzO8QP0XEndWSevA5K8YGwUX_xfCT9bauQK19tkoE',
+  },
 } as const;
 
 const publicConfigByChannel: Record<DeploymentChannel, PublicConfig> = {

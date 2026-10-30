@@ -71,6 +71,7 @@ let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let createPost: typeof CoreServices.createPost;
+let generateProfilePinKey: typeof CoreServices.generateProfilePinKey;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let handleInboundCreate: typeof HandleInboundCreate;
@@ -78,6 +79,14 @@ let handleInboundDelete: typeof HandleInboundDelete;
 let app: Hono<Env>;
 let localInstanceId: string;
 let restoreSentryTransport: (() => void) | undefined;
+
+const profilePinOrderKeys = (count: number) => {
+  const keys: CoreDb.ProfilePinOrderKey[] = [];
+  while (keys.length < count) {
+    keys.push(generateProfilePinKey(keys.at(-1) ?? null, null));
+  }
+  return keys;
+};
 
 describe('GraphQL remote profile boundary', () => {
   before(async () => {
@@ -113,7 +122,7 @@ describe('GraphQL remote profile boundary', () => {
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-    ({ createPost } = await import('@kosmo/core/services'));
+    ({ createPost, generateProfilePinKey } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
     ({ handleInboundDelete } = await import('../../../../../packages/fedify/src/inbound-delete'));
 
@@ -1153,14 +1162,19 @@ describe('GraphQL remote profile boundary', () => {
     const posts = await Promise.all(
       Array.from({ length: 3 }, () => createContentfulPost({ profileId: auth.profile.id })),
     );
-    for (const post of posts) {
-      await db.insert(ProfilePinnedPosts).values({ profileId: auth.profile.id, postId: post.id });
-    }
+    const orderKeys = profilePinOrderKeys(posts.length);
+    await db.insert(ProfilePinnedPosts).values(
+      posts.map((post, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: auth.profile.id,
+        postId: post.id,
+      })),
+    );
     const rows = await db
       .select()
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
-      .orderBy(asc(ProfilePinnedPosts.id));
+      .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
     const operation = `mutation Reorder($input: ReorderProfilePostInput!) { reorderProfilePost(input: $input) { changed profile { id pinnedPosts { id } } } }`;
     const input = {
       postId: globalId('Post', rows[2].postId),
@@ -1278,6 +1292,7 @@ describe('GraphQL remote profile boundary', () => {
     });
     const otherPost = await createContentfulPost({ profileId: otherProfile.id });
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: generateProfilePinKey(null, null),
       profileId: otherProfile.id,
       postId: otherPost.id,
     });
@@ -1337,17 +1352,20 @@ describe('GraphQL remote profile boundary', () => {
     );
     const hidden = await createContentfulPost({ profileId: auth.profile.id });
     const visiblePosts = [first, reply, quote, ...additionalVisiblePosts];
-    await db
-      .insert(ProfilePinnedPosts)
-      .values(
-        [...visiblePosts, hidden].map(({ id }) => ({ profileId: auth.profile.id, postId: id })),
-      );
+    const orderKeys = profilePinOrderKeys(visiblePosts.length + 1);
+    await db.insert(ProfilePinnedPosts).values(
+      [...visiblePosts, hidden].map(({ id: postId }, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: auth.profile.id,
+        postId,
+      })),
+    );
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hidden.id));
     const orderedPinnedPostIds = await db
       .select({ postId: ProfilePinnedPosts.postId })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
-      .orderBy(asc(ProfilePinnedPosts.id));
+      .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
     const visiblePinnedPostIds = orderedPinnedPostIds
       .map(({ postId }) => postId)
       .filter((postId) => postId !== hidden.id);
@@ -1435,9 +1453,20 @@ describe('GraphQL remote profile boundary', () => {
       })
       .returning()
       .then(firstOrThrow);
+    const orderKeys = profilePinOrderKeys(2);
     await db.insert(ProfilePinnedPosts).values([
-      { position: 0, postId: first.id, profileId: remote.id },
-      { position: 1, postId: second.id, profileId: remote.id },
+      {
+        orderKey: orderKeys[0]!,
+        position: 0,
+        postId: first.id,
+        profileId: remote.id,
+      },
+      {
+        orderKey: orderKeys[1]!,
+        position: 1,
+        postId: second.id,
+        profileId: remote.id,
+      },
     ]);
 
     const query = `query RemotePinnedPosts($profileId: ID!) {
@@ -1468,6 +1497,7 @@ describe('GraphQL remote profile boundary', () => {
       targetProfileId: viewer.profile.id,
     });
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: generateProfilePinKey(null, null),
       postId: pinned.id,
       profileId: visited.profile.id,
     });
@@ -1515,10 +1545,14 @@ describe('GraphQL remote profile boundary', () => {
     });
     const visiblePinnedPost = await createContentfulPost({ profileId: author.id });
     const unpinnedPost = await createContentfulPost({ profileId: author.id });
-    await db.insert(ProfilePinnedPosts).values([
-      { profileId: author.id, postId: hiddenPinnedPost.id },
-      { profileId: author.id, postId: visiblePinnedPost.id },
-    ]);
+    const orderKeys = profilePinOrderKeys(2);
+    await db.insert(ProfilePinnedPosts).values(
+      [hiddenPinnedPost, visiblePinnedPost].map(({ id: postId }, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: author.id,
+        postId,
+      })),
+    );
     await db.insert(ProfileMutes).values({
       ownerProfileId: viewer.profile.id,
       targetProfileId: sourceAuthor.profile.id,

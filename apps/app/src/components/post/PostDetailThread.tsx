@@ -187,6 +187,7 @@ export function PostDetailFrame({
 }
 
 type PostDetailThreadProps = {
+  onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -201,6 +202,7 @@ type PostDetailThreadProps = {
 };
 
 export function PostDetailThread({
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -222,6 +224,7 @@ export function PostDetailThread({
         preserveScrollPosition={preserveScrollPosition}
       >
         <PostDetailThreadData
+          onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
           currentPostReplyAvailable={currentPostReplyAvailable}
           currentPostReplyOnPress={currentPostReplyOnPress}
           currentPostReplySurfaceId={currentPostReplySurfaceId}
@@ -640,6 +643,7 @@ type PostDetailThreadRowsProps = {
   conversationLoading?: boolean;
   currentDetail: PostLayout_post$key | null;
   currentId: string;
+  onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -653,6 +657,7 @@ type PostDetailThreadRowsProps = {
 };
 
 export function PostDetailThreadData({
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -686,6 +691,7 @@ export function PostDetailThreadData({
     <PostDetailThreadRows
       currentDetail={data.detail}
       currentId={data.id}
+      onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
@@ -705,6 +711,7 @@ export function PostDetailConversationData({
   conversationLoading = false,
   currentDetail,
   currentId,
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -717,6 +724,7 @@ export function PostDetailConversationData({
   conversationLoading?: boolean;
   currentDetail: PostLayout_post$key | null;
   currentId: string;
+  onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -750,6 +758,7 @@ export function PostDetailConversationData({
       conversationLoading={conversationLoading}
       currentDetail={currentDetail}
       currentId={currentId}
+      onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
@@ -769,6 +778,7 @@ function PostDetailThreadRows({
   conversationLoading = false,
   currentDetail,
   currentId,
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -833,6 +843,7 @@ function PostDetailThreadRows({
               <PostLayout
                 contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
+                onActionBarBackgroundPress={onCurrentPostBackgroundPress}
                 onDeleted={onPostDeleted}
                 onReplyPress={currentPostReplyOnPress}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
