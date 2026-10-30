@@ -965,9 +965,19 @@ describe('PostComposer local author', () => {
     );
 
     await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls.length, 0);
+    assert.equal(targetProps?.body, '보존할 본문');
+
+    mediaState = 'ready';
+    await act(async () => refreshMedia?.());
+    await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
     const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
-    assert.equal(typeof requestId, 'string');
+    assert.ok(typeof requestId === 'string');
+    assert.match(
+      requestId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
     assert.deepEqual(submittedInput, {
       bodyText: '보존할 본문',
       contentWarning: '보존할 CW',
@@ -1067,7 +1077,13 @@ describe('PostComposer local author', () => {
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
-    assert.deepEqual(mutationCalls[0]?.variables.input, {
+    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
+    assert.ok(typeof requestId === 'string');
+    assert.match(
+      requestId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.deepEqual(submittedInput, {
       actorProfileId: profileB.id,
       bodyText: '😀 @alice !',
       media: mediaValue.getPostRequestMedia(),
@@ -1105,7 +1121,15 @@ describe('PostComposer local author', () => {
     await act(async () => targetProps?.onVisibilityChange('DIRECT'));
     await act(async () => targetProps?.onSubmit());
 
-    assert.deepEqual(mutationCalls[0]?.variables.input, {
+    assert.equal(mutationCalls.length, 1);
+    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
+    assert.ok(typeof requestId === 'string');
+    assert.match(
+      requestId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.deepEqual(submittedInput, {
+      actorProfileId: profileA.id,
       bodyText: '@alice',
       media: mediaValue.getPostRequestMedia(),
       mentions: [{ profileId: 'profile-alice', start: 0, end: 6 }],

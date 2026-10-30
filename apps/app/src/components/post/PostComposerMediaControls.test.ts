@@ -50,6 +50,7 @@ let issueCalls: MediaMutationConfig[] = [];
 let uploadCalls = 0;
 let renderer: ReactTestRenderer | null = null;
 let nextIssuedId = 0;
+let releasePendingUpload: (() => void) | undefined;
 let PostComposerMediaControls: typeof PostComposerMediaControlsComponent;
 
 const asset = (): ImagePickerAsset =>
@@ -152,6 +153,7 @@ beforeEach(() => {
   issueCalls = [];
   uploadCalls = 0;
   nextIssuedId = 0;
+  releasePendingUpload = undefined;
 });
 
 afterEach(async () => {
@@ -159,6 +161,8 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  releasePendingUpload?.();
+  releasePendingUpload = undefined;
   mock.restoreAll();
 });
 
@@ -205,7 +209,7 @@ describe('PostComposerMediaControls post request media', () => {
 
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
       { altText: 'First image', applyNightshade: false, mediaId: 'media-1' },
-      { altText: 'Second image', applyNightshade: true, mediaId: 'media-3' },
+      { altText: 'Second image', applyNightshade: true, mediaId: 'media-2' },
     ]);
     assert.equal(issueCalls.length, initialIssueCount);
     assert.equal(uploadCalls, initialUploadCount);
@@ -213,7 +217,10 @@ describe('PostComposerMediaControls post request media', () => {
   });
 
   it('blocks post request media while a selected image is still uploading', async () => {
-    uploadImageImpl = async () => 'media-slow';
+    uploadImageImpl = () =>
+      new Promise<string | null>((resolve) => {
+        releasePendingUpload = () => resolve(null);
+      });
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
 
