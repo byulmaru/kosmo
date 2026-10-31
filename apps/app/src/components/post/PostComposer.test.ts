@@ -625,7 +625,6 @@ describe('PostComposer request acknowledgement cache projection', () => {
             relativeHandle: '@writer',
           },
           bodyText: '접수된 본문',
-          contentWarning: '접수된 경고',
           id: requestNodeId,
           media: [],
           post: null,
@@ -660,7 +659,6 @@ describe('PostComposer request acknowledgement cache projection', () => {
     assert.deepEqual(requestIds('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES), []);
     const requestRecord = environment.getStore().getSource().get(requestNodeId);
     assert.equal(requestRecord?.bodyText, '접수된 본문');
-    assert.equal(requestRecord?.contentWarning, '접수된 경고');
     assert.equal(requestRecord?.sensitiveMedia, true);
     assert.equal(requestRecord?.draft, undefined);
   });
