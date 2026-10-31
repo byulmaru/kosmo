@@ -230,6 +230,7 @@ export default function SearchScreen() {
   const inputRef = useRef<TextInput>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
+  const [toolbarKey, setToolbarKey] = useState(0);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { clearQueryNavigation, getQueryNavigation, recordQueryNavigation } =
     usePrimaryNavigationScroll();
@@ -407,6 +408,7 @@ export default function SearchScreen() {
 
   const searchToolbar = (
     <SearchToolbar
+      key={toolbarKey}
       focused={focused}
       inputRef={inputRef}
       leadingAction={leadingAction}
@@ -455,6 +457,7 @@ export default function SearchScreen() {
                         const primaryActivation = isPrimarySearchLinkActivation(event);
                         if (currentTarget && primaryActivation) {
                           event.preventDefault();
+                          setToolbarKey((key) => key + 1);
                         } else if (primaryActivation) {
                           preserveQueryNavigationPosition();
                         }
