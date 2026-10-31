@@ -33,7 +33,7 @@ export type ComposerMediaEditorProps = {
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
-  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
+  readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
@@ -464,11 +464,11 @@ function WebToolPanel(
         />
       ) : (
         <NightshadeToolContent
-          applyNightshade={props.selected?.applyNightshade ?? false}
+          applyAiProhibitFilter={props.selected?.applyAiProhibitFilter ?? false}
           itemNumber={props.selectedIndex + 1}
-          onApplyNightshadeChange={(value) => {
+          onApplyAiProhibitFilterChange={(value) => {
             if (props.selected) {
-              props.onApplyNightshadeChange(props.selected.key, value);
+              props.onApplyAiProhibitFilterChange(props.selected.key, value);
             }
           }}
         />
@@ -514,12 +514,12 @@ function MobileToolSheet(
         />
       ) : (
         <NightshadeToolContent
-          applyNightshade={props.selected?.applyNightshade ?? false}
+          applyAiProhibitFilter={props.selected?.applyAiProhibitFilter ?? false}
           compact
           itemNumber={props.selectedIndex + 1}
-          onApplyNightshadeChange={(value) => {
+          onApplyAiProhibitFilterChange={(value) => {
             if (props.selected) {
-              props.onApplyNightshadeChange(props.selected.key, value);
+              props.onApplyAiProhibitFilterChange(props.selected.key, value);
             }
           }}
         />
@@ -665,15 +665,15 @@ function SensitiveToolContent({
 }
 
 function NightshadeToolContent({
-  applyNightshade,
+  applyAiProhibitFilter,
   compact = false,
   itemNumber,
-  onApplyNightshadeChange,
+  onApplyAiProhibitFilterChange,
 }: {
-  readonly applyNightshade: boolean;
+  readonly applyAiProhibitFilter: boolean;
   readonly compact?: boolean;
   readonly itemNumber: number;
-  readonly onApplyNightshadeChange: (value: boolean) => void;
+  readonly onApplyAiProhibitFilterChange: (value: boolean) => void;
 }) {
   const theme = useTheme();
 
@@ -695,16 +695,16 @@ function NightshadeToolContent({
       >
         <View style={styles.sensitiveCopy}>
           <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
-            Nightshade 적용
+            AI 학습 방지 필터 적용
           </Text>
           <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
             실험적인 기능입니다.
           </Text>
         </View>
         <Switch
-          accessibilityLabel={`첨부 이미지 ${itemNumber} Nightshade 적용`}
-          onValueChange={onApplyNightshadeChange}
-          value={applyNightshade}
+          accessibilityLabel={`첨부 이미지 ${itemNumber} AI 학습 방지 필터 적용`}
+          onValueChange={onApplyAiProhibitFilterChange}
+          value={applyAiProhibitFilter}
         />
       </View>
     </>

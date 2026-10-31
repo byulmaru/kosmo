@@ -1,3 +1,4 @@
+import { ConnectionHandler } from 'relay-runtime';
 import type { RecordSourceSelectorProxy } from 'relay-runtime';
 
 export const POST_REQUEST_HOME_ACTIVE_STATUSES = [
@@ -49,4 +50,43 @@ export function removePostRequestFromHomePage(
     requests.filter((request) => request?.getDataID() !== requestNodeId),
     'requests',
   );
+}
+
+export function reconcilePublishedPostInHome(
+  store: RecordSourceSelectorProxy,
+  {
+    authorProfileId,
+    currentProfileId,
+    postId,
+    profileId,
+    requestNodeId,
+  }: Readonly<{
+    authorProfileId: string | null;
+    currentProfileId: string | null;
+    postId: string | null;
+    profileId: string;
+    requestNodeId: string;
+  }>,
+) {
+  removePostRequestFromHomePage(store, profileId, requestNodeId);
+
+  if (!postId || !authorProfileId || authorProfileId !== currentProfileId) {
+    return;
+  }
+
+  const post = store.get(postId);
+  const homeConnection = ConnectionHandler.getConnection(store.getRoot(), 'PostList_homeTimeline');
+  if (!post || !homeConnection) {
+    return;
+  }
+
+  const alreadyPresent = (homeConnection.getLinkedRecords('edges') ?? []).some(
+    (edge) => edge?.getLinkedRecord('node')?.getDataID() === postId,
+  );
+  if (alreadyPresent) {
+    return;
+  }
+
+  const edge = ConnectionHandler.createEdge(store, homeConnection, post, 'PostConnectionEdge');
+  ConnectionHandler.insertEdgeBefore(homeConnection, edge);
 }

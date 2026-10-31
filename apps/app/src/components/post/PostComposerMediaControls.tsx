@@ -36,7 +36,7 @@ type ComposerMediaItemFields = {
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
-  readonly applyNightshade?: boolean;
+  readonly applyAiProhibitFilter?: boolean;
   readonly requiresReselection?: boolean;
 };
 
@@ -57,7 +57,7 @@ export type PostComposerMediaValue = {
 
 export type PostRequestMediaItem = Readonly<{
   readonly altText: string | null;
-  readonly applyNightshade: boolean;
+  readonly applyAiProhibitFilter: boolean;
   readonly mediaId: string;
 }>;
 
@@ -70,7 +70,7 @@ const releaseMediaPreview = (item: ComposerMediaItem) => {
 export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
-  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
+  readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -202,7 +202,7 @@ export function PostComposerMediaControls({
     }
 
     const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
@@ -353,7 +353,7 @@ export function PostComposerMediaControls({
         media.map((item) =>
           Object.freeze({
             altText: item.altText.trim() || null,
-            applyNightshade: item.applyNightshade ?? false,
+            applyAiProhibitFilter: item.applyAiProhibitFilter ?? false,
             mediaId: item.mediaId!,
           }),
         ),
@@ -400,15 +400,15 @@ export function PostComposerMediaControls({
         updateMedia((items) =>
           items.map((item) => (item.key === key ? { ...item, altText } : item)),
         ),
-      onApplyNightshadeChange: (key, value) => {
+      onApplyAiProhibitFilterChange: (key, value) => {
         const item = mediaRef.current.find((current) => current.key === key);
-        if (!item || (item.applyNightshade ?? false) === value) {
+        if (!item || (item.applyAiProhibitFilter ?? false) === value) {
           return;
         }
 
         updateMedia((items) =>
           items.map((current) =>
-            current.key === key ? { ...current, applyNightshade: value } : current,
+            current.key === key ? { ...current, applyAiProhibitFilter: value } : current,
           ),
         );
       },

@@ -3,7 +3,6 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import {
   commitLocalUpdate,
-  ConnectionHandler,
   createOperationDescriptor,
   fetchQuery,
   getRequest,
@@ -17,6 +16,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import {
   POST_REQUEST_HOME_ACTIVE_STATUSES,
+  reconcilePublishedPostInHome,
   removePostRequestFromHomePage,
 } from './postRequestCache';
 import { PostRequestCard } from './PostRequestCard';
@@ -94,35 +94,13 @@ function usePostRequestCardHandlers(profileId: string) {
   const onPublished = useCallback(
     ({ authorProfileId, postId, requestNodeId }: PublishedPost) => {
       commitLocalUpdate(environment, (store) => {
-        removePostRequestFromHomePage(store, profileId, requestNodeId);
-
-        if (!postId || !authorProfileId || authorProfileId !== selectedProfileId) {
-          return;
-        }
-
-        const post = store.get(postId);
-        const homeConnection = ConnectionHandler.getConnection(
-          store.getRoot(),
-          'PostList_homeTimeline',
-        );
-        if (!post || !homeConnection) {
-          return;
-        }
-
-        const alreadyPresent = (homeConnection.getLinkedRecords('edges') ?? []).some(
-          (edge) => edge?.getLinkedRecord('node')?.getDataID() === postId,
-        );
-        if (alreadyPresent) {
-          return;
-        }
-
-        const edge = ConnectionHandler.createEdge(
-          store,
-          homeConnection,
-          post,
-          'PostConnectionEdge',
-        );
-        ConnectionHandler.insertEdgeBefore(homeConnection, edge);
+        reconcilePublishedPostInHome(store, {
+          authorProfileId,
+          currentProfileId: selectedProfileId,
+          postId,
+          profileId,
+          requestNodeId,
+        });
       });
     },
     [environment, profileId, selectedProfileId],

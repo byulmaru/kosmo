@@ -6,8 +6,11 @@ import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import * as RelayRuntime from 'relay-runtime';
 import {
+  commitLocalUpdate,
+  ConnectionHandler,
   createOperationDescriptor,
   Environment,
+  getRelayHandleKey,
   getRequest,
   Network,
   Observable,
@@ -17,7 +20,10 @@ import {
 import CreatePostMutation from './__generated__/PostComposerCreatePostMutation.graphql';
 import PostComposerMentionSuggestionsQueryNode from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
 import PostRequestListQueryNode from './__generated__/PostRequestListQuery.graphql';
-import { POST_REQUEST_HOME_ACTIVE_STATUSES } from './postRequestCache';
+import {
+  POST_REQUEST_HOME_ACTIVE_STATUSES,
+  reconcilePublishedPostInHome,
+} from './postRequestCache';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
@@ -54,7 +60,7 @@ const mediaValue = {
     if (mediaState !== 'ready') {
       throw new Error('Media is unavailable');
     }
-    return [{ altText: '대체 텍스트', applyNightshade: false, mediaId: 'media-1' }];
+    return [{ altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' }];
   },
   requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
 };
@@ -110,6 +116,7 @@ let mutationCalls: Array<{
   };
 }> = [];
 let sessionAccountId: string | null = 'account-1';
+let sessionSelectedProfileId: string | null = 'profile-a';
 const acceptedRequestResponse = (callIndex: number) => ({
   createPost: {
     request: {
@@ -182,6 +189,43 @@ const createRelayEnvironment = () =>
     store: new Store(new RecordSource()),
   });
 
+function seedHomeTimeline(environment: Environment, existingPostIds: readonly string[] = []) {
+  commitLocalUpdate(environment, (store) => {
+    const root = store.getRoot();
+    const connectionId = ConnectionHandler.getConnectionID(
+      root.getDataID(),
+      'PostList_homeTimeline',
+    );
+    const connection = store.create(connectionId, 'PostConnection');
+    const edges = existingPostIds.map((id) => {
+      const post = store.create(id, 'Post');
+      return ConnectionHandler.createEdge(store, connection, post, 'PostConnectionEdge');
+    });
+    connection.setLinkedRecords(edges, 'edges');
+    root.setLinkedRecord(
+      connection,
+      getRelayHandleKey('connection', 'PostList_homeTimeline', null),
+    );
+  });
+}
+
+function homeTimelinePostIds(environment: Environment) {
+  const connectionId = ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline');
+  const source = environment.getStore().getSource();
+  const connection = source.get(connectionId) as Record<string, unknown> | undefined;
+  const edgeIds = (connection?.['edges'] as { __refs?: ReadonlyArray<string | null> } | undefined)
+    ?.__refs;
+
+  return (edgeIds ?? []).flatMap((edgeId) => {
+    if (!edgeId) {
+      return [];
+    }
+    const edge = source.get(edgeId) as Record<string, unknown> | undefined;
+    const postId = (edge?.['node'] as { __ref?: string } | undefined)?.__ref;
+    return postId ? [postId] : [];
+  });
+}
+
 // ReactTestRenderer lifecycle probe only; this fixture does not model browser or device focus.
 function TrackedTextInput(props: Record<string, unknown>) {
   useEffect(() => {
@@ -241,6 +285,7 @@ mockModule('react-relay', {
 mockModule('relay-runtime', {
   ...RelayRuntime,
   ConnectionHandler: {
+    ...RelayRuntime.ConnectionHandler,
     getConnectionID: (
       accountId: string,
       key: string,
@@ -250,7 +295,7 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId: sessionAccountId }),
+  useSession: () => ({ accountId: sessionAccountId, selectedProfileId: sessionSelectedProfileId }),
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
 mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
@@ -391,6 +436,7 @@ beforeEach(() => {
   relayEnvironment = createRelayEnvironment();
   relayEnvironmentGeneration = null;
   sessionAccountId = 'account-1';
+  sessionSelectedProfileId = 'profile-a';
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
@@ -559,109 +605,217 @@ describe('PostComposer character count', () => {
 });
 
 describe('PostComposer request acknowledgement cache projection', () => {
-  it('prepends a rechecked request only to the original actor first-page arrays', async () => {
-    const requestNodeId = 'post-request-node';
-    const query = getRequest(PostRequestListQueryNode);
-    const environment = relayEnvironment;
-    const seedPage = (
-      profileId: string,
-      statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
-    ) => {
-      environment.commitPayload(
-        createOperationDescriptor(query, { pageToken: null, profileId, statuses }),
-        { postRequests: { nextPageToken: null, requests: [] } },
-      );
-    };
-    seedPage('profile-a', null);
-    seedPage('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
-    seedPage('profile-b', null);
-    seedPage('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
-
-    let retryUncertainRequest: (() => void) | undefined;
-    const composerProps = (profile: typeof profileA) => ({
-      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
-        retryUncertainRequest = uncertain ? retry : undefined;
-      },
-      onRequestClose: () => undefined,
-      presentation: 'overlay' as const,
-      profile: profile as never,
-    });
-
-    await act(async () => {
-      renderer = create(createElement(PostComposer, composerProps(profileA)));
-    });
-    await act(async () => targetProps?.onBodyChange('접수된 본문'));
-    await act(async () => targetProps?.onSubmit());
-
-    const originalSubmission = mutationCalls[0]?.variables;
-    assert.ok(originalSubmission);
-    assert.equal(originalSubmission.input.actorProfileId, profileA.id);
-    const requestId = originalSubmission.input.requestId;
-    assert.ok(typeof requestId === 'string');
-    await act(async () => mutationCalls[0]?.onError(new Error('접수 결과 확인 불가')));
-    assert.ok(retryUncertainRequest);
-
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, composerProps(profileB)));
-    });
-    assert.ok(retryUncertainRequest);
-    await act(async () => retryUncertainRequest?.());
-
-    const call = mutationCalls[1];
-    assert.ok(call);
-    assert.deepEqual(call.variables, originalSubmission);
-    const variables = call.variables as PostComposerCreatePostMutation['variables'];
-    const mutationOperation = createOperationDescriptor(getRequest(CreatePostMutation), variables);
-    environment.commitPayload(mutationOperation, {
-      createPost: {
-        request: {
-          __typename: 'PostRequest',
-          authorProfile: {
-            __typename: 'Profile',
-            avatar: null,
-            displayName: '작성자',
-            handle: '@writer',
-            id: 'profile-a',
-            relativeHandle: '@writer',
-          },
-          bodyText: '접수된 본문',
-          id: requestNodeId,
-          media: [],
-          post: null,
-          requestId,
-          sensitiveMedia: true,
-          status: 'QUEUED',
-        },
-      },
-    });
-    await act(async () =>
-      call.onCompleted({ createPost: { request: { id: requestNodeId, requestId } } }),
-    );
-
-    const requestIds = (
-      profileId: string,
-      statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
-    ) => {
-      const operation = createOperationDescriptor(query, {
-        pageToken: null,
-        profileId,
-        statuses,
-      });
-      const data = environment.lookup(operation.fragment).data as {
-        postRequests: { requests: ReadonlyArray<{ id: string }> };
+  for (const status of ['QUEUED', 'PUBLISHED'] as const) {
+    it(`projects a ${status} retry into the appropriate request and Home pages`, async () => {
+      const requestNodeId = 'post-request-node';
+      const publishedPostId = 'post-published';
+      const query = getRequest(PostRequestListQueryNode);
+      const environment = relayEnvironment;
+      const seedPage = (
+        profileId: string,
+        statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
+      ) => {
+        environment.commitPayload(
+          createOperationDescriptor(query, { pageToken: null, profileId, statuses }),
+          { postRequests: { nextPageToken: null, requests: [] } },
+        );
       };
-      return data.postRequests.requests.map((request) => request.id);
-    };
+      seedPage('profile-a', null);
+      seedPage('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
+      seedPage('profile-b', null);
+      seedPage('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
+      seedHomeTimeline(environment, ['post-home-existing']);
 
-    assert.deepEqual(requestIds('profile-a', null), [requestNodeId]);
-    assert.deepEqual(requestIds('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES), [requestNodeId]);
-    assert.deepEqual(requestIds('profile-b', null), []);
-    assert.deepEqual(requestIds('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES), []);
-    const requestRecord = environment.getStore().getSource().get(requestNodeId);
-    assert.equal(requestRecord?.bodyText, '접수된 본문');
-    assert.equal(requestRecord?.sensitiveMedia, true);
-    assert.equal(requestRecord?.draft, undefined);
-  });
+      let retryUncertainRequest: (() => void) | undefined;
+      const composerProps = (profile: typeof profileA) => ({
+        onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
+          retryUncertainRequest = uncertain ? retry : undefined;
+        },
+        onRequestClose: () => undefined,
+        presentation: 'overlay' as const,
+        profile: profile as never,
+      });
+
+      await act(async () => {
+        renderer = create(createElement(PostComposer, composerProps(profileA)));
+      });
+      await act(async () => targetProps?.onBodyChange('접수된 본문'));
+      await act(async () => targetProps?.onSubmit());
+
+      const originalSubmission = mutationCalls[0]?.variables;
+      assert.ok(originalSubmission);
+      assert.equal(originalSubmission.input.actorProfileId, profileA.id);
+      const requestId = originalSubmission.input.requestId;
+      assert.ok(typeof requestId === 'string');
+      await act(async () => mutationCalls[0]?.onError(new Error('접수 결과 확인 불가')));
+      assert.ok(retryUncertainRequest);
+
+      await act(async () => {
+        renderer?.update(createElement(PostComposer, composerProps(profileB)));
+      });
+      assert.ok(retryUncertainRequest);
+      await act(async () => retryUncertainRequest?.());
+
+      const call = mutationCalls[1];
+      assert.ok(call);
+      assert.deepEqual(call.variables, originalSubmission);
+      const variables = call.variables as PostComposerCreatePostMutation['variables'];
+      const mutationOperation = createOperationDescriptor(
+        getRequest(CreatePostMutation),
+        variables,
+      );
+      const publishedPost =
+        status === 'PUBLISHED'
+          ? {
+              __typename: 'Post',
+              content: { __typename: 'PostContent', id: `content:${publishedPostId}` },
+              id: publishedPostId,
+              profile: {
+                __typename: 'Profile',
+                avatar: null,
+                displayName: '작성자 A',
+                handle: '@profile-a',
+                id: 'profile-a',
+                relativeHandle: '@profile-a',
+              },
+              replyParent: null,
+            }
+          : null;
+      environment.commitPayload(mutationOperation, {
+        createPost: {
+          request: {
+            __typename: 'PostRequest',
+            authorProfile: {
+              __typename: 'Profile',
+              avatar: null,
+              displayName: '작성자',
+              handle: '@writer',
+              id: 'profile-a',
+              relativeHandle: '@writer',
+            },
+            bodyText: '접수된 본문',
+            id: requestNodeId,
+            media: [],
+            post: publishedPost,
+            requestId,
+            sensitiveMedia: true,
+            status,
+          },
+        },
+      });
+      await act(async () =>
+        call.onCompleted({ createPost: { request: { id: requestNodeId, requestId } } }),
+      );
+
+      const requestIds = (
+        profileId: string,
+        statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
+      ) => {
+        const operation = createOperationDescriptor(query, {
+          pageToken: null,
+          profileId,
+          statuses,
+        });
+        const data = environment.lookup(operation.fragment).data as {
+          postRequests: { requests: ReadonlyArray<{ id: string }> };
+        };
+        return data.postRequests.requests.map((request) => request.id);
+      };
+
+      assert.deepEqual(requestIds('profile-a', null), [requestNodeId]);
+      assert.deepEqual(
+        requestIds('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES),
+        status === 'PUBLISHED' ? [] : [requestNodeId],
+      );
+      assert.deepEqual(requestIds('profile-b', null), []);
+      assert.deepEqual(requestIds('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+      assert.deepEqual(
+        homeTimelinePostIds(environment),
+        status === 'PUBLISHED' ? [publishedPostId, 'post-home-existing'] : ['post-home-existing'],
+      );
+
+      const requestRecord = environment.getStore().getSource().get(requestNodeId);
+      assert.equal(requestRecord?.bodyText, '접수된 본문');
+      assert.equal(requestRecord?.sensitiveMedia, true);
+      assert.equal(requestRecord?.status, status);
+      assert.equal(requestRecord?.draft, undefined);
+
+      if (status === 'PUBLISHED') {
+        await act(async () => {
+          commitLocalUpdate(environment, (store) => {
+            reconcilePublishedPostInHome(store, {
+              authorProfileId: profileA.id,
+              currentProfileId: sessionSelectedProfileId,
+              postId: publishedPostId,
+              profileId: profileA.id,
+              requestNodeId,
+            });
+          });
+        });
+        assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
+
+        await act(async () => targetProps?.onBodyChange('프로필 B에서 작성한 본문'));
+        await act(async () => targetProps?.onSubmit());
+
+        const authorBCall = mutationCalls[2];
+        assert.ok(authorBCall);
+        const authorBRequestId = String(authorBCall.variables.input.requestId);
+        const authorBRequestNodeId = 'post-request-node-profile-b';
+        const authorBPostId = 'post-published-profile-b';
+        assert.equal(authorBCall.variables.input.actorProfileId, profileB.id);
+        const authorBMutation = createOperationDescriptor(
+          getRequest(CreatePostMutation),
+          authorBCall.variables as PostComposerCreatePostMutation['variables'],
+        );
+        environment.commitPayload(authorBMutation, {
+          createPost: {
+            request: {
+              __typename: 'PostRequest',
+              authorProfile: {
+                __typename: 'Profile',
+                avatar: null,
+                displayName: '작성자 B',
+                handle: '@profile-b',
+                id: profileB.id,
+                relativeHandle: '@profile-b',
+              },
+              bodyText: '프로필 B에서 작성한 본문',
+              id: authorBRequestNodeId,
+              media: [],
+              post: {
+                __typename: 'Post',
+                content: { __typename: 'PostContent', id: `content:${authorBPostId}` },
+                id: authorBPostId,
+                profile: {
+                  __typename: 'Profile',
+                  avatar: null,
+                  displayName: '작성자 B',
+                  handle: '@profile-b',
+                  id: profileB.id,
+                  relativeHandle: profileB.relativeHandle,
+                },
+                replyParent: null,
+              },
+              requestId: authorBRequestId,
+              sensitiveMedia: false,
+              status: 'PUBLISHED',
+            },
+          },
+        });
+        await act(async () =>
+          authorBCall.onCompleted({
+            createPost: { request: { id: authorBRequestNodeId, requestId: authorBRequestId } },
+          }),
+        );
+
+        assert.deepEqual(requestIds(profileA.id, null), [requestNodeId]);
+        assert.deepEqual(requestIds(profileA.id, POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+        assert.deepEqual(requestIds(profileB.id, null), [authorBRequestNodeId]);
+        assert.deepEqual(requestIds(profileB.id, POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+        assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
+      }
+    });
+  }
 });
 
 describe('PostComposer media submission', () => {

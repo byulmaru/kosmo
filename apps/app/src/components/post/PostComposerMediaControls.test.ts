@@ -202,14 +202,14 @@ describe('PostComposerMediaControls post request media', () => {
     await act(async () => {
       mediaRenderProps?.onAltTextChange(first.key, '  First image  ');
       mediaRenderProps?.onAltTextChange(second.key, 'Second image');
-      mediaRenderProps?.onApplyNightshadeChange(second.key, true);
+      mediaRenderProps?.onApplyAiProhibitFilterChange(second.key, true);
       mediaRenderProps?.onSensitiveMediaChange(true);
     });
     await flush();
 
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      { altText: 'First image', applyNightshade: false, mediaId: 'media-1' },
-      { altText: 'Second image', applyNightshade: true, mediaId: 'media-2' },
+      { altText: 'First image', applyAiProhibitFilter: false, mediaId: 'media-1' },
+      { altText: 'Second image', applyAiProhibitFilter: true, mediaId: 'media-2' },
     ]);
     assert.equal(issueCalls.length, initialIssueCount);
     assert.equal(uploadCalls, initialUploadCount);
@@ -239,7 +239,7 @@ describe('PostComposerMediaControls post request media', () => {
     assert.ok(second);
     await act(async () => {
       mediaRenderProps?.onAltTextChange(first.key, 'Replace this ALT');
-      mediaRenderProps?.onApplyNightshadeChange(first.key, true);
+      mediaRenderProps?.onApplyAiProhibitFilterChange(first.key, true);
       mediaRenderProps?.onAltTextChange(second.key, 'Keep sibling ALT');
     });
     mediaValues.at(-1)?.requirePostRequestMediaReselection(first.mediaId!);
@@ -258,8 +258,8 @@ describe('PostComposerMediaControls post request media', () => {
     assert.equal(uploadCalls, 3);
     assert.equal(issueCalls.length, 3);
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      { altText: 'Replace this ALT', applyNightshade: true, mediaId: 'media-3' },
-      { altText: 'Keep sibling ALT', applyNightshade: false, mediaId: 'media-2' },
+      { altText: 'Replace this ALT', applyAiProhibitFilter: true, mediaId: 'media-3' },
+      { altText: 'Keep sibling ALT', applyAiProhibitFilter: false, mediaId: 'media-2' },
     ]);
     assert.equal(mediaRenderProps?.items[0]?.asset?.uri, 'file:///local/image.jpg');
     assert.equal(mediaRenderProps?.items[1]?.mediaId, 'media-2');
