@@ -27,6 +27,7 @@ export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 export type PostComposerHostCloseReason = 'created' | 'dismiss';
 
 type PostComposerHostProps = {
+  anchorRef?: RefObject<View | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
@@ -38,6 +39,7 @@ type PostComposerHostProps = {
 type PostComposerRequestCloseReason = PostComposerHostCloseReason | OverlayCloseReason;
 
 export function PostComposerHost({
+  anchorRef,
   fallbackFocusRef,
   mode,
   onExpand,
@@ -61,7 +63,8 @@ export function PostComposerHost({
         : theme.backgroundElevated;
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
-  const expandControlRef = useRef<View>(null);
+  const fallbackExpandControlRef = useRef<View>(null);
+  const expandControlRef = anchorRef ?? fallbackExpandControlRef;
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const requestClose = useCallback(
     (reason: PostComposerRequestCloseReason = 'dismiss') => {

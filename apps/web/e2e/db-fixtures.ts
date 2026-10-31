@@ -66,6 +66,7 @@ type CreateE2ESessionOptions = {
   handle?: string;
   oidcSubject?: string;
   profile?: boolean;
+  timelineGuideShown?: boolean;
   sessionState?: SessionState;
   token?: string;
 };
@@ -250,6 +251,8 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
     .insert(Accounts)
     .values({
       displayName,
+      // General feature tests use a returning account; onboarding tests start unseen.
+      metadata: (options.timelineGuideShown ?? true) ? { 'coachmark.timeline.shown': 'true' } : {},
       oidcSubject: options.oidcSubject ?? `e2e-oidc-${suffix}`,
       state: options.accountState ?? AccountState.ACTIVE,
     })

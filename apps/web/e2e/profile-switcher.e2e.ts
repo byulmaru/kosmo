@@ -100,6 +100,7 @@ test('selectProfile response identifies the selected profile and recreates the a
   await expect(page).toHaveURL(/\/first-profile\/handle$/);
 
   const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
+  await dismissTimelineGuide(page);
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
   await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Composer 확장' })).toBeVisible();
@@ -131,6 +132,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await page.waitForURL('**/first-profile/handle');
 
   const gammaProfileId = await createProfileFromSwitcher(page, 'gamma');
+  await dismissTimelineGuide(page);
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
@@ -159,6 +161,7 @@ test('home route active profile query refetches after switching profiles', async
   await page.waitForURL('**/first-profile/handle');
 
   const alphaHomeProfileId = await createProfileFromSwitcher(page, 'alphahome');
+  await dismissTimelineGuide(page);
   await createProfileFromSwitcher(page, 'betahome');
   await expect(sidebarProfileHandle(page, 'betahome')).toBeVisible();
 
@@ -276,6 +279,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'revisionalpha');
+  await dismissTimelineGuide(page);
   const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
   await createPost(page, betaPostBody);
   await page.goto('/home');
@@ -349,6 +353,7 @@ test('home onboarding stays hidden while the home active profile query errors', 
   await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'errorhome');
+  await dismissTimelineGuide(page);
   await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
   await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
@@ -447,6 +452,12 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   await expect(sidebarProfileHandle(page, handle)).toBeVisible();
 
   return createdProfile?.id as string;
+}
+
+async function dismissTimelineGuide(page: Page) {
+  const guide = page.getByRole('dialog', { name: '팔로우한 사람들의 소식' });
+  await guide.getByRole('button', { name: '건너뛰기' }).click();
+  await expect(guide).toBeHidden();
 }
 
 async function openProfileSwitcher(page: Page) {

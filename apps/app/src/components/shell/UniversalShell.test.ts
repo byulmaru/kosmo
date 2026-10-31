@@ -160,6 +160,9 @@ mockModule('@/components/PageHeader', {
   PageHeaderView: ({ leading, ...props }: { leading?: ReactNode; [key: string]: unknown }) =>
     createElement('PageHeader', props, leading),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
 });

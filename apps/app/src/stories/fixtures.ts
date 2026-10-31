@@ -262,7 +262,7 @@ export function shellQuery({
 } = {}) {
   return {
     currentSession: { id: 'session-story', selectedProfile },
-    me: { id: 'account-story', name: '스토리 계정', profiles },
+    me: { id: 'account-story', name: '스토리 계정', profiles, metadata: [] },
   };
 }
 

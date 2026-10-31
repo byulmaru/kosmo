@@ -1,4 +1,5 @@
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { UniversalShell } from '@/components/shell/UniversalShell';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
@@ -12,11 +13,15 @@ import baseMeta, {
   UniversalMobileComposerLifecycle as universalMobileComposerLifecycle,
   UniversalMobileGuardedProfilePicker as universalMobileGuardedProfilePicker,
   UniversalMobileLongProfilePickerScroll as universalMobileLongProfilePickerScroll,
+  UniversalMobileTimelineHome as universalMobileTimelineHome,
+  UniversalMobileTimelineLocal as universalMobileTimelineLocal,
+  UniversalMobileTimelineNoSelectedProfile as universalMobileTimelineNoSelectedProfile,
 } from './Shell.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
   ...baseMeta,
+  component: UniversalShell,
   excludeStories: [],
   parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Shell/Tests',
@@ -26,6 +31,76 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const profileSwitcherMutationRequestObserver = fn();
+
+async function exerciseTimelineCoachmark(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const page = within(canvasElement.ownerDocument.body);
+  const help = await canvas.findByRole('button', { name: '타임라인 도움말' });
+
+  await userEvent.click(help);
+  const homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
+  expect(within(homeDialog).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '4');
+  await waitFor(() =>
+    expect(within(homeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
+  );
+  await userEvent.click(within(homeDialog).getByRole('button', { name: '다음' }));
+  let localDialog = await page.findByRole('dialog', {
+    name: '새로운 사람들을 만나보세요',
+  });
+  await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
+  let profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
+  expect(page.queryByRole('navigation', { name: '주요 메뉴', hidden: true })).toBeNull();
+  expect(profileDialog).toBeVisible();
+  await waitFor(() =>
+    expect(within(profileDialog).getByRole('button', { name: '이전' })).toBeEnabled(),
+  );
+  await userEvent.click(within(profileDialog).getByRole('button', { name: '이전' }));
+  await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+  localDialog = await page.findByRole('dialog', {
+    name: '새로운 사람들을 만나보세요',
+  });
+  await waitFor(() =>
+    expect(localDialog.contains(canvasElement.ownerDocument.activeElement)).toBe(true),
+  );
+  await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
+  profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
+  await waitFor(() =>
+    expect(within(profileDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
+  );
+
+  await userEvent.click(within(profileDialog).getByRole('button', { name: '다음' }));
+  await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+  const composerDialog = await page.findByRole('dialog', { name: '내 이야기를 들려주세요' });
+  expect(composerDialog).toBeVisible();
+  await waitFor(() =>
+    expect(composerDialog.contains(canvasElement.ownerDocument.activeElement)).toBe(true),
+  );
+
+  await userEvent.click(within(composerDialog).getByRole('button', { name: '건너뛰기' }));
+  await waitFor(() =>
+    expect(page.queryByRole('dialog', { name: '내 이야기를 들려주세요' })).toBeNull(),
+  );
+  await waitFor(() => expect(help).toHaveFocus());
+  await userEvent.click(help);
+  const restartedHomeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
+  await waitFor(() =>
+    expect(within(restartedHomeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
+  );
+  await userEvent.click(within(restartedHomeDialog).getByRole('button', { name: '다음' }));
+  localDialog = await page.findByRole('dialog', {
+    name: '새로운 사람들을 만나보세요',
+  });
+  await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
+  profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
+  await waitFor(() =>
+    expect(within(profileDialog).getByRole('button', { name: '건너뛰기' })).toBeEnabled(),
+  );
+  await userEvent.click(within(profileDialog).getByRole('button', { name: '건너뛰기' }));
+  await waitFor(() =>
+    expect(page.queryByRole('dialog', { name: '지금 활동 중인 프로필' })).toBeNull(),
+  );
+  await waitFor(() => expect(help).toHaveFocus());
+}
 
 export const UniversalCompactComposerLifecycle: Story = {
   ...universalCompactComposerLifecycle,
@@ -218,6 +293,49 @@ export const UniversalMobileProfilePickerDismissesInsideDrawer: Story = {
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
     expect(page.queryByLabelText('프로필 전환')).toBeNull();
     await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
+  },
+};
+
+export const UniversalMobileTimelineHomeLifecycle: Story = {
+  ...universalMobileTimelineHome,
+  play: async ({ canvasElement }) => {
+    await exerciseTimelineCoachmark(canvasElement);
+  },
+};
+
+export const UniversalMobileTimelineLocalLifecycle: Story = {
+  ...universalMobileTimelineLocal,
+  play: async ({ canvasElement }) => {
+    await exerciseTimelineCoachmark(canvasElement);
+  },
+};
+
+export const UniversalMobileTimelineNoSelectedProfile: Story = {
+  ...universalMobileTimelineNoSelectedProfile,
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const help = await within(canvasElement).findByRole('button', { name: '타임라인 도움말' });
+    await userEvent.click(help);
+    const homeDialog = await page.findByRole('dialog', { name: '팔로우한 사람들의 소식' });
+    expect(within(homeDialog).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '3');
+    await waitFor(() =>
+      expect(within(homeDialog).getByRole('button', { name: '다음' })).toBeEnabled(),
+    );
+    await userEvent.click(within(homeDialog).getByRole('button', { name: '다음' }));
+    const localDialog = await page.findByRole('dialog', {
+      name: '새로운 사람들을 만나보세요',
+    });
+    await userEvent.click(within(localDialog).getByRole('button', { name: '다음' }));
+    const profileDialog = await page.findByRole('dialog', { name: '지금 활동 중인 프로필' });
+    await waitFor(() =>
+      expect(within(profileDialog).getByRole('button', { name: '완료' })).toBeEnabled(),
+    );
+    await userEvent.click(within(profileDialog).getByRole('button', { name: '완료' }));
+    await waitFor(() =>
+      expect(page.queryByRole('dialog', { name: '지금 활동 중인 프로필' })).toBeNull(),
+    );
+    expect(page.queryByRole('navigation', { name: '주요 메뉴', hidden: true })).toBeNull();
+    await waitFor(() => expect(help).toHaveFocus());
   },
 };
 

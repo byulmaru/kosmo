@@ -4,6 +4,7 @@ import { before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,8 +47,16 @@ mockModule('relay-runtime', {
   fetchQuery: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
   getRequest: () => ({}),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineCoachmark: () => null,
+  TimelineHelpButton: () => null,
+});
+function MockPageHeader(props: object) {
+  return createElement('PageHeader', props);
+}
+
 mockModule('@/components/PageHeader', {
-  PageHeader: (props: object) => createElement('PageHeader', props),
+  PageHeader: MockPageHeader,
 });
 mockModule('@/components/post/PostList', { PostList: () => null });
 mockModule('@/components/RelayFailOpenBoundary', {
@@ -60,6 +69,7 @@ mockModule('@/components/RouteBoundary', {
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
+  getTimelineGuideViewportWidth: (_web: boolean, width: number) => width,
   getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
@@ -72,17 +82,17 @@ mockModule('@/theme/ThemeProvider', {
 });
 
 let HomeScreen: ComponentType;
-
 before(async () => {
   ({ default: HomeScreen } = await import('../../app/(tabs)/(protected)/home'));
 });
 
 test('Native 타임라인 파라미터가 Local이면 같은 route에서 Local 콘텐츠를 표시한다', async () => {
-  let renderer;
+  let renderer: ReactTestRenderer | null = null;
   await act(async () => {
     renderer = create(createElement(HomeScreen));
   });
 
-  const header = renderer!.root.findByType('PageHeader');
+  const header = renderer!.root.findByType(MockPageHeader);
   assert.equal(header.props.accessibilityLabel, '로컬');
+  await act(async () => renderer?.unmount());
 });

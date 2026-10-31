@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRefetchableFragment } from 'react-relay';
+import { TimelineCoachmark, TimelineHelpButton } from '@/components/coachmark/TimelineCoachmark';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
@@ -10,6 +11,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
+  getTimelineGuideViewportWidth,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
@@ -19,7 +21,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
-import type { MutableRefObject } from 'react';
+import type { MutableRefObject, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type {
@@ -43,6 +45,7 @@ const LocalFragment = graphql`
       id
       selectedProfile {
         id
+        displayName
         ...ReplyComposerSurface_profile
       }
     }
@@ -51,6 +54,7 @@ const LocalFragment = graphql`
       profiles {
         id
       }
+      ...CoachmarkController_account
     }
     ...PostList_local @arguments(count: $count)
   }
@@ -62,6 +66,8 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
+  const homeTabAnchorRef = useRef<View>(null);
+  const localTabAnchorRef = useRef<View>(null);
   const [refreshState, setRefreshState] = useState({ refreshVersion: 0, refreshing: false });
   const completeRefresh = useCallback(() => {
     setRefreshState((state) => ({ ...state, refreshing: false }));
@@ -102,7 +108,11 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           <PageHeader title="타임라인 둘러보기" />
         ) : null
       ) : (
-        <LocalHeader width={width} />
+        <LocalHeader
+          width={width}
+          homeTabAnchorRef={homeTabAnchorRef}
+          localTabAnchorRef={localTabAnchorRef}
+        />
       )}
       <View style={styles.body}>
         <RouteBoundary
@@ -129,6 +139,8 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
             onRefreshComplete={completeRefresh}
             refreshVersion={refreshState.refreshVersion}
             refreshing={refreshState.refreshing}
+            homeTabAnchorRef={homeTabAnchorRef}
+            localTabAnchorRef={localTabAnchorRef}
           />
         </RouteBoundary>
       </View>
@@ -136,7 +148,15 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   );
 }
 
-function LocalHeader({ width }: { width: number }) {
+function LocalHeader({
+  width,
+  homeTabAnchorRef,
+  localTabAnchorRef,
+}: {
+  width: number;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+}) {
   const shellChrome = useShellChrome();
   const routeOwnsHeader =
     Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
@@ -150,6 +170,7 @@ function LocalHeader({ width }: { width: number }) {
           brandCurrent
           brandHref={Platform.OS === 'web' ? '/home' : undefined}
           onBrandCurrentNavigate={Platform.OS === 'web' ? shellChrome?.reselectHome : undefined}
+          trailing={<TimelineHelpButton />}
           variant="brand"
         />
       ) : null}
@@ -163,7 +184,11 @@ function LocalHeader({ width }: { width: number }) {
             : undefined
         }
       >
-        <TimelineTabs value="local" />
+        <TimelineTabs
+          homeAnchorRef={homeTabAnchorRef}
+          localAnchorRef={localTabAnchorRef}
+          value="local"
+        />
       </View>
     </>
   );
@@ -171,12 +196,16 @@ function LocalHeader({ width }: { width: number }) {
 
 function LocalContent({
   hasSuccessfulLocalRef,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   onRefreshComplete,
   refreshVersion,
   refreshing,
 }: {
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   onRefreshComplete: () => void;
   refreshVersion: number;
@@ -196,7 +225,13 @@ function LocalContent({
 
   return (
     <>
-      <LocalContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />
+      <LocalContentView
+        data={data}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        homeTabAnchorRef={homeTabAnchorRef}
+        localTabAnchorRef={localTabAnchorRef}
+      />
       <RelayFailOpenBoundary
         fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
         reportUnexpectedErrors={false}
@@ -269,51 +304,82 @@ function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
 
 function LocalContentView({
   data,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   refreshing,
 }: {
   data: LocalContent_query$data;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
   const { status } = useSession();
   const guest = Platform.OS === 'web' && status === 'guest' && !data.currentSession && !data.me;
+  const shellLayout = getShellLayout(Platform.OS === 'web', width);
+  const timelineLayout = getShellLayout(
+    Platform.OS === 'web',
+    getTimelineGuideViewportWidth(Platform.OS === 'web', width),
+  );
+  const coachmark = (
+    <TimelineCoachmark
+      account={data.me}
+      hasProfiles={hasProfiles}
+      hasSelectedProfile={Boolean(selectedProfile)}
+      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${timelineLayout}`}
+      mobile={Platform.OS !== 'web' || shellLayout === 'mobile'}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      profileName={selectedProfile?.displayName}
+    />
+  );
 
   if (!selectedProfile && !guest) {
     return (
-      <View style={styles.onboardingRoot}>
-        <View style={styles.onboarding}>
-          <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
-          <Text accessibilityRole="header" style={[styles.onboardingTitle, { color: theme.text }]}>
-            {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
-          </Text>
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
-            {hasProfiles
-              ? '로컬 타임라인을 보려면 사용할 프로필을 먼저 선택해야 해요.'
-              : '프로필을 만들면 로컬 게시물을 둘러볼 수 있어요.'}
-          </Text>
-          <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
-            {hasProfiles ? '프로필 선택' : '프로필 만들기'}
-          </Button>
+      <>
+        {coachmark}
+        <View style={styles.onboardingRoot}>
+          <View style={styles.onboarding}>
+            <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
+            <Text
+              accessibilityRole="header"
+              style={[styles.onboardingTitle, { color: theme.text }]}
+            >
+              {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
+            </Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              {hasProfiles
+                ? '로컬 타임라인을 보려면 사용할 프로필을 먼저 선택해야 해요.'
+                : '프로필을 만들면 로컬 게시물을 둘러볼 수 있어요.'}
+            </Text>
+            <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
+              {hasProfiles ? '프로필 선택' : '프로필 만들기'}
+            </Button>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.timeline}>
-      <PostList
-        identityKey={`local:${selectedProfile?.id ?? 'guest'}`}
-        local={data}
-        onRefresh={onRefresh}
-        replyProfile={selectedProfile}
-        refreshing={refreshing}
-      />
-    </View>
+    <>
+      {coachmark}
+      <View style={styles.timeline}>
+        <PostList
+          identityKey={`local:${selectedProfile?.id ?? 'guest'}`}
+          local={data}
+          onRefresh={onRefresh}
+          replyProfile={selectedProfile}
+          refreshing={refreshing}
+        />
+      </View>
+    </>
   );
 }
 

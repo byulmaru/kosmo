@@ -154,12 +154,29 @@ export function CoachmarkProvider({
 
   const active = state.active;
   const current = active?.steps[active.step];
-  const finish = () =>
+  const finish = () => {
+    setStoredState((value) => {
+      if (
+        !active ||
+        value.accountKey !== accountKey ||
+        value.active?.token !== active.token ||
+        !value.active.visible
+      ) {
+        return value;
+      }
+      return { ...value, active: { ...value.active, visible: false } };
+    });
+  };
+  const move = (step: number) => {
     setStoredState((value) =>
-      active && value.accountKey === accountKey && value.active?.token === active.token
-        ? { ...value, active: { ...value.active, visible: false } }
+      active &&
+      value.accountKey === accountGeneration.accountKey &&
+      value.active?.token === active.token &&
+      value.active.visible
+        ? { ...value, active: { ...value.active, step } }
         : value,
     );
+  };
   const release = () => {
     if (
       !active ||
@@ -176,14 +193,6 @@ export function CoachmarkProvider({
         : value,
     );
   };
-  const move = (step: number) =>
-    setStoredState((value) =>
-      active &&
-      value.accountKey === accountGeneration.accountKey &&
-      value.active?.token === active.token
-        ? { ...value, active: { ...value.active, step } }
-        : value,
-    );
   const presentation =
     active && current ? (
       <Coachmark

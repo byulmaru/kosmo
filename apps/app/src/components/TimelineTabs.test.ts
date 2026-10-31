@@ -47,7 +47,9 @@ mock.module(new URL('./shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({ reselectTab }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
+let TimelineTabs: ComponentType<{
+  value: 'home' | 'local';
+}>;
 
 before(async () => {
   ({ TimelineTabs } = await import('./TimelineTabs'));

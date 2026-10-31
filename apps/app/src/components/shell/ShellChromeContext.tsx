@@ -12,6 +12,11 @@ type ShellChromeActions = {
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
+  registerTimelineHelp?: (handler: (() => void) | null) => () => void;
+  timelineComposerRef?: RefObject<NativeView | null>;
+  timelineHelp?: () => void;
+  timelineHelpTriggerRef?: RefObject<NativeView | null>;
+  timelineProfileRef?: RefObject<NativeView | null>;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
   registerTabReselection?: (
     destination: TabReselectionDestination,
@@ -31,6 +36,11 @@ export function ShellChromeProvider({
   navigationDrawerTriggerRef,
   openNavigationDrawer,
   openProfileSwitcher,
+  registerTimelineHelp,
+  timelineComposerRef,
+  timelineHelp,
+  timelineHelpTriggerRef,
+  timelineProfileRef,
   registerHomeReselection,
   registerTabReselection,
   reselectTab,
@@ -42,6 +52,11 @@ export function ShellChromeProvider({
       navigationDrawerTriggerRef,
       openNavigationDrawer,
       openProfileSwitcher,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,
@@ -52,6 +67,11 @@ export function ShellChromeProvider({
       navigationDrawerTriggerRef,
       openNavigationDrawer,
       openProfileSwitcher,
+      registerTimelineHelp,
+      timelineComposerRef,
+      timelineHelp,
+      timelineHelpTriggerRef,
+      timelineProfileRef,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,

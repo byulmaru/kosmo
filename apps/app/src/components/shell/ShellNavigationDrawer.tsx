@@ -44,11 +44,11 @@ export function WebNavigationDrawer({
   const drawerSafeAreaStyle = useSafeAreaPadding();
   const theme = useTheme();
   // The drawer owns this ref so nested picker dismissal can restore trigger focus.
-  const profileTriggerRef = useRef<View>(null);
+  const internalProfileTriggerRef = useRef<View>(null);
   const handleRequestClose = () => {
     if (switcherOpen) {
       onSwitcherOpenChange(false);
-      profileTriggerRef.current?.focus();
+      internalProfileTriggerRef.current?.focus();
       return;
     }
     onClose();
@@ -82,7 +82,7 @@ export function WebNavigationDrawer({
             onHomeReselect={onHomeReselect}
             onNavigate={onClose}
             onSwitcherOpenChange={onSwitcherOpenChange}
-            profileTriggerRef={profileTriggerRef}
+            profileTriggerRef={internalProfileTriggerRef}
             query={query}
             surface="drawer"
             switcherOpen={switcherOpen}
@@ -115,6 +115,7 @@ export function NativeNavigationDrawer({
   const drawerSafeAreaStyle = useSafeAreaPadding();
   const elevation = useElevation();
   const theme = useTheme();
+  const drawerProfileTriggerRef = useRef<View>(null);
 
   return (
     <Drawer
@@ -141,6 +142,7 @@ export function NativeNavigationDrawer({
             onFeedbackOpen={onFeedbackOpen}
             onNavigate={onClose}
             onSwitcherOpenChange={onSwitcherOpenChange}
+            profileTriggerRef={drawerProfileTriggerRef}
             query={query}
             surface="drawer"
             switcherOpen={switcherOpen}
