@@ -7341,12 +7341,12 @@ export const ComposerMediaUploadInteraction: Story = {
         media: [
           {
             altText: '첫 번째 이미지',
-            applyNightshade: false,
+            applyAiProhibitFilter: false,
             mediaId: 'media-1',
           },
           ...['media-2', 'media-3', 'media-4'].map((mediaId) => ({
             altText: null,
-            applyNightshade: false,
+            applyAiProhibitFilter: false,
             mediaId,
           })),
         ],
@@ -8274,7 +8274,7 @@ export const ComposerReplyMediaMutationContract: Story = {
         media: [
           {
             altText: '답글 이미지',
-            applyNightshade: false,
+            applyAiProhibitFilter: false,
             mediaId: 'media-reply-story-1',
           },
         ],

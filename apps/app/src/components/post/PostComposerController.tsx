@@ -33,7 +33,7 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
-import { prependPostRequestToLoadedPages } from './postRequestCache';
+import { prependPostRequestToLoadedPages, reconcilePublishedPostInHome } from './postRequestCache';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -299,6 +299,7 @@ function PostComposerContents({
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
+  const { selectedProfileId } = useSession();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
@@ -570,6 +571,21 @@ function PostComposerContents({
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {
               prependPostRequestToLoadedPages(store, actorProfileId, acceptedRequest.id);
+
+              const request = store.get(acceptedRequest.id);
+              if (request?.getValue('status') !== 'PUBLISHED') {
+                return;
+              }
+
+              const post = request.getLinkedRecord('post');
+              const authorProfile = post?.getLinkedRecord('profile');
+              reconcilePublishedPostInHome(store, {
+                authorProfileId: authorProfile?.getDataID() ?? null,
+                currentProfileId: selectedProfileId,
+                postId: post?.getDataID() ?? null,
+                profileId: actorProfileId,
+                requestNodeId: acceptedRequest.id,
+              });
             });
           }
           setPendingSubmission(null);
@@ -832,7 +848,7 @@ function PostComposerContents({
               render={({
                 items,
                 onAltTextChange,
-                onApplyNightshadeChange,
+                onApplyAiProhibitFilterChange,
                 onMediaAction,
                 onMediaRemove,
                 onMediaRetry,
@@ -868,7 +884,7 @@ function PostComposerContents({
                     media={items}
                     mobileState={mediaEditor.tool}
                     onAltTextChange={onAltTextChange}
-                    onApplyNightshadeChange={onApplyNightshadeChange}
+                    onApplyAiProhibitFilterChange={onApplyAiProhibitFilterChange}
                     onBack={closeMediaEditor}
                     onClose={() => {
                       setMediaEditor(null);

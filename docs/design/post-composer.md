@@ -71,7 +71,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ## Local Post 제출과 요청 상태
 
-- 일반 Post·Reply·Quote의 `게시`는 원본 Media 바이트 전송과 서버의 접수 확인까지만 기다린다. 접수는 Post나 Post Content가 생성됐다는 뜻이 아니며, 이후 Media 처리나 게시 완료를 기다리지 않는다. 접수가 확인되면 Composer를 닫고 초안을 비운다. 실제 Post 구조와 권한은 [Post 객체](../domain/objects/post.md)를 따른다.
+- 모든 Local Post·Reply·Quote 제출은 같은 PostRequest 경로를 사용한다. 입력 `requestId`는 선택적인 멱등성 재시도 키이며 생략하면 서버가 생성하고, 게시 처리 경로를 선택하지 않는다. 새 요청에 Media가 없거나 모든 참조 Media가 Ready면 publication 결과인 `PUBLISHED`를 기다린다. 유효한 Local Uploading Media가 하나라도 있으면 요청 접수를 즉시 확인하고 Media 처리와 publication은 계속 진행한다. 같은 ID와 작성 내용의 재요청은 기존 요청 상태를 반환하며, 같은 ID에 다른 내용은 거부한다. 응답이 확인되면 Composer를 닫고 초안을 비운다. 실제 Post 구조와 권한은 [Post 객체](../domain/objects/post.md)를 따른다.
 - 접수된 요청의 전체 제출 snapshot은 Temporal Workflow 안에 보존해 게시와 멱등 처리를 완료하며, UI에는 공개하지 않고 Composer에 복구하지 않는다. 요청 상태는 `QUEUED`, `PROCESSING`, `PUBLISHING`, `CONFIRMING`, `FAILED`, `CANCELLED`, `PUBLISHED` 중 하나로 표시하고 백분율이나 남은 시간을 만들어 보여주지 않는다.
 - Home에는 현재 선택한 작성 Profile의 게시 요청 요약을 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. 비공개 `/post-requests` 화면에는 Account가 소유한 요청 목록을 표시한다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. 요청 카드는 작성자 본인 전용 요약이므로 Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일을 표시한다. Sensitive Media 썸네일은 생략하며, 게시된 Post의 Content Warning 가림과 공용 reveal 동작은 그대로 유지한다.
 - `QUEUED`·`PROCESSING` 요청은 취소를 요청할 수 있으며, 서버가 `CANCELLED`로 확인한 뒤 취소 완료로 처리한다. `PUBLISHING`과 `CONFIRMING`은 취소할 수 없다. `CANCELLED` 요청은 Account 요청 이력에 남으며 Home 요약에서만 제거한다. `FAILED`는 Post나 Tombstone이 아닌 종료된 요청 상태로 workflow 보존 기간에만 남는다. `FAILED`와 `CANCELLED`의 `새 글 작성`은 현재 선택한 Profile의 일반 Post Composer를 연다. 요청의 본문·Content Warning·Media·Mention·Reply·Quote 관계·작성 Profile·기본값은 복사하지 않는다. 이미 일반 Composer draft나 접수 불명확 상태가 있으면 기존 정책을 따르며, 로컬 draft가 없을 때만 새 입력이 비어 있다.
@@ -138,9 +138,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   공유하는 중앙 영역에서 함께 스크롤하고 고정 footer를 밀어내지 않는다.
 - Media editor는 developer-targeted `post-composer-nightshade` feature flag가 켜진 경우 Web에서
   `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button과 tool content를 제공한다. flag가 꺼져 있거나
-  평가되지 않았으면 이를 숨긴다. 선택한 이미지마다 `Nightshade 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는
+  평가되지 않았으면 이를 숨긴다. 선택한 이미지마다 `AI 학습 방지 필터 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는
   `실험적인 기능입니다.`를 표시한다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
-  Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N Nightshade 적용`이다.
+  Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N AI 학습 방지 필터 적용`이다.
   처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
   [Media 객체](../domain/objects/media.md)를 따른다.
 - Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
@@ -259,7 +259,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
 - Media 추가·제거·재시도, 업로드 상태, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control은 기존 일반
   Composer와 같은 accessible name·state·live feedback을 제공한다. AI 학습 방지 Switch의 이름은
-  `첨부 이미지 N Nightshade 적용`이다.
+  `첨부 이미지 N AI 학습 방지 필터 적용`이다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
   관찰을 source of truth로 삼고, 이전 target-size 수치를 자동으로 이식하지 않는다.
 - 중앙 scroll은 keyboard focus가 Parent 또는 editor의 현재 위치를 가리지 않게 유지한다. Parent 전용 nested
@@ -324,7 +324,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Web 390px에서는 지원 브라우저의 Back·Forward, 계속 작성의 초안·URL 유지, 폐기 후 원래 목적지 이동과
   history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
-- Post·Reply·Quote의 raw Media upload 완료와 서버 접수 확인 뒤 Composer 종료·draft reset, Post 미생성, 요청 상태와
+- Post·Reply·Quote의 raw Media upload 완료 뒤 Media 상태에 따른 응답 확인(첨부 Media가 없거나 모두 Ready면 `PUBLISHED`, 유효한 Local Uploading Media가 있으면 즉시 request acknowledgement), Composer 종료·draft reset, 접수 acknowledgement만으로 Post를 만들지 않는 동작, 요청 상태와
   Home 요약·비공개 `/post-requests` 표시를 확인한다. Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일이 표시되고, Sensitive Media 썸네일은 생략되는지, 일곱 요청 상태의 표시와
   백분율·ETA 부재, `PROCESSING` 취소 확인, `PUBLISHING`·`CONFIRMING` 취소 불가를 확인한다. `PROCESSING` 취소는 서버가
   `CANCELLED`를 확인하기 전에 Composer를 열지 않고, `FAILED`·`CANCELLED`의 `새 글 작성`은 현재 Profile의 일반 Post Composer를
