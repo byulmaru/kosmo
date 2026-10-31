@@ -12,7 +12,7 @@ import {
   WorkflowFailedError,
   WorkflowUpdateFailedError,
 } from '@temporalio/client';
-import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
+import type { WorkflowHandleWithStartDetails, WorkflowStartOptions } from '@temporalio/client';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
 import type { PostCreateWorkflowArgs, PostCreateWorkflowResult } from './post-create';
 import type { RemoteProfileLookupInput, RemoteProfileUpdateInput } from './remote-profile';
@@ -227,6 +227,9 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
     workflow: 'zeroArgumentWorkflow',
     workflowIdFromArgs,
   };
+  const typedSearchAttributes = [
+    { key: { name: 'KosmoPostRequestOwnerAccountId', type: 'KEYWORD' }, value: 'account-1' },
+  ] satisfies NonNullable<WorkflowStartOptions<ZeroArgumentWorkflow>['typedSearchAttributes']>;
   let releaseStart!: () => void;
   const startReleased = new Promise<void>((resolve) => {
     releaseStart = resolve;
@@ -257,6 +260,7 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
 
   const callerResult = runWorkflow(definition, {
     mode: 'start',
+    typedSearchAttributes,
   });
   let callerSettled = false;
   void callerResult.then(
@@ -288,6 +292,7 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
     assert.equal(options.workflowId, 'opaque-start-id');
     assert.equal(options.args, undefined);
     assert.equal(options.taskQueue, 'kosmo');
+    assert.equal(options.typedSearchAttributes, typedSearchAttributes);
     assert.equal('workflowIdFromArgs' in options, false);
     assert.equal('mode' in options, false);
     assert.equal('workflow' in options, false);
@@ -569,6 +574,118 @@ test('update-with-start mode는 Workflow와 Update를 한 번에 admission하고
   } finally {
     deadline.mock.restore();
     update.mock.restore();
+  }
+});
+
+test('update mode는 stable ID로 기존 Workflow만 조회해 typed Update를 bounded deadline 안에 실행한다', async () => {
+  type PostRequestWorkflowInput = { accountId: string; requestId: string };
+  type CancelUpdateResult = { status: 'CANCELLED' };
+  const workflowInput: PostRequestWorkflowInput = {
+    accountId: 'account-1',
+    requestId: 'request-1',
+  };
+  const workflowId = 'post-request:account-1:request-1';
+  let workflowIdCallbackCount = 0;
+  const definition: WorkflowUpdateDefinition<
+    (input: PostRequestWorkflowInput) => Promise<void>,
+    CancelUpdateResult,
+    []
+  > = {
+    workflow: 'postRequestWorkflow',
+    update: 'cancelPostRequest',
+    workflowIdFromArgs: ({ accountId, requestId }) => {
+      workflowIdCallbackCount += 1;
+      return `post-request:${accountId}:${requestId}`;
+    },
+  };
+  const result: CancelUpdateResult = { status: 'CANCELLED' };
+  const executeUpdate = mock.fn(
+    async (updateName: string, options: { args?: unknown[]; updateId?: string }) => {
+      assert.equal(updateName, 'cancelPostRequest');
+      assert.deepEqual(options.args, []);
+      assert.equal(options.updateId, 'cancel-request-1');
+      return result;
+    },
+  );
+  const handle = { executeUpdate };
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
+    assert.equal(id, workflowId);
+    return handle as never;
+  });
+  const deadlines: Array<number | Date> = [];
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value);
+      return callback();
+    },
+  );
+  const now = mock.method(Date, 'now', () => 1_000_000);
+
+  try {
+    assert.strictEqual(
+      await runWorkflow(definition, {
+        args: [workflowInput],
+        mode: 'update',
+        updateArgs: [],
+        updateId: 'cancel-request-1',
+      }),
+      result,
+    );
+    assert.equal(getHandle.mock.calls.length, 1);
+    assert.equal(executeUpdate.mock.calls.length, 1);
+    assert.equal(workflowIdCallbackCount, 1);
+    assert.deepEqual(deadlines, [1_030_000]);
+  } finally {
+    now.mock.restore();
+    deadline.mock.restore();
+    getHandle.mock.restore();
+  }
+});
+
+test('update mode는 non-empty typed Update args를 기존 Workflow에 전달한다', async () => {
+  type Input = { accountId: string; requestId: string };
+  type Result = { status: 'CANCELLED' };
+  const input: Input = { accountId: 'account-1', requestId: 'request-1' };
+  const definition: WorkflowUpdateDefinition<(input: Input) => Promise<void>, Result, [Input]> = {
+    workflow: 'postRequestWorkflow',
+    update: 'cancelPostRequest',
+    workflowIdFromArgs: ({ accountId, requestId }) => `post-request:${accountId}:${requestId}`,
+  };
+  const result: Result = { status: 'CANCELLED' };
+  const executeUpdate = mock.fn(
+    async (name: string, options: { args?: unknown[]; updateId?: string }) => {
+      assert.equal(name, 'cancelPostRequest');
+      assert.deepEqual(options.args, [input]);
+      assert.equal(options.updateId, 'cancel-request-1');
+      return result;
+    },
+  );
+  const getHandle = mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
+    assert.equal(id, 'post-request:account-1:request-1');
+    return { executeUpdate } as never;
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_value: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    assert.strictEqual(
+      await runWorkflow(definition, {
+        args: [input],
+        mode: 'update',
+        updateArgs: [input],
+        updateId: 'cancel-request-1',
+      }),
+      result,
+    );
+    assert.equal(executeUpdate.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    getHandle.mock.restore();
   }
 });
 

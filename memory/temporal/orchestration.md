@@ -36,11 +36,46 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
-- Local GraphQL과 inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`를 공유하고 ID는
-  `post-create:${requestId}`로 만든다. Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에
-  `USE_EXISTING`, `REJECT_DUPLICATE`, `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction
-  Activity가 공통 결과를 commit한 뒤 Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다.
-  ID가 일치하는 `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
+- Local GraphQL의 Post·Reply·Quote 요청은 `postRequestWorkflow`가 immutable request snapshot과 stable `postId`를
+  소유한다. 입력 Media가 모두 READY가 되기 전에는 Post row나 Post Content를 생성하지 않는다. Workflow는 READY Media를
+  재사용하고 UPLOADING Media는 신규 history에서 독립된 `mediaUploadWorkflow`에 연결한 workflow-backed Nexus operation으로 실행하거나 join한다. READY Media는 새 처리 선택과 무관하게 재사용한다.
+  신규 history는 `patched('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
+  `ABANDON` cancellation과 76시간 schedule-to-close 한도로 실행한다. Worker handler는 기존 `media-upload:${mediaId}` Workflow ID로
+  `USE_EXISTING` conflict와 `ALLOW_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은
+  독립 upload 실행에 붙는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다. 기존 history의 child start/execute
+  command 순서는 그대로 유지하며, `post-request-media-retry-poll-v1` marker가 있는 history는 기존
+  `checkPostRequestMediaUploadActivity` 5초 간격 retry, marker가 없는 history는 기존
+  `waitForPostRequestMediaUploadActivity` 76시간 heartbeat 경로를 사용한다. 두 legacy Activity와 각 branch는 해당 history가
+  drain될 때까지 등록한다. Nexus operation 또는 legacy child start/join 실패 뒤 새 history는
+  `patched('post-request-media-ready-recovery-v1')`에서 취소가 아닐 때 동일 Account의 Local Media가 primary DB에서
+  READY인지 재확인한다. READY면 그 Media identity를 재사용하고, 그렇지 않거나 재확인에 실패하면 원래 upload 오류를
+  보존한다. 취소는 recovery 확인을 건너뛰며 Nexus operation과 legacy child 모두 `ABANDON`으로 취소 전파를 막는다. 취소는 publication 시작 전에만 확정한다. publication
+  중 timeout이나 응답 유실이 있으면 exact `postId`를 조회해 정산하되, 아직 row가 없다는 결과만으로 FAILED를 확정하지
+  않는다. 이전 post Activity가 나중에 commit할 수 있기 때문이다. Publication은 stable `postId`와 현재 authorization
+  재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.
+  처리 실패나 publication 전 취소는 각각 `FAILED`·`CANCELLED`를 반환하고 Workflow를 닫는다. 상태와 상세는
+  Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
+  만들지 않는다. GraphQL projection은 [Post domain contract](../../docs/domain/objects/post.md)을 따르며,
+  immutable input 전체나 public error detail을 복원하지 않는다. Local `createPost`의 모든 새 요청은 같은
+  `postRequestWorkflow` 경로로 admission한다. 선택적인 `requestId`는 멱등성 재시도 키일 뿐이며, 생략하면 서버가
+  생성한다. 신규 admission은 기존 primary Media query로 분류한다. Media가 없거나 모두 READY면 기존 request
+  Workflow의 `result()`를 현재 30초 API caller deadline까지 기다려 `PUBLISHED` request를 반환하고, 유효한 Local
+  UPLOADING Media가 하나라도 있으면 request acknowledgement를 즉시 반환한 뒤 Workflow가 처리를 계속한다. 같은 ID와
+  fingerprint의 replay나 racing start는 기존 current state를 반환하고 재검증·재분류·재개방하지 않으며, ID에 다른
+  content가 오면 conflict다. 이 admission 동작은 `request` 또는 `post` 선택과 무관하다. non-null `post`는 기존 lazy
+  compatibility field이고, 선택하면 publication을 기다린 뒤 published `postId`와 snapshot의 원본 `profileId`를 함께
+  조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
+  result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를
+  취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있다.
+- 선택적인 내부 `PostAnalyticsPlatform`은 Post request snapshot에서 V2 create child와 stable effects child까지
+  전달한다. 각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
+  순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만
+  실행하므로 capture retry/failure가 publication 결과를 바꾸지 않는다.
+- inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.
+  Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에 `USE_EXISTING`, `REJECT_DUPLICATE`,
+  `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction Activity가 공통 결과를 commit한 뒤
+  Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다. ID가 일치하는
+  `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
 

@@ -74,6 +74,14 @@ type BookmarkConnectionEdge {
   node: Bookmark!
 }
 
+input CancelPostRequestInput {
+  requestId: String!
+}
+
+type CancelPostRequestPayload {
+  request: PostRequest!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -84,7 +92,8 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
-  applyNightshade: Boolean = false
+  applyAiProhibitFilter: Boolean
+  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   id: ID!
 }
 
@@ -138,12 +147,15 @@ input CreatePostInput {
   mentions: [CreatePostMentionInput!]
   replyParentId: ID
   repostSourceId: ID
+  requestId: String
   sensitiveMedia: Boolean
   visibility: PostVisibility!
 }
 
 input CreatePostMediaInput {
   altText: String
+  applyAiProhibitFilter: Boolean
+  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   mediaId: ID!
 }
 
@@ -155,6 +167,7 @@ input CreatePostMentionInput {
 
 type CreatePostPayload {
   post: Post!
+  request: PostRequest
 }
 
 input CreateProfileInput {
@@ -349,6 +362,7 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   blockProfile(input: BlockProfileInput!): BlockProfilePayload!
+  cancelPostRequest(input: CancelPostRequestInput!): CancelPostRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -485,6 +499,33 @@ type PostContent implements Node {
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+type PostRequest implements Node {
+  authorProfile: Profile
+  bodyText: String!
+  contentWarning: String
+  id: ID!
+  media: [Media]!
+  post: Post
+  requestId: String!
+  sensitiveMedia: Boolean!
+  status: PostRequestStatus!
+}
+
+type PostRequestPage {
+  nextPageToken: String
+  requests: [PostRequest!]!
+}
+
+enum PostRequestStatus {
+  CANCELLED
+  CONFIRMING
+  FAILED
+  PROCESSING
+  PUBLISHED
+  PUBLISHING
+  QUEUED
+}
 
 enum PostState {
   ACTIVE
@@ -680,6 +721,8 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  postRequest(profileId: ID!, requestId: String!): PostRequest
+  postRequests(pageToken: String, profileId: ID!, statuses: [PostRequestStatus!]): PostRequestPage!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }

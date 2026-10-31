@@ -868,6 +868,13 @@ test(
             throw ApplicationFailure.nonRetryable('Mention notification failed');
           }
         },
+        capturePostCreatedActivity: async ({
+          analyticsPlatform,
+          postId,
+        }: {
+          readonly analyticsPlatform: 'web' | 'native';
+          readonly postId: string;
+        }) => calls.push(`capture:${analyticsPlatform}:${postId}`),
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -883,7 +890,13 @@ test(
         mentionAttempts = 0;
         retryFirstMention = origin === 'ACTIVITYPUB';
         const handle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
-          args: [{ postId, origin }],
+          args: [
+            {
+              postId,
+              origin,
+              ...(origin === 'ACTIVITYPUB' ? { analyticsPlatform: 'web' } : {}),
+            },
+          ],
           taskQueue,
           workflowId: `post-create-effects-test:${origin}:${postId}`,
         });
@@ -912,6 +925,32 @@ test(
           handle.workflowId,
         );
       }
+
+      const capturedPostId = '00000000-0000-8000-8000-000000000305';
+      calls.length = 0;
+      mentionAttempts = 0;
+      retryFirstMention = false;
+      const capturedHandle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+        args: [{ analyticsPlatform: 'native', origin: 'LOCAL', postId: capturedPostId }],
+        taskQueue,
+        workflowId: `post-create-effects-test:LOCAL:captured:${capturedPostId}`,
+      });
+      await capturedHandle.result();
+      assert.deepEqual(
+        calls.toSorted(),
+        [
+          `${NotificationKind.MENTION}:${capturedPostId}`,
+          `${NotificationKind.QUOTE}:${capturedPostId}`,
+          `${NotificationKind.REPLY}:${capturedPostId}`,
+          `capture:native:${capturedPostId}`,
+          `send:${capturedPostId}`,
+        ].toSorted(),
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        await capturedHandle.fetchHistory(),
+        capturedHandle.workflowId,
+      );
 
       const failingPostId = '00000000-0000-8000-8000-000000000302';
       failMention = true;

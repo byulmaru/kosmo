@@ -1,14 +1,38 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubPosts, db, first, firstOrThrow, PostContents, Posts } from '@kosmo/core/db';
-import { PostState } from '@kosmo/core/enums';
-import { ConflictError, KosmoError, NotFoundError, ValidationError } from '@kosmo/core/error';
+import {
+  AccountProfiles,
+  Accounts,
+  ActivityPubPosts,
+  db,
+  first,
+  firstOrThrow,
+  Instances,
+  PostContents,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
+import {
+  AccountProfileRole,
+  AccountProfileRoleOrder,
+  AccountState,
+  PostState,
+} from '@kosmo/core/enums';
+import {
+  ConflictError,
+  KosmoError,
+  NotFoundError,
+  PermissionDeniedError,
+  ValidationError,
+} from '@kosmo/core/error';
 import {
   createPostInTransaction,
   isActivityPubPostUriConflict,
   ProfilePairBlockedError,
 } from '@kosmo/core/services';
-import { eq, sql } from 'drizzle-orm';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
+import { and, eq, sql } from 'drizzle-orm';
+import type { Transaction } from '@kosmo/core/db';
 import type { ActivityPubPostInput, PostCreateInput } from '@kosmo/core/services';
 import type {
   PostCreateActivityInput,
@@ -59,10 +83,49 @@ const toErrorResult = (
   };
 };
 
+const assertLocalPostRequestAuthorization = async (
+  tx: Transaction,
+  input: PostCreateInput,
+): Promise<void> => {
+  if (input.origin !== 'LOCAL' || input.accountId === undefined) {
+    throw new PermissionDeniedError('Active Account membership is required to create this Post');
+  }
+
+  const account = await tx
+    .select({ state: Accounts.state })
+    .from(Accounts)
+    .where(eq(Accounts.id, input.accountId))
+    .limit(1)
+    .then(first);
+  if (!account || account.state !== AccountState.ACTIVE) {
+    throw new PermissionDeniedError('Active Account membership is required to create this Post');
+  }
+
+  const membership = await tx
+    .select({ role: AccountProfiles.role })
+    .from(AccountProfiles)
+    .innerJoin(Profiles, eq(Profiles.id, AccountProfiles.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(AccountProfiles.accountId, input.accountId),
+        eq(AccountProfiles.profileId, input.profileId),
+        visibleProfileWhere({ profile: Profiles, instance: Instances }),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  const roleIndex = membership ? AccountProfileRoleOrder.indexOf(membership.role) : -1;
+  if (roleIndex < AccountProfileRoleOrder.indexOf(AccountProfileRole.MEMBER)) {
+    throw new PermissionDeniedError('Active Account membership is required to create this Post');
+  }
+};
+
 const createPostTransaction = async (
   input: PostCreateInput,
   postId: string,
   replyParentFallback: boolean,
+  revalidateAuthorization: boolean,
 ): Promise<PostCreateActivityResult> =>
   db.transaction(async (tx) => {
     const claimed = await tx
@@ -130,6 +193,10 @@ const createPostTransaction = async (
       };
     }
 
+    if (revalidateAuthorization) {
+      await assertLocalPostRequestAuthorization(tx, input);
+    }
+
     const created = await createPostInTransaction(tx, input, postId);
     return {
       ok: true,
@@ -167,9 +234,10 @@ const createPostAttempt = async (
   input: PostCreateInput,
   postId: string,
   replyParentFallback: boolean,
+  revalidateAuthorization: boolean,
 ): Promise<PostCreateActivityResult> => {
   try {
-    return await createPostTransaction(input, postId, replyParentFallback);
+    return await createPostTransaction(input, postId, replyParentFallback, revalidateAuthorization);
   } catch (error) {
     if (input.origin === 'ACTIVITYPUB' && isActivityPubPostUriConflict(error)) {
       return duplicateActivityPubPost(input.objectUri);
@@ -189,10 +257,11 @@ export const generatePostIdActivity = async (): Promise<string> =>
 export const createPostActivity = async ({
   input,
   postId,
+  revalidateAuthorization = false,
 }: PostCreateActivityInput): Promise<PostCreateActivityResult> => {
   const postInput = toPostInput(input);
   try {
-    return await createPostAttempt(postInput, postId, false);
+    return await createPostAttempt(postInput, postId, false, revalidateAuthorization);
   } catch (error) {
     if (input.origin === 'ACTIVITYPUB' && error instanceof ProfilePairBlockedError) {
       return toErrorResult(error, postInput.origin);
@@ -203,7 +272,12 @@ export const createPostActivity = async ({
       isReplyParentFailure(error)
     ) {
       try {
-        return await createPostAttempt(withoutReplyParent(postInput), postId, true);
+        return await createPostAttempt(
+          withoutReplyParent(postInput),
+          postId,
+          true,
+          revalidateAuthorization,
+        );
       } catch (fallbackError) {
         return toErrorResult(fallbackError, postInput.origin);
       }

@@ -33,10 +33,11 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { temporalTestExecutable } from '../temporal-test-executable.js';
 import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
 import { createPostActivity, generatePostIdActivity } from './post-create';
+import { getPostRequestMediaStateActivity, reconcilePostRequestActivity } from './post-request';
 import type {
   LocalPostCreateInput,
   LocalPostCreateResult,
@@ -568,6 +569,252 @@ test('Local Post Activity rejects a claimed ID owned by another account or profi
       .then((rows) => rows.length),
     1,
   );
+});
+
+test('Post request rechecks current membership and reconciles an already committed stable ID', async () => {
+  const revokedAuthor = await createAuthor('post-request-revoked');
+  const revokedPostId = await generatePostIdActivity();
+  postIds.add(revokedPostId);
+  const revokedInput: PostCreateActivityInput = {
+    input: localInput(revokedAuthor),
+    postId: revokedPostId,
+    revalidateAuthorization: true,
+  };
+
+  await db
+    .delete(AccountProfiles)
+    .where(
+      and(
+        eq(AccountProfiles.accountId, revokedAuthor.account.id),
+        eq(AccountProfiles.profileId, revokedAuthor.profile.id),
+      ),
+    );
+
+  const rejected = await createPostActivity(revokedInput);
+  assert.equal(rejected.ok, false);
+  if (rejected.ok) {
+    assert.fail('Expected revoked Profile membership to reject Post publication');
+  }
+  assert.equal(rejected.error.code, 'PERMISSION_DENIED');
+  assert.deepEqual(
+    await reconcilePostRequestActivity({
+      accountId: revokedAuthor.account.id,
+      postId: revokedPostId,
+      profileId: revokedAuthor.profile.id,
+    }),
+    { status: 'ABSENT' },
+  );
+
+  const unavailableAuthor = await createAuthor('post-request-profile-disabled');
+  const unavailablePostId = await generatePostIdActivity();
+  postIds.add(unavailablePostId);
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, unavailableAuthor.profile.id));
+  const unavailable = await createPostActivity({
+    input: localInput(unavailableAuthor),
+    postId: unavailablePostId,
+    revalidateAuthorization: true,
+  });
+  assert.equal(unavailable.ok, false);
+  if (unavailable.ok) {
+    assert.fail('Expected a disabled Profile to reject Post publication');
+  }
+  assert.equal(unavailable.error.code, 'PERMISSION_DENIED');
+  assert.deepEqual(
+    await reconcilePostRequestActivity({
+      accountId: unavailableAuthor.account.id,
+      postId: unavailablePostId,
+      profileId: unavailableAuthor.profile.id,
+    }),
+    { status: 'ABSENT' },
+  );
+
+  const suspendedAccountAuthor = await createAuthor('post-request-account-suspended');
+  const suspendedAccountPostId = await generatePostIdActivity();
+  postIds.add(suspendedAccountPostId);
+  await db
+    .update(Accounts)
+    .set({ state: AccountState.SUSPENDED })
+    .where(eq(Accounts.id, suspendedAccountAuthor.account.id));
+  const suspendedAccount = await createPostActivity({
+    input: localInput(suspendedAccountAuthor),
+    postId: suspendedAccountPostId,
+    revalidateAuthorization: true,
+  });
+  assert.equal(suspendedAccount.ok, false);
+  if (suspendedAccount.ok) {
+    assert.fail('Expected a suspended Account to reject Post publication');
+  }
+  assert.equal(suspendedAccount.error.code, 'PERMISSION_DENIED');
+  assert.deepEqual(
+    await reconcilePostRequestActivity({
+      accountId: suspendedAccountAuthor.account.id,
+      postId: suspendedAccountPostId,
+      profileId: suspendedAccountAuthor.profile.id,
+    }),
+    { status: 'ABSENT' },
+  );
+
+  const committedAuthor = await createAuthor('post-request-committed');
+  const committedPostId = await generatePostIdActivity();
+  postIds.add(committedPostId);
+  const committedInput: PostCreateActivityInput = {
+    input: localInput(committedAuthor),
+    postId: committedPostId,
+    revalidateAuthorization: true,
+  };
+  const committed = await createPostActivity(committedInput);
+  assert.deepEqual(committed, {
+    ok: true,
+    result: {
+      authorProfileId: committedAuthor.profile.id,
+      postId: committedPostId,
+      status: 'created',
+    },
+  });
+
+  await db
+    .delete(AccountProfiles)
+    .where(
+      and(
+        eq(AccountProfiles.accountId, committedAuthor.account.id),
+        eq(AccountProfiles.profileId, committedAuthor.profile.id),
+      ),
+    );
+
+  assert.deepEqual(await createPostActivity(committedInput), committed);
+  assert.deepEqual(
+    await reconcilePostRequestActivity({
+      accountId: committedAuthor.account.id,
+      postId: committedPostId,
+      profileId: committedAuthor.profile.id,
+    }),
+    { postId: committedPostId, status: 'PUBLISHED' },
+  );
+});
+
+test('Post request rejects unavailable Reply Parent and Quote instead of publishing standalone', async () => {
+  const author = await createAuthor('post-request-unavailable-reference');
+  const hiddenParentAuthor = await createAuthor('post-request-hidden-parent');
+  const hiddenParentId = await createParentPost(
+    hiddenParentAuthor.profile.id,
+    PostVisibility.FOLLOWERS,
+  );
+  const cases = [
+    {
+      input: localInput(author, { replyParentId: crypto.randomUUID() }),
+      kind: 'missing Reply Parent',
+    },
+    {
+      input: localInput(author, { replyParentId: hiddenParentId }),
+      kind: 'unavailable Reply Parent',
+    },
+    {
+      input: localInput(author, { repostSourceId: crypto.randomUUID() }),
+      kind: 'missing Quote source',
+    },
+  ];
+
+  for (const { input, kind } of cases) {
+    const postId = await generatePostIdActivity();
+    postIds.add(postId);
+    const result = await createPostActivity({ input, postId, revalidateAuthorization: true });
+    assert.equal(result.ok, false, kind);
+    if (result.ok) {
+      assert.fail(`Expected ${kind} to reject the Post request`);
+    }
+    assert.equal(result.error.code, 'NOT_FOUND', kind);
+    assert.deepEqual(
+      await reconcilePostRequestActivity({
+        accountId: author.account.id,
+        postId,
+        profileId: author.profile.id,
+      }),
+      { status: 'ABSENT' },
+      kind,
+    );
+  }
+});
+
+test('Post request media-state Activity returns ready local IDs and rejects invalid media without writes', async () => {
+  const author = await createAuthor('post-request-media');
+  const ready = await createReadyMedia(author.account.id, author.profile.id);
+  const uploading = await db
+    .insert(Media)
+    .values({
+      accountId: author.account.id,
+      profileId: author.profile.id,
+      source: MediaSource.LOCAL,
+      state: MediaState.UPLOADING,
+      storageReference: `nexus:v1:${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 10 }),
+    })
+    .returning({ id: Media.id })
+    .then(firstOrThrow);
+  mediaIds.add(uploading.id);
+  const remote = await db
+    .insert(Media)
+    .values({
+      mediaType: 'image/webp',
+      profileId: author.profile.id,
+      source: MediaSource.REMOTE,
+      state: MediaState.READY,
+      url: `https://media.example/remote-${crypto.randomUUID()}.webp`,
+    })
+    .returning({ id: Media.id })
+    .then(firstOrThrow);
+  mediaIds.add(remote.id);
+
+  const mediaIdsToCheck = [uploading.id, ready.id];
+  const readStates = async () =>
+    db
+      .select({ id: Media.id, state: Media.state })
+      .from(Media)
+      .where(inArray(Media.id, mediaIdsToCheck))
+      .then((rows) => rows.sort((left, right) => left.id.localeCompare(right.id)));
+  const stateBefore = await readStates();
+
+  assert.deepEqual(
+    await getPostRequestMediaStateActivity({
+      accountId: author.account.id,
+      mediaIds: mediaIdsToCheck,
+    }),
+    { readyMediaIds: [ready.id] },
+  );
+  assert.deepEqual(await readStates(), stateBefore);
+
+  const hasFailureType = (error: unknown) =>
+    error instanceof ApplicationFailure &&
+    error.nonRetryable === true &&
+    error.type === 'PostRequestMediaInvalid';
+  await assert.rejects(
+    getPostRequestMediaStateActivity({
+      accountId: crypto.randomUUID(),
+      mediaIds: [ready.id],
+    }),
+    hasFailureType,
+  );
+  await assert.rejects(
+    getPostRequestMediaStateActivity({
+      accountId: author.account.id,
+      mediaIds: [crypto.randomUUID()],
+    }),
+    hasFailureType,
+  );
+  await assert.rejects(
+    getPostRequestMediaStateActivity({ accountId: author.account.id, mediaIds: [remote.id] }),
+    hasFailureType,
+  );
+  await assert.rejects(
+    getPostRequestMediaStateActivity({
+      accountId: author.account.id,
+      mediaIds: [ready.id, ready.id],
+    }),
+    hasFailureType,
+  );
+  assert.deepEqual(await readStates(), stateBefore);
 });
 
 test('Post Activity retries a committed ActivityPub Post before revalidating parent and keeps timestamps and media', async () => {

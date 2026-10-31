@@ -75,24 +75,24 @@ Profile이 달라도 참조할 수 있다.
 | Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                            | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
 | Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
 
-Local 업로드 완료는 클라이언트가 명시적으로 보내는 공개 확정 요청이며, Post나 Profile 표현 저장이 이를 대신하지 않는다.
-Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
-Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
+`completeMediaUpload`를 사용하는 흐름에서 Local 업로드 완료는 클라이언트가 명시적으로 보내는 공개 확정 요청이며,
+Post나 Profile 표현 저장이 이를 대신하지 않는다. Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지
+않는다. 저장 참조를 알고 있다는 사실만으로 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
 
-게시글 첨부는 파일 선택 시 `issueMediaUploadUrl`과 업로드 `PUT`으로 private staging까지만 진행한다. 등록 제출 시
-현재 첨부된 Media만 `completeMediaUpload`로 완료하고 모두 Ready가 된 뒤 Post를 저장한다. 제거했거나 등록을 포기한
-첨부는 완료하지 않으며, Profile avatar/header 업로드의 기존 완료 시점은 유지한다.
+Post Composer 첨부는 파일 선택 시 `issueMediaUploadUrl`로 제한된 권한을 발급하고 Media `PUT`으로 private staging까지만
+진행한다. 제출 시 클라이언트는 현재 첨부 Media를 포함해 `createPost`로 요청을 접수한다. 서버의 PostRequest 흐름은
+참조 Media의 저장과 처리를 완료하고 모든 Media가 Ready가 된 뒤 Post를 저장한다. 제거했거나 제출하지 않은
+첨부는 처리하지 않으며, Profile avatar/header 업로드의 기존 명시적 `completeMediaUpload` 시점은 유지한다.
 
-Post Composer에서 새 Local Media마다 Nightshade 처리를 선택할 수 있으며 기본값은 off다. 선택한 이미지는 Media
-Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다. 처리가
-실패하면 해당 Media는 Ready가 되지 않고 Post 저장을 막으며, 초안과 실패한 첨부를 유지해 제거하거나 다시 올릴 수
-있게 한다. 선택한 처리가 실패한 이미지를 처리 전 원본으로 대신 공개하지 않는다.
+Post Composer에서 새 Local Media마다 AI 학습 방지 필터 적용 여부를 선택할 수 있으며 기본값은 off다. 선택한 이미지는
+Media Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다.
+처리가 실패하면 해당 Media는 Ready가 되지 않고 해당 PostRequest는 `FAILED`가 되며 Post를 만들지 않는다. 선택한 처리가
+실패한 이미지를 처리 전 원본으로 대신 공개하지 않는다.
 
-클라이언트는 기존 `issueMediaUploadUrl` → 업로드 `PUT` → `completeMediaUpload` 흐름을 유지하며 파일 크기를
-별도로 제출하지 않는다. 새 업로드는 모두 같은 Media 업로드 경로를 사용하고, 서버가 실제 수신 byte를 기준으로
-파일당 16 MiB 제한을 적용한 뒤 private staging에 저장한다. staging byte는 공개되지 않으며, `completeMediaUpload`는
-Media Storage Service의 최종 저장 결과가 확인된 뒤에만 완료된다. 새 업로드의 공개 확정 시점은 이 완료 요청이며,
-기존 Ready Media와 전환 전에 발급된 업로드 완료 호환성에는 영향을 주지 않는다.
+새 Local Media는 같은 `issueMediaUploadUrl`과 업로드 `PUT` 경로를 사용하며 파일 크기를 별도로 제출하지 않는다. 서버는
+실제 수신 byte를 기준으로 파일당 16 MiB 제한을 적용한 뒤 private staging에 저장하고, staging byte는 공개하지 않는다.
+다른 소비자의 명시적 `completeMediaUpload` 호출은 그대로 유지하며, 이 요청은 Media Storage Service의 최종 저장 결과가
+확인된 뒤 완료된다. 기존 Ready Media와 전환 전에 발급된 업로드 완료 호환성에는 영향을 주지 않는다.
 
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.
