@@ -493,7 +493,7 @@ async function createPost(page: Page, body: string) {
   } else {
     await open.click();
   }
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = page.getByRole('form', { name: /^게시글 작성 \(@/ });
   await expect(composer).toBeVisible();
 
   await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
@@ -519,11 +519,15 @@ async function failGraphQLOperation(page: Page, operationName: string) {
 }
 
 function composerProfileHandle(page: Page, handle: string) {
-  return page.getByLabel('게시글 작성', { exact: true }).getByText(`@${handle}`);
+  return page
+    .getByRole('form', { name: `게시글 작성 (@${handle})`, exact: true })
+    .getByText(`@${handle}`);
 }
 
 function sidebarProfileHandle(page: Page, handle: string) {
-  return page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${handle}` });
+  return page
+    .getByRole('group', { name: '활성 프로필', exact: true })
+    .getByText(`@${handle}`, { exact: true });
 }
 
 function waitForGraphQLOperation(page: Page, operationName: string) {

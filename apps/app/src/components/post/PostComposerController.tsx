@@ -565,13 +565,7 @@ function PostComposerContents({
 
   const form = (
     <Form
-      accessibilityLabel={
-        composerMode === 'reply'
-          ? '답글 작성'
-          : composerMode === 'quote'
-            ? '인용 게시글 작성'
-            : '게시글 작성'
-      }
+      accessibilityLabel={`${composerMode === 'reply' ? '답글 작성' : composerMode === 'quote' ? '인용 게시글 작성' : '게시글 작성'}${Platform.OS === 'web' ? ` (@${profile.handle})` : ''}`}
       onSubmit={submit}
       style={[
         presentation !== undefined ? styles.productionForm : styles.standaloneForm,

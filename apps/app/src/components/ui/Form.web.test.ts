@@ -42,6 +42,8 @@ test('Web form ignores IME Enter for the submit shortcut', async () => {
   });
 
   const form = renderer!.root.findByType('form');
+  assert.equal(form.props['aria-label'], 'Post composer');
+  assert.equal(form.parent!.props.accessibilityLabel, undefined);
   const submitEvent = () =>
     form.props.onSubmit({
       preventDefault: () => undefined,

@@ -432,14 +432,16 @@ type Story = StoryObj<typeof meta>;
 export const SharedNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const activeProfile = await canvas.findByRole('group', { name: '활성 프로필' });
     const sidebarBoundary = canvas.getByTestId('sidebar-shell-boundary');
     const activeAvatar = within(activeProfile).getByLabelText(
       `${selectedProfile.displayName} 프로필 이미지`,
     );
     const profileTrigger = within(activeProfile).getByRole('button', { name: '프로필 목록' });
     const profileName = within(profileTrigger).getByText(selectedProfile.displayName);
-    const profileHandle = within(activeProfile).getByLabelText('활성 프로필 핸들');
+    const profileHandle = within(activeProfile).getByText(selectedProfile.relativeHandle, {
+      exact: true,
+    });
     const followingCount = within(activeProfile).getByRole('link', { name: /팔로잉/ });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const navigationArea = navigation.parentElement?.parentElement;
@@ -790,13 +792,15 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const activeProfile = await canvas.findByRole('group', { name: '활성 프로필' });
     const activeAvatar = within(activeProfile).getByLabelText(
       `${selectedProfile.displayName} 프로필 이미지`,
     );
     const profileTrigger = within(activeProfile).getByRole('button', { name: '프로필 목록' });
     const profileName = within(profileTrigger).getByText(selectedProfile.displayName);
-    const profileHandle = within(activeProfile).getByLabelText('활성 프로필 핸들');
+    const profileHandle = within(activeProfile).getByText(selectedProfile.relativeHandle, {
+      exact: true,
+    });
     const followingCount = within(activeProfile).getByRole('link', { name: /팔로잉/ });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
@@ -866,11 +870,11 @@ export const ResponsiveProfilePickerFull: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activeProfile = await canvas.findByLabelText('활성 프로필');
+    const activeProfile = await canvas.findByRole('group', { name: '활성 프로필' });
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const triggerName = within(trigger).getByText('코스모 작가');
-    const profileHandle = canvas.getByLabelText('활성 프로필 핸들');
+    const profileHandle = canvas.getByText(selectedProfile.relativeHandle, { exact: true });
     const triggerIcon = trigger.querySelector('svg')!;
     const triggerRect = trigger.getBoundingClientRect();
     const activeProfileLeft = activeProfile.getBoundingClientRect().left;
@@ -2088,7 +2092,10 @@ export const UniversalMobile: Story = {
     const drawerNavigationSurface = page.getByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
-    const profileHandle = page.getByLabelText('활성 프로필 핸들');
+    const profileHandle = within(page.getByRole('group', { name: '활성 프로필' })).getByText(
+      selectedProfile.relativeHandle,
+      { exact: true },
+    );
     const triggerIcon = profileTrigger.querySelector('svg')!;
     const triggerRect = profileTrigger.getBoundingClientRect();
     const navigationRect = drawer.getBoundingClientRect();

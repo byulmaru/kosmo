@@ -1068,7 +1068,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await expect(page).toHaveURL(/\/compose$/);
     await expect(page.getByText('프로필을 찾을 수 없어요', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('게시글 작성', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('form', { name: /^게시글 작성 \(@/ })).toHaveCount(0);
   });
 
   test('/search에서 보호 shell과 검색 입력을 본다', async ({ page }) => {

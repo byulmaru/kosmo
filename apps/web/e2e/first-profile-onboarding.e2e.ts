@@ -35,7 +35,7 @@ async function expectNewComposerVisibility(page: Page, label: '공개' | '조용
   }
   await expect(
     page
-      .getByLabel('게시글 작성', { exact: true })
+      .getByRole('form', { name: /^게시글 작성 \(@/ })
       .getByRole('button', { name: `공개 범위: ${label}`, exact: true }),
   ).toBeVisible();
 }
