@@ -232,7 +232,12 @@ for (const mode of ['reply', 'quote'] as const) {
     });
 
     const submitResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
-    await composer.getByRole('button', { name: '게시', exact: true }).click();
+    await composer
+      .getByRole('button', {
+        name: mode === 'reply' ? '답글 게시' : '인용 게시',
+        exact: true,
+      })
+      .click();
     await submitResponse;
     await expect(input).toHaveCount(0);
 
