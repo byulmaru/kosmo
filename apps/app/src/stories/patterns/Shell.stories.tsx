@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/PageHeader';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
 import LocalScreen from '@/app/(tabs)/(protected)/local';
 import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
@@ -2079,7 +2080,15 @@ function UniversalTimelineStory({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <CoachmarkProvider accountId={timelineStoryQuery.me.id}>
-        <UniversalShell>{children}</UniversalShell>
+        <WebPushPermissionContext.Provider
+          value={{
+            permission: 'default',
+            requestPermission: async () => undefined,
+            support: 'unsupported',
+          }}
+        >
+          <UniversalShell>{children}</UniversalShell>
+        </WebPushPermissionContext.Provider>
       </CoachmarkProvider>
     </SessionProvider>
   );
