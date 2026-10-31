@@ -104,7 +104,12 @@ let mutationCalls: Array<{
   onCompleted: (
     response: {
       createPost: {
-        request: { id: string; requestId: string } | null;
+        request: {
+          id: string;
+          post?: { id: string } | null;
+          requestId: string;
+          status?: string | null;
+        } | null;
       } | null;
     } | null,
     errors?: Array<{ extensions?: { code?: unknown; field?: unknown }; message: string }> | null,
@@ -596,6 +601,8 @@ describe('PostComposer request acknowledgement cache projection', () => {
     it(`projects a ${status} retry into the appropriate request and Home pages`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
+      const createdPosts: Array<{ id: string }> = [];
+      let acceptedCount = 0;
       const query = getRequest(PostRequestListQueryNode);
       const environment = relayEnvironment;
       const seedPage = (
@@ -615,6 +622,8 @@ describe('PostComposer request acknowledgement cache projection', () => {
 
       let retryUncertainRequest: (() => void) | undefined;
       const composerProps = (profile: typeof profileA) => ({
+        onPostCreated: (post: { id: string }) => createdPosts.push(post),
+        onPostRequestAccepted: () => acceptedCount++,
         onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
           retryUncertainRequest = uncertain ? retry : undefined;
         },
@@ -691,8 +700,19 @@ describe('PostComposer request acknowledgement cache projection', () => {
         },
       });
       await act(async () =>
-        call.onCompleted({ createPost: { request: { id: requestNodeId, requestId } } }),
+        call.onCompleted({
+          createPost: {
+            request: {
+              id: requestNodeId,
+              post: publishedPost ? { id: publishedPostId } : null,
+              requestId,
+              status,
+            },
+          },
+        }),
       );
+      assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
+      assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
 
       const requestIds = (
         profileId: string,
@@ -791,10 +811,21 @@ describe('PostComposer request acknowledgement cache projection', () => {
         });
         await act(async () =>
           authorBCall.onCompleted({
-            createPost: { request: { id: authorBRequestNodeId, requestId: authorBRequestId } },
+            createPost: {
+              request: {
+                id: authorBRequestNodeId,
+                post: { id: authorBPostId },
+                requestId: authorBRequestId,
+                status: 'PUBLISHED',
+              },
+            },
           }),
         );
 
+        assert.deepEqual(createdPosts, [
+          ...(status === 'PUBLISHED' ? [{ id: publishedPostId }] : []),
+          { id: authorBPostId },
+        ]);
         assert.deepEqual(requestIds(profileA.id, null), [requestNodeId]);
         assert.deepEqual(requestIds(profileA.id, POST_REQUEST_HOME_ACTIVE_STATUSES), []);
         assert.deepEqual(requestIds(profileB.id, null), [authorBRequestNodeId]);
@@ -803,6 +834,71 @@ describe('PostComposer request acknowledgement cache projection', () => {
       }
     });
   }
+});
+
+it('requires a published Post ID and a completion handler before skipping the request acknowledgement', async () => {
+  const createdPosts: Array<{ id: string }> = [];
+  let acceptedCount = 0;
+  const props = {
+    onPostCreated: (post: { id: string }) => createdPosts.push(post),
+    onPostRequestAccepted: () => acceptedCount++,
+    onRequestClose: () => undefined,
+    presentation: 'overlay' as const,
+    profile: profileA as never,
+  };
+  await act(async () => {
+    renderer = create(createElement(PostComposer, props));
+  });
+
+  await act(async () => targetProps?.onBodyChange('게시할 답글'));
+  await act(async () => targetProps?.onSubmit());
+  const callWithNullPost = mutationCalls.at(-1);
+  assert.ok(callWithNullPost);
+  const nullPostRequestId = String(callWithNullPost.variables.input.requestId);
+  await act(async () =>
+    callWithNullPost.onCompleted({
+      createPost: {
+        request: {
+          id: `request-${nullPostRequestId}`,
+          post: null,
+          requestId: nullPostRequestId,
+          status: 'PUBLISHED',
+        },
+      },
+    }),
+  );
+
+  await act(async () => {
+    renderer?.update(
+      createElement(PostComposer, {
+        onPostRequestAccepted: props.onPostRequestAccepted,
+        onRequestClose: props.onRequestClose,
+        presentation: props.presentation,
+        profile: props.profile,
+      }),
+    );
+  });
+  await act(async () => targetProps?.onBodyChange('게시할 일반 글'));
+  await act(async () => targetProps?.onSubmit());
+  const callWithoutCreatedHandler = mutationCalls.at(-1);
+  assert.ok(callWithoutCreatedHandler);
+  const requestId = String(callWithoutCreatedHandler.variables.input.requestId);
+  await act(async () =>
+    callWithoutCreatedHandler.onCompleted({
+      createPost: {
+        request: {
+          id: `request-${requestId}`,
+          post: { id: 'post-published-without-handler' },
+          requestId,
+          status: 'PUBLISHED',
+        },
+      },
+    }),
+  );
+
+  assert.deepEqual(createdPosts, []);
+  assert.equal(acceptedCount, 2);
+  assert.equal(toastCalls.filter(([message]) => message === '게시 요청을 접수했어요').length, 2);
 });
 
 describe('PostComposer media submission', () => {

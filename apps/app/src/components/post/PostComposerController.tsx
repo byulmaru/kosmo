@@ -105,7 +105,11 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       request {
         id
+        post {
+          id
+        }
         requestId
+        status
         ...PostRequestCard_request
       }
     }
@@ -278,6 +282,7 @@ function PostComposerContents({
   focusOnMount = false,
   initialBodyText,
   initialContentWarning,
+  onPostCreated,
   onPostRequestAccepted,
   onPostRequestUncertainChange,
   pendingSubmission,
@@ -508,6 +513,7 @@ function PostComposerContents({
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current ?? null;
     const submissionGuardGeneration = contextGuard?.current;
+    const submittedCreatedCallback = onPostCreated;
     const submittedCallback = onPostRequestAccepted;
     const isCurrentSubmission = () =>
       mountedRef.current &&
@@ -602,8 +608,16 @@ function PostComposerContents({
               replyParentVisibility,
             ),
           );
-          showToast('게시 요청을 접수했어요', { tone: 'success' });
-          submittedCallback?.();
+          if (
+            acceptedRequest.status === 'PUBLISHED' &&
+            acceptedRequest.post?.id &&
+            submittedCreatedCallback
+          ) {
+            submittedCreatedCallback({ id: acceptedRequest.post.id });
+          } else {
+            showToast('게시 요청을 접수했어요', { tone: 'success' });
+            submittedCallback?.();
+          }
           return;
         }
 
