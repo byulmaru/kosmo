@@ -1290,8 +1290,9 @@ test(
       createPostActivityV2: async () => {
         createAttempts += 1;
         throw ApplicationFailure.nonRetryable(
-          'The account no longer permits this Post',
-          'PERMISSION_DENIED',
+          'Reply Parent must have content',
+          'VALIDATION',
+          'replyParentId',
         );
       },
       generatePostIdActivity: async () => {
@@ -1304,8 +1305,9 @@ test(
       const failedHandle = await startPostRequest(environment, taskQueue, args);
       const failed = await failedHandle.result();
       assert.equal(failed.status, PostRequestStatus.FAILED);
-      assert.equal(failed.error?.code, 'PERMISSION_DENIED');
-      assert.equal(failed.error?.message, 'The account no longer permits this Post');
+      assert.equal(failed.error?.code, 'VALIDATION');
+      assert.equal(failed.error?.field, 'replyParentId');
+      assert.equal(failed.error?.message, 'Reply Parent must have content');
       assert.deepEqual(
         await failedHandle.query<PostRequestState>(POST_REQUEST_STATE_QUERY),
         failed,
@@ -1351,6 +1353,7 @@ test(
         throw ApplicationFailure.nonRetryable(
           'database rejected UUID allocation with private details',
           'POST_ID_GENERATION_FAILED',
+          'private.databaseField',
         );
       },
     });
@@ -1361,6 +1364,7 @@ test(
       assert.equal(result.status, PostRequestStatus.FAILED);
       assert.equal(result.error?.code, 'INTERNAL_SERVER_ERROR');
       assert.equal(result.error?.message, 'The post request could not be completed');
+      assert.equal(result.error?.field, undefined);
       assert.equal(result.snapshot.postId, undefined);
       assert.equal(postCreateCalls, 0);
     });

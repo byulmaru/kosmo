@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db } from '@kosmo/core/db';
 import { AccountProfileRole, MediaState } from '@kosmo/core/enums';
-import { ConflictError, KosmoError, ValidationError } from '@kosmo/core/error';
+import { ConflictError, FieldError, ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
@@ -634,7 +634,7 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
   assert.equal(selectCallCount, 2);
 });
 
-test('createPost maps a failed no-media request to its GraphQL error', async (t) => {
+test('createPost maps a failed no-media request without field metadata to its GraphQL error', async (t) => {
   const requestId = '00000000-0000-4000-8000-000000000017';
   setupPostRequestWorkflow(
     t,
@@ -648,8 +648,32 @@ test('createPost maps a failed no-media request to its GraphQL error', async (t)
 
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.message, 'Post content is invalid');
-  assert.ok(result.errors?.[0]?.originalError instanceof KosmoError);
-  assert.equal((result.errors?.[0]?.originalError as KosmoError).code, 'VALIDATION');
+  assert.ok(result.errors?.[0]?.originalError instanceof FieldError);
+  assert.equal((result.errors?.[0]?.originalError as FieldError).code, 'VALIDATION');
+  assert.equal((result.errors?.[0]?.originalError as FieldError).field, undefined);
+});
+
+test('createPost maps a failed no-media request field to its GraphQL error', async (t) => {
+  const requestId = '00000000-0000-4000-8000-000000000020';
+  setupPostRequestWorkflow(
+    t,
+    requestId,
+    completedRequest(requestId, PostRequestStatus.FAILED, {
+      error: {
+        code: 'VALIDATION',
+        field: 'replyParentId',
+        message: 'Reply Parent must have content',
+      },
+    }),
+  );
+
+  const result = await createPostRequest(requestId, 'post { id }');
+
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.message, 'Reply Parent must have content');
+  assert.ok(result.errors?.[0]?.originalError instanceof FieldError);
+  assert.equal((result.errors?.[0]?.originalError as FieldError).code, 'VALIDATION');
+  assert.equal((result.errors?.[0]?.originalError as FieldError).field, 'replyParentId');
 });
 
 test('createPost maps a cancelled no-media request to ConflictError', async (t) => {

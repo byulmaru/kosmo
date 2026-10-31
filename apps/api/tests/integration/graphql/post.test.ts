@@ -1504,7 +1504,7 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
     assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
-    assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media');
+    assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media.0');
     assert.deepEqual(
       { contents: await db.$count(PostContents), posts: await db.$count(Posts) },
       before,

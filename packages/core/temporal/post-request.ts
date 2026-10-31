@@ -47,6 +47,7 @@ export type PostRequestWorkflowArgs = PostRequestSnapshot;
 export type PostRequestState = {
   readonly error?: {
     readonly code: ErrorCode | 'INTERNAL_SERVER_ERROR';
+    readonly field?: string;
     readonly message: string;
   };
   readonly result?: {

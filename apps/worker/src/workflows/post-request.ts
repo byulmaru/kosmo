@@ -238,16 +238,16 @@ const findApplicationFailure = (error: unknown): ApplicationFailure | undefined 
   return undefined;
 };
 
-const failureDetails = (
-  error: unknown,
-): {
-  readonly code: ErrorCode | 'INTERNAL_SERVER_ERROR';
-  readonly message: string;
-} => {
+const failureDetails = (error: unknown): NonNullable<PostRequestState['error']> => {
   const applicationFailure = findApplicationFailure(error);
   if (applicationFailure && domainErrorCodes.includes(applicationFailure.type as ErrorCode)) {
+    const field =
+      typeof applicationFailure.details?.[0] === 'string'
+        ? applicationFailure.details[0]
+        : undefined;
     return {
       code: applicationFailure.type as ErrorCode,
+      ...(field === undefined ? {} : { field }),
       message: applicationFailure.message,
     };
   }

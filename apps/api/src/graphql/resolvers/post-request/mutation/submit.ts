@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
-import { ConflictError, KosmoError, ValidationError } from '@kosmo/core/error';
+import { ConflictError, FieldError, ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { runWorkflow, temporalClient } from '@kosmo/core/temporal/client';
@@ -125,7 +125,11 @@ export async function waitForPostRequestResult(
 
   if (state.status === PostRequestStatus.FAILED) {
     if (state.error && state.error.code !== 'INTERNAL_SERVER_ERROR') {
-      throw new KosmoError({ code: state.error.code, message: state.error.message });
+      throw new FieldError({
+        code: state.error.code,
+        field: state.error.field,
+        message: state.error.message,
+      });
     }
     throw new Error(state.error?.message ?? 'Post request failed');
   }
