@@ -1,19 +1,10 @@
 import { useRouter } from 'expo-router';
 import { XIcon } from 'lucide-react-native';
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -27,7 +18,7 @@ import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
+import { useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -36,6 +27,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposerController } from './PostComposerController';
+import { PostComposerViewport } from './PostComposerViewport';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
@@ -182,10 +174,6 @@ function ReplyComposerSurfaceContents({
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-  const [fullscreenViewport, setFullscreenViewport] = useState<{
-    height: number;
-    offsetTop: number;
-  } | null>(null);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
@@ -196,30 +184,6 @@ function ReplyComposerSurfaceContents({
   const presentation = getReplySurfacePresentation(replyPlatform, width);
   const webOverlayOpen = open && Platform.OS === 'web';
   const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
-
-  // Keep the web fullscreen surface inside the visible viewport when the software keyboard opens.
-  useLayoutEffect(() => {
-    if (!webOverlayOpen || presentation !== 'fullscreen') {
-      return;
-    }
-    const viewport = typeof window === 'undefined' ? null : window.visualViewport;
-    if (!viewport) {
-      return;
-    }
-    const updateViewport = () => {
-      const next = { height: viewport.height, offsetTop: viewport.offsetTop };
-      setFullscreenViewport((current) =>
-        current?.height === next.height && current.offsetTop === next.offsetTop ? current : next,
-      );
-    };
-    updateViewport();
-    viewport.addEventListener('resize', updateViewport);
-    viewport.addEventListener('scroll', updateViewport);
-    return () => {
-      viewport.removeEventListener('resize', updateViewport);
-      viewport.removeEventListener('scroll', updateViewport);
-    };
-  }, [presentation, webOverlayOpen]);
 
   useEffect(() => {
     if (open) {
@@ -401,23 +365,16 @@ function ReplyComposerSurfaceContents({
       visible
     >
       <ToastProvider>
-        <OverlayBackdrop
+        <PostComposerViewport
           accessible={false}
+          fullscreen={presentation === 'fullscreen'}
+          open={open}
           onRequestClose={handleOverlayRequestClose}
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
             Platform.OS === 'web' && presentation === 'modal' ? styles.webModalBackdrop : null,
             safeAreaStyle,
-            Platform.OS === 'web' && presentation === 'fullscreen' && fullscreenViewport
-              ? [
-                  styles.webFullscreenBackdrop,
-                  {
-                    height: fullscreenViewport.height,
-                    top: fullscreenViewport.offsetTop,
-                  },
-                ]
-              : null,
             { backgroundColor: theme.overlayScrim },
           ]}
           testID="reply-composer-backdrop"
@@ -482,11 +439,10 @@ function ReplyComposerSurfaceContents({
             profile={profile.composer}
             registerNativeBackHandler={registerNativeBackHandler}
             renderSurface={({ form, mediaEditorOpen }) => (
-              <Pressable
+              <View
                 accessible={false}
                 accessibilityViewIsModal
                 onAccessibilityEscape={requestNativeBack}
-                onPress={(event) => event.stopPropagation()}
                 ref={dialogRef}
                 style={[
                   styles.dialog,
@@ -549,7 +505,7 @@ function ReplyComposerSurfaceContents({
                   </View>
                   {discardConfirm}
                 </View>
-              </Pressable>
+              </View>
             )}
             {...(quoteMode
               ? { repostSourceId: parent.id }
@@ -559,7 +515,7 @@ function ReplyComposerSurfaceContents({
               <PostSourcePreview interactive={false} source={parent} style={styles.quoteSource} />
             ) : null}
           </PostComposerController>
-        </OverlayBackdrop>
+        </PostComposerViewport>
       </ToastProvider>
     </Modal>
   );
@@ -574,7 +530,6 @@ const styles = StyleSheet.create({
   },
   webModalBackdrop: { justifyContent: 'flex-start' },
   fullscreenBackdrop: { padding: 0 },
-  webFullscreenBackdrop: { left: 0, position: 'fixed' as never, right: 0 },
   dialog: {
     borderWidth: 1,
     maxHeight: '85dvh' as never,
