@@ -179,6 +179,7 @@ export function ProfileHero({
           if (!copied) {
             throw new Error('Clipboard did not confirm the copy.');
           }
+          showToast('링크를 복사했어요', { tone: 'success' });
         } catch {
           showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
             tone: 'danger',
