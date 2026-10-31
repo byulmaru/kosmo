@@ -1,5 +1,6 @@
+import { usePathname } from 'expo-router';
 import { useCallback, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
@@ -75,6 +76,7 @@ function useStoryPost() {
 }
 
 function Fixture({ presentation }: StoryArgs) {
+  const pathname = usePathname();
   const postNode = useStoryPost();
 
   if (!postNode) {
@@ -84,6 +86,7 @@ function Fixture({ presentation }: StoryArgs) {
   return (
     <View style={styles.fixture}>
       <PostListItem pinned={postNode.isPinned} post={postNode.post} presentation={presentation} />
+      <Text testID="pin-story-pathname">{pathname}</Text>
     </View>
   );
 }
@@ -252,7 +255,47 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
   parameters: { controls: { disable: false } },
 };
-export const OwnerPinned: Story = { args: { action: 'unpin' } };
+export const OwnerPinned: Story = {
+  args: { action: 'unpin' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const label = await canvas.findByText('고정됨');
+    const row = label.parentElement!.parentElement!;
+    const wrapper = row.parentElement!;
+    const card = canvas.getByTestId('post-list-item-card');
+    const pathname = canvas.getByTestId('pin-story-pathname');
+    const initialPath = pathname.textContent;
+    const detailPath = `/@kosmo/${storyPost.id}`;
+    expect(initialPath).not.toBe(detailPath);
+    wrapper.scrollIntoView({ block: 'center' });
+    const bounds = wrapper.getBoundingClientRect();
+    const x = (bounds.left + bounds.right) / 2;
+    for (const { cursor, expectedPath, target, y } of [
+      {
+        cursor: 'auto',
+        expectedPath: initialPath,
+        target: wrapper,
+        y: (bounds.top + row.getBoundingClientRect().top) / 2,
+      },
+      { cursor: 'pointer', expectedPath: detailPath, target: card, y: bounds.top - 2 },
+    ]) {
+      expect(document.elementFromPoint(x, y)).toBe(target);
+      const coords = {
+        clientX: x,
+        clientY: y,
+        pageX: x + window.scrollX,
+        pageY: y + window.scrollY,
+      };
+      await userEvent.pointer({ target, coords });
+      expect(getComputedStyle(target).cursor).toBe(cursor);
+      await userEvent.pointer([
+        { keys: '[MouseLeft>]', target, coords },
+        { keys: '[/MouseLeft]', target, coords },
+      ]);
+      expect(pathname.textContent).toBe(expectedPath);
+    }
+  },
+};
 export const VisitorPinned: Story = { args: { viewer: 'visitor' } };
 export const Mobile: Story = {
   args: { action: 'unpin', presentation: 'mobile' },
@@ -392,6 +435,8 @@ export const PendingContract: Story = {
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveAttribute('aria-busy', 'true'));
     expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(getComputedStyle(trigger).cursor).toBe('auto');
+    expect(trigger).toHaveFocus();
     trigger.click();
     await userEvent.keyboard('{Enter}');
     expect(body.queryByRole('menuitem', { name: '프로필에 고정' })).not.toBeInTheDocument();
