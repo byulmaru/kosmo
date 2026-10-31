@@ -208,9 +208,10 @@ Post, Reply Parent Post, Quote의 direct Repost Source Post, Repost의 Source Po
 정책 확정은 서버·앱 구현이나 배포 완료를 의미하지 않는다.
 
 - 같은 Recipient Account·Recipient Profile·대상 Post의 Reaction Notification을 이모지 종류와 관계없이
-  묶는다. Notification 생성 시각을 UTC 1970-01-01 00:00부터 이어지는 고정 48시간 구간으로 나누며,
-  구간 시작은 포함하고 끝은 다음 구간에 포함한다. 첫 반응 시각이나 취소에 따라 구간을 이동하지 않는다.
-  구간 경계에서는 가까운 시각의 반응도 다른 묶음이 될 수 있다. 다른 Notification Type의 묶음이나 Push에는 적용하지 않는다.
+  묶는다. Notification 생성 시각을 한국 표준시(UTC+09:00) 달력 날짜로 나누며, 각 구간은 KST 자정부터
+  다음 자정 전까지(24시간)다. 첫 반응 시각이나 취소에 따라 구간을 이동하지 않는다. KST 자정 경계에서는
+  가까운 시각의 반응도 다른 묶음이 될 수 있고, UTC 자정은 묶음 경계가 아니다. 다른 Notification Type의
+  묶음이나 Push에는 적용하지 않는다.
 - 묶음의 인원은 서로 다른 반응 Profile 수이며, 이모지별 수는 해당 묶음의 Reaction 수다. 같은 Profile의
   서로 다른 이모지는 인원으로 한 번만 세고 이모지별로 각각 센다.
 - 목록을 새로 조회할 때 묶음은 남아 있는 최신 반응 시각순으로 정렬한다. 새 구성원이 Unread이면 기존 구성원의 Read 여부와

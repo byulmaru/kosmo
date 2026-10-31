@@ -6,8 +6,6 @@ import { visibleViewerNotificationWhere } from './access/visibility';
 import type { DatabaseHandle } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
 
-export const REACTION_GROUP_BUCKET_SECONDS = 48 * 60 * 60;
-
 export type ReactionNotificationGroupMemberRow = {
   readonly createdAt: Temporal.Instant;
   readonly groupId: string;
@@ -53,7 +51,8 @@ export const parseReactionNotificationGroupId = (id: string) => {
 };
 
 export const reactionNotificationGroupBucket = () =>
-  sql<string>`floor(extract(epoch from ${Notifications.createdAt}) / ${sql.raw(String(REACTION_GROUP_BUCKET_SECONDS))})::bigint::text`;
+  // Align integer buckets to KST midnights: +32400 seconds for UTC+09:00 and 86400 seconds per day.
+  sql<string>`floor((extract(epoch from ${Notifications.createdAt}) + 32400) / 86400)::bigint::text`;
 
 export const reactionNotificationGroupIdentity = () =>
   sql<string>`concat(${Notifications.recipientAccountId}, '|', ${Notifications.recipientProfileId}, '|', ${Reactions.postId}, '|', ${reactionNotificationGroupBucket()})`;

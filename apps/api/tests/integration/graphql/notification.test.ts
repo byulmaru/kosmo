@@ -2295,13 +2295,13 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(await notificationReadAt(follow.id), null);
   });
 
-  test('groups Reaction Notifications into fixed buckets and keeps late arrivals unread', async () => {
+  test('groups Reaction Notifications by KST calendar day and keeps late arrivals unread', async () => {
     const auth = await createAuthenticatedSession();
     const authorA = await createProfile('reaction-feed-author-a');
     const authorB = await createProfile('reaction-feed-author-b');
     const authorC = await createProfile('reaction-feed-author-c');
     const post = await createContentPost(auth.profile.id);
-    const firstAt = Temporal.Instant.from('2026-10-03T23:58:00.000000Z');
+    const firstAt = Temporal.Instant.from('2026-10-03T14:58:00.000000Z');
     const firstReactions = await Promise.all([
       createReactionNotificationForPost(post.id, authorA.id, '❤️', firstAt),
       createReactionNotificationForPost(post.id, authorA.id, '🎉', firstAt.add({ seconds: 30 })),
@@ -2312,14 +2312,28 @@ describe('Notification GraphQL Node boundary', () => {
       post.id,
       authorA.id,
       '👏',
-      Temporal.Instant.from('2026-10-04T00:00:00.000000Z'),
+      Temporal.Instant.from('2026-10-03T15:00:00.000000Z'),
     );
+    const utcMidnightReactions = await Promise.all([
+      createReactionNotificationForPost(
+        post.id,
+        authorB.id,
+        '😎',
+        Temporal.Instant.from('2026-10-03T23:59:30.000000Z'),
+      ),
+      createReactionNotificationForPost(
+        post.id,
+        authorC.id,
+        '🤝',
+        Temporal.Instant.from('2026-10-04T00:00:00.000000Z'),
+      ),
+    ]);
     const follow = await createFollowNotification(
       auth.profile.id,
       await createProfile('reaction-feed-follow-author').then(({ id }) => id),
       '00000000-0000-8006-8000-00000000feed',
       auth.account.id,
-      Temporal.Instant.from('2026-10-04T00:00:00.000000Z'),
+      Temporal.Instant.from('2026-10-03T15:00:00.000000Z'),
     );
     const profileId = encodeGlobalId('Profile', auth.profile.id);
 
@@ -2379,6 +2393,15 @@ describe('Notification GraphQL Node boundary', () => {
     );
     assert.ok(boundaryGroup);
     assert.notEqual(firstGroup.id, boundaryGroup.id);
+    assert.deepEqual(
+      new Set(boundaryGroup.notificationIds),
+      new Set([
+        encodeGlobalId('ReactionNotification', boundaryReaction.notification.id),
+        ...utcMidnightReactions.map(({ notification }) =>
+          encodeGlobalId('ReactionNotification', notification.id),
+        ),
+      ]),
+    );
     assert.equal(
       pages.some((node) => node.id === encodeGlobalId('FollowNotification', follow.id)),
       true,
@@ -2459,6 +2482,19 @@ describe('Notification GraphQL Node boundary', () => {
       type: boundaryReaction.reaction.type,
     });
     await deleteReactionNotification(boundaryReaction.reaction.id);
+    for (const [actorProfileId, { reaction }] of [
+      [authorB.id, utcMidnightReactions[0]!],
+      [authorC.id, utcMidnightReactions[1]!],
+    ] as const) {
+      await deleteReaction({
+        actorProfileId,
+        expectedReactionId: reaction.id,
+        origin: 'LOCAL',
+        postId: post.id,
+        type: reaction.type,
+      });
+      await deleteReactionNotification(reaction.id);
+    }
     const afterEmptyGroupCancellation = await loadNotificationFeed(profileId, auth.token, {
       first: 10,
     });
@@ -2469,6 +2505,25 @@ describe('Notification GraphQL Node boundary', () => {
       ),
       false,
     );
+
+    const nextKstDayReaction = await createReactionNotificationForPost(
+      post.id,
+      authorA.id,
+      '💯',
+      Temporal.Instant.from('2026-10-04T15:00:00.000000Z'),
+    );
+    const afterNextKstDay = await loadNotificationFeed(profileId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(afterNextKstDay);
+    const nextKstDayGroup = afterNextKstDay.data?.node?.notificationFeed.edges.find(
+      ({ node }) =>
+        node.__typename === 'ReactionNotificationGroup' &&
+        node.notificationIds.includes(
+          encodeGlobalId('ReactionNotification', nextKstDayReaction.notification.id),
+        ),
+    )?.node;
+    assert.ok(nextKstDayGroup);
+    assert.notEqual(nextKstDayGroup.id, boundaryGroup.id);
+    assert.notEqual(nextKstDayGroup.id, firstGroup.id);
   });
 
   test('pages ordinary notifications with a stateless keyset cursor', async () => {
