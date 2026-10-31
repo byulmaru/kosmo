@@ -6051,6 +6051,19 @@ export const PostDetailThreadBackgroundCursors: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByTestId('post-thread');
+    const scrollHeader = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
+    const initialCurrent = canvas.getByTestId('post-thread-current-route-current');
+    await waitFor(() =>
+      expect(
+        Math.abs(
+          initialCurrent.getBoundingClientRect().top - scrollHeader.getBoundingClientRect().bottom,
+        ),
+      ).toBeLessThanOrEqual(1),
+    );
+    // Release the initial current-row scroll anchor before testing ancestor backgrounds.
+    canvas
+      .getByTestId('post-thread')
+      .dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
     const pathname = canvas.getByTestId('current-story-pathname');
     const pointerAt = async (x: number, y: number, cursor: 'auto' | 'pointer') => {
       const target = document.elementFromPoint(x, y)!;
@@ -6073,20 +6086,9 @@ export const PostDetailThreadBackgroundCursors: Story = {
     for (const id of ['route-root', 'route-child']) {
       const item = canvas.getByTestId(`post-thread-item-${id}`);
       const row = within(item).getByTestId('post-list-standard-row');
-      const initialPath = pathname.textContent;
-      const toolbar = within(row).getByRole('toolbar', { name: '액션 바' });
-      toolbar.scrollIntoView({ block: 'center' });
-      const buttons = within(toolbar).getAllByRole('button');
-      const first = buttons[0]!.getBoundingClientRect();
-      const second = buttons[1]!.getBoundingClientRect();
-      expect(second.left).toBeGreaterThan(first.right);
-      const target = await pointerAt(
-        (first.right + second.left) / 2,
-        (first.top + first.bottom) / 2,
-        'auto',
-      );
-      expect(target.closest('a, [role="button"], [role="link"]')).toBeNull();
-      expect(pathname.textContent).toBe(initialPath);
+      await checkActionBarWhitespace(row, () => {
+        expect(pathname).toHaveTextContent(`/@kosmo/${id}`);
+      });
 
       row.scrollIntoView({ block: 'center' });
       const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]')!;
@@ -6123,8 +6125,8 @@ export const PostDetailThreadBackgroundCursors: Story = {
     );
     preview.scrollIntoView({ block: 'center' });
     const previewBounds = preview.getBoundingClientRect();
-    const previewX = (previewBounds.left + previewBounds.right) / 2;
-    const previewY = previewBounds.top + 2;
+    const previewX = previewBounds.left + 2;
+    const previewY = (previewBounds.top + previewBounds.bottom) / 2;
     expect(document.elementFromPoint(previewX, previewY)).toBe(preview);
     await pointerAt(previewX, previewY, 'auto');
     expect(pathname.textContent).toBe(initialPath);
