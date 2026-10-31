@@ -19,6 +19,13 @@ let closeFocused = 0;
 const openedUrls: string[] = [];
 const viewerKeyTarget = { tagName: 'DIV' };
 const childOverlayKeyTarget = { tagName: 'DIV' };
+let activeModal = true;
+const webOverlays: object[] = [];
+const childOverlayElement = {
+  closest: () => null,
+  contains: () => false,
+  getClientRects: () => [{}],
+};
 const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
   getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
     onSuccess(1600, 900),
@@ -213,6 +220,8 @@ afterEach(async () => {
   viewport.width = 767;
   keydownListener = null;
   closeFocused = 0;
+  activeModal = true;
+  webOverlays.length = 0;
   openedUrls.length = 0;
 });
 
@@ -423,6 +432,7 @@ describe('PostMediaViewer', () => {
     );
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
 
+    webOverlays.push(childOverlayElement);
     await act(async () =>
       keydownListener?.({
         altKey: false,
@@ -938,6 +948,7 @@ describe('PostMediaViewer', () => {
   it('Web child overlay가 처리한 Escape는 뒤의 Viewer까지 닫지 않는다', async () => {
     let closed = 0;
     await render({ onClose: () => closed++ });
+    webOverlays.push(childOverlayElement);
     await act(async () =>
       keydownListener?.({
         altKey: false,
@@ -952,6 +963,42 @@ describe('PostMediaViewer', () => {
 
     await act(async () => rendered('Modal')[0]!.props.onRequestClose());
     assert.equal(closed, 0);
+    await act(async () => rendered('Modal')[0]!.props.onRequestClose());
+    assert.equal(closed, 1);
+  });
+
+  it('Web body에 focus가 빠져도 최상위 Viewer의 인접 이미지로 이동한다', async () => {
+    await render({ selectedIndex: 1 });
+    const event = {
+      key: 'ArrowRight',
+      target: { tagName: 'BODY' },
+      preventDefault: () => undefined,
+    } as unknown as KeyboardEvent;
+    await act(async () => keydownListener?.(event));
+    assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
+
+    activeModal = false;
+    await act(async () => keydownListener?.({ ...event, key: 'ArrowLeft' }));
+    assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
+
+    activeModal = true;
+    await act(async () => keydownListener?.({ ...event, key: 'ArrowLeft' }));
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+  });
+
+  it('Web body의 Escape는 child overlay를 닫은 뒤 Viewer도 닫을 수 있다', async () => {
+    let closed = 0;
+    await render({ onClose: () => closed++ });
+    const event = {
+      key: 'Escape',
+      target: { tagName: 'BODY' },
+      preventDefault: () => undefined,
+    } as unknown as KeyboardEvent;
+    await act(async () => keydownListener?.({ ...event, defaultPrevented: true }));
+    await act(async () => rendered('Modal')[0]!.props.onRequestClose());
+    assert.equal(closed, 0);
+
+    await act(async () => keydownListener?.(event));
     await act(async () => rendered('Modal')[0]!.props.onRequestClose());
     assert.equal(closed, 1);
   });
@@ -1035,7 +1082,10 @@ async function render(overrides: Partial<ViewerProps> = {}) {
             return { focus: () => closeFocused++ };
           }
           if (elementProps.testID === 'post-media-viewer-dialog') {
-            return { contains: (target: unknown) => target === viewerKeyTarget };
+            return {
+              closest: () => ({ getAttribute: () => (activeModal ? 'dialog' : null) }),
+              ownerDocument: { querySelectorAll: () => webOverlays },
+            };
           }
           return {};
         },
