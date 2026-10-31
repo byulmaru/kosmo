@@ -3185,6 +3185,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'ReplyFullscreenVisibleViewport',
   ],
   decorators: [
     (Story) => (
