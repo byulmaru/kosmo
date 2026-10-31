@@ -632,6 +632,11 @@ export const InteractionContract: Story = {
     await userEvent.type(search, '존재하지않음');
     expect(canvas.getByText('검색 결과가 없어요')).toBeVisible();
     expect(canvas.getByText('다른 이름이나 이모지로 검색해 보세요.')).toBeVisible();
+
+    args.onClose.mockClear();
+    search.focus();
+    await userEvent.keyboard('{Escape}');
+    expect(args.onClose).toHaveBeenCalledTimes(1);
   },
   render: (args) => <InteractivePicker {...args} />,
 };

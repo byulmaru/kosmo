@@ -1,5 +1,4 @@
 import { Search } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
 import {
   FlatList,
   Platform,
@@ -65,7 +64,6 @@ export function FullReactionPicker({
   const { columns, columnGap, targetSize } = mobile
     ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
     : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
-  const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
     [option.emoji, option.label, ...(option.keywords ?? [])]
@@ -114,31 +112,23 @@ export function FullReactionPicker({
     itemOffset += length;
     return layout;
   });
-  useEffect(() => {
-    if (mobile) {
-      return;
-    }
-
-    const ownerDocument = (pickerRef.current as unknown as HTMLElement | null)?.ownerDocument;
-    if (!ownerDocument) {
-      return;
-    }
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    ownerDocument.addEventListener('keyup', onKeyUp, true);
-    return () => ownerDocument.removeEventListener('keyup', onKeyUp, true);
-  }, [mobile, onClose]);
+  const webEscapeProps: Record<string, unknown> =
+    !mobile && Platform.OS === 'web'
+      ? {
+          onKeyUp: (event: React.KeyboardEvent<HTMLElement>) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+            }
+          },
+        }
+      : {};
   const picker = (
     <View
       accessibilityLabel="반응 선택"
       onAccessibilityEscape={onClose}
-      ref={pickerRef}
+      {...webEscapeProps}
       role={!mobile && Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
         mobile ? styles.mobileSheetContent : styles.webDialog,

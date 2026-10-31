@@ -3,6 +3,15 @@ import { spacing } from '@/theme/tokens';
 import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
+export type DropdownViewportInset =
+  | number
+  | Readonly<{
+      bottom?: number;
+      left?: number;
+      right?: number;
+      top?: number;
+    }>;
+
 export type DropdownProps = {
   accessibilityLabel: string;
   children: (maxHeight: number) => ReactNode;
@@ -14,11 +23,13 @@ export type DropdownProps = {
   minWidth?: number;
   zIndex?: number;
   anchorInset?: number;
-  viewportInset?: number;
+  viewportInset?: DropdownViewportInset;
+  gap?: number;
+  maxWidth?: number;
   maxHeight?: number;
   placement?: 'overlap-end';
   horizontalPlacement?: 'after' | 'end' | 'start';
-  verticalPlacement?: 'after' | 'end' | 'start';
+  verticalPlacement?: 'after' | 'auto' | 'end' | 'start';
 };
 
 export function Dropdown({
