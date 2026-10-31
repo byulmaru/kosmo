@@ -253,8 +253,8 @@ export const ChildOverlayKeyboardOwnership: Story = {
     const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '메뉴 열기' }));
     const menu = await screen.findByRole('menu', { name: '이미지 작업' });
-    expect(dialog.contains(menu)).toBe(false);
-    expect(menu.closest('[aria-modal="true"]')).toBeNull();
+    expect(dialog.contains(menu)).toBe(true);
+    expect(menu.closest('[aria-modal="true"]')).toBe(dialog.closest('[aria-modal="true"]'));
     expect(dialog.closest('[aria-modal="true"]')).toHaveAttribute('role', 'dialog');
     (document.activeElement as HTMLElement).blur();
     expect(document.activeElement).toBe(document.body);
