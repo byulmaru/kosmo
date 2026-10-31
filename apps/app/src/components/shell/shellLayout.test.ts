@@ -110,6 +110,10 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '개발 정보',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/licenses', []), {
+      leading: 'back',
+      title: '오픈소스 라이선스',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/compose', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
