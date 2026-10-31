@@ -46,6 +46,52 @@ async function pasteComposerImage(input: Locator) {
   });
 }
 
+type PostRequestAcknowledgementInput = {
+  bodyText: string;
+  contentWarning?: string | null;
+  media: readonly { altText: string | null; applyAiProhibitFilter?: boolean; mediaId: string }[];
+  mentions?: readonly { end: number; profileId: string; start: number }[];
+  replyParentId?: string | null;
+  requestId: string;
+  repostSourceId?: string | null;
+  sensitiveMedia: boolean;
+  visibility: string;
+};
+
+function acknowledgedPostRequest(
+  input: PostRequestAcknowledgementInput,
+  author: { displayName: string; handle: string; id: string },
+) {
+  return {
+    data: {
+      createPost: {
+        post: null,
+        request: {
+          authorProfile: {
+            avatar: null,
+            displayName: author.displayName,
+            handle: author.handle,
+            id: toGlobalId('Profile', author.id),
+            relativeHandle: `@${author.handle}`,
+          },
+          bodyText: input.bodyText,
+          contentWarning: input.contentWarning ?? null,
+          id: toGlobalId('PostRequest', input.requestId),
+          media: input.media.map(({ altText, mediaId }) => ({
+            __typename: 'Media',
+            altText,
+            id: mediaId,
+            url: `https://media.example/${mediaId}.webp`,
+          })),
+          requestId: input.requestId,
+          sensitiveMedia: input.sensitiveMedia,
+          status: 'QUEUED',
+        },
+      },
+    },
+  };
+}
+
 async function openComposer(page: Page) {
   await page.goto('/home');
   await expect(page.getByRole('progressbar')).toHaveCount(0);
@@ -66,6 +112,62 @@ async function openComposer(page: Page) {
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
+});
+
+test('불확실한 접수 확인은 focus를 가두고 재확인 뒤 Composer로 돌려준다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Uncertain Composer Focus',
+    handle: 'e2e-uncertain-composer-focus',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'PostComposerCreatePostMutation') {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { createPost: null },
+          errors: [{ message: '게시 요청 응답을 확인할 수 없어요.' }],
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  const composer = await openComposer(page);
+  const dialog = page.getByRole('dialog', { name: '글쓰기' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  await input.fill('접수 불확실 포커스 확인');
+  const submitResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  await composer.getByRole('button', { name: '게시', exact: true }).click();
+  await submitResponse;
+  await expect(dialog.getByRole('button', { name: '접수 다시 확인' })).toBeEnabled();
+
+  await dialog.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
+  const confirmation = page.getByRole('alertdialog', { name: '접수 결과 확인' });
+  const retry = confirmation.getByRole('button', { name: '다시 확인' });
+  const close = confirmation.getByRole('button', { name: '닫기' });
+  await expect(retry).toBeFocused();
+  await expect(dialog.getByRole('textbox', { name: '게시글 본문' })).toHaveCount(0);
+
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(retry).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+
+  const retryResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  await retry.click();
+  await retryResponse;
+  await expect(confirmation).toHaveCount(0);
+  await expect(dialog).toBeFocused();
 });
 
 test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ context, page }) => {
@@ -293,10 +395,11 @@ test('Web Composer는 긴 본문을 중앙에서 스크롤하고 footer를 modal
   expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(380);
 });
 
-test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 실행한다', async ({
+test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을 접수하고 실제 게시한다', async ({
   context,
   page,
 }) => {
+  test.setTimeout(60_000);
   const body = 'E2E compose createPost body';
   const editorBody = `  ${body}\n\nsecond line  `;
   const viewer = await createE2ESession({
@@ -381,21 +484,74 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   const response = await mutationResponse;
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
-    data?: { createPost?: { post?: { id?: string | null } | null } | null };
+    data?: {
+      createPost?: { request?: { requestId?: string | null } | null } | null;
+    };
+    errors?: unknown[];
   };
+  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
 
+  expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
+  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
   expect(operation?.operationName).toBe('PostComposerCreatePostMutation');
   expect(operation?.variables).toMatchObject({
     input: {
+      requestId: acceptedRequestId,
       bodyText: `${body}\n\nsecond line`,
       visibility: 'PUBLIC',
     },
   });
-  expect(responseBody.data?.createPost?.post?.id).toEqual(expect.any(String));
+  expect(acceptedRequestId).toEqual(expect.any(String));
   await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
   await expect(page).toHaveURL(/\/home$/);
+  await expect
+    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
 
   await page.goto('/@e2e-composer');
+  const publishedArticle = page.getByRole('article').filter({ hasText: body }).first();
+  await expect(publishedArticle).toBeVisible();
+  await publishedArticle.getByTestId('post-list-row-body').click();
+  await expect(page).toHaveURL(/\/@e2e-composer\/[^/]+$/);
+  const publishedPath = decodeURIComponent(new URL(page.url()).pathname);
+  expect(publishedPath).toMatch(/^\/@e2e-composer\/[^/]+$/);
+  await expect(
+    page
+      .getByTestId('post-detail-scroll')
+      .getByTestId(`post-thread-current-${publishedPath.split('/').at(-1)}`)
+      .getByText(body),
+  ).toBeVisible();
+  const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          node?: {
+            __typename?: string | null;
+            id?: string | null;
+            profile?: { relativeHandle?: string | null } | null;
+            replyParent?: { id?: string | null } | null;
+          } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
+  await page.reload();
+  const { response: publishedPost, body: publishedBody } = await publishedPostResponse;
+  const publishedOperation = readGraphQLOperation(publishedPost.request().postData());
+  expect(publishedPost.ok(), JSON.stringify(publishedBody, null, 2)).toBe(true);
+  expect(publishedBody.errors, JSON.stringify(publishedBody, null, 2)).toBeUndefined();
+  expect(publishedOperation?.variables?.postId).toEqual(expect.any(String));
+  expect(publishedOperation?.variables?.postId).toBe(publishedPath.split('/').at(-1));
+  expect(publishedBody.data?.node).toMatchObject({
+    __typename: 'Post',
+    id: publishedOperation?.variables?.postId,
+    profile: { relativeHandle: '@e2e-composer' },
+    replyParent: null,
+  });
   await expect(page.getByText(body)).toBeVisible();
 });
 
@@ -403,6 +559,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   context,
   page,
 }) => {
+  test.setTimeout(60_000);
   const viewer = await createE2ESession({
     displayName: 'E2E Production Wiring',
     handle: 'e2e-production-wiring',
@@ -504,22 +661,32 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
   await input.fill(body);
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
-  const createResponse = await createPostResponse;
-  const createOperation = readGraphQLOperation(createResponse.request().postData());
-  const createBody = (await createResponse.json()) as {
-    data?: { createPost?: { post?: { id?: string | null } | null } | null };
+  const submitResponse = await submitResponsePromise;
+  const submitOperation = readGraphQLOperation(submitResponse.request().postData());
+  const submitBody = (await submitResponse.json()) as {
+    data?: {
+      createPost?: { request?: { requestId?: string | null } | null } | null;
+    };
     errors?: unknown[];
   };
 
-  expect(createResponse.ok(), JSON.stringify(createBody, null, 2)).toBe(true);
-  expect(createBody.errors, JSON.stringify(createBody, null, 2)).toBeUndefined();
-  expect(createOperation?.variables).toMatchObject({
-    input: { bodyText: body, visibility: 'PUBLIC' },
+  expect(submitResponse.ok(), JSON.stringify(submitBody, null, 2)).toBe(true);
+  expect(submitBody.errors, JSON.stringify(submitBody, null, 2)).toBeUndefined();
+  expect(submitOperation?.variables).toMatchObject({
+    input: {
+      bodyText: body,
+      requestId: submitBody.data?.createPost?.request?.requestId,
+      visibility: 'PUBLIC',
+    },
   });
-  const createdPostId = createBody.data?.createPost?.post?.id;
-  expect(createdPostId).toEqual(expect.any(String));
+  expect(submitBody.data?.createPost?.request?.requestId).toEqual(expect.any(String));
+  await expect
+    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
 
   const localResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
   await page.goto('/local');
@@ -527,7 +694,12 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   const localBody = (await localResponse.json()) as {
     data?: {
       localTimeline?: {
-        edges?: Array<{ node?: { id?: string | null } | null } | null> | null;
+        edges?: Array<{
+          node?: {
+            id?: string | null;
+            content?: { bodyText?: string | null } | null;
+          } | null;
+        } | null> | null;
       } | null;
     };
     errors?: unknown[];
@@ -535,6 +707,10 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   expect(localResponse.ok(), JSON.stringify(localBody, null, 2)).toBe(true);
   expect(localBody.errors, JSON.stringify(localBody, null, 2)).toBeUndefined();
+  const createdPostId = localBody.data?.localTimeline?.edges?.find(
+    (edge) => edge?.node?.content?.bodyText === body,
+  )?.node?.id;
+  expect(createdPostId).toEqual(expect.any(String));
   expect(localBody.data?.localTimeline?.edges).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ node: expect.objectContaining({ id: createdPostId }) }),
@@ -551,7 +727,12 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   const reselectBody = (await reselectResponse.json()) as {
     data?: {
       localTimeline?: {
-        edges?: Array<{ node?: { id?: string | null } | null } | null> | null;
+        edges?: Array<{
+          node?: {
+            id?: string | null;
+            content?: { bodyText?: string | null } | null;
+          } | null;
+        } | null> | null;
       } | null;
     };
     errors?: unknown[];
@@ -559,6 +740,11 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   expect(reselectResponse.ok(), JSON.stringify(reselectBody, null, 2)).toBe(true);
   expect(reselectBody.errors, JSON.stringify(reselectBody, null, 2)).toBeUndefined();
+  expect(
+    reselectBody.data?.localTimeline?.edges?.some(
+      (edge) => edge?.node?.content?.bodyText === body && edge?.node?.id === createdPostId,
+    ),
+  ).toBe(true);
   expect(reselectBody.data?.localTimeline?.edges).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ node: expect.objectContaining({ id: createdPostId }) }),
@@ -571,6 +757,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   context,
   page,
 }) => {
+  test.setTimeout(120_000);
   const body = 'E2E composer profile body';
   const contentWarning = 'E2E composer content warning';
   const session = await createE2ESession({
@@ -587,7 +774,6 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
 
   await setE2ESessionCookie(context, session.token);
   const mediaId = 'media-composer-profile-e2e';
-  let completedMediaId: string | null = null;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
@@ -598,19 +784,6 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
               media: { id: mediaId },
               uploadUrl: 'https://upload.example/composer-profile-e2e',
             },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-    if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
-      completedMediaId = (operation.variables?.input as { id: string }).id;
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            completeMediaUpload: { media: { id: completedMediaId, state: 'READY' } },
           },
         }),
         contentType: 'application/json',
@@ -679,25 +852,24 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await composer.getByRole('button', { name: '첨부 이미지 1 제거', exact: true }).click();
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toHaveCount(0);
 
-  expect(completedMediaId).toBeNull();
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
-  const response = await createPostResponse;
-  expect(completedMediaId).toBeNull();
+  const response = await submitResponsePromise;
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      createPost?: {
-        post?: { id?: string | null } | null;
-      } | null;
+      createPost?: { request?: { requestId?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
+  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
+  expect(acceptedRequestId).toEqual(expect.any(String));
   expect(operation?.variables).toMatchObject({
     input: {
+      requestId: acceptedRequestId,
       bodyText: body,
       contentWarning,
       media: [],
@@ -705,27 +877,111 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
       sensitiveMedia: false,
       visibility: 'FOLLOWERS',
     },
-    prependToHome: false,
   });
-  const responsePost = responseBody.data?.createPost?.post;
-  expect(responsePost?.id).toEqual(expect.any(String));
-  expect(responsePost).not.toHaveProperty('content');
-  expect(responsePost).not.toHaveProperty('profile');
-  expect(responsePost).toHaveProperty('replyParent', null);
-  expect(responsePost).not.toHaveProperty('repostSource');
-  expect(responsePost).not.toHaveProperty('viewerBookmark');
-  expect(responsePost).not.toHaveProperty('viewerRepost');
 
-  const refreshedHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const refreshedHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
   await page.reload();
-  const refreshedHomeBody = (await (await refreshedHomeResponse).json()) as {
-    data?: {
-      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
-    };
-    errors?: unknown[];
-  };
+  const { body: refreshedHomeBody } = await refreshedHomeResponse;
   expect(refreshedHomeBody.errors, JSON.stringify(refreshedHomeBody, null, 2)).toBeUndefined();
   expect(refreshedHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
+
+  const postRequestDetailResponse = waitForGraphQLOperation(page, 'PostRequestListDetailPageQuery');
+  const requestSearch = new URLSearchParams({
+    profileId: selectedProfileId,
+    requestId: acceptedRequestId ?? '',
+  });
+  await page.goto(`/post-requests?${requestSearch.toString()}`);
+  const postRequestDetail = await postRequestDetailResponse;
+  const postRequestDetailBody = (await postRequestDetail.json()) as {
+    data?: { postRequest?: { requestId?: string | null; status?: string | null } | null };
+    errors?: unknown[];
+  };
+  expect(postRequestDetail.ok(), JSON.stringify(postRequestDetailBody, null, 2)).toBe(true);
+  expect(
+    postRequestDetailBody.errors,
+    JSON.stringify(postRequestDetailBody, null, 2),
+  ).toBeUndefined();
+  expect(postRequestDetailBody.data?.postRequest?.requestId).toBe(acceptedRequestId);
+
+  const terminalStatus = page.getByText(/^게시 (완료|실패)$/).first();
+  await expect
+    .poll(
+      async () => {
+        const statusCount = await terminalStatus.count();
+        return statusCount > 0 ? terminalStatus.textContent() : null;
+      },
+      { timeout: 60_000 },
+    )
+    .not.toBeNull();
+  await expect(terminalStatus).toHaveText('게시 완료');
+
+  const publishedPostLink = page.getByRole('link', { name: '게시물 보기' });
+  await expect(publishedPostLink).toHaveCount(0);
+
+  await page.getByRole('button', { name: '프로필 목록' }).first().click();
+  const profileSwitcher = page.getByLabel('프로필 전환');
+  await expect(profileSwitcher).toBeVisible();
+  await page
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
+    .filter({ hasText: `@${selectedProfile.handle}` })
+    .click();
+
+  await expect(
+    page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${selectedProfile.handle}` }),
+  ).toBeVisible();
+  await expect(publishedPostLink).toBeVisible();
+  const publishedHref = await publishedPostLink.getAttribute('href');
+  expect(publishedHref).toMatch(/^\/@e2e-composer-profile-b\/[^/]+$/);
+  await publishedPostLink.click();
+  await expect(page).toHaveURL(publishedHref!);
+  const publishedArticle = page.getByRole('article').filter({ hasText: contentWarning }).first();
+  const showBody = publishedArticle.getByRole('button', {
+    name: `${contentWarning}, 본문, 보기`,
+    exact: true,
+  });
+  await expect(showBody).toBeVisible();
+  await showBody.click();
+  await expect(publishedArticle.getByText(body, { exact: true })).toBeVisible();
+
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
+    async (response) => ({
+      response,
+      body: (await response.json()) as {
+        data?: {
+          node?: {
+            __typename?: string | null;
+            id?: string | null;
+            profile?: { relativeHandle?: string | null } | null;
+            replyParent?: { id?: string | null } | null;
+          } | null;
+        };
+        errors?: unknown[];
+      },
+    }),
+  );
+  await page.reload();
+  const { response: detail, body: detailBody } = await detailResponse;
+  const detailOperation = readGraphQLOperation(detail.request().postData());
+  expect(detail.ok(), JSON.stringify(detailBody, null, 2)).toBe(true);
+  expect(detailBody.errors, JSON.stringify(detailBody, null, 2)).toBeUndefined();
+  expect(detailOperation?.variables?.postId).toBe(publishedHref?.split('/').at(-1));
+  expect(detailBody.data?.node).toMatchObject({
+    __typename: 'Post',
+    id: detailOperation?.variables?.postId,
+    profile: { relativeHandle: `@${selectedProfile.handle}` },
+    replyParent: null,
+  });
 });
 
 test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 Media 제출 흐름을 사용한다', async ({
@@ -739,7 +995,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   await setE2ESessionCookie(context, viewer.token);
 
   let mediaCount = 0;
-  const completedMediaIds: string[] = [];
+  const rawUploads: Array<{ byteLength: number; contentType?: string; url: string }> = [];
   let createPostVariables: Record<string, unknown> | null = null;
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
@@ -750,22 +1006,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
           data: {
             issueMediaUploadUrl: {
               media: { id: `media-clipboard-e2e-${mediaCount}` },
-              uploadUrl: 'https://upload.example/clipboard',
-            },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-    if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
-      completedMediaIds.push((operation.variables?.input as { id: string }).id);
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            completeMediaUpload: {
-              media: { id: (operation.variables?.input as { id: string }).id, state: 'READY' },
+              uploadUrl: `https://upload.example/clipboard-${mediaCount}`,
             },
           },
         }),
@@ -776,8 +1017,15 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
     }
     if (operation?.operationName === 'PostComposerCreatePostMutation') {
       createPostVariables = operation.variables ?? null;
+      const input = operation.variables?.input as PostRequestAcknowledgementInput;
       await route.fulfill({
-        body: JSON.stringify({ data: { createPost: { post: { id: 'post-clipboard-e2e' } } } }),
+        body: JSON.stringify(
+          acknowledgedPostRequest(input, {
+            displayName: viewer.profile!.displayName,
+            handle: viewer.profile!.handle,
+            id: viewer.profile!.id,
+          }),
+        ),
         contentType: 'application/json',
         status: 200,
       });
@@ -786,6 +1034,14 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
     await route.fallback();
   });
   await page.route('https://upload.example/**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      rawUploads.push({
+        byteLength: request.postDataBuffer()?.byteLength ?? 0,
+        contentType: request.headers()['content-type'],
+        url: request.url(),
+      });
+    }
     await route.fulfill({ body: '', status: 204 });
   });
 
@@ -839,17 +1095,38 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   await expect(input).toHaveValue('기존 본문');
   await expect(composer.getByLabel('첨부 이미지 2, 업로드 완료')).toBeVisible();
 
-  const createResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await submit.click();
-  const response = await createResponse;
+  const response = await submitResponsePromise;
+  const responseBody = (await response.json()) as {
+    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
+    errors?: unknown[];
+  };
   expect(response.status()).toBe(200);
-  expect(completedMediaIds).toEqual(['media-clipboard-e2e-1', 'media-clipboard-e2e-2']);
+  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
+  const requestId = (createPostVariables?.input as { requestId?: string } | undefined)?.requestId;
+  expect(responseBody.data?.createPost?.request?.requestId).toBe(requestId);
+  expect(rawUploads.map(({ url }) => url)).toEqual([
+    'https://upload.example/clipboard-1',
+    'https://upload.example/clipboard-2',
+  ]);
+  expect(
+    rawUploads.every(
+      ({ byteLength, contentType }) =>
+        byteLength > 0 && /^image\/(png|webp)$/.test(contentType ?? ''),
+    ),
+  ).toBe(true);
   expect(createPostVariables).toMatchObject({
     input: {
+      requestId: expect.any(String),
       bodyText: '기존 본문',
       media: [
-        { altText: '보존할 이미지 설명', mediaId: 'media-clipboard-e2e-1' },
-        { altText: null, mediaId: 'media-clipboard-e2e-2' },
+        {
+          altText: '보존할 이미지 설명',
+          applyAiProhibitFilter: false,
+          mediaId: 'media-clipboard-e2e-1',
+        },
+        { altText: null, applyAiProhibitFilter: false, mediaId: 'media-clipboard-e2e-2' },
       ],
       sensitiveMedia: true,
     },
@@ -877,7 +1154,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   const secondProfileId = toGlobalId('Profile', secondProfile.id);
   let createPostVariables: Record<string, unknown> | null = null;
   let issueMediaProfileId: string | null = null;
-  let completedMediaId: string | null = null;
+  const rawUploads: Array<{ byteLength: number; contentType?: string; url: string }> = [];
 
   await setE2ESessionCookie(context, session.token);
   await page.route('**/graphql', async (route) => {
@@ -900,25 +1177,17 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
       });
       return;
     }
-    if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
-      completedMediaId = (operation.variables?.input as { id: string }).id;
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            completeMediaUpload: { media: { id: completedMediaId, state: 'READY' } },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
     if (operation?.operationName === 'PostComposerCreatePostMutation') {
       createPostVariables = operation.variables ?? null;
+      const input = operation.variables?.input as PostRequestAcknowledgementInput;
       await route.fulfill({
-        body: JSON.stringify({
-          data: { createPost: { post: { id: 'post-profile-switcher-e2e' } } },
-        }),
+        body: JSON.stringify(
+          acknowledgedPostRequest(input, {
+            displayName: secondProfile.displayName,
+            handle: secondProfile.handle,
+            id: secondProfile.id,
+          }),
+        ),
         contentType: 'application/json',
         status: 200,
       });
@@ -927,6 +1196,14 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
     await route.fallback();
   });
   await page.route('https://upload.example/**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      rawUploads.push({
+        byteLength: request.postDataBuffer()?.byteLength ?? 0,
+        contentType: request.headers()['content-type'],
+        url: request.url(),
+      });
+    }
     await route.fulfill({ body: '', status: 204 });
   });
 
@@ -978,20 +1255,30 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   await expect(composer.getByRole('switch', { name: '민감한 이미지' })).toBeChecked();
   await composer.getByRole('button', { name: '완료', exact: true }).click();
 
-  expect(completedMediaId).toBeNull();
-  const completeMediaResponse = waitForGraphQLOperation(
-    page,
-    'PostComposerCompleteMediaUploadMutation',
-  );
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
-  await completeMediaResponse;
-  expect(completedMediaId).toBe(mediaId);
-  await createPostResponse;
+  const submitResponse = await submitResponsePromise;
+  const submitBody = (await submitResponse.json()) as {
+    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
+    errors?: unknown[];
+  };
+  const requestId = (createPostVariables?.input as { requestId?: string } | undefined)?.requestId;
+  expect(submitResponse.ok(), JSON.stringify(submitBody, null, 2)).toBe(true);
+  expect(submitBody.errors, JSON.stringify(submitBody, null, 2)).toBeUndefined();
+  expect(requestId).toEqual(expect.any(String));
+  expect(submitBody.data?.createPost?.request?.requestId).toBe(requestId);
+  expect(rawUploads).toHaveLength(1);
+  expect(rawUploads[0]).toMatchObject({
+    byteLength: expect.any(Number),
+    url: 'https://upload.example/profile-switcher',
+  });
+  expect(rawUploads[0]!.byteLength).toBeGreaterThan(0);
+  expect(rawUploads[0]!.contentType).toMatch(/^image\/(png|webp)$/);
   expect(createPostVariables).toMatchObject({
     input: {
+      requestId: expect.any(String),
       bodyText: body,
-      media: [{ altText, mediaId }],
+      media: [{ altText, applyAiProhibitFilter: false, mediaId }],
       actorProfileId: secondProfileId,
       sensitiveMedia: true,
     },

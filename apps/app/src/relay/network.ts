@@ -1,4 +1,5 @@
 import { getApiOrigin, getPublicWebOrigin } from '@/config/origin';
+import { getPostAnalyticsPlatform } from '../analytics/client';
 import { RelayTransportError } from './transportError';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
@@ -35,6 +36,7 @@ export async function executeGraphQLRequest(
 
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getPublicWebOrigin();
+  const analyticsPlatform = getPostAnalyticsPlatform();
   const startedAt = Date.now();
   const responsePromise = fetchImplementation(`${origin}/graphql`, {
     method: 'POST',
@@ -43,6 +45,7 @@ export async function executeGraphQLRequest(
       accept: 'application/json',
       'content-type': 'application/json',
       ...(native && token ? { authorization: `Bearer ${token}` } : {}),
+      ...(analyticsPlatform ? { 'x-kosmo-analytics-platform': analyticsPlatform } : {}),
     },
     body: JSON.stringify({
       operationName: request.name,

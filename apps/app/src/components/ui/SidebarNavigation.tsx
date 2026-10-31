@@ -4,6 +4,7 @@ import {
   Bookmark,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Ellipsis,
   House,
   LogIn,
@@ -71,6 +72,7 @@ const primaryItems = [
   ['notifications', '알림', Bell],
   ['profile', '프로필', UserRound],
   ['followRequests', '팔로워 요청', UserRoundPlus],
+  ['postRequests', '작성 요청', ClipboardList],
   ['bookmarks', '북마크', Bookmark],
 ] as const satisfies readonly (readonly [NavigationDestination, string, LucideIcon])[];
 

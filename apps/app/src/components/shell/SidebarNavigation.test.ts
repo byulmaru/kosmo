@@ -77,7 +77,7 @@ mockModule('@/auth/webLogin', {
 });
 mockModule(new URL('./shellLayout.ts', import.meta.url), {
   isSettingsRoute: () => false,
-  isTimelineRoute: () => true,
+  isTimelineRoute: (route: string) => route === '/home' || route === '/local',
 });
 let SidebarNavigation: typeof SidebarNavigationExport;
 
@@ -149,6 +149,13 @@ test('Production adapter hides feedback without a current session', async () => 
   const props = await renderSidebar();
 
   assert.equal(props.showFeedback, false);
+});
+
+test('Production adapter selects the protected post request route', async () => {
+  pathname = '/post-requests';
+  const props = await renderSidebar();
+
+  assert.equal(props.currentDestination, 'postRequests');
 });
 
 test('Production adapter starts guest authentication through the existing BFF entry', async () => {

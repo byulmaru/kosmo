@@ -4,7 +4,6 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { reportImageUploadError as ReportImageUploadErrorFn } from '../media/imageUpload';
 import type {
   PostComposerMediaControls as PostComposerMediaControlsComponent,
   PostComposerMediaControlsRenderProps,
@@ -16,33 +15,23 @@ import type {
 type IssueMediaResponse = {
   issueMediaUploadUrl: { media: { id: string }; uploadUrl: string };
 };
-type CompleteMediaResponse = {
-  completeMediaUpload: { media: { id: string; state: string } };
-};
 type MediaMutationConfig = {
   readonly variables: {
     readonly input: {
       readonly actorProfileId?: string;
-      readonly applyNightshade?: boolean;
-      readonly id?: string;
     };
   };
   readonly onCompleted: (
-    response: IssueMediaResponse | CompleteMediaResponse,
+    response: IssueMediaResponse,
     errors?: ReadonlyArray<unknown> | null,
   ) => void;
   readonly onError: (error: Error) => void;
 };
 type UploadOptions = {
   readonly asset: ImagePickerAsset;
-  readonly complete?: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
   readonly issue: () => Promise<{ readonly mediaId: string; readonly uploadUrl: string }>;
 };
-type CaptureContext = Record<string, string | number>;
-type CaptureCall = { readonly context?: CaptureContext; readonly error: Error };
-type ReportImageUploadError = typeof ReportImageUploadErrorFn;
-
 const platform = { OS: 'web' };
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -58,26 +47,14 @@ let mediaValues: PostComposerMediaValue[] = [];
 let captureMediaValues = true;
 let mediaRenderProps: PostComposerMediaControlsRenderProps | undefined;
 let issueCalls: MediaMutationConfig[] = [];
-let completeCalls: MediaMutationConfig[] = [];
-let toastCalls: Array<[string, { tone: string }]> = [];
-let captureCalls: CaptureCall[] = [];
-let captureThrows = false;
+let uploadCalls = 0;
 let renderer: ReactTestRenderer | null = null;
 let nextIssuedId = 0;
+let releasePendingUpload: (() => void) | undefined;
 let PostComposerMediaControls: typeof PostComposerMediaControlsComponent;
-let reportImageUploadError: ReportImageUploadError;
 
 const asset = (): ImagePickerAsset =>
   ({ height: 100, uri: 'file:///local/image.jpg', width: 100 }) as ImagePickerAsset;
-
-mockModule('@/observability/sentry', {
-  captureHandledError: (error: Error, context?: CaptureContext) => {
-    captureCalls.push({ context, error });
-    if (captureThrows) {
-      throw new Error('Sentry unavailable');
-    }
-  },
-});
 
 mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => pickerResult,
@@ -99,17 +76,13 @@ mockModule(require.resolve('lucide-react-native'), {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
-  useMutation: (document: string) => [
+  useMutation: () => [
     (config: MediaMutationConfig) => {
-      if (document.includes('IssueMediaUploadUrlMutation')) {
-        issueCalls.push(config);
-        const id = `media-${++nextIssuedId}`;
-        config.onCompleted({
-          issueMediaUploadUrl: { media: { id }, uploadUrl: `https://upload.example/${id}` },
-        });
-      } else {
-        completeCalls.push(config);
-      }
+      issueCalls.push(config);
+      const id = `media-${++nextIssuedId}`;
+      config.onCompleted({
+        issueMediaUploadUrl: { media: { id }, uploadUrl: `https://upload.example/${id}` },
+      });
     },
   ],
 });
@@ -125,7 +98,7 @@ mockModule('@/components/ui/IconButton', {
 mockModule('@/components/ui/TextField', { TextField: 'TextField' });
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({
-    showToast: (message: string, options: { tone: string }) => toastCalls.push([message, options]),
+    showToast: () => undefined,
   }),
 });
 mockModule('@/theme/ThemeProvider', {
@@ -151,13 +124,13 @@ const renderMedia = (props: PostComposerMediaControlsRenderProps) => {
 };
 
 before(async () => {
-  ({ reportImageUploadError } = await import(
-    new URL('../media/imageUpload.ts', import.meta.url).href
-  ));
   mockModule('@/components/media/imageUpload', {
-    reportImageUploadError,
+    reportImageUploadError: () => undefined,
     releaseImagePreview: () => undefined,
-    uploadImage: (options: UploadOptions) => uploadImageImpl(options),
+    uploadImage: (options: UploadOptions) => {
+      uploadCalls += 1;
+      return uploadImageImpl(options);
+    },
   });
   ({ PostComposerMediaControls } = await import('./PostComposerMediaControls'));
 });
@@ -172,20 +145,15 @@ beforeEach(() => {
     if (!options.isActive()) {
       return null;
     }
-    if (options.complete) {
-      await options.complete(issued.mediaId);
-    }
     return issued.mediaId;
   };
   mediaValues = [];
   captureMediaValues = true;
   mediaRenderProps = undefined;
   issueCalls = [];
-  completeCalls = [];
-  toastCalls = [];
-  captureCalls = [];
-  captureThrows = false;
+  uploadCalls = 0;
   nextIssuedId = 0;
+  releasePendingUpload = undefined;
 });
 
 afterEach(async () => {
@@ -193,6 +161,8 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  releasePendingUpload?.();
+  releasePendingUpload = undefined;
   mock.restoreAll();
 });
 
@@ -217,35 +187,8 @@ async function renderControls() {
   });
 }
 
-describe('PostComposerMediaControls deferred completion', () => {
-  it('keeps an attached upload uncompleted until submit requests READY', async () => {
-    await renderControls();
-    await act(async () => mediaRenderProps?.onMediaAction());
-    await flush();
-
-    assert.equal(issueCalls.length, 1);
-    assert.equal(completeCalls.length, 0);
-    assert.deepEqual(mediaValues.at(-1)?.items, [{ altText: null, mediaId: 'media-1' }]);
-
-    let completion!: Promise<void>;
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 1);
-    assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-1',
-    });
-
-    await act(async () => {
-      completeCalls[0]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      await completion;
-    });
-  });
-
-  it('reuploads only a submitted attachment when its Nightshade setting changes', async () => {
+describe('PostComposerMediaControls post request media', () => {
+  it('provides ordered media IDs and processing choices after upload', async () => {
     pickerResult = { assets: [asset(), asset()], canceled: false };
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
@@ -254,402 +197,71 @@ describe('PostComposerMediaControls deferred completion', () => {
     const [first, second] = mediaRenderProps?.items ?? [];
     assert.ok(first);
     assert.ok(second);
-    assert.equal(first.applyNightshade, false);
-    assert.equal(second.applyNightshade, false);
+    const initialIssueCount = issueCalls.length;
+    const initialUploadCount = uploadCalls;
     await act(async () => {
-      mediaRenderProps?.onApplyNightshadeChange(first.key, true);
-      mediaRenderProps?.onAltTextChange(second.key, 'Second image description');
+      mediaRenderProps?.onAltTextChange(first.key, '  First image  ');
+      mediaRenderProps?.onAltTextChange(second.key, 'Second image');
+      mediaRenderProps?.onApplyAiProhibitFilterChange(second.key, true);
+      mediaRenderProps?.onSensitiveMediaChange(true);
     });
     await flush();
-    const valuesBeforeSameChange = mediaValues.length;
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(first.key, true));
-    await flush();
-    assert.equal(mediaValues.length, valuesBeforeSameChange);
-    assert.equal(issueCalls.length, 2);
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
-    assert.equal(mediaRenderProps?.items[1]?.applyNightshade, false);
-    assert.deepEqual(mediaValues.at(-1)?.items, [
-      { altText: null, mediaId: 'media-1' },
-      { altText: 'Second image description', mediaId: 'media-2' },
+
+    assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
+      { altText: 'First image', applyAiProhibitFilter: false, mediaId: 'media-1' },
+      { altText: 'Second image', applyAiProhibitFilter: true, mediaId: 'media-2' },
     ]);
-
-    let completion!: Promise<void>;
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: true,
-      id: 'media-1',
-    });
-    assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-2',
-    });
-    await act(async () => {
-      completeCalls[0]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      completeCalls[1]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
-      });
-      await completion;
-    });
-
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(second.key, true));
-    await flush();
-    assert.equal(issueCalls.length, 3);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => ({
-        altText: item.altText,
-        applyNightshade: item.applyNightshade,
-        mediaId: item.mediaId,
-      })),
-      [
-        { altText: '', applyNightshade: true, mediaId: 'media-1' },
-        {
-          altText: 'Second image description',
-          applyNightshade: true,
-          mediaId: 'media-3',
-        },
-      ],
-    );
-
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 4);
-    assert.deepEqual(completeCalls[2]?.variables.input, {
-      applyNightshade: true,
-      id: 'media-1',
-    });
-    assert.deepEqual(completeCalls[3]?.variables.input, {
-      applyNightshade: true,
-      id: 'media-3',
-    });
-    await act(async () => {
-      completeCalls[2]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      completeCalls[3]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-3', state: 'READY' } },
-      });
-      await completion;
-    });
+    assert.equal(issueCalls.length, initialIssueCount);
+    assert.equal(uploadCalls, initialUploadCount);
+    assert.equal(mediaValues.at(-1)?.sensitiveMedia, true);
   });
 
-  it('uses a fresh upload after completion dispatch and keeps later changes on that upload', async () => {
-    let resolveReupload!: (mediaId: string | null) => void;
-    uploadImageImpl = async (options) => {
-      if (!options.isActive()) {
-        return null;
-      }
-      const issued = await options.issue();
-      if (!options.isActive()) {
-        return null;
-      }
-      if (issued.mediaId === 'media-2') {
-        return new Promise((resolve) => {
-          resolveReupload = resolve;
-        });
-      }
-      return issued.mediaId;
-    };
+  it('blocks post request media while a selected image is still uploading', async () => {
+    uploadImageImpl = () =>
+      new Promise<string | null>((resolve) => {
+        releasePendingUpload = () => resolve(null);
+      });
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
-    await flush();
 
-    const item = mediaRenderProps?.items[0];
-    assert.ok(item);
-    let completion!: Promise<void>;
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-1',
-    });
-
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(item.key, true));
-    await flush();
-    assert.equal(issueCalls.length, 2);
-    assert.equal(mediaRenderProps?.items[0]?.state, 'uploading');
-    assert.equal(mediaRenderProps?.items[0]?.mediaId, undefined);
-
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(item.key, false));
-    await flush();
-    assert.equal(issueCalls.length, 2);
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
-
-    await act(async () => {
-      completeCalls[0]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      await assert.rejects(completion);
-    });
-
-    await act(async () => resolveReupload('media-2'));
-    await flush();
-    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
-    assert.equal(mediaRenderProps?.items[0]?.mediaId, 'media-2');
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, false);
-
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-2',
-    });
-    await act(async () => {
-      completeCalls[1]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
-      });
-      await completion;
-    });
+    assert.equal(mediaValues.at(-1)?.hasPendingMedia, true);
+    assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
   });
 
-  it('marks a completion failure retryable and retries with a new upload session', async () => {
-    const privateDetail =
-      'completion failed for file:///private/photo.jpg at https://upload.example/private?token=secret';
-    const completionFailure = new Error(privateDetail);
-    captureThrows = true;
-    await renderControls();
-    await act(async () => mediaRenderProps?.onMediaAction());
-    await flush();
-    const selectedItem = mediaRenderProps?.items[0];
-    assert.ok(selectedItem);
-    await act(async () => mediaRenderProps?.onApplyNightshadeChange(selectedItem.key, true));
-    await flush();
-
-    let completion!: Promise<void>;
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 1);
-
-    await act(async () => {
-      completeCalls[0]?.onError(completionFailure);
-      await assert.rejects(completion, (error: unknown) => error === completionFailure);
-    });
-
-    assert.equal(captureCalls.length, 1);
-    assert.deepEqual(captureCalls[0]?.context, {
-      operation: 'complete',
-      reason: 'transient',
-      stage: 'complete',
-    });
-    const capturedError = captureCalls[0]?.error;
-    assert.ok(capturedError);
-    assert.notEqual(capturedError, completionFailure);
-    assert.equal(capturedError.name, 'ImageUploadError');
-    assert.equal(capturedError.message, 'Image upload failed');
-    assert.equal((capturedError as Error & { cause?: unknown }).cause, undefined);
-    assert.equal(capturedError.stack?.includes(privateDetail), false);
-    assert.equal(mediaRenderProps?.items[0]?.state, 'failed');
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
-    assert.deepEqual(toastCalls, [
-      ['1번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
-    ]);
-    await act(async () => {
-      const failedItem = mediaRenderProps?.items[0];
-      assert.ok(failedItem);
-      mediaRenderProps?.onMediaRetry(failedItem);
-    });
-    await flush();
-
-    assert.equal(issueCalls.length, 2);
-    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
-    assert.equal(mediaRenderProps?.items[0]?.mediaId, 'media-2');
-    assert.equal(mediaRenderProps?.items[0]?.applyNightshade, true);
-    assert.equal(completeCalls.length, 1);
-
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[1]?.variables.input, { applyNightshade: true, id: 'media-2' });
-    await act(async () => {
-      completeCalls[1]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
-      });
-      await completion;
-    });
-    assert.equal(captureCalls.length, 1);
-  });
-
-  it('completes retained images concurrently and waits until all are READY', async () => {
+  it('requires a new file after admission rejects an uploaded image and replaces only that slot', async () => {
     pickerResult = { assets: [asset(), asset()], canceled: false };
     await renderControls();
     await act(async () => mediaRenderProps?.onMediaAction());
     await flush();
 
-    assert.equal(issueCalls.length, 2);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'ready'],
-    );
-
-    let completion!: Promise<void>;
-    let completionSettled = false;
+    const [first, second] = mediaRenderProps?.items ?? [];
+    assert.ok(first);
+    assert.ok(second);
     await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
+      mediaRenderProps?.onAltTextChange(first.key, 'Replace this ALT');
+      mediaRenderProps?.onApplyAiProhibitFilterChange(first.key, true);
+      mediaRenderProps?.onAltTextChange(second.key, 'Keep sibling ALT');
     });
-    void completion.then(
-      () => {
-        completionSettled = true;
-      },
-      () => {
-        completionSettled = true;
-      },
-    );
-    assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-1',
-    });
-    assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
-      id: 'media-2',
-    });
-
-    await act(async () => {
-      completeCalls[0]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    assert.equal(completionSettled, false);
-
-    await act(async () => {
-      completeCalls[1]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
-      });
-      await completion;
-    });
-
-    assert.equal(completionSettled, true);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'ready'],
-    );
-    assert.equal(toastCalls.length, 0);
-  });
-
-  it('waits for every completion failure and leaves successful siblings ready', async () => {
-    pickerResult = { assets: [asset(), asset(), asset()], canceled: false };
-    await renderControls();
-    await act(async () => mediaRenderProps?.onMediaAction());
+    mediaValues.at(-1)?.requirePostRequestMediaReselection(first.mediaId!);
     await flush();
 
+    assert.equal(mediaRenderProps?.items[0]?.requiresReselection, true);
+    assert.equal(mediaRenderProps?.items[0]?.state, 'failed');
+    assert.equal(mediaRenderProps?.items[1]?.state, 'ready');
+    assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
+
+    const needsReselection = mediaRenderProps?.items[0];
+    assert.ok(needsReselection);
+    await act(async () => mediaRenderProps?.onMediaRetry(needsReselection));
+    await flush();
+
+    assert.equal(uploadCalls, 3);
     assert.equal(issueCalls.length, 3);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'ready', 'ready'],
-    );
-
-    let completion!: Promise<void>;
-    let completionSettled = false;
-    await act(async () => {
-      completion = mediaValues.at(-1)!.completeUploads();
-    });
-    void completion.then(
-      () => {
-        completionSettled = true;
-      },
-      () => {
-        completionSettled = true;
-      },
-    );
-    assert.equal(completeCalls.length, 3);
-    assert.deepEqual(
-      completeCalls.map((call) => call.variables.input.id),
-      ['media-1', 'media-2', 'media-3'],
-    );
-
-    await act(async () => {
-      completeCalls[0]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-1', state: 'READY' } },
-      });
-      completeCalls[1]?.onCompleted({
-        completeMediaUpload: { media: { id: 'media-2', state: 'UPLOADING' } },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    assert.equal(completionSettled, false);
-
-    await act(async () => {
-      completeCalls[2]?.onError(new Error('third completion failed'));
-      await assert.rejects(completion);
-    });
-
-    assert.equal(completionSettled, true);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'failed', 'failed'],
-    );
-    assert.deepEqual(toastCalls, [
-      ['2번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
-      ['3번째 이미지 업로드를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', { tone: 'danger' }],
+    assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
+      { altText: 'Replace this ALT', applyAiProhibitFilter: true, mediaId: 'media-3' },
+      { altText: 'Keep sibling ALT', applyAiProhibitFilter: false, mediaId: 'media-2' },
     ]);
-    assert.equal(captureCalls.length, 2);
-
-    await act(async () => {
-      const failedItem = mediaRenderProps?.items[1];
-      assert.ok(failedItem);
-      mediaRenderProps?.onMediaRetry(failedItem);
-    });
-    await flush();
-    assert.equal(issueCalls.length, 4);
-    assert.deepEqual(
-      mediaRenderProps?.items.map((item) => item.state),
-      ['ready', 'ready', 'failed'],
-    );
-  });
-
-  it('rejects an outdated item snapshot and never completes a removed image', async () => {
-    await renderControls();
-    const emptySnapshot = mediaValues.at(-1)!;
-    captureMediaValues = false;
-    await act(async () => mediaRenderProps?.onMediaAction());
-    await flush();
-
-    await assert.rejects(emptySnapshot.completeUploads());
-    assert.equal(completeCalls.length, 0);
-
-    const item = mediaRenderProps?.items[0];
-    assert.ok(item);
-    captureMediaValues = true;
-    await act(async () => mediaRenderProps?.onAltTextChange(item.key, '설명'));
-    const attachedSnapshot = mediaValues.at(-1)!;
-    await act(async () => mediaRenderProps?.onMediaRemove(item.key));
-
-    await mediaValues.at(-1)!.completeUploads();
-    await assert.rejects(attachedSnapshot.completeUploads());
-    assert.equal(completeCalls.length, 0);
-  });
-
-  it('rejects submit completion while a retained image is still uploading', async () => {
-    let resolveUpload!: (mediaId: string | null) => void;
-    uploadImageImpl = async (options) => {
-      await options.issue();
-      return new Promise((resolve) => {
-        resolveUpload = resolve;
-      });
-    };
-    await renderControls();
-    await act(async () => mediaRenderProps?.onMediaAction());
-    await flush();
-
-    assert.equal(mediaValues.at(-1)?.hasPendingMedia, true);
-    await assert.rejects(mediaValues.at(-1)!.completeUploads());
-    assert.equal(completeCalls.length, 0);
-
-    await act(async () => {
-      resolveUpload('media-1');
-    });
-    await flush();
-    assert.equal(mediaRenderProps?.items[0]?.state, 'ready');
+    assert.equal(mediaRenderProps?.items[0]?.asset?.uri, 'file:///local/image.jpg');
+    assert.equal(mediaRenderProps?.items[1]?.mediaId, 'media-2');
   });
 });

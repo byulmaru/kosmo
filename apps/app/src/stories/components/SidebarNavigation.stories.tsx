@@ -21,6 +21,7 @@ const destinations = [
   'notifications',
   'profile',
   'followRequests',
+  'postRequests',
   'bookmarks',
   'compose',
   'feedback',
@@ -34,6 +35,7 @@ const labels = {
   followRequests: '팔로워 요청',
   home: '홈',
   notifications: '알림',
+  postRequests: '작성 요청',
   profile: '프로필',
   search: '검색',
   settings: '설정',
@@ -465,6 +467,7 @@ export const Compact: Story = {
         'notifications',
         'profile',
         'followRequests',
+        'postRequests',
         'bookmarks',
         'compose',
       ] as const) {

@@ -33,7 +33,7 @@ export type ComposerMediaEditorProps = {
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
-  readonly onApplyNightshadeChange: (key: string, value: boolean) => void;
+  readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
@@ -312,17 +312,25 @@ function MediaPreview({
   readonly selectedIndex: number;
 }) {
   const theme = useTheme();
+  const selectedPreviewUri = selected?.asset.uri ?? null;
   const selectedPreview = selected ? (
-    <Image
-      accessibilityElementsHidden={Boolean(onPreviewPress)}
-      accessibilityIgnoresInvertColors
-      accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
-      accessibilityRole="image"
-      fadeDuration={0}
-      resizeMode="contain"
-      source={{ uri: selected.asset.uri }}
-      style={styles.selectedPreview}
-    />
+    selectedPreviewUri ? (
+      <Image
+        accessibilityElementsHidden={Boolean(onPreviewPress)}
+        accessibilityIgnoresInvertColors
+        accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
+        accessibilityRole="image"
+        fadeDuration={0}
+        resizeMode="contain"
+        source={{ uri: selectedPreviewUri }}
+        style={styles.selectedPreview}
+      />
+    ) : (
+      <View
+        accessibilityElementsHidden
+        style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}
+      />
+    )
   ) : (
     <View style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}>
       <Text style={[styles.emptyCopy, { color: theme.foregroundSecondary }]}>
@@ -333,7 +341,7 @@ function MediaPreview({
 
   return (
     <View style={[styles.previewSection, { backgroundColor: theme.backgroundSurface }]}>
-      {selected && onPreviewPress ? (
+      {selected && onPreviewPress && selectedPreviewUri ? (
         <Pressable
           accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
           accessibilityRole="button"
@@ -382,6 +390,7 @@ function MediaGallery({
     >
       {media.map((item, index) => {
         const selected = item.key === selectedKey;
+        const previewUri = item.asset.uri;
         return (
           <Pressable
             accessibilityLabel={`첨부 이미지 ${index + 1} 선택`}
@@ -398,12 +407,23 @@ function MediaGallery({
               },
             ]}
           >
-            <Image
-              accessibilityIgnoresInvertColors
-              fadeDuration={0}
-              source={{ uri: item.asset.uri }}
-              style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
-            />
+            {previewUri ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                fadeDuration={0}
+                source={{ uri: previewUri }}
+                style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
+              />
+            ) : (
+              <View
+                accessibilityElementsHidden
+                style={[
+                  styles.thumbnail,
+                  mobile && styles.mobileThumbnail,
+                  { backgroundColor: theme.backgroundElevated },
+                ]}
+              />
+            )}
           </Pressable>
         );
       })}
@@ -444,11 +464,11 @@ function WebToolPanel(
         />
       ) : (
         <NightshadeToolContent
-          applyNightshade={props.selected?.applyNightshade ?? false}
+          applyAiProhibitFilter={props.selected?.applyAiProhibitFilter ?? false}
           itemNumber={props.selectedIndex + 1}
-          onApplyNightshadeChange={(value) => {
+          onApplyAiProhibitFilterChange={(value) => {
             if (props.selected) {
-              props.onApplyNightshadeChange(props.selected.key, value);
+              props.onApplyAiProhibitFilterChange(props.selected.key, value);
             }
           }}
         />
@@ -494,12 +514,12 @@ function MobileToolSheet(
         />
       ) : (
         <NightshadeToolContent
-          applyNightshade={props.selected?.applyNightshade ?? false}
+          applyAiProhibitFilter={props.selected?.applyAiProhibitFilter ?? false}
           compact
           itemNumber={props.selectedIndex + 1}
-          onApplyNightshadeChange={(value) => {
+          onApplyAiProhibitFilterChange={(value) => {
             if (props.selected) {
-              props.onApplyNightshadeChange(props.selected.key, value);
+              props.onApplyAiProhibitFilterChange(props.selected.key, value);
             }
           }}
         />
@@ -645,15 +665,15 @@ function SensitiveToolContent({
 }
 
 function NightshadeToolContent({
-  applyNightshade,
+  applyAiProhibitFilter,
   compact = false,
   itemNumber,
-  onApplyNightshadeChange,
+  onApplyAiProhibitFilterChange,
 }: {
-  readonly applyNightshade: boolean;
+  readonly applyAiProhibitFilter: boolean;
   readonly compact?: boolean;
   readonly itemNumber: number;
-  readonly onApplyNightshadeChange: (value: boolean) => void;
+  readonly onApplyAiProhibitFilterChange: (value: boolean) => void;
 }) {
   const theme = useTheme();
 
@@ -675,16 +695,16 @@ function NightshadeToolContent({
       >
         <View style={styles.sensitiveCopy}>
           <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
-            Nightshade 적용
+            AI 학습 방지 필터 적용
           </Text>
           <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
             실험적인 기능입니다.
           </Text>
         </View>
         <Switch
-          accessibilityLabel={`첨부 이미지 ${itemNumber} Nightshade 적용`}
-          onValueChange={onApplyNightshadeChange}
-          value={applyNightshade}
+          accessibilityLabel={`첨부 이미지 ${itemNumber} AI 학습 방지 필터 적용`}
+          onValueChange={onApplyAiProhibitFilterChange}
+          value={applyAiProhibitFilter}
         />
       </View>
     </>

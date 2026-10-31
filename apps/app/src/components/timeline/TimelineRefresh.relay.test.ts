@@ -169,6 +169,11 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/post/PostRequestList', {
+  PostRequestHomeSummaryFallback: () => null,
+  PostRequestHomeSummaryLoading: () => null,
+  PostRequestListSummary: () => null,
+});
 
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,

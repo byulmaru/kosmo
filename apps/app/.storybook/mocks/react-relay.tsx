@@ -21,7 +21,10 @@ type RelayMockValue = {
     | StoryOperationResponse
     | StoryOperationResponse[]
     | StoryOperationResponseSequence
-    | ((selectedProfileId: string | null) => StoryOperationResponse)
+    | ((
+        selectedProfileId: string | null,
+        variables: Variables,
+      ) => StoryOperationResponse | undefined)
   >;
   queryData?: unknown;
   queryRequestObserver?: (request: RequestParameters, variables: Variables) => void;
@@ -154,7 +157,7 @@ async function executeStoryOperation(
     const configuredResponse = mock.operationResponses?.[request.name];
     const actorResponse =
       typeof configuredResponse === 'function'
-        ? configuredResponse(selectedProfileId)
+        ? configuredResponse(selectedProfileId, variables)
         : configuredResponse;
     return Array.isArray(actorResponse)
       ? actorResponse[Math.min(environmentIndex, actorResponse.length - 1)]

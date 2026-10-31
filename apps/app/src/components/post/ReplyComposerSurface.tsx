@@ -186,6 +186,8 @@ function ReplyComposerSurfaceContents({
     height: number;
     offsetTop: number;
   } | null>(null);
+  const [uncertainRequest, setUncertainRequest] = useState<{ retry?: () => void } | null>(null);
+  const [uncertainCloseOpen, setUncertainCloseOpen] = useState(false);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
@@ -196,6 +198,7 @@ function ReplyComposerSurfaceContents({
   const presentation = getReplySurfacePresentation(replyPlatform, width);
   const webOverlayOpen = open && Platform.OS === 'web';
   const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
+  const closeConfirmationOpen = discardConfirmOpen || uncertainCloseOpen;
 
   // Keep the web fullscreen surface inside the visible viewport when the software keyboard opens.
   useLayoutEffect(() => {
@@ -225,13 +228,18 @@ function ReplyComposerSurfaceContents({
     if (open) {
       setSubmitting(false);
       setDiscardConfirmOpen(false);
+      setUncertainCloseOpen(false);
       closeAfterDiscardRef.current = undefined;
+    } else {
+      setUncertainRequest(null);
     }
   }, [mode, open, parent.id]);
 
   const closeImmediately = useCallback(
     (onClosed?: () => void) => {
       setDiscardConfirmOpen(false);
+      setUncertainCloseOpen(false);
+      setUncertainRequest(null);
       closeAfterDiscardRef.current = undefined;
       restoreTriggerFocusRef.current = onClosed === undefined;
       onRequestClose(onClosed !== undefined);
@@ -242,19 +250,40 @@ function ReplyComposerSurfaceContents({
 
   const requestClose = useCallback(
     (onClosed?: () => void) => {
-      if (submitting || discardConfirmOpen) {
+      if (submitting || closeConfirmationOpen) {
         return;
       }
       closeAfterDiscardRef.current = onClosed;
-      setDiscardConfirmOpen(true);
+      if (uncertainRequest !== null) {
+        setUncertainCloseOpen(true);
+      } else {
+        setDiscardConfirmOpen(true);
+      }
     },
-    [discardConfirmOpen, submitting],
+    [closeConfirmationOpen, submitting, uncertainRequest],
   );
   const continueEditing = useCallback(() => {
     closeAfterDiscardRef.current = undefined;
     setDiscardConfirmOpen(false);
     requestAnimationFrame(() => editorRef.current?.focus());
   }, []);
+  const dismissCloseConfirmation = useCallback(() => {
+    closeAfterDiscardRef.current = undefined;
+    setDiscardConfirmOpen(false);
+    setUncertainCloseOpen(false);
+    if (!uncertainCloseOpen) {
+      requestAnimationFrame(() => editorRef.current?.focus());
+    }
+  }, [uncertainCloseOpen]);
+  const retryUncertainRequest = useCallback(() => {
+    const retry = uncertainRequest?.retry;
+    if (!retry) {
+      return;
+    }
+    closeAfterDiscardRef.current = undefined;
+    setUncertainCloseOpen(false);
+    retry();
+  }, [uncertainRequest]);
   const requestNavigation = useCallback(
     (action: () => void) => {
       if (submitting) {
@@ -264,13 +293,13 @@ function ReplyComposerSurfaceContents({
         nativeBackHandlerRef.current();
         return true;
       }
-      if (discardConfirmOpen) {
+      if (closeConfirmationOpen) {
         return true;
       }
       requestClose(action);
       return true;
     },
-    [discardConfirmOpen, requestClose, submitting],
+    [closeConfirmationOpen, requestClose, submitting],
   );
 
   useEffect(() => {
@@ -286,8 +315,8 @@ function ReplyComposerSurfaceContents({
     if (submitting) {
       return;
     }
-    if (discardConfirmOpen) {
-      continueEditing();
+    if (closeConfirmationOpen) {
+      dismissCloseConfirmation();
       return;
     }
     if (nativeBackHandlerRef.current) {
@@ -295,22 +324,22 @@ function ReplyComposerSurfaceContents({
       return;
     }
     requestClose();
-  }, [continueEditing, discardConfirmOpen, requestClose, submitting]);
+  }, [closeConfirmationOpen, dismissCloseConfirmation, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
-      if (reason === 'escape' && discardConfirmOpen) {
-        continueEditing();
+      if (reason === 'escape' && closeConfirmationOpen) {
+        dismissCloseConfirmation();
         return;
       }
       requestClose();
     },
-    [continueEditing, discardConfirmOpen, requestClose],
+    [closeConfirmationOpen, dismissCloseConfirmation, requestClose],
   );
   const { dialogRef } = useOverlayLifecycle({
-    focusScopeRef: discardConfirmOpen ? discardConfirmRef : undefined,
+    focusScopeRef: closeConfirmationOpen ? discardConfirmRef : undefined,
     onRequestClose: handleOverlayRequestClose,
     open: webOverlayOpen,
     shouldRestoreFocus: () => restoreTriggerFocusRef.current,
@@ -332,8 +361,13 @@ function ReplyComposerSurfaceContents({
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
+  const handlePostRequestAccepted = useCallback(() => {
+    closeImmediately();
+    showToast('게시 요청을 접수했어요', { tone: 'success' });
+  }, [closeImmediately, showToast]);
+
   useEffect(() => {
-    if (!discardConfirmOpen || Platform.OS !== 'web') {
+    if (!closeConfirmationOpen || uncertainCloseOpen || Platform.OS !== 'web') {
       return;
     }
     const frame = requestAnimationFrame(() => {
@@ -341,18 +375,20 @@ function ReplyComposerSurfaceContents({
       confirm?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [discardConfirmOpen]);
+  }, [closeConfirmationOpen, uncertainCloseOpen]);
 
   if (!open) {
     return null;
   }
 
-  const discardConfirm = discardConfirmOpen ? (
+  const closeConfirmation = closeConfirmationOpen ? (
     <View style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}>
       <View
-        accessibilityLabel={`${composerName} 작성을 취소할까요?`}
+        accessibilityLabel={
+          uncertainCloseOpen ? '게시 요청 결과' : `${composerName} 작성을 취소할까요?`
+        }
         accessibilityViewIsModal
-        onAccessibilityEscape={continueEditing}
+        onAccessibilityEscape={dismissCloseConfirmation}
         ref={discardConfirmRef}
         role="alertdialog"
         style={[
@@ -361,21 +397,29 @@ function ReplyComposerSurfaceContents({
           { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
         ]}
       >
-        <Text
-          accessibilityRole="header"
-          style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
-        >
-          {composerName} 작성을 취소할까요?
-        </Text>
+        {uncertainCloseOpen ? null : (
+          <Text
+            accessibilityRole="header"
+            style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
+          >
+            {composerName} 작성을 취소할까요?
+          </Text>
+        )}
         <Text style={[styles.confirmDescription, { color: theme.foregroundSecondary }]}>
-          작성 중인 내용은 저장되지 않습니다.
+          {uncertainCloseOpen
+            ? '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.'
+            : '작성 중인 내용은 저장되지 않습니다.'}
         </Text>
         <View style={styles.confirmActions}>
-          <Button onPress={continueEditing} tone="secondary">
-            계속 작성
+          <Button
+            disabled={uncertainCloseOpen && uncertainRequest?.retry === undefined}
+            onPress={uncertainCloseOpen ? retryUncertainRequest : continueEditing}
+            tone="secondary"
+          >
+            {uncertainCloseOpen ? '다시 확인' : '계속 작성'}
           </Button>
           <Button onPress={() => closeImmediately(closeAfterDiscardRef.current)} tone="danger">
-            작성 취소
+            {uncertainCloseOpen ? '닫기' : '작성 취소'}
           </Button>
         </View>
       </View>
@@ -478,6 +522,10 @@ function ReplyComposerSurfaceContents({
             initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
             presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
             onPostCreated={handlePostCreated}
+            onPostRequestAccepted={handlePostRequestAccepted}
+            onPostRequestUncertainChange={(uncertain, retry) =>
+              setUncertainRequest(uncertain ? { retry } : null)
+            }
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
             registerNativeBackHandler={registerNativeBackHandler}
@@ -505,10 +553,12 @@ function ReplyComposerSurfaceContents({
               >
                 <View style={styles.contentFrame}>
                   <View
-                    accessibilityElementsHidden={discardConfirmOpen}
-                    aria-hidden={discardConfirmOpen || undefined}
-                    importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
-                    style={[styles.main, discardConfirmOpen ? styles.mainBlocked : null]}
+                    accessibilityElementsHidden={closeConfirmationOpen}
+                    aria-hidden={closeConfirmationOpen || undefined}
+                    importantForAccessibility={
+                      closeConfirmationOpen ? 'no-hide-descendants' : 'auto'
+                    }
+                    style={[styles.main, closeConfirmationOpen ? styles.mainBlocked : null]}
                   >
                     {presentation === 'modal' ? (
                       <View style={[styles.header, { borderColor: theme.borderDefault }]}>
@@ -547,7 +597,7 @@ function ReplyComposerSurfaceContents({
                       {form}
                     </KeyboardAvoidingView>
                   </View>
-                  {discardConfirm}
+                  {closeConfirmation}
                 </View>
               </Pressable>
             )}

@@ -38,7 +38,9 @@ type Props = {
   onStateChange?: (state: FeedbackFormState) => void;
 };
 
-type FeedbackMediaItem = PostComposerSelectedMediaItem;
+type FeedbackMediaItem = PostComposerSelectedMediaItem & {
+  readonly asset: ImagePicker.ImagePickerAsset;
+};
 
 export function FeedbackForm({ onStateChange }: Props) {
   const theme = useTheme();

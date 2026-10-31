@@ -1,5 +1,9 @@
 import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
 
+export function getPostAnalyticsPlatform(): 'web' | 'native' | undefined {
+  return undefined;
+}
+
 export function trackAnalytics<Name extends AnalyticsEventName>(
   name: Name,
   properties: AnalyticsEventProperties[Name],
