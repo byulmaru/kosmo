@@ -458,6 +458,7 @@ const createPostRequestTestEnvironment = () =>
   TestWorkflowEnvironment.createLocal({
     server: {
       executable: temporalTestExecutable,
+      namespace: 'default',
       searchAttributes: [...POST_REQUEST_TEST_SEARCH_ATTRIBUTES],
     },
   });
