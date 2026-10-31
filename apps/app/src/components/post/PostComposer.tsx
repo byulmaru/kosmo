@@ -769,10 +769,16 @@ export function MobileFullscreenComposerShellCandidate({
       return;
     }
     const availableHeight = input.clientHeight;
+    // Setting the textarea to zero height can clamp the outer scroll position.
+    const scrollNode = scrollRef.current?.getScrollableNode() as HTMLElement | null;
+    const scrollTop = scrollNode?.scrollTop;
     input.style.height = '0px';
     const height = input.scrollHeight;
-    const overflowing = height > availableHeight;
+    const overflowing = height >= availableHeight;
     input.style.height = overflowing ? `${height}px` : 'auto';
+    if (scrollNode && scrollTop !== undefined) {
+      scrollNode.scrollTop = scrollTop;
+    }
     setBodyContentHeight(overflowing ? height : 0);
   }, [body, bodyContentHeight, bodyRef, shouldAutoSizeBody]);
   const selectedVisibility =
@@ -866,10 +872,16 @@ export function MobileFullscreenComposerShellCandidate({
                     return;
                   }
                   const availableHeight = input.clientHeight;
+                  // Setting the textarea to zero height can clamp the outer scroll position.
+                  const scrollNode = scrollRef.current?.getScrollableNode() as HTMLElement | null;
+                  const scrollTop = scrollNode?.scrollTop;
                   input.style.height = '0px';
                   const height = input.scrollHeight;
-                  const overflowing = height > availableHeight;
+                  const overflowing = height >= availableHeight;
                   input.style.height = overflowing ? `${height}px` : 'auto';
+                  if (scrollNode && scrollTop !== undefined) {
+                    scrollNode.scrollTop = scrollTop;
+                  }
                   setBodyContentHeight(overflowing ? height : 0);
                 }
               }}
