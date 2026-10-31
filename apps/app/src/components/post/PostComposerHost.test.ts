@@ -39,6 +39,7 @@ mockModule('react-native', {
   ScrollView: 'ScrollView',
   StyleSheet: {
     absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
   },
   Text: 'Text',
@@ -431,22 +432,19 @@ describe('PostComposerHost', () => {
       assert.equal(closeCount, 0);
 
       const backdrop = renderer?.root
-        .findAllByType('Pressable' as ElementType)
-        .find((pressable) => {
-          const styles = Array.isArray(pressable.props.style)
-            ? pressable.props.style
-            : [pressable.props.style];
-          return styles.some(
-            (style: { position?: string } | null) => style?.position === 'absolute',
-          );
-        });
+        .findAllByProps({ testID: 'post-composer-viewport-backdrop' })
+        .find((element) => typeof element.props.onPress === 'function');
       assert.ok(backdrop);
       await act(async () => backdrop?.props.onPress());
+      assert.equal(closeCount, 0);
 
       const closeButton = renderer?.root.findByProps({ accessibilityLabel: '글쓰기 닫기' });
       await act(async () => closeButton?.props.onPress());
 
       assert.equal(closeCount, 0);
+      await act(async () => composerProps?.onSubmittingChange?.(false));
+      await act(async () => backdrop?.props.onPress());
+      assert.equal(closeCount, 1);
     } finally {
       if (renderer) {
         await act(async () => renderer?.unmount());
