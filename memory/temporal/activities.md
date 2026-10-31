@@ -29,7 +29,15 @@
 - Activity 이름은 Workflow history와 운영 조회에 남는 public runtime identity이므로 rename은 호환성 영향을 검토한다.
 - Local Post request의 `getPostRequestMediaStateActivity`는 입력한 모든 Media ID가 해당 Account 소유의 Local Media이고
   state가 UPLOADING 또는 READY인지 한 번 읽어 검증한 뒤, READY ID만 반환한다. Activity는 Media를 변경하거나 upload를
-  실행하지 않으며 Workflow는 READY ID를 재사용하고 나머지에 기존 upload child를 사용한다.
+  실행하지 않으며 Workflow는 READY ID를 재사용한다. 신규 history는 UPLOADING ID를 독립 `mediaUploadWorkflow`에
+  연결한 workflow-backed Nexus operation에 전달하고, 기존 upload child branch는 legacy history용으로 보존한다.
+- 신규 `postRequestWorkflow` history는 `patched('post-request-media-nexus-v1')` 뒤에서 Worker-local
+  `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을 `ABANDON` cancellation과 76시간 schedule-to-close로
+  호출한다. Production handler는 `mediaUploadWorkflow`의 기존 Workflow ID와 `USE_EXISTING` conflict,
+  `ALLOW_DUPLICATE` reuse를 사용해 실행 중인 upload를 공유하며 cancellation handler는 PostRequest가 upload 소유자가
+  아니므로 Workflow를 취소하지 않는다. Nexus service endpoint는 `${namespace}-media-upload`이고 Worker는 실제
+  `KOSMO_TASK_QUEUE`에서 operation handler와 Media Upload Workflow를 함께 등록한다. 이 marker 이전 history의
+  child-start branch, polling/heartbeat Activity identity와 retry marker는 해당 history가 drain될 때까지 보존한다.
 - Local Post request publication은 기존 create transaction Activity를 `createPostActivityV2` history alias로 호출한다.
   `revalidateAuthorization` 경로는 duplicate stable ID의 완성된 Post를 먼저 반환하고, 새 row를 만들기 전에 같은
   transaction에서 Account ACTIVE, 현재 Account/Profile membership이 최소 MEMBER인지, Profile과 Instance가 현재

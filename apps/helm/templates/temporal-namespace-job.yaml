@@ -86,6 +86,32 @@ spec:
                 --name KosmoPostRequestStatus \
                 --type Keyword
               echo "Reconciled Temporal search attributes in namespace ${TEMPORAL_NAMESPACE}."
+
+              if temporal operator nexus endpoint create \
+                --address "${TEMPORAL_ADDRESS}" \
+                --tls=false \
+                --disable-config-env \
+                --disable-config-file \
+                --client-connect-timeout 10s \
+                --command-timeout 20s \
+                --name "${TEMPORAL_NAMESPACE}-media-upload" \
+                --target-namespace "${TEMPORAL_NAMESPACE}" \
+                --target-task-queue kosmo; then
+                echo "Created Temporal Nexus endpoint ${TEMPORAL_NAMESPACE}-media-upload."
+              else
+                echo "Temporal Nexus endpoint create did not succeed; reconciling the existing endpoint."
+                temporal operator nexus endpoint update \
+                  --address "${TEMPORAL_ADDRESS}" \
+                  --tls=false \
+                  --disable-config-env \
+                  --disable-config-file \
+                  --client-connect-timeout 10s \
+                  --command-timeout 20s \
+                  --name "${TEMPORAL_NAMESPACE}-media-upload" \
+                  --target-namespace "${TEMPORAL_NAMESPACE}" \
+                  --target-task-queue kosmo
+                echo "Reconciled Temporal Nexus endpoint ${TEMPORAL_NAMESPACE}-media-upload."
+              fi
           env:
             - name: TEMPORAL_ADDRESS
               value: {{ .Values.temporal.frontendAddress | quote }}

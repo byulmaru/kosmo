@@ -11,8 +11,10 @@ import {
   ApplicationFailure,
   CancellationScope,
   ChildWorkflowCancellationType,
+  createNexusServiceClient,
   defineQuery,
   defineUpdate,
+  NexusOperationCancellationType,
   ParentClosePolicy,
   patched,
   proxyActivities,
@@ -23,6 +25,7 @@ import {
   workflowInfo,
 } from '@temporalio/workflow';
 import { z } from 'zod';
+import { mediaUploadService } from '../nexus/media-upload-service';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import { startPostCreateEffects } from './post-create';
@@ -309,34 +312,47 @@ const uploadMedia = async (
     const cancellationScope = new CancellationScope();
     setCancellationScope(cancellationScope);
     try {
-      try {
+      if (patched('post-request-media-nexus-v1')) {
+        const client = createNexusServiceClient({
+          endpoint: `${workflowInfo().namespace}-media-upload`,
+          service: mediaUploadService,
+        });
         await cancellationScope.run(() =>
-          runChildWorkflow(mediaUploadWorkflow, {
-            args: [childArgs],
-            cancellationType: ChildWorkflowCancellationType.ABANDON,
-            mode: 'execute',
-            parentClosePolicy: ParentClosePolicy.ABANDON,
-            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+          client.executeOperation('processUpload', childArgs, {
+            cancellationType: NexusOperationCancellationType.ABANDON,
+            scheduleToCloseTimeout: '76 hours',
           }),
         );
-      } catch (error) {
-        if (!isWorkflowAlreadyStarted(error)) {
-          throw error;
-        }
-        if (patched('post-request-media-retry-poll-v1')) {
+      } else {
+        try {
           await cancellationScope.run(() =>
-            checkPostRequestMediaUploadActivity({
-              accountId: snapshot.input.accountId,
-              mediaId,
+            runChildWorkflow(mediaUploadWorkflow, {
+              args: [childArgs],
+              cancellationType: ChildWorkflowCancellationType.ABANDON,
+              mode: 'execute',
+              parentClosePolicy: ParentClosePolicy.ABANDON,
+              workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
             }),
           );
-        } else {
-          await cancellationScope.run(() =>
-            waitForPostRequestMediaUploadActivity({
-              accountId: snapshot.input.accountId,
-              mediaId,
-            }),
-          );
+        } catch (error) {
+          if (!isWorkflowAlreadyStarted(error)) {
+            throw error;
+          }
+          if (patched('post-request-media-retry-poll-v1')) {
+            await cancellationScope.run(() =>
+              checkPostRequestMediaUploadActivity({
+                accountId: snapshot.input.accountId,
+                mediaId,
+              }),
+            );
+          } else {
+            await cancellationScope.run(() =>
+              waitForPostRequestMediaUploadActivity({
+                accountId: snapshot.input.accountId,
+                mediaId,
+              }),
+            );
+          }
         }
       }
     } catch (error) {
