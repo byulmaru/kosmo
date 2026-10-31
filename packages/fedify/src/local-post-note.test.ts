@@ -700,11 +700,14 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(note.replyTargetId?.href, `${publicOrigin}/ap/note/${source.id}`);
     const currentHashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', currentHashtag.id)}/posts`;
     const secondHashtagUrl = `${publicOrigin}/hashtags/${encodeGlobalId('Hashtag', secondHashtag.id)}/posts`;
+    const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
+    assert.equal(note.quoteId?.href, sourceUri);
     assert.equal(
       note.content?.toString(),
       `<p>Before &lt;&amp;&gt; <a href="${currentHashtagUrl}" rel="tag">#MiXeD</a><br>then ` +
         `<a href="${secondHashtagUrl}" rel="tag">#Second</a> again ` +
-        `<a href="${currentHashtagUrl}" rel="tag">#mixed</a></p>`,
+        `<a href="${currentHashtagUrl}" rel="tag">#mixed</a></p>` +
+        `<span class="quote-inline">RE: <a href="${sourceUri}">${sourceUri}</a></span>`,
     );
     assert.equal(note.summary?.toString(), '&lt;script&gt;alert(1)&lt;/script&gt; &amp; spoiler');
     assert.equal(note.sensitive, true);

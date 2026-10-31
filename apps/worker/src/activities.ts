@@ -25,6 +25,12 @@ export {
 export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
 export {
+  createPostTransitionActivity,
+  deletePostTransitionActivity,
+  reservePostIdActivity,
+  verifyPostDeletionActivity,
+} from './activities/post-transition';
+export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
@@ -32,6 +38,15 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
+export {
+  applyQuoteConsentActivity,
+  bootstrapQuoteOwnerActivity,
+  drainQuoteOwnerActivity,
+  materializeQuoteOwnerSourceActivity,
+  prepareQuoteConsentActivity,
+  sendQuoteOwnerEffectActivity,
+} from './activities/quote-owner';
+export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   lookupRemotePostActivity,
   prepareRemotePostActivity,
@@ -86,6 +101,8 @@ export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,
+  sendLocalPostQuoteRequest as sendLocalPostQuoteRequestActivity,
+  sendLocalPostQuoteRevocations as sendLocalPostQuoteRevocationsActivity,
 } from '@kosmo/fedify';
 export {
   sendRepostAnnounce as sendRepostAnnounceActivity,

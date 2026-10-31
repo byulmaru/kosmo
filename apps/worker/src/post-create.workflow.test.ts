@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { PostVisibility } from '@kosmo/core/enums';
+import { postCreateWorkflowArgs } from '@kosmo/core/temporal/post-admission';
 import { POST_CREATE_WORKFLOW_TYPE, postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
@@ -82,8 +83,9 @@ test(
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-workflow-' + process.pid;
-    const postIds = [randomUUID(), randomUUID()];
+    const postIds = [randomUUID(), randomUUID(), randomUUID()];
     const generatedIds: string[] = [];
+    const generateInputs: unknown[][] = [];
     const createAttempts: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
     let retryFirstLocalActivity = true;
@@ -93,10 +95,11 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        generatePostIdActivity: async () => {
+        generatePostIdActivity: async (...args: unknown[]) => {
           const postId = postIds[generatedIds.length];
           assert.ok(postId);
           generatedIds.push(postId);
+          generateInputs.push(args);
           return postId;
         },
         createPostActivity: async (
@@ -169,6 +172,12 @@ test(
           futureField: true,
           media: [{ ...remoteMedia, futureField: true }],
         };
+        const expectedQuoteInput: LocalPostInput = {
+          ...localPostInput('A Quote'),
+          admissionId: `${Date.now()}:${randomUUID()}`,
+          repostSourceId: randomUUID(),
+        };
+        const quoteArgs = postCreateWorkflowArgs(expectedQuoteInput);
 
         const cases = [
           {
@@ -177,7 +186,9 @@ test(
               input: futureLocalInput,
               requestId: randomUUID(),
             },
+            expectedGenerateInputs: [],
             expectedInput: expectedLocalInput,
+            expectedRequestId: undefined,
             postId: postIds[0]!,
           },
           {
@@ -186,8 +197,17 @@ test(
               input: futureRemoteInput,
               requestId: randomUUID(),
             },
+            expectedGenerateInputs: [],
             expectedInput: { ...expectedRemoteInput, media: [remoteMedia] },
+            expectedRequestId: undefined,
             postId: postIds[1]!,
+          },
+          {
+            args: quoteArgs,
+            expectedGenerateInputs: [expectedQuoteInput],
+            expectedInput: expectedQuoteInput,
+            expectedRequestId: quoteArgs.requestId,
+            postId: postIds[2]!,
           },
         ];
 
@@ -224,11 +244,16 @@ test(
           );
           assert.equal(attemptsForPost.length, index === 0 ? 2 : 1);
           assert.deepEqual(
-            attemptsForPost.map((attempt) => attempt.input),
-            index === 0
-              ? [expectedLocalInput, expectedLocalInput]
-              : [{ ...expectedRemoteInput, media: [remoteMedia] }],
+            attemptsForPost,
+            Array.from({ length: index === 0 ? 2 : 1 }, () => ({
+              input: item.expectedInput,
+              postId: item.postId,
+              ...(item.expectedRequestId === undefined
+                ? {}
+                : { requestId: item.expectedRequestId }),
+            })),
           );
+          assert.deepEqual(generateInputs[index], item.expectedGenerateInputs);
 
           effectReleased.resolve();
           await childHandle.result();
@@ -360,6 +385,28 @@ test(
       await assert.rejects(executeInput(invalidRemoteInput), (error: unknown) =>
         isWorkflowFailureType(error, 'RemotePostCreateInputInvalid'),
       );
+      const quoteInput = {
+        ...localPostInput('Quote admission validation'),
+        repostSourceId: randomUUID(),
+      };
+      for (const candidate of [
+        quoteInput,
+        { ...quoteInput, admissionId: `invalid:${randomUUID()}` },
+        { ...quoteInput, admissionId: `${Date.now()}:invalid` },
+        { ...quoteInput, admissionId: 123 },
+        { ...quoteInput, admissionId: `${Date.now() - 10 * 60_000}:${randomUUID()}` },
+        { ...quoteInput, admissionId: `${Date.now() + 10 * 60_000}:${randomUUID()}` },
+        { ...validLocalInput, admissionId: `${Date.now()}:${randomUUID()}` },
+      ]) {
+        await assert.rejects(
+          executeInput(candidate),
+          (error: unknown) =>
+            isWorkflowFailureType(error, 'VALIDATION') &&
+            error instanceof WorkflowFailedError &&
+            error.cause instanceof ApplicationFailure &&
+            error.cause.details?.[0] === 'admissionId',
+        );
+      }
       assert.deepEqual(generatedIds, []);
       assert.deepEqual(activityCalls, []);
 

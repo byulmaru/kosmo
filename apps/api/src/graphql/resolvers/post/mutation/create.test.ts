@@ -16,6 +16,7 @@ import {
   isObjectType,
 } from 'graphql';
 import { schema } from '@/graphql/schema';
+import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
 
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
@@ -268,6 +269,96 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
   assert.ok(error instanceof ValidationError);
   assert.equal(error.field, 'media');
   assert.equal(execute.mock.callCount(), 1);
+});
+
+test('ordinary Posts and Quote admissions use the shared Post Create execution contract', async (t) => {
+  const workflowReached = new Error('shared Post Create execution reached');
+  const submitted: PostCreateWorkflowArgs[] = [];
+  const execute = t.mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postCreateWorkflow.workflow);
+      const workflowOptions = options as {
+        args: readonly [PostCreateWorkflowArgs];
+        workflowId: string;
+        workflowIdConflictPolicy: string;
+        workflowIdReusePolicy: string;
+      };
+      const [args] = workflowOptions.args;
+      submitted.push(args);
+      assert.equal(workflowOptions.args.length, 1);
+      assert.equal(workflowOptions.workflowId, `post-create:${args.requestId}`);
+      assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+      assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
+      throw workflowReached;
+    },
+  );
+  const accountId = crypto.randomUUID();
+  const profileId = crypto.randomUUID();
+  const sourceId = crypto.randomUUID();
+  const ordinaryInput = { bodyText: 'ordinary post', visibility: 'PUBLIC' };
+  const quoteInput = {
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+    bodyText: 'original quote',
+    repostSourceId: encodeGlobalId('Post', sourceId),
+    visibility: 'PUBLIC',
+  };
+  const submit = (input: object) =>
+    graphql({
+      schema,
+      source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } }
+      }
+    `,
+      variableValues: { input },
+      contextValue: {
+        session: {
+          accountId,
+          profile: { id: profileId, role: AccountProfileRole.MEMBER },
+        },
+      },
+    });
+
+  for (const input of [
+    ordinaryInput,
+    ordinaryInput,
+    quoteInput,
+    quoteInput,
+    {
+      ...quoteInput,
+      bodyText: 'changed quote',
+    },
+  ]) {
+    const result = await submit(input);
+    assert.equal(result.errors?.[0]?.originalError, workflowReached);
+  }
+
+  assert.equal(execute.mock.callCount(), 5);
+  assert.notEqual(submitted[0]!.requestId, submitted[1]!.requestId);
+  assert.equal(submitted[2]!.requestId, submitted[3]!.requestId);
+  assert.notEqual(submitted[2]!.requestId, submitted[4]!.requestId);
+  assert.deepEqual(submitted[2]!.input, {
+    admissionId: quoteInput.admissionId,
+    accountId,
+    bodyText: quoteInput.bodyText,
+    contentWarning: null,
+    media: [],
+    mentions: [],
+    origin: 'LOCAL',
+    profileId,
+    replyParentId: undefined,
+    repostSourceId: sourceId,
+    sensitiveMedia: false,
+    visibility: 'PUBLIC',
+  });
+
+  const withoutSource = await submit({ ...quoteInput, repostSourceId: undefined });
+  const error = withoutSource.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'admissionId');
+  assert.equal(execute.mock.callCount(), 5);
 });
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {

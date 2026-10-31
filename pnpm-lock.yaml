@@ -664,6 +664,9 @@ importers:
       '@fedify/fedify':
         specifier: ^2.4.5
         version: 2.4.5
+      '@fedify/interaction-controls':
+        specifier: 2.4.5
+        version: 2.4.5(@fedify/fedify@2.4.5)
       '@fedify/postgres':
         specifier: 2.4.0
         version: 2.4.0(@fedify/fedify@2.4.5)(postgres@3.4.9)
@@ -1680,6 +1683,11 @@ packages:
   '@fedify/fedify@2.4.5':
     resolution: {integrity: sha512-XHi/dyLeDBKt1gkfyGxNVFgxmijOVdRdlwZGCwslStrE9+5KHeJPaDTZ5vwchrYIZFbeMlD1qjcYNnxVXNvlxg==}
     engines: {bun: '>=1.1.0', deno: '>=2.0.0', node: '>=22.0.0'}
+
+  '@fedify/interaction-controls@2.4.5':
+    resolution: {integrity: sha512-txg2XUPgNbqLkXYfdZgMDtWpDilOAJs169VnOkko0cXrsyalehuYBNSS4kYmmdFMCmUfAg5H8OeoPI+EQkmWUw==}
+    peerDependencies:
+      '@fedify/fedify': ^2.4.5
 
   '@fedify/postgres@2.4.0':
     resolution: {integrity: sha512-U4E0GKiEXvmpcNk6/97jGhzt+JxxjALlkH0+OPwgcQ6eatVSLKzvVyJ/8a2wRUHHIkgCFo7LO9tLZ+x7GGqxXg==}
@@ -10415,6 +10423,13 @@ snapshots:
       structured-field-values: 2.0.4
       temporal-polyfill: 1.0.5
       urlpattern-polyfill: 10.1.0
+
+  '@fedify/interaction-controls@2.4.5(@fedify/fedify@2.4.5)':
+    dependencies:
+      '@fedify/fedify': 2.4.5
+      '@fedify/vocab': 2.4.5
+      '@fedify/vocab-runtime': 2.4.5
+      temporal-polyfill: 1.0.5
 
   '@fedify/postgres@2.4.0(@fedify/fedify@2.4.5)(postgres@3.4.9)':
     dependencies:

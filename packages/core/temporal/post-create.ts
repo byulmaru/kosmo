@@ -15,6 +15,7 @@ export type ActivityPubPostCreateInput = Omit<
 export type PostCreateActivityInput = {
   input: LocalPostInput | ActivityPubPostCreateInput;
   postId: string;
+  requestId?: string;
 };
 
 export type PostCreateActivityErrorKind =

@@ -1,5 +1,6 @@
 import '@kosmo/core/polyfill';
 
+import { createHash } from 'node:crypto';
 import { ActivityPubPosts, db, first, firstOrThrow, PostContents, Posts } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
 import { ConflictError, KosmoError, NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -8,6 +9,10 @@ import {
   isActivityPubPostUriConflict,
   ProfilePairBlockedError,
 } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateInputKey } from '@kosmo/core/temporal/post';
+import { postCreateIdentities, quotePostCreateInput } from '@kosmo/core/temporal/post-admission';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq, sql } from 'drizzle-orm';
 import type { ActivityPubPostInput, PostCreateInput } from '@kosmo/core/services';
 import type {
@@ -178,20 +183,65 @@ const createPostAttempt = async (
   }
 };
 
-export const generatePostIdActivity = async (): Promise<string> =>
-  db
+export const generatePostIdActivity = async (
+  input?: PostCreateActivityInput['input'],
+): Promise<string> => {
+  if (input?.origin === 'LOCAL' && input.repostSourceId !== undefined) {
+    return postCreateIdentities(quotePostCreateInput(input)).postId;
+  }
+  return db
     .select({ id: sql<string>`uuidv7()` })
     .from(sql`(VALUES (1)) AS id_source(value)`)
     .limit(1)
     .then(firstOrThrow)
     .then(({ id }) => id);
+};
 
 export const createPostActivity = async ({
   input,
   postId,
+  requestId,
 }: PostCreateActivityInput): Promise<PostCreateActivityResult> => {
   const postInput = toPostInput(input);
   try {
+    if (postInput.origin === 'LOCAL' && postInput.repostSourceId !== undefined) {
+      const command = quotePostCreateInput(postInput);
+      const identities = postCreateIdentities(command);
+      if (postId !== identities.postId || requestId !== identities.contentId) {
+        throw new ValidationError(
+          'Quote admission payload does not match its original submission',
+          {
+            field: 'admissionId',
+          },
+        );
+      }
+      // The Quote owner owns its Source lock, current-Run fence and shared persistence transaction.
+      const { admissionId, ...localInput } = postInput;
+      const commandId = `${admissionId}:${createHash('sha256').update(postCreateInputKey(command)).digest('hex')}`;
+      const outcome = await runWorkflow(postQuoteOwnerWorkflow, {
+        args: [{ postId, initialSourcePostId: postInput.repostSourceId }],
+        mode: 'update-with-start',
+        updateId: commandId,
+        updateArgs: [
+          {
+            kind: 'INITIALIZE',
+            postId,
+            commandId,
+            input: localInput,
+            initialContentId: identities.contentId,
+          },
+        ],
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      if (outcome.error) {
+        return { ok: false, error: outcome.error };
+      }
+      return {
+        ok: true,
+        result: { authorProfileId: postInput.profileId, postId, status: 'created' },
+      };
+    }
     return await createPostAttempt(postInput, postId, false);
   } catch (error) {
     if (input.origin === 'ACTIVITYPUB' && error instanceof ProfilePairBlockedError) {

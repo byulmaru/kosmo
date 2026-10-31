@@ -20,7 +20,25 @@ export {
   withInboundObservability,
 } from './src/inbound-observability';
 export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
-export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
+export type { InboundQuoteRetryInput } from './src/inbound-quote';
+export {
+  handleInboundQuote,
+  materializeInboundQuoteSource,
+  prepareInboundQuoteDelete,
+  prepareInboundQuoteResponse,
+  prepareStoredInboundQuote,
+  resolveStoredInboundQuote,
+  revokeInboundQuote,
+} from './src/inbound-quote';
+export {
+  sendLocalPostConsentUpdate,
+  sendLocalPostCreate,
+  sendLocalPostDelete,
+  sendLocalPostQuoteDecision,
+  sendLocalPostQuoteRequest,
+  sendLocalPostQuoteRevocation,
+  sendLocalPostQuoteRevocations,
+} from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export { configureFedifyInboxLogging } from './src/logging';
 export { closeFedifyMetrics, startFedifyMetrics } from './src/metrics';

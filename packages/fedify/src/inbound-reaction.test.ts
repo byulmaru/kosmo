@@ -33,6 +33,7 @@ import { setInboundObservabilityReporter } from './inbound-observability';
 import { handleInboundReaction } from './inbound-reaction';
 import {
   materializeRemoteProfileActor,
+  RemoteActorDiscoveryUnavailableError,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { TestContext } from 'node:test';
@@ -361,7 +362,7 @@ test('non-HTTP actor/object identity rejects before remote actor lookup', async 
   }
 });
 
-test('unknown actor lookup failure propagates without Reaction persistence', async () => {
+test('typed unknown actor lookup failure propagates without Reaction persistence', async () => {
   const actorUri = new URL(`https://${crypto.randomUUID()}.example/users/alice`);
   const target = await createLocalTarget();
   const failure = new Error('Remote actor lookup unavailable');
@@ -379,7 +380,11 @@ test('unknown actor lookup failure propagates without Reaction persistence', asy
           object: target.objectUri,
         }),
       ),
-      failure,
+      (error: unknown) => {
+        assert.ok(error instanceof RemoteActorDiscoveryUnavailableError);
+        assert.equal(error.cause, failure);
+        return true;
+      },
     );
 
     assert.equal(lookup.mock.callCount(), 1);

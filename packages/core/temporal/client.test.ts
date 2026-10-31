@@ -10,6 +10,7 @@ import {
   TimeoutFailure,
   WorkflowExecutionAlreadyStartedError,
   WorkflowFailedError,
+  WorkflowNotFoundError,
   WorkflowUpdateFailedError,
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
@@ -1038,5 +1039,164 @@ test('update-with-start mode는 WorkflowUpdateFailedError의 ApplicationFailure�
   } finally {
     deadline.mock.restore();
     update.mock.restore();
+  }
+});
+
+test('update-result mode는 기존 Workflow의 Update 결과를 캐시에서 반환하고 새 실행을 시작하지 않는다', async () => {
+  type PostCreateWorkflow = (input: { admissionId: string }) => Promise<void>;
+  type PostCreateResult = { postId: string };
+  const input = { admissionId: 'admission-1' };
+  const workflowId = 'post-create:admission-1';
+  const updateId = 'payload-hash-1';
+  const result = { postId: 'post-1' } satisfies PostCreateResult;
+  const definition: WorkflowUpdateDefinition<PostCreateWorkflow, PostCreateResult, []> = {
+    workflow: 'postCreateWorkflow',
+    update: 'createPost',
+    workflowIdFromArgs: (command) => `post-create:${command.admissionId}`,
+  };
+  const updateResult = {
+    result: async () => result,
+  };
+  const updateHandle = {
+    getUpdateHandle: (receivedUpdateId: string) => {
+      assert.equal(receivedUpdateId, updateId);
+      return updateResult;
+    },
+  };
+  const getHandle = mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    (receivedWorkflowId: string) => {
+      assert.equal(receivedWorkflowId, workflowId);
+      return updateHandle as never;
+    },
+  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('update-result mode must not start a Workflow');
+  });
+  const executeUpdateWithStart = mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async () => {
+      throw new Error('update-result mode must not execute Update with start');
+    },
+  );
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    assert.deepEqual(
+      await runWorkflow(definition, {
+        args: [input],
+        mode: 'update-result',
+        updateId,
+      }),
+      result,
+    );
+    assert.equal(getHandle.mock.calls.length, 1);
+    assert.equal(start.mock.calls.length, 0);
+    assert.equal(executeUpdateWithStart.mock.calls.length, 0);
+    assert.equal(deadline.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    executeUpdateWithStart.mock.restore();
+    start.mock.restore();
+    getHandle.mock.restore();
+  }
+});
+
+test('update-result mode는 기존 Workflow가 없으면 WorkflowNotFoundError를 그대로 전파한다', async () => {
+  type PostCreateWorkflow = (input: { admissionId: string }) => Promise<void>;
+  type PostCreateResult = { postId: string };
+  const input = { admissionId: 'missing-admission' };
+  const workflowId = 'post-create:missing-admission';
+  const updateId = 'payload-hash-missing';
+  const notFound = new WorkflowNotFoundError('Workflow not found', workflowId, undefined);
+  const definition: WorkflowUpdateDefinition<PostCreateWorkflow, PostCreateResult, []> = {
+    workflow: 'postCreateWorkflow',
+    update: 'createPost',
+    workflowIdFromArgs: (command) => `post-create:${command.admissionId}`,
+  };
+  const getHandle = mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    () =>
+      ({
+        getUpdateHandle: () => ({
+          result: async () => {
+            throw notFound;
+          },
+        }),
+      }) as never,
+  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('update-result mode must not start a Workflow');
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      runWorkflow(definition, { args: [input], mode: 'update-result', updateId }),
+      (error: unknown) => error === notFound,
+    );
+    assert.equal(start.mock.calls.length, 0);
+  } finally {
+    deadline.mock.restore();
+    start.mock.restore();
+    getHandle.mock.restore();
+  }
+});
+
+test('update-result mode는 기존 Update 결과 조회의 일시적 오류를 원본으로 전파하고 새 실행을 시작하지 않는다', async () => {
+  type PostCreateWorkflow = (input: { admissionId: string }) => Promise<void>;
+  type PostCreateResult = { postId: string };
+  const transientFailure = new ServiceError('Temporal update result unavailable');
+  const definition: WorkflowUpdateDefinition<PostCreateWorkflow, PostCreateResult, []> = {
+    workflow: 'postCreateWorkflow',
+    update: 'createPost',
+    workflowIdFromArgs: (command) => `post-create:${command.admissionId}`,
+  };
+  const getHandle = mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    () =>
+      ({
+        getUpdateHandle: () => ({
+          result: async () => {
+            throw transientFailure;
+          },
+        }),
+      }) as never,
+  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('update-result mode must not start a Workflow');
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      runWorkflow(definition, {
+        args: [{ admissionId: 'transient-admission' }],
+        mode: 'update-result',
+        updateId: 'payload-hash-transient',
+      }),
+      (error: unknown) => error === transientFailure,
+    );
+    assert.equal(start.mock.calls.length, 0);
+  } finally {
+    deadline.mock.restore();
+    start.mock.restore();
+    getHandle.mock.restore();
   }
 });

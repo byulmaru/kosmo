@@ -9,6 +9,7 @@ import {
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateWorkflowArgs } from '@kosmo/core/temporal/post-admission';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
@@ -24,7 +25,6 @@ import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
 import { extractPostMentionCandidates } from './mention-candidates';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
-import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
 
 const rethrowLocalPostCreateFailure = (error: unknown): never => {
   if (!(error instanceof ApplicationFailure)) {
@@ -96,6 +96,7 @@ builder.mutationField('createPost', (t) =>
         ),
     },
     input: {
+      admissionId: t.input.string({ required: false }),
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({
@@ -291,25 +292,23 @@ builder.mutationField('createPost', (t) =>
         }
       }
 
-      const args: PostCreateWorkflowArgs = {
-        requestId: crypto.randomUUID(),
-        input: {
-          accountId: ctx.session.accountId,
-          bodyText,
-          contentWarning: contentWarning || null,
-          media: media.map(({ altText, mediaId }) => ({
-            altText: altText ?? null,
-            mediaId: mediaId.id,
-          })),
-          mentions: mentionReferences,
-          origin: 'LOCAL',
-          profileId,
-          replyParentId: input.replyParentId?.id,
-          repostSourceId: input.repostSourceId?.id,
-          sensitiveMedia: input.sensitiveMedia ?? false,
-          visibility: input.visibility,
-        },
-      };
+      const args = postCreateWorkflowArgs({
+        admissionId: input.admissionId ?? undefined,
+        accountId: ctx.session.accountId,
+        bodyText,
+        contentWarning: contentWarning || null,
+        media: media.map(({ altText, mediaId }) => ({
+          altText: altText ?? null,
+          mediaId: mediaId.id,
+        })),
+        mentions: mentionReferences,
+        origin: 'LOCAL',
+        profileId,
+        replyParentId: input.replyParentId?.id,
+        repostSourceId: input.repostSourceId?.id,
+        sensitiveMedia: input.sensitiveMedia ?? false,
+        visibility: input.visibility,
+      });
       const result = await runWorkflow(postCreateWorkflow, {
         args: [args],
         mode: 'execute',

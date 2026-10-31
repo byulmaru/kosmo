@@ -132,6 +132,7 @@ type CreateHashtagMuteRulePayload {
 
 input CreatePostInput {
   actorProfileId: ID
+  admissionId: String
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
