@@ -4,7 +4,6 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import * as RelayRuntime from 'relay-runtime';
 import {
   commitLocalUpdate,
   ConnectionHandler,
@@ -281,18 +280,6 @@ mockModule('react-relay', {
     false,
   ],
   useRelayEnvironment: () => relayEnvironment,
-});
-mockModule('relay-runtime', {
-  ...RelayRuntime,
-  ConnectionHandler: {
-    ...RelayRuntime.ConnectionHandler,
-    getConnectionID: (
-      accountId: string,
-      key: string,
-      filters: { profileId: string; statuses: unknown },
-    ) => `${accountId}:${key}:${filters.profileId}:${filters.statuses === null ? 'all' : 'home'}`,
-  },
-  ROOT_ID: 'root',
 });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ accountId: sessionAccountId, selectedProfileId: sessionSelectedProfileId }),

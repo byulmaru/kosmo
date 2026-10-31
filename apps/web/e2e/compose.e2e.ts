@@ -49,7 +49,7 @@ async function pasteComposerImage(input: Locator) {
 type PostRequestAcknowledgementInput = {
   bodyText: string;
   contentWarning?: string | null;
-  media: readonly { altText: string | null; applyNightshade?: boolean; mediaId: string }[];
+  media: readonly { altText: string | null; applyAiProhibitFilter?: boolean; mediaId: string }[];
   mentions?: readonly { end: number; profileId: string; start: number }[];
   replyParentId?: string | null;
   requestId: string;
@@ -1123,10 +1123,10 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
       media: [
         {
           altText: '보존할 이미지 설명',
-          applyNightshade: false,
+          applyAiProhibitFilter: false,
           mediaId: 'media-clipboard-e2e-1',
         },
-        { altText: null, applyNightshade: false, mediaId: 'media-clipboard-e2e-2' },
+        { altText: null, applyAiProhibitFilter: false, mediaId: 'media-clipboard-e2e-2' },
       ],
       sensitiveMedia: true,
     },
@@ -1278,7 +1278,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
     input: {
       requestId: expect.any(String),
       bodyText: body,
-      media: [{ altText, applyNightshade: false, mediaId }],
+      media: [{ altText, applyAiProhibitFilter: false, mediaId }],
       actorProfileId: secondProfileId,
       sensitiveMedia: true,
     },
