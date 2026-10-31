@@ -29,10 +29,11 @@ import { operation, service, serviceHandler } from 'nexus-rpc';
 import { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 import { getPostRequestMediaStateActivity } from './activities/post-request';
 import { mediaUploadServiceHandler } from './nexus/media-upload';
-import { mediaUploadService } from './nexus/media-upload-service';
 import { temporalTestExecutable } from './temporal-test-executable.js';
 import { POST_REQUEST_TEST_SEARCH_ATTRIBUTES } from './temporal-test-search-attributes.js';
 import {
+  MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_CANCEL_SIGNAL,
+  MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_FINISH_SIGNAL,
   MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL,
   MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL,
   mockMediaUploadNexusOperationWorkflow,
@@ -469,7 +470,7 @@ const createMockMediaUploadActivities = (
   prepareMediaUploadActivity: async (input: Parameters<typeof prepareMediaUploadActivity>[0]) => {
     onPrepare(input);
     return {
-      contentType: 'image/jpeg',
+      contentType: 'image/jpeg' as const,
       id: `u_${input.mediaId}`,
       sourceKey: `uploads/${input.mediaId}`,
     };
@@ -618,7 +619,8 @@ test(
           assert.equal(uploadResult.id, `u_${mediaId}`);
           assert.ok(results.every(({ status }) => status === PostRequestStatus.PUBLISHED));
           for (const handle of handles) {
-            const { events = [] } = await handle.fetchHistory();
+            const history = await handle.fetchHistory();
+            const events = history.events ?? [];
             assert.equal(
               events.some(
                 ({ startChildWorkflowExecutionInitiatedEventAttributes }) =>
@@ -735,23 +737,70 @@ test(
         const uploadHandle = environment.client.workflow.getHandle(
           mediaUploadWorkflow.workflowIdFromArgs({ accountId: args.input.accountId, mediaId }),
         );
-        const serviceClient = environment.client.nexus.createServiceClient({
-          endpoint: `${environment.namespace}-media-upload`,
-          service: mediaUploadService,
-        });
-        const operation = await waitFor(
-          serviceClient.startOperation(
-            'processUpload',
-            { accountId: args.input.accountId, mediaId },
-            { id: `cancel-shared-upload-${randomUUID()}` },
-          ),
-          'client Nexus operation start',
+        const mediaInput = args.input.media![0]!;
+        const cancelProbe = await waitFor(
+          environment.client.workflow.start('mediaUploadNexusCancelProbeWorkflow', {
+            args: [
+              {
+                accountId: args.input.accountId,
+                mediaId,
+                ...(mediaInput.applyNightshade === undefined
+                  ? {}
+                  : { applyNightshade: mediaInput.applyNightshade }),
+              },
+            ],
+            taskQueue: remoteTaskQueue,
+            workflowId: `media-upload-cancel-probe:${randomUUID()}`,
+          }),
+          'workflow-backed Nexus cancellation probe start',
         );
-        await waitForCondition(
-          async () => (await operation.describe()).state === 'STARTED',
-          'the actual Media Upload Nexus handler to start',
-        );
-        await waitFor(operation.cancel(), 'client Nexus operation cancellation');
+        let cancelProbeFinished = false;
+        try {
+          await waitForCondition(async () => {
+            const history = await cancelProbe.fetchHistory();
+            return (history.events ?? []).some(
+              ({ nexusOperationStartedEventAttributes }) =>
+                nexusOperationStartedEventAttributes != null,
+            );
+          }, 'the cancellation probe Nexus operation to start');
+          await waitFor(
+            cancelProbe.signal(MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_CANCEL_SIGNAL),
+            'the cancellation probe to request Nexus cancellation',
+          );
+          await waitForCondition(async () => {
+            const history = await cancelProbe.fetchHistory();
+            return (history.events ?? []).some(
+              ({ nexusOperationCancelRequestCompletedEventAttributes }) =>
+                nexusOperationCancelRequestCompletedEventAttributes != null,
+            );
+          }, 'the Nexus handler cancellation request acknowledgement');
+          assert.equal((await uploadHandle.describe()).status.name, 'RUNNING');
+
+          await waitFor(
+            cancelProbe.signal(MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_FINISH_SIGNAL),
+            'the cancellation probe finish signal',
+          );
+          assert.deepEqual(await waitFor(cancelProbe.result(), 'cancellation probe completion'), {
+            cancelled: true,
+          });
+          cancelProbeFinished = true;
+        } finally {
+          if (!cancelProbeFinished) {
+            await waitFor(
+              cancelProbe.signal(MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_CANCEL_SIGNAL),
+              'cancellation probe cleanup cancel signal',
+              3_000,
+            ).catch(() => undefined);
+            await waitFor(
+              cancelProbe.signal(MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_FINISH_SIGNAL),
+              'cancellation probe cleanup finish signal',
+              3_000,
+            ).catch(() => undefined);
+            await waitFor(cancelProbe.result(), 'cancellation probe cleanup', 3_000).catch(
+              () => undefined,
+            );
+          }
+        }
         assert.equal((await uploadHandle.describe()).status.name, 'RUNNING');
 
         const joinerArgs = Array.from({ length: 2 }, () => ({
