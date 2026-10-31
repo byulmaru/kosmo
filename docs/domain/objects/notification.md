@@ -95,6 +95,16 @@ Post, Reply Parent Post, Quote의 direct Repost Source Post, Repost의 Source Po
   요청 시점의 전체 visible unread 집합으로 확장하지 않는다.
 - 처리 실패 시 입력 목록의 일부 Notification만 변경된 상태를 남기지 않는다.
 
+### Reaction 묶음 읽음 처리 · PROD-1207
+
+- Reaction 묶음의 읽음 대상은 조회 당시 그 묶음에 포함된 Notification 전체다. 대표 Profile 사진으로
+  표시되지 않은 구성원도 포함하며, 조회 이후 새로 도착한 Notification은 포함하지 않는다.
+- 이미 Read인 구성원의 최초 읽음 시각은 유지하고, 이후 도착한 구성원은 Unread로 남긴다.
+- 모두 읽음은 현재 로드된 Reaction 묶음의 조회 당시 구성원과 로드된 일반 Notification만 대상으로 한다.
+  아직 불러오지 않은 묶음이나 일반 Notification까지 확장하지 않는다.
+- 기존 Recipient 권한과 지정 읽음 처리의 멱등성·실패 원자성을 유지한다. 읽음의 입력 시점과 이동은
+  [Notification presentation](../../design/notifications.md#reaction-묶음-표시--prod-1207)을 따른다.
+
 ### Reaction/Repost 목록의 이동 · PROD-1078
 
 - 반응·재게시 알림의 프로필 사진을 활성화하면 사진에 표시된 행위자의 Profile로 한 번 이동한다.
@@ -192,6 +202,34 @@ Post, Reply Parent Post, Quote의 direct Repost Source Post, Repost의 Source Po
 
 ## 조회 정책
 
+### Reaction 알림 묶음 · PROD-1207
+
+[PROD-1207](https://linear.app/byulmaru/issue/PROD-1207)에서 확정한 인앱 목록 정책이다.
+정책 확정은 서버·앱 구현이나 배포 완료를 의미하지 않는다.
+
+- 같은 Recipient Account·Recipient Profile·대상 Post의 Reaction Notification을 이모지 종류와 관계없이
+  묶는다. Notification 생성 시각을 한국 표준시(UTC+09:00) 달력 날짜로 나누며, 각 구간은 KST 자정부터
+  다음 자정 전까지(24시간)다. 첫 반응 시각이나 취소에 따라 구간을 이동하지 않는다. KST 자정 경계에서는
+  가까운 시각의 반응도 다른 묶음이 될 수 있고, UTC 자정은 묶음 경계가 아니다. 다른 Notification Type의
+  묶음이나 Push에는 적용하지 않는다.
+- 묶음의 인원은 서로 다른 반응 Profile 수이며, 이모지별 수는 해당 묶음의 Reaction 수다. 같은 Profile의
+  서로 다른 이모지는 인원으로 한 번만 세고 이모지별로 각각 센다.
+- 목록을 새로 조회할 때 묶음은 남아 있는 최신 반응 시각순으로 정렬한다. 새 구성원이 Unread이면 기존 구성원의 Read 여부와
+  관계없이 묶음은 미확인이다. 미확인 수는 Unread 구성원이 있는 Reaction 묶음 수와 다른 Type의 개별
+  Unread Notification 수를 합산한다. Recipient 범위와 원본 객체의 조회 권한을 우회하지 않는다.
+- 반응 취소 후 해당 Notification을 제외하고 인원·이모지별 수·미확인 수를 다시 계산한다. 빈 묶음은 제거하고
+  남은 구성원의 Read State는 유지한다. 최신 반응이 취소되면 남은 최신 반응 시각을 사용한다.
+  기존 비동기 정리 경계를 유지하며 취소 직후 모든 화면에 즉시 반영되는 보장은 추가하지 않는다.
+- 기존에 남아 있는 Reaction Notification에도 같은 정책을 적용한다. 기존 Read State와
+  최초 읽음 시각을 보존하며, Notification 재생성이나 Push 재전송을 하지 않는다. 삭제된 원본을 복원하는
+  요구는 아니다.
+- 묶음은 조회 당시 남아 있는 알림의 요약이다. 모든 반응이 취소되면 표시하지 않으며, 이후 같은 구간에 새 반응이 도착하면 그 구간의 묶음으로 표시한다. 정확한 현재 반응 내역은 게시글의 기존 반응 목록에서 확인한다.
+- 기존 개별 알림 조회·미확인 수·읽음 계약은 유지하고 묶음 목록과 묶음 기준 미확인 수를 추가로 제공한다. 앱은 PROD-1209에서 새 묶음 계약으로 전환한다.
+- 묶음과 일반 알림이 섞인 목록은 각 페이지 조회 당시의 최신 시각순으로 반환한다. 페이지 사이 반응 추가·취소로 순서가 바뀌면 중복되거나 이번 연속 조회에서 보이지 않는 항목이 생길 수 있다. 재진입·새로고침 때 최신 목록으로 다시 조회하며, 연속 조회의 순서 고정이나 만료 후 교체 계약은 두지 않는다.
+- 각 페이지는 현재 조회 가능한 구성원·집계·읽음 상태를 반환하고, 그 페이지에서 받은 구성원 ID가 읽음 대상이다. 삭제된 항목·빈 묶음·현재 조회 권한이 없는 항목은 제외한다.
+
+### 공통 조회 정책
+
 - Recipient가 Related Post 또는 Related Profile을 볼 수 없는 경우 새 Notification을 생성하지 않는다.
 - Reply, Reaction, Repost, Quote의 Recipient Profile과 원인 행동의 Related Profile이 같으면 새 Notification을
   생성하지 않는다.
@@ -278,6 +316,9 @@ Post, Reply Parent Post, Quote의 direct Repost Source Post, Repost의 Source Po
 - 수신자: Recipient
 
 ## 제외/보류
+
+- 반응 취소 기록 유지 대안은 취소 제외 방식이 너무 복잡한 경우에만 허용된 조건부 대안이다. 현재 선택은
+  기존 삭제 흐름을 따르는 취소 제외이며, 대안 채택 시 이 문서와 표시 계약을 함께 정렬한다.
 
 - Remote Quote의 승인 판정 자체는 원격 인용 관계 계약을 따르며 이 문서에서 legacy 승인을 추정하지 않는다.
 - Post 삭제 정리 대상 이외의 조회 불가 Notification 비동기 제거를 event-driven 처리로 전환하거나 현재 범위를 넘어 대량 처리하는 방식은

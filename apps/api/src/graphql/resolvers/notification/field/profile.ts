@@ -9,7 +9,7 @@ import { Notification, NotificationConnection } from '../ref';
 import type { Database } from '@kosmo/core/db';
 import type { NotificationRow } from '../ref';
 
-const requireProfileNotificationMembership = async (
+export const requireProfileNotificationMembership = async (
   accountId: string,
   profileId: string,
   database: Database,
