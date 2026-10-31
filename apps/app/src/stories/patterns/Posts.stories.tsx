@@ -3185,6 +3185,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'ReplyModalBackdropDismissInteraction',
     'ReplyFullscreenVisibleViewport',
   ],
   decorators: [
@@ -8691,6 +8692,27 @@ export const ReplyFullscreenVisibleViewport: Story = {
       }
       visualViewport.dispatchEvent(new storyWindow.Event('resize'));
     }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyModalBackdropDismissInteraction: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await waitFor(() => expect(body).toHaveFocus());
+    await userEvent.type(body, '배경을 눌러도 유지할 답글');
+
+    await userEvent.click(screen.getByTestId('post-composer-viewport-backdrop'));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(body).toHaveValue('@kosmo 배경을 눌러도 유지할 답글');
+
+    await userEvent.click(within(confirm).getByRole('button', { name: '계속 작성' }));
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(body).toHaveValue('@kosmo 배경을 눌러도 유지할 답글');
   },
   render: () => <ReplyModalPresentationStory />,
 };

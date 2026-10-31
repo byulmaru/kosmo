@@ -18,6 +18,7 @@ import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
+import { PostComposerViewport } from './PostComposerViewport';
 import type { RefObject } from 'react';
 import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -218,9 +219,11 @@ export function PostComposerHost({
 
   const active = mode === 'rail' || overlayVisible;
   return (
-    <View
+    <PostComposerViewport
       accessibilityElementsHidden={!active}
       aria-hidden={!active || undefined}
+      fullscreen={mode === 'mobile'}
+      open={overlayVisible}
       pointerEvents={active ? 'auto' : 'none'}
       style={[
         mode === 'rail' ? styles.railHost : styles.webOverlayHost,
@@ -229,12 +232,10 @@ export function PostComposerHost({
         !active ? styles.hiddenHost : null,
         mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
       ]}
+      {...(mode === 'rail' ? {} : { onRequestClose: requestClose })}
     >
-      {mode !== 'rail' ? (
-        <OverlayBackdrop onRequestClose={requestClose} style={styles.webBackdrop} />
-      ) : null}
       {composer}
-    </View>
+    </PostComposerViewport>
   );
 }
 
@@ -252,7 +253,6 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   webMobileHost: { height: '100dvh' as never, padding: 0 },
-  webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
