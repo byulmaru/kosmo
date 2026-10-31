@@ -31,6 +31,8 @@ let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
+    Link: ({ children, ...props }: Record<string, unknown>) =>
+      createElement('Link', props, children as ReactNode),
     Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
     Slot: () => createElement(SlotRoute),
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
@@ -84,7 +86,34 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
-  exports: { ChevronLeftIcon: 'ChevronLeftIcon' },
+  exports: {
+    ChevronDownIcon: 'ChevronDownIcon',
+    ChevronLeftIcon: 'ChevronLeftIcon',
+    ChevronRightIcon: 'ChevronRightIcon',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
+  exports: {
+    default: {
+      sourceSha256: 'fixture-source-sha256',
+      notices: [
+        {
+          license: 'MIT',
+          name: 'first-package',
+          sourceUrl: 'https://licenses.example/first-package',
+          text: 'Original license text\nSecond line.',
+          version: '1.0.0',
+        },
+        {
+          license: 'CC-BY-4.0',
+          name: 'asset-notice',
+          sourceUrl: 'https://licenses.example/asset-notice',
+          text: '',
+          version: '',
+        },
+      ],
+    },
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../PageHeader.tsx', import.meta.url), {
   exports: {
@@ -208,6 +237,7 @@ let SettingsAccountDeletionRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
+let SettingsLicensesRoute: ComponentType;
 let SettingsDeveloperRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let WebRouteScrollContainer: ComponentType<RouteScrollContainerProps>;
@@ -222,6 +252,8 @@ before(async () => {
     await import('../ui/RouteScrollContainer.web'));
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
+  ({ default: SettingsLicensesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/licenses'));
   ({ default: SettingsDeveloperRoute } =
     await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
@@ -700,10 +732,88 @@ describe('Settings routes', () => {
 
     assert.deepEqual(
       rendered('SettingsLinkRow').map((node) => node.props.href),
-      ['/privacy', '/account-deletion', '/child-safety', '/settings/developer'],
+      [
+        '/privacy',
+        '/account-deletion',
+        '/child-safety',
+        '/settings/licenses',
+        '/settings/developer',
+      ],
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
+  });
+
+  it('오픈소스 라이선스는 한 항목만 펼치고 원문과 외부 출처 링크를 제공한다', async () => {
+    await renderRoute('/settings/licenses', SettingsLicensesRoute);
+
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    assert.equal(rendered('PageHeader')[1].props.title, '오픈소스 라이선스');
+    const rows = licenseRows();
+    assert.equal(rows.length, 2);
+    assert.deepEqual(
+      settingsItems().map((node) => [node.props.label, node.props.description]),
+      [
+        ['first-package', '버전 1.0.0, MIT'],
+        ['asset-notice', 'CC-BY-4.0'],
+      ],
+    );
+    assert.deepEqual(
+      rows.map((node) => node.props.accessibilityState),
+      [{ expanded: false }, { expanded: false }],
+    );
+
+    await act(async () =>
+      rows[0].props.onFocus({
+        currentTarget: { matches: (selector: string) => selector === ':focus-visible' },
+      }),
+    );
+    assert.equal(flattenStyle(licenseRows()[0].props.style()).outlineStyle, 'solid');
+    assert.equal(flattenStyle(licenseRows()[1].props.style()).outlineStyle, 'none');
+    await act(async () => licenseRows()[0].props.onBlur());
+    assert.equal(flattenStyle(licenseRows()[0].props.style()).outlineStyle, 'none');
+
+    await act(async () => rows[0].props.onPress());
+    assert.deepEqual(licenseRows()[0].props.accessibilityState, { expanded: true });
+    assert.ok(
+      rendered('Text').some(
+        (node) =>
+          node.props.selectable && node.props.children === 'Original license text\nSecond line.',
+      ),
+    );
+    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/first-package');
+    const sourceLink = rendered('Link')[0].findAll(
+      (node) => (node.type as unknown) === 'Pressable',
+    )[0];
+    assert.equal(sourceLink.props.accessibilityRole, 'link');
+    assert.equal(sourceLink.props.accessibilityLabel, 'first-package 출처 보기');
+
+    await act(async () => licenseRows()[1].props.onPress());
+    assert.deepEqual(
+      licenseRows().map((node) => node.props.accessibilityState),
+      [{ expanded: false }, { expanded: true }],
+    );
+    assert.equal(
+      rendered('Text').some((node) => String(node.props.children).includes('Original license')),
+      false,
+    );
+    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/asset-notice');
+    assert.deepEqual(
+      rendered('Text').map((node) => node.props.children),
+      ['라이선스 고지 미확인', '출처 보기'],
+    );
+
+    await act(async () => licenseRows()[1].props.onPress());
+    assert.equal(rendered('Link').length, 0);
+    assert.equal(
+      licenseRows().every((node) => node.props.accessibilityState.expanded === false),
+      true,
+    );
+
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings/info']);
   });
 
   it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
@@ -865,6 +975,16 @@ function byTestId(testID: string): ReactTestInstance {
 
 function settingsItems(): ReactTestInstance[] {
   return rendered('SettingsItem');
+}
+
+function licenseRows(): ReactTestInstance[] {
+  return rendered('Pressable').filter(
+    (node) =>
+      node.props.accessibilityRole === 'button' &&
+      ['first-package', 'asset-notice'].some((name) =>
+        String(node.props.accessibilityLabel).startsWith(name),
+      ),
+  );
 }
 
 function settingsItem(label: string): ReactTestInstance {

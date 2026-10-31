@@ -34,7 +34,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
         ? 'profile-migration'
         : pathname === '/settings/following-import'
           ? 'following-import'
-          : pathname === '/settings/info' || pathname === '/settings/developer'
+          : pathname === '/settings/info' ||
+              pathname === '/settings/developer' ||
+              pathname === '/settings/licenses'
             ? 'info'
             : pathname === '/settings/mute-and-block' ||
                 pathname === '/settings/muted-profiles' ||

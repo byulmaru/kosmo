@@ -15,9 +15,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 2026-09-10 PROD-889 결정으로 `정보`를 Settings root의 추가 direct destination으로 두고
 `/settings/info` detail에서 공개 정책 문서 진입점을 제공한다. `정보`는 기존 Settings 목록·detail·back·header
 조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크를
-포함한다. 이 정책 링크 범위와 별개로, 인증된 모든 플랫폼에서는 이 detail에 `개발 정보`의 nested destination을
-하나 더 제공하며 채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
-소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
+포함한다. 이후 이 detail에는 `오픈소스 라이선스`와 `개발 정보`의 nested destination도 제공하며, 채널과 OTA
+진단은 `/settings/developer`에서만 표시한다. 이들 진입점은 Byulmaru ID가 소유하는 기존 `계정 설정` 외부
+진입점과 결합하지 않는다.
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
@@ -39,6 +39,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   Root에서는 다른 서비스에서 이전 진입점 바로 뒤에 둔다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
+- 오픈소스 라이선스 detail의 canonical route는 `/settings/licenses`이며 parent는 `/settings/info`다.
+  정보 화면에는 세 public policy link 다음, `개발 정보` 앞에 `오픈소스 라이선스` 진입점을 둔다.
 - Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
   `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
@@ -67,9 +69,11 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `개발 정보` link row를 제공하며 channel
-  selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
-  public route 간 cross-link는 각 정책 문서가 소유한다.
+  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link, `오픈소스 라이선스`, `개발 정보` link row를 이
+  순서로 제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일
+  처리와 public route 간 cross-link는 각 정책 문서가 소유한다. `/settings/licenses`는 앱에 포함된 offline
+  notice data를 package 단위로 보여 준다. 각 entry에서 원문을 펼쳐 선택할 수 있고, 원문이 없으면
+  `라이선스 고지 미확인`을 표시하며 제공된 출처 link를 유지한다. 한 번에 펼쳐 두는 entry는 하나다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
   `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존
   `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를 제공하고, 현재 실행에 대한 `현재 updateId`,
@@ -314,7 +318,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전`과 `팔로잉 가져오기` → `뮤트 및 차단` →
   `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
-  link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
+  link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
+  `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
+  expanded entry의 full text 또는 원문이 없을 때 `라이선스 고지 미확인` 상태와 제공된 출처 link를 읽는다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
   Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.
@@ -334,8 +340,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   accepted 시작 확인은 polite live region으로 한 번 알린다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
-  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서와 `개발 정보`
-  entrypoint를 유지한다. Native `/settings/developer`의 optional 오류 행은 오류가 있을 때만 읽힌다.
+  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 세 policy link 다음에 `오픈소스 라이선스`,
+  `개발 정보` entrypoint 순서를 유지한다. Native `/settings/developer`의 optional 오류 행은 오류가 있을 때만 읽힌다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지
