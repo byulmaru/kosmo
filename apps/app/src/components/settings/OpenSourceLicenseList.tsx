@@ -27,109 +27,105 @@ export function OpenSourceLicenseList({ notices }: OpenSourceLicenseListProps) {
 
   return (
     <View style={[layoutRecipes.listStack, styles.root]}>
-      {notices.map((entry) => {
-        const entryKey = `${entry.name}@${entry.version}`;
-        const expanded = expandedEntry === entryKey;
+      {notices
+        .filter((entry) => entry.text.length > 0)
+        .map((entry) => {
+          const entryKey = `${entry.name}@${entry.version}`;
+          const expanded = expandedEntry === entryKey;
 
-        return (
-          <View key={entryKey}>
-            <Pressable
-              accessibilityLabel={`${entry.name}${entry.version ? `, 버전 ${entry.version}` : ''}, ${entry.license}`}
-              accessibilityRole="button"
-              accessibilityState={{ expanded }}
-              aria-expanded={expanded}
-              onBlur={() => setFocusedEntryKey(null)}
-              onFocus={(event) => {
-                if (Platform.OS !== 'web') {
-                  return;
-                }
-                const target = event.currentTarget as unknown as {
-                  matches?: (selector: string) => boolean;
-                };
-                setFocusedEntryKey(target.matches?.(':focus-visible') ? entryKey : null);
-              }}
-              onPointerDown={() => setFocusedEntryKey(null)}
-              onPress={() => setExpandedEntry(expanded ? null : entryKey)}
-              style={() => [
-                styles.entry,
-                {
-                  borderColor: 'transparent',
-                  borderWidth: borderWidths[1],
-                  outlineColor: focusedEntryKey === entryKey ? theme.stateFocusRing : undefined,
-                  outlineOffset: 2,
-                  outlineStyle: focusedEntryKey === entryKey ? 'solid' : 'none',
-                  outlineWidth: focusedEntryKey === entryKey ? 2 : 0,
-                } as unknown as ViewStyle,
-              ]}
-            >
-              {(state) => {
-                const hovered =
-                  Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
-                const backgroundColor = state.pressed
-                  ? theme.statePressed
-                  : hovered
-                    ? theme.stateHover
-                    : expanded
-                      ? theme.stateSelectedSurface
-                      : 'transparent';
+          return (
+            <View key={entryKey}>
+              <Pressable
+                accessibilityLabel={`${entry.name}${entry.version ? `, 버전 ${entry.version}` : ''}, ${entry.license}`}
+                accessibilityRole="button"
+                accessibilityState={{ expanded }}
+                aria-expanded={expanded}
+                onBlur={() => setFocusedEntryKey(null)}
+                onFocus={(event) => {
+                  if (Platform.OS !== 'web') {
+                    return;
+                  }
+                  const target = event.currentTarget as unknown as {
+                    matches?: (selector: string) => boolean;
+                  };
+                  setFocusedEntryKey(target.matches?.(':focus-visible') ? entryKey : null);
+                }}
+                onPointerDown={() => setFocusedEntryKey(null)}
+                onPress={() => setExpandedEntry(expanded ? null : entryKey)}
+                style={() => [
+                  styles.entry,
+                  {
+                    borderColor: 'transparent',
+                    borderWidth: borderWidths[1],
+                    outlineColor: focusedEntryKey === entryKey ? theme.stateFocusRing : undefined,
+                    outlineOffset: 2,
+                    outlineStyle: focusedEntryKey === entryKey ? 'solid' : 'none',
+                    outlineWidth: focusedEntryKey === entryKey ? 2 : 0,
+                  } as unknown as ViewStyle,
+                ]}
+              >
+                {(state) => {
+                  const hovered =
+                    Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+                  const backgroundColor = state.pressed
+                    ? theme.statePressed
+                    : hovered
+                      ? theme.stateHover
+                      : expanded
+                        ? theme.stateSelectedSurface
+                        : 'transparent';
 
-                return (
-                  <View style={[styles.rowSurface, { backgroundColor }]}>
-                    <SettingsItem
-                      description={`${entry.version ? `버전 ${entry.version}, ` : ''}${entry.license}`}
-                      label={entry.name}
-                      trailing={
-                        <View accessibilityElementsHidden pointerEvents="none">
-                          {expanded ? (
-                            <ChevronDownIcon
-                              color={theme.foregroundSecondary}
-                              size={20}
-                              strokeWidth={2}
-                            />
-                          ) : (
-                            <ChevronRightIcon
-                              color={theme.foregroundSecondary}
-                              size={20}
-                              strokeWidth={2}
-                            />
-                          )}
-                        </View>
-                      }
-                    />
-                  </View>
-                );
-              }}
-            </Pressable>
-            {expanded ? (
-              <View style={[layoutRecipes.formStack, styles.expandedContent]}>
-                {entry.text.length > 0 ? (
+                  return (
+                    <View style={[styles.rowSurface, { backgroundColor }]}>
+                      <SettingsItem
+                        description={`${entry.version ? `버전 ${entry.version}, ` : ''}${entry.license}`}
+                        label={entry.name}
+                        trailing={
+                          <View accessibilityElementsHidden pointerEvents="none">
+                            {expanded ? (
+                              <ChevronDownIcon
+                                color={theme.foregroundSecondary}
+                                size={20}
+                                strokeWidth={2}
+                              />
+                            ) : (
+                              <ChevronRightIcon
+                                color={theme.foregroundSecondary}
+                                size={20}
+                                strokeWidth={2}
+                              />
+                            )}
+                          </View>
+                        }
+                      />
+                    </View>
+                  );
+                }}
+              </Pressable>
+              {expanded ? (
+                <View style={[layoutRecipes.formStack, styles.expandedContent]}>
                   <Text
                     selectable
                     style={[textStyles.contentM, { color: theme.foregroundPrimary }]}
                   >
                     {entry.text}
                   </Text>
-                ) : (
-                  <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                    라이선스 고지 미확인
-                  </Text>
-                )}
-                <Link asChild href={entry.sourceUrl as Href}>
-                  <Pressable
-                    accessibilityLabel={`${entry.name} 출처 보기`}
-                    accessibilityRole="link"
-                    style={styles.sourceLink}
-                  >
-                    <Text style={[textStyles.uiLabelM, { color: theme.actionLinkBase }]}>
-                      출처 보기
-                    </Text>
-                  </Pressable>
-                </Link>
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
+                  <Link asChild href={entry.sourceUrl as Href}>
+                    <Pressable
+                      accessibilityLabel={`${entry.name} 출처 보기`}
+                      accessibilityRole="link"
+                      style={styles.sourceLink}
+                    >
+                      <Text style={[textStyles.uiLabelM, { color: theme.actionLinkBase }]}>
+                        출처 보기
+                      </Text>
+                    </Pressable>
+                  </Link>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
     </View>
   );
 }

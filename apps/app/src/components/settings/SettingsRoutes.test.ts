@@ -105,9 +105,16 @@ mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
           version: '1.0.0',
         },
         {
+          license: 'Apache-2.0',
+          name: 'second-package',
+          sourceUrl: 'https://licenses.example/second-package',
+          text: 'Second original license text.',
+          version: '2.0.0',
+        },
+        {
           license: 'CC-BY-4.0',
-          name: 'asset-notice',
-          sourceUrl: 'https://licenses.example/asset-notice',
+          name: 'sample-pending-package',
+          sourceUrl: 'https://licenses.example/pending-package',
           text: '',
           version: '',
         },
@@ -755,8 +762,14 @@ describe('Settings routes', () => {
       settingsItems().map((node) => [node.props.label, node.props.description]),
       [
         ['first-package', '버전 1.0.0, MIT'],
-        ['asset-notice', 'CC-BY-4.0'],
+        ['second-package', '버전 2.0.0, Apache-2.0'],
       ],
+    );
+    assert.equal(
+      rendered('Pressable').some((node) =>
+        String(node.props.accessibilityLabel).startsWith('sample-pending-package'),
+      ),
+      false,
     );
     assert.deepEqual(
       rows.map((node) => node.props.accessibilityState),
@@ -794,13 +807,17 @@ describe('Settings routes', () => {
       [{ expanded: false }, { expanded: true }],
     );
     assert.equal(
-      rendered('Text').some((node) => String(node.props.children).includes('Original license')),
-      false,
+      rendered('Text').some(
+        (node) => node.props.selectable && node.props.children === 'Second original license text.',
+      ),
+      true,
     );
-    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/asset-notice');
-    assert.deepEqual(
-      rendered('Text').map((node) => node.props.children),
-      ['라이선스 고지 미확인', '출처 보기'],
+    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/second-package');
+    assert.equal(
+      rendered('Link').some(
+        (node) => node.props.href === 'https://licenses.example/pending-package',
+      ),
+      false,
     );
 
     await act(async () => licenseRows()[1].props.onPress());
@@ -808,6 +825,10 @@ describe('Settings routes', () => {
     assert.equal(
       licenseRows().every((node) => node.props.accessibilityState.expanded === false),
       true,
+    );
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.accessibilityRole === 'link'),
+      false,
     );
 
     const back = rendered('PageHeader')[1].props.leading;
@@ -981,7 +1002,7 @@ function licenseRows(): ReactTestInstance[] {
   return rendered('Pressable').filter(
     (node) =>
       node.props.accessibilityRole === 'button' &&
-      ['first-package', 'asset-notice'].some((name) =>
+      ['first-package', 'second-package', 'sample-pending-package'].some((name) =>
         String(node.props.accessibilityLabel).startsWith(name),
       ),
   );

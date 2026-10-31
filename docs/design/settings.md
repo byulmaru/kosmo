@@ -72,8 +72,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link, `오픈소스 라이선스`, `개발 정보` link row를 이
   순서로 제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일
   처리와 public route 간 cross-link는 각 정책 문서가 소유한다. `/settings/licenses`는 앱에 포함된 offline
-  notice data를 package 단위로 보여 준다. 각 entry에서 원문을 펼쳐 선택할 수 있고, 원문이 없으면
-  `라이선스 고지 미확인`을 표시하며 제공된 출처 link를 유지한다. 한 번에 펼쳐 두는 entry는 하나다.
+  notice data 중 원문이 제공된 package를 보여 준다. 표시된 entry에서 원문을 펼쳐 선택할 수 있고, 제공된
+  출처 link를 함께 표시한다. 한 번에 펼쳐 두는 entry는 하나다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
   `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존
   `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를 제공하고, 현재 실행에 대한 `현재 updateId`,
@@ -320,7 +320,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
   link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
   `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
-  expanded entry의 full text 또는 원문이 없을 때 `라이선스 고지 미확인` 상태와 제공된 출처 link를 읽는다.
+  expanded entry의 full text와 제공된 출처 link를 읽는다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
   Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.

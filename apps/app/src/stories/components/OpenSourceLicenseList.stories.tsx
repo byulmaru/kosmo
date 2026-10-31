@@ -7,23 +7,24 @@ import type { OpenSourceLicenseNotice } from '@/components/settings/OpenSourceLi
 const notices: readonly OpenSourceLicenseNotice[] = [
   {
     license: 'MIT',
-    name: '@kosmo/a-package-with-a-long-name-that-wraps-on-mobile',
+    name: 'sample-package-with-a-long-name-that-wraps-on-mobile',
     sourceUrl: 'https://licenses.example.test/packages/long-name',
-    text: `MIT License
+    text: `Sample notice text for preview only. It demonstrates long, selectable original text without representing a real package notice.
 
-Copyright (c) 2026 KOSMO contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.`,
+Second sample paragraph with enough content to show the expanded notice layout on narrow screens.`,
     version: '1.0.0',
   },
   {
+    license: 'Apache-2.0',
+    name: 'sample-second-package',
+    sourceUrl: 'https://licenses.example.test/packages/second',
+    text: 'Second sample original notice text for interaction preview.',
+    version: '2.0.0',
+  },
+  {
     license: 'CC-BY-4.0',
-    name: 'font-attribution-notice',
-    sourceUrl: 'https://licenses.example.test/assets/font-attribution',
+    name: 'sample-pending-package',
+    sourceUrl: 'https://licenses.example.test/packages/pending',
     text: '',
     version: '',
   },
@@ -53,17 +54,18 @@ export const InteractionContract: Story = {
   parameters: { controls: { disable: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const fullNoticeName =
-      '@kosmo/a-package-with-a-long-name-that-wraps-on-mobile, 버전 1.0.0, MIT';
-    const pendingNoticeName = 'font-attribution-notice, CC-BY-4.0';
+    const fullNoticeName = 'sample-package-with-a-long-name-that-wraps-on-mobile, 버전 1.0.0, MIT';
+    const secondNoticeName = 'sample-second-package, 버전 2.0.0, Apache-2.0';
+    const pendingNoticeName = 'sample-pending-package, CC-BY-4.0';
     const fullNotice = canvas.getByRole('button', { name: fullNoticeName });
-    const pendingNotice = canvas.getByRole('button', { name: pendingNoticeName });
-    const packageName = canvas.getByText('@kosmo/a-package-with-a-long-name-that-wraps-on-mobile', {
+    const secondNotice = canvas.getByRole('button', { name: secondNoticeName });
+    const packageName = canvas.getByText('sample-package-with-a-long-name-that-wraps-on-mobile', {
       exact: true,
     });
 
     await expect(fullNotice).toHaveAttribute('aria-expanded', 'false');
-    await expect(pendingNotice).toHaveAttribute('aria-expanded', 'false');
+    await expect(secondNotice).toHaveAttribute('aria-expanded', 'false');
+    await expect(canvas.queryByRole('button', { name: pendingNoticeName })).toBeNull();
     await expect(packageName.getBoundingClientRect().height).toBeGreaterThan(24);
     await userEvent.click(fullNotice);
     await expect(fullNotice).toHaveAttribute('aria-expanded', 'true');
@@ -72,21 +74,26 @@ export const InteractionContract: Story = {
     await expect(licenseText).toBeVisible();
     await expect(getComputedStyle(licenseText).userSelect).toBe('text');
     const sourceLink = canvas.getByRole('link', {
-      name: '@kosmo/a-package-with-a-long-name-that-wraps-on-mobile 출처 보기',
+      name: 'sample-package-with-a-long-name-that-wraps-on-mobile 출처 보기',
     });
     await expect(sourceLink).toHaveAttribute('href', notices[0]!.sourceUrl);
 
-    await userEvent.click(pendingNotice);
+    await userEvent.click(secondNotice);
     await expect(fullNotice).toHaveAttribute('aria-expanded', 'false');
-    await expect(pendingNotice).toHaveAttribute('aria-expanded', 'true');
+    await expect(secondNotice).toHaveAttribute('aria-expanded', 'true');
     await expect(licenseText).not.toBeVisible();
-    await expect(canvas.getByText('라이선스 고지 미확인')).toBeVisible();
+    const secondLicenseText = canvas.getByText(notices[1]!.text, { exact: true });
+    await expect(secondLicenseText).toBeVisible();
+    await expect(getComputedStyle(secondLicenseText).userSelect).toBe('text');
     await expect(
-      canvas.getByRole('link', { name: 'font-attribution-notice 출처 보기' }),
+      canvas.getByRole('link', { name: 'sample-second-package 출처 보기' }),
     ).toHaveAttribute('href', notices[1]!.sourceUrl);
+    await expect(
+      canvas.queryByRole('link', { name: 'sample-pending-package 출처 보기' }),
+    ).toBeNull();
 
-    await userEvent.click(pendingNotice);
-    await expect(pendingNotice).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(secondNotice);
+    await expect(secondNotice).toHaveAttribute('aria-expanded', 'false');
     await expect(canvas.queryByRole('link', { name: /출처 보기/ })).toBeNull();
   },
 };
