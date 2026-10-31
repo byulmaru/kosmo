@@ -593,7 +593,8 @@ function readPnpmLicenseReport(root) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(result.stderr || 'pnpm licenses list failed.');
+    const output = [result.stderr, result.stdout].filter(Boolean).join('\n');
+    throw new Error(output || 'pnpm licenses list failed.');
   }
   return JSON.parse(result.stdout);
 }

@@ -1,8 +1,18 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   buildLicenseEntries,
   checkLicenseArtifact,
@@ -63,6 +73,39 @@ function linkInstalledPackage(root, name, packagePath) {
   mkdirSync(dirname(linkPath), { recursive: true });
   symlinkSync(packagePath, linkPath, 'dir');
 }
+
+test('reports pnpm license failures written to stdout and stderr', (t) => {
+  const binDirectory = mkdtempSync(join(tmpdir(), 'kosmo-app-licenses-pnpm-'));
+  t.after(() => rmSync(binDirectory, { recursive: true, force: true }));
+  const pnpmPath = join(binDirectory, 'pnpm');
+  writeFileSync(
+    pnpmPath,
+    `#!/bin/sh
+cat <<'JSON'
+{"error":{"code":"ERR_PNPM_MISSING_PACKAGE_INDEX_FILE","message":"package index missing"}}
+JSON
+printf '%s\\n' 'pnpm stderr diagnostic' >&2
+exit 1
+`,
+  );
+  chmodSync(pnpmPath, 0o755);
+
+  const result = spawnSync(
+    process.execPath,
+    [fileURLToPath(new URL('./generate-app-licenses.mjs', import.meta.url)), '--check'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${binDirectory}${delimiter}${process.env.PATH ?? ''}` },
+    },
+  );
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /"code":"ERR_PNPM_MISSING_PACKAGE_INDEX_FILE"/);
+  assert.match(result.stderr, /"message":"package index missing"/);
+  assert.match(result.stderr, /pnpm stderr diagnostic/);
+});
 
 test('builds sorted package entries from local originals and exact supplements', (t) => {
   const { root, notice, supplemental } = fixture(t);
