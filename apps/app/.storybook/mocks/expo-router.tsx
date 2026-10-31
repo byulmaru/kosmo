@@ -4,6 +4,7 @@ import {
   Fragment,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -94,6 +95,10 @@ export function RouterMockProvider({
 
 export function usePathname() {
   return useContext(RouterContext).pathname;
+}
+
+export function useFocusEffect(effect: () => void | (() => void)) {
+  useEffect(effect, [effect]);
 }
 
 export function useCurrentRouteInfo() {
