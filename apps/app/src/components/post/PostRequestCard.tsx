@@ -26,7 +26,6 @@ const PostRequestCardFragment = graphql`
       relativeHandle
     }
     bodyText
-    contentWarning
     media {
       id
       url
@@ -200,12 +199,10 @@ export function PostRequestCard({
   const statusLabel = getStatusLabel(request.status);
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
   const canCompose = request.status === 'FAILED' || request.status === 'CANCELLED';
-  const contentWarning = request.contentWarning?.trim();
-  const excerpt = contentWarning || request.bodyText.trim();
-  const thumbnail =
-    contentWarning || request.sensitiveMedia
-      ? undefined
-      : request.media.find((item) => Boolean(item?.url));
+  const excerpt = request.bodyText.trim();
+  const thumbnail = request.sensitiveMedia
+    ? undefined
+    : request.media.find((item) => Boolean(item?.url));
   const publishedHref = request.post?.profile.relativeHandle
     ? `/${request.post.profile.relativeHandle}/${request.post.id}`
     : undefined;

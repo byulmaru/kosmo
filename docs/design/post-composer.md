@@ -73,7 +73,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - 일반 Post·Reply·Quote의 `게시`는 원본 Media 바이트 전송과 서버의 접수 확인까지만 기다린다. 접수는 Post나 Post Content가 생성됐다는 뜻이 아니며, 이후 Media 처리나 게시 완료를 기다리지 않는다. 접수가 확인되면 Composer를 닫고 초안을 비운다. 실제 Post 구조와 권한은 [Post 객체](../domain/objects/post.md)를 따른다.
 - 접수된 요청의 전체 제출 snapshot은 Temporal Workflow 안에 보존해 게시와 멱등 처리를 완료하며, UI에는 공개하지 않고 Composer에 복구하지 않는다. 요청 상태는 `QUEUED`, `PROCESSING`, `PUBLISHING`, `CONFIRMING`, `FAILED`, `CANCELLED`, `PUBLISHED` 중 하나로 표시하고 백분율이나 남은 시간을 만들어 보여주지 않는다.
-- Home에는 현재 선택한 작성 Profile의 게시 요청 요약을 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. 비공개 `/post-requests` 화면에는 Account가 소유한 요청 목록을 표시한다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. Content Warning은 공용 reveal 전까지 본문과 Media를 가리며, Sensitive Media는 별도의 이미지 가림 상태를 유지한다.
+- Home에는 현재 선택한 작성 Profile의 게시 요청 요약을 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. 비공개 `/post-requests` 화면에는 Account가 소유한 요청 목록을 표시한다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. 요청 카드는 작성자 본인 전용 요약이므로 Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일을 표시한다. Sensitive Media 썸네일은 생략하며, 게시된 Post의 Content Warning 가림과 공용 reveal 동작은 그대로 유지한다.
 - `QUEUED`·`PROCESSING` 요청은 취소를 요청할 수 있으며, 서버가 `CANCELLED`로 확인한 뒤 취소 완료로 처리한다. `PUBLISHING`과 `CONFIRMING`은 취소할 수 없다. `CANCELLED` 요청은 Account 요청 이력에 남으며 Home 요약에서만 제거한다. `FAILED`는 Post나 Tombstone이 아닌 종료된 요청 상태로 workflow 보존 기간에만 남는다. `FAILED`와 `CANCELLED`의 `새 글 작성`은 현재 선택한 Profile의 일반 Post Composer를 연다. 요청의 본문·Content Warning·Media·Mention·Reply·Quote 관계·작성 Profile·기본값은 복사하지 않는다. 이미 일반 Composer draft나 접수 불명확 상태가 있으면 기존 정책을 따르며, 로컬 draft가 없을 때만 새 입력이 비어 있다.
 - 접수 결과가 불명확하면 입력 snapshot을 잠그고 같은 요청 ID로 `접수 다시 확인`만 제공한다. 이때 사용자는 앱 안에서 다른 화면으로 이동할 수 있지만, 확인 없이 Composer를 떠나면 `접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.`라고 경고한다. 제출 초안을 로컬에 영구 저장하거나 새 전역 게시글 이력을 만들지 않는다.
 - `PUBLISHED`는 Post 저장 transaction이 commit됐음을 뜻한다. 후속 게시 작업의 완료를 뜻하지 않으며, 이 상태가 되어도 Post 상세로 자동 이동하지 않는다. 실제 publish 시점에 작성 Profile 권한을 다시 확인한다.
@@ -325,7 +325,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
 - Post·Reply·Quote의 raw Media upload 완료와 서버 접수 확인 뒤 Composer 종료·draft reset, Post 미생성, 요청 상태와
-  Home 요약·비공개 `/post-requests` 표시를 확인한다. Content Warning과 Sensitive Media 가림, 일곱 요청 상태의 표시와
+  Home 요약·비공개 `/post-requests` 표시를 확인한다. Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일이 표시되고, Sensitive Media 썸네일은 생략되는지, 일곱 요청 상태의 표시와
   백분율·ETA 부재, `PROCESSING` 취소 확인, `PUBLISHING`·`CONFIRMING` 취소 불가를 확인한다. `PROCESSING` 취소는 서버가
   `CANCELLED`를 확인하기 전에 Composer를 열지 않고, `FAILED`·`CANCELLED`의 `새 글 작성`은 현재 Profile의 일반 Post Composer를
   열면서 요청 snapshot을 복사하지 않는지 확인한다. 기존 일반 draft나 접수 불명확 상태는 일반 Composer 정책을 유지하고,

@@ -249,7 +249,7 @@ describe('PostRequestCard', () => {
     assert.equal(button('새 글 작성'), undefined);
   });
 
-  it('uses the content warning instead of the body, hides sensitive media, and labels a thin media preview', async () => {
+  it('shows the body and normal media with a content warning while independently hiding sensitive media', async () => {
     const media = [
       null,
       { altText: '사용하지 않는 이미지', id: 'missing-url', url: null },
@@ -264,9 +264,11 @@ describe('PostRequestCard', () => {
         sensitiveMedia: false,
       }),
     );
-    assert.equal(visibleText()?.includes('본문을 함께 보여줘요'), false);
-    assert.equal(visibleText()?.includes('민감한 내용'), true);
-    assert.equal(findAllByType('Image').length, 0);
+    assert.equal(visibleText()?.includes('본문을 함께 보여줘요'), true);
+    const [imageWithWarning] = findAllByType('Image');
+    assert.ok(imageWithWarning);
+    assert.equal(imageWithWarning.props.source.uri, 'https://example.test/first.jpg');
+    assert.equal(imageWithWarning.props.accessibilityLabel, '산');
 
     await updateCard(
       makeRequest('QUEUED', {
