@@ -168,20 +168,21 @@ test('Post Request media check pins the closed run and confirms READY after succ
       },
     ];
   });
-  const handleCalls: [string, string | undefined][] = [];
-  let resultOptions: { readonly followRuns?: boolean } | undefined;
-  t.mock.method(temporalClient.workflow, 'getHandle', ((workflowId: string, runId?: string) => {
-    handleCalls.push([workflowId, runId]);
+  const handleCalls: [string, string | undefined, { readonly followRuns?: boolean } | undefined][] =
+    [];
+  t.mock.method(temporalClient.workflow, 'getHandle', ((
+    workflowId: string,
+    runId?: string,
+    options?: { readonly followRuns?: boolean },
+  ) => {
+    handleCalls.push([workflowId, runId, options]);
     return {
       describe: async () => ({ runId: 'closed-run', status: { name: 'COMPLETED' } }),
-      result: async (options: { readonly followRuns?: boolean }) => {
-        resultOptions = options;
-        return {
-          id: input.mediaId,
-          mediaType: 'image/jpeg',
-          url: 'https://media.example/image.jpg',
-        };
-      },
+      result: async () => ({
+        id: input.mediaId,
+        mediaType: 'image/jpeg',
+        url: 'https://media.example/image.jpg',
+      }),
     } as never;
   }) as never);
 
@@ -189,10 +190,9 @@ test('Post Request media check pins the closed run and confirms READY after succ
 
   assert.equal(queryCount, 2);
   assert.deepEqual(handleCalls, [
-    [`media-upload:${input.mediaId}`, undefined],
-    [`media-upload:${input.mediaId}`, 'closed-run'],
+    [`media-upload:${input.mediaId}`, undefined, undefined],
+    [`media-upload:${input.mediaId}`, 'closed-run', { followRuns: false }],
   ]);
-  assert.deepEqual(resultOptions, { followRuns: false });
 });
 
 test('Post Request media check fails non-retryably when a closed upload failed', async (t) => {

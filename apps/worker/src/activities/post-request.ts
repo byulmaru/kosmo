@@ -159,8 +159,8 @@ export const checkPostRequestMediaUploadActivity = async ({
 
         try {
           await temporalClient.workflow
-            .getHandle(workflowId, description.runId)
-            .result({ followRuns: false });
+            .getHandle(workflowId, description.runId, { followRuns: false })
+            .result();
         } catch (error) {
           if (error instanceof WorkflowContinuedAsNewError) {
             throw pendingPostRequestMediaUpload();

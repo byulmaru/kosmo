@@ -261,8 +261,12 @@ const mockTemporalClientToEnvironment = (
   environment: TestWorkflowEnvironment,
   onDescribe?: (workflowId: string, status: string, parentWorkflowId?: string) => void,
 ): void => {
-  t.mock.method(temporalClient.workflow, 'getHandle', ((workflowId: string, runId?: string) => {
-    const handle = environment.client.workflow.getHandle(workflowId, runId);
+  t.mock.method(temporalClient.workflow, 'getHandle', ((
+    workflowId: string,
+    runId?: string,
+    options?: { readonly followRuns?: boolean },
+  ) => {
+    const handle = environment.client.workflow.getHandle(workflowId, runId, options);
     return {
       describe: async () => {
         const description = await handle.describe();
@@ -273,7 +277,7 @@ const mockTemporalClientToEnvironment = (
         );
         return description;
       },
-      result: (options?: { readonly followRuns?: boolean }) => handle.result(options),
+      result: () => handle.result(),
     } as never;
   }) as never);
 };
