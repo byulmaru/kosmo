@@ -30,7 +30,10 @@ import {
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
-import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
+import {
+  POST_REQUEST_WORKFLOW_TYPE,
+  postRequestWorkflowId,
+} from '@kosmo/core/temporal/post-request';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -41,6 +44,7 @@ import {
 } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
+import type { PostRequestSnapshot } from '@kosmo/core/temporal/post-request';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
 import type { projectLocalPostNote as ProjectLocalPostNote } from '../../../../../packages/fedify/src/local-post-note';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -610,7 +614,12 @@ describe('Post Reply GraphQL 경계', () => {
       `@${available.handle}.extra @${available.handle}é ` +
       `@${available.handle}@missing.example @missing@missing.example ` +
       `@${blocked.handle} @${disabled.handle}`;
-    const execute = t.mock.method(temporalClient.workflow, 'execute');
+    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      (...args: Parameters<typeof temporalClient.workflow.start>) => originalStart(...args),
+    );
 
     const result = await requestCreatePost(
       { bodyText, visibility: PostVisibility.PUBLIC },
@@ -618,11 +627,16 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(execute.mock.calls.length, 1);
-    const [workflow, options] = execute.mock.calls[0]!.arguments;
-    assert.equal(workflow, POST_CREATE_WORKFLOW_TYPE);
-    const workflowArgs = options.args?.[0] as { input: { origin: string } };
-    assert.equal(workflowArgs.input.origin, 'LOCAL');
+    const postRequestCalls = start.mock.calls.filter(
+      (call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE,
+    );
+    assert.equal(postRequestCalls.length, 1);
+    const [, options] = postRequestCalls[0]!.arguments;
+    const snapshot = options.args?.[0] as PostRequestSnapshot;
+    assert.equal(snapshot.input.origin, 'LOCAL');
+    assert.equal(snapshot.input.accountId, auth.account.id);
+    assert.equal(snapshot.input.profileId, auth.profile.id);
+    assert.equal(options.workflowId, postRequestWorkflowId(auth.account.id, snapshot.requestId));
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -1344,15 +1358,6 @@ describe('Post Reply GraphQL 경계', () => {
         options: Parameters<typeof temporalClient.workflow.execute>[1],
       ) => {
         if (workflow !== MEDIA_UPLOAD_WORKFLOW_TYPE) {
-          if (workflow === POST_CREATE_WORKFLOW_TYPE) {
-            const workflowInput = (
-              options.args?.[0] as {
-                input: { accountId?: string; media?: { mediaId: string }[] };
-              }
-            ).input;
-            assert.equal(workflowInput.accountId, auth.account.id);
-            assert.equal(workflowInput.media?.[0]?.mediaId, storedMedia.id);
-          }
           return originalExecute(workflow, options);
         }
 
@@ -1377,6 +1382,20 @@ describe('Post Reply GraphQL 경계', () => {
           mediaType: 'storage-defined-format',
           url: publicMediaUrl,
         } as never;
+      },
+    );
+    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      async (...args: Parameters<typeof temporalClient.workflow.start>) => {
+        const [workflow, options] = args;
+        if (workflow === POST_REQUEST_WORKFLOW_TYPE) {
+          const snapshot = options.args?.[0] as PostRequestSnapshot;
+          assert.equal(snapshot.input.accountId, auth.account.id);
+          assert.equal(snapshot.input.media?.[0]?.mediaId, storedMedia.id);
+        }
+        return originalStart(...args);
       },
     );
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
@@ -1406,6 +1425,10 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
     assertNoGraphQLErrors(created);
+    assert.equal(
+      start.mock.calls.filter((call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE).length,
+      1,
+    );
     const postId = created.data?.createPost.post.id;
     assert.ok(postId);
 
