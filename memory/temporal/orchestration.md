@@ -38,7 +38,16 @@
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
 - Local GraphQL의 Post·Reply·Quote 요청은 `postRequestWorkflow`가 immutable request snapshot과 stable `postId`를
   소유한다. 입력 Media가 모두 READY가 되기 전에는 Post row나 Post Content를 생성하지 않는다. Workflow는 READY Media를
-  재사용하고 UPLOADING Media에 기존 upload child를 실행한다. 취소는 publication 시작 전에만 확정한다. publication
+  재사용하고 UPLOADING Media에 기존 upload child를 실행한다. READY Media는 새 처리 선택과 무관하게 재사용한다.
+  다른 요청이 같은 Media Upload Workflow를 실행 중이면 새 Workflow history는
+  `patched('post-request-media-retry-poll-v1')` 뒤에서 `checkPostRequestMediaUploadActivity`를 호출한다. 미완료 상태는
+  BENIGN retryable failure로 반환하고 Temporal이 5초 간격으로 재시도하며, 전체 Activity schedule-to-close 한도는
+  76시간이다. 각 시도는 10초 start-to-close로 제한되어 대기 사이 Worker Activity slot을 유지하지 않는다. Patch 이전
+  history는 기존 `waitForPostRequestMediaUploadActivity`의 76시간 heartbeat 경로를 유지하므로 두 Activity와 legacy
+  branch는 해당 history가 drain될 때까지 등록한다. Child start/join 실패 뒤 새 history는
+  `patched('post-request-media-ready-recovery-v1')`에서 취소가 아닐 때 동일 Account의 Local Media가 primary DB에서
+  READY인지 재확인한다. READY면 그 Media identity를 재사용하고, 그렇지 않거나 재확인에 실패하면 원래 upload 오류를
+  보존한다. 취소는 recovery 확인을 건너뛰며 shared upload child는 `ABANDON`한다. 취소는 publication 시작 전에만 확정한다. publication
   중 timeout이나 응답 유실이 있으면 exact `postId`를 조회해 정산하되, 아직 row가 없다는 결과만으로 FAILED를 확정하지
   않는다. 이전 post Activity가 나중에 commit할 수 있기 때문이다. Publication은 stable `postId`와 현재 authorization
   재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.

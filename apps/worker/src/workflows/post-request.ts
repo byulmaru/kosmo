@@ -129,6 +129,16 @@ const { waitForPostRequestMediaUploadActivity } = proxyActivities<typeof activit
   scheduleToCloseTimeout: '76 hours',
   startToCloseTimeout: '76 hours',
 });
+const { checkPostRequestMediaUploadActivity } = proxyActivities<typeof activities>({
+  retry: {
+    backoffCoefficient: 1,
+    initialInterval: '5 seconds',
+    maximumAttempts: 0,
+    maximumInterval: '5 seconds',
+  },
+  scheduleToCloseTimeout: '76 hours',
+  startToCloseTimeout: '10 seconds',
+});
 
 const queryState = defineQuery<PostRequestState>(POST_REQUEST_STATE_QUERY);
 const cancelRequest = defineUpdate<PostRequestState>(POST_REQUEST_CANCEL_UPDATE);
@@ -313,12 +323,41 @@ const uploadMedia = async (
         if (!isWorkflowAlreadyStarted(error)) {
           throw error;
         }
-        await cancellationScope.run(() =>
-          waitForPostRequestMediaUploadActivity({
+        if (patched('post-request-media-retry-poll-v1')) {
+          await cancellationScope.run(() =>
+            checkPostRequestMediaUploadActivity({
+              accountId: snapshot.input.accountId,
+              mediaId,
+            }),
+          );
+        } else {
+          await cancellationScope.run(() =>
+            waitForPostRequestMediaUploadActivity({
+              accountId: snapshot.input.accountId,
+              mediaId,
+            }),
+          );
+        }
+      }
+    } catch (error) {
+      if (!patched('post-request-media-ready-recovery-v1') || isCancelled()) {
+        throw error;
+      }
+
+      let mediaIsReady = false;
+      try {
+        const currentMedia = await cancellationScope.run(() =>
+          getPostRequestMediaStateActivity({
             accountId: snapshot.input.accountId,
-            mediaId,
+            mediaIds: [mediaId],
           }),
         );
+        mediaIsReady = currentMedia.readyMediaIds.includes(mediaId);
+      } catch {
+        // Keep the original child or join failure if the readiness recheck fails.
+      }
+      if (!mediaIsReady) {
+        throw error;
       }
     } finally {
       setCancellationScope(undefined);

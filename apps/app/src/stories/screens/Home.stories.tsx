@@ -293,7 +293,7 @@ export const OnboardingCompact: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findAllByRole('heading', { name: '홈' });
-    expectHomeBrandHeader(canvasElement);
+    await expectHomeBrandHeader(canvasElement);
   },
 };
 
