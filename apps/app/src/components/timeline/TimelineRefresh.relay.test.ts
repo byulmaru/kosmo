@@ -115,6 +115,7 @@ mockModule('react-relay', {
   },
 });
 mockModule('expo-router', {
+  useIsFocused: () => true,
   useRouter: () => ({
     replace: (href: string) => navigations.push(href),
     setParams: (params: object) => navigations.push(params),

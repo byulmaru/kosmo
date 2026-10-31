@@ -38,6 +38,7 @@ mockModule('react-native', {
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
+mockModule('expo-router', { useIsFocused: () => true });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/BrandLogo', { BrandLogo: 'BrandLogo' });
 mockModule('@/components/ui/StateView', { StateView: 'StateView' });

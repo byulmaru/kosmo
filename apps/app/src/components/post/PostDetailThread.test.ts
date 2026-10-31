@@ -60,6 +60,12 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('expo-router', {
+  exports: {
+    useIsFocused: () => true,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('react-relay', {
   exports: {
     graphql: () => ({}),

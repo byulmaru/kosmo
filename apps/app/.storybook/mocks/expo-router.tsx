@@ -96,6 +96,10 @@ export function usePathname() {
   return useContext(RouterContext).pathname;
 }
 
+export function useIsFocused() {
+  return true;
+}
+
 export function useCurrentRouteInfo() {
   const { params, pathname } = useContext(RouterContext);
   return { params, pathname };
