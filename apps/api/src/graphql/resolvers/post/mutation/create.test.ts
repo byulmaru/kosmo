@@ -341,7 +341,11 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
     assert.equal(workflow, postRequestWorkflow.workflow);
     throw workflowReached;
   });
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const result = await graphql({
     schema,
@@ -434,7 +438,11 @@ test('createPost without a request ID uses Post Request and forwards supported a
         }),
       }) as never,
   );
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   for (const { expected, header } of [
     { expected: 'web', header: 'web' },
@@ -469,10 +477,12 @@ test('createPost without a request ID uses Post Request and forwards supported a
     });
 
     assert.deepEqual(result.errors, undefined);
-    const post = result.data?.createPost.post as { id: string };
-    assert.equal(post.id, encodeGlobalId('Post', createdPostIds.at(-1)!));
-    const request = result.data?.createPost.request as { id: string; status: string };
-    assert.equal(request.status, PostRequestStatus.PUBLISHED);
+    const response = result.data?.createPost as {
+      post: { id: string };
+      request: { id: string; status: string };
+    };
+    assert.equal(response.post.id, encodeGlobalId('Post', createdPostIds.at(-1)!));
+    assert.equal(response.request.status, PostRequestStatus.PUBLISHED);
     assert.equal(startedSnapshots.at(-1)?.analyticsPlatform, expected);
     assert.equal(
       Object.hasOwn(startedSnapshots.at(-1) ?? {}, 'analyticsPlatform'),
@@ -673,7 +683,11 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
     throw failure;
   });
   t.mock.method(temporalClient.workflow, 'getHandle', () => ({ query: async () => null }) as never);
-  t.mock.method(temporalClient, 'withDeadline', async (_deadline, callback) => callback());
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
   const result = await graphql({
     schema,

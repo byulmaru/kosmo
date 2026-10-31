@@ -334,15 +334,7 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
   });
 
   const started: Array<{
-    args?: readonly {
-      input: {
-        media?: readonly { altText: string | null; applyNightshade: boolean; mediaId: string }[];
-      };
-      postId?: string;
-      requestId: string;
-      submittedAt: string;
-      submissionFingerprint?: string;
-    }[];
+    args?: readonly [PostRequestState['snapshot']];
     typedSearchAttributes?: readonly { key: { name: string; type: string }; value: string }[];
     workflowIdConflictPolicy?: string;
     workflowIdReusePolicy?: string;
