@@ -56,13 +56,17 @@
   처리 실패나 publication 전 취소는 각각 `FAILED`·`CANCELLED`를 반환하고 Workflow를 닫는다. 상태와 상세는
   Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
   만들지 않는다. GraphQL projection은 [Post domain contract](../../docs/domain/objects/post.md)을 따르며,
-  immutable input 전체나 public error detail을 복원하지 않는다. `createPost`의 `request`만 선택하면 접수 뒤 바로
-  반환하고, non-null `post`를 선택한 경우에만
-  기존 request Workflow의 `result()`를 30초 API deadline으로 기다린 뒤, published `postId`와 snapshot의 원본
-  `profileId`를 함께 조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
+  immutable input 전체나 public error detail을 복원하지 않는다. Local `createPost`의 모든 새 요청은 같은
+  `postRequestWorkflow` 경로로 admission한다. 선택적인 `requestId`는 멱등성 재시도 키일 뿐이며, 생략하면 서버가
+  생성한다. 신규 admission은 기존 primary Media query로 분류한다. Media가 없거나 모두 READY면 기존 request
+  Workflow의 `result()`를 현재 30초 API caller deadline까지 기다려 `PUBLISHED` request를 반환하고, 유효한 Local
+  UPLOADING Media가 하나라도 있으면 request acknowledgement를 즉시 반환한 뒤 Workflow가 처리를 계속한다. 같은 ID와
+  fingerprint의 replay나 racing start는 기존 current state를 반환하고 재검증·재분류·재개방하지 않으며, ID에 다른
+  content가 오면 conflict다. 이 admission 동작은 `request` 또는 `post` 선택과 무관하다. non-null `post`는 기존 lazy
+  compatibility field이고, 선택하면 publication을 기다린 뒤 published `postId`와 snapshot의 원본 `profileId`를 함께
+  조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
   result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를
-  취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있지만,
-  `request`만 선택한 acknowledgement는 영향을 받지 않는다.
+  취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있다.
 - 선택적인 내부 `PostAnalyticsPlatform`은 Post request snapshot에서 V2 create child와 stable effects child까지
   전달한다. 각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
   순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만

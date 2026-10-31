@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { db, Media as MediaTable } from '@kosmo/core/db';
+import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
-import { ConflictError, ValidationError } from '@kosmo/core/error';
+import { ConflictError, KosmoError, ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
-import { runWorkflow } from '@kosmo/core/temporal/client';
+import { runWorkflow, temporalClient } from '@kosmo/core/temporal/client';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
   PostRequestStatus,
@@ -41,25 +41,28 @@ const unusableMedia = (index: number, message = '이미지를 다시 첨부해 �
 const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[]) => {
   const uniqueMediaIds = [...new Set(mediaIds)];
   if (uniqueMediaIds.length === 0) {
-    return;
+    return false;
   }
 
-  const rows = await db
-    .select({
-      id: MediaTable.id,
-      state: MediaTable.state,
-      storageReference: MediaTable.storageReference,
-      url: MediaTable.url,
-    })
-    .from(MediaTable)
-    .where(
-      and(
-        inArray(MediaTable.id, uniqueMediaIds),
-        eq(MediaTable.accountId, accountId),
-        eq(MediaTable.source, MediaSource.LOCAL),
+  const rows = await withPrimaryDatabase(async () =>
+    db
+      .select({
+        id: MediaTable.id,
+        state: MediaTable.state,
+        storageReference: MediaTable.storageReference,
+        url: MediaTable.url,
+      })
+      .from(MediaTable)
+      .where(
+        and(
+          inArray(MediaTable.id, uniqueMediaIds),
+          eq(MediaTable.accountId, accountId),
+          eq(MediaTable.source, MediaSource.LOCAL),
+        ),
       ),
-    );
+  );
   const rowsById = new Map(rows.map((row) => [row.id, row]));
+  let hasUploadingMedia = false;
 
   for (const [index, mediaId] of mediaIds.entries()) {
     const media = rowsById.get(mediaId);
@@ -79,6 +82,7 @@ const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[
       throw unusableMedia(index);
     }
 
+    hasUploadingMedia = true;
     try {
       await headNexusMediaUploadSource(media.storageReference);
     } catch (error) {
@@ -88,7 +92,50 @@ const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[
       throw unusableMedia(index, error.message);
     }
   }
+
+  return hasUploadingMedia;
 };
+
+type PostRequestWorkflow = (args: PostRequestSnapshot) => Promise<PostRequestState>;
+
+export async function waitForPostRequestResult(
+  accountId: string,
+  request: PostRequestState,
+): Promise<PostRequestState> {
+  const state =
+    request.status === PostRequestStatus.PUBLISHED
+      ? request
+      : await temporalClient
+          .withDeadline(Date.now() + 30_000, () =>
+            temporalClient.workflow
+              .getHandle<PostRequestWorkflow>(
+                postRequestWorkflowId(accountId, request.snapshot.requestId),
+              )
+              .result(),
+          )
+          .catch(rethrowPostWorkflowFailure);
+
+  if (state.status === PostRequestStatus.PUBLISHED) {
+    if (!state.result?.postId) {
+      throw new Error('Published Post request has no Post ID');
+    }
+
+    return state;
+  }
+
+  if (state.status === PostRequestStatus.FAILED) {
+    if (state.error && state.error.code !== 'INTERNAL_SERVER_ERROR') {
+      throw new KosmoError({ code: state.error.code, message: state.error.message });
+    }
+    throw new Error(state.error?.message ?? 'Post request failed');
+  }
+
+  if (state.status === PostRequestStatus.CANCELLED) {
+    throw new ConflictError({ message: 'Post request is already finished' });
+  }
+
+  throw new Error(`Post request completed with unexpected status: ${state.status}`);
+}
 
 export async function submitPostRequest(
   input: LocalPostMutationInput,
@@ -101,6 +148,13 @@ export async function submitPostRequest(
     throw new ValidationError('Post request media must be unique', { field: 'media' });
   }
 
+  const media = submittedMedia.map(
+    ({ altText, applyAiProhibitFilter, applyNightshade, mediaId }) => ({
+      altText: altText ?? null,
+      applyNightshade: applyAiProhibitFilter ?? applyNightshade ?? false,
+      mediaId: mediaId.id,
+    }),
+  );
   const actorProfileId = input.actorProfileId?.id ?? ctx.session.profile?.id;
   const submissionFingerprint = createHash('sha256')
     .update(
@@ -109,11 +163,7 @@ export async function submitPostRequest(
         actorProfileId,
         bodyText: normalizePostContentPlainText(input.bodyText),
         contentWarning: normalizePostContentPlainText(input.contentWarning ?? '') || null,
-        media: submittedMedia.map(({ altText, applyNightshade, mediaId }) => ({
-          altText: altText ?? null,
-          applyNightshade: applyNightshade ?? false,
-          mediaId: mediaId.id,
-        })),
+        media,
         mentions: (input.mentions ?? []).map(({ end, profileId, start }) => ({
           end,
           profileId: profileId.id,
@@ -135,12 +185,7 @@ export async function submitPostRequest(
   }
 
   const preparedInput = await prepareLocalPostInput(input, ctx);
-  const media = submittedMedia.map(({ altText, applyNightshade, mediaId }) => ({
-    altText: altText ?? null,
-    applyNightshade: applyNightshade ?? false,
-    mediaId: mediaId.id,
-  }));
-  await verifyAttachedMedia(
+  const hasUploadingMedia = await verifyAttachedMedia(
     ctx.session.accountId,
     media.map(({ mediaId }) => mediaId),
   );
@@ -179,7 +224,6 @@ export async function submitPostRequest(
         },
       ] satisfies NonNullable<WorkflowStartOptions<Workflow>['typedSearchAttributes']>,
     });
-    return state;
   } catch (error) {
     if (
       !(error instanceof WorkflowExecutionAlreadyStartedError) ||
@@ -197,4 +241,6 @@ export async function submitPostRequest(
     }
     return existingSubmission(current, submissionFingerprint);
   }
+
+  return hasUploadingMedia ? state : waitForPostRequestResult(ctx.session.accountId, state);
 }

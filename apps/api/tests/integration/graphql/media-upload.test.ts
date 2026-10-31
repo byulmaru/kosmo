@@ -340,6 +340,57 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(execution.mock.callCount(), 1);
   });
 
+  test('canonical AI filter input maps to the existing workflow option and overrides legacy input', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const first = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(first);
+    const firstMedia = await db.select().from(Media).then(firstOrThrow);
+    const firstSession = parseNexusMediaUploadReference(firstMedia.storageReference!);
+    assert.ok(firstSession);
+
+    const second = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(second);
+    const secondMedia = (
+      await db.select().from(Media).where(eq(Media.accountId, auth.account.id))
+    ).find(({ id }) => id !== firstMedia.id);
+    assert.ok(secondMedia);
+
+    const choices: boolean[] = [];
+    const execution = mockCompletingWorkflow(t, async ({ mediaId, applyNightshade }) => {
+      choices.push(applyNightshade);
+      await markMediaReady(mediaId);
+      return workflowResult(firstSession.id);
+    });
+    const canonical = await requestCompleteMediaUpload(
+      first.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      undefined,
+      true,
+    );
+    assertNoGraphQLErrors(canonical);
+    assertMediaUploadWorkflowOptions(
+      execution.mock.calls[0]!,
+      firstMedia.id,
+      auth.account.id,
+      true,
+    );
+
+    const precedence = await requestCompleteMediaUpload(
+      second.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+      false,
+    );
+    assertNoGraphQLErrors(precedence);
+    assertMediaUploadWorkflowOptions(
+      execution.mock.calls[1]!,
+      secondMedia.id,
+      auth.account.id,
+      false,
+    );
+    assert.deepEqual(choices, [true, false]);
+  });
+
   test('workflow 오류 뒤 발견한 READY row를 요청 선택과 무관하게 반환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
@@ -940,12 +991,23 @@ const requestIssueMediaUploadUrl = (
   );
 };
 
-const requestCompleteMediaUpload = (id: string, token?: string, applyNightshade?: boolean) =>
+const requestCompleteMediaUpload = (
+  id: string,
+  token?: string,
+  applyNightshade?: boolean,
+  applyAiProhibitFilter?: boolean,
+) =>
   requestGraphQL<CompleteMediaUploadData>(
     `mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) {
       completeMediaUpload(input: $input) { media { id readyAt state } }
     }`,
-    { input: { id, ...(applyNightshade === undefined ? {} : { applyNightshade }) } },
+    {
+      input: {
+        id,
+        ...(applyNightshade === undefined ? {} : { applyNightshade }),
+        ...(applyAiProhibitFilter === undefined ? {} : { applyAiProhibitFilter }),
+      },
+    },
     token,
   );
 

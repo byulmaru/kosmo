@@ -28,7 +28,11 @@ type CreatePostResult = {
 const requestSubmit = (
   input: {
     bodyText: string;
-    media?: readonly { applyNightshade?: boolean; mediaId: string }[];
+    media?: readonly {
+      applyAiProhibitFilter?: boolean;
+      applyNightshade?: boolean;
+      mediaId: string;
+    }[];
     requestId: string;
     visibility: 'PUBLIC';
   },
@@ -75,7 +79,9 @@ const noExistingPostRequestHandle = {
 test('createPost snapshots supported analytics platforms and keeps the first request value', async (t) => {
   const accountId = '00000000-0000-4000-8000-000000000001';
   const states = new Map<string, PostRequestState>();
+  const results = new Map<string, PostRequestState>();
   const startedSnapshots: PostRequestState['snapshot'][] = [];
+  let resultCallCount = 0;
   t.mock.method(
     temporalClient.workflow,
     'getHandle',
@@ -84,6 +90,13 @@ test('createPost snapshots supported analytics platforms and keeps the first req
         query: async (queryName: string) => {
           assert.equal(queryName, POST_REQUEST_STATE_QUERY);
           return states.get(workflowId) ?? null;
+        },
+        result: async () => {
+          resultCallCount += 1;
+          const result = results.get(workflowId);
+          assert.ok(result);
+          states.set(workflowId, result);
+          return result;
         },
       }) as never,
   );
@@ -96,6 +109,11 @@ test('createPost snapshots supported analytics platforms and keeps the first req
       startedSnapshots.push(snapshot);
       const workflowId = postRequestWorkflowId(accountId, snapshot.requestId);
       states.set(workflowId, { snapshot, status: PostRequestStatus.QUEUED });
+      results.set(workflowId, {
+        snapshot,
+        status: PostRequestStatus.PUBLISHED,
+        result: { postId: crypto.randomUUID() },
+      });
       return { workflowId } as never;
     },
   );
@@ -110,6 +128,7 @@ test('createPost snapshots supported analytics platforms and keeps the first req
   const webRequestId = '00000000-0000-4000-8000-000000000006';
   const web = await submit(webRequestId, 'web');
   assert.deepEqual(web.errors, undefined);
+  assert.equal(web.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
   assert.equal(startedSnapshots[0]?.analyticsPlatform, 'web');
   const firstSnapshot = states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot;
   assert.ok(firstSnapshot);
@@ -151,6 +170,7 @@ test('createPost snapshots supported analytics platforms and keeps the first req
     false,
   );
   assert.equal(start.mock.callCount(), 4);
+  assert.equal(resultCallCount, 4);
 });
 
 test('createPost rejects duplicate media before checking uploads or starting the workflow', async (t) => {
@@ -230,13 +250,28 @@ test('createPost rejects duplicate media before checking uploads or starting the
   assert.equal(start.mock.callCount(), 0);
 });
 
-test('createPost checks raw uploads before start and keeps READY media choices in the snapshot', async (t) => {
+test('createPost checks raw uploads, acknowledges pending media, and waits for READY media', async (t) => {
   const query = t.mock.fn(async (queryName: string) => {
     assert.equal(queryName, POST_REQUEST_STATE_QUERY);
     return null;
   });
-  t.mock.method(temporalClient.workflow, 'getHandle', () => ({ query }) as never);
   const accountId = '00000000-0000-4000-8000-000000000001';
+  const results = new Map<string, PostRequestState>();
+  let resultCallCount = 0;
+  t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    (workflowId: string) =>
+      ({
+        query,
+        result: async () => {
+          resultCallCount += 1;
+          const result = results.get(workflowId);
+          assert.ok(result);
+          return result;
+        },
+      }) as never,
+  );
   const uploadingMediaId = '00000000-0000-4000-8000-000000000003';
   const readyMediaId = '00000000-0000-4000-8000-000000000004';
   const uploadId = '00000000-0000-4000-8000-000000000005';
@@ -318,8 +353,17 @@ test('createPost checks raw uploads before start and keeps READY media choices i
   t.mock.method(temporalClient.workflow, 'start', async (workflow: unknown, options: unknown) => {
     assert.equal(workflow, postRequestWorkflow.workflow);
     assert.ok(options && typeof options === 'object');
-    started.push(options as (typeof started)[number]);
-    return { workflowId: 'post-request', firstExecutionRunId: 'run-1' } as never;
+    const workflowOptions = options as (typeof started)[number];
+    started.push(workflowOptions);
+    const snapshot = workflowOptions.args?.[0];
+    assert.ok(snapshot);
+    const workflowId = postRequestWorkflowId(accountId, snapshot.requestId);
+    results.set(workflowId, {
+      snapshot,
+      status: PostRequestStatus.PUBLISHED,
+      result: { postId: crypto.randomUUID() },
+    });
+    return { workflowId, firstExecutionRunId: 'run-1' } as never;
   });
   t.mock.method(
     temporalClient,
@@ -329,7 +373,13 @@ test('createPost checks raw uploads before start and keeps READY media choices i
 
   const uploadingResult = await requestSubmit({
     bodyText: 'uploading image',
-    media: [{ applyNightshade: true, mediaId: encodeGlobalId('Media', uploadingMediaId) }],
+    media: [
+      {
+        applyAiProhibitFilter: false,
+        applyNightshade: true,
+        mediaId: encodeGlobalId('Media', uploadingMediaId),
+      },
+    ],
     requestId: '00000000-0000-4000-8000-000000000006',
     visibility: 'PUBLIC',
   });
@@ -342,7 +392,7 @@ test('createPost checks raw uploads before start and keeps READY media choices i
     },
   ]);
   assert.deepEqual(started[0]?.args?.[0]?.input.media, [
-    { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
+    { altText: null, applyNightshade: false, mediaId: uploadingMediaId },
   ]);
   assert.equal(started[0]?.args?.[0]?.postId, undefined);
   assert.ok(started[0]?.args?.[0]?.submittedAt);
@@ -371,13 +421,14 @@ test('createPost checks raw uploads before start and keeps READY media choices i
     visibility: 'PUBLIC',
   });
   assert.deepEqual(readyResult.errors, undefined);
-  assert.equal(readyResult.data?.createPost.request?.status, 'QUEUED');
+  assert.equal(readyResult.data?.createPost.request?.status, 'PUBLISHED');
   assert.equal(metadataRequests.length, 1);
   assert.deepEqual(started[1]?.args?.[0]?.input.media, [
     { altText: null, applyNightshade: false, mediaId: readyMediaId },
   ]);
   assert.equal(started[1]?.args?.[0]?.postId, undefined);
   assert.equal(query.mock.callCount(), 2);
+  assert.equal(resultCallCount, 1);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(executeWorkflow.mock.callCount(), 0);
 });
@@ -650,7 +701,7 @@ test('createPost recovers a lost acknowledgement after an upload source disappea
 
   const input = {
     bodyText: 'same content',
-    media: [{ applyNightshade: true, mediaId: encodeGlobalId('Media', mediaId) }],
+    media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', mediaId) }],
     requestId,
     visibility: 'PUBLIC' as const,
   };
@@ -660,13 +711,17 @@ test('createPost recovers a lost acknowledgement after an upload source disappea
 
   const currentAfterStart = readCurrent();
   assert.ok(currentAfterStart);
+  assert.equal(currentAfterStart.snapshot.input.media?.[0]?.applyNightshade, true);
   const publishedPostId = '00000000-0000-4000-8000-000000000099';
   current = {
     ...currentAfterStart,
     result: { postId: publishedPostId },
     status: PostRequestStatus.PUBLISHED,
   };
-  const replay = await requestSubmit(input);
+  const replay = await requestSubmit({
+    ...input,
+    media: [{ applyNightshade: true, mediaId: encodeGlobalId('Media', mediaId) }],
+  });
   assert.deepEqual(replay.errors, undefined);
   assert.equal(replay.data?.createPost.request?.status, 'PUBLISHED');
   current = { ...currentAfterStart, status: PostRequestStatus.FAILED };

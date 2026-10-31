@@ -92,7 +92,8 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
-  applyNightshade: Boolean = false
+  applyAiProhibitFilter: Boolean
+  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   id: ID!
 }
 
@@ -153,7 +154,8 @@ input CreatePostInput {
 
 input CreatePostMediaInput {
   altText: String
-  applyNightshade: Boolean = false
+  applyAiProhibitFilter: Boolean
+  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   mediaId: ID!
 }
 

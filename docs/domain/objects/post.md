@@ -108,16 +108,22 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
-Post·Reply·Quote 요청은 Media 준비가 끝나기 전에 접수될 수 있지만, 접수만으로 Post나 Post Content가 생성되지는
-않는다. Media 처리 실패로 작성에 이르지 못해도 Post나 Post Content를 만들지 않는다. 실제 Post 생성 transaction은
-당시 Account가 Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 유효한지 다시 확인한다. 확인할 수
-없으면 Post를 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤
-저장 결과가 확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
+Local Post·Reply·Quote 작성은 모두 같은 PostRequest 경로로 접수한다. 입력 `requestId`는 선택적인 멱등성 재시도 키이며,
+생략하면 서버가 생성한다. 이 값의 유무는 게시 동작을 바꾸지 않는다. 같은 `requestId`와 작성 내용의 재요청은 기존
+요청 상태를 반환하며, 같은 ID에 다른 내용은 충돌이다.
+
+새 요청은 제출 Media 상태에 따라 응답한다. Media가 없거나 모든 참조 Media가 Ready면 publication 결과를 기다려
+`PUBLISHED` PostRequest를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 접수 확인을 즉시 반환하고, 모든
+참조 Media가 Ready가 된 뒤 publication을 진행한다. 어느 경우에도 Media 준비 전에 Post나 Post Content를 만들지 않는다.
+Media 처리 실패로 작성에 이르지 못하면 Post나 Post Content를 만들지 않는다. 실제 Post 생성 transaction은 당시 Account가
+Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 유효한지 다시 확인한다. 확인할 수 없으면 Post를
+생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤 저장 결과가
+확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
 
 `PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
 `sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
-nullable list item으로 반환한다. `createPost`의 `request`만 선택하면 접수 응답을 바로 받을 수 있고, non-null
-`post`를 선택하면 publication 결과를 기다린다.
+nullable list item으로 반환한다. `CreatePostPayload.post`는 non-null lazy compatibility field이며 선택하면 publication
+결과를 기다린다. 결과에서 `request`만 선택해도 새 요청의 Media 상태에 따라 publication 완료를 기다릴 수 있다.
 
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.

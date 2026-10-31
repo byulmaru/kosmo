@@ -26,6 +26,7 @@ export type LocalPostMutationInput = {
   media?:
     | readonly {
         readonly altText?: string | null;
+        readonly applyAiProhibitFilter?: boolean | null;
         readonly applyNightshade?: boolean | null;
         readonly mediaId: { readonly id: string };
       }[]
@@ -46,7 +47,12 @@ export type LocalPostMutationInput = {
 export const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
-    applyNightshade: t.boolean({ required: false, defaultValue: false }),
+    applyAiProhibitFilter: t.boolean({ required: false }),
+    applyNightshade: t.boolean({
+      required: false,
+      defaultValue: false,
+      deprecationReason: 'Use applyAiProhibitFilter instead.',
+    }),
     mediaId: t.globalID({ for: Media }),
   }),
 });
