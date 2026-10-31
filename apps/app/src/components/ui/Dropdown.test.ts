@@ -164,3 +164,46 @@ test('exiting content stays rendered without accepting dismissal events', async 
   assert.equal(data.documentListeners.has('pointerdown'), false);
   assert.deepEqual(reasons, []);
 });
+
+test('auto placement uses directional insets and keeps a stable gap above or below the trigger', async () => {
+  const data = fixture();
+  data.trigger.getBoundingClientRect = () => ({ left: 350, right: 390, top: 40, bottom: 80 });
+  let maxHeight = 0;
+  const props = {
+    accessibilityLabel: 'reactions',
+    gap: 4,
+    maxHeight: 240,
+    maxWidth: 288,
+    open: true,
+    triggerRef: { current: data.trigger } as never,
+    onRequestClose() {},
+    viewportInset: { bottom: 24, left: 12, right: 16, top: 16 },
+    verticalPlacement: 'auto' as const,
+    children: (height: number) => {
+      maxHeight = height;
+      return null;
+    },
+  };
+  await act(async () => {
+    renderer = create(createElement(Dropdown, props), { createNodeMock: () => data.content });
+  });
+  const style = () => Object.assign({}, ...renderer!.root.findByType('View' as never).props.style);
+  const dataSet = () => renderer!.root.findByType('View' as never).props.dataSet;
+  assert.equal(dataSet().placement, 'bottom');
+  assert.equal(maxHeight, 212);
+  assert.equal(style().top, 84);
+  assert.equal(style().left, 86);
+  assert.equal(style().width, 288);
+
+  data.trigger.getBoundingClientRect = () => ({ left: 40, right: 80, top: 260, bottom: 300 });
+  data.content.getBoundingClientRect = () => ({ width: 280, height: 100 });
+  await act(async () => data.viewportListeners.get('resize')?.());
+  assert.equal(dataSet().placement, 'top');
+  assert.equal(maxHeight, 240);
+  assert.equal(style().top, 156);
+
+  await act(async () => renderer?.update(createElement(Dropdown, { ...props, open: false })));
+  await act(async () => renderer?.update(createElement(Dropdown, props)));
+  assert.equal(dataSet().placement, 'top');
+  assert.equal(style().top, 156);
+});

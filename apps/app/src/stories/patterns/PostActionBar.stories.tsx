@@ -18,6 +18,7 @@ import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostM
 import { usePostMoreMenuItem } from '@/components/post/PostMoreMenu';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, fontFamilies, spacing, typography } from '@/theme/tokens';
@@ -1650,7 +1651,6 @@ export const ReactionViewerOverlayContract: Story = {
     await userEvent.click(trigger);
     picker = await screen.findByRole('dialog', { name: '반응 선택' });
     const position = screen.getByTestId('full-reaction-overlay-position');
-    const overlayRoot = position.parentElement!;
     const scroll = screen.getByTestId('reaction-viewer-scroll') as HTMLDivElement;
     const column = screen.getByTestId('reaction-viewer-column') as HTMLDivElement;
     const positionIsAnchored = () => {
@@ -1662,7 +1662,7 @@ export const ReactionViewerOverlayContract: Story = {
     };
 
     expect(viewer).toContainElement(position);
-    expect(document.defaultView!.getComputedStyle(overlayRoot).position).toBe('fixed');
+    expect(document.defaultView!.getComputedStyle(position).position).toBe('fixed');
     positionIsAnchored();
 
     scroll.scrollTop = 48;
@@ -1746,6 +1746,11 @@ export const ReactionMobileWebTabClearance: Story = {
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
     expect(position.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       trigger.getBoundingClientRect().top,
+    );
+    expect(position.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientHeight -
+        getBottomTabBarContentHeight('web') -
+        spacing.sm,
     );
   },
   render: () => (
