@@ -385,6 +385,67 @@ test('Native PostActionBar wiring keeps target sizes and the zero-gap trailing g
   }
 });
 
+test('PostActionBar omits unavailable bookmark targets while preserving reply focus refs', async () => {
+  const bookmarkRef = { current: null } as never;
+  const disabledBookmark = await renderBar({
+    bookmark: {
+      accessibilityLabel: '북마크',
+      hasBookmarked: false,
+      onPress: () => undefined,
+      processing: 'disabled',
+    },
+    bookmarkControlRef: bookmarkRef,
+    post: null,
+  });
+  findByTestID(disabledBookmark, 'post-action-bookmark');
+  assert.equal(disabledBookmark.findByType(PostActionControl).props.controlRef, undefined);
+
+  const pendingBookmarkRef = { current: null } as never;
+  await renderBar({
+    bookmark: {
+      accessibilityLabel: '북마크',
+      hasBookmarked: false,
+      onPress: () => undefined,
+      processing: 'pending',
+    },
+    bookmarkControlRef: pendingBookmarkRef,
+    post: null,
+  });
+  assert.equal(renderer?.root.findByType(PostActionControl).props.controlRef, undefined);
+
+  const replyRef = { current: null } as never;
+  const disabledReply = await renderBar({
+    execution: { kind: 'enabled' },
+    post: null,
+    reply: {
+      accessibilityLabel: '답글',
+      controlRef: replyRef,
+      expanded: false,
+      onPress: () => undefined,
+      processing: 'disabled',
+    },
+  });
+  findByTestID(disabledReply, 'post-action-reply');
+  assert.strictEqual(disabledReply.findByType(PostActionControl).props.controlRef, replyRef);
+
+  const resolutionReplyRef = { current: null } as never;
+  const resolutionReply = await renderBar({
+    execution: { kind: 'resolution-required', reason: 'guest' },
+    post: null,
+    reply: {
+      accessibilityLabel: '답글',
+      controlRef: resolutionReplyRef,
+      expanded: false,
+      onPress: () => undefined,
+      processing: 'default',
+    },
+  });
+  assert.strictEqual(
+    resolutionReply.findByType(PostActionControl).props.controlRef,
+    resolutionReplyRef,
+  );
+});
+
 test('PostListItem uses the supplied list presentation', async () => {
   for (const [presentation, expectedPadding] of [
     ['mobile', 16],

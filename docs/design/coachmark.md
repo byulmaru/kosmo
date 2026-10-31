@@ -16,6 +16,14 @@
 - 이전·다음·닫기·다시 보기는 실제 팔로우·반응·게시를 실행하지 않는다. 작성 내용·검색어·선택을 유지하며, 기능 사용이나 다른 페이지 방문을 완료 조건으로 요구하지 않는다.
 - 표시 후 저장 실패 또는 두 기기의 동시 최초 진입에서는 중복 자동 안내가 발생할 수 있다. 서버 저장 완료 전까지 기기 간 정확히 한 번 표시를 보장하지 않는다.
 
+### 게시글 상세 안내 · PROD-1205
+
+- 게시글 상세의 `POST` 안내는 현재 게시글에서 보이고 사용할 수 있는 항목만 다음 순서로 안내한다: 반응 버튼 → 게시글에 이미 붙은 반응 이모지 요약 → 재게시 → 북마크 → 답글.
+- 게시글에 양수 반응이 없으면 반응 요약 단계를 제외해 4단계로 표시한다. 첫 유효 단계가 실제로 표시되면 반응 요약 단계의 생략 여부와 관계없이 `coachmark.post.shown`에 게시글 안내 전체를 본 것으로 기록한다. 4단계 진행 표시는 `1/4`부터 시작한다.
+- 생략된 단계는 다른 게시글·프로필·thread 행·기기에서 자동으로 보충하지 않는다. 수동 다시 보기는 요청한 시점에 현재 상세에서 보이고 사용할 수 있는 대상과 권한으로 단계 배열을 다시 만든다.
+- 로딩·오류·빈 대상이거나 현재 대상이 아직 측정되지 않았으면 안내를 열거나 `coachmark.post.shown`을 기록하지 않는다. ancestor·reply 행이 아닌 현재 상세 게시글의 action만 anchor로 사용한다.
+- 안내의 이전·다음·건너뛰기·완료·다시 보기는 반응·재게시·북마크·답글 게시를 실행하지 않는다. 안내를 탐색하거나 닫아도 선택 상태와 작성 중 draft를 초기화하지 않는다.
+
 자동 안내 이력은 다음 Account metadata를 사용한다.
 
 - 안내 이름은 `timeline`, `search`, `tag`, `profile`, `post`, `composer`로 두고 각각 `coachmark.<guide>.shown` 키를 사용한다.
@@ -104,3 +112,16 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 
 - 값 갱신을 허용하는 계약으로 변경한 뒤, 빈 임시 DB 마이그레이션과 API 통합 테스트 5개 및 마이그레이션 재실행을 통과했다. 본인 계정 접근 제한, 기본 빈 객체, 요청한 키만 조회, 같은 키 덮어쓰기와 서로 다른 키의 동시 갱신 보존을 확인했다.
 - 관련 앱 단위 테스트 32개, API 스키마·TypeScript, 앱 Relay·TypeScript, ESLint·Prettier 검사를 통과했다. 이번 변경에서 Storybook·Native 실기기·운영 환경 검증은 수행하지 않았다.
+
+### 게시글 상세 연결 검증 · 2026-10-29
+
+- `CoachmarkController`, `PostDetailCoachmark`, Post action·bookmark·thread·Media viewer 집중 테스트 58개와 POST Tests Storybook 16개가 통과했다. 현재 대상 단계 계산, 반응 요약 단계 생략, positive reaction의 unseen 자동 5단계, 대상 준비 후 자동 시작, 수동 다시 보기와 계정 metadata rerender 중 focus lifecycle을 포함한다.
+- 앱·Web TypeScript 검사, 변경 파일 targeted ESLint·Prettier 검사와 Relay compiler를 통과했다. Storybook Web에서 게시글 도움말 진입, 다섯 단계 완료 후 다시 보기, 반응 없음 4단계 자동 안내, 첫 실제 반응 이모지 anchor와 종료 후 도움말 trigger focus 복귀를 확인했다. 내장 Browser의 390px Light·Dark viewport에서 `1/5 → 2/5` 이동과 첫 실제 반응 이모지 anchor도 확인했다.
+- 비활성·처리 중인 액션을 안내 대상에서 제외하고 기존 picker·menu·답글 focus ref를 보존한다. 최종 앱 단위 테스트 1,331개와 기존 Posts Storybook 117개가 통과했다. Web export와 정적 Storybook 빌드도 통과했다.
+- 이번 변경에서는 Native 실기기, VoiceOver/TalkBack, 운영 환경 검증을 수행하지 않았다. Web Storybook 결과를 Native runtime 통과로 간주하지 않는다.
+
+### 게시글 대상 전이 검증 · 2026-10-29
+
+- 게시글 상세의 실제 Relay Store에서 반응 count를 0으로 갱신하는 `Posts / PostDetailThreadRouteCoachmarkSummaryDisappears` 회귀를 추가했다. 반응 요약 단계 표시 중 안내가 닫히고, 도움말을 다시 열었을 때 현재 대상 기준 4단계가 시작되는 동작을 확인했다.
+- 앱 단위 테스트 1,386개, Relay compiler·TypeScript, 변경 파일 ESLint·Prettier와 전체 Storybook Web 테스트 1,055개가 통과했다. 새 회귀 Story 단독 재실행과 정적 Storybook 빌드도 통과했으며, 기존 metadata rerender lifecycle 테스트를 유지했다.
+- Native 실기기·VoiceOver/TalkBack·운영 환경 검증은 수행하지 않았다. Web 결과를 Native runtime 검증으로 간주하지 않는다.

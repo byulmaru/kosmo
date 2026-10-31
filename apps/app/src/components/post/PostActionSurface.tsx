@@ -22,10 +22,13 @@ import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
+import type { PostDetailCoachmarkTargets } from './PostDetailCoachmarkSteps';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onActionBarBackgroundPress?: () => void;
+  coachmarkTargets?: PostDetailCoachmarkTargets;
+  onCoachmarkSummaryReady?: () => void;
   onDeleted?: () => void;
   onReactionSummaryBackgroundPress?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
@@ -59,6 +62,8 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onActionBarBackgroundPress,
+  coachmarkTargets,
+  onCoachmarkSummaryReady,
   onDeleted,
   onReactionSummaryBackgroundPress,
   reactionSummaryStyle,
@@ -108,6 +113,7 @@ export function PostActionSurface({
     <PostActionBackgroundPressContext.Provider value={onActionBarBackgroundPress}>
       <PostActionBackground style={actionBarStyle}>
         <PostActionBar
+          bookmarkControlRef={coachmarkTargets?.bookmark}
           execution={authentication.execution}
           more={more}
           moreItems={moreItems}
@@ -119,8 +125,10 @@ export function PostActionSurface({
           onRepostError={onRepostError}
           onResolutionRequired={authentication.resolve}
           post={target.actionBar}
+          reactionControlRef={coachmarkTargets?.reaction}
           reactionController={reactionController}
           reply={reply}
+          repostControlRef={coachmarkTargets?.repost}
           repostExecution={repostAuthentication.execution}
         />
       </PostActionBackground>
@@ -130,7 +138,9 @@ export function PostActionSurface({
   return (
     <>
       <PostReactionSummary
+        anchorRef={coachmarkTargets?.reactionSummary ?? undefined}
         controller={reactionController}
+        onReady={coachmarkTargets ? onCoachmarkSummaryReady : undefined}
         onBackgroundPress={onReactionSummaryBackgroundPress}
         style={reactionSummaryStyle}
       />

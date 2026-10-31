@@ -36,6 +36,7 @@ let requestFromProvider: ((request: CoachmarkRequest) => { cancel: () => void } 
 let renderer: ReactTestRenderer | null = null;
 let autoStartEffectRuns = 0;
 let autoStartEffectCancellations = 0;
+let currentControllerSteps = [createStep('첫 대상')];
 let CoachmarkProvider: typeof CoachmarkProviderModule.CoachmarkProvider;
 let useCoachmark: typeof CoachmarkProviderModule.useCoachmark;
 let useCoachmarkController: typeof CoachmarkControllerModule.useCoachmarkController;
@@ -111,6 +112,19 @@ function AutoStartEffectProbe() {
   return null;
 }
 
+function FreshStepsProbe() {
+  const controller = useCoachmarkController({
+    account: account as never,
+    guide: 'TIMELINE',
+    ready: true,
+    steps: () => currentControllerSteps,
+  });
+  return createElement('ControllerProbe', {
+    open: controller.open,
+    requestAutoStart: controller.requestAutoStart,
+  });
+}
+
 async function renderProvider(
   children: ReactNode = createElement(ProviderProbe),
   accountId: string | null = null,
@@ -133,6 +147,7 @@ beforeEach(() => {
   reportCalls.length = 0;
   autoStartEffectRuns = 0;
   autoStartEffectCancellations = 0;
+  currentControllerSteps = [createStep('첫 대상')];
   requestFromProvider = null;
 });
 
@@ -294,6 +309,21 @@ test('automatic start effect keeps its request callback stable while the guide o
   assert.equal(autoStartEffectRuns, 1);
   assert.equal(autoStartEffectCancellations, 0);
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 1);
+});
+
+test('manual requests resolve the current target steps at request time', async () => {
+  await renderProvider(createElement(FreshStepsProbe));
+  const probe = () => renderer?.root.findByType('ControllerProbe' as never).props;
+
+  await act(async () => probe()?.open());
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '첫 대상');
+  const first = renderer?.root.findByType('Coachmark' as never);
+  await act(async () => first?.props.onClose());
+  await act(async () => first?.props.onExited?.());
+
+  currentControllerSteps = [createStep('현재 대상')];
+  await act(async () => probe()?.open());
+  assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '현재 대상');
 });
 
 test('metadata marked as shown suppresses automatic start while manual help remains available', async () => {

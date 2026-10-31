@@ -250,6 +250,8 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
     .insert(Accounts)
     .values({
       displayName,
+      // Existing E2E flows should not be interrupted by the first POST guide.
+      metadata: { 'coachmark.post.shown': 'true' },
       oidcSubject: options.oidcSubject ?? `e2e-oidc-${suffix}`,
       state: options.accountState ?? AccountState.ACTIVE,
     })

@@ -12,15 +12,18 @@ import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
+import { PostDetailCoachmark } from './PostDetailCoachmark';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { getPostReplyActionCount } from './postReplyCount';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { LayoutChangeEvent } from 'react-native';
+import type { CoachmarkController_account$key } from '@/components/coachmark/CoachmarkController';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
+import type { PostDetailCoachmarkTargets } from './PostDetailCoachmarkSteps';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostLayoutFragment = graphql`
@@ -29,6 +32,9 @@ const PostLayoutFragment = graphql`
     createdAt
     visibility
     replyCount
+    reactionCounts {
+      count
+    }
     content {
       id
       bodyText
@@ -71,6 +77,7 @@ const visibilityLabels: Record<string, string> = {
 };
 
 export function PostLayout({
+  coachmarkAccount,
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
   onActionBarBackgroundPress,
@@ -82,6 +89,7 @@ export function PostLayout({
   replySurfacePostId,
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
+  coachmarkAccount?: CoachmarkController_account$key | null;
   mediaPresentation?: 'default' | 'hidden';
   onActionBarBackgroundPress?: () => void;
   onDeleted?: () => void;
@@ -121,7 +129,34 @@ export function PostLayout({
   const composerPostId = replySurfacePostId ?? post.id;
   const replyBinding = usePostComposerBinding(composerPostId);
   const replyAuthentication = usePostActionAuthentication(replyAvailable ?? Boolean(post.content));
+  const [coachmarkReadyState, setCoachmarkReadyState] = useState({
+    postId: post.id,
+    ready: false,
+  });
   const replyTriggerRef = useRef<View>(null);
+  const bookmarkCoachmarkRef = useRef<View>(null);
+  const reactionCoachmarkRef = useRef<View>(null);
+  const reactionSummaryCoachmarkRef = useRef<View>(null);
+  const repostCoachmarkRef = useRef<View>(null);
+  const coachmarkTargets: PostDetailCoachmarkTargets = {
+    bookmark: bookmarkCoachmarkRef,
+    reaction: reactionCoachmarkRef,
+    reactionSummary: reactionSummaryCoachmarkRef,
+    repost: repostCoachmarkRef,
+    reply:
+      replyBinding &&
+      (replyAuthentication.execution.kind === 'resolution-required' ||
+        (replyAuthentication.execution.kind === 'enabled' && Boolean(replyBinding.profile)))
+        ? replyTriggerRef
+        : null,
+  };
+  const coachmarkReady = coachmarkReadyState.postId === post.id && coachmarkReadyState.ready;
+  const coachmarkSummaryAvailable = post.reactionCounts?.some(({ count }) => count > 0) ?? false;
+  const markCoachmarkReady = useCallback(() => {
+    setCoachmarkReadyState((current) =>
+      current.postId === post.id && current.ready ? current : { postId: post.id, ready: true },
+    );
+  }, [post.id]);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
@@ -212,6 +247,14 @@ export function PostLayout({
         <View style={styles.headerContent}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
         </View>
+        {!compact && coachmarkAccount !== undefined ? (
+          <PostDetailCoachmark
+            account={coachmarkAccount}
+            ready={coachmarkReady}
+            summaryAvailable={coachmarkSummaryAvailable}
+            targets={coachmarkTargets}
+          />
+        ) : null}
       </View>
       <View style={[styles.body, compact ? styles.compactBody : null]}>
         {compact ? (
@@ -299,6 +342,10 @@ export function PostLayout({
             ]}
             onActionBarBackgroundPress={onActionBarBackgroundPress}
             onDeleted={handleDeleted}
+            coachmarkTargets={coachmarkAccount !== undefined ? coachmarkTargets : undefined}
+            onCoachmarkSummaryReady={
+              coachmarkAccount !== undefined ? markCoachmarkReady : undefined
+            }
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}
             socialActionTarget={socialActionTarget!}
