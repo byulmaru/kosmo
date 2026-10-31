@@ -921,6 +921,7 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
 
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('E2E navigation history post 0')).toBeVisible();
   await scrollDocument(page);
   const homeScroll = await page.evaluate(() => window.scrollY);
   await (await visiblePrimaryNavigation(page))
