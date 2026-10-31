@@ -78,12 +78,7 @@ builder.mutationField('createPost', (t) =>
       const analyticsPlatform: PostAnalyticsPlatform | undefined =
         headerPlatform === 'web' || headerPlatform === 'native' ? headerPlatform : undefined;
 
-      const request = await submitPostRequest(
-        input,
-        input.requestId ?? crypto.randomUUID(),
-        ctx,
-        analyticsPlatform,
-      );
+      const request = await submitPostRequest(input, input.requestId, ctx, analyticsPlatform);
       return {
         post: () => getPostForRequest(ctx.session.accountId, request),
         request,

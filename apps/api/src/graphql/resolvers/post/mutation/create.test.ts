@@ -719,6 +719,12 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {
   const select = t.mock.method(db, 'select');
+  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle', () => {
+    throw new Error('Unexpected Temporal getHandle');
+  });
+  const start = t.mock.method(temporalClient.workflow, 'start', () => {
+    throw new Error('Unexpected Temporal workflow start');
+  });
   const result = await graphql({
     schema,
     source: `
@@ -738,6 +744,7 @@ test('rejects impossible Mention counts before querying target Profiles', async 
     },
     contextValue: {
       session: {
+        accountId: crypto.randomUUID(),
         profile: {
           id: crypto.randomUUID(),
           role: AccountProfileRole.MEMBER,
@@ -750,6 +757,8 @@ test('rejects impossible Mention counts before querying target Profiles', async 
   assert.ok(error instanceof ValidationError);
   assert.equal(error.field, 'mentions');
   assert.equal(select.mock.callCount(), 0);
+  assert.equal(getHandle.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
 });
 
 test('Pothos rejects a non-Profile global ID for a selected Mention before target lookup', async (t) => {

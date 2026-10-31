@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { ConflictError, KosmoError, ValidationError } from '@kosmo/core/error';
@@ -139,10 +139,11 @@ export async function waitForPostRequestResult(
 
 export async function submitPostRequest(
   input: LocalPostMutationInput,
-  requestId: string,
+  clientRequestId: string | null | undefined,
   ctx: SessionContext,
   analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<PostRequestState> {
+  const requestId = clientRequestId ?? randomUUID();
   const submittedMedia = input.media ?? [];
   if (new Set(submittedMedia.map(({ mediaId }) => mediaId.id)).size !== submittedMedia.length) {
     throw new ValidationError('Post request media must be unique', { field: 'media' });
@@ -176,12 +177,14 @@ export async function submitPostRequest(
       }),
     )
     .digest('hex');
-  const existing = await loadPostRequestStateForAccount({
-    accountId: ctx.session.accountId,
-    requestId,
-  });
-  if (existing) {
-    return existingSubmission(existing, submissionFingerprint);
+  if (clientRequestId != null) {
+    const existing = await loadPostRequestStateForAccount({
+      accountId: ctx.session.accountId,
+      requestId,
+    });
+    if (existing) {
+      return existingSubmission(existing, submissionFingerprint);
+    }
   }
 
   const preparedInput = await prepareLocalPostInput(input, ctx);
