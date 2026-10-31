@@ -2,6 +2,7 @@ import { Environment, Network, RecordSource, ROOT_TYPE, Store } from 'relay-runt
 import { captureHandledMessage } from '@/observability/sentry';
 import { executeGraphQLRequest } from './network';
 import type { MissingFieldHandler, RelayFieldLogger } from 'relay-runtime';
+import type { NativeStartupRecovery } from './nativeStartupRecovery';
 
 const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
 const RELAY_MISSING_EXPECTED_DATA_MESSAGE = 'Relay missing expected data';
@@ -26,6 +27,7 @@ const postNodeMissingFieldHandler: MissingFieldHandler = {
 export function createRelayEnvironment(
   token: string | null,
   selectedProfileId: string | null = null,
+  startupRecovery?: NativeStartupRecovery | null,
 ): Environment {
   const environmentCreatedAt = Date.now();
   const reportedEvents = new Set<string>();
@@ -50,8 +52,15 @@ export function createRelayEnvironment(
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
+    network: Network.create((request, variables, cacheConfig) =>
+      executeGraphQLRequest(
+        request,
+        variables,
+        token,
+        fetch,
+        selectedProfileId,
+        cacheConfig.metadata?.nativeStartup === true ? startupRecovery : undefined,
+      ),
     ),
     missingFieldHandlers: [postNodeMissingFieldHandler],
     relayFieldLogger,

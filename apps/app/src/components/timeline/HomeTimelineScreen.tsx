@@ -170,7 +170,11 @@ function HomeContent({
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    { fetchKey, fetchPolicy: 'store-or-network' },
+    {
+      fetchKey,
+      fetchPolicy: 'store-or-network',
+      networkCacheConfig: { metadata: { nativeStartup: true } },
+    },
   );
   const [refreshing, setRefreshing] = useState(false);
 
