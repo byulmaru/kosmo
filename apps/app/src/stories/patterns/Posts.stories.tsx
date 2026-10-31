@@ -3185,6 +3185,7 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'ReplyFullscreenVisibleViewport',
   ],
   decorators: [
     (Story) => (
@@ -8594,6 +8595,109 @@ export const ReplyModalResponsiveFocusLifecycle: Story = {
       visualViewport.dispatchEvent(new Event('resize'));
     }
   },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyFullscreenVisibleViewport: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    if (!storyWindow) {
+      throw new Error('Reply fullscreen viewport story requires a browser window.');
+    }
+    const visualViewport = storyWindow.visualViewport;
+    if (!visualViewport) {
+      throw new Error('Reply fullscreen viewport story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(
+      visualViewport,
+      'offsetTop',
+    );
+    const originalHeight = visualViewport.height;
+    const originalOffsetTop = visualViewport.offsetTop;
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' }) as HTMLTextAreaElement;
+    const backdrop = screen.getByTestId('reply-composer-backdrop');
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const footer = within(dialog).getByTestId('mobile-composer-footer');
+
+    try {
+      await waitFor(() => expect(body).toHaveFocus());
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = backdrop.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(originalOffsetTop, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(originalOffsetTop + 361);
+
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 40 });
+      visualViewport.dispatchEvent(new storyWindow.Event('scroll'));
+      await waitFor(() => expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0));
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(40, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(401);
+
+      // Synthetic input does not trigger native caret scrolling; real keyboard QA covers that behavior.
+      await userEvent.clear(body);
+      for (let line = 1; line <= 16; line += 1) {
+        await userEvent.type(body, `작성 줄 ${line}`);
+        await userEvent.keyboard('{Enter}');
+      }
+      await userEvent.type(body, 'caret 끝');
+      expect(body.selectionStart).toBe(body.value.length);
+      await waitFor(() => {
+        expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0);
+        expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+        expect(surface.getBoundingClientRect().top).toBeCloseTo(40, 0);
+        expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+        expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(401);
+      });
+
+      Object.defineProperty(visualViewport, 'height', {
+        configurable: true,
+        value: originalHeight,
+      });
+      Object.defineProperty(visualViewport, 'offsetTop', {
+        configurable: true,
+        value: originalOffsetTop,
+      });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = backdrop.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(originalHeight, 0);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(originalOffsetTop, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(originalHeight, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        originalOffsetTop + originalHeight + 1,
+      );
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      if (originalOffsetTopDescriptor) {
+        Object.defineProperty(visualViewport, 'offsetTop', originalOffsetTopDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'offsetTop');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+// Direct native keyboard QA opens this fixture without running the simulated viewport interaction above.
+export const ReplyFullscreenKeyboardFixture: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   render: () => <ReplyModalPresentationStory />,
 };
 

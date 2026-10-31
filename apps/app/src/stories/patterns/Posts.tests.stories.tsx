@@ -24,6 +24,7 @@ import baseMeta, {
   ReactionSummaryPostNavigation as reactionSummaryPostNavigation,
   ReactionSummaryQuoteNavigation as reactionSummaryQuoteNavigation,
   ReactionSummaryRepostNavigation as reactionSummaryRepostNavigation,
+  ReplyFullscreenVisibleViewport as replyFullscreenVisibleViewport,
   ReplyModalComposerMediaEditorGeometry as replyModalComposerMediaEditorGeometry,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -64,6 +65,7 @@ export const ReactionSummaryPostNavigation: Story = reactionSummaryPostNavigatio
 export const ReactionSummaryQuoteNavigation: Story = reactionSummaryQuoteNavigation;
 export const ReactionSummaryRepostNavigation: Story = reactionSummaryRepostNavigation;
 
+export const ReplyFullscreenVisibleViewport: Story = replyFullscreenVisibleViewport;
 export const ActionBarPostNavigation: Story = actionBarPostNavigation;
 export const ActionBarQuoteNavigation: Story = actionBarQuoteNavigation;
 export const ActionBarRepostNavigation: Story = actionBarRepostNavigation;
