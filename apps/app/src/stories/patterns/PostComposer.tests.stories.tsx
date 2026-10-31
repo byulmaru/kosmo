@@ -313,6 +313,7 @@ export const MobileReplyLongBodyAutoSizeContract: Story = {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '답글 본문' }) as HTMLTextAreaElement;
     const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const parent = canvas.getByTestId('mobile-reply-parent');
     const lineHeight = Number.parseFloat(getComputedStyle(body).lineHeight);
     const lastLineBottom = () => {
       const style = getComputedStyle(body);
@@ -340,6 +341,13 @@ export const MobileReplyLongBodyAutoSizeContract: Story = {
     await waitFor(() => expect(scroll.scrollTop).toBeGreaterThan(0));
     await waitFor(() =>
       expect(lastLineBottom()).toBeLessThanOrEqual(scroll.getBoundingClientRect().bottom + 1),
+    );
+
+    fireEvent.click(canvas.getByTestId('mobile-reply-parent-resize'));
+    await waitFor(() => expect(parent.style.height).toBe('260px'));
+    expect(body).toHaveFocus();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
 
     await userEvent.type(body, '가', { skipClick: true });

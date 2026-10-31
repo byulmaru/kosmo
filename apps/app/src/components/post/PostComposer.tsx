@@ -1036,6 +1036,7 @@ export function MobileFullscreenComposerShellCandidate({
       {!isReplyShell ? visibilityControl : null}
       <ScrollView
         ref={scrollRef}
+        scrollEventThrottle={isReplyShell ? 1 : undefined}
         contentContainerStyle={styles.mobileScrollContent}
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => {
