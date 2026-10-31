@@ -271,7 +271,16 @@ function ReplyComposerSurfaceContents({
     closeAfterDiscardRef.current = undefined;
     setDiscardConfirmOpen(false);
     setUncertainCloseOpen(false);
-    if (!uncertainCloseOpen) {
+    if (uncertainCloseOpen && Platform.OS === 'web') {
+      if (typeof document !== 'undefined') {
+        requestAnimationFrame(() => {
+          const surface = dialogRef.current as unknown as HTMLElement | null;
+          if (surface && document.contains(surface) && surface.getClientRects().length > 0) {
+            surface.focus();
+          }
+        });
+      }
+    } else if (!uncertainCloseOpen) {
       requestAnimationFrame(() => editorRef.current?.focus());
     }
   }, [uncertainCloseOpen]);
@@ -280,10 +289,9 @@ function ReplyComposerSurfaceContents({
     if (!retry) {
       return;
     }
-    closeAfterDiscardRef.current = undefined;
-    setUncertainCloseOpen(false);
+    dismissCloseConfirmation();
     retry();
-  }, [uncertainRequest]);
+  }, [dismissCloseConfirmation, uncertainRequest]);
   const requestNavigation = useCallback(
     (action: () => void) => {
       if (submitting) {
@@ -367,7 +375,7 @@ function ReplyComposerSurfaceContents({
   }, [closeImmediately, showToast]);
 
   useEffect(() => {
-    if (!closeConfirmationOpen || uncertainCloseOpen || Platform.OS !== 'web') {
+    if (!closeConfirmationOpen || Platform.OS !== 'web') {
       return;
     }
     const frame = requestAnimationFrame(() => {
@@ -375,7 +383,7 @@ function ReplyComposerSurfaceContents({
       confirm?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [closeConfirmationOpen, uncertainCloseOpen]);
+  }, [closeConfirmationOpen]);
 
   if (!open) {
     return null;
@@ -549,6 +557,7 @@ function ReplyComposerSurfaceContents({
                     borderColor: theme.borderDefault,
                   },
                 ]}
+                tabIndex={Platform.OS === 'web' ? -1 : undefined}
                 testID={`${quoteMode ? 'quote' : 'reply'}-composer-dialog-surface`}
               >
                 <View style={styles.contentFrame}>

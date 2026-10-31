@@ -170,6 +170,108 @@ test('불확실한 접수 확인은 focus를 가두고 재확인 뒤 Composer로
   await expect(dialog).toBeFocused();
 });
 
+for (const mode of ['reply', 'quote'] as const) {
+  test(`Web ${mode === 'reply' ? 'Reply' : 'Quote'} 불확실한 접수 확인은 focus를 복원한다`, async ({
+    context,
+    page,
+  }) => {
+    const composerLabel = mode === 'reply' ? '답글' : '인용 게시글';
+    const viewer = await createE2ESession({
+      displayName: `E2E Uncertain ${composerLabel} Focus`,
+      handle: `e2e-uncertain-${mode}-focus`,
+    });
+    const parent = await createE2EPost({
+      body: `E2E uncertain ${composerLabel} parent`,
+      profileId: viewer.profile!.id,
+    });
+    await setE2ESessionCookie(context, viewer.token);
+    await page.setViewportSize({ width: 1024, height: 800 });
+    if (mode === 'quote') {
+      await routeQuoteFlag(page, {
+        body: JSON.stringify({ flags: [{ key: 'quote', value: true }] }),
+      });
+    }
+    const quoteFlagResponse = mode === 'quote' ? waitForQuoteFlagResponse(page) : undefined;
+    const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await page.goto(`/@${viewer.profile!.handle}/${toGlobalId('Post', parent.id)}`);
+    if (quoteFlagResponse) {
+      await (await quoteFlagResponse).finished();
+    }
+    await detailResponse;
+
+    const engagement = page.getByTestId('post-layout-engagement');
+    const trigger = engagement.getByTestId(
+      mode === 'reply' ? 'post-action-reply' : 'post-action-repost',
+    );
+    await trigger.click();
+    if (mode === 'quote') {
+      await page
+        .getByRole('menu', { name: '재게시 메뉴' })
+        .getByRole('menuitem', { name: '인용하기' })
+        .click();
+    }
+
+    const composer = page.getByRole('dialog', { name: `${composerLabel} 쓰기` });
+    const dialogSurface = page.getByTestId(`${mode}-composer-dialog-surface`);
+    const input = composer.getByRole('textbox', { name: `${composerLabel} 본문` });
+    await input.fill(`E2E uncertain ${composerLabel} focus`);
+    await page.route('**/graphql', async (route) => {
+      const operation = readGraphQLOperation(route.request().postData());
+      if (operation?.operationName === 'PostComposerCreatePostMutation') {
+        await route.fulfill({
+          body: JSON.stringify({
+            data: { createPost: null },
+            errors: [{ message: '게시 요청 응답을 확인할 수 없어요.' }],
+          }),
+          contentType: 'application/json',
+          status: 200,
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    const submitResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+    await composer.getByRole('button', { name: '게시', exact: true }).click();
+    await submitResponse;
+    await expect(input).toHaveCount(0);
+
+    await composer.getByRole('button', { name: '닫기', exact: true }).click();
+    const confirmation = page.getByRole('alertdialog', { name: '게시 요청 결과' });
+    const retry = confirmation.getByRole('button', { name: '다시 확인' });
+    const close = confirmation.getByRole('button', { name: '닫기' });
+    await expect(retry).toBeFocused();
+    await expect(input).toHaveCount(0);
+    await page.keyboard.press('Shift+Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(retry).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(confirmation).toHaveCount(0);
+    await expect(dialogSurface).toBeFocused();
+    await expect(composer.getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
+    await expect(page.locator('[aria-hidden="true"] :focus')).toHaveCount(0);
+
+    await composer.getByRole('button', { name: '닫기', exact: true }).click();
+    await expect(confirmation).toBeVisible();
+    const retryResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+    await confirmation.getByRole('button', { name: '다시 확인' }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(dialogSurface).toBeFocused();
+    await expect(page.locator('[aria-hidden="true"] :focus')).toHaveCount(0);
+    await retryResponse;
+    await expect(dialogSurface).toBeFocused();
+    await expect(page.locator('[aria-hidden="true"] :focus')).toHaveCount(0);
+
+    await composer.getByRole('button', { name: '닫기', exact: true }).click();
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: '닫기' }).click();
+    await expect(composer).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+}
+
 test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ context, page }) => {
   const sourceBody = 'E2E Quote direct source body';
   const viewer = await createE2ESession({
