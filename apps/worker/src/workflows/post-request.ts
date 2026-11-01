@@ -29,6 +29,7 @@ import { mediaUploadService } from '../nexus/media-upload-service';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import { startPostCreateEffects } from './post-create';
+import { settleEffects } from './settle-effects';
 import type { ErrorCode } from '@kosmo/core/error';
 import type { PostCreateWorkflowResult } from '@kosmo/core/temporal/post-create';
 import type {
@@ -295,22 +296,16 @@ const uploadMedia = async (
     accountId: snapshot.input.accountId,
     mediaIds: uploadMediaIds,
   });
-  for (const mediaId of uploadMediaIds) {
-    if (isCancelled()) {
-      return;
-    }
-    if (ready.readyMediaIds.includes(mediaId)) {
-      continue;
-    }
-
+  const processMedia = async (
+    mediaId: string,
+    cancellationScope: CancellationScope,
+  ): Promise<void> => {
     const media = mediaById.get(mediaId)!;
     const childArgs = {
       accountId: snapshot.input.accountId,
       applyNightshade: media.applyNightshade,
       mediaId,
     };
-    const cancellationScope = new CancellationScope();
-    setCancellationScope(cancellationScope);
     try {
       if (patched('post-request-media-nexus-v1')) {
         const client = createNexusServiceClient({
@@ -375,6 +370,41 @@ const uploadMedia = async (
       if (!mediaIsReady) {
         throw error;
       }
+    }
+  };
+
+  if (patched('post-request-media-parallel-v1')) {
+    const pendingMediaIds = uploadMediaIds.filter(
+      (mediaId) => !ready.readyMediaIds.includes(mediaId),
+    );
+    if (isCancelled() || pendingMediaIds.length === 0) {
+      return;
+    }
+
+    const cancellationScope = new CancellationScope();
+    setCancellationScope(cancellationScope);
+    try {
+      await settleEffects(
+        pendingMediaIds.map((mediaId) => processMedia(mediaId, cancellationScope)),
+      );
+    } finally {
+      setCancellationScope(undefined);
+    }
+    return;
+  }
+
+  for (const mediaId of uploadMediaIds) {
+    if (isCancelled()) {
+      return;
+    }
+    if (ready.readyMediaIds.includes(mediaId)) {
+      continue;
+    }
+
+    const cancellationScope = new CancellationScope();
+    setCancellationScope(cancellationScope);
+    try {
+      await processMedia(mediaId, cancellationScope);
     } finally {
       setCancellationScope(undefined);
     }

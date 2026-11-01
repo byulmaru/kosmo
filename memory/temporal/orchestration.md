@@ -81,6 +81,8 @@
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
 
+- 신규 `postRequestWorkflow` history는 bulk READY lookup 뒤 `patched('post-request-media-parallel-v1')`로 non-READY Media 작업을 processing ID 순서로 시작하고 기존 `settleEffects`로 모두 정산한다. 한 batch `CancellationScope`는 PostRequest의 대기를 취소하면서 `ABANDON` shared upload는 유지한다. Marker 이전 history는 per-ID scope와 직렬 command 순서를 보존하며 per-ID Nexus·retry·READY recovery 동작은 그대로 둔다.
+
 ## Workflow Source Structure
 
 - `apps/worker/src/workflows`에서는 exported Workflow 하나를 파일 하나가 소유한다. create/delete처럼 lifecycle이 다르면 파일도 나눈다.
