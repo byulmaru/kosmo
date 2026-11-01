@@ -805,20 +805,20 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
     data?: {
       createPost?: {
         request?: {
-          post?: { id?: string | null } | null;
           requestId?: string | null;
+          status?: string | null;
         } | null;
       } | null;
     };
     errors?: unknown[];
   };
   const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
-  const publishedPostId = responseBody.data?.createPost?.request?.post?.id;
+  const publishedRequestStatus = responseBody.data?.createPost?.request?.status;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
   expect(acceptedRequestId).toEqual(expect.any(String));
-  expect(publishedPostId).toEqual(expect.any(String));
+  expect(publishedRequestStatus).toBe('PUBLISHED');
   expect(operation?.variables?.input).not.toHaveProperty('requestId');
   expect(operation?.variables).toMatchObject({
     input: {
@@ -868,12 +868,14 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
     page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${selectedProfile.handle}` }),
   ).toBeVisible();
   await page.goto(`/@${selectedProfile.handle}`);
-  const publishedPostRow = page.getByTestId('post-list-row-body').first();
+  const publishedPostRow = page
+    .getByTestId('post-list-standard-row')
+    .filter({ hasText: contentWarning });
   await expect(publishedPostRow).toBeVisible();
-  await publishedPostRow.click();
+  await publishedPostRow.getByRole('link').last().click();
   await expect(page).toHaveURL(/\/@e2e-composer-profile-b\/[^/]+$/);
   const publishedPostPathId = new URL(page.url()).pathname.split('/').at(-1);
-  expect(decodeURIComponent(publishedPostPathId ?? '')).toBe(publishedPostId);
+  const publishedPostId = decodeURIComponent(publishedPostPathId ?? '');
   const publishedArticle = page.getByRole('article').filter({ hasText: contentWarning }).first();
   const showBody = publishedArticle.getByRole('button', {
     name: `${contentWarning}, 본문, 보기`,
@@ -907,7 +909,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   expect(detailOperation?.variables?.postId).toBe(publishedPostId);
   expect(detailBody.data?.node).toMatchObject({
     __typename: 'Post',
-    id: detailOperation?.variables?.postId,
+    id: publishedPostId,
     profile: { relativeHandle: `@${selectedProfile.handle}` },
     replyParent: null,
   });
