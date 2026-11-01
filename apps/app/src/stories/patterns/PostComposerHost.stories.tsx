@@ -6,7 +6,7 @@ import { PostComposerHost } from '@/components/post/PostComposerHost';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PostComposerHostStoriesQuery as Query } from './__generated__/PostComposerHostStoriesQuery.graphql';
 
-function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'rail' }) {
+function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'overlay' | 'rail' }) {
   const data = useLazyLoadQuery<Query>(
     graphql`
       query PostComposerHostStoriesQuery {
@@ -23,7 +23,11 @@ function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'rail' }) {
   const [open, setOpen] = useState(true);
   const profiles = data.me?.profiles ?? [];
   const hostProps =
-    mode === 'rail' ? { mode: 'rail' as const, onExpand: fn() } : { mode: 'mobile' as const };
+    mode === 'rail'
+      ? { mode: 'rail' as const, onExpand: fn() }
+      : mode === 'mobile'
+        ? { mode: 'mobile' as const }
+        : { mode: 'overlay' as const };
   return profiles[0] ? (
     <View style={mode === 'rail' ? { width: 326 } : undefined}>
       <PostComposerHost
@@ -39,7 +43,10 @@ function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'rail' }) {
 
 const meta = {
   component: HostFixture,
-  excludeStories: ['MobileFullscreenVisibleViewportContract'],
+  excludeStories: [
+    'DesktopOverlayVisibleViewportContract',
+    'MobileFullscreenVisibleViewportContract',
+  ],
   title: 'KOSMO/Patterns/Post Composer Host',
   parameters: {
     relay: {
@@ -95,6 +102,60 @@ export const MobileFullscreenKeyboardFixture: Story = {
   render: () => <HostFixture mode="mobile" />,
 };
 
+export const DesktopOverlayVisibleViewportContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  render: () => <HostFixture mode="overlay" />,
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const viewport = storyWindow?.visualViewport;
+    if (!storyWindow || !viewport) {
+      throw new Error('Post composer desktop viewport story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(viewport, 'height');
+    const page = within(canvasElement.ownerDocument.body);
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    const composerSurface = page.getByTestId('post-composer-dialog');
+    const body = page.getByRole('textbox', { name: '게시글 본문' }) as HTMLTextAreaElement;
+
+    try {
+      expect(dialog).toBeVisible();
+      await waitFor(() => expect(body).toHaveFocus());
+      for (let line = 1; line <= 30; line += 1) {
+        await userEvent.type(body, `긴 작성 줄 ${line}`);
+        if (line < 30) {
+          await userEvent.keyboard('{Enter}');
+        }
+      }
+
+      await waitFor(() =>
+        expect(composerSurface.getBoundingClientRect().height).toBeGreaterThan(748),
+      );
+      Object.defineProperty(viewport, 'height', { configurable: true, value: 844 });
+      viewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = composerSurface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(748, 0);
+      });
+
+      Object.defineProperty(viewport, 'height', { configurable: true, value: 640 });
+      viewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = composerSurface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(544, 0);
+      });
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(viewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(viewport, 'height');
+      }
+      viewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
+  },
+};
+
 export const MobileFullscreenVisibleViewportContract: Story = {
   ...MobileFullscreenKeyboardFixture,
   play: async ({ canvasElement }) => {
@@ -110,27 +171,32 @@ export const MobileFullscreenVisibleViewportContract: Story = {
     const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(viewport, 'offsetTop');
     const originalHeight = viewport.height;
     const originalOffsetTop = viewport.offsetTop;
-    const canvas = within(canvasElement);
-    const dialog = await canvas.findByRole('dialog', { name: '글쓰기' });
-    const body = canvas.getByRole('textbox', { name: '게시글 본문' }) as HTMLTextAreaElement;
-    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
-    const footer = canvas.getByTestId('mobile-composer-footer');
+    const page = within(canvasElement.ownerDocument.body);
+    const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    const composerSurface = page.getByTestId('post-composer-dialog');
+    const backdrop = page.getByTestId('post-composer-backdrop');
+    const body = page.getByRole('textbox', { name: '게시글 본문' }) as HTMLTextAreaElement;
+    const scroll = page.getByTestId('mobile-fullscreen-composer-scroll');
+    const footer = page.getByTestId('mobile-composer-footer');
 
     try {
+      expect(dialog).toBeVisible();
       await waitFor(() => expect(body).toHaveFocus());
       Object.defineProperty(viewport, 'height', { configurable: true, value: 360 });
       viewport.dispatchEvent(new storyWindow.Event('resize'));
       await waitFor(() => {
-        const bounds = dialog.getBoundingClientRect();
+        const bounds = backdrop.getBoundingClientRect();
         expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
         expect(bounds.height).toBeCloseTo(360, 0);
       });
+      expect(composerSurface.getBoundingClientRect().height).toBeCloseTo(360, 0);
 
       const shortScrollHeight = scroll.clientHeight;
       Object.defineProperty(viewport, 'offsetTop', { configurable: true, value: 40 });
       viewport.dispatchEvent(new storyWindow.Event('scroll'));
-      await waitFor(() => expect(dialog.getBoundingClientRect().top).toBeCloseTo(40, 0));
-      expect(dialog.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      await waitFor(() => expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0));
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(composerSurface.getBoundingClientRect().height).toBeCloseTo(360, 0);
       const footerBottom = footer.getBoundingClientRect().bottom;
       expect(footerBottom).toBeLessThanOrEqual(401);
 
@@ -145,8 +211,9 @@ export const MobileFullscreenVisibleViewportContract: Story = {
         expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight + 1);
       });
       expect(scroll).toContainElement(body);
-      expect(dialog.getBoundingClientRect().top).toBeCloseTo(40, 0);
-      expect(dialog.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0);
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(composerSurface.getBoundingClientRect().height).toBeCloseTo(360, 0);
       expect(footer.getBoundingClientRect().bottom).toBeCloseTo(footerBottom, 0);
 
       Object.defineProperty(viewport, 'height', {
@@ -159,11 +226,12 @@ export const MobileFullscreenVisibleViewportContract: Story = {
       });
       viewport.dispatchEvent(new storyWindow.Event('resize'));
       await waitFor(() => {
-        const bounds = dialog.getBoundingClientRect();
+        const bounds = backdrop.getBoundingClientRect();
         expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
         expect(bounds.height).toBeCloseTo(originalHeight, 0);
         expect(scroll.clientHeight).toBeGreaterThan(shortScrollHeight);
       });
+      expect(composerSurface.getBoundingClientRect().height).toBeCloseTo(originalHeight, 0);
       expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
         originalOffsetTop + originalHeight + 1,
       );

@@ -8602,7 +8602,13 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
       },
     },
   },
-  play: async () => {
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Reply media editor story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
     const { originalFetch } = installImageUploadFetch(
       async () => new Response(null, { status: 200 }),
     );
@@ -8614,6 +8620,22 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
     try {
       const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
       const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+      const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 844 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(surface.getBoundingClientRect().top).toBeCloseTo(48, 0));
+      for (let line = 1; line <= 40; line += 1) {
+        await userEvent.type(body, `긴 답글 줄 ${line}`);
+        if (line < 40) {
+          await userEvent.keyboard('{Enter}');
+        }
+      }
+      await waitFor(() => {
+        const bounds = surface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(748, 0);
+      });
       expect(surface.getBoundingClientRect().width).toBe(600);
       await userEvent.click(
         within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
@@ -8624,7 +8646,31 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
 
       await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
       expect(screen.getAllByRole('dialog')).toHaveLength(1);
-      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await waitFor(() => {
+        expect(surface.getBoundingClientRect().width).toBe(720);
+        expect(surface.getBoundingClientRect().height).toBe(678);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(48, 0);
+      const complete = within(dialog).getByRole('button', { name: '완료' });
+      expect(complete.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        surface.getBoundingClientRect().bottom,
+      );
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 640 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = surface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(544, 0);
+      });
+      expect(complete).toBeVisible();
+      expect(complete.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        surface.getBoundingClientRect().bottom,
+      );
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 844 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(surface.getBoundingClientRect().height).toBe(678));
       await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
       await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
 
@@ -8633,6 +8679,12 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
       await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
       await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
     } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       globalThis.fetch = originalFetch;
       resetImagePickerMock();
     }
@@ -8941,7 +8993,7 @@ export const ReplyModalBackdropDismissInteraction: Story = {
     await waitFor(() => expect(body).toHaveFocus());
     await userEvent.type(body, '배경을 눌러도 유지할 답글');
 
-    await userEvent.click(screen.getByTestId('post-composer-viewport-backdrop'));
+    await userEvent.click(screen.getByTestId('reply-composer-backdrop'));
     const confirm = await screen.findByRole('alertdialog', {
       name: '답글 작성을 취소할까요?',
     });

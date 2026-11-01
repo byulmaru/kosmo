@@ -1,4 +1,5 @@
 import baseMeta, {
+  DesktopOverlayVisibleViewportContract as desktopOverlayVisibleViewportContract,
   MobileFullscreenVisibleViewportContract as mobileFullscreenVisibleViewportContract,
 } from './PostComposerHost.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -15,3 +16,4 @@ type Story = StoryObj<typeof meta>;
 
 export const MobileFullscreenVisibleViewportContract: Story =
   mobileFullscreenVisibleViewportContract;
+export const DesktopOverlayVisibleViewportContract: Story = desktopOverlayVisibleViewportContract;

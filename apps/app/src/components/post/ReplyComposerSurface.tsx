@@ -3,7 +3,6 @@ import { XIcon } from 'lucide-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -18,7 +17,8 @@ import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { useOverlayLifecycle } from '@/components/ui/Overlay';
+import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
+import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -27,7 +27,6 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposerController } from './PostComposerController';
-import { PostComposerViewport } from './PostComposerViewport';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
@@ -353,9 +352,10 @@ function ReplyComposerSurfaceContents({
   const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
 
   return (
-    <Modal
+    <ModalSheetHost
       accessibilityLabel={`${composerName} 쓰기`}
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
+      interactionDisabled={false}
       navigationBarTranslucent
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
@@ -369,11 +369,8 @@ function ReplyComposerSurfaceContents({
       visible
     >
       <ToastProvider>
-        <PostComposerViewport
+        <View
           accessible={false}
-          fullscreen={presentation === 'fullscreen'}
-          open={open}
-          onRequestClose={handleOverlayRequestClose}
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
@@ -381,8 +378,12 @@ function ReplyComposerSurfaceContents({
             safeAreaStyle,
             { backgroundColor: theme.overlayScrim },
           ]}
-          testID="reply-composer-backdrop"
         >
+          <OverlayBackdrop
+            onRequestClose={handleOverlayRequestClose}
+            style={StyleSheet.absoluteFill}
+            testID="reply-composer-backdrop"
+          />
           <PostComposerController
             beforeEditor={
               quoteMode ? undefined : (
@@ -520,9 +521,9 @@ function ReplyComposerSurfaceContents({
               <PostSourcePreview interactive={false} source={parent} style={styles.quoteSource} />
             ) : null}
           </PostComposerController>
-        </PostComposerViewport>
+        </View>
       </ToastProvider>
-    </Modal>
+    </ModalSheetHost>
   );
 }
 
@@ -547,7 +548,7 @@ const styles = StyleSheet.create({
   },
   webModal: {
     marginTop: spacing.xxl,
-    maxHeight: 'calc(100dvh - 96px)' as never,
+    maxHeight: 'calc(100% - 64px)' as never,
     overflow: 'clip' as never,
   },
   webMediaEditorDialog: {

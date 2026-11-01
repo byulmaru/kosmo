@@ -2655,7 +2655,9 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
 
       const editor = within(dialog).getByTestId('web-composer-media-editor');
       expect(page.getAllByRole('dialog')).toHaveLength(1);
-      const dialogBounds = dialog.getBoundingClientRect();
+      const dialogBounds = within(dialog)
+        .getByTestId('post-composer-dialog')
+        .getBoundingClientRect();
       const closeButton = within(editor).getByRole('button', { name: '미디어 편집 닫기' });
       const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
       const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
@@ -2705,7 +2707,8 @@ function universalMediaEditorResponsiveStory(
       try {
         await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
         const dialog = await page.findByRole('dialog', { name: '글쓰기' });
-        expect(dialog.getBoundingClientRect().width).toBe(640);
+        const surface = within(dialog).getByTestId('post-composer-dialog');
+        expect(surface.getBoundingClientRect().width).toBe(640);
         await userEvent.click(
           within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
         );
@@ -2713,22 +2716,26 @@ function universalMediaEditorResponsiveStory(
           within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
         ).resolves.toBeVisible();
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         const editor = within(dialog).getByTestId('web-composer-media-editor');
         const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
         const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
         const doneButton = within(editor).getByRole('button', { name: '완료' });
-        const dialogBounds = dialog.getBoundingClientRect();
+        const dialogBounds = surface.getBoundingClientRect();
         expect(toolPanel.getBoundingClientRect().width).toBe(280);
         expectElementInsideBounds(altTextInput, dialogBounds);
         expectElementInsideBounds(doneButton, dialogBounds);
 
         await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
       } finally {
         restoreFetch();
         resetImagePickerMock();
@@ -3095,8 +3102,8 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
       const body = canvas.getByRole('textbox', { name: '게시글 본문' });
       await userEvent.type(body, 'overlay rail reopen draft');
       await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
-      await expect(canvas.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
-      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await expect(page.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
+      await userEvent.click(page.getByRole('button', { name: '첨부 이미지 1 편집' }));
 
       let dialog = await page.findByRole('dialog', { name: '글쓰기' });
       await userEvent.type(
@@ -3108,11 +3115,11 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
 
       await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
       await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
-      expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
+      expect(page.queryByTestId('web-composer-media-editor')).toBeNull();
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
         'overlay rail reopen draft',
       );
-      expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      expect(page.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
 
       await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
       dialog = await page.findByRole('dialog', { name: '글쓰기' });
