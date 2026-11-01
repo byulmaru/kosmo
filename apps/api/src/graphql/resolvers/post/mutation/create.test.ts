@@ -87,20 +87,24 @@ const setupPostRequestWorkflow = (
       return { workflowId } as never;
     },
   );
-  t.mock.method(temporalClient.workflow, 'getHandle', (requestedWorkflowId: string) => {
-    assert.equal(requestedWorkflowId, workflowId);
-    return {
-      result: async () => {
-        resultCallCount += 1;
-        assert.ok(snapshot);
-        const state = result(snapshot);
-        if (state instanceof Error) {
-          throw state;
-        }
-        return state;
-      },
-    } as never;
-  });
+  const getHandle = t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    (requestedWorkflowId: string) => {
+      assert.equal(requestedWorkflowId, workflowId);
+      return {
+        result: async () => {
+          resultCallCount += 1;
+          assert.ok(snapshot);
+          const state = result(snapshot);
+          if (state instanceof Error) {
+            throw state;
+          }
+          return state;
+        },
+      } as never;
+    },
+  );
   t.mock.method(
     temporalClient,
     'withDeadline',
@@ -114,6 +118,7 @@ const setupPostRequestWorkflow = (
     get snapshot() {
       return snapshot;
     },
+    getHandle,
     start,
   };
 };
@@ -485,7 +490,7 @@ test('createPost without media returns the actual published request state', asyn
   assert.equal(workflow.resultCallCount, 1);
 });
 
-test('createPost waits for publication in the lazy Post field while acknowledging pending media', async (t) => {
+test('createPost acknowledges pending media regardless of Post field selection', async (t) => {
   const postId = '00000000-0000-4000-8000-000000000016';
   const mediaId = '00000000-0000-4000-8000-000000000017';
   const uploadId = '00000000-0000-4000-8000-000000000018';
@@ -523,49 +528,65 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
         },
       }),
   );
-  let selectCallCount = 0;
-  const select = t.mock.method(db, 'select', () => {
-    selectCallCount += 1;
-    return (
-      selectCallCount === 1
-        ? {
-            from: () => ({
-              where: async () => [
-                {
-                  id: mediaId,
-                  state: MediaState.UPLOADING,
-                  storageReference: `nexus:v1:${uploadId}`,
-                  url: null,
-                },
-              ],
-            }),
-          }
-        : {
-            from: () => ({
-              where: () => ({
-                limit: async (limit: number) => {
-                  assert.equal(limit, 1);
-                  return [{ id: postId, profileId: requestProfileId }];
-                },
-              }),
-            }),
-          }
-    ) as never;
-  });
+  const select = t.mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from: () => ({
+          where: async () => [
+            {
+              id: mediaId,
+              state: MediaState.UPLOADING,
+              storageReference: `nexus:v1:${uploadId}`,
+              url: null,
+            },
+          ],
+        }),
+      }) as never,
+  );
 
-  let settled = false;
-  const resultPromise = createPostRequest('post { id } request { status }', [
-    { mediaId: encodeGlobalId('Media', mediaId) },
-  ]).then((result) => {
-    settled = true;
+  const media = [{ mediaId: encodeGlobalId('Media', mediaId) }];
+  let requestOnlySettled = false;
+  const requestOnlyPromise = createPostRequest('request { status }', media).then((result) => {
+    requestOnlySettled = true;
     return result;
   });
+  let postSelectedSettled = false;
+  let postSelectedPromise: ReturnType<typeof createPostRequest> | undefined;
   try {
     await new Promise<void>((resolve) => setImmediate(resolve));
-    assert.equal(settled, false);
+    assert.equal(requestOnlySettled, true);
     assert.equal(select.mock.callCount(), 1);
-    assert.equal(workflow.resultCallCount, 1);
     assert.equal(workflow.start.mock.callCount(), 1);
+
+    const requestOnlyResult = await requestOnlyPromise;
+    assert.deepEqual(requestOnlyResult.errors, undefined);
+    assert.equal(
+      (requestOnlyResult.data?.createPost as { request: { status: string } }).request.status,
+      PostRequestStatus.QUEUED,
+    );
+
+    postSelectedPromise = createPostRequest('post { id } request { status }', media).then(
+      (result) => {
+        postSelectedSettled = true;
+        return result;
+      },
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(postSelectedSettled, true);
+
+    const postSelectedResult = await postSelectedPromise;
+    assert.deepEqual(postSelectedResult.errors, undefined);
+    const response = postSelectedResult.data?.createPost as {
+      post: { id: string } | null;
+      request: { status: string };
+    };
+    assert.equal(response.request.status, PostRequestStatus.QUEUED);
+    assert.equal(response.post, null);
+    assert.equal(select.mock.callCount(), 2);
+    assert.equal(workflow.start.mock.callCount(), 2);
+    assert.equal(workflow.getHandle.mock.callCount(), 0);
   } finally {
     const snapshot = workflow.snapshot;
     assert.ok(snapshot);
@@ -580,23 +601,11 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
       status: PostRequestStatus.PUBLISHED,
       result: { postId },
     });
-    await resultPromise;
+    await requestOnlyPromise;
+    if (postSelectedPromise) {
+      await postSelectedPromise;
+    }
   }
-  const result = await resultPromise;
-
-  assert.deepEqual(result.errors, undefined);
-  assert.equal(
-    (result.data?.createPost as { request: { status: string } }).request.status,
-    PostRequestStatus.QUEUED,
-  );
-  assert.equal(
-    (result.data?.createPost as { post: { id: string } }).post.id,
-    encodeGlobalId('Post', postId),
-  );
-  assert.equal(workflow.start.mock.callCount(), 1);
-  assert.equal(workflow.resultCallCount, 1);
-  assert.equal(select.mock.callCount(), 2);
-  assert.equal(selectCallCount, 2);
 });
 
 test('createPost maps a failed no-media request without field metadata to its GraphQL error', async (t) => {

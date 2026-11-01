@@ -64,11 +64,11 @@
   별도 호출도 각각 독립된 요청으로 admission한다. Start 오류는 기존 GraphQL error mapping으로 전달하며,
   API는 오류 뒤에 Workflow를 조회해 admission을 복구하지 않는다. 새 호출은 새 `requestId`를 받아 별도 요청이 될 수
   있으므로 HTTP 요청이 정확히 한 번만 접수된다고 보장하지 않는다. 이 admission 동작은 `request` 또는 `post` 선택과
-  무관하다. non-null `post`는 기존 lazy
-  compatibility field이고, 선택하면 publication을 기다린 뒤 published `postId`와 snapshot의 원본 `profileId`를 함께
-  조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
+  무관하다. `post`는 nullable이며, 이 응답에서 반환된 request 상태가 `PUBLISHED`일 때만 결과의 `postId`와 snapshot의
+  원본 `profileId`를 함께 조건으로 DB에서 Post를 읽는다. 그 외 상태에서는 Workflow를 다시 기다리거나 조회하지 않고
+  Post DB 조회도 하지 않는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
   result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를
-  취소하지 않는다. `Post!`를 선택해 이 대기가 끝나면 GraphQL null propagation으로 payload도 null일 수 있다.
+  취소하지 않는다.
 - 선택적인 내부 `PostAnalyticsPlatform`은 Post request snapshot에서 V2 create child와 stable effects child까지
   전달한다. 각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
   순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만

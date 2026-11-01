@@ -19,9 +19,10 @@ The Worker is a rolling Deployment with no Temporal SDK version routing. API, We
 ## GraphQL request projection
 
 The GraphQL request projection follows the [Post domain contract](../domain/objects/post.md); it does not restore the
-rest of the immutable request snapshot or public error details. Unavailable Media items are nullable. A `createPost`
-selection containing only `request` acknowledges the existing request without waiting for publication. Selecting its
-non-null `post` waits up to the existing 30-second API deadline on that request's Workflow, then loads the published
-Post under the original author Profile. An API result-wait deadline expiry or Workflow failure remains a GraphQL
-error; expiry ends only this caller's wait and does not cancel the Workflow. Because `post` is non-null, selected-Post
-errors can null the payload. Request-only acknowledgement is unaffected.
+rest of the immutable request snapshot or public error details. Unavailable Media items are nullable. `createPost`
+admission uses the same Media-state-dependent wait regardless of selected fields: no Media or all READY Media waits up
+to the existing 30-second API deadline for a `PUBLISHED` request, while valid Local UPLOADING Media returns an
+acknowledgement immediately. The nullable `post` field loads the published Post under the original author Profile only
+when the request state captured for this response is `PUBLISHED`; otherwise it returns `null` without another Workflow
+wait or Post lookup, even if processing later publishes. A result-wait deadline expiry or Workflow failure during
+admission remains a GraphQL error; expiry ends only this caller's wait and does not cancel the Workflow.

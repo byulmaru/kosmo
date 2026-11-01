@@ -163,7 +163,7 @@ input CreatePostMentionInput {
 }
 
 type CreatePostPayload {
-  post: Post!
+  post: Post
   request: PostRequest
 }
 

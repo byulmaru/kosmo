@@ -1,9 +1,10 @@
 import { db, firstOrThrow, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
+import { PostRequestStatus } from '@kosmo/core/temporal/post-request';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { submitPostRequest, waitForPostRequestResult } from '../../post-request/mutation/submit';
+import { submitPostRequest } from '../../post-request/mutation/submit';
 import { PostRequest } from '../../post-request/ref';
 import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
@@ -17,37 +18,41 @@ import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
 
 type CreatePostPayloadSource = {
-  readonly post: () => Promise<typeof Posts.$inferSelect>;
-  readonly request: PostRequestState | null;
+  readonly request: PostRequestState;
 };
 
 const CreatePostPayload = builder.objectRef<CreatePostPayloadSource>('CreatePostPayload');
 
-CreatePostPayload.implement({
-  fields: (t) => ({
-    post: t.field({ type: Post, resolve: ({ post }) => post() }),
-    request: t.field({ type: PostRequest, nullable: true, resolve: ({ request }) => request }),
-  }),
-});
-
 const getPostForRequest = async (
-  accountId: string,
   request: PostRequestState,
-): Promise<typeof Posts.$inferSelect> => {
-  const state = await waitForPostRequestResult(accountId, request);
+): Promise<typeof Posts.$inferSelect | null> => {
+  if (request.status !== PostRequestStatus.PUBLISHED) {
+    return null;
+  }
+
+  const postId = request.result?.postId;
+  if (!postId) {
+    throw new Error('Published Post request has no Post ID');
+  }
 
   return db
     .select()
     .from(Posts)
-    .where(
-      and(
-        eq(Posts.id, state.result!.postId),
-        eq(Posts.profileId, request.snapshot.input.profileId),
-      ),
-    )
+    .where(and(eq(Posts.id, postId), eq(Posts.profileId, request.snapshot.input.profileId)))
     .limit(1)
     .then(firstOrThrow);
 };
+
+CreatePostPayload.implement({
+  fields: (t) => ({
+    post: t.field({
+      type: Post,
+      nullable: true,
+      resolve: ({ request }) => getPostForRequest(request),
+    }),
+    request: t.field({ type: PostRequest, nullable: true, resolve: ({ request }) => request }),
+  }),
+});
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -77,10 +82,7 @@ builder.mutationField('createPost', (t) =>
         headerPlatform === 'web' || headerPlatform === 'native' ? headerPlatform : undefined;
 
       const request = await submitPostRequest(input, ctx, analyticsPlatform);
-      return {
-        post: () => getPostForRequest(ctx.session.accountId, request),
-        request,
-      };
+      return { request };
     },
   }),
 );
