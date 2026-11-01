@@ -114,8 +114,8 @@ mockModule('./PostRequestCard', {
   }: {
     onCompose?: () => void;
     onPublished?: (result: {
-      authorProfileId: string;
-      postId: string;
+      authorProfileId: string | null;
+      postId: string | null;
       requestNodeId: string;
     }) => void;
     request: { id: string; requestId: string; status: string };
@@ -569,91 +569,103 @@ describe('PostRequestList', () => {
     assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
   });
 
-  it('moves a normalized published request into Home once when its author is the selected profile', async () => {
-    const environment = createEnvironment();
-    const request = makeRequest('request-a', 'PROCESSING');
-    const cancelledRequest = makeRequest('request-b', 'CANCELLED');
-    seedPostRequestLists(environment, [request, cancelledRequest]);
-    seedHomeConnection(environment, [
-      { cursor: 'cursor-home-first-page', id: 'post-home-first-page' },
-      { cursor: 'cursor-home-next-page', id: 'post-home-next-page' },
-    ]);
+  for (const testCase of [
+    {
+      label: 'with a Post projection',
+      post: { id: 'post-a', profileId: 'profile-a' },
+      authorProfileId: 'profile-a',
+      postId: 'post-a',
+      homePostIds: ['post-a', 'post-home-first-page', 'post-home-next-page'],
+      homeCursors: [null, 'cursor-home-first-page', 'cursor-home-next-page'],
+    },
+    {
+      label: 'without a Post projection',
+      post: null,
+      authorProfileId: null,
+      postId: null,
+      homePostIds: ['post-home-first-page', 'post-home-next-page'],
+      homeCursors: ['cursor-home-first-page', 'cursor-home-next-page'],
+    },
+  ] as const) {
+    it(`removes a polled PUBLISHED request ${testCase.label}`, async () => {
+      const environment = createEnvironment();
+      const request = makeRequest('request-a', 'PROCESSING');
+      const cancelledRequest = makeRequest('request-b', 'CANCELLED');
+      seedPostRequestLists(environment, [request, cancelledRequest]);
+      seedHomeConnection(environment, [
+        { cursor: 'cursor-home-first-page', id: 'post-home-first-page' },
+        { cursor: 'cursor-home-next-page', id: 'post-home-next-page' },
+      ]);
 
-    await renderSummary(environment);
-    assert.equal(all('PostRequestCard').length, 1);
+      await renderSummary(environment);
+      assert.equal(all('PostRequestCard').length, 1);
 
-    await act(async () => {
-      updateRequestStatus(environment, request, 'PUBLISHED', {
-        id: 'post-a',
-        profileId: 'profile-a',
+      await act(async () => {
+        updateRequestStatus(environment, request, 'PUBLISHED', testCase.post);
       });
+      const publishedCard = all('PostRequestCard')[0];
+      assert.ok(publishedCard);
+      assert.equal(publishedCard.props.status, 'PUBLISHED');
+      const onPublished = publishedCard.props.onPublished as (result: {
+        authorProfileId: string | null;
+        postId: string | null;
+        requestNodeId: string;
+      }) => void;
+      await act(async () => {
+        const result = {
+          authorProfileId: testCase.authorProfileId,
+          postId: testCase.postId,
+          requestNodeId: request.id,
+        };
+        onPublished(result);
+        onPublished(result);
+      });
+
+      assert.equal(all('PostRequestCard').length, 0);
+      assert.deepEqual(listRequestIds(environment), [cancelledRequest.id]);
+      const homeConnectionId = ConnectionHandler.getConnectionID(
+        'client:root',
+        'PostList_homeTimeline',
+      );
+      assert.deepEqual(connectionNodeIds(environment, homeConnectionId), testCase.homePostIds);
+
+      const source = environment.getStore().getSource();
+      const connection = source.get(homeConnectionId) as Record<string, unknown> | null;
+      assert.ok(connection);
+      const edgeIds = (connection['edges'] as { __refs?: ReadonlyArray<string | null> } | undefined)
+        ?.__refs;
+      assert.ok(edgeIds);
+      assert.deepEqual(
+        edgeIds.map((edgeId) => (edgeId ? source.get(edgeId)?.['cursor'] : null)),
+        testCase.homeCursors,
+      );
+
+      const pageInfoId = (connection['pageInfo'] as { __ref?: string } | undefined)?.__ref;
+      assert.ok(pageInfoId);
+      const pageInfo = source.get(pageInfoId) as Record<string, unknown> | null;
+      assert.ok(pageInfo);
+      assert.deepEqual(
+        {
+          endCursor: pageInfo['endCursor'],
+          hasNextPage: pageInfo['hasNextPage'],
+          hasPreviousPage: pageInfo['hasPreviousPage'],
+          startCursor: pageInfo['startCursor'],
+        },
+        {
+          endCursor: 'cursor-home-next-page',
+          hasNextPage: true,
+          hasPreviousPage: false,
+          startCursor: 'cursor-home-first-page',
+        },
+      );
+
+      await updateList(environment);
+      assert.deepEqual(
+        all('PostRequestCard').map((node) => node.props.status),
+        ['CANCELLED'],
+      );
     });
-    const publishedCard = all('PostRequestCard')[0];
-    assert.ok(publishedCard);
-    assert.equal(publishedCard.props.status, 'PUBLISHED');
-    const onPublished = publishedCard.props.onPublished as (result: {
-      authorProfileId: string;
-      postId: string;
-      requestNodeId: string;
-    }) => void;
-    await act(async () => {
-      const result = {
-        authorProfileId: 'profile-a',
-        postId: 'post-a',
-        requestNodeId: request.id,
-      };
-      onPublished(result);
-      onPublished(result);
-    });
-
-    assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment), [cancelledRequest.id]);
-    const homeConnectionId = ConnectionHandler.getConnectionID(
-      'client:root',
-      'PostList_homeTimeline',
-    );
-    assert.deepEqual(connectionNodeIds(environment, homeConnectionId), [
-      'post-a',
-      'post-home-first-page',
-      'post-home-next-page',
-    ]);
-
-    const source = environment.getStore().getSource();
-    const connection = source.get(homeConnectionId) as Record<string, unknown> | null;
-    assert.ok(connection);
-    const edgeIds = (connection['edges'] as { __refs?: ReadonlyArray<string | null> } | undefined)
-      ?.__refs;
-    assert.ok(edgeIds);
-    assert.deepEqual(
-      edgeIds.map((edgeId) => (edgeId ? source.get(edgeId)?.['cursor'] : null)),
-      [null, 'cursor-home-first-page', 'cursor-home-next-page'],
-    );
-
-    const pageInfoId = (connection['pageInfo'] as { __ref?: string } | undefined)?.__ref;
-    assert.ok(pageInfoId);
-    const pageInfo = source.get(pageInfoId) as Record<string, unknown> | null;
-    assert.ok(pageInfo);
-    assert.deepEqual(
-      {
-        endCursor: pageInfo['endCursor'],
-        hasNextPage: pageInfo['hasNextPage'],
-        hasPreviousPage: pageInfo['hasPreviousPage'],
-        startCursor: pageInfo['startCursor'],
-      },
-      {
-        endCursor: 'cursor-home-next-page',
-        hasNextPage: true,
-        hasPreviousPage: false,
-        startCursor: 'cursor-home-first-page',
-      },
-    );
-
-    await updateList(environment);
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.status),
-      ['CANCELLED'],
-    );
-  });
+  }
 
   it('does not infer Home Posts from retained FAILED and CANCELLED request history', async () => {
     const environment = createEnvironment();
@@ -700,8 +712,8 @@ describe('PostRequestList', () => {
     const publishedCard = all('PostRequestCard')[0];
     assert.ok(publishedCard);
     const onPublished = publishedCard.props.onPublished as (result: {
-      authorProfileId: string;
-      postId: string;
+      authorProfileId: string | null;
+      postId: string | null;
       requestNodeId: string;
     }) => void;
     await act(async () =>

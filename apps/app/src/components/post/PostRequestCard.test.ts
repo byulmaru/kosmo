@@ -293,26 +293,43 @@ describe('PostRequestCard', () => {
     assert.equal(findAllByType('Image')[0]?.props.accessibilityLabel, '첨부 이미지');
   });
 
-  it('links to the published post and emits completion only after observing an active-to-published transition', async () => {
-    const onPublished = mock.fn();
-    const published = makeRequest('PUBLISHED', {
-      post: { id: 'post-id', profile: { id: 'profile-writer', relativeHandle: '@writer' } },
-    });
-    await renderCard(published, { onPublished });
-
-    assert.equal(findAllByType('Link')[0]?.props.href, '/@writer/post-id');
-    assert.equal(onPublished.mock.callCount(), 0);
-
-    await updateCard(makeRequest('QUEUED'), { onPublished });
-    await updateCard(published, { onPublished });
-    assert.deepEqual(onPublished.mock.calls[0]?.arguments, [
+  for (const [label, post, expected] of [
+    [
+      'with a Post projection',
+      { id: 'post-id', profile: { id: 'profile-writer', relativeHandle: '@writer' } },
       {
         requestNodeId: 'request-node-id',
         postId: 'post-id',
         authorProfileId: 'profile-writer',
       },
-    ]);
-  });
+    ],
+    [
+      'without a Post projection',
+      null,
+      {
+        requestNodeId: 'request-node-id',
+        postId: null,
+        authorProfileId: null,
+      },
+    ],
+  ] as const) {
+    it(`emits completion only after an active-to-published transition ${label}`, async () => {
+      const onPublished = mock.fn();
+      const published = makeRequest('PUBLISHED', { post });
+      await renderCard(published, { onPublished });
+
+      if (post) {
+        assert.equal(findAllByType('Link')[0]?.props.href, '/@writer/post-id');
+      } else {
+        assert.equal(findAllByType('Link').length, 0);
+      }
+      assert.equal(onPublished.mock.callCount(), 0);
+
+      await updateCard(makeRequest('QUEUED'), { onPublished });
+      await updateCard(published, { onPublished });
+      assert.deepEqual(onPublished.mock.calls[0]?.arguments, [expected]);
+    });
+  }
 
   it('keeps the last known status visible after a cancel error and offers a manual status check', async () => {
     cancelCommit = (config) => config.onError?.(new Error('network error'));

@@ -29,6 +29,7 @@ const PostRequestListRequestFragment = graphql`
 const PostRequestListQuery = graphql`
   query PostRequestListQuery($profileId: ID!) {
     node(id: $profileId) {
+      __typename
       ... on Profile {
         id
         postRequests {

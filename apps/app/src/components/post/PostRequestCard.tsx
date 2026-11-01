@@ -61,8 +61,8 @@ const CancelPostRequestMutation = graphql`
 `;
 
 type PublishedPost = {
-  authorProfileId: string;
-  postId: string;
+  authorProfileId: string | null;
+  postId: string | null;
   requestNodeId: string;
 };
 
@@ -97,12 +97,11 @@ export function PostRequestCard({
     if (
       previousRequest.id === request.id &&
       ACTIVE_STATUSES.has(previousRequest.status) &&
-      request.status === 'PUBLISHED' &&
-      request.post?.id
+      request.status === 'PUBLISHED'
     ) {
       onPublished?.({
-        authorProfileId: request.post.profile.id,
-        postId: request.post.id,
+        authorProfileId: request.post?.profile.id ?? null,
+        postId: request.post?.id ?? null,
         requestNodeId: request.id,
       });
     }
