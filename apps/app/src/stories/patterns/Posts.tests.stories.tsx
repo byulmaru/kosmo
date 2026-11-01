@@ -13,6 +13,7 @@ import baseMeta, {
   AuthorNavigationShort as authorNavigationShort,
   AuthorNavigationTruncated as authorNavigationTruncated,
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
+  ComposerKeyboardSubmitInteraction as composerKeyboardSubmitInteraction,
   ContentWarningCardPressableFeedbackInteraction as contentWarningCardPressableFeedback,
   ContentWarningProductionConsumersShareRevealStateInteraction as contentWarningConsumersInteraction,
   ContentWarningQuoteIndependentLifecycleInteraction as contentWarningQuoteInteraction,
@@ -42,6 +43,7 @@ type Story = StoryObj<typeof meta>;
 
 export const LinkedSourceQuoteInteraction: Story = linkedSourceQuoteInteraction;
 export const ComposerBeforeUnloadContract: Story = composerBeforeUnloadContract;
+export const ComposerKeyboardSubmitInteraction: Story = composerKeyboardSubmitInteraction;
 
 export const ContentWarningReveal: Story = contentWarningRevealInteraction;
 

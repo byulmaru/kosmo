@@ -3181,6 +3181,7 @@ const meta = {
     'AuthorNavigationRepost',
     'AuthorNavigationRepostOfQuote',
     'ComposerBeforeUnloadContract',
+    'ComposerKeyboardSubmitInteraction',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
     'ContentWarningCardPressableFeedbackInteraction',
     'ContentWarningQuoteIndependentLifecycleInteraction',
@@ -7856,30 +7857,28 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 export const ComposerKeyboardSubmitInteraction: Story = {
   parameters: { relay: { mutationRequestObserver: postComposerMutationRequestObserver } },
   play: async ({ canvasElement }) => {
-    const form = canvasElement.querySelector('form');
-    expect(form).not.toBeNull();
-    if (!form) {
-      return;
-    }
-    const body = within(form).getByRole('textbox', { name: '게시글 본문' });
+    const getBody = () => {
+      const form = canvasElement.querySelector('form');
+      if (!form) {
+        throw new Error('Composer form is missing');
+      }
+      return within(form).getByRole('textbox', { name: '게시글 본문' });
+    };
 
-    await userEvent.type(body, 'modifier 없는 Enter는 줄바꿈으로 남습니다.');
+    await userEvent.type(getBody(), 'modifier 없는 Enter는 줄바꿈으로 남습니다.');
     await userEvent.keyboard('{Enter}');
-    await waitFor(() => expect(body).toHaveValue('modifier 없는 Enter는 줄바꿈으로 남습니다.\n'));
-
-    await userEvent.type(body, 'Command+Enter로 제출한 게시글입니다.');
-    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
-      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+      expect(getBody()).toHaveValue('modifier 없는 Enter는 줄바꿈으로 남습니다.\n'),
     );
+
+    await userEvent.type(getBody(), 'Command+Enter로 제출한 게시글입니다.');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() => expect(getBody()).toHaveValue(''));
     await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1));
 
-    const resetBody = within(form).getByRole('textbox', { name: '게시글 본문' });
-    await userEvent.type(resetBody, 'Control+Enter로 제출한 게시글입니다.');
+    await userEvent.type(getBody(), 'Control+Enter로 제출한 게시글입니다.');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
-    await waitFor(() =>
-      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
-    );
+    await waitFor(() => expect(getBody()).toHaveValue(''));
     await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(2));
     const firstInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
       .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
