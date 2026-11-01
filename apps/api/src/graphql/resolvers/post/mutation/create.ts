@@ -2,7 +2,6 @@ import { db, firstOrThrow, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { submitPostRequest, waitForPostRequestResult } from '../../post-request/mutation/submit';
 import { PostRequest } from '../../post-request/ref';
@@ -55,7 +54,6 @@ builder.mutationField('createPost', (t) =>
     type: CreatePostPayload,
     typeOptions: { validate: localPostCreateInputSchema },
     input: {
-      requestId: t.input.string({ required: false, validate: z.uuid().nullish() }),
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({
@@ -78,7 +76,7 @@ builder.mutationField('createPost', (t) =>
       const analyticsPlatform: PostAnalyticsPlatform | undefined =
         headerPlatform === 'web' || headerPlatform === 'native' ? headerPlatform : undefined;
 
-      const request = await submitPostRequest(input, input.requestId, ctx, analyticsPlatform);
+      const request = await submitPostRequest(input, ctx, analyticsPlatform);
       return {
         post: () => getPostForRequest(ctx.session.accountId, request),
         request,

@@ -57,12 +57,14 @@
   Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
   만들지 않는다. GraphQL projection은 [Post domain contract](../../docs/domain/objects/post.md)을 따르며,
   immutable input 전체나 public error detail을 복원하지 않는다. Local `createPost`의 모든 새 요청은 같은
-  `postRequestWorkflow` 경로로 admission한다. 선택적인 `requestId`는 멱등성 재시도 키일 뿐이며, 생략하면 서버가
-  생성한다. 신규 admission은 기존 primary Media query로 분류한다. Media가 없거나 모두 READY면 기존 request
+  `postRequestWorkflow` 경로로 admission한다. 서버는 각 호출에 새로운 `requestId`를 생성하며 클라이언트는 retry key를
+  제출하지 않는다. 신규 admission은 기존 primary Media query로 분류한다. Media가 없거나 모두 READY면 새 request
   Workflow의 `result()`를 현재 30초 API caller deadline까지 기다려 `PUBLISHED` request를 반환하고, 유효한 Local
-  UPLOADING Media가 하나라도 있으면 request acknowledgement를 즉시 반환한 뒤 Workflow가 처리를 계속한다. 같은 ID와
-  fingerprint의 replay나 racing start는 기존 current state를 반환하고 재검증·재분류·재개방하지 않으며, ID에 다른
-  content가 오면 conflict다. 이 admission 동작은 `request` 또는 `post` 선택과 무관하다. non-null `post`는 기존 lazy
+  UPLOADING Media가 하나라도 있으면 request acknowledgement를 즉시 반환한 뒤 Workflow가 처리를 계속한다. 동일 내용의
+  별도 호출도 각각 독립된 요청으로 admission한다. Start 오류는 기존 GraphQL error mapping으로 전달하며,
+  API는 오류 뒤에 Workflow를 조회해 admission을 복구하지 않는다. 새 호출은 새 `requestId`를 받아 별도 요청이 될 수
+  있으므로 HTTP 요청이 정확히 한 번만 접수된다고 보장하지 않는다. 이 admission 동작은 `request` 또는 `post` 선택과
+  무관하다. non-null `post`는 기존 lazy
   compatibility field이고, 선택하면 publication을 기다린 뒤 published `postId`와 snapshot의 원본 `profileId`를 함께
   조건으로 DB에서 Post를 읽는다. API result-wait deadline expiry, Workflow failure, cancellation, 예상 밖 terminal
   result는 성공 payload가 아니라 GraphQL error다. API result-wait deadline은 해당 caller의 대기만 끝내며 Workflow를

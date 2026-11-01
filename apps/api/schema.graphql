@@ -93,7 +93,6 @@ type CancelProfileFollowRequestPayload {
 
 input CompleteMediaUploadInput {
   applyAiProhibitFilter: Boolean
-  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   id: ID!
 }
 
@@ -147,7 +146,6 @@ input CreatePostInput {
   mentions: [CreatePostMentionInput!]
   replyParentId: ID
   repostSourceId: ID
-  requestId: String
   sensitiveMedia: Boolean
   visibility: PostVisibility!
 }
@@ -155,7 +153,6 @@ input CreatePostInput {
 input CreatePostMediaInput {
   altText: String
   applyAiProhibitFilter: Boolean
-  applyNightshade: Boolean = false @deprecated(reason: "Use applyAiProhibitFilter instead.")
   mediaId: ID!
 }
 

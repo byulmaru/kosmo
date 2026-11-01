@@ -2,18 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
-import { ConflictError, ValidationError } from '@kosmo/core/error';
+import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
-  POST_REQUEST_STATE_QUERY,
-  POST_REQUEST_WORKFLOW_TYPE,
   PostRequestStatus,
   postRequestWorkflow,
   postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
-import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
 import { graphql } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
@@ -25,19 +22,14 @@ type CreatePostResult = {
   };
 };
 
-const requestSubmit = (
-  input: {
-    bodyText: string;
-    media?: readonly {
-      applyAiProhibitFilter?: boolean;
-      applyNightshade?: boolean;
-      mediaId: string;
-    }[];
-    requestId: string;
-    visibility: 'PUBLIC';
-  },
-  analyticsPlatformHeader?: string,
-) =>
+const requestSubmit = (input: {
+  bodyText: string;
+  media?: readonly {
+    applyAiProhibitFilter?: boolean;
+    mediaId: string;
+  }[];
+  visibility: 'PUBLIC';
+}) =>
   graphql({
     schema,
     source: `
@@ -56,29 +48,11 @@ const requestSubmit = (
           role: 'MEMBER',
         },
       },
-      ...(analyticsPlatformHeader === undefined
-        ? {}
-        : {
-            c: {
-              req: {
-                header: (name: string) =>
-                  name === 'x-kosmo-analytics-platform' ? analyticsPlatformHeader : undefined,
-              },
-            },
-          }),
     },
   }) as Promise<ExecutionResult<CreatePostResult>>;
 
-const noExistingPostRequestHandle = {
-  query: async (queryName: string) => {
-    assert.equal(queryName, POST_REQUEST_STATE_QUERY);
-    return null;
-  },
-};
-
-test('createPost snapshots supported analytics platforms and keeps the first request value', async (t) => {
+test('createPost admits identical submissions as separate requests', async (t) => {
   const accountId = '00000000-0000-4000-8000-000000000001';
-  const states = new Map<string, PostRequestState>();
   const results = new Map<string, PostRequestState>();
   const startedSnapshots: PostRequestState['snapshot'][] = [];
   let resultCallCount = 0;
@@ -87,15 +61,10 @@ test('createPost snapshots supported analytics platforms and keeps the first req
     'getHandle',
     (workflowId: string) =>
       ({
-        query: async (queryName: string) => {
-          assert.equal(queryName, POST_REQUEST_STATE_QUERY);
-          return states.get(workflowId) ?? null;
-        },
         result: async () => {
           resultCallCount += 1;
           const result = results.get(workflowId);
           assert.ok(result);
-          states.set(workflowId, result);
           return result;
         },
       }) as never,
@@ -108,7 +77,6 @@ test('createPost snapshots supported analytics platforms and keeps the first req
       const snapshot = (options as { args: readonly [PostRequestState['snapshot']] }).args[0];
       startedSnapshots.push(snapshot);
       const workflowId = postRequestWorkflowId(accountId, snapshot.requestId);
-      states.set(workflowId, { snapshot, status: PostRequestStatus.QUEUED });
       results.set(workflowId, {
         snapshot,
         status: PostRequestStatus.PUBLISHED,
@@ -123,58 +91,24 @@ test('createPost snapshots supported analytics platforms and keeps the first req
     async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
   );
 
-  const submit = (requestId: string, platformHeader?: string) =>
-    requestSubmit({ bodyText: 'post body', requestId, visibility: 'PUBLIC' }, platformHeader);
-  const webRequestId = '00000000-0000-4000-8000-000000000006';
-  const web = await submit(webRequestId, 'web');
-  assert.deepEqual(web.errors, undefined);
-  assert.equal(web.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
-  assert.equal(startedSnapshots[0]?.analyticsPlatform, 'web');
-  const firstSnapshot = states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot;
-  assert.ok(firstSnapshot);
-  assert.ok(firstSnapshot.submissionFingerprint);
+  const first = await requestSubmit({ bodyText: 'post body', visibility: 'PUBLIC' });
+  const second = await requestSubmit({ bodyText: 'post body', visibility: 'PUBLIC' });
+  assert.deepEqual(first.errors, undefined);
+  assert.equal(first.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
+  assert.deepEqual(second.errors, undefined);
+  assert.equal(second.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
 
-  const replay = await submit(webRequestId, 'native');
-  assert.deepEqual(replay.errors, undefined);
-  assert.equal(startedSnapshots.length, 1);
-  assert.equal(
-    states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot.analyticsPlatform,
-    'web',
+  assert.equal(start.mock.callCount(), 2);
+  assert.equal(resultCallCount, 2);
+  const requestIds = startedSnapshots.map(({ requestId }) => requestId);
+  assert.ok(requestIds.every((requestId) => /^[0-9a-f-]{36}$/i.test(requestId)));
+  assert.equal(new Set(requestIds).size, requestIds.length);
+  assert.ok(
+    startedSnapshots.every(({ submissionFingerprint }) => submissionFingerprint === undefined),
   );
-  assert.equal(
-    states.get(postRequestWorkflowId(accountId, webRequestId))?.snapshot.submissionFingerprint,
-    firstSnapshot.submissionFingerprint,
-  );
-
-  const native = await submit('00000000-0000-4000-8000-000000000007', 'native');
-  assert.deepEqual(native.errors, undefined);
-  assert.equal(startedSnapshots[1]?.analyticsPlatform, 'native');
-
-  const invalid = await submit('00000000-0000-4000-8000-000000000008', 'Web');
-  assert.deepEqual(invalid.errors, undefined);
-  assert.equal(Object.hasOwn(startedSnapshots[2] ?? {}, 'analyticsPlatform'), false);
-
-  const missing = await submit('00000000-0000-4000-8000-000000000009');
-  assert.deepEqual(missing.errors, undefined);
-  assert.equal(Object.hasOwn(startedSnapshots[3] ?? {}, 'analyticsPlatform'), false);
-
-  const missingReplay = await submit('00000000-0000-4000-8000-000000000009', 'web');
-  assert.deepEqual(missingReplay.errors, undefined);
-  assert.equal(startedSnapshots.length, 4);
-  assert.equal(
-    Object.hasOwn(
-      states.get(postRequestWorkflowId(accountId, '00000000-0000-4000-8000-000000000009'))
-        ?.snapshot ?? {},
-      'analyticsPlatform',
-    ),
-    false,
-  );
-  assert.equal(start.mock.callCount(), 4);
-  assert.equal(resultCallCount, 4);
 });
 
 test('createPost rejects duplicate media before checking uploads or starting the workflow', async (t) => {
-  t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);
   const mediaId = '00000000-0000-4000-8000-000000000003';
   const uploadId = '00000000-0000-4000-8000-000000000005';
   const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
@@ -235,10 +169,9 @@ test('createPost rejects duplicate media before checking uploads or starting the
   const result = await requestSubmit({
     bodyText: 'duplicate image',
     media: [
-      { applyNightshade: false, mediaId: encodedMediaId },
-      { applyNightshade: true, mediaId: encodedMediaId },
+      { applyAiProhibitFilter: false, mediaId: encodedMediaId },
+      { applyAiProhibitFilter: true, mediaId: encodedMediaId },
     ],
-    requestId: '00000000-0000-4000-8000-000000000006',
     visibility: 'PUBLIC',
   });
 
@@ -251,10 +184,6 @@ test('createPost rejects duplicate media before checking uploads or starting the
 });
 
 test('createPost checks raw uploads, acknowledges pending media, and waits for READY media', async (t) => {
-  const query = t.mock.fn(async (queryName: string) => {
-    assert.equal(queryName, POST_REQUEST_STATE_QUERY);
-    return null;
-  });
   const accountId = '00000000-0000-4000-8000-000000000001';
   const results = new Map<string, PostRequestState>();
   let resultCallCount = 0;
@@ -263,7 +192,6 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     'getHandle',
     (workflowId: string) =>
       ({
-        query,
         result: async () => {
           resultCallCount += 1;
           const result = results.get(workflowId);
@@ -367,12 +295,10 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     bodyText: 'uploading image',
     media: [
       {
-        applyAiProhibitFilter: false,
-        applyNightshade: true,
+        applyAiProhibitFilter: true,
         mediaId: encodeGlobalId('Media', uploadingMediaId),
       },
     ],
-    requestId: '00000000-0000-4000-8000-000000000006',
     visibility: 'PUBLIC',
   });
   assert.deepEqual(uploadingResult.errors, undefined);
@@ -384,13 +310,13 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     },
   ]);
   assert.deepEqual(started[0]?.args?.[0]?.input.media, [
-    { altText: null, applyNightshade: false, mediaId: uploadingMediaId },
+    { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
   ]);
   assert.equal(started[0]?.args?.[0]?.postId, undefined);
   assert.ok(started[0]?.args?.[0]?.submittedAt);
   assert.equal(started[0]?.workflowIdConflictPolicy, 'FAIL');
   assert.equal(started[0]?.workflowIdReusePolicy, 'REJECT_DUPLICATE');
-  assert.match(started[0]?.args?.[0]?.submissionFingerprint ?? '', /^[a-f0-9]{64}$/);
+  assert.equal(started[0]?.args?.[0]?.submissionFingerprint, undefined);
   assert.deepEqual(started[0]?.typedSearchAttributes, [
     {
       key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.ownerAccountId, type: 'KEYWORD' },
@@ -409,7 +335,6 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
   const readyResult = await requestSubmit({
     bodyText: 'ready image',
     media: [{ mediaId: encodeGlobalId('Media', readyMediaId) }],
-    requestId: '00000000-0000-4000-8000-000000000007',
     visibility: 'PUBLIC',
   });
   assert.deepEqual(readyResult.errors, undefined);
@@ -419,14 +344,12 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     { altText: null, applyNightshade: false, mediaId: readyMediaId },
   ]);
   assert.equal(started[1]?.args?.[0]?.postId, undefined);
-  assert.equal(query.mock.callCount(), 2);
   assert.equal(resultCallCount, 1);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(executeWorkflow.mock.callCount(), 0);
 });
 
 test('createPost does not admit an Uploading Media whose raw upload is missing', async (t) => {
-  t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);
   const mediaId = '00000000-0000-4000-8000-000000000003';
   const uploadId = '00000000-0000-4000-8000-000000000005';
   const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
@@ -474,8 +397,7 @@ test('createPost does not admit an Uploading Media whose raw upload is missing',
 
   const result = await requestSubmit({
     bodyText: 'image without bytes',
-    media: [{ applyNightshade: false, mediaId: encodeGlobalId('Media', mediaId) }],
-    requestId: '00000000-0000-4000-8000-000000000006',
+    media: [{ mediaId: encodeGlobalId('Media', mediaId) }],
     visibility: 'PUBLIC',
   });
 
@@ -487,7 +409,6 @@ test('createPost does not admit an Uploading Media whose raw upload is missing',
 });
 
 test('createPost reports unsupported uploads by their original media index', async (t) => {
-  t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);
   const readyMediaId = '00000000-0000-4000-8000-000000000003';
   const uploadingMediaId = '00000000-0000-4000-8000-000000000004';
   t.mock.method(
@@ -520,10 +441,9 @@ test('createPost reports unsupported uploads by their original media index', asy
   const result = await requestSubmit({
     bodyText: 'two images',
     media: [
-      { applyNightshade: false, mediaId: encodeGlobalId('Media', readyMediaId) },
-      { applyNightshade: false, mediaId: encodeGlobalId('Media', uploadingMediaId) },
+      { mediaId: encodeGlobalId('Media', readyMediaId) },
+      { mediaId: encodeGlobalId('Media', uploadingMediaId) },
     ],
-    requestId: '00000000-0000-4000-8000-000000000006',
     visibility: 'PUBLIC',
   });
 
@@ -535,7 +455,6 @@ test('createPost reports unsupported uploads by their original media index', asy
 });
 
 test('createPost leaves storage outages unknown and does not mark a media slot missing', async (t) => {
-  t.mock.method(temporalClient.workflow, 'getHandle', () => noExistingPostRequestHandle as never);
   const readyMediaId = '00000000-0000-4000-8000-000000000003';
   const uploadingMediaId = '00000000-0000-4000-8000-000000000004';
   const uploadId = '00000000-0000-4000-8000-000000000005';
@@ -590,10 +509,9 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
   const result = await requestSubmit({
     bodyText: 'two images',
     media: [
-      { applyNightshade: false, mediaId: encodeGlobalId('Media', readyMediaId) },
-      { applyNightshade: false, mediaId: encodeGlobalId('Media', uploadingMediaId) },
+      { mediaId: encodeGlobalId('Media', readyMediaId) },
+      { mediaId: encodeGlobalId('Media', uploadingMediaId) },
     ],
-    requestId: '00000000-0000-4000-8000-000000000006',
     visibility: 'PUBLIC',
   });
 
@@ -603,183 +521,22 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
   assert.equal(start.mock.callCount(), 0);
 });
 
-test('createPost recovers a lost acknowledgement after an upload source disappears without reopening FAILED requests', async (t) => {
-  const accountId = '00000000-0000-4000-8000-000000000001';
-  const mediaId = '00000000-0000-4000-8000-000000000003';
-  const uploadId = '00000000-0000-4000-8000-000000000004';
-  const requestId = '00000000-0000-4000-8000-000000000005';
-  const workflowId = postRequestWorkflowId(accountId, requestId);
-  const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-  const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-  process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://storage.example';
-  process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'test-key';
-  t.after(() => {
-    if (previousOrigin === undefined) {
-      delete process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-    } else {
-      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousOrigin;
-    }
-    if (previousApiKey === undefined) {
-      delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-    } else {
-      process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousApiKey;
-    }
+test('createPost returns a Workflow admission error without querying request state', async (t) => {
+  const admissionFailure = new Error('Temporal start acknowledgement was lost');
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    throw admissionFailure;
   });
-
-  let current: PostRequestState | null = null;
-  let queryCount = 0;
-  const readCurrent = (): PostRequestState | null => current;
-  t.mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
-    assert.equal(id, workflowId);
-    return {
-      query: async (queryName: string) => {
-        assert.equal(queryName, POST_REQUEST_STATE_QUERY);
-        queryCount += 1;
-        return current;
-      },
-    } as never;
-  });
-  const select = t.mock.method(
-    db,
-    'select',
-    () =>
-      ({
-        from: () => ({
-          where: async () => [
-            {
-              id: mediaId,
-              source: MediaSource.LOCAL,
-              state: MediaState.UPLOADING,
-              storageReference: `nexus:v1:${uploadId}`,
-              url: null,
-            },
-          ],
-        }),
-      }) as never,
-  );
-  let fetchCount = 0;
-  t.mock.method(globalThis, 'fetch', async () => {
-    fetchCount += 1;
-    return fetchCount === 1
-      ? new Response(null, {
-          status: 200,
-          headers: {
-            'content-length': '1',
-            'content-type': 'image/png',
-            'last-modified': new Date().toUTCString(),
-          },
-        })
-      : new Response(null, { status: 404 });
-  });
-  let startCount = 0;
-  t.mock.method(temporalClient.workflow, 'start', async (workflow: unknown, options: unknown) => {
-    assert.equal(workflow, postRequestWorkflow.workflow);
-    const workflowOptions = options as {
-      workflowIdConflictPolicy?: string;
-      workflowIdReusePolicy?: string;
-    };
-    assert.equal(workflowOptions.workflowIdConflictPolicy, 'FAIL');
-    assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
-    startCount += 1;
-    const snapshot = (options as { args: readonly [PostRequestState['snapshot']] }).args[0];
-    current = { snapshot, status: PostRequestStatus.QUEUED };
-    return { workflowId, firstExecutionRunId: 'run-1' } as never;
-  });
+  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle');
   t.mock.method(
     temporalClient,
     'withDeadline',
     async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
   );
 
-  const input = {
-    bodyText: 'same content',
-    media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', mediaId) }],
-    requestId,
-    visibility: 'PUBLIC' as const,
-  };
-  const initial = await requestSubmit(input);
-  assert.deepEqual(initial.errors, undefined);
-  assert.equal(initial.data?.createPost.request?.status, 'QUEUED');
+  const result = await requestSubmit({ bodyText: 'post body', visibility: 'PUBLIC' });
 
-  const currentAfterStart = readCurrent();
-  assert.ok(currentAfterStart);
-  assert.equal(currentAfterStart.snapshot.input.media?.[0]?.applyNightshade, true);
-  const publishedPostId = '00000000-0000-4000-8000-000000000099';
-  current = {
-    ...currentAfterStart,
-    result: { postId: publishedPostId },
-    status: PostRequestStatus.PUBLISHED,
-  };
-  const replay = await requestSubmit({
-    ...input,
-    media: [{ applyNightshade: true, mediaId: encodeGlobalId('Media', mediaId) }],
-  });
-  assert.deepEqual(replay.errors, undefined);
-  assert.equal(replay.data?.createPost.request?.status, 'PUBLISHED');
-  current = { ...currentAfterStart, status: PostRequestStatus.FAILED };
-  const failedReplay = await requestSubmit(input);
-  assert.deepEqual(failedReplay.errors, undefined);
-  assert.equal(failedReplay.data?.createPost.request?.status, 'FAILED');
-  assert.equal(queryCount, 3);
-  assert.equal(fetchCount, 1);
-  assert.equal(select.mock.callCount(), 1);
-  assert.equal(startCount, 1);
-});
-
-test('createPost confirms a matching racing start and rejects different content', async (t) => {
-  const accountId = '00000000-0000-4000-8000-000000000001';
-  const requestId = '00000000-0000-4000-8000-000000000006';
-  const workflowId = postRequestWorkflowId(accountId, requestId);
-  let current: PostRequestState | null = null;
-  let queryCount = 0;
-  t.mock.method(temporalClient.workflow, 'getHandle', (id: string) => {
-    assert.equal(id, workflowId);
-    return {
-      query: async (queryName: string) => {
-        assert.equal(queryName, POST_REQUEST_STATE_QUERY);
-        queryCount += 1;
-        return current;
-      },
-    } as never;
-  });
-  const start = t.mock.method(
-    temporalClient.workflow,
-    'start',
-    async (_workflow: unknown, options: unknown) => {
-      const snapshot = (options as { args: readonly [PostRequestState['snapshot']] }).args[0];
-      current = { snapshot, status: PostRequestStatus.PROCESSING };
-      throw new WorkflowExecutionAlreadyStartedError(
-        'Workflow execution already started',
-        workflowId,
-        POST_REQUEST_WORKFLOW_TYPE,
-      );
-    },
-  );
-  t.mock.method(
-    temporalClient,
-    'withDeadline',
-    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
-  );
-
-  const matching = await requestSubmit({
-    bodyText: 'same content',
-    requestId,
-    visibility: 'PUBLIC',
-  });
-  assert.deepEqual(matching.errors, undefined);
-  assert.equal(matching.data?.createPost.request?.status, 'PROCESSING');
-
-  const changed = await requestSubmit({
-    bodyText: 'changed content',
-    requestId,
-    visibility: 'PUBLIC',
-  });
-  assert.equal(
-    changed.errors?.[0]?.message,
-    'This request ID already belongs to different post content',
-  );
-  assert.ok(changed.errors?.[0]?.originalError instanceof ConflictError);
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.originalError, admissionFailure);
   assert.equal(start.mock.callCount(), 1);
-  assert.equal(queryCount, 3);
-  assert.equal((changed.errors?.[0]?.originalError as ConflictError).field, 'requestId');
+  assert.equal(getHandle.mock.callCount(), 0);
 });

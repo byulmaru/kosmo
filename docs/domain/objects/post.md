@@ -108,9 +108,10 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
-Local Post·Reply·Quote 작성은 모두 같은 PostRequest 경로로 접수한다. 입력 `requestId`는 선택적인 멱등성 재시도 키이며,
-생략하면 서버가 생성한다. 이 값의 유무는 게시 동작을 바꾸지 않는다. 같은 `requestId`와 작성 내용의 재요청은 기존
-요청 상태를 반환하며, 같은 ID에 다른 내용은 충돌이다.
+Local Post·Reply·Quote 작성은 모두 같은 PostRequest 경로로 접수한다. 서버는 각 `createPost` 호출에 새로운
+`requestId`를 생성하며, 클라이언트는 이 값을 제출하거나 재사용하지 않는다. 작성 내용이 같아도 각 호출은 별도 요청으로
+접수된다. 응답을 받지 못해 다시 제출하면 새 요청이 만들어질 수 있으며, HTTP 요청이 정확히 한 번만 접수된다고 보장하지 않는다.
+작성 화면은 요청 실패나 응답 유실 뒤에도 작성 내용을 유지하며, 사용자의 다음 제출은 새 요청으로 처리한다.
 
 새 요청은 제출 Media 상태에 따라 응답한다. Media가 없거나 모든 참조 Media가 Ready면 publication 결과를 기다려
 `PUBLISHED` PostRequest를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 접수 확인을 즉시 반환하고, 모든

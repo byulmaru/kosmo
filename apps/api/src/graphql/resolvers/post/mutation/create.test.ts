@@ -12,13 +12,7 @@ import {
   postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
 import { ApplicationFailure } from '@temporalio/client';
-import {
-  graphql,
-  GraphQLObjectType,
-  GraphQLSchema,
-  isInputObjectType,
-  isObjectType,
-} from 'graphql';
+import { graphql, GraphQLObjectType, GraphQLSchema, isObjectType } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { TestContext } from 'node:test';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
@@ -26,11 +20,7 @@ import type { PostRequestState } from '@kosmo/core/temporal/post-request';
 const requestOwnerAccountId = '00000000-0000-4000-8000-000000000011';
 const requestProfileId = '00000000-0000-4000-8000-000000000012';
 
-const createPostRequest = (
-  requestId: string,
-  selection: string,
-  media?: readonly { mediaId: string }[],
-) =>
+const createPostRequest = (selection: string, media?: readonly { mediaId: string }[]) =>
   graphql({
     schema,
     source: `
@@ -42,7 +32,6 @@ const createPostRequest = (
       input: {
         bodyText: 'post body',
         ...(media === undefined ? {} : { media }),
-        requestId,
         visibility: 'PUBLIC',
       },
     },
@@ -80,16 +69,20 @@ const completedRequest = (
 
 const setupPostRequestWorkflow = (
   t: TestContext,
-  requestId: string,
-  result: PostRequestState | Error | Promise<PostRequestState>,
+  result: (
+    snapshot: PostRequestState['snapshot'],
+  ) => PostRequestState | Error | Promise<PostRequestState>,
 ) => {
-  const workflowId = postRequestWorkflowId(requestOwnerAccountId, requestId);
+  let snapshot: PostRequestState['snapshot'] | undefined;
+  let workflowId: string | undefined;
   let resultCallCount = 0;
   const start = t.mock.method(
     temporalClient.workflow,
     'start',
     async (workflow: unknown, options: unknown) => {
       assert.equal(workflow, postRequestWorkflow.workflow);
+      snapshot = (options as { args: readonly [PostRequestState['snapshot']] }).args[0];
+      workflowId = postRequestWorkflowId(requestOwnerAccountId, snapshot.requestId);
       assert.equal((options as { workflowId: string }).workflowId, workflowId);
       return { workflowId } as never;
     },
@@ -97,13 +90,14 @@ const setupPostRequestWorkflow = (
   t.mock.method(temporalClient.workflow, 'getHandle', (requestedWorkflowId: string) => {
     assert.equal(requestedWorkflowId, workflowId);
     return {
-      query: async () => null,
       result: async () => {
         resultCallCount += 1;
-        if (result instanceof Error) {
-          throw result;
+        assert.ok(snapshot);
+        const state = result(snapshot);
+        if (state instanceof Error) {
+          throw state;
         }
-        return result;
+        return state;
       },
     } as never;
   });
@@ -117,66 +111,12 @@ const setupPostRequestWorkflow = (
     get resultCallCount() {
       return resultCallCount;
     },
+    get snapshot() {
+      return snapshot;
+    },
     start,
   };
 };
-
-test('exposes the versioned PostContent document and Plain Text composer contract', () => {
-  const postContent = schema.getType('PostContent');
-  const createPostInput = schema.getType('CreatePostInput');
-
-  assert.ok(isObjectType(postContent));
-  assert.ok(postContent.getFields().document);
-  assert.ok(postContent.getFields().bodyText);
-  assert.ok(postContent.getFields().contentWarning);
-  assert.equal(postContent.getFields().spoilerText, undefined);
-  assert.equal(postContent.getFields().bodyJson, undefined);
-
-  assert.ok(isInputObjectType(createPostInput));
-  assert.equal(createPostInput.getFields().content, undefined);
-  assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
-  assert.equal(String(createPostInput.getFields().requestId?.type), 'String');
-  assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
-  assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
-  assert.equal(String(createPostInput.getFields().repostSourceId?.type), 'ID');
-  assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');
-
-  const createPostMediaInput = schema.getType('CreatePostMediaInput');
-  assert.ok(isInputObjectType(createPostMediaInput));
-  assert.equal(String(createPostMediaInput.getFields().mediaId?.type), 'ID!');
-  assert.equal(String(createPostMediaInput.getFields().altText?.type), 'String');
-  assert.equal(String(createPostMediaInput.getFields().applyNightshade?.type), 'Boolean');
-  assert.equal(createPostMediaInput.getFields().applyNightshade?.defaultValue, false);
-  assert.equal(schema.getType('TipTapDocument'), undefined);
-  assert.equal(schema.getType('PostContentBody'), undefined);
-  assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
-
-  const createPostPayload = schema.getType('CreatePostPayload');
-  assert.ok(isObjectType(createPostPayload));
-  assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
-  assert.equal(String(createPostPayload.getFields().request.type), 'PostRequest');
-  assert.deepEqual(Object.keys(createPostPayload.getFields()).sort(), ['post', 'request']);
-
-  assert.equal(schema.getType('SubmitPostRequestInput'), undefined);
-  assert.equal(schema.getType('SubmitPostRequestPayload'), undefined);
-  assert.equal(schema.getType('PostRequestMediaInput'), undefined);
-  assert.equal(schema.getType('PostRequestDraft'), undefined);
-  assert.equal(schema.getType('PostRequestConnection'), undefined);
-  assert.equal(schema.getType('CreatePostMedia'), undefined);
-  assert.equal(schema.getType('CreatePostMention'), undefined);
-  const postRequest = schema.getType('PostRequest');
-  assert.ok(isObjectType(postRequest));
-  assert.ok(postRequest.getFields().bodyText);
-  assert.ok(postRequest.getFields().media);
-  assert.equal(postRequest.getFields().mentions, undefined);
-  assert.equal(postRequest.getFields().draft, undefined);
-
-  const query = schema.getQueryType();
-  assert.ok(query);
-  assert.ok(query.getFields().postRequest);
-  assert.ok(query.getFields().postRequests);
-  assert.equal(query.getFields().account, undefined);
-});
 
 test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
   const postContent = schema.getType('PostContent');
@@ -304,7 +244,7 @@ test('validates createPost input before running the resolver', async () => {
   }
 });
 
-test('createPost validates an optional request ID as a UUID before resolving', async (t) => {
+test('createPost rejects a caller-supplied request ID', async (t) => {
   const start = t.mock.method(temporalClient.workflow, 'start');
   const result = await graphql({
     schema,
@@ -314,7 +254,7 @@ test('createPost validates an optional request ID as a UUID before resolving', a
       }
     `,
     variableValues: {
-      input: { bodyText: 'post body', requestId: 'not-a-uuid', visibility: 'PUBLIC' },
+      input: { bodyText: 'post body', requestId: crypto.randomUUID(), visibility: 'PUBLIC' },
     },
     contextValue: {
       session: {
@@ -327,16 +267,48 @@ test('createPost validates an optional request ID as a UUID before resolving', a
     },
   });
 
-  const error = result.errors?.[0]?.originalError;
-  assert.ok(error instanceof ValidationError);
-  assert.equal(error.field, 'requestId');
+  assert.equal(result.data, undefined);
+  assert.match(result.errors?.[0]?.message ?? '', /requestId/);
+  assert.equal(start.mock.callCount(), 0);
+});
+
+test('createPost rejects the legacy media processing alias', async (t) => {
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } }
+      }
+    `,
+    variableValues: {
+      input: {
+        bodyText: 'post body',
+        media: [
+          {
+            mediaId: encodeGlobalId('Media', '00000000-0000-4000-8000-000000000003'),
+            applyNightshade: true,
+          },
+        ],
+        visibility: 'PUBLIC',
+      },
+    },
+    contextValue: {
+      session: {
+        accountId: requestOwnerAccountId,
+        profile: { id: requestProfileId, role: AccountProfileRole.MEMBER },
+      },
+    },
+  });
+
+  assert.equal(result.data, undefined);
+  assert.match(result.errors?.[0]?.message ?? '', /applyNightshade/);
   assert.equal(start.mock.callCount(), 0);
 });
 
 test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
   const workflowReached = new Error('postRequestWorkflow reached');
   const accountId = '00000000-0000-4000-8000-000000000002';
-  t.mock.method(temporalClient.workflow, 'getHandle', () => ({ query: async () => null }) as never);
   const start = t.mock.method(temporalClient.workflow, 'start', async (workflow: unknown) => {
     assert.equal(workflow, postRequestWorkflow.workflow);
     throw workflowReached;
@@ -378,7 +350,7 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   assert.equal(start.mock.callCount(), 1);
 });
 
-test('createPost without a request ID uses Post Request and forwards supported analytics platforms', async (t) => {
+test('createPost uses Post Request and forwards supported analytics platforms', async (t) => {
   const accountId = '00000000-0000-4000-8000-000000000002';
   const profileId = '00000000-0000-4000-8000-000000000001';
   const states = new Map<string, PostRequestState>();
@@ -391,7 +363,6 @@ test('createPost without a request ID uses Post Request and forwards supported a
     'getHandle',
     (workflowId: string) =>
       ({
-        query: async () => null,
         result: async () => {
           resultCallCount += 1;
           const state = states.get(workflowId);
@@ -488,7 +459,6 @@ test('createPost without a request ID uses Post Request and forwards supported a
       Object.hasOwn(startedSnapshots.at(-1) ?? {}, 'analyticsPlatform'),
       expected !== undefined,
     );
-    assert.ok(startedSnapshots.at(-1)?.requestId);
   }
 
   assert.equal(start.mock.callCount(), 4);
@@ -498,16 +468,13 @@ test('createPost without a request ID uses Post Request and forwards supported a
 });
 
 test('createPost without media returns the actual published request state', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000013';
-  const workflow = setupPostRequestWorkflow(
-    t,
-    requestId,
-    completedRequest(requestId, PostRequestStatus.PUBLISHED, {
+  const workflow = setupPostRequestWorkflow(t, (snapshot) =>
+    completedRequest(snapshot.requestId, PostRequestStatus.PUBLISHED, {
       result: { postId: '00000000-0000-4000-8000-000000000014' },
     }),
   );
 
-  const result = await createPostRequest(requestId, 'request { id status }');
+  const result = await createPostRequest('request { id status }');
 
   assert.deepEqual(result.errors, undefined);
   assert.equal(
@@ -519,28 +486,14 @@ test('createPost without media returns the actual published request state', asyn
 });
 
 test('createPost waits for publication in the lazy Post field while acknowledging pending media', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000015';
   const postId = '00000000-0000-4000-8000-000000000016';
   const mediaId = '00000000-0000-4000-8000-000000000017';
   const uploadId = '00000000-0000-4000-8000-000000000018';
-  const publishedRequest = completedRequest(requestId, PostRequestStatus.PUBLISHED, {
-    result: { postId },
-  });
-  const published: PostRequestState = {
-    ...publishedRequest,
-    snapshot: {
-      ...publishedRequest.snapshot,
-      input: {
-        ...publishedRequest.snapshot.input,
-        media: [{ altText: null, applyNightshade: false, mediaId }],
-      },
-    },
-  };
   let publishRequest!: (state: PostRequestState) => void;
   const deferredResult = new Promise<PostRequestState>((resolve) => {
     publishRequest = resolve;
   });
-  const workflow = setupPostRequestWorkflow(t, requestId, deferredResult);
+  const workflow = setupPostRequestWorkflow(t, () => deferredResult);
   const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
   const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
   process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://storage.example';
@@ -601,7 +554,7 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
   });
 
   let settled = false;
-  const resultPromise = createPostRequest(requestId, 'post { id } request { status }', [
+  const resultPromise = createPostRequest('post { id } request { status }', [
     { mediaId: encodeGlobalId('Media', mediaId) },
   ]).then((result) => {
     settled = true;
@@ -614,7 +567,19 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
     assert.equal(workflow.resultCallCount, 1);
     assert.equal(workflow.start.mock.callCount(), 1);
   } finally {
-    publishRequest(published);
+    const snapshot = workflow.snapshot;
+    assert.ok(snapshot);
+    publishRequest({
+      snapshot: {
+        ...snapshot,
+        input: {
+          ...snapshot.input,
+          media: [{ altText: null, applyNightshade: false, mediaId }],
+        },
+      },
+      status: PostRequestStatus.PUBLISHED,
+      result: { postId },
+    });
     await resultPromise;
   }
   const result = await resultPromise;
@@ -635,16 +600,13 @@ test('createPost waits for publication in the lazy Post field while acknowledgin
 });
 
 test('createPost maps a failed no-media request without field metadata to its GraphQL error', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000017';
-  setupPostRequestWorkflow(
-    t,
-    requestId,
-    completedRequest(requestId, PostRequestStatus.FAILED, {
+  setupPostRequestWorkflow(t, (snapshot) =>
+    completedRequest(snapshot.requestId, PostRequestStatus.FAILED, {
       error: { code: 'VALIDATION', message: 'Post content is invalid' },
     }),
   );
 
-  const result = await createPostRequest(requestId, 'post { id }');
+  const result = await createPostRequest('post { id }');
 
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.message, 'Post content is invalid');
@@ -654,11 +616,8 @@ test('createPost maps a failed no-media request without field metadata to its Gr
 });
 
 test('createPost maps a failed no-media request field to its GraphQL error', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000020';
-  setupPostRequestWorkflow(
-    t,
-    requestId,
-    completedRequest(requestId, PostRequestStatus.FAILED, {
+  setupPostRequestWorkflow(t, (snapshot) =>
+    completedRequest(snapshot.requestId, PostRequestStatus.FAILED, {
       error: {
         code: 'VALIDATION',
         field: 'replyParentId',
@@ -667,7 +626,7 @@ test('createPost maps a failed no-media request field to its GraphQL error', asy
     }),
   );
 
-  const result = await createPostRequest(requestId, 'post { id }');
+  const result = await createPostRequest('post { id }');
 
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.message, 'Reply Parent must have content');
@@ -677,21 +636,21 @@ test('createPost maps a failed no-media request field to its GraphQL error', asy
 });
 
 test('createPost maps a cancelled no-media request to ConflictError', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000018';
-  setupPostRequestWorkflow(t, requestId, completedRequest(requestId, PostRequestStatus.CANCELLED));
+  setupPostRequestWorkflow(t, (snapshot) =>
+    completedRequest(snapshot.requestId, PostRequestStatus.CANCELLED),
+  );
 
-  const result = await createPostRequest(requestId, 'post { id }');
+  const result = await createPostRequest('post { id }');
 
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.originalError instanceof ConflictError, true);
 });
 
 test('createPost keeps no-media workflow wait failures as GraphQL errors', async (t) => {
-  const requestId = '00000000-0000-4000-8000-000000000019';
   const waitFailure = new Error('post request wait failed');
-  setupPostRequestWorkflow(t, requestId, waitFailure);
+  setupPostRequestWorkflow(t, () => waitFailure);
 
-  const result = await createPostRequest(requestId, 'post { id }');
+  const result = await createPostRequest('post { id }');
 
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.originalError, waitFailure);
@@ -706,7 +665,6 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
   const start = t.mock.method(temporalClient.workflow, 'start', async () => {
     throw failure;
   });
-  t.mock.method(temporalClient.workflow, 'getHandle', () => ({ query: async () => null }) as never);
   t.mock.method(
     temporalClient,
     'withDeadline',

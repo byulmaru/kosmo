@@ -1,9 +1,8 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { ConflictError, FieldError, ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
-import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { runWorkflow, temporalClient } from '@kosmo/core/temporal/client';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
@@ -11,29 +10,14 @@ import {
   postRequestWorkflow,
   postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
-import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
 import { and, eq, inArray } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
-import { loadPostRequestStateForAccount } from '../state';
 import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
 import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type { SessionContext } from '@/context';
 import type { LocalPostMutationInput } from '../../post/mutation/prepare-local-input';
-
-const existingSubmission = (
-  current: PostRequestState,
-  submissionFingerprint: string,
-): PostRequestState => {
-  if (current.snapshot.submissionFingerprint !== submissionFingerprint) {
-    throw new ConflictError({
-      message: 'This request ID already belongs to different post content',
-      field: 'requestId',
-    });
-  }
-  return current;
-};
 
 const unusableMedia = (index: number, message = '이미지를 다시 첨부해 주세요') =>
   new ValidationError(message, { field: `media.${index}` });
@@ -143,53 +127,20 @@ export async function waitForPostRequestResult(
 
 export async function submitPostRequest(
   input: LocalPostMutationInput,
-  clientRequestId: string | null | undefined,
   ctx: SessionContext,
   analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<PostRequestState> {
-  const requestId = clientRequestId ?? randomUUID();
+  const requestId = randomUUID();
   const submittedMedia = input.media ?? [];
   if (new Set(submittedMedia.map(({ mediaId }) => mediaId.id)).size !== submittedMedia.length) {
     throw new ValidationError('Post request media must be unique', { field: 'media' });
   }
 
-  const media = submittedMedia.map(
-    ({ altText, applyAiProhibitFilter, applyNightshade, mediaId }) => ({
-      altText: altText ?? null,
-      applyNightshade: applyAiProhibitFilter ?? applyNightshade ?? false,
-      mediaId: mediaId.id,
-    }),
-  );
-  const actorProfileId = input.actorProfileId?.id ?? ctx.session.profile?.id;
-  const submissionFingerprint = createHash('sha256')
-    .update(
-      JSON.stringify({
-        accountId: ctx.session.accountId,
-        actorProfileId,
-        bodyText: normalizePostContentPlainText(input.bodyText),
-        contentWarning: normalizePostContentPlainText(input.contentWarning ?? '') || null,
-        media,
-        mentions: (input.mentions ?? []).map(({ end, profileId, start }) => ({
-          end,
-          profileId: profileId.id,
-          start,
-        })),
-        replyParentId: input.replyParentId?.id ?? null,
-        repostSourceId: input.repostSourceId?.id ?? null,
-        sensitiveMedia: input.sensitiveMedia ?? false,
-        visibility: input.visibility,
-      }),
-    )
-    .digest('hex');
-  if (clientRequestId != null) {
-    const existing = await loadPostRequestStateForAccount({
-      accountId: ctx.session.accountId,
-      requestId,
-    });
-    if (existing) {
-      return existingSubmission(existing, submissionFingerprint);
-    }
-  }
+  const media = submittedMedia.map(({ altText, applyAiProhibitFilter, mediaId }) => ({
+    altText: altText ?? null,
+    applyNightshade: applyAiProhibitFilter ?? false,
+    mediaId: mediaId.id,
+  }));
 
   const preparedInput = await prepareLocalPostInput(input, ctx);
   const hasUploadingMedia = await verifyAttachedMedia(
@@ -200,7 +151,6 @@ export async function submitPostRequest(
   const snapshot: PostRequestSnapshot = {
     input: { ...preparedInput, media },
     requestId,
-    submissionFingerprint,
     submittedAt: new Date().toISOString(),
     ...(analyticsPlatform ? { analyticsPlatform } : {}),
   };
@@ -208,8 +158,6 @@ export async function submitPostRequest(
     snapshot,
     status: PostRequestStatus.QUEUED,
   };
-  const workflowId = postRequestWorkflowId(ctx.session.accountId, requestId);
-
   try {
     await runWorkflow(postRequestWorkflow, {
       args: [snapshot],
@@ -232,21 +180,7 @@ export async function submitPostRequest(
       ] satisfies NonNullable<WorkflowStartOptions<Workflow>['typedSearchAttributes']>,
     });
   } catch (error) {
-    if (
-      !(error instanceof WorkflowExecutionAlreadyStartedError) ||
-      error.workflowId !== workflowId
-    ) {
-      return rethrowPostWorkflowFailure(error);
-    }
-
-    const current = await loadPostRequestStateForAccount({
-      accountId: ctx.session.accountId,
-      requestId,
-    });
-    if (!current) {
-      throw new Error('Unable to confirm post request status');
-    }
-    return existingSubmission(current, submissionFingerprint);
+    return rethrowPostWorkflowFailure(error);
   }
 
   return hasUploadingMedia ? state : waitForPostRequestResult(ctx.session.accountId, state);

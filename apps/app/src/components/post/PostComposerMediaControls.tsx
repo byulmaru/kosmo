@@ -319,7 +319,10 @@ export function PostComposerMediaControls({
           return new Promise<void>((resolve, reject) => {
             commitCompleteMediaUpload({
               variables: {
-                input: { id: mediaId, applyNightshade: media[index]?.applyNightshade ?? false },
+                input: {
+                  id: mediaId,
+                  applyAiProhibitFilter: media[index]?.applyNightshade ?? false,
+                },
               },
               onCompleted: (response, errors) => {
                 if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {

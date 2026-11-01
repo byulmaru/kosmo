@@ -299,7 +299,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(stored.mediaType, 'image/webp');
   });
 
-  test('선택한 Nightshade를 workflow에 전달하고 Ready Media를 선택과 무관하게 재사용한다', async (t) => {
+  test('선택한 AI 필터를 workflow에 전달하고 Ready Media를 선택과 무관하게 재사용한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(issued);
@@ -340,7 +340,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(execution.mock.callCount(), 1);
   });
 
-  test('canonical AI filter input maps to the existing workflow option and overrides legacy input', async (t) => {
+  test('canonical AI filter input maps to the existing workflow option', async (t) => {
     const auth = await createAuthenticatedSession();
     const first = await requestIssueMediaUploadUrl(auth.token);
     assertNoGraphQLErrors(first);
@@ -361,13 +361,12 @@ describe('Local Media upload GraphQL 경계', () => {
       await markMediaReady(mediaId);
       return workflowResult(firstSession.id);
     });
-    const canonical = await requestCompleteMediaUpload(
+    const filtered = await requestCompleteMediaUpload(
       first.data!.issueMediaUploadUrl.media.id,
       auth.token,
-      undefined,
       true,
     );
-    assertNoGraphQLErrors(canonical);
+    assertNoGraphQLErrors(filtered);
     assertMediaUploadWorkflowOptions(
       execution.mock.calls[0]!,
       firstMedia.id,
@@ -375,13 +374,12 @@ describe('Local Media upload GraphQL 경계', () => {
       true,
     );
 
-    const precedence = await requestCompleteMediaUpload(
+    const unfiltered = await requestCompleteMediaUpload(
       second.data!.issueMediaUploadUrl.media.id,
       auth.token,
-      true,
       false,
     );
-    assertNoGraphQLErrors(precedence);
+    assertNoGraphQLErrors(unfiltered);
     assertMediaUploadWorkflowOptions(
       execution.mock.calls[1]!,
       secondMedia.id,
@@ -462,7 +460,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(execution.mock.callCount(), 1);
   });
 
-  test('Nightshade opt-in is rejected for a legacy upload instead of silently skipping processing', async (t) => {
+  test('AI filter opt-in is rejected for a legacy upload instead of silently skipping processing', async (t) => {
     const auth = await createAuthenticatedSession();
     const media = await createUploadingMedia(
       auth.account.id,
@@ -991,12 +989,7 @@ const requestIssueMediaUploadUrl = (
   );
 };
 
-const requestCompleteMediaUpload = (
-  id: string,
-  token?: string,
-  applyNightshade?: boolean,
-  applyAiProhibitFilter?: boolean,
-) =>
+const requestCompleteMediaUpload = (id: string, token?: string, applyAiProhibitFilter?: boolean) =>
   requestGraphQL<CompleteMediaUploadData>(
     `mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) {
       completeMediaUpload(input: $input) { media { id readyAt state } }
@@ -1004,7 +997,6 @@ const requestCompleteMediaUpload = (
     {
       input: {
         id,
-        ...(applyNightshade === undefined ? {} : { applyNightshade }),
         ...(applyAiProhibitFilter === undefined ? {} : { applyAiProhibitFilter }),
       },
     },
