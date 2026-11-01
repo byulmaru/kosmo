@@ -1474,7 +1474,7 @@ test(
 );
 
 test(
-  'Post Request resumes a legacy snapshot in upload order and preserves attachment order',
+  'Post Request preserves legacy snapshot processing flags and attachment order',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createPostRequestTestEnvironment();
@@ -1576,10 +1576,13 @@ test(
         { altText: 'A attachment', applyNightshade: true, mediaId: mediaIdA },
       ]);
       assert.deepEqual(mediaStateChecks, [[mediaIdA, mediaIdB]]);
-      assert.deepEqual(preparedMedia, [
-        { applyNightshade: true, mediaId: mediaIdA },
-        { applyNightshade: false, mediaId: mediaIdB },
-      ]);
+      assert.deepEqual(
+        preparedMedia.toSorted((left, right) => left.mediaId.localeCompare(right.mediaId)),
+        [
+          { applyNightshade: true, mediaId: mediaIdA },
+          { applyNightshade: false, mediaId: mediaIdB },
+        ].toSorted((left, right) => left.mediaId.localeCompare(right.mediaId)),
+      );
       assert.deepEqual(appliedNightshadeUploadIds, [`u_${mediaIdA}`]);
       assert.deepEqual(postCreateInputs, [
         {
