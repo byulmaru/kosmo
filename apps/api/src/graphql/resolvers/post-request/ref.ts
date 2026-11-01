@@ -56,17 +56,3 @@ PostRequest.implement({
     }),
   }),
 });
-
-export type PostRequestPageShape = {
-  readonly nextPageToken: string | null;
-  readonly requests: readonly PostRequestState[];
-};
-
-export const PostRequestPage = builder.objectRef<PostRequestPageShape>('PostRequestPage');
-
-PostRequestPage.implement({
-  fields: (t) => ({
-    requests: t.field({ type: [PostRequest], resolve: (page) => page.requests }),
-    nextPageToken: t.exposeString('nextPageToken', { nullable: true }),
-  }),
-});

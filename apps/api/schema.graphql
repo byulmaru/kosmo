@@ -92,7 +92,7 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
-  applyAiProhibitFilter: Boolean
+  applyAiProhibitFilter: Boolean = false
   id: ID!
 }
 
@@ -152,7 +152,7 @@ input CreatePostInput {
 
 input CreatePostMediaInput {
   altText: String
-  applyAiProhibitFilter: Boolean
+  applyAiProhibitFilter: Boolean = false
   mediaId: ID!
 }
 
@@ -509,11 +509,6 @@ type PostRequest implements Node {
   status: PostRequestStatus!
 }
 
-type PostRequestPage {
-  nextPageToken: String
-  requests: [PostRequest!]!
-}
-
 enum PostRequestStatus {
   CANCELLED
   CONFIRMING
@@ -719,7 +714,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   postRequest(profileId: ID!, requestId: String!): PostRequest
-  postRequests(pageToken: String, profileId: ID!, statuses: [PostRequestStatus!]): PostRequestPage!
+  postRequests(profileId: ID!, statuses: [PostRequestStatus!]): [PostRequest!]!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }

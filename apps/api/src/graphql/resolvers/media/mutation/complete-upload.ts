@@ -26,7 +26,7 @@ builder.mutationField('completeMediaUpload', (t) =>
     }),
     input: {
       id: t.input.globalID({ for: Media }),
-      applyAiProhibitFilter: t.input.boolean({ required: false }),
+      applyAiProhibitFilter: t.input.boolean({ required: false, defaultValue: false }),
     },
     resolve: async (_, { input }, ctx) => {
       const applyNightshade = input.applyAiProhibitFilter ?? false;

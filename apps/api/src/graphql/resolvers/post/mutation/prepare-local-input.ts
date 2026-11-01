@@ -46,7 +46,7 @@ export type LocalPostMutationInput = {
 export const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
-    applyAiProhibitFilter: t.boolean({ required: false }),
+    applyAiProhibitFilter: t.boolean({ required: false, defaultValue: false }),
     mediaId: t.globalID({ for: Media }),
   }),
 });
