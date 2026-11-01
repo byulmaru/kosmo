@@ -8,21 +8,11 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type RouteParams = { edit?: string; profileId?: string; requestId?: string };
-type RequestData = Readonly<{
-  authorProfile: Readonly<{ id: string }>;
-  id: string;
-  requestId: string;
-  status: string;
-}>;
-type RouteData = Readonly<{
-  postRequest: RequestData | null;
-}>;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 const routeParams: RouteParams = {};
-const routeData: { current: RouteData } = { current: { postRequest: null } };
 const session = { accountId: 'account-a', selectedProfileId: 'profile-b' as string | null };
 const queryCalls: Array<{ name: string; options: object; variables: object }> = [];
 const openComposer = mock.fn();
@@ -42,7 +32,7 @@ mockModule('react-relay', {
   }),
   useLazyLoadQuery: (query: { name: string }, variables: object, options: object) => {
     queryCalls.push({ name: query.name, options, variables });
-    return routeData.current;
+    throw new Error(`Unexpected route query: ${query.name}`);
   },
 });
 mockModule('@/components/PageHeader', {
@@ -76,20 +66,10 @@ afterEach(async () => {
   routeParams.edit = undefined;
   routeParams.profileId = undefined;
   routeParams.requestId = undefined;
-  routeData.current = { postRequest: null };
   session.selectedProfileId = 'profile-b';
   queryCalls.length = 0;
   openComposer.mock.resetCalls();
 });
-
-function request(status = 'FAILED'): RequestData {
-  return {
-    authorProfile: { id: 'profile-a' },
-    id: 'request-node-a',
-    requestId: 'request-a',
-    status,
-  };
-}
 
 async function renderScreen() {
   await act(async () => {
@@ -112,25 +92,18 @@ function list() {
 }
 
 describe('post request route', () => {
-  it('treats legacy edit links as request details and calls the shell composer unchanged', async () => {
+  it('preserves legacy edit links as focused list routes and the shell composer action', async () => {
     routeParams.edit = '1';
     routeParams.profileId = 'profile-a';
     routeParams.requestId = 'request-a';
-    routeData.current = { postRequest: request() };
 
     await renderScreen();
 
-    assert.deepEqual(queryCalls, [
-      {
-        name: 'PostRequestListDetailPageQuery',
-        options: { fetchKey: '0' },
-        variables: { profileId: 'profile-a', requestId: 'request-a' },
-      },
-    ]);
+    assert.deepEqual(queryCalls, []);
     assert.equal(session.selectedProfileId, 'profile-b');
     assert.equal(list().props.profileId, 'profile-a');
     assert.equal(list().props.focusedRequestId, 'request-a');
-    assert.equal(list().props.focusedRequest, routeData.current.postRequest);
+    assert.equal(Object.hasOwn(list().props, 'focusedRequest'), false);
     assert.equal(list().props.onCompose, openComposer);
 
     await act(async () => list().props.onCompose());
@@ -138,25 +111,18 @@ describe('post request route', () => {
     assert.equal(session.selectedProfileId, 'profile-b');
   });
 
-  it('focuses the requested card for ordinary detail viewing and defaults the profile from the session', async () => {
+  it('passes the focused request id to the profile list without a detail query', async () => {
     routeParams.requestId = 'request-a';
-    routeData.current = { postRequest: request('PROCESSING') };
 
     await renderScreen();
 
-    assert.deepEqual(queryCalls[0], {
-      name: 'PostRequestListDetailPageQuery',
-      options: { fetchKey: '0' },
-      variables: { profileId: 'profile-b', requestId: 'request-a' },
-    });
+    assert.deepEqual(queryCalls, []);
     assert.equal(list().props.profileId, 'profile-b');
     assert.equal(list().props.focusedRequestId, 'request-a');
-    assert.equal(list().props.focusedRequest.requestId, 'request-a');
   });
 
-  it('renders the full-history list without a route-owned list query', async () => {
+  it('renders the ordinary profile list without a route-owned query', async () => {
     routeParams.profileId = 'profile-a';
-    routeData.current = { postRequest: null };
 
     await renderScreen();
 

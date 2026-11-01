@@ -19,7 +19,7 @@ import CreatePostMutation from './__generated__/PostComposerCreatePostMutation.g
 import PostComposerMentionSuggestionsQueryNode from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
 import PostRequestListQueryNode from './__generated__/PostRequestListQuery.graphql';
 import {
-  POST_REQUEST_HOME_ACTIVE_STATUSES,
+  prependPostRequestToLoadedProfileRequests,
   reconcilePublishedPostInHome,
 } from './postRequestCache';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -597,25 +597,24 @@ describe('PostComposer character count', () => {
 
 describe('PostComposer request acknowledgement cache projection', () => {
   for (const status of ['QUEUED', 'PUBLISHED'] as const) {
-    it(`projects a ${status} acknowledgement into the appropriate request and Home lists`, async () => {
+    it(`projects a ${status} acknowledgement into Profile requests and the real Home Post`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
       const createdPosts: Array<{ id: string }> = [];
       let acceptedCount = 0;
       const query = getRequest(PostRequestListQueryNode);
       const environment = relayEnvironment;
-      const seedList = (
-        profileId: string,
-        statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
-      ) => {
-        environment.commitPayload(createOperationDescriptor(query, { profileId, statuses }), {
-          postRequests: [],
+      const seedList = (profileId: string) => {
+        environment.commitPayload(createOperationDescriptor(query, { profileId }), {
+          node: {
+            __typename: 'Profile',
+            id: profileId,
+            postRequests: [],
+          },
         });
       };
-      seedList('profile-a', null);
-      seedList('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
-      seedList('profile-b', null);
-      seedList('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
+      seedList('profile-a');
+      seedList('profile-b');
       seedHomeTimeline(environment, ['post-home-existing']);
 
       const composerProps = (profile: typeof profileA) => ({
@@ -695,27 +694,26 @@ describe('PostComposer request acknowledgement cache projection', () => {
       assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
       assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
 
-      const requestIds = (
-        profileId: string,
-        statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
-      ) => {
-        const operation = createOperationDescriptor(query, {
-          profileId,
-          statuses,
-        });
+      const requestIds = (profileId: string) => {
+        const operation = createOperationDescriptor(query, { profileId });
         const data = environment.lookup(operation.fragment).data as {
-          postRequests: ReadonlyArray<{ id: string }>;
+          node: { __typename: string; postRequests: ReadonlyArray<{ id: string }> } | null;
         };
-        return data.postRequests.map((request) => request.id);
+        return data.node?.__typename === 'Profile'
+          ? data.node.postRequests.map((request) => request.id)
+          : [];
       };
 
-      assert.deepEqual(requestIds('profile-a', null), [requestNodeId]);
-      assert.deepEqual(
-        requestIds('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES),
-        status === 'PUBLISHED' ? [] : [requestNodeId],
-      );
-      assert.deepEqual(requestIds('profile-b', null), []);
-      assert.deepEqual(requestIds('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+      assert.deepEqual(requestIds('profile-a'), status === 'PUBLISHED' ? [] : [requestNodeId]);
+      assert.deepEqual(requestIds('profile-b'), []);
+      if (status === 'QUEUED') {
+        await act(async () => {
+          commitLocalUpdate(environment, (store) => {
+            prependPostRequestToLoadedProfileRequests(store, profileA.id, requestNodeId);
+          });
+        });
+        assert.deepEqual(requestIds('profile-a'), [requestNodeId]);
+      }
       assert.deepEqual(
         homeTimelinePostIds(environment),
         status === 'PUBLISHED' ? [publishedPostId, 'post-home-existing'] : ['post-home-existing'],
@@ -809,10 +807,8 @@ describe('PostComposer request acknowledgement cache projection', () => {
           ...(status === 'PUBLISHED' ? [{ id: publishedPostId }] : []),
           { id: authorBPostId },
         ]);
-        assert.deepEqual(requestIds(profileA.id, null), [requestNodeId]);
-        assert.deepEqual(requestIds(profileA.id, POST_REQUEST_HOME_ACTIVE_STATUSES), []);
-        assert.deepEqual(requestIds(profileB.id, null), [authorBRequestNodeId]);
-        assert.deepEqual(requestIds(profileB.id, POST_REQUEST_HOME_ACTIVE_STATUSES), []);
+        assert.deepEqual(requestIds(profileA.id), []);
+        assert.deepEqual(requestIds(profileB.id), []);
         assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
       }
     });

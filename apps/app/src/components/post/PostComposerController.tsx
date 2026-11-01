@@ -31,7 +31,10 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
-import { prependPostRequestToLoadedLists, reconcilePublishedPostInHome } from './postRequestCache';
+import {
+  prependPostRequestToLoadedProfileRequests,
+  reconcilePublishedPostInHome,
+} from './postRequestCache';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -513,7 +516,7 @@ function PostComposerContents({
           const actorProfileId = input.actorProfileId;
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {
-              prependPostRequestToLoadedLists(store, actorProfileId, acceptedRequest.id);
+              prependPostRequestToLoadedProfileRequests(store, actorProfileId, acceptedRequest.id);
 
               const request = store.get(acceptedRequest.id);
               if (request?.getValue('status') !== 'PUBLISHED') {

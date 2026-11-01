@@ -9,47 +9,49 @@ export const POST_REQUEST_HOME_ACTIVE_STATUSES = [
   'QUEUED',
 ] as const;
 
-export function prependPostRequestToLoadedLists(
+export function prependPostRequestToLoadedProfileRequests(
   store: RecordSourceSelectorProxy,
   profileId: string,
   requestNodeId: string,
 ) {
   const request = store.get(requestNodeId);
-  if (!request) {
+  const profile = store.get(profileId);
+  if (
+    !request ||
+    !profile ||
+    profile.getType() !== 'Profile' ||
+    request.getValue('status') === 'PUBLISHED'
+  ) {
     return;
   }
 
-  const root = store.getRoot();
-  for (const statuses of [null, POST_REQUEST_HOME_ACTIVE_STATUSES]) {
-    const requests = root.getLinkedRecords('postRequests', { profileId, statuses });
-    if (!requests || requests.some((item) => item?.getDataID() === requestNodeId)) {
-      continue;
-    }
-
-    root.setLinkedRecords([request, ...requests], 'postRequests', { profileId, statuses });
+  const requests = profile.getLinkedRecords('postRequests');
+  if (!requests || requests.some((item) => item?.getDataID() === requestNodeId)) {
+    return;
   }
+
+  profile.setLinkedRecords([request, ...requests], 'postRequests');
 }
 
-export function removePostRequestFromHomeRequests(
+export function removePostRequestFromLoadedProfileRequests(
   store: RecordSourceSelectorProxy,
   profileId: string,
   requestNodeId: string,
 ) {
-  const root = store.getRoot();
-  const args = {
-    profileId,
-    statuses: POST_REQUEST_HOME_ACTIVE_STATUSES,
-  };
-  const requests = root.getLinkedRecords('postRequests', args);
+  const profile = store.get(profileId);
+  if (!profile || profile.getType() !== 'Profile') {
+    return;
+  }
+
+  const requests = profile.getLinkedRecords('postRequests');
   if (!requests) {
     return;
   }
 
-  root.setLinkedRecords(
-    requests.filter((request) => request?.getDataID() !== requestNodeId),
-    'postRequests',
-    args,
-  );
+  const nextRequests = requests.filter((request) => request?.getDataID() !== requestNodeId);
+  if (nextRequests.length !== requests.length) {
+    profile.setLinkedRecords(nextRequests, 'postRequests');
+  }
 }
 
 export function reconcilePublishedPostInHome(
@@ -68,7 +70,7 @@ export function reconcilePublishedPostInHome(
     requestNodeId: string;
   }>,
 ) {
-  removePostRequestFromHomeRequests(store, profileId, requestNodeId);
+  removePostRequestFromLoadedProfileRequests(store, profileId, requestNodeId);
 
   if (!postId || !authorProfileId || authorProfileId !== currentProfileId) {
     return;

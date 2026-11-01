@@ -211,21 +211,6 @@ describe('PostRequestCard', () => {
     assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
   });
 
-  it('only reports cancellation to the active list after the Node reflects CANCELLED', async () => {
-    cancelCommit = (config) => config.onError?.(new Error('response lost'));
-    const onCancelled = mock.fn();
-    const props = { onCancelled };
-    await renderCard(makeRequest('PROCESSING'), props);
-
-    await act(async () => button('취소')?.props.onPress());
-    assert.equal(onCancelled.mock.callCount(), 0);
-    await act(async () => lastRefetch?.options.onComplete?.(null));
-    assert.equal(onCancelled.mock.callCount(), 0);
-
-    await updateCard(makeRequest('CANCELLED'), props);
-    assert.deepEqual(onCancelled.mock.calls[0]?.arguments, [{ requestNodeId: 'request-node-id' }]);
-  });
-
   it('does not offer cancellation during publishing or confirmation', async () => {
     await renderCard(makeRequest('PUBLISHING'));
     assert.equal(visibleText()?.includes('게시 중'), true);

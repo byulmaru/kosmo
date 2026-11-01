@@ -803,15 +803,22 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      createPost?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: {
+        request?: {
+          post?: { id?: string | null } | null;
+          requestId?: string | null;
+        } | null;
+      } | null;
     };
     errors?: unknown[];
   };
   const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
+  const publishedPostId = responseBody.data?.createPost?.request?.post?.id;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
   expect(acceptedRequestId).toEqual(expect.any(String));
+  expect(publishedPostId).toEqual(expect.any(String));
   expect(operation?.variables?.input).not.toHaveProperty('requestId');
   expect(operation?.variables).toMatchObject({
     input: {
@@ -840,38 +847,13 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   expect(refreshedHomeBody.errors, JSON.stringify(refreshedHomeBody, null, 2)).toBeUndefined();
   expect(refreshedHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
 
-  const postRequestDetailResponse = waitForGraphQLOperation(page, 'PostRequestListDetailPageQuery');
   const requestSearch = new URLSearchParams({
     profileId: selectedProfileId,
     requestId: acceptedRequestId ?? '',
   });
   await page.goto(`/post-requests?${requestSearch.toString()}`);
-  const postRequestDetail = await postRequestDetailResponse;
-  const postRequestDetailBody = (await postRequestDetail.json()) as {
-    data?: { postRequest?: { requestId?: string | null; status?: string | null } | null };
-    errors?: unknown[];
-  };
-  expect(postRequestDetail.ok(), JSON.stringify(postRequestDetailBody, null, 2)).toBe(true);
-  expect(
-    postRequestDetailBody.errors,
-    JSON.stringify(postRequestDetailBody, null, 2),
-  ).toBeUndefined();
-  expect(postRequestDetailBody.data?.postRequest?.requestId).toBe(acceptedRequestId);
-
-  const terminalStatus = page.getByText(/^게시 (완료|실패)$/).first();
-  await expect
-    .poll(
-      async () => {
-        const statusCount = await terminalStatus.count();
-        return statusCount > 0 ? terminalStatus.textContent() : null;
-      },
-      { timeout: 60_000 },
-    )
-    .not.toBeNull();
-  await expect(terminalStatus).toHaveText('게시 완료');
-
-  const publishedPostLink = page.getByRole('link', { name: '게시물 보기' });
-  await expect(publishedPostLink).toHaveCount(0);
+  await expect(page.getByText('작성 요청이 없어요')).toBeVisible();
+  await expect(page.getByText('요청을 찾을 수 없어요')).toHaveCount(0);
 
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   const profileSwitcher = page.getByLabel('프로필 전환');
@@ -885,11 +867,13 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await expect(
     page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${selectedProfile.handle}` }),
   ).toBeVisible();
-  await expect(publishedPostLink).toBeVisible();
-  const publishedHref = await publishedPostLink.getAttribute('href');
-  expect(publishedHref).toMatch(/^\/@e2e-composer-profile-b\/[^/]+$/);
-  await publishedPostLink.click();
-  await expect(page).toHaveURL(publishedHref!);
+  await page.goto(`/@${selectedProfile.handle}`);
+  const publishedPostRow = page.getByTestId('post-list-row-body').first();
+  await expect(publishedPostRow).toBeVisible();
+  await publishedPostRow.click();
+  await expect(page).toHaveURL(/\/@e2e-composer-profile-b\/[^/]+$/);
+  const publishedPostPathId = new URL(page.url()).pathname.split('/').at(-1);
+  expect(decodeURIComponent(publishedPostPathId ?? '')).toBe(publishedPostId);
   const publishedArticle = page.getByRole('article').filter({ hasText: contentWarning }).first();
   const showBody = publishedArticle.getByRole('button', {
     name: `${contentWarning}, 본문, 보기`,
@@ -920,7 +904,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   const detailOperation = readGraphQLOperation(detail.request().postData());
   expect(detail.ok(), JSON.stringify(detailBody, null, 2)).toBe(true);
   expect(detailBody.errors, JSON.stringify(detailBody, null, 2)).toBeUndefined();
-  expect(detailOperation?.variables?.postId).toBe(publishedHref?.split('/').at(-1));
+  expect(detailOperation?.variables?.postId).toBe(publishedPostId);
   expect(detailBody.data?.node).toMatchObject({
     __typename: 'Post',
     id: detailOperation?.variables?.postId,

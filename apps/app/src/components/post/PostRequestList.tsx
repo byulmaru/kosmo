@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect } from 'react';
+import { Fragment, useCallback } from 'react';
 import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -11,11 +11,9 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import {
   POST_REQUEST_HOME_ACTIVE_STATUSES,
   reconcilePublishedPostInHome,
-  removePostRequestFromHomeRequests,
 } from './postRequestCache';
 import { PostRequestCard } from './PostRequestCard';
 import type { ReactElement } from 'react';
-import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
 import type { PostRequestList_request$key } from './__generated__/PostRequestList_request.graphql';
 import type { PostRequestListQuery } from './__generated__/PostRequestListQuery.graphql';
 
@@ -24,21 +22,20 @@ const PostRequestListRequestFragment = graphql`
     id
     requestId
     status
-    post {
-      id
-      profile {
-        id
-      }
-    }
     ...PostRequestCard_request
   }
 `;
 
 const PostRequestListQuery = graphql`
-  query PostRequestListQuery($profileId: ID!, $statuses: [PostRequestStatus!]) {
-    postRequests(profileId: $profileId, statuses: $statuses) {
-      id
-      ...PostRequestList_request
+  query PostRequestListQuery($profileId: ID!) {
+    node(id: $profileId) {
+      ... on Profile {
+        id
+        postRequests {
+          id
+          ...PostRequestList_request
+        }
+      }
     }
   }
 `;
@@ -48,12 +45,9 @@ type PublishedPost = Readonly<{
   postId: string | null;
   requestNodeId: string;
 }>;
-type CancelledRequest = Readonly<{ requestNodeId: string }>;
-
 type RequestListProps = Readonly<{
   fetchKey?: string;
   focusedRequestId?: string;
-  focusedRequest?: PostRequestCard_request$key | null;
   header?: ReactElement | null;
   profileId: string;
   onCompose?: () => void;
@@ -62,14 +56,6 @@ type RequestListProps = Readonly<{
 function usePostRequestCardHandlers(profileId: string) {
   const environment = useRelayEnvironment();
   const { selectedProfileId } = useSession();
-  const onCancelled = useCallback(
-    ({ requestNodeId }: CancelledRequest) => {
-      commitLocalUpdate(environment, (store) => {
-        removePostRequestFromHomeRequests(store, profileId, requestNodeId);
-      });
-    },
-    [environment, profileId],
-  );
   const onPublished = useCallback(
     ({ authorProfileId, postId, requestNodeId }: PublishedPost) => {
       commitLocalUpdate(environment, (store) => {
@@ -85,13 +71,12 @@ function usePostRequestCardHandlers(profileId: string) {
     [environment, profileId, selectedProfileId],
   );
 
-  return { onCancelled, onPublished };
+  return { onPublished };
 }
 
 export function PostRequestList({
   fetchKey,
   focusedRequestId,
-  focusedRequest,
   header,
   onCompose,
   profileId,
@@ -100,43 +85,39 @@ export function PostRequestList({
   const hasNativeScrollParent = Platform.OS !== 'web' && hasPaginationScrollContext;
   const data = useLazyLoadQuery<PostRequestListQuery>(
     PostRequestListQuery,
-    { profileId, statuses: null },
+    { profileId },
     {
       fetchKey,
       fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
     },
   );
+  const profile = data.node?.__typename === 'Profile' ? data.node : null;
   const requests = useFragment<PostRequestList_request$key>(
     PostRequestListRequestFragment,
-    data.postRequests,
+    profile?.postRequests ?? [],
   );
-  const displayRequests = requests.filter((request) => request.requestId !== focusedRequestId);
-  const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
+  const focusedRequest = focusedRequestId
+    ? (requests.find((request) => request.requestId === focusedRequestId) ?? null)
+    : null;
+  const displayRequests = focusedRequest
+    ? requests.filter((request) => request.id !== focusedRequest.id)
+    : requests;
+  const { onPublished } = usePostRequestCardHandlers(profileId);
 
   const empty = <StateView style={styles.empty} title="작성 요청이 없어요" />;
   const listHeader = focusedRequest ? (
     <>
       {header}
-      <PostRequestCard
-        onCancelled={onCancelled}
-        onCompose={onCompose}
-        onPublished={onPublished}
-        request={focusedRequest}
-      />
+      <PostRequestCard onCompose={onCompose} onPublished={onPublished} request={focusedRequest} />
     </>
   ) : (
     header
   );
 
-  const emptyList = displayRequests.length === 0 && !focusedRequestId ? empty : null;
+  const emptyList = displayRequests.length === 0 && !focusedRequest ? empty : null;
   const key = `post-requests:${profileId}`;
   const renderRequest = (request: (typeof displayRequests)[number]) => (
-    <PostRequestCard
-      onCancelled={onCancelled}
-      onCompose={onCompose}
-      onPublished={onPublished}
-      request={request}
-    />
+    <PostRequestCard onCompose={onCompose} onPublished={onPublished} request={request} />
   );
 
   if (Platform.OS === 'web' || hasNativeScrollParent) {
@@ -177,42 +158,26 @@ export function PostRequestListSummary({
 }) {
   const data = useLazyLoadQuery<PostRequestListQuery>(
     PostRequestListQuery,
-    { profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
+    { profileId },
     {
       fetchKey,
       fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
     },
   );
+  const profile = data.node?.__typename === 'Profile' ? data.node : null;
   const requests = useFragment<PostRequestList_request$key>(
     PostRequestListRequestFragment,
-    data.postRequests,
+    profile?.postRequests ?? [],
   );
-  const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
+  const { onPublished } = usePostRequestCardHandlers(profileId);
 
-  useEffect(() => {
-    for (const request of requests) {
-      if (request.status === 'PUBLISHED') {
-        onPublished({
-          authorProfileId: request.post?.profile?.id ?? null,
-          postId: request.post?.id ?? null,
-          requestNodeId: request.id,
-        });
-      } else if (request.status === 'CANCELLED') {
-        onCancelled({ requestNodeId: request.id });
-      }
-    }
-  }, [onCancelled, onPublished, requests]);
-
-  const request = requests.find((item) =>
-    POST_REQUEST_HOME_ACTIVE_STATUSES.some((status) => status === item.status),
+  const request = requests.find(
+    (item) =>
+      POST_REQUEST_HOME_ACTIVE_STATUSES.some((status) => status === item.status) ||
+      item.status === 'PUBLISHED',
   );
   return request ? (
-    <PostRequestCard
-      onCancelled={onCancelled}
-      onCompose={onCompose}
-      onPublished={onPublished}
-      request={request}
-    />
+    <PostRequestCard onCompose={onCompose} onPublished={onPublished} request={request} />
   ) : null;
 }
 

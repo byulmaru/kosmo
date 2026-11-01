@@ -16,11 +16,9 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { POST_REQUEST_HOME_ACTIVE_STATUSES } from './postRequestCache';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
 import type {
   PostRequestList as PostRequestListComponent,
   PostRequestListSummary as PostRequestListSummaryComponent,
@@ -110,12 +108,10 @@ mockModule('@/theme/tokens', {
 });
 mockModule('./PostRequestCard', {
   PostRequestCard: ({
-    onCancelled,
     onCompose,
     onPublished,
     request,
   }: {
-    onCancelled?: (result: { requestNodeId: string }) => void;
     onCompose?: () => void;
     onPublished?: (result: {
       authorProfileId: string;
@@ -125,7 +121,6 @@ mockModule('./PostRequestCard', {
     request: { id: string; requestId: string; status: string };
   }) =>
     createElement('PostRequestCard', {
-      onCancelled,
       onCompose,
       onPublished,
       requestId: request.requestId,
@@ -140,7 +135,6 @@ let PostRequestListSummary: typeof PostRequestListSummaryComponent;
 let selectedProfileId = 'profile-a';
 
 const PROFILE_ID = 'profile-a';
-const HOME_STATUSES = POST_REQUEST_HOME_ACTIVE_STATUSES;
 const postRequestListQuery = generated('PostRequestListQuery');
 const postRequestCardRefetchQuery = generated('PostRequestCardRefetchQuery');
 
@@ -218,14 +212,19 @@ function makeRequestPayload(request: RequestRow) {
   };
 }
 
-function makeListPayload(requests: ReadonlyArray<RequestRow>) {
-  return { postRequests: requests.map(makeRequestPayload) };
+function makeListPayload(requests: ReadonlyArray<RequestRow>, profileId = PROFILE_ID) {
+  return {
+    node: {
+      __typename: 'Profile',
+      id: profileId,
+      postRequests: requests.map(makeRequestPayload),
+    },
+  };
 }
 
-function listOperation(statuses: readonly string[] | null, profileId = PROFILE_ID) {
+function listOperation(profileId = PROFILE_ID) {
   return createOperationDescriptor(getRequest(postRequestListQuery), {
     profileId,
-    statuses,
   });
 }
 
@@ -234,21 +233,17 @@ function seedPostRequestLists(
   requests: ReadonlyArray<RequestRow>,
   profileId = PROFILE_ID,
 ) {
-  environment.commitPayload(listOperation(null, profileId), makeListPayload(requests));
-  environment.commitPayload(
-    listOperation(HOME_STATUSES, profileId),
-    makeListPayload(requests.filter((request) => HOME_STATUSES.includes(request.status as never))),
-  );
+  environment.commitPayload(listOperation(profileId), makeListPayload(requests, profileId));
 }
 
-function listRequestIds(
-  environment: Environment,
-  statuses: readonly string[] | null,
-  profileId = PROFILE_ID,
-) {
-  const snapshot = environment.lookup(listOperation(statuses, profileId).fragment);
-  const data = snapshot.data as { postRequests: ReadonlyArray<{ id: string }> };
-  return data.postRequests.map((request) => request.id);
+function listRequestIds(environment: Environment, profileId = PROFILE_ID) {
+  const snapshot = environment.lookup(listOperation(profileId).fragment);
+  const data = snapshot.data as {
+    node: { __typename: string; postRequests: ReadonlyArray<{ id: string }> } | null;
+  };
+  return data.node?.__typename === 'Profile'
+    ? data.node.postRequests.map((request) => request.id)
+    : [];
 }
 
 function seedHomeConnection(
@@ -386,14 +381,14 @@ describe('PostRequestList', () => {
       ),
       store: new Store(new RecordSource()),
     });
-    environment.commitPayload(listOperation(null), makeListPayload([request]));
+    environment.commitPayload(listOperation(), makeListPayload([request]));
 
     await renderList(environment, { fetchKey: '0' });
     assert.deepEqual(requestedVariables, []);
 
     await updateList(environment, { fetchKey: '1' });
 
-    assert.deepEqual(requestedVariables, [{ profileId: PROFILE_ID, statuses: null }]);
+    assert.deepEqual(requestedVariables, [{ profileId: PROFILE_ID }]);
     assert.deepEqual(
       (all('FlatList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
         ({ requestId }) => requestId,
@@ -504,52 +499,58 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('shows a focused request once above the remaining status history', async () => {
+  it('derives a focused request from the Profile list and de-duplicates it', async () => {
     const environment = createEnvironment();
-    const requests = [
-      makeRequest('request-a', 'FAILED'),
-      makeRequest('request-b', 'CANCELLED'),
-      makeRequest('request-c', 'PUBLISHED'),
-    ];
+    const requests = [makeRequest('request-a', 'FAILED'), makeRequest('request-b', 'CANCELLED')];
     seedPostRequestLists(environment, requests);
-    const focused = makeRequestPayload(requests[0]!);
 
-    await renderList(environment, {
-      focusedRequestId: 'request-a',
-      focusedRequest: focused as unknown as PostRequestCard_request$key,
-    });
+    await renderList(environment, { focusedRequestId: 'request-a' });
 
     assert.deepEqual(
       all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a', 'request-b', 'request-c'],
+      ['request-a', 'request-b'],
     );
     assert.deepEqual(
       (all('FlatList')[0]!.props.data as ReadonlyArray<{ requestId: string }>).map(
         ({ requestId }) => requestId,
       ),
-      ['request-b', 'request-c'],
+      ['request-b'],
     );
   });
 
-  it('uses the profile-scoped active root list for the Home summary', async () => {
+  it('keeps focused links ordinary when the request is absent from the retained Profile list', async () => {
+    const environment = createEnvironment();
+    seedPostRequestLists(environment, [
+      makeRequest('request-a', 'FAILED'),
+      makeRequest('request-b', 'CANCELLED'),
+    ]);
+
+    await renderList(environment, { focusedRequestId: 'request-published' });
+
+    assert.deepEqual(
+      all('PostRequestCard').map((node) => node.props.requestId),
+      ['request-a', 'request-b'],
+    );
+    assert.equal(all('StateView').length, 0);
+  });
+
+  it('filters the retained Profile list locally for the Home summary', async () => {
     const environment = createEnvironment();
     const requests = [
-      makeRequest('request-a', 'CONFIRMING'),
-      makeRequest('request-b', 'FAILED'),
-      makeRequest('request-c', 'CANCELLED'),
-      makeRequest('request-d', 'PUBLISHED'),
+      makeRequest('request-failed', 'FAILED'),
+      makeRequest('request-cancelled', 'CANCELLED'),
+      makeRequest('request-queued', 'QUEUED'),
+      makeRequest('request-processing', 'PROCESSING'),
+      makeRequest('request-publishing', 'PUBLISHING'),
+      makeRequest('request-confirming', 'CONFIRMING'),
     ];
     seedPostRequestLists(environment, requests);
 
     await renderSummary(environment);
 
-    assert.equal(all('PostRequestCard')[0]?.props.requestId, 'request-a');
-    assert.deepEqual(listRequestIds(environment, HOME_STATUSES), [
-      'node:request-a',
-      'node:request-b',
-    ]);
+    assert.equal(all('PostRequestCard')[0]?.props.requestId, 'request-failed');
     assert.deepEqual(
-      listRequestIds(environment, null),
+      listRequestIds(environment),
       requests.map((request) => request.id),
     );
   });
@@ -571,7 +572,8 @@ describe('PostRequestList', () => {
   it('moves a normalized published request into Home once when its author is the selected profile', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
-    seedPostRequestLists(environment, [request]);
+    const cancelledRequest = makeRequest('request-b', 'CANCELLED');
+    seedPostRequestLists(environment, [request, cancelledRequest]);
     seedHomeConnection(environment, [
       { cursor: 'cursor-home-first-page', id: 'post-home-first-page' },
       { cursor: 'cursor-home-next-page', id: 'post-home-next-page' },
@@ -586,16 +588,26 @@ describe('PostRequestList', () => {
         profileId: 'profile-a',
       });
     });
+    const publishedCard = all('PostRequestCard')[0];
+    assert.ok(publishedCard);
+    assert.equal(publishedCard.props.status, 'PUBLISHED');
+    const onPublished = publishedCard.props.onPublished as (result: {
+      authorProfileId: string;
+      postId: string;
+      requestNodeId: string;
+    }) => void;
     await act(async () => {
-      updateRequestStatus(environment, request, 'PUBLISHED', {
-        id: 'post-a',
-        profileId: 'profile-a',
-      });
+      const result = {
+        authorProfileId: 'profile-a',
+        postId: 'post-a',
+        requestNodeId: request.id,
+      };
+      onPublished(result);
+      onPublished(result);
     });
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment, HOME_STATUSES), []);
-    assert.deepEqual(listRequestIds(environment, null), [request.id]);
+    assert.deepEqual(listRequestIds(environment), [cancelledRequest.id]);
     const homeConnectionId = ConnectionHandler.getConnectionID(
       'client:root',
       'PostList_homeTimeline',
@@ -635,69 +647,43 @@ describe('PostRequestList', () => {
         startCursor: 'cursor-home-first-page',
       },
     );
+
+    await updateList(environment);
+    assert.deepEqual(
+      all('PostRequestCard').map((node) => node.props.status),
+      ['CANCELLED'],
+    );
   });
 
-  it('reconciles first-seen terminal requests in Home while preserving history and reply counts', async () => {
+  it('does not infer Home Posts from retained FAILED and CANCELLED request history', async () => {
     const environment = createEnvironment();
     const requests = [
-      makeRequest('request-published-a', 'PROCESSING'),
-      makeRequest('request-published-b', 'PROCESSING'),
-      makeRequest('request-cancelled', 'PROCESSING'),
+      makeRequest('request-failed', 'FAILED'),
+      makeRequest('request-cancelled', 'CANCELLED'),
     ];
     seedPostRequestLists(environment, requests);
     seedHomeConnection(environment);
 
-    updateRequestStatus(environment, requests[0]!, 'PUBLISHED', {
-      id: 'post-a',
-      profileId: 'profile-a',
-      replyParent: { id: 'parent-post', replyCount: 4 },
-    });
-    updateRequestStatus(environment, requests[1]!, 'PUBLISHED', {
-      id: 'post-b',
-      profileId: 'profile-b',
-    });
-    updateRequestStatus(environment, requests[2]!, 'CANCELLED');
-
     await renderSummary(environment);
 
-    assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment, HOME_STATUSES), []);
     assert.deepEqual(
-      listRequestIds(environment, null),
-      requests.map(({ id }) => id),
+      all('PostRequestCard').map((node) => node.props.requestId),
+      ['request-failed'],
+    );
+    assert.deepEqual(
+      listRequestIds(environment),
+      requests.map((item) => item.id),
     );
     assert.deepEqual(
       connectionNodeIds(
         environment,
         ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
       ),
-      ['post-a'],
-    );
-    assert.equal(
-      (environment.getStore().getSource().get('parent-post') as Record<string, unknown> | null)?.[
-        'replyCount'
-      ],
-      4,
-    );
-
-    await act(async () => {
-      updateRequestStatus(environment, requests[0]!, 'PUBLISHED', {
-        id: 'post-a',
-        profileId: 'profile-a',
-        replyParent: { id: 'parent-post', replyCount: 4 },
-      });
-    });
-
-    assert.deepEqual(
-      connectionNodeIds(
-        environment,
-        ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
-      ),
-      ['post-a'],
+      [],
     );
   });
 
-  it('removes a published request from Home without inserting another profile’s Post', async () => {
+  it('removes a published request without inserting another profile’s Post', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
     seedPostRequestLists(environment, [request]);
@@ -711,9 +697,23 @@ describe('PostRequestList', () => {
         profileId: 'profile-b',
       });
     });
+    const publishedCard = all('PostRequestCard')[0];
+    assert.ok(publishedCard);
+    const onPublished = publishedCard.props.onPublished as (result: {
+      authorProfileId: string;
+      postId: string;
+      requestNodeId: string;
+    }) => void;
+    await act(async () =>
+      onPublished({
+        authorProfileId: 'profile-b',
+        postId: 'post-b',
+        requestNodeId: request.id,
+      }),
+    );
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment, HOME_STATUSES), []);
+    assert.deepEqual(listRequestIds(environment), []);
     assert.deepEqual(
       connectionNodeIds(
         environment,
@@ -723,7 +723,7 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('prunes a cancelled request only from the Home list after refetch confirms it', async () => {
+  it('retains a cancelled request in Profile history while filtering it from the Home summary', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
     seedPostRequestLists(environment, [request]);
@@ -735,14 +735,19 @@ describe('PostRequestList', () => {
     await act(async () => updateRequestStatus(environment, request, 'CANCELLED'));
 
     assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment, HOME_STATUSES), []);
-    assert.deepEqual(listRequestIds(environment, null), [request.id]);
+    assert.deepEqual(listRequestIds(environment), [request.id]);
     assert.deepEqual(
       connectionNodeIds(
         environment,
         ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
       ),
       [],
+    );
+
+    await updateList(environment);
+    assert.deepEqual(
+      all('PostRequestCard').map((node) => node.props.status),
+      ['CANCELLED'],
     );
   });
 });

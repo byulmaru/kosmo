@@ -66,17 +66,13 @@ type PublishedPost = {
   requestNodeId: string;
 };
 
-type CancelledPostRequest = { requestNodeId: string };
-
 type PostRequestCardProps = {
-  onCancelled?: (request: CancelledPostRequest) => void;
   onCompose?: () => void;
   onPublished?: (post: PublishedPost) => void;
   request: PostRequestCard_request$key;
 };
 
 export function PostRequestCard({
-  onCancelled,
   onCompose,
   onPublished,
   request: requestKey,
@@ -101,13 +97,6 @@ export function PostRequestCard({
     if (
       previousRequest.id === request.id &&
       ACTIVE_STATUSES.has(previousRequest.status) &&
-      request.status === 'CANCELLED'
-    ) {
-      onCancelled?.({ requestNodeId: request.id });
-    }
-    if (
-      previousRequest.id === request.id &&
-      ACTIVE_STATUSES.has(previousRequest.status) &&
       request.status === 'PUBLISHED' &&
       request.post?.id
     ) {
@@ -120,7 +109,7 @@ export function PostRequestCard({
     if (previousRequest.id !== request.id || previousRequest.status !== request.status) {
       setPreviousRequest({ id: request.id, status: request.status });
     }
-  }, [onCancelled, onPublished, previousRequest, request.id, request.post, request.status]);
+  }, [onPublished, previousRequest, request.id, request.post, request.status]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
