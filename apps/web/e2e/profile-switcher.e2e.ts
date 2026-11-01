@@ -510,8 +510,9 @@ async function createPost(page: Page, body: string) {
   expect(submitResponse.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
   expect(acceptedRequestId).toEqual(expect.any(String));
+  expect(operation?.variables?.input).not.toHaveProperty('requestId');
   expect(operation?.variables).toMatchObject({
-    input: { bodyText: body, requestId: acceptedRequestId },
+    input: { bodyText: body },
   });
   await expect
     .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
