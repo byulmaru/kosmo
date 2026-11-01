@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { temporalTestExecutable } from './temporal-test-executable.js';
+import { POST_REQUEST_TEST_SEARCH_ATTRIBUTES } from './temporal-test-search-attributes.js';
 
 const host = process.env.HOST?.trim() || '127.0.0.1';
 const healthPort = Number(process.env.PORT);
@@ -28,6 +29,7 @@ const environment = await TestWorkflowEnvironment.createLocal({
     ip: host,
     namespace,
     port: temporalPort,
+    searchAttributes: [...POST_REQUEST_TEST_SEARCH_ATTRIBUTES],
     ui: false,
   },
 });

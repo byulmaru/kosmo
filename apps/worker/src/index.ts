@@ -5,6 +5,7 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyMetrics, closeFedifyQueue, startFedifyMetrics } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
+import { mediaUploadServiceHandler } from './nexus/media-upload';
 import { runSchedules } from './schedule';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
@@ -37,6 +38,7 @@ if (import.meta.main) {
       worker = await Worker.create({
         activities,
         connection,
+        nexusServices: [mediaUploadServiceHandler],
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
         workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,

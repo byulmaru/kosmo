@@ -3,6 +3,7 @@ import type { ActivityPubPostInput, LocalPostInput } from '../services/post';
 import type { WorkflowDefinition } from './client';
 
 export const POST_CREATE_WORKFLOW_TYPE = 'postCreateWorkflow';
+export const POST_CREATE_WORKFLOW_V2_TYPE = 'postCreateWorkflowV2';
 
 export type ActivityPubPostCreateInput = Omit<
   ActivityPubPostInput,
@@ -15,7 +16,10 @@ export type ActivityPubPostCreateInput = Omit<
 export type PostCreateActivityInput = {
   input: LocalPostInput | ActivityPubPostCreateInput;
   postId: string;
+  revalidateAuthorization?: boolean;
 };
+
+export type PostAnalyticsPlatform = 'web' | 'native';
 
 export type PostCreateActivityErrorKind =
   | 'note_media_validation_rejected'
@@ -42,7 +46,10 @@ export type PostCreateActivityResult =
     };
 
 export type PostCreateWorkflowArgs = {
+  readonly analyticsPlatform?: PostAnalyticsPlatform;
   readonly input: LocalPostInput | ActivityPubPostCreateInput;
+  readonly postId?: string;
+  readonly revalidateAuthorization?: boolean;
   readonly requestId: string;
 };
 
@@ -53,9 +60,19 @@ export type PostCreateWorkflowResult =
       readonly status: 'rejected';
     };
 
+const postCreateWorkflowId = ({ requestId }: PostCreateWorkflowArgs): string =>
+  `post-create:${requestId}`;
+
 export const postCreateWorkflow: WorkflowDefinition<
   (args: PostCreateWorkflowArgs) => Promise<PostCreateWorkflowResult>
 > = {
   workflow: POST_CREATE_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ requestId }) => `post-create:${requestId}`,
+  workflowIdFromArgs: postCreateWorkflowId,
+};
+
+export const postCreateWorkflowV2: WorkflowDefinition<
+  (args: PostCreateWorkflowArgs) => Promise<PostCreateWorkflowResult>
+> = {
+  workflow: POST_CREATE_WORKFLOW_V2_TYPE,
+  workflowIdFromArgs: postCreateWorkflowId,
 };

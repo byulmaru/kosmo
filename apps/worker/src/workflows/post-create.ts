@@ -5,6 +5,7 @@ import {
   ChildWorkflowCancellationType,
   log,
   ParentClosePolicy,
+  patched,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
@@ -14,6 +15,7 @@ import { runChildWorkflow } from './child';
 import { postCreateEffectsDefinition } from './create';
 import type {
   ActivityPubPostCreateInput,
+  PostAnalyticsPlatform,
   PostCreateWorkflowArgs,
   PostCreateWorkflowResult,
 } from '@kosmo/core/temporal/post-create';
@@ -65,14 +67,17 @@ const activityPubPostCreateInputSchema = z.object({
   visibility: z.enum(PostVisibility),
 });
 const workflowArgsSchema = z.object({
+  analyticsPlatform: z.enum(['web', 'native']).optional(),
   input: z.discriminatedUnion('origin', [
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
   ]),
+  postId: z.uuid().optional(),
+  revalidateAuthorization: z.boolean().optional(),
   requestId: z.uuid(),
 });
 
-const { createPostActivity, generatePostIdActivity } =
+const { createPostActivity, createPostActivityV2, generatePostIdActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 const parseInput = (value: unknown): PostCreateWorkflowArgs => {
@@ -90,13 +95,23 @@ const parseInput = (value: unknown): PostCreateWorkflowArgs => {
   return result.data;
 };
 
-const startPostCreateEffects = async (
+export const startPostCreateEffects = async (
   origin: PostCreateWorkflowArgs['input']['origin'],
   postId: string,
+  analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<void> => {
   try {
     await runChildWorkflow(postCreateEffectsDefinition, {
-      args: [{ origin, postId }],
+      args: [
+        {
+          origin,
+          postId,
+          ...(analyticsPlatform !== undefined &&
+          patched('post-create-effects-analytics-platform-v1')
+            ? { analyticsPlatform }
+            : {}),
+        },
+      ],
       cancellationType: ChildWorkflowCancellationType.ABANDON,
       mode: 'start',
       parentClosePolicy: ParentClosePolicy.ABANDON,
@@ -116,9 +131,21 @@ export async function postCreateWorkflow(
   input: PostCreateWorkflowArgs,
 ): Promise<PostCreateWorkflowResult> {
   const parsed = parseInput(input);
-  const execution = await createPostActivity({
+  if (parsed.revalidateAuthorization && parsed.input.origin !== 'LOCAL') {
+    throw ApplicationFailure.nonRetryable(
+      'Authorization revalidation is only supported for local Post creation',
+      'VALIDATION',
+    );
+  }
+
+  const postId = parsed.postId ?? (await generatePostIdActivity());
+  const createPost = parsed.revalidateAuthorization ? createPostActivityV2 : createPostActivity;
+  const execution = await createPost({
     input: parsed.input,
-    postId: await generatePostIdActivity(),
+    postId,
+    ...(parsed.revalidateAuthorization === undefined
+      ? {}
+      : { revalidateAuthorization: parsed.revalidateAuthorization }),
   });
   if (!execution.ok) {
     if (
@@ -136,7 +163,11 @@ export async function postCreateWorkflow(
   }
 
   if (execution.result.status === 'created') {
-    await startPostCreateEffects(parsed.input.origin, execution.result.postId);
+    await startPostCreateEffects(
+      parsed.input.origin,
+      execution.result.postId,
+      parsed.analyticsPlatform,
+    );
   }
 
   return execution.result;

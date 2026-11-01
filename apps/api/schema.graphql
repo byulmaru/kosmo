@@ -74,6 +74,14 @@ type BookmarkConnectionEdge {
   node: Bookmark!
 }
 
+input CancelPostRequestInput {
+  requestId: String!
+}
+
+type CancelPostRequestPayload {
+  request: PostRequest!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -84,7 +92,7 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
-  applyNightshade: Boolean = false
+  applyAiProhibitFilter: Boolean = false
   id: ID!
 }
 
@@ -144,6 +152,7 @@ input CreatePostInput {
 
 input CreatePostMediaInput {
   altText: String
+  applyAiProhibitFilter: Boolean = false
   mediaId: ID!
 }
 
@@ -154,7 +163,8 @@ input CreatePostMentionInput {
 }
 
 type CreatePostPayload {
-  post: Post!
+  post: Post
+  request: PostRequest
 }
 
 input CreateProfileInput {
@@ -349,6 +359,7 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   blockProfile(input: BlockProfileInput!): BlockProfilePayload!
+  cancelPostRequest(input: CancelPostRequestInput!): CancelPostRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -486,6 +497,28 @@ type PostContent implements Node {
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
 
+type PostRequest implements Node {
+  authorProfile: Profile
+  bodyText: String!
+  contentWarning: String
+  id: ID!
+  media: [Media]!
+  post: Post
+  requestId: String!
+  sensitiveMedia: Boolean!
+  status: PostRequestStatus!
+}
+
+enum PostRequestStatus {
+  CANCELLED
+  CONFIRMING
+  FAILED
+  PROCESSING
+  PUBLISHED
+  PUBLISHING
+  QUEUED
+}
+
 enum PostState {
   ACTIVE
   DELETED
@@ -519,6 +552,7 @@ type Profile implements Node {
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   pinnedPosts: [Post!]!
+  postRequests: [PostRequest!]!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection

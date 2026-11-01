@@ -233,7 +233,7 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
     assert.equal(completeCalls.length, 1);
     assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-1',
     });
 
@@ -279,11 +279,11 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
     assert.equal(completeCalls.length, 2);
     assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: true,
+      applyAiProhibitFilter: true,
       id: 'media-1',
     });
     assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-2',
     });
     await act(async () => {
@@ -320,11 +320,11 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
     assert.equal(completeCalls.length, 4);
     assert.deepEqual(completeCalls[2]?.variables.input, {
-      applyNightshade: true,
+      applyAiProhibitFilter: true,
       id: 'media-1',
     });
     assert.deepEqual(completeCalls[3]?.variables.input, {
-      applyNightshade: true,
+      applyAiProhibitFilter: true,
       id: 'media-3',
     });
     await act(async () => {
@@ -366,7 +366,7 @@ describe('PostComposerMediaControls deferred completion', () => {
       completion = mediaValues.at(-1)!.completeUploads();
     });
     assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-1',
     });
 
@@ -399,7 +399,7 @@ describe('PostComposerMediaControls deferred completion', () => {
     });
     assert.equal(completeCalls.length, 2);
     assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-2',
     });
     await act(async () => {
@@ -469,7 +469,10 @@ describe('PostComposerMediaControls deferred completion', () => {
       completion = mediaValues.at(-1)!.completeUploads();
     });
     assert.equal(completeCalls.length, 2);
-    assert.deepEqual(completeCalls[1]?.variables.input, { applyNightshade: true, id: 'media-2' });
+    assert.deepEqual(completeCalls[1]?.variables.input, {
+      applyAiProhibitFilter: true,
+      id: 'media-2',
+    });
     await act(async () => {
       completeCalls[1]?.onCompleted({
         completeMediaUpload: { media: { id: 'media-2', state: 'READY' } },
@@ -506,11 +509,11 @@ describe('PostComposerMediaControls deferred completion', () => {
     );
     assert.equal(completeCalls.length, 2);
     assert.deepEqual(completeCalls[0]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-1',
     });
     assert.deepEqual(completeCalls[1]?.variables.input, {
-      applyNightshade: false,
+      applyAiProhibitFilter: false,
       id: 'media-2',
     });
 

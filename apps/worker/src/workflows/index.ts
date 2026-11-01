@@ -10,6 +10,8 @@ export { mediaUploadWorkflow } from './media-upload';
 export { operationalNotificationDeliveryWorkflow } from './operational-notification';
 export { reprocessLocalPostContentsWorkflow } from './post-content-reprocessing';
 export { postCreateWorkflow } from './post-create';
+export { postCreateWorkflow as postCreateWorkflowV2 } from './post-create';
+export { postRequestWorkflow } from './post-request';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';

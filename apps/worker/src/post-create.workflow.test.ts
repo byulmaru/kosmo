@@ -4,7 +4,12 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { PostVisibility } from '@kosmo/core/enums';
-import { POST_CREATE_WORKFLOW_TYPE, postCreateWorkflow } from '@kosmo/core/temporal/post-create';
+import {
+  POST_CREATE_WORKFLOW_TYPE,
+  POST_CREATE_WORKFLOW_V2_TYPE,
+  postCreateWorkflow,
+  postCreateWorkflowV2,
+} from '@kosmo/core/temporal/post-create';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
@@ -19,8 +24,10 @@ import type {
   PostCreateWorkflowResult,
 } from '@kosmo/core/temporal/post-create';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities/notification';
+import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
+type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
@@ -86,10 +93,12 @@ test(
     const generatedIds: string[] = [];
     const createAttempts: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     let retryFirstLocalActivity = true;
     let blockedPostId = '';
     let effectStarted = Promise.withResolvers<void>();
     let effectReleased = Promise.withResolvers<void>();
+    let captureStarted = Promise.withResolvers<void>();
 
     const worker = await Worker.create({
       activities: {
@@ -128,6 +137,13 @@ test(
         },
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
+        },
+        capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+          analyticsCalls.push(input);
+          if (input.postId === blockedPostId) {
+            captureStarted.resolve();
+            await effectReleased.promise;
+          }
         },
       },
       connection: environment.nativeConnection,
@@ -173,6 +189,7 @@ test(
         const cases = [
           {
             args: {
+              analyticsPlatform: 'web',
               futureField: true,
               input: futureLocalInput,
               requestId: randomUUID(),
@@ -182,6 +199,7 @@ test(
           },
           {
             args: {
+              analyticsPlatform: undefined,
               futureField: true,
               input: futureRemoteInput,
               requestId: randomUUID(),
@@ -195,8 +213,12 @@ test(
           blockedPostId = item.postId;
           effectStarted = Promise.withResolvers<void>();
           effectReleased = Promise.withResolvers<void>();
+          captureStarted = Promise.withResolvers<void>();
           const resultPromise = runPostCreate(environment, taskQueue, item.args);
           await effectStarted.promise;
+          if (item.args.analyticsPlatform !== undefined) {
+            await captureStarted.promise;
+          }
 
           const expectedResult = {
             authorProfileId: item.expectedInput.profileId,
@@ -228,6 +250,12 @@ test(
             index === 0
               ? [expectedLocalInput, expectedLocalInput]
               : [{ ...expectedRemoteInput, media: [remoteMedia] }],
+          );
+          assert.deepEqual(
+            analyticsCalls.filter(({ postId: capturedPostId }) => capturedPostId === item.postId),
+            item.args.analyticsPlatform === undefined
+              ? []
+              : [{ analyticsPlatform: item.args.analyticsPlatform, postId: item.postId }],
           );
 
           effectReleased.resolve();
@@ -495,6 +523,76 @@ test(
       } finally {
         effectReleased.resolve();
       }
+    });
+  },
+);
+
+test(
+  'Post Create Workflow uses a supplied stable ID and forwards authorization revalidation',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: temporalTestExecutable },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-post-create-stable-id-' + process.pid;
+    const postId = randomUUID();
+    const generatedIds: string[] = [];
+    const activityInputs: PostCreateActivityInput[] = [];
+    const createPostActivityStub = async (
+      activityInput: PostCreateActivityInput,
+    ): Promise<PostCreateActivityResult> => {
+      activityInputs.push(activityInput);
+      return {
+        ok: true,
+        result: {
+          authorProfileId: activityInput.input.profileId,
+          postId: activityInput.postId,
+          status: 'created',
+        },
+      };
+    };
+    const worker = await Worker.create({
+      activities: {
+        generatePostIdActivity: async () => {
+          generatedIds.push(postId);
+          return postId;
+        },
+        createPostActivity: createPostActivityStub,
+        createPostActivityV2: createPostActivityStub,
+        createNotificationActivity: async () => {},
+        sendLocalPostCreateActivity: async () => {},
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const args: PostCreateWorkflowArgs = {
+        input: localPostInput('Stable post request'),
+        postId,
+        revalidateAuthorization: true,
+        requestId: randomUUID(),
+      };
+      const result = (await environment.client.workflow.execute(POST_CREATE_WORKFLOW_V2_TYPE, {
+        args: [args],
+        taskQueue,
+        workflowId: postCreateWorkflowV2.workflowIdFromArgs(args),
+        workflowExecutionTimeout: '30 seconds',
+      })) as PostCreateWorkflowResult;
+
+      assert.deepEqual(result, {
+        authorProfileId: args.input.profileId,
+        postId,
+        status: 'created',
+      });
+      assert.deepEqual(generatedIds, []);
+      assert.deepEqual(activityInputs, [
+        { input: args.input, postId, revalidateAuthorization: true },
+      ]);
     });
   },
 );

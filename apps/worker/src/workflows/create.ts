@@ -4,9 +4,11 @@ import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type { WorkflowDefinition } from '@kosmo/core/temporal/client';
+import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
 import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
+  readonly analyticsPlatform?: PostAnalyticsPlatform;
   readonly postId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
@@ -16,15 +18,18 @@ const {
   createQuoteNotificationActivity,
   createMentionNotificationActivity,
   createReplyNotificationActivity,
+  capturePostCreatedActivity,
   sendLocalPostCreateActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postCreateEffectsWorkflow({
+  analyticsPlatform,
   postId,
   origin,
 }: PostCreateEffectsInput): Promise<void> {
   const pushNotificationDispatchEnabled = patched('post-create-effects-push-notification-v1');
   const mentionNotificationEnabled = patched('post-create-effects-mention-notification-v1');
+  const postCreatedAnalyticsEnabled = patched('post-create-effects-post-created-analytics-v1');
   await settleEffects([
     pushNotificationDispatchEnabled
       ? createNotificationActivity({ kind: NotificationKind.REPLY, sourceId: postId })
@@ -44,7 +49,12 @@ export async function postCreateEffectsWorkflow({
         ]
       : []),
     ...match(origin)
-      .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
+      .with('LOCAL', () => [
+        sendLocalPostCreateActivity(postId),
+        ...(postCreatedAnalyticsEnabled && analyticsPlatform !== undefined
+          ? [capturePostCreatedActivity({ analyticsPlatform, postId })]
+          : []),
+      ])
       .with('ACTIVITYPUB', () => [])
       .exhaustive(),
   ]);

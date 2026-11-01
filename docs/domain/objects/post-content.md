@@ -159,7 +159,7 @@ rollback해 partial relation을 남기지 않는다.
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
-Nightshade 선택은 Content Document의 속성이 아니며 새 Local Media에 적용된다. 처리 정책은 [Media 객체](./media.md)에
+AI 학습 방지 필터 선택은 Content Document의 속성이 아니며 새 Local Media에 적용된다. 처리 정책은 [Media 객체](./media.md)에
 두며, Post Content는 처리 결과가 반영된 Media ID만 참조한다.
 
 ActivityPub `tag`의 typed `Mention`은 앞서 정의한 `Mention.href` identity 확인으로 알려진 Local/Remote Profile을 Mentioned Profile
@@ -238,6 +238,6 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
   위의 저장 document 처리 규칙으로 재처리할 수 있다. 이 재처리는 사용자용 Post 수정, Remote revision backfill 또는
   inbound `Update(Note)`를 포함하지 않는다.
 - 기존 Media의 crop, filter 등 이미지 byte나 파생 표현을 편집하는 기능은 포함하지 않는다. 새 Post에 첨부할
-  이미지의 선택적 Nightshade 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
+  이미지의 선택적 AI 학습 방지 필터 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
   기능은 포함한다.
 - revision 번호, 과거 revision 목록·복원, 동시 편집 충돌 UX와 Media 물리 삭제 정책은 후속 계약에서 정한다.
