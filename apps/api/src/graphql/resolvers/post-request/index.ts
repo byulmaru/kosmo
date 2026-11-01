@@ -1,4 +1,4 @@
-import './query';
+import './field';
 import './mutation';
 
 export { PostRequest } from './ref';

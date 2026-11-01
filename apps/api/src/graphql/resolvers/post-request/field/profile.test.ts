@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { AccountProfiles, db, Profiles } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
@@ -21,6 +22,15 @@ const ownerAccountId = '00000000-0000-4000-8000-000000000001';
 const otherAccountId = '00000000-0000-4000-8000-000000000002';
 const profileId = '00000000-0000-4000-8000-000000000003';
 const otherProfileId = '00000000-0000-4000-8000-000000000004';
+
+const retainedStatuses = [
+  PostRequestStatus.QUEUED,
+  PostRequestStatus.PROCESSING,
+  PostRequestStatus.PUBLISHING,
+  PostRequestStatus.CONFIRMING,
+  PostRequestStatus.FAILED,
+  PostRequestStatus.CANCELLED,
+] as const;
 
 const requestState = (
   requestId: string,
@@ -62,33 +72,54 @@ const accountContext = (accountId: string | null) =>
         },
       };
 
-const execution = (workflowId: string) => ({ workflowId });
+type ProfileRow = { readonly id: string };
+type ProfileSelectChain = {
+  from: (...args: unknown[]) => ProfileSelectChain;
+  innerJoin: (...args: unknown[]) => ProfileSelectChain;
+  where: (...args: unknown[]) => Promise<ProfileRow[]>;
+};
 
-const listRequests = (profile: string, statuses?: readonly PostRequestStatusValue[]) =>
+const profileSelectChain = (rows: ProfileRow[]): ProfileSelectChain => {
+  let selectedRows: ProfileRow[] = [];
+  const chain: ProfileSelectChain = {
+    from: (table) => {
+      selectedRows = table === Profiles ? rows : table === AccountProfiles ? [] : rows;
+      return chain;
+    },
+    innerJoin: () => chain,
+    where: async () => selectedRows,
+  };
+  return chain;
+};
+
+const profilePostRequests = (accountId: string | null = ownerAccountId) =>
   graphql({
     schema,
     source: `
-      query PostRequests($profileId: ID!, $statuses: [PostRequestStatus!]) {
-        postRequests(profileId: $profileId, statuses: $statuses) {
-          requestId
-          status
+      query ProfilePostRequests($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            postRequests {
+              requestId
+              status
+            }
+          }
         }
       }
     `,
-    variableValues: {
-      profileId: encodeGlobalId('Profile', profile),
-      statuses,
-    },
-    contextValue: accountContext(ownerAccountId),
+    variableValues: { id: encodeGlobalId('Profile', profileId) },
+    contextValue: accountContext(accountId),
   });
 
-test('postRequests returns all matching states across SDK list pages and revalidates snapshots', async (t) => {
+const execution = (workflowId: string) => ({ workflowId });
+
+test('Profile.postRequests keeps live non-published states across pages without requiring membership', async (t) => {
   const matchingRequestIds = Array.from(
     { length: 25 },
     (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
   );
-  const staleRequestId = '00000000-0000-4000-8000-000000000101';
-  const foreignRequestId = '00000000-0000-4000-8000-000000000102';
+  const publishedRequestId = '00000000-0000-4000-8000-000000000101';
+  const wrongAccountRequestId = '00000000-0000-4000-8000-000000000102';
   const wrongProfileRequestId = '00000000-0000-4000-8000-000000000103';
   const missingRequestId = '00000000-0000-4000-8000-000000000104';
   const statesByWorkflowId = new Map<string, PostRequestState>([
@@ -96,43 +127,46 @@ test('postRequests returns all matching states across SDK list pages and revalid
       (requestId, index) =>
         [
           postRequestWorkflowId(ownerAccountId, requestId),
-          requestState(requestId, {
-            status: index % 2 === 0 ? PostRequestStatus.QUEUED : PostRequestStatus.FAILED,
-          }),
+          requestState(requestId, { status: retainedStatuses[index % retainedStatuses.length] }),
         ] as const,
     ),
     [
-      postRequestWorkflowId(ownerAccountId, staleRequestId),
-      requestState(staleRequestId, { status: PostRequestStatus.PUBLISHED }),
+      postRequestWorkflowId(ownerAccountId, publishedRequestId),
+      requestState(publishedRequestId, { status: PostRequestStatus.PUBLISHED }),
     ],
     [
-      postRequestWorkflowId(ownerAccountId, foreignRequestId),
-      requestState(foreignRequestId, { accountId: otherAccountId }),
+      postRequestWorkflowId(ownerAccountId, wrongAccountRequestId),
+      requestState(wrongAccountRequestId, { accountId: otherAccountId }),
     ],
     [
       postRequestWorkflowId(ownerAccountId, wrongProfileRequestId),
       requestState(wrongProfileRequestId, { profileId: otherProfileId }),
     ],
   ]);
+  const foreignAccountWorkflowId = postRequestWorkflowId(otherAccountId, missingRequestId);
+  const emptyRequestWorkflowId = postRequestWorkflowId(ownerAccountId, '');
   const listQueries: (string | undefined)[] = [];
   const sdkPages = [
     [
       ...matchingRequestIds
         .slice(0, 20)
         .map((id) => execution(postRequestWorkflowId(ownerAccountId, id))),
-      execution(postRequestWorkflowId(ownerAccountId, staleRequestId)),
+      execution(postRequestWorkflowId(ownerAccountId, publishedRequestId)),
     ],
     [
       ...matchingRequestIds
         .slice(20)
         .map((id) => execution(postRequestWorkflowId(ownerAccountId, id))),
-      execution(postRequestWorkflowId(ownerAccountId, foreignRequestId)),
+      execution(postRequestWorkflowId(ownerAccountId, wrongAccountRequestId)),
       execution(postRequestWorkflowId(ownerAccountId, wrongProfileRequestId)),
       execution(postRequestWorkflowId(ownerAccountId, missingRequestId)),
+      execution(foreignAccountWorkflowId),
+      execution(emptyRequestWorkflowId),
       execution('unrelated-workflow'),
     ],
   ];
 
+  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
   t.mock.method(
     temporalClient.workflow,
     'list',
@@ -158,20 +192,18 @@ test('postRequests returns all matching states across SDK list pages and revalid
     } as never;
   });
 
-  const result = await listRequests(profileId, [
-    PostRequestStatus.QUEUED,
-    PostRequestStatus.FAILED,
-  ]);
+  const result = await profilePostRequests();
   assert.deepEqual(result.errors, undefined);
+  const requests = (result.data?.node as { postRequests: { requestId: string; status: string }[] })
+    .postRequests;
   assert.deepEqual(
-    (result.data?.postRequests as { requestId: string; status: string }[]).map(
-      ({ requestId, status }) => [requestId, status],
-    ),
+    requests.map(({ requestId, status }) => [requestId, status]),
     matchingRequestIds.map((requestId, index) => [
       requestId,
-      index % 2 === 0 ? PostRequestStatus.QUEUED : PostRequestStatus.FAILED,
+      retainedStatuses[index % retainedStatuses.length],
     ]),
   );
+  assert.deepEqual(new Set(requests.map(({ status }) => status)), new Set(retainedStatuses));
   assert.equal(listQueries.length, 1);
   assert.ok(listQueries[0]?.includes(`WorkflowType = '${POST_REQUEST_WORKFLOW_TYPE}'`));
   assert.ok(
@@ -182,38 +214,24 @@ test('postRequests returns all matching states across SDK list pages and revalid
   assert.ok(
     listQueries[0]?.includes(`${POST_REQUEST_SEARCH_ATTRIBUTES.profileId} = '${profileId}'`),
   );
-  assert.ok(
-    listQueries[0]?.includes(`${POST_REQUEST_SEARCH_ATTRIBUTES.status} IN ('QUEUED', 'FAILED')`),
-  );
+  assert.equal(listQueries[0]?.includes(POST_REQUEST_SEARCH_ATTRIBUTES.status), false);
+  assert.equal(workflowIds.includes(foreignAccountWorkflowId), false);
+  assert.equal(workflowIds.includes(emptyRequestWorkflowId), false);
   assert.equal(workflowIds.includes('unrelated-workflow'), false);
 });
 
-test('postRequests returns empty results for an empty status list without querying Temporal', async (t) => {
+test('Profile.postRequests requires login and does not query Temporal for unauthenticated users', async (t) => {
+  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
   const list = t.mock.method(temporalClient.workflow, 'list');
-  const result = await listRequests(profileId, []);
-  assert.deepEqual(result.errors, undefined);
-  assert.deepEqual(result.data?.postRequests, []);
+
+  const result = await profilePostRequests(null);
+  assert.ok(result.errors?.[0]?.originalError instanceof PermissionDeniedError);
   assert.equal(list.mock.callCount(), 0);
 });
 
-test('postRequests requires an authenticated account', async (t) => {
-  const list = t.mock.method(temporalClient.workflow, 'list');
-  const unauthenticated = await graphql({
-    schema,
-    source: `
-      query PostRequests($profileId: ID!) {
-        postRequests(profileId: $profileId) { requestId }
-      }
-    `,
-    variableValues: { profileId: encodeGlobalId('Profile', profileId) },
-    contextValue: accountContext(null),
-  });
-  assert.ok(unauthenticated.errors?.[0]?.originalError instanceof PermissionDeniedError);
-  assert.equal(list.mock.callCount(), 0);
-});
-
-test('postRequests propagates Temporal list errors', async (t) => {
+test('Profile.postRequests propagates Temporal list errors', async (t) => {
   const failure = new Error('Temporal list failed');
+  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
   t.mock.method(
     temporalClient.workflow,
     'list',
@@ -226,6 +244,6 @@ test('postRequests propagates Temporal list errors', async (t) => {
       }) as never,
   );
 
-  const result = await listRequests(profileId);
+  const result = await profilePostRequests();
   assert.equal(result.errors?.[0]?.originalError, failure);
 });

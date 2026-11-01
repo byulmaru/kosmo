@@ -552,6 +552,7 @@ type Profile implements Node {
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   pinnedPosts: [Post!]!
+  postRequests: [PostRequest!]!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
@@ -713,8 +714,6 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  postRequest(profileId: ID!, requestId: String!): PostRequest
-  postRequests(profileId: ID!, statuses: [PostRequestStatus!]): [PostRequest!]!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }

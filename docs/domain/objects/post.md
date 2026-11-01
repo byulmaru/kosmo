@@ -123,7 +123,8 @@ Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 
 
 `PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
 `sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
-nullable list item으로 반환한다. `CreatePostPayload.post`는 nullable이며, 이 응답에서 반환된 request 상태가
+nullable list item으로 반환한다. Profile의 PostRequest 목록은 현재 상태가 `PUBLISHED`인 요청을 제외한다.
+`CreatePostPayload.post`는 nullable이며, 이 응답에서 반환된 request 상태가
 `PUBLISHED`일 때만 생성된 Post를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 즉시 반환하는 접수 확인의
 `post`는 `null`이며, 이후 publication을 기다리지 않는다. `request`와 `post` 선택은 접수 대기를 바꾸지 않는다.
 Media가 없거나 모든 참조 Media가 Ready인 요청은 기존처럼 publication 결과를 기다려 `PUBLISHED` PostRequest를 반환한다.
