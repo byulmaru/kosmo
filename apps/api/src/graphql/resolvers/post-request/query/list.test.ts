@@ -133,16 +133,20 @@ test('postRequests returns all matching states across SDK list pages and revalid
     ],
   ];
 
-  t.mock.method(temporalClient.workflow, 'list', (options) => {
-    listQueries.push(options?.query);
-    return {
-      async *[Symbol.asyncIterator]() {
-        for (const page of sdkPages) {
-          yield* page;
-        }
-      },
-    } as never;
-  });
+  t.mock.method(
+    temporalClient.workflow,
+    'list',
+    (options: Parameters<typeof temporalClient.workflow.list>[0]) => {
+      listQueries.push(options?.query);
+      return {
+        async *[Symbol.asyncIterator]() {
+          for (const page of sdkPages) {
+            yield* page;
+          }
+        },
+      } as never;
+    },
+  );
   const workflowIds: string[] = [];
   t.mock.method(temporalClient.workflow, 'getHandle', (workflowId: string) => {
     workflowIds.push(workflowId);
