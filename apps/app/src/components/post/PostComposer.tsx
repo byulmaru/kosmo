@@ -1061,7 +1061,7 @@ export function MobileFullscreenComposerShellCandidate({
           if (
             initialScrollPendingRef.current &&
             offset !== null &&
-            Math.abs(event.nativeEvent.contentOffset.y - offset) > 1
+            Math.abs(event.nativeEvent.contentOffset.y - offset) <= 1
           ) {
             initialScrollPendingRef.current = false;
           }
