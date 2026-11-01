@@ -795,7 +795,7 @@ test(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.PROCESSING,
       );
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
 
       const firstUpload = environment.client.workflow.getHandle(
         mediaUploadWorkflow.workflowIdFromArgs({
@@ -820,12 +820,12 @@ test(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.PROCESSING,
       );
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
 
       releasePublish.get(`u_${firstMediaId}`)!.resolve();
       const [firstResult, result] = await Promise.all([
         waitFor(firstUpload.result(), 'first Media Upload completion'),
-        waitFor(handle.result(), 'Post Request publication'),
+        waitFor<PostRequestState>(handle.result(), 'Post Request publication'),
       ]);
       assert.equal(firstResult.id, `u_${firstMediaId}`);
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
@@ -955,7 +955,7 @@ test(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.PROCESSING,
       );
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
 
       releasePending.resolve();
       const [pendingResult, result] = await Promise.all([
@@ -966,7 +966,7 @@ test(
       assert.equal(result.status, PostRequestStatus.FAILED);
       assert.equal(mediaRows.get(failedMediaId)?.state, MediaState.UPLOADING);
       assert.equal(mediaRows.get(pendingMediaId)?.state, MediaState.READY);
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
     });
   },
 );
@@ -1037,7 +1037,7 @@ test(
         ),
         ['RUNNING', 'RUNNING'],
       );
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
 
       releasePublish.forEach(({ resolve }) => resolve());
       const results = await Promise.all(
@@ -1050,7 +1050,7 @@ test(
         uploadIds,
       );
       assert.ok(mediaIds.every((mediaId) => mediaRows.get(mediaId)?.state === MediaState.READY));
-      assert.deepEqual(postCreateInputs, []);
+      assert.equal(postCreateInputs.length, 0);
     });
   },
 );
