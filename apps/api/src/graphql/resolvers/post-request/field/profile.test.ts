@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AccountProfiles, db, Profiles } from '@kosmo/core/db';
+import { db, Profiles } from '@kosmo/core/db';
+import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
@@ -22,6 +23,7 @@ const ownerAccountId = '00000000-0000-4000-8000-000000000001';
 const otherAccountId = '00000000-0000-4000-8000-000000000002';
 const profileId = '00000000-0000-4000-8000-000000000003';
 const otherProfileId = '00000000-0000-4000-8000-000000000004';
+const selectedProfileId = '00000000-0000-4000-8000-000000000005';
 
 const retainedStatuses = [
   PostRequestStatus.QUEUED,
@@ -61,14 +63,17 @@ const requestState = (
   status,
 });
 
-const accountContext = (accountId: string | null) =>
+const accountContext = (
+  accountId: string | null,
+  profile: { readonly id: string; readonly role: AccountProfileRole } | null = null,
+) =>
   accountId === null
     ? {}
     : {
         session: {
           id: 'test-session',
           accountId,
-          profile: null,
+          profile,
         },
       };
 
@@ -79,11 +84,11 @@ type ProfileSelectChain = {
   where: (...args: unknown[]) => Promise<ProfileRow[]>;
 };
 
-const profileSelectChain = (rows: ProfileRow[]): ProfileSelectChain => {
+const profileSelectChain = (): ProfileSelectChain => {
   let selectedRows: ProfileRow[] = [];
   const chain: ProfileSelectChain = {
     from: (table) => {
-      selectedRows = table === Profiles ? rows : table === AccountProfiles ? [] : rows;
+      selectedRows = table === Profiles ? [{ id: profileId }] : [];
       return chain;
     },
     innerJoin: () => chain,
@@ -92,7 +97,13 @@ const profileSelectChain = (rows: ProfileRow[]): ProfileSelectChain => {
   return chain;
 };
 
-const profilePostRequests = (accountId: string | null = ownerAccountId) =>
+const profilePostRequests = ({
+  accountId = ownerAccountId,
+  selectedProfile = { id: selectedProfileId, role: AccountProfileRole.MEMBER },
+}: {
+  readonly accountId?: string | null;
+  readonly selectedProfile?: { readonly id: string; readonly role: AccountProfileRole } | null;
+} = {}) =>
   graphql({
     schema,
     source: `
@@ -108,12 +119,12 @@ const profilePostRequests = (accountId: string | null = ownerAccountId) =>
       }
     `,
     variableValues: { id: encodeGlobalId('Profile', profileId) },
-    contextValue: accountContext(accountId),
+    contextValue: accountContext(accountId, selectedProfile),
   });
 
 const execution = (workflowId: string) => ({ workflowId });
 
-test('Profile.postRequests keeps live non-published states across pages without requiring membership', async (t) => {
+test('Profile.postRequests returns live requests for a selected Member while filtering by target Profile', async (t) => {
   const matchingRequestIds = Array.from(
     { length: 25 },
     (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
@@ -166,7 +177,7 @@ test('Profile.postRequests keeps live non-published states across pages without 
     ],
   ];
 
-  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
+  t.mock.method(db, 'select', () => profileSelectChain() as never);
   t.mock.method(
     temporalClient.workflow,
     'list',
@@ -220,18 +231,46 @@ test('Profile.postRequests keeps live non-published states across pages without 
   assert.equal(workflowIds.includes('unrelated-workflow'), false);
 });
 
-test('Profile.postRequests requires login and does not query Temporal for unauthenticated users', async (t) => {
-  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
+test('Profile.postRequests allows a selected Owner', async (t) => {
+  t.mock.method(db, 'select', () => profileSelectChain() as never);
+  const list = t.mock.method(
+    temporalClient.workflow,
+    'list',
+    () =>
+      ({
+        async *[Symbol.asyncIterator]() {},
+      }) as never,
+  );
+
+  const result = await profilePostRequests({
+    selectedProfile: { id: selectedProfileId, role: AccountProfileRole.OWNER },
+  });
+  assert.deepEqual(result.errors, undefined);
+  assert.deepEqual((result.data?.node as { postRequests: unknown[] }).postRequests, []);
+  assert.equal(list.mock.callCount(), 1);
+});
+
+test('Profile.postRequests requires a selected Profile and does not query Temporal without one', async (t) => {
+  t.mock.method(db, 'select', () => profileSelectChain() as never);
   const list = t.mock.method(temporalClient.workflow, 'list');
 
-  const result = await profilePostRequests(null);
+  const result = await profilePostRequests({ selectedProfile: null });
+  assert.ok(result.errors?.[0]?.originalError instanceof PermissionDeniedError);
+  assert.equal(list.mock.callCount(), 0);
+});
+
+test('Profile.postRequests requires login and does not query Temporal for unauthenticated users', async (t) => {
+  t.mock.method(db, 'select', () => profileSelectChain() as never);
+  const list = t.mock.method(temporalClient.workflow, 'list');
+
+  const result = await profilePostRequests({ accountId: null });
   assert.ok(result.errors?.[0]?.originalError instanceof PermissionDeniedError);
   assert.equal(list.mock.callCount(), 0);
 });
 
 test('Profile.postRequests propagates Temporal list errors', async (t) => {
   const failure = new Error('Temporal list failed');
-  t.mock.method(db, 'select', () => profileSelectChain([{ id: profileId }]) as never);
+  t.mock.method(db, 'select', () => profileSelectChain() as never);
   t.mock.method(
     temporalClient.workflow,
     'list',
