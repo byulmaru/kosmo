@@ -858,6 +858,7 @@ function PostComposerContents({
 const styles = StyleSheet.create({
   productionForm: { flexShrink: 1, minHeight: 0, width: '100%' },
   standaloneForm: { width: '100%' },
+  hiddenPresentation: { display: 'none' },
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   surfaceRoot: { flex: 1, minHeight: 0 },
   editorScroll: { flexShrink: 1, minHeight: 0 },
