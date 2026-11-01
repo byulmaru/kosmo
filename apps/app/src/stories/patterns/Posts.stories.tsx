@@ -3193,6 +3193,7 @@ const meta = {
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
     'ReplyModalBackdropDismissInteraction',
+    'ReplyModalComposerMediaEditorGeometry',
     'ReplyFullscreenVisibleViewport',
   ],
   decorators: [
@@ -8624,12 +8625,10 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
       Object.defineProperty(visualViewport, 'height', { configurable: true, value: 844 });
       visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       await waitFor(() => expect(surface.getBoundingClientRect().top).toBeCloseTo(48, 0));
-      for (let line = 1; line <= 40; line += 1) {
-        await userEvent.type(body, `긴 답글 줄 ${line}`);
-        if (line < 40) {
-          await userEvent.keyboard('{Enter}');
-        }
-      }
+      await userEvent.click(body);
+      await userEvent.paste(
+        Array.from({ length: 40 }, (_, index) => `긴 답글 줄 ${index + 1}`).join('\n'),
+      );
       await waitFor(() => {
         const bounds = surface.getBoundingClientRect();
         expect(bounds.top).toBeCloseTo(48, 0);
