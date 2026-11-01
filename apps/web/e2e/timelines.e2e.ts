@@ -12,6 +12,8 @@ import { expect, test } from './fixtures';
 import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
+test.use({ trace: 'retain-on-failure' });
+
 const minute = 60_000;
 const day = 24 * 60 * minute;
 
@@ -385,7 +387,7 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 });
 
-test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }) => {
+test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }, testInfo) => {
   let localRequestCount = 0;
   let failLocalRequests = true;
   const viewer = await createE2ESession({
@@ -413,6 +415,11 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   });
 
   await page.goto('/local');
+  await expect.poll(() => localRequestCount).toBeGreaterThan(0);
+  await testInfo.attach('local-error-initial-request.json', {
+    body: Buffer.from(JSON.stringify({ localRequestCount, failLocalRequests })),
+    contentType: 'application/json',
+  });
 
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
