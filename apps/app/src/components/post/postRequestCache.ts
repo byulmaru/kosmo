@@ -9,7 +9,7 @@ export const POST_REQUEST_HOME_ACTIVE_STATUSES = [
   'QUEUED',
 ] as const;
 
-export function prependPostRequestToLoadedPages(
+export function prependPostRequestToLoadedLists(
   store: RecordSourceSelectorProxy,
   profileId: string,
   requestNodeId: string,
@@ -21,34 +21,34 @@ export function prependPostRequestToLoadedPages(
 
   const root = store.getRoot();
   for (const statuses of [null, POST_REQUEST_HOME_ACTIVE_STATUSES]) {
-    const page = root.getLinkedRecord('postRequests', { pageToken: null, profileId, statuses });
-    const requests = page?.getLinkedRecords('requests');
-    if (!page || !requests || requests.some((item) => item?.getDataID() === requestNodeId)) {
+    const requests = root.getLinkedRecords('postRequests', { profileId, statuses });
+    if (!requests || requests.some((item) => item?.getDataID() === requestNodeId)) {
       continue;
     }
 
-    page.setLinkedRecords([request, ...requests], 'requests');
+    root.setLinkedRecords([request, ...requests], 'postRequests', { profileId, statuses });
   }
 }
 
-export function removePostRequestFromHomePage(
+export function removePostRequestFromHomeRequests(
   store: RecordSourceSelectorProxy,
   profileId: string,
   requestNodeId: string,
 ) {
-  const page = store.getRoot().getLinkedRecord('postRequests', {
-    pageToken: null,
+  const root = store.getRoot();
+  const args = {
     profileId,
     statuses: POST_REQUEST_HOME_ACTIVE_STATUSES,
-  });
-  const requests = page?.getLinkedRecords('requests');
-  if (!page || !requests) {
+  };
+  const requests = root.getLinkedRecords('postRequests', args);
+  if (!requests) {
     return;
   }
 
-  page.setLinkedRecords(
+  root.setLinkedRecords(
     requests.filter((request) => request?.getDataID() !== requestNodeId),
-    'requests',
+    'postRequests',
+    args,
   );
 }
 
@@ -68,7 +68,7 @@ export function reconcilePublishedPostInHome(
     requestNodeId: string;
   }>,
 ) {
-  removePostRequestFromHomePage(store, profileId, requestNodeId);
+  removePostRequestFromHomeRequests(store, profileId, requestNodeId);
 
   if (!postId || !authorProfileId || authorProfileId !== currentProfileId) {
     return;

@@ -1,23 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Fragment, useCallback, useEffect } from 'react';
+import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import {
-  commitLocalUpdate,
-  createOperationDescriptor,
-  fetchQuery,
-  getRequest,
-} from 'relay-runtime';
-import { InfiniteList } from '@/components/pagination/InfiniteList';
+import { commitLocalUpdate } from 'relay-runtime';
+import { usePaginationScrollContext } from '@/components/pagination/PaginationScrollView';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import {
   POST_REQUEST_HOME_ACTIVE_STATUSES,
   reconcilePublishedPostInHome,
-  removePostRequestFromHomePage,
+  removePostRequestFromHomeRequests,
 } from './postRequestCache';
 import { PostRequestCard } from './PostRequestCard';
 import type { ReactElement } from 'react';
@@ -41,13 +35,10 @@ const PostRequestListRequestFragment = graphql`
 `;
 
 const PostRequestListQuery = graphql`
-  query PostRequestListQuery($profileId: ID!, $statuses: [PostRequestStatus!], $pageToken: String) {
-    postRequests(profileId: $profileId, statuses: $statuses, pageToken: $pageToken) {
-      requests {
-        id
-        ...PostRequestList_request
-      }
-      nextPageToken
+  query PostRequestListQuery($profileId: ID!, $statuses: [PostRequestStatus!]) {
+    postRequests(profileId: $profileId, statuses: $statuses) {
+      id
+      ...PostRequestList_request
     }
   }
 `;
@@ -58,18 +49,6 @@ type PublishedPost = Readonly<{
   requestNodeId: string;
 }>;
 type CancelledRequest = Readonly<{ requestNodeId: string }>;
-type RequestKey = PostRequestList_request$key[number] & Readonly<{ id: string }>;
-type RetainedPage = {
-  retain: { dispose: () => void };
-  subscription: { unsubscribe: () => void } | null;
-};
-type PageState = Readonly<{
-  environment: ReturnType<typeof useRelayEnvironment>;
-  isLoadingNext: boolean;
-  nextPageToken: string | null;
-  profileId: string;
-  requests: readonly RequestKey[];
-}>;
 
 type RequestListProps = Readonly<{
   fetchKey?: string;
@@ -86,7 +65,7 @@ function usePostRequestCardHandlers(profileId: string) {
   const onCancelled = useCallback(
     ({ requestNodeId }: CancelledRequest) => {
       commitLocalUpdate(environment, (store) => {
-        removePostRequestFromHomePage(store, profileId, requestNodeId);
+        removePostRequestFromHomeRequests(store, profileId, requestNodeId);
       });
     },
     [environment, profileId],
@@ -117,158 +96,22 @@ export function PostRequestList({
   onCompose,
   profileId,
 }: RequestListProps) {
-  const theme = useTheme();
-  const environment = useRelayEnvironment();
-  const { showToast } = useToast();
-  const pageResources = useRef(new Set<RetainedPage>());
-  const loadErrorToastCleanup = useRef<(() => void) | null>(null);
+  const hasPaginationScrollContext = usePaginationScrollContext();
+  const hasNativeScrollParent = Platform.OS !== 'web' && hasPaginationScrollContext;
   const data = useLazyLoadQuery<PostRequestListQuery>(
     PostRequestListQuery,
-    { pageToken: null, profileId, statuses: null },
+    { profileId, statuses: null },
     {
       fetchKey,
       fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
     },
   );
-  const firstPage = data.postRequests;
-  const [pageState, setPageState] = useState<PageState>(() => ({
-    environment,
-    isLoadingNext: false,
-    nextPageToken: firstPage.nextPageToken ?? null,
-    profileId,
-    requests: [],
-  }));
-  const currentPageState =
-    pageState.environment === environment && pageState.profileId === profileId ? pageState : null;
-  const additionalRequests = currentPageState?.requests ?? [];
-  const nextPageToken = currentPageState
-    ? currentPageState.nextPageToken
-    : (firstPage.nextPageToken ?? null);
-  const isLoadingNext = currentPageState?.isLoadingNext ?? false;
-  const requestKeys = useMemo(() => {
-    const requestsById = new Map<string, RequestKey>();
-    for (const request of [...firstPage.requests, ...additionalRequests]) {
-      if (!requestsById.has(request.id)) {
-        requestsById.set(request.id, request);
-      }
-    }
-    return [...requestsById.values()];
-  }, [additionalRequests, firstPage.requests]);
   const requests = useFragment<PostRequestList_request$key>(
     PostRequestListRequestFragment,
-    requestKeys,
+    data.postRequests,
   );
   const displayRequests = requests.filter((request) => request.requestId !== focusedRequestId);
   const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
-
-  useEffect(() => {
-    setPageState({
-      environment,
-      isLoadingNext: false,
-      nextPageToken: firstPage.nextPageToken ?? null,
-      profileId,
-      requests: [],
-    });
-
-    return () => {
-      for (const resource of pageResources.current) {
-        resource.subscription?.unsubscribe();
-        resource.retain.dispose();
-      }
-      pageResources.current.clear();
-    };
-  }, [environment, firstPage.nextPageToken, profileId]);
-
-  const loadNext = useCallback(
-    (_count: number, { onComplete }: { onComplete: (error: Error | null) => void }) => {
-      if (!nextPageToken) {
-        onComplete(null);
-        return;
-      }
-
-      const variables = { pageToken: nextPageToken, profileId, statuses: null };
-      const operation = createOperationDescriptor(getRequest(PostRequestListQuery), variables);
-      const retain = environment.retain(operation);
-      const resource: RetainedPage = { retain, subscription: null };
-      let nextPage: PostRequestListQuery['response']['postRequests'] | null = null;
-      pageResources.current.add(resource);
-      setPageState((previous) =>
-        previous.environment === environment && previous.profileId === profileId
-          ? { ...previous, isLoadingNext: true }
-          : previous,
-      );
-
-      const releaseFailedPage = (error: Error) => {
-        resource.subscription?.unsubscribe();
-        retain.dispose();
-        pageResources.current.delete(resource);
-        setPageState((previous) =>
-          previous.environment === environment && previous.profileId === profileId
-            ? { ...previous, isLoadingNext: false }
-            : previous,
-        );
-        onComplete(error);
-      };
-
-      resource.subscription = fetchQuery<PostRequestListQuery>(
-        environment,
-        PostRequestListQuery,
-        variables,
-        { fetchPolicy: 'network-only' },
-      ).subscribe({
-        complete: () => {
-          const completedPage = nextPage;
-          if (!completedPage) {
-            releaseFailedPage(new Error('The post request page was empty.'));
-            return;
-          }
-
-          resource.subscription?.unsubscribe();
-          setPageState((previous) =>
-            previous.environment === environment && previous.profileId === profileId
-              ? {
-                  ...previous,
-                  isLoadingNext: false,
-                  nextPageToken: completedPage.nextPageToken ?? null,
-                  requests: [...previous.requests, ...completedPage.requests],
-                }
-              : previous,
-          );
-          onComplete(null);
-        },
-        error: (error: unknown) => {
-          releaseFailedPage(error instanceof Error ? error : new Error(String(error)));
-        },
-        next: (response) => {
-          nextPage = response.postRequests;
-        },
-      });
-    },
-    [environment, nextPageToken, profileId],
-  );
-
-  const handleLoadErrorChange = useCallback(
-    (loadError: boolean, onRetryNextPage: () => void) => {
-      if (loadError && !loadErrorToastCleanup.current) {
-        loadErrorToastCleanup.current = showToast('게시 요청을 더 불러오지 못했어요.', {
-          action: { label: '다시 시도', onPress: onRetryNextPage },
-          tone: 'danger',
-        });
-      } else if (!loadError && loadErrorToastCleanup.current) {
-        loadErrorToastCleanup.current();
-        loadErrorToastCleanup.current = null;
-      }
-    },
-    [showToast],
-  );
-
-  useEffect(
-    () => () => {
-      loadErrorToastCleanup.current?.();
-      loadErrorToastCleanup.current = null;
-    },
-    [],
-  );
 
   const empty = <StateView style={styles.empty} title="작성 요청이 없어요" />;
   const listHeader = focusedRequest ? (
@@ -285,40 +128,40 @@ export function PostRequestList({
     header
   );
 
+  const emptyList = displayRequests.length === 0 && !focusedRequestId ? empty : null;
+  const key = `post-requests:${profileId}`;
+  const renderRequest = (request: (typeof displayRequests)[number]) => (
+    <PostRequestCard
+      onCancelled={onCancelled}
+      onCompose={onCompose}
+      onPublished={onPublished}
+      request={request}
+    />
+  );
+
+  if (Platform.OS === 'web' || hasNativeScrollParent) {
+    return (
+      <View key={key} style={styles.root}>
+        {listHeader}
+        {displayRequests.length === 0
+          ? emptyList
+          : displayRequests.map((request) => (
+              <Fragment key={request.id}>{renderRequest(request)}</Fragment>
+            ))}
+      </View>
+    );
+  }
+
   return (
-    <InfiniteList
+    <FlatList
       data={displayRequests}
-      empty={displayRequests.length === 0 && !focusedRequestId ? empty : null}
-      hasNext={nextPageToken !== null}
-      isLoadingNext={isLoadingNext}
-      key={`post-requests:${profileId}`}
+      key={key}
       keyExtractor={(request) => request.id}
-      loadNext={loadNext}
-      onLoadErrorChange={handleLoadErrorChange}
-      pageSize={20}
-      header={listHeader}
-      footer={
-        isLoadingNext ? (
-          <View style={styles.loadingNext}>
-            <ActivityIndicator
-              accessibilityLabel="게시 요청을 더 불러오는 중"
-              color={theme.foregroundSecondary}
-            />
-            <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-              게시 요청을 더 불러오는 중입니다.
-            </Text>
-          </View>
-        ) : null
-      }
-      renderItem={({ item }) => (
-        <PostRequestCard
-          onCancelled={onCancelled}
-          onCompose={onCompose}
-          onPublished={onPublished}
-          request={item}
-        />
-      )}
-      style={styles.root}
+      keyboardShouldPersistTaps="handled"
+      ListEmptyComponent={emptyList}
+      ListHeaderComponent={listHeader}
+      renderItem={({ item }) => renderRequest(item)}
+      style={[styles.root, styles.nativeList]}
     />
   );
 }
@@ -334,7 +177,7 @@ export function PostRequestListSummary({
 }) {
   const data = useLazyLoadQuery<PostRequestListQuery>(
     PostRequestListQuery,
-    { pageToken: null, profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
+    { profileId, statuses: POST_REQUEST_HOME_ACTIVE_STATUSES },
     {
       fetchKey,
       fetchPolicy: fetchKey && fetchKey !== '0' ? 'network-only' : 'store-or-network',
@@ -342,7 +185,7 @@ export function PostRequestListSummary({
   );
   const requests = useFragment<PostRequestList_request$key>(
     PostRequestListRequestFragment,
-    data.postRequests.requests,
+    data.postRequests,
   );
   const { onCancelled, onPublished } = usePostRequestCardHandlers(profileId);
 
@@ -404,16 +247,8 @@ export function PostRequestHomeSummaryLoading() {
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   empty: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xxxl },
-  loadingNext: { alignItems: 'center', padding: spacing.md },
+  nativeList: { flex: 1 },
   summaryError: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   summaryErrorText: { fontFamily: fontFamilies.ui, ...typography.sm },
   summaryLoading: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  srOnly: {
-    height: 1,
-    left: 0,
-    overflow: 'hidden',
-    position: 'absolute',
-    top: 0,
-    width: 1,
-  },
 });

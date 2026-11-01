@@ -41,7 +41,7 @@ const meta = {
   parameters: {
     layout: 'padded',
     relay: {
-      data: { postRequests: { requests: [failedRequest], nextPageToken: null } },
+      data: { postRequests: [failedRequest] },
     },
   },
   title: 'KOSMO/Patterns/PostRequestList',
@@ -54,6 +54,6 @@ export const Playground: Story = {};
 
 export const Empty: Story = {
   parameters: {
-    relay: { data: { postRequests: { requests: [], nextPageToken: null } } },
+    relay: { data: { postRequests: [] } },
   },
 };

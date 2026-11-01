@@ -597,26 +597,25 @@ describe('PostComposer character count', () => {
 
 describe('PostComposer request acknowledgement cache projection', () => {
   for (const status of ['QUEUED', 'PUBLISHED'] as const) {
-    it(`projects a ${status} acknowledgement into the appropriate request and Home pages`, async () => {
+    it(`projects a ${status} acknowledgement into the appropriate request and Home lists`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
       const createdPosts: Array<{ id: string }> = [];
       let acceptedCount = 0;
       const query = getRequest(PostRequestListQueryNode);
       const environment = relayEnvironment;
-      const seedPage = (
+      const seedList = (
         profileId: string,
         statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
       ) => {
-        environment.commitPayload(
-          createOperationDescriptor(query, { pageToken: null, profileId, statuses }),
-          { postRequests: { nextPageToken: null, requests: [] } },
-        );
+        environment.commitPayload(createOperationDescriptor(query, { profileId, statuses }), {
+          postRequests: [],
+        });
       };
-      seedPage('profile-a', null);
-      seedPage('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
-      seedPage('profile-b', null);
-      seedPage('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
+      seedList('profile-a', null);
+      seedList('profile-a', POST_REQUEST_HOME_ACTIVE_STATUSES);
+      seedList('profile-b', null);
+      seedList('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
       seedHomeTimeline(environment, ['post-home-existing']);
 
       const composerProps = (profile: typeof profileA) => ({
@@ -701,14 +700,13 @@ describe('PostComposer request acknowledgement cache projection', () => {
         statuses: typeof POST_REQUEST_HOME_ACTIVE_STATUSES | null,
       ) => {
         const operation = createOperationDescriptor(query, {
-          pageToken: null,
           profileId,
           statuses,
         });
         const data = environment.lookup(operation.fragment).data as {
-          postRequests: { requests: ReadonlyArray<{ id: string }> };
+          postRequests: ReadonlyArray<{ id: string }>;
         };
-        return data.postRequests.requests.map((request) => request.id);
+        return data.postRequests.map((request) => request.id);
       };
 
       assert.deepEqual(requestIds('profile-a', null), [requestNodeId]);
