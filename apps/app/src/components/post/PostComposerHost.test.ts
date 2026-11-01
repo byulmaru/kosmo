@@ -18,7 +18,6 @@ let composerProps:
       onRequestClose?: () => void;
       onPostCreated?: (post: PostComposerCreatedPost) => void;
       onPostRequestAccepted?: () => void;
-      onPostRequestUncertainChange?: (uncertain: boolean, retry?: () => void) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
       renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
@@ -298,55 +297,6 @@ describe('PostComposerHost', () => {
     await act(async () => composerProps?.onPostRequestAccepted?.());
 
     assert.deepEqual(events, ['created']);
-  });
-
-  it('불확실한 접수를 다시 확인하거나 경고를 본 뒤 닫는다', async () => {
-    let closeCount = 0;
-    let retryCount = 0;
-    await act(async () => {
-      renderer = create(
-        createElement(PostComposerHost, {
-          mode: 'mobile',
-          onRequestClose: () => closeCount++,
-          open: true,
-          profile: {} as never,
-        }),
-      );
-    });
-    await act(async () => composerProps?.onPostRequestUncertainChange?.(true, () => retryCount++));
-    await act(async () => composerProps?.onRequestClose?.());
-
-    let confirmation = renderer?.root.findByProps({ role: 'alertdialog' });
-    assert.equal(confirmation?.props.accessibilityLabel, '접수 결과 확인');
-    const clippedSurface = renderer?.root.findByProps({ accessibilityElementsHidden: true });
-    assert.equal(clippedSurface?.props['aria-hidden'], true);
-    assert.equal(clippedSurface?.props.importantForAccessibility, 'no-hide-descendants');
-    assert.ok(
-      renderer?.root
-        .findAllByType('Text' as ElementType)
-        .some(
-          (text) =>
-            text.props.children === '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.',
-        ),
-    );
-    const retry = renderer?.root
-      .findAllByType('Pressable' as ElementType)
-      .find((pressable) => pressable.props.children === '다시 확인');
-    assert.ok(retry);
-    await act(async () => retry.props.onPress());
-    assert.equal(retryCount, 1);
-    assert.equal(closeCount, 0);
-    assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
-
-    await act(async () => composerProps?.onRequestClose?.());
-    confirmation = renderer?.root.findByProps({ role: 'alertdialog' });
-    assert.ok(confirmation);
-    const close = renderer?.root
-      .findAllByType('Pressable' as ElementType)
-      .find((pressable) => pressable.props.children === '닫기');
-    assert.ok(close);
-    await act(async () => close.props.onPress());
-    assert.equal(closeCount, 1);
   });
 
   it('Native back은 제출 중에는 닫지 않는다', async () => {

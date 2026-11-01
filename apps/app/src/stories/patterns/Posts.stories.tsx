@@ -974,14 +974,17 @@ const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 
 type PostComposerCreatePostInput = PostComposerCreatePostMutation$variables['input'];
 
+let generatedPostRequestIdSequence = 0;
+
 function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$variables) {
   const { input } = variables;
   const authorProfile = [composerProfile, alternateComposerProfile].find(
     (candidate) => candidate.id === input.actorProfileId,
   );
-  if (!input.requestId || !authorProfile) {
-    throw new Error('Accepted Post request fixture requires its request and actor IDs.');
+  if (!authorProfile) {
+    throw new Error('Accepted Post request fixture requires its actor ID.');
   }
+  const requestId = `00000000-0000-4000-8000-${String(++generatedPostRequestIdSequence).padStart(12, '0')}`;
 
   return {
     data: {
@@ -991,7 +994,7 @@ function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$va
           authorProfile,
           bodyText: input.bodyText,
           contentWarning: input.contentWarning ?? null,
-          id: `post-request-${input.requestId}`,
+          id: `post-request-${requestId}`,
           media: (input.media ?? []).map((item) => ({
             __typename: 'Media',
             altText: item.altText ?? null,
@@ -999,7 +1002,7 @@ function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$va
             url: postMediaImageUri,
           })),
           post: null,
-          requestId: input.requestId,
+          requestId,
           sensitiveMedia: input.sensitiveMedia ?? false,
           status: 'QUEUED',
         },
@@ -3150,6 +3153,7 @@ const postListPaginationRelayData = {
 };
 const meta = {
   beforeEach: () => {
+    generatedPostRequestIdSequence = 0;
     mocked(trackAnalytics).mockClear();
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
@@ -3621,7 +3625,6 @@ export const HomePostPrependAndPaginationShareConnection: Story = {
       actorProfileId: composerProfile.id,
       bodyText: 'Home에 새로 작성한 게시글',
       media: [],
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
@@ -4888,7 +4891,6 @@ export const QuoteComposerListIntegration: Story = {
       bodyText: '실제 메뉴에서 작성한 인용입니다.',
       media: [],
       repostSourceId: shortPost.id,
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
@@ -6243,7 +6245,6 @@ export const PostDetailReplyTargetedRefetch: Story = {
       bodyText: '@kosmo 현재 상세에 반영할 Reply',
       media: [],
       replyParentId: routeCurrentPost.id,
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
@@ -7350,7 +7351,6 @@ export const ComposerMediaUploadInteraction: Story = {
             mediaId,
           })),
         ],
-        requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
         sensitiveMedia: true,
         visibility: 'UNLISTED',
       });
@@ -7829,7 +7829,6 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
       actorProfileId: composerProfile.id,
       bodyText: '스토리에서 작성한 게시글입니다.',
       media: [],
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'PUBLIC',
     });
@@ -7877,7 +7876,6 @@ export const ComposerKeyboardSubmitInteraction: Story = {
       actorProfileId: composerProfile.id,
       bodyText: 'modifier 없는 Enter는 줄바꿈으로 남습니다.\nCommand+Enter로 제출한 게시글입니다.',
       media: [],
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
@@ -7885,11 +7883,9 @@ export const ComposerKeyboardSubmitInteraction: Story = {
       actorProfileId: composerProfile.id,
       bodyText: 'Control+Enter로 제출한 게시글입니다.',
       media: [],
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
-    expect(secondInput.requestId).not.toBe(firstInput.requestId);
     expect(firstInput).not.toHaveProperty('mentions');
     expect(secondInput).not.toHaveProperty('mentions');
     expect(firstInput).not.toHaveProperty('replyParentId');
@@ -8107,8 +8103,10 @@ export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     await userEvent.type(body, '생성되지 않으면 보존할 본문입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('button', { name: '접수 다시 확인' })).resolves.toBeVisible();
-    expect(canvas.queryByRole('textbox', { name: '게시글 본문' })).not.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
+    );
+    expect(body).toHaveValue('생성되지 않으면 보존할 본문입니다.');
     expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1);
     const originalInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
       .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
@@ -8116,19 +8114,12 @@ export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
       actorProfileId: composerProfile.id,
       bodyText: '생성되지 않으면 보존할 본문입니다.',
       media: [],
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
+    expect(originalInput).not.toHaveProperty('requestId');
     expect(originalInput).not.toHaveProperty('replyParentId');
     expect(originalInput).not.toHaveProperty('repostSourceId');
-    await userEvent.click(canvas.getByRole('button', { name: '접수 다시 확인' }));
-    await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(2));
-    const retriedInput = postComposerMutationRequestObserver.mock.calls[1]?.[1]
-      .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
-    expect(retriedInput).toEqual(originalInput);
-    expect(canvas.getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ComposerStory />,
@@ -8152,10 +8143,10 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '오류가 나도 보존할 답글입니다.');
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
-    await expect(
-      within(dialog).findByRole('button', { name: '접수 다시 확인' }),
-    ).resolves.toBeVisible();
-    expect(within(dialog).queryByRole('textbox', { name: '답글 본문' })).not.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
+    );
+    expect(body).toHaveValue('@kosmo 오류가 나도 보존할 답글입니다.');
     expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1);
     const originalInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
       .input as PostComposerCreatePostInput &
@@ -8165,25 +8156,11 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
       bodyText: '@kosmo 오류가 나도 보존할 답글입니다.',
       media: [],
       replyParentId: shortPost.id,
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
+    expect(originalInput).not.toHaveProperty('requestId');
     expect(originalInput).not.toHaveProperty('repostSourceId');
-    await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
-    const closeWarning = await screen.findByRole('alertdialog', { name: '게시 요청 결과' });
-    expect(closeWarning).toHaveTextContent(
-      '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.',
-    );
-    await userEvent.click(within(closeWarning).getByRole('button', { name: '다시 확인' }));
-    await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(2));
-    const retriedInput = postComposerMutationRequestObserver.mock.calls[1]?.[1]
-      .input as PostComposerCreatePostInput &
-      Readonly<{ replyParentId: string; visibility: string }>;
-    expect(retriedInput).toEqual(originalInput);
-    expect(within(dialog).getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
-    expect(within(dialog).queryByRole('textbox', { name: '답글 본문' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ReplyModalPresentationStory />,
@@ -8212,7 +8189,6 @@ export const ComposerReplyMutationContract: Story = {
       bodyText: '부모 게시물에 작성한 답글입니다.',
       media: [],
       replyParentId: 'post-parent',
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'FOLLOWERS',
     });
@@ -8279,7 +8255,6 @@ export const ComposerReplyMediaMutationContract: Story = {
           },
         ],
         replyParentId: 'post-parent',
-        requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
         sensitiveMedia: true,
         visibility: 'UNLISTED',
       });
@@ -8405,43 +8380,47 @@ export const ComposerReplyContextIsolation: Story = {
       bodyText: '이전 Parent의 늦은 답글',
       media: [],
       replyParentId: 'post-parent-a',
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
+    expect(originalInput).not.toHaveProperty('requestId');
     await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
 
     await waitFor(() =>
       expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
     );
-    await expect(canvas.findByRole('button', { name: '접수 다시 확인' })).resolves.toBeVisible();
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
-    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).not.toBeInTheDocument();
-    expect(canvas.getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
+    let currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    expect(currentBody).toHaveValue('');
     expect(
       JSON.parse(canvas.getByTestId('reply-context-request-log').textContent ?? '[]'),
     ).toHaveLength(1);
 
-    await userEvent.click(canvas.getByRole('button', { name: '접수 다시 확인' }));
+    await userEvent.type(currentBody, '새 Parent의 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
     await waitFor(() => {
       const requests = JSON.parse(
         canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
       ) as ReplyComposerRequest[];
       expect(requests).toHaveLength(2);
     });
-    const retriedInput = (
+    const currentInput = (
       JSON.parse(
         canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
       ) as ReplyComposerRequest[]
     )[1]!;
-    expect(retriedInput).toEqual(originalInput);
-    expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
+    expect(currentInput).toMatchObject({
+      actorProfileId: alternateComposerProfile.id,
+      bodyText: '새 Parent의 답글',
+      replyParentId: 'post-parent-b',
+    });
+    expect(currentInput).not.toHaveProperty('requestId');
 
     await waitFor(() =>
       expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('1'),
     );
-    const currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
     await waitFor(() =>
       expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
     );
@@ -9135,13 +9114,11 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await userEvent.type(body, 'null 응답 뒤 유지할 인용');
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
-    await expect(
-      within(dialog).findByRole('button', { name: '접수 다시 확인' }),
-    ).resolves.toBeVisible();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
+    );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
-    expect(
-      within(dialog).queryByRole('textbox', { name: '인용 게시글 본문' }),
-    ).not.toBeInTheDocument();
+    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
     const originalInput = quoteMutationRequestObserver.mock.calls[0]?.[1]
       .input as PostComposerCreatePostInput &
       Readonly<{ repostSourceId: string; visibility: string }>;
@@ -9150,27 +9127,11 @@ export const QuoteModalNullFailureLifecycle: Story = {
       bodyText: 'null 응답 뒤 유지할 인용',
       media: [],
       repostSourceId: shortPost.id,
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });
+    expect(originalInput).not.toHaveProperty('requestId');
     expect(originalInput).not.toHaveProperty('replyParentId');
-    await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
-    const closeWarning = await screen.findByRole('alertdialog', { name: '게시 요청 결과' });
-    expect(closeWarning).toHaveTextContent(
-      '접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.',
-    );
-    await userEvent.click(within(closeWarning).getByRole('button', { name: '다시 확인' }));
-    await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
-    const retriedInput = quoteMutationRequestObserver.mock.calls[1]?.[1]
-      .input as PostComposerCreatePostInput &
-      Readonly<{ repostSourceId: string; visibility: string }>;
-    expect(retriedInput).toEqual(originalInput);
-    expect(within(dialog).getByRole('button', { name: '접수 다시 확인' })).toBeVisible();
-    expect(
-      within(dialog).queryByRole('textbox', { name: '인용 게시글 본문' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ReplyModalPresentationStory mode="quote" />,
@@ -9309,7 +9270,6 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
       bodyText: '@kosmo 목록에서 작성한 답글',
       media: [],
       replyParentId: shortPost.id,
-      requestId: expect.stringMatching(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i),
       sensitiveMedia: false,
       visibility: 'UNLISTED',
     });

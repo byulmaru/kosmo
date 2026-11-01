@@ -1,20 +1,18 @@
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { randomUUID } from 'expo-crypto';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
 import { commitLocalUpdate } from 'relay-runtime';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
 import { Form } from '@/components/ui/Form';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
-import { fontFamilies, spacing, textStyles } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
 import {
@@ -57,7 +55,6 @@ type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
 const submitFailureMessage = '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.';
-const postRequestUncertainMessage = '접수 결과를 확인하지 못했어요.';
 
 function postRequestSubmissionError(error: unknown): { code: string; field?: string } | null {
   if (typeof error !== 'object' || error === null || !('extensions' in error)) {
@@ -74,15 +71,6 @@ function postRequestSubmissionError(error: unknown): { code: string; field?: str
       : {}),
   };
 }
-
-type PostRequestSubmission = Readonly<{
-  contextGeneration: number;
-  environmentGeneration: number | null;
-  input: PostComposerCreatePostMutation['variables']['input'];
-  ownerAccountId: string | null;
-  requestId: string;
-  uncertain: boolean;
-}>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -152,7 +140,6 @@ type PostComposerBaseProps = {
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onPostRequestAccepted?: () => void;
-  onPostRequestUncertainChange?: (uncertain: boolean, retry?: () => void) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
@@ -220,8 +207,6 @@ export function PostComposerController({
     contextKeyRef.current = contextKey;
     contextGenerationRef.current += 1;
   }
-  const [pendingSubmission, setPendingSubmission] = useState<PostRequestSubmission | null>(null);
-
   const contentsKey = [contextGenerationRef.current, environmentGenerationRef?.current ?? 0].join(
     ':',
   );
@@ -231,10 +216,8 @@ export function PostComposerController({
     currentAccountIdRef,
     environmentGenerationRef,
     mentionCandidates: props.mentionCandidates,
-    pendingSubmission,
     profileKey,
     profiles,
-    setPendingSubmission,
   };
   const contentsProps: PostComposerContentsInputProps = replyParentId
     ? { ...contentsCommonProps, replyParentId, replyParentVisibility }
@@ -257,8 +240,6 @@ type PostComposerContentsCommonProps = Omit<PostComposerBaseProps, 'profile' | '
   profileKey: PostComposer_profile$key;
   profiles: readonly PostComposerProfileRef[];
   replyContext?: ReactNode;
-  pendingSubmission: PostRequestSubmission | null;
-  setPendingSubmission: (submission: PostRequestSubmission | null) => void;
 };
 
 type PostComposerContentsRelationshipProps =
@@ -284,8 +265,6 @@ function PostComposerContents({
   initialContentWarning,
   onPostCreated,
   onPostRequestAccepted,
-  onPostRequestUncertainChange,
-  pendingSubmission,
   accountId,
   onRequestClose,
   onSubmittingChange,
@@ -300,7 +279,6 @@ function PostComposerContents({
   replyParentVisibility,
   repostSourceId,
   renderSurface,
-  setPendingSubmission,
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
@@ -434,17 +412,6 @@ function PostComposerContents({
     (bodyText.length === 0 && media.items.length === 0) ||
     media.hasPendingMedia ||
     remaining < 0;
-  const canRecheckSubmission =
-    pendingSubmission !== null &&
-    accountId !== null &&
-    accountId === pendingSubmission.ownerAccountId;
-  const notifiedUncertainContextRef = useRef<{
-    accountId: string | null;
-    contextGeneration: number;
-    environmentGeneration: number | null;
-    requestId: string;
-  } | null>(null);
-
   useEffect(() => {
     if (visibilityProfileIdRef.current !== profile.id) {
       visibilityProfileIdRef.current = profile.id;
@@ -495,21 +462,11 @@ function PostComposerContents({
     };
   }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
 
-  const submit = (retrySnapshot?: PostRequestSubmission) => {
-    const retryCandidate = retrySnapshot ?? pendingSubmission;
-    if (
-      retryCandidate &&
-      (currentAccountIdRef.current === null ||
-        currentAccountIdRef.current !== retryCandidate.ownerAccountId)
-    ) {
+  const submit = () => {
+    if (disabled) {
       return;
     }
-
-    const wasUncertain = retryCandidate?.uncertain ?? false;
-    if (!retryCandidate && disabled) {
-      return;
-    }
-    const submissionOwnerAccountId = retryCandidate ? retryCandidate.ownerAccountId : accountId;
+    const submissionOwnerAccountId = accountId;
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current ?? null;
     const submissionGuardGeneration = contextGuard?.current;
@@ -522,58 +479,38 @@ function PostComposerContents({
       contextGuard?.current === submissionGuardGeneration &&
       currentAccountIdRef.current === submissionOwnerAccountId;
 
-    let submission = retryCandidate;
-    if (!submission) {
-      try {
-        const requestId = randomUUID();
-        const submittedMedia = media.getPostRequestMedia();
-        const frozenMentions = Object.freeze(
-          mentions.map((mention) => Object.freeze({ ...mention })),
-        );
-        submission = Object.freeze({
-          contextGeneration: submissionGeneration,
-          environmentGeneration: submissionEnvironmentGeneration,
-          input: Object.freeze({
-            requestId,
-            ...createPostComposerMutationInput(
-              bodyText,
-              visibility,
-              replyParentId,
-              contentWarningText,
-              repostSourceId,
-              frozenMentions,
-            ),
-            actorProfileId: profile.id,
-            media: submittedMedia,
-            sensitiveMedia: media.sensitiveMedia,
-          }),
-          ownerAccountId: accountId,
-          requestId,
-          uncertain: false,
-        });
-      } catch {
-        if (isCurrentSubmission()) {
-          showToast(submitFailureMessage, { tone: 'danger' });
-        }
-        return;
+    let input: PostComposerCreatePostMutation['variables']['input'];
+    try {
+      const submittedMedia = media.getPostRequestMedia();
+      input = {
+        ...createPostComposerMutationInput(
+          bodyText,
+          visibility,
+          replyParentId,
+          contentWarningText,
+          repostSourceId,
+          mentions,
+        ),
+        actorProfileId: profile.id,
+        media: submittedMedia,
+        sensitiveMedia: media.sensitiveMedia,
+      };
+    } catch {
+      if (isCurrentSubmission()) {
+        showToast(submitFailureMessage, { tone: 'danger' });
       }
+      return;
     }
 
-    const finalSubmission = Object.freeze({
-      ...submission,
-      uncertain: wasUncertain || submission.uncertain,
-    });
-    setPendingSubmission(finalSubmission);
-
     commit({
-      variables: { input: finalSubmission.input },
+      variables: { input },
       onCompleted: (response, errors) => {
         if (!isCurrentSubmission()) {
           return;
         }
         const acceptedRequest = response?.createPost?.request;
-        if (acceptedRequest?.id && acceptedRequest.requestId === finalSubmission.requestId) {
-          const actorProfileId = finalSubmission.input.actorProfileId;
+        if (acceptedRequest?.id) {
+          const actorProfileId = input.actorProfileId;
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {
               prependPostRequestToLoadedPages(store, actorProfileId, acceptedRequest.id);
@@ -594,8 +531,6 @@ function PostComposerContents({
               });
             });
           }
-          setPendingSubmission(null);
-          onPostRequestUncertainChange?.(false);
           onBodyReset();
           setContentWarning('');
           setContentWarningExpanded(false);
@@ -635,7 +570,7 @@ function PostComposerContents({
             'VALIDATION',
           ].includes(code),
         );
-        if (definiteDenial && !wasUncertain) {
+        if (definiteDenial) {
           const unavailableMediaIndex = submissionErrors
             .filter(
               (error) =>
@@ -647,105 +582,22 @@ function PostComposerContents({
           const unavailableMediaId =
             unavailableMediaIndex === undefined
               ? undefined
-              : finalSubmission.input.media?.[unavailableMediaIndex]?.mediaId;
+              : input.media?.[unavailableMediaIndex]?.mediaId;
           if (unavailableMediaId) {
             media.requirePostRequestMediaReselection(unavailableMediaId);
           }
-          setPendingSubmission(null);
-          onPostRequestUncertainChange?.(false);
-          showToast(submitFailureMessage, { tone: 'danger' });
-          return;
         }
 
-        const uncertainSubmission = Object.freeze({ ...finalSubmission, uncertain: true });
-        setPendingSubmission(uncertainSubmission);
-        notifyUncertainSubmission(uncertainSubmission);
+        showToast(submitFailureMessage, { tone: 'danger' });
       },
       onError: () => {
         if (!isCurrentSubmission()) {
           return;
         }
-        const uncertainSubmission = Object.freeze({ ...finalSubmission, uncertain: true });
-        setPendingSubmission(uncertainSubmission);
-        notifyUncertainSubmission(uncertainSubmission);
+        showToast(submitFailureMessage, { tone: 'danger' });
       },
     });
   };
-
-  const notifyUncertainSubmission = (submission: PostRequestSubmission) => {
-    const currentContext = {
-      accountId: currentAccountIdRef.current,
-      contextGeneration: contextGenerationRef.current,
-      environmentGeneration: environmentGenerationRef?.current ?? null,
-      requestId: submission.requestId,
-    };
-    notifiedUncertainContextRef.current = currentContext;
-    onPostRequestUncertainChange?.(
-      true,
-      currentContext.accountId !== null && currentContext.accountId === submission.ownerAccountId
-        ? () => void submit(submission)
-        : undefined,
-    );
-  };
-
-  useEffect(() => {
-    if (
-      pendingSubmission === null ||
-      pendingSubmission.uncertain ||
-      (pendingSubmission.contextGeneration === contextGenerationRef.current &&
-        pendingSubmission.environmentGeneration === (environmentGenerationRef?.current ?? null) &&
-        currentAccountIdRef.current === pendingSubmission.ownerAccountId)
-    ) {
-      return;
-    }
-
-    const uncertainSubmission = Object.freeze({ ...pendingSubmission, uncertain: true });
-    setPendingSubmission(uncertainSubmission);
-    notifyUncertainSubmission(uncertainSubmission);
-  }, [
-    accountId,
-    contextGenerationRef,
-    environmentGenerationRef,
-    notifyUncertainSubmission,
-    onPostRequestUncertainChange,
-    pendingSubmission,
-    submit,
-  ]);
-
-  const contextGeneration = contextGenerationRef.current;
-  const currentEnvironmentGeneration = environmentGenerationRef?.current ?? null;
-  useLayoutEffect(() => {
-    if (pendingSubmission === null || !pendingSubmission.uncertain) {
-      notifiedUncertainContextRef.current = null;
-      return;
-    }
-
-    const currentContext = {
-      accountId: currentAccountIdRef.current,
-      contextGeneration,
-      environmentGeneration: currentEnvironmentGeneration,
-      requestId: pendingSubmission.requestId,
-    };
-    const previousContext = notifiedUncertainContextRef.current;
-    if (
-      previousContext?.accountId === currentContext.accountId &&
-      previousContext.contextGeneration === currentContext.contextGeneration &&
-      previousContext.environmentGeneration === currentContext.environmentGeneration &&
-      previousContext.requestId === currentContext.requestId
-    ) {
-      return;
-    }
-
-    notifyUncertainSubmission(pendingSubmission);
-  }, [
-    accountId,
-    contextGeneration,
-    currentEnvironmentGeneration,
-    notifyUncertainSubmission,
-    onPostRequestUncertainChange,
-    pendingSubmission,
-    submit,
-  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -780,12 +632,6 @@ function PostComposerContents({
   }, [focusOnMount]);
 
   const productionSurface: PostComposerVisibility = visibility;
-  const showRecovery =
-    pendingSubmission !== null &&
-    (pendingSubmission.uncertain ||
-      pendingSubmission.contextGeneration !== contextGenerationRef.current ||
-      pendingSubmission.environmentGeneration !== (environmentGenerationRef?.current ?? null) ||
-      pendingSubmission.ownerAccountId !== accountId);
   const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
   const pickerProfiles =
     selectedProfileKey && !profiles.includes(selectedProfileKey)
@@ -801,14 +647,10 @@ function PostComposerContents({
             ? '인용 게시글 작성'
             : '게시글 작성'
       }
-      accessibilityElementsHidden={showRecovery ? true : undefined}
-      aria-hidden={showRecovery ? true : undefined}
       onSubmit={() => submit()}
-      pointerEvents={showRecovery ? 'none' : undefined}
       style={[
         presentation !== undefined ? styles.productionForm : styles.standaloneForm,
         (resolvedPresentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
-        showRecovery && styles.hiddenPresentation,
       ]}
       submitOnModEnter
     >
@@ -1010,53 +852,13 @@ function PostComposerContents({
     </Form>
   );
 
-  const requestRecoveryForm = showRecovery ? (
-    <Form
-      accessibilityLabel="게시 요청 확인"
-      onSubmit={() => void submit(pendingSubmission)}
-      style={[styles.productionForm, styles.requestRecoveryForm]}
-    >
-      <View style={styles.requestRecoveryContent}>
-        <Text accessibilityLiveRegion="polite" style={styles.requestRecoveryText}>
-          {submitting
-            ? '게시 요청을 보내고 있어요.'
-            : canRecheckSubmission
-              ? postRequestUncertainMessage
-              : '요청을 제출한 계정으로 전환해 주세요.'}
-        </Text>
-        <Button
-          disabled={submitting || !canRecheckSubmission}
-          loading={submitting}
-          onPress={() => void submit(pendingSubmission)}
-        >
-          {submitting ? '확인 중' : '접수 다시 확인'}
-        </Button>
-      </View>
-    </Form>
-  ) : null;
-  const visibleForm = (
-    <>
-      {form}
-      {requestRecoveryForm}
-    </>
-  );
-
-  return renderSurface
-    ? renderSurface({
-        form: visibleForm,
-        mediaEditorOpen: mediaEditor !== null && !showRecovery,
-      })
-    : visibleForm;
+  return renderSurface ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null }) : form;
 }
 
 const styles = StyleSheet.create({
   productionForm: { flexShrink: 1, minHeight: 0, width: '100%' },
   standaloneForm: { width: '100%' },
-  hiddenPresentation: { display: 'none' },
   productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   surfaceRoot: { flex: 1, minHeight: 0 },
   editorScroll: { flexShrink: 1, minHeight: 0 },
-  requestRecoveryForm: { flex: 1, justifyContent: 'center' },
-  requestRecoveryContent: { alignItems: 'center', gap: spacing.md, padding: spacing.lg },
-  requestRecoveryText: { ...textStyles.uiCopyM, fontFamily: fontFamilies.ui, textAlign: 'center' },
 });

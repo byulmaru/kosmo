@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
@@ -52,9 +51,6 @@ export function PostComposerHost({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
-  const [uncertainRequest, setUncertainRequest] = useState<{ retry?: () => void } | null>(null);
-  const [uncertainCloseOpen, setUncertainCloseOpen] = useState(false);
-  const uncertainCloseRef = useRef<View>(null);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -72,14 +68,9 @@ export function PostComposerHost({
       if (reason !== 'created' && submitting) {
         return;
       }
-      if (reason !== 'created' && uncertainRequest !== null) {
-        setUncertainCloseOpen(true);
-        return;
-      }
-      setUncertainCloseOpen(false);
       onRequestClose(reason === 'created' ? 'created' : 'dismiss');
     },
-    [onRequestClose, submitting, uncertainRequest],
+    [onRequestClose, submitting],
   );
   const requestNativeBack = useCallback(() => {
     if (submitting) {
@@ -96,77 +87,11 @@ export function PostComposerHost({
   }, []);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
-    focusScopeRef: uncertainCloseOpen ? uncertainCloseRef : undefined,
     onRequestClose: requestClose,
-    open: overlayVisible || uncertainCloseOpen,
+    open: overlayVisible,
     preferredFocusRef: expandControlRef,
     triggerFocusRef,
   });
-
-  useEffect(() => {
-    if (!uncertainCloseOpen || !web || typeof document === 'undefined') {
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      const confirmation = uncertainCloseRef.current as unknown as HTMLElement | null;
-      confirmation?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [uncertainCloseOpen, web]);
-
-  const uncertainCloseConfirmation = uncertainCloseOpen ? (
-    <View style={[styles.uncertainCloseBackdrop, { backgroundColor: theme.overlayScrim }]}>
-      <View
-        accessibilityLabel="접수 결과 확인"
-        accessibilityViewIsModal
-        ref={uncertainCloseRef}
-        role="alertdialog"
-        style={[
-          styles.uncertainCloseDialog,
-          elevation.overlay,
-          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
-        ]}
-      >
-        <Text style={[styles.uncertainCloseText, { color: theme.foregroundPrimary }]}>
-          접수 결과를 확인하지 못했어요. 닫아도 게시될 수 있어요.
-        </Text>
-        <View style={styles.uncertainCloseActions}>
-          <Button
-            disabled={submitting || uncertainRequest?.retry === undefined}
-            onPress={() => {
-              const retry = uncertainRequest?.retry;
-              setUncertainCloseOpen(false);
-              retry?.();
-              if (web && typeof document !== 'undefined') {
-                requestAnimationFrame(() => {
-                  const surface = dialogRef.current as unknown as HTMLElement | null;
-                  if (
-                    surface &&
-                    document.contains(surface) &&
-                    surface.getClientRects().length > 0
-                  ) {
-                    surface.focus();
-                  }
-                });
-              }
-            }}
-            tone="secondary"
-          >
-            다시 확인
-          </Button>
-          <Button
-            onPress={() => {
-              setUncertainCloseOpen(false);
-              onRequestClose('dismiss');
-            }}
-            tone="danger"
-          >
-            닫기
-          </Button>
-        </View>
-      </View>
-    </View>
-  ) : null;
 
   const header =
     mode === 'overlay' ? (
@@ -193,9 +118,6 @@ export function PostComposerHost({
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
         onPostRequestAccepted={() => requestClose('created')}
-        onPostRequestUncertainChange={(uncertain, retry) =>
-          setUncertainRequest(uncertain ? { retry } : null)
-        }
         onSubmittingChange={setSubmitting}
         profile={profile}
         profiles={profiles}
@@ -208,7 +130,6 @@ export function PostComposerHost({
             onAccessibilityEscape={requestNativeBack}
             ref={dialogRef}
             role={overlayVisible ? 'dialog' : undefined}
-            tabIndex={web ? -1 : undefined}
             style={[
               styles.dialog,
               mode !== 'rail' && !nativeMobile && elevation.overlay,
@@ -223,9 +144,6 @@ export function PostComposerHost({
             testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
           >
             <View
-              accessibilityElementsHidden={uncertainCloseOpen}
-              aria-hidden={uncertainCloseOpen || undefined}
-              importantForAccessibility={uncertainCloseOpen ? 'no-hide-descendants' : 'auto'}
               style={[
                 styles.clippedSurface,
                 mode === 'overlay' ? { borderRadius: radii.lg } : null,
@@ -250,7 +168,6 @@ export function PostComposerHost({
                 </KeyboardAvoidingView>
               </OverlayPortalProvider>
             </View>
-            {uncertainCloseConfirmation}
           </View>
         )}
         {...(mode === 'rail'
@@ -367,25 +284,4 @@ const styles = StyleSheet.create({
   title: textStyles.uiHeadingS,
   composerFrame: { flexShrink: 1, minHeight: 0 },
   composerFrameFill: { flex: 1 },
-  uncertainCloseBackdrop: {
-    alignItems: 'center',
-    bottom: 0,
-    justifyContent: 'center',
-    left: 0,
-    padding: spacing.lg,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    zIndex: 10,
-  },
-  uncertainCloseDialog: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    gap: spacing.lg,
-    maxWidth: 420,
-    padding: spacing.xl,
-    width: '100%',
-  },
-  uncertainCloseText: textStyles.uiCopyM,
-  uncertainCloseActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });

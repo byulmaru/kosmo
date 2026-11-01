@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
@@ -121,11 +120,14 @@ let mutationCalls: Array<{
 }> = [];
 let sessionAccountId: string | null = 'account-1';
 let sessionSelectedProfileId: string | null = 'profile-a';
+const serverGeneratedRequestId = (callIndex: number) =>
+  `00000000-0000-4000-8000-${String(callIndex + 1).padStart(12, '0')}`;
+
 const acceptedRequestResponse = (callIndex: number) => ({
   createPost: {
     request: {
       id: `post-request-node-${callIndex}`,
-      requestId: String(mutationCalls[callIndex]?.variables.input.requestId),
+      requestId: serverGeneratedRequestId(callIndex),
     },
   },
 });
@@ -246,7 +248,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('expo-crypto', { randomUUID });
 mockModule('react-native', {
   AppState: {
     addEventListener: (_eventType: string, listener: (nextState: string) => void) => {
@@ -547,7 +548,6 @@ describe('PostComposer submit handler', () => {
       nativeEvent: {
         actorProfileId: 'event-actor',
         bodyText: '이벤트 본문',
-        requestId: 'event-request-id',
       },
     };
     const onSubmit = targetProps?.onSubmit;
@@ -558,8 +558,7 @@ describe('PostComposer submit handler', () => {
 
     const submittedInput = mutationCalls[0]?.variables.input;
     assert.equal(mutationCalls.length, 1);
-    assert.equal(typeof submittedInput?.requestId, 'string');
-    assert.notEqual(submittedInput?.requestId, pressEvent.nativeEvent.requestId);
+    assert.equal(Object.hasOwn(submittedInput ?? {}, 'requestId'), false);
     assert.equal(submittedInput?.bodyText, '버튼에서 제출할 본문');
     assert.equal(submittedInput?.actorProfileId, profileA.id);
   });
@@ -598,7 +597,7 @@ describe('PostComposer character count', () => {
 
 describe('PostComposer request acknowledgement cache projection', () => {
   for (const status of ['QUEUED', 'PUBLISHED'] as const) {
-    it(`projects a ${status} retry into the appropriate request and Home pages`, async () => {
+    it(`projects a ${status} acknowledgement into the appropriate request and Home pages`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
       const createdPosts: Array<{ id: string }> = [];
@@ -620,13 +619,9 @@ describe('PostComposer request acknowledgement cache projection', () => {
       seedPage('profile-b', POST_REQUEST_HOME_ACTIVE_STATUSES);
       seedHomeTimeline(environment, ['post-home-existing']);
 
-      let retryUncertainRequest: (() => void) | undefined;
       const composerProps = (profile: typeof profileA) => ({
         onPostCreated: (post: { id: string }) => createdPosts.push(post),
         onPostRequestAccepted: () => acceptedCount++,
-        onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
-          retryUncertainRequest = uncertain ? retry : undefined;
-        },
         onRequestClose: () => undefined,
         presentation: 'overlay' as const,
         profile: profile as never,
@@ -638,23 +633,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
       await act(async () => targetProps?.onBodyChange('접수된 본문'));
       await act(async () => targetProps?.onSubmit());
 
-      const originalSubmission = mutationCalls[0]?.variables;
-      assert.ok(originalSubmission);
-      assert.equal(originalSubmission.input.actorProfileId, profileA.id);
-      const requestId = originalSubmission.input.requestId;
-      assert.ok(typeof requestId === 'string');
-      await act(async () => mutationCalls[0]?.onError(new Error('접수 결과 확인 불가')));
-      assert.ok(retryUncertainRequest);
-
-      await act(async () => {
-        renderer?.update(createElement(PostComposer, composerProps(profileB)));
-      });
-      assert.ok(retryUncertainRequest);
-      await act(async () => retryUncertainRequest?.());
-
-      const call = mutationCalls[1];
+      const call = mutationCalls[0];
       assert.ok(call);
-      assert.deepEqual(call.variables, originalSubmission);
+      assert.equal(call.variables.input.actorProfileId, profileA.id);
+      const requestId = serverGeneratedRequestId(0);
       const variables = call.variables as PostComposerCreatePostMutation['variables'];
       const mutationOperation = createOperationDescriptor(
         getRequest(CreatePostMutation),
@@ -761,12 +743,15 @@ describe('PostComposer request acknowledgement cache projection', () => {
         });
         assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
 
+        await act(async () => {
+          renderer?.update(createElement(PostComposer, composerProps(profileB)));
+        });
         await act(async () => targetProps?.onBodyChange('프로필 B에서 작성한 본문'));
         await act(async () => targetProps?.onSubmit());
 
-        const authorBCall = mutationCalls[2];
+        const authorBCall = mutationCalls[1];
         assert.ok(authorBCall);
-        const authorBRequestId = String(authorBCall.variables.input.requestId);
+        const authorBRequestId = serverGeneratedRequestId(1);
         const authorBRequestNodeId = 'post-request-node-profile-b';
         const authorBPostId = 'post-published-profile-b';
         assert.equal(authorBCall.variables.input.actorProfileId, profileB.id);
@@ -854,7 +839,7 @@ it('requires a published Post ID and a completion handler before skipping the re
   await act(async () => targetProps?.onSubmit());
   const callWithNullPost = mutationCalls.at(-1);
   assert.ok(callWithNullPost);
-  const nullPostRequestId = String(callWithNullPost.variables.input.requestId);
+  const nullPostRequestId = serverGeneratedRequestId(mutationCalls.length - 1);
   await act(async () =>
     callWithNullPost.onCompleted({
       createPost: {
@@ -882,7 +867,7 @@ it('requires a published Post ID and a completion handler before skipping the re
   await act(async () => targetProps?.onSubmit());
   const callWithoutCreatedHandler = mutationCalls.at(-1);
   assert.ok(callWithoutCreatedHandler);
-  const requestId = String(callWithoutCreatedHandler.variables.input.requestId);
+  const requestId = serverGeneratedRequestId(mutationCalls.length - 1);
   await act(async () =>
     callWithoutCreatedHandler.onCompleted({
       createPost: {
@@ -1143,7 +1128,7 @@ describe('PostComposer Reply visibility seed', () => {
 });
 
 describe('PostComposer local author', () => {
-  it('preserves the draft while switching author, sends the local id, isolates home, and unlocks failed media', async () => {
+  it('preserves the draft while switching author and reports errors after failed media unlocks', async () => {
     let editorFocusCount = 0;
     const editorRef = { current: { focus: () => editorFocusCount++ } };
     await act(async () => {
@@ -1205,13 +1190,7 @@ describe('PostComposer local author', () => {
     await act(async () => refreshMedia?.());
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
-    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
-    assert.ok(typeof requestId === 'string');
-    assert.match(
-      requestId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-    assert.deepEqual(submittedInput, {
+    assert.deepEqual(mutationCalls[0]!.variables.input, {
       bodyText: '보존할 본문',
       contentWarning: '보존할 CW',
       media: mediaValue.getPostRequestMedia(),
@@ -1220,14 +1199,9 @@ describe('PostComposer local author', () => {
       visibility: 'DIRECT',
     });
 
-    const toastCountBeforeUncertainError = toastCalls.length;
+    const toastCountBeforeError = toastCalls.length;
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
-    assert.equal(toastCalls.length, toastCountBeforeUncertainError);
-    assert.ok(
-      renderer?.root
-        .findAllByType('Button' as never)
-        .some((button) => button.props.children === '접수 다시 확인'),
-    );
+    assert.equal(toastCalls.length, toastCountBeforeError + 1);
     assert.equal(targetProps?.body, '보존할 본문');
     assert.equal(targetProps?.contentWarning, '보존할 CW');
     assert.equal(
@@ -1311,13 +1285,7 @@ describe('PostComposer local author', () => {
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
-    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
-    assert.ok(typeof requestId === 'string');
-    assert.match(
-      requestId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-    assert.deepEqual(submittedInput, {
+    assert.deepEqual(mutationCalls[0]!.variables.input, {
       actorProfileId: profileB.id,
       bodyText: '😀 @alice !',
       media: mediaValue.getPostRequestMedia(),
@@ -1356,13 +1324,7 @@ describe('PostComposer local author', () => {
     await act(async () => targetProps?.onSubmit());
 
     assert.equal(mutationCalls.length, 1);
-    const { requestId, ...submittedInput } = mutationCalls[0]!.variables.input;
-    assert.ok(typeof requestId === 'string');
-    assert.match(
-      requestId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-    assert.deepEqual(submittedInput, {
+    assert.deepEqual(mutationCalls[0]!.variables.input, {
       actorProfileId: profileA.id,
       bodyText: '@alice',
       media: mediaValue.getPostRequestMedia(),
@@ -1496,180 +1458,61 @@ describe('PostComposer local author', () => {
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
   });
 
-  it('keeps the original actor and request ID when retrying after an unknown outcome', async () => {
+  it('keeps the draft after a request error and submits again without a client request ID', async () => {
+    let acceptedCount = 0;
+    const createdPosts: Array<{ id: string }> = [];
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
-          onExpand: () => undefined,
+          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostRequestAccepted: () => acceptedCount++,
           onRequestClose: () => undefined,
-          presentation: 'rail',
+          presentation: 'overlay',
           profile: profileA as never,
-          profiles: candidates as never,
         }),
       );
     });
-    await act(async () => targetProps?.onBodyChange('첫 글'));
+    await act(async () => targetProps?.onBodyChange('오류 뒤 보존할 본문'));
+    await act(async () => targetProps?.onContentWarningChange('오류 뒤 보존할 CW'));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
     await act(async () => targetProps?.onSubmit());
-    const originalSubmission = mutationCalls[0]?.variables;
-    assert.equal(originalSubmission?.input.actorProfileId, profileA.id);
-    await act(async () => mutationCalls[0]?.onError(new Error('실패')));
-    assert.equal(reselectionMediaIds.length, 0);
-    assert.ok(
-      renderer?.root
-        .findAllByType('Button' as never)
-        .some((button) => button.props.children === '접수 다시 확인'),
-    );
 
-    await act(async () => {
-      renderer?.update(
-        createElement(PostComposer, {
-          onExpand: () => undefined,
-          onRequestClose: () => undefined,
-          presentation: 'rail',
-          profile: profileB as never,
-          profiles: candidates as never,
-        }),
-      );
-    });
-    const retry = renderer?.root
-      .findAllByType('Button' as never)
-      .find((button) => button.props.children === '접수 다시 확인');
-    assert.ok(retry);
-    await act(async () => retry.props.onPress());
-    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
-    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission?.input.requestId);
+    const firstCall = mutationCalls[0];
+    assert.ok(firstCall);
+    assert.equal(Object.hasOwn(firstCall.variables.input, 'requestId'), false);
+    await act(async () => firstCall.onError(new Error('acknowledgement lost')));
 
-    const retryRequestId = String(originalSubmission?.input.requestId);
-    await act(async () =>
-      mutationCalls[1]?.onCompleted(
-        {
-          createPost: {
-            request: { id: 'request-node-a', requestId: retryRequestId },
-          },
-        },
-        [{ message: 'ignored field error', extensions: { code: 'VALIDATION', field: 'mentions' } }],
-      ),
-    );
-    assert.deepEqual(toastCalls.at(-1), ['게시 요청을 접수했어요', { tone: 'success' }]);
+    assert.equal(targetProps?.body, '오류 뒤 보존할 본문');
+    assert.equal(targetProps?.contentWarning, '오류 뒤 보존할 CW');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
-      'PUBLIC',
-    );
-
-    await act(async () => targetProps?.onBodyChange('다음 글'));
-    await act(async () => targetProps?.onSubmit());
-    assert.equal(mutationCalls[2]?.variables.input.actorProfileId, profileB.id);
-    assert.equal(mutationCalls[2]?.variables.input.visibility, 'PUBLIC');
-  });
-
-  it('blocks an uncertain request recheck under another account and allows it after switching back', async () => {
-    let currentRetry: (() => void) | undefined;
-    let acceptedCount = 0;
-    const props = {
-      onPostRequestAccepted: () => acceptedCount++,
-      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
-        currentRetry = uncertain ? retry : undefined;
-      },
-      onRequestClose: () => undefined,
-      presentation: 'overlay' as const,
-      profile: profileA as never,
-    };
-
-    await act(async () => {
-      renderer = create(createElement(PostComposer, props));
-    });
-    await act(async () => targetProps?.onBodyChange('계정 A에 남겨 둘 본문'));
-    await act(async () => targetProps?.onSubmit());
-    const originalSubmission = mutationCalls[0]?.variables;
-    assert.ok(originalSubmission);
-    const originalRequestId = originalSubmission.input.requestId;
-    assert.ok(typeof originalRequestId === 'string');
-    await act(async () => mutationCalls[0]?.onError(new Error('결과 확인 불가')));
-
-    const staleRetry = currentRetry;
-    assert.ok(staleRetry);
-    const retryButton = () =>
-      renderer?.root
-        .findAllByType('Button' as never)
-        .find((button) => button.props.children === '접수 다시 확인');
-    assert.equal(retryButton()?.props.disabled, false);
-
-    sessionAccountId = 'account-2';
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, props));
-    });
-
-    assert.equal(retryButton()?.props.disabled, true);
-    assert.equal(currentRetry, undefined);
-    assert.ok(
-      renderer?.root
-        .findAllByType('Text' as never)
-        .some((text) => text.props.children === '요청을 제출한 계정으로 전환해 주세요.'),
-    );
-    const hiddenComposerForm = renderer?.root.findByProps({ accessibilityLabel: '게시글 작성' });
-    assert.equal(hiddenComposerForm?.props.accessibilityElementsHidden, true);
-    assert.equal(hiddenComposerForm?.props['aria-hidden'], true);
-    assert.equal(hiddenComposerForm?.props.pointerEvents, 'none');
-
-    await act(async () => staleRetry?.());
-    await act(async () => retryButton()?.props.onPress());
-    assert.equal(mutationCalls.length, 1);
-
-    sessionAccountId = 'account-1';
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, props));
-    });
-
-    assert.equal(retryButton()?.props.disabled, false);
-    assert.ok(currentRetry);
-    await act(async () => currentRetry?.());
-    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
-    assert.equal(mutationCalls[1]?.variables.input.requestId, originalRequestId);
-
-    sessionAccountId = 'account-2';
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, props));
-    });
-    await act(async () =>
-      mutationCalls[1]?.onCompleted({
-        createPost: {
-          request: { id: 'request-node-a', requestId: originalRequestId },
-        },
-      }),
+      'DIRECT',
     );
     assert.equal(acceptedCount, 0);
-    assert.equal(retryButton()?.props.disabled, true);
-    assert.equal(currentRetry, undefined);
+    assert.deepEqual(createdPosts, []);
+    assert.deepEqual(toastCalls.at(-1), [
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
+    assert.equal(mutationCalls.length, 1);
 
-    sessionAccountId = 'account-1';
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, props));
-    });
-    assert.equal(retryButton()?.props.disabled, false);
-    assert.ok(currentRetry);
-    await act(async () => currentRetry?.());
-    assert.deepEqual(mutationCalls[2]?.variables, originalSubmission);
-    await act(async () =>
-      mutationCalls[2]?.onCompleted({
-        createPost: {
-          request: { id: 'request-node-a', requestId: originalRequestId },
-        },
-      }),
-    );
+    await act(async () => targetProps?.onSubmit());
+    const secondCall = mutationCalls[1];
+    assert.ok(secondCall);
+    assert.equal(Object.hasOwn(secondCall.variables.input, 'requestId'), false);
+    assert.deepEqual(secondCall.variables.input, firstCall.variables.input);
+    await act(async () => secondCall.onCompleted(acceptedRequestResponse(1)));
+
     assert.equal(acceptedCount, 1);
+    assert.deepEqual(createdPosts, []);
+    assert.equal(targetProps?.body, '');
   });
 
-  it('marks a remounted request uncertain and ignores its stale actor response before rechecking', async () => {
-    let retryUncertainRequest: (() => void) | undefined;
+  it('ignores a mutation response after the composer actor and environment change', async () => {
     let acceptedCount = 0;
     relayEnvironmentGeneration = { current: 0 };
     const props = {
       onPostRequestAccepted: () => acceptedCount++,
-      onPostRequestUncertainChange: (uncertain: boolean, retry?: () => void) => {
-        if (uncertain) {
-          retryUncertainRequest = retry;
-        }
-      },
       onRequestClose: () => undefined,
       presentation: 'overlay' as const,
       profile: profileA as never,
@@ -1680,48 +1523,30 @@ describe('PostComposer local author', () => {
     });
     await act(async () => targetProps?.onBodyChange('첫 글'));
     await act(async () => targetProps?.onSubmit());
-    const originalSubmission = mutationCalls[0]?.variables;
-    assert.ok(originalSubmission);
+    const originalCall = mutationCalls[0];
+    assert.ok(originalCall);
+    assert.equal(originalCall.variables.input.actorProfileId, profileA.id);
+    assert.equal(Object.hasOwn(originalCall.variables.input, 'requestId'), false);
 
     await act(async () => {
       relayEnvironment = createRelayEnvironment();
       relayEnvironmentGeneration!.current += 1;
       renderer?.update(createElement(PostComposer, { ...props, profile: profileB as never }));
     });
-
-    assert.ok(retryUncertainRequest);
     await act(async () =>
-      mutationCalls[0]?.onCompleted({
+      originalCall.onCompleted({
         createPost: {
           request: {
             id: 'request-node-a',
-            requestId: String(originalSubmission.input.requestId),
+            requestId: serverGeneratedRequestId(0),
           },
         },
       }),
     );
+
     assert.equal(acceptedCount, 0);
-    assert.ok(
-      renderer?.root
-        .findAllByType('Button' as never)
-        .some((button) => button.props.children === '접수 다시 확인'),
-    );
-
-    await act(async () => retryUncertainRequest?.());
-    assert.deepEqual(mutationCalls[1]?.variables, originalSubmission);
-    assert.equal(mutationCalls[1]?.variables.input.actorProfileId, profileA.id);
-    assert.equal(mutationCalls[1]?.variables.input.requestId, originalSubmission.input.requestId);
-    await act(async () =>
-      mutationCalls[1]?.onCompleted({
-        createPost: {
-          request: {
-            id: 'request-node-a',
-            requestId: String(originalSubmission.input.requestId),
-          },
-        },
-      }),
-    );
-    assert.equal(acceptedCount, 1);
+    assert.equal(toastCalls.length, 0);
+    assert.equal(targetProps?.body, '');
   });
 });
 
