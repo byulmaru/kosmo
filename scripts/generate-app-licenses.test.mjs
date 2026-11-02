@@ -1,14 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
@@ -66,12 +58,6 @@ function updateManifest(packagePath, updates) {
     manifestPath,
     `${JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, 'utf8')), ...updates })}\n`,
   );
-}
-
-function linkInstalledPackage(root, name, packagePath) {
-  const linkPath = join(root, 'node_modules', ...name.split('/'));
-  mkdirSync(dirname(linkPath), { recursive: true });
-  symlinkSync(packagePath, linkPath, 'dir');
 }
 
 test('reports pnpm license failures written to stdout and stderr', (t) => {
@@ -339,7 +325,7 @@ test('rejects mismatched version paths and conflicting supplement duplicates', (
   );
 });
 
-test('checks the installed subset against committed all-platform data', (t) => {
+test('checks the exact generated package set and notice records', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'kosmo-license-output-'));
   const outputPath = join(root, 'data/licenses.json');
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -356,12 +342,20 @@ test('checks the installed subset against committed all-platform data', (t) => {
   };
   const generatedData = {
     sourceSha256: current.sourceSha256,
-    notices: [entry, { ...entry, name: 'pkg-linux' }],
+    notices: [entry],
   };
   writeLicenseArtifact(generatedData, outputPath);
   const generated = readFileSync(outputPath, 'utf8');
   assert.equal(generated, `${JSON.stringify(generatedData, null, 2)}\n`);
   assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
+  assert.throws(
+    () =>
+      checkLicenseArtifact(
+        { ...current, notices: [entry, { ...entry, name: 'new-package' }] },
+        outputPath,
+      ),
+    /stale package set:[\s\S]*missing from generated data: new-package@1\.0\.0/,
+  );
   assert.throws(
     () => checkLicenseArtifact({ ...current, sourceSha256: 'b'.repeat(64) }, outputPath),
     /stale for pnpm-lock\.yaml/,
@@ -372,6 +366,15 @@ test('checks the installed subset against committed all-platform data', (t) => {
     /stale for pkg@1\.0\.0/,
   );
   assert.equal(readFileSync(outputPath, 'utf8'), generated);
+
+  writeLicenseArtifact(
+    { ...generatedData, notices: [entry, { ...entry, name: 'pkg-linux' }] },
+    outputPath,
+  );
+  assert.throws(
+    () => checkLicenseArtifact(current, outputPath),
+    /stale package set:[\s\S]*no longer distributed: pkg-linux/,
+  );
 });
 
 test('checks one checksum over lock, supplemental, pending, and emoji notice sources', (t) => {
@@ -432,85 +435,54 @@ test('NOTICE-only packages require a full license supplement', (t) => {
   );
 });
 
-test('adds forced-installed optional variants and their dependency closure', (t) => {
+test('includes selected transitive packages and excludes unshipped build tools', (t) => {
   const { root, notice, supplemental } = fixture(t);
-  const parent = addPackage(root, 'parent', '1.0.0', 'owner/parent', {
-    LICENSE: 'Parent license\n',
+  const runtime = addPackage(root, 'runtime', '1.0.0', 'owner/runtime', {
+    LICENSE: 'Runtime license\n',
   });
-  const variant = addPackage(
-    root,
-    '@vendor/platform',
-    '1.0.0',
-    'git+https://github.com/vendor/platform.git',
-    { LICENSE: 'Platform license\n' },
-  );
-  const transitive = addPackage(root, 'transitive', '2.0.0', 'owner/transitive', {
+  const transitive = addPackage(root, 'runtime-transitive', '2.0.0', 'owner/transitive', {
     COPYING: 'Transitive license\n',
   });
-  updateManifest(parent, {
-    optionalDependencies: { '@vendor/platform': '1.0.0' },
+  const buildTool = addPackage(root, 'build-tool', '3.0.0', 'owner/build-tool');
+  updateManifest(runtime, {
+    dependencies: { 'runtime-transitive': '^2.0.0' },
   });
-  updateManifest(variant, {
-    dependencies: { transitive: '^2.0.0', 'missing-optional': '1.0.0' },
-    optionalDependencies: { 'missing-optional': '1.0.0' },
+  updateManifest(transitive, {
+    dependencies: { 'build-tool': '^3.0.0' },
   });
-  linkInstalledPackage(root, '@vendor/platform', variant);
-  linkInstalledPackage(root, 'transitive', transitive);
 
   const entries = buildLicenseEntries(
-    { MIT: [reportRow('parent', ['1.0.0'], [parent])] },
+    {
+      MIT: [
+        reportRow('runtime', ['1.0.0'], [runtime]),
+        reportRow('runtime-transitive', ['2.0.0'], [transitive]),
+        reportRow('build-tool', ['3.0.0'], [buildTool]),
+      ],
+    },
     {
       root,
       notice,
       supplementalFiles: [supplemental],
-      strictOptionalDependencies: false,
+      packageKeys: new Set(['runtime@1.0.0', 'runtime-transitive@2.0.0']),
     },
   );
   assert.deepEqual(
-    entries.map(({ name }) => name),
-    ['@vendor/platform', 'parent', 'transitive', '반응 이모지'],
-  );
-  assert.equal(
-    entries.find((entry) => entry.name === '@vendor/platform').sourceUrl,
-    'https://github.com/vendor/platform',
+    entries.map(({ name, version }) => `${name}@${version}`),
+    ['runtime@1.0.0', 'runtime-transitive@2.0.0', '반응 이모지@'],
   );
 
-  const missingRoot = mkdtempSync(join(tmpdir(), 'kosmo-license-optional-'));
-  t.after(() => rmSync(missingRoot, { recursive: true, force: true }));
-  const missingNotice = join(missingRoot, 'NOTICE.md');
-  const missingSupplemental = join(missingRoot, 'supplemental.json');
-  const missingPending = join(missingRoot, 'apps/app/licenses/pending-notices.json');
-  writeFileSync(missingNotice, 'Notice\n');
-  writeFileSync(missingSupplemental, '[]\n');
-  mkdirSync(dirname(missingPending), { recursive: true });
-  writeFileSync(missingPending, '[]\n');
-  const missingParent = addPackage(missingRoot, 'missing-parent', '1.0.0', 'owner/missing-parent', {
-    LICENSE: 'Parent license\n',
-  });
-  updateManifest(missingParent, {
-    optionalDependencies: { '@vendor/missing': '1.0.0' },
-  });
-  const missingReport = {
-    MIT: [reportRow('missing-parent', ['1.0.0'], [missingParent])],
-  };
-  assert.doesNotThrow(() =>
-    buildLicenseEntries(missingReport, {
-      root: missingRoot,
-      notice: missingNotice,
-      supplementalFiles: [missingSupplemental],
-      pendingFile: missingPending,
-      strictOptionalDependencies: false,
-    }),
-  );
   assert.throws(
     () =>
-      buildLicenseEntries(missingReport, {
-        root: missingRoot,
-        notice: missingNotice,
-        supplementalFiles: [missingSupplemental],
-        pendingFile: missingPending,
-      }),
-    /missing-parent@1\.0\.0 -> @vendor\/missing \(optional\)/,
+      buildLicenseEntries(
+        { MIT: [reportRow('runtime', ['1.0.0'], [runtime])] },
+        {
+          root,
+          notice,
+          supplementalFiles: [supplemental],
+          packageKeys: new Set(['runtime@1.0.0', 'missing-transitive@4.0.0']),
+        },
+      ),
+    /Selected distribution packages are missing from pnpm production metadata:[\s\S]*missing-transitive@4\.0\.0/,
   );
 });
 
