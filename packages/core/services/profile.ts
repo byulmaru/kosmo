@@ -1,8 +1,8 @@
 import { and, DrizzleQueryError, eq, exists, sql } from 'drizzle-orm';
-import { invalidateHomeTimelines } from '../home-timeline/cache';
 import { first, getDatabaseConnection, ProfileFollows, Profiles, Sessions } from '../db';
 import { ProfileState } from '../enums';
 import { NotFoundError } from '../error';
+import { invalidateHomeTimelines } from '../home-timeline/cache';
 import type { Database } from '../db';
 
 const disableProfileOnce = (profileId: string, handle?: Database) =>

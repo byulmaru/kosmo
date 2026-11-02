@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
 import { performance } from 'node:perf_hooks';
+import { after, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
@@ -33,13 +33,13 @@ import {
   ProfileState,
 } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
-import { postContentDocumentFromText } from '../post-content/server';
-import { runRedisCommand } from '../redis/client';
 import {
   invalidateHomeTimelines,
   readHomeTimelineCache,
   rebuildHomeTimeline,
 } from '../home-timeline/cache';
+import { postContentDocumentFromText } from '../post-content/server';
+import { runRedisCommand } from '../redis/client';
 import { muteProfile, unmuteProfile } from './profile-mute';
 
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;

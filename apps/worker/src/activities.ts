@@ -19,10 +19,6 @@ export {
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { createNotificationActivity } from './activities/notification';
 export {
-  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
-  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
-} from '@kosmo/core/home-timeline/cache';
-export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
@@ -71,6 +67,10 @@ export {
   loadProfileMigrationMoveFollowerBatchActivity,
   prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
+export {
+  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
+  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
+} from '@kosmo/core/home-timeline/cache';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,

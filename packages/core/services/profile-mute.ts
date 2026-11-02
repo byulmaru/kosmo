@@ -1,8 +1,8 @@
 import { and, eq, ne } from 'drizzle-orm';
-import { invalidateHomeTimelines } from '../home-timeline/cache';
 import { db, first, Instances, ProfileMutes, Profiles } from '../db';
 import { InstanceState, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { invalidateHomeTimelines } from '../home-timeline/cache';
 import { visibleProfileWhere } from '../visibility';
 import type { Transaction } from '../db';
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
-import { setTimeout as delay } from 'node:timers/promises';
 import { after, test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { eq } from 'drizzle-orm';
 import {
   db,
@@ -21,13 +21,13 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { postContentDocumentFromText } from '../post-content/server';
-import { runRedisCommand } from '../redis/client';
 import {
   invalidateHomeTimelines,
   readHomeTimelineCache,
   rebuildHomeTimeline,
 } from '../home-timeline/cache';
+import { postContentDocumentFromText } from '../post-content/server';
+import { runRedisCommand } from '../redis/client';
 import { disableProfile } from './profile';
 
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
