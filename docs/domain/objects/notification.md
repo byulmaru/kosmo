@@ -75,6 +75,10 @@ Quote Notification의 Recipient Profile은 Related Post의 direct Repost Source 
 | Profile Notification 지정 읽음 처리        | Account   | Notification 목록             | Notification ID 목록                                                    | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                                                           | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
 | Account Operational Notification 읽음 처리 | Account   | Operational Notification 목록 | Notification ID 목록                                                    | `Account.Active`, `Notification.Recipient` | 요청 Account의 Operational Notification이다                                                                                                                                          | 처리 가능한 입력 항목은 Read가 되고 최초 읽음 시각을 보존한다                                                 |
 
+Local Post 작성과 ActivityPub Post 수신은 각 Type의 생성 조건에 따라 Reply, Quote, Mention Notification을 기본
+생성한다. 과거 게시물 가져오기로 명시된 저장 요청은 Post와 그 관계를 유지하면서 새 Reply, Quote, Mention
+Notification과 그에 따른 push를 생성하지 않는다. 일반 Post 게시의 기존 Notification 생성 동작은 유지한다.
+
 Post 삭제 후 정리는 Local·Remote 여부와 관계없이 Mention·Reply·Quote·Repost를 직접 일으킨 Post와 Reaction 대상
 Post, Reply Parent Post, Quote의 direct Repost Source Post, Repost의 Source Post를 대상으로 한다. Reply Parent만
 삭제되어도 그 Reply Post를 원인으로 하는 Mention Notification은 이 정리로 제거하지 않는다. 삭제 후속 처리에서

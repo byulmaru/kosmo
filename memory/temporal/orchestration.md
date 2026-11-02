@@ -80,6 +80,13 @@
   `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
+- Shared `PostCreateWorkflowArgs`의 optional mode는 `publish` 또는 `import`를 허용하며, 생략은 `publish`와 같다.
+  V1/V2 공통 Workflow가 mode를 검증하지만 두 mode 모두 같은 Post persistence Activity와 인자를 사용한다. `created`
+  결과이며 mode가 `publish`이거나 생략된 경우에만 post-create effects child를 시작한다. `import`는 결과 상태와 관계없이
+  effects child를 시작하지 않으므로 새 Reply·Quote·Mention Notification과 해당 push, Local Create delivery,
+  `post_created` analytics를 생략한다. 이전 history는 mode가 생략되어 replay 시 `publish` 분기로 진행한다. 이 경우
+  기존 effects child의 argument와 command trace를 그대로 유지하고, 명시적 `import`는 새 input branch라 새
+  `patched` marker가 필요하지 않다. Effects child의 입력 shape와 기존 effects execution은 유지한다.
 
 - 신규 `postRequestWorkflow` history는 bulk READY lookup 뒤 `patched('post-request-media-parallel-v1')`로 non-READY Media 작업을 processing ID 순서로 시작하고 기존 `settleEffects`로 모두 정산한다. 한 batch `CancellationScope`는 PostRequest의 대기를 취소하면서 `ABANDON` shared upload는 유지한다. Marker 이전 history는 per-ID scope와 직렬 command 순서를 보존하며 per-ID Nexus·retry·READY recovery 동작은 그대로 둔다.
 

@@ -72,6 +72,7 @@ const workflowArgsSchema = z.object({
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
   ]),
+  mode: z.enum(['publish', 'import']).optional(),
   postId: z.uuid().optional(),
   revalidateAuthorization: z.boolean().optional(),
   requestId: z.uuid(),
@@ -162,7 +163,7 @@ export async function postCreateWorkflow(
     );
   }
 
-  if (execution.result.status === 'created') {
+  if (execution.result.status === 'created' && parsed.mode !== 'import') {
     await startPostCreateEffects(
       parsed.input.origin,
       execution.result.postId,
