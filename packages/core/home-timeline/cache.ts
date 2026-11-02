@@ -273,6 +273,10 @@ export const invalidateHomeTimelines = async ({
 }: {
   readonly profileIds?: readonly string[];
 } = {}): Promise<void> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return;
+  }
+
   if (profileIds !== undefined) {
     for (let offset = 0; offset < profileIds.length; offset += candidateBatchSize) {
       const keys = profileIds.slice(offset, offset + candidateBatchSize).map(feedKey);
@@ -280,7 +284,7 @@ export const invalidateHomeTimelines = async ({
         continue;
       }
       if ((await runRedisCommand((client) => client.unlink(keys))) === null) {
-        return;
+        throw new Error('Redis unavailable while invalidating Home timelines');
       }
     }
     return;
@@ -292,14 +296,14 @@ export const invalidateHomeTimelines = async ({
       client.scan(cursor, { MATCH: `${feedKeyPrefix}*`, COUNT: candidateBatchSize }),
     );
     if (result === null) {
-      return;
+      throw new Error('Redis unavailable while invalidating Home timelines');
     }
     cursor = result.value.cursor;
     if (
       result.value.keys.length > 0 &&
       (await runRedisCommand((client) => client.unlink(result.value.keys))) === null
     ) {
-      return;
+      throw new Error('Redis unavailable while invalidating Home timelines');
     }
   } while (cursor !== '0');
 };
