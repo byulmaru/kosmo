@@ -258,6 +258,9 @@ importers:
       '@fedify/vocab':
         specifier: 2.4.5
         version: 2.4.5
+      '@redis/client':
+        specifier: ^6.3.0
+        version: 6.3.0(@opentelemetry/api@1.9.1)
 
   apps/app:
     dependencies:
@@ -372,6 +375,9 @@ importers:
       firebase:
         specifier: 12.17.1
         version: 12.17.1(@react-native-async-storage/async-storage@2.2.0(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1)))
+      graphql-sse:
+        specifier: ^2.6.3
+        version: 2.6.3(graphql@16.14.0)
       lucide-react-native:
         specifier: ^1.23.0
         version: 1.23.0(react-native-svg@15.15.4(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -609,6 +615,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@graphql-yoga/subscription':
+        specifier: 5.1.1
+        version: 5.1.1
       '@kosmo/fedify':
         specifier: workspace:*
         version: link:../fedify
@@ -6161,6 +6170,12 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  graphql-sse@2.6.3:
+    resolution: {integrity: sha512-UCSx3a+IklDOqJt8gpxGwDhnmWiZLJ5wNPMJ7TLGOQ68PhiKIDxLJBB2i+nKEGyWYLtiSLpTJ5fFEG5kkAxppA==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      graphql: '>=0.11 <=17'
 
   graphql-yoga@5.24.4:
     resolution: {integrity: sha512-jnpLm2g9BfnP18VKL+Yao8YRQYgDjXdAkFgZso/tnKFcRcAtOeUKLDVc1XnYiE3uooXzfIQzsvpKR+fC3we4QA==}
@@ -15288,6 +15303,10 @@ snapshots:
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
+
+  graphql-sse@2.6.3(graphql@16.14.0):
+    dependencies:
+      graphql: 16.14.0
 
   graphql-yoga@5.24.4(graphql@16.14.0):
     dependencies:

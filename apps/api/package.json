@@ -40,6 +40,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fedify/vocab": "2.4.5"
+    "@fedify/vocab": "2.4.5",
+    "@redis/client": "^6.3.0"
   }
 }
