@@ -581,38 +581,23 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
 
   const composer = page.getByRole('dialog', { name: '답글 쓰기' });
   await expect(composer).toBeVisible();
-  await expect(composer.getByText(parentBody)).toBeVisible();
+  const parentText = composer.getByText(parentBody, { exact: true });
   const composerScroll = composer.getByTestId('mobile-fullscreen-composer-scroll');
-  const parentPreview = composer.getByTestId('reply-parent');
   const visibility = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
-  await expect
-    .poll(async () => {
-      const [scrollBounds, parentBounds] = await Promise.all([
-        composerScroll.boundingBox(),
-        parentPreview.boundingBox(),
-      ]);
-      return scrollBounds && parentBounds
-        ? parentBounds.y + parentBounds.height - scrollBounds.y
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
-  await expect(composer.getByRole('textbox', { name: '답글 본문' })).toBeFocused();
+  const bodyTextbox = composer.getByRole('textbox', { name: '답글 본문' });
+  await expect(composerScroll).toBeVisible();
+  await expect(bodyTextbox).toBeFocused();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(parentText).toBeVisible();
+  await expect(parentText).not.toBeInViewport();
+  await expect(visibility).toBeInViewport();
   await expect(composer.getByText(`@${viewer.profile!.handle}님에게 답글`)).toBeVisible();
-  await expect
-    .poll(async () => {
-      const [connectorBounds, visibilityBounds] = await Promise.all([
-        composer.getByTestId('reply-parent-thread-connector').boundingBox(),
-        visibility.boundingBox(),
-      ]);
-      return connectorBounds && visibilityBounds
-        ? Math.abs(connectorBounds.y + connectorBounds.height - visibilityBounds.y)
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
   await expect(parentRow.getByRole('textbox', { name: '답글 본문' })).toHaveCount(0);
 
   await page.setViewportSize({ height: 844, width: 320 });
   await expect(composer).toBeVisible();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(visibility).toBeInViewport();
   await composer.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '답글 작성을 취소할까요?' })
