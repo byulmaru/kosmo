@@ -62,7 +62,7 @@ export type PostRequestMediaItem = Readonly<{
 }>;
 
 const releaseMediaPreview = (item: ComposerMediaItem) => {
-  if (Platform.OS === 'web' && item.asset.uri) {
+  if (Platform.OS === 'web') {
     releaseImagePreview(item.asset.uri);
   }
 };
@@ -497,20 +497,14 @@ export function PostComposerMediaItems({
             style={styles.mediaItem}
           >
             <View style={styles.mediaPreviewContainer}>
-              {item.asset.uri ? (
-                <Image
-                  accessibilityIgnoresInvertColors
-                  accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
-                  accessibilityRole="image"
-                  fadeDuration={0}
-                  source={{ uri: item.asset.uri }}
-                  style={styles.mediaPreview}
-                />
-              ) : (
-                <View
-                  style={[styles.mediaPreview, { backgroundColor: theme.backgroundElevated }]}
-                />
-              )}
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
+                accessibilityRole="image"
+                fadeDuration={0}
+                source={{ uri: item.asset.uri }}
+                style={styles.mediaPreview}
+              />
               {item.state !== 'ready' ? (
                 <>
                   <View style={[StyleSheet.absoluteFill, styles.mediaOverlayBackdrop]} />

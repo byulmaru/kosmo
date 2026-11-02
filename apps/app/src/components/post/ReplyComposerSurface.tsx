@@ -250,7 +250,7 @@ function ReplyComposerSurfaceContents({
     },
     [discardConfirmOpen, submitting],
   );
-  const dismissCloseConfirmation = useCallback(() => {
+  const continueEditing = useCallback(() => {
     closeAfterDiscardRef.current = undefined;
     setDiscardConfirmOpen(false);
     requestAnimationFrame(() => editorRef.current?.focus());
@@ -287,7 +287,7 @@ function ReplyComposerSurfaceContents({
       return;
     }
     if (discardConfirmOpen) {
-      dismissCloseConfirmation();
+      continueEditing();
       return;
     }
     if (nativeBackHandlerRef.current) {
@@ -295,19 +295,19 @@ function ReplyComposerSurfaceContents({
       return;
     }
     requestClose();
-  }, [discardConfirmOpen, dismissCloseConfirmation, requestClose, submitting]);
+  }, [continueEditing, discardConfirmOpen, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
       if (reason === 'escape' && discardConfirmOpen) {
-        dismissCloseConfirmation();
+        continueEditing();
         return;
       }
       requestClose();
     },
-    [discardConfirmOpen, dismissCloseConfirmation, requestClose],
+    [continueEditing, discardConfirmOpen, requestClose],
   );
   const { dialogRef } = useOverlayLifecycle({
     focusScopeRef: discardConfirmOpen ? discardConfirmRef : undefined,
@@ -352,12 +352,12 @@ function ReplyComposerSurfaceContents({
     return null;
   }
 
-  const closeConfirmation = discardConfirmOpen ? (
+  const discardConfirm = discardConfirmOpen ? (
     <View style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}>
       <View
         accessibilityLabel={`${composerName} 작성을 취소할까요?`}
         accessibilityViewIsModal
-        onAccessibilityEscape={dismissCloseConfirmation}
+        onAccessibilityEscape={continueEditing}
         ref={discardConfirmRef}
         role="alertdialog"
         style={[
@@ -376,7 +376,7 @@ function ReplyComposerSurfaceContents({
           작성 중인 내용은 저장되지 않습니다.
         </Text>
         <View style={styles.confirmActions}>
-          <Button onPress={dismissCloseConfirmation} tone="secondary">
+          <Button onPress={continueEditing} tone="secondary">
             계속 작성
           </Button>
           <Button onPress={() => closeImmediately(closeAfterDiscardRef.current)} tone="danger">
@@ -553,7 +553,7 @@ function ReplyComposerSurfaceContents({
                       {form}
                     </KeyboardAvoidingView>
                   </View>
-                  {closeConfirmation}
+                  {discardConfirm}
                 </View>
               </Pressable>
             )}

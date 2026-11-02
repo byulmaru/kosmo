@@ -7835,7 +7835,11 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     expect(submittedInput).not.toHaveProperty('mentions');
     expect(submittedInput).not.toHaveProperty('replyParentId');
     expect(submittedInput).not.toHaveProperty('repostSourceId');
-    expect(trackAnalytics).not.toHaveBeenCalled();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      selected_profile_id: composerProfile.id,
+      visibility: 'PUBLIC',
+    });
   },
   render: () => <ComposerStory />,
 };
@@ -8081,7 +8085,11 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
-    expect(trackAnalytics).not.toHaveBeenCalled();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <ComposerStory />,
 };

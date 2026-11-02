@@ -98,24 +98,18 @@ export function PostComposerMediaItemsTarget({
           const ready = item.state === 'ready';
           const failed = item.state === 'failed';
           const canEdit = ready || item.requiresReselection;
-          const previewUri = item.asset.uri;
           const previewStyle = [
             styles.preview,
             item.state === 'uploading' ? styles.pendingPreview : null,
           ];
-          const preview = previewUri ? (
+          const preview = (
             <Image
               accessibilityIgnoresInvertColors
               accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
               accessibilityRole="image"
               fadeDuration={0}
-              source={{ uri: previewUri }}
+              source={{ uri: item.asset.uri }}
               style={previewStyle}
-            />
-          ) : (
-            <View
-              accessibilityElementsHidden
-              style={[...previewStyle, { backgroundColor: theme.backgroundElevated }]}
             />
           );
 

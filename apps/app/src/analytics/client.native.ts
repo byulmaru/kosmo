@@ -5,7 +5,6 @@ import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
 type PostHogClient = InstanceType<typeof PostHog>;
 
 let client: PostHogClient | null | undefined;
-let sdkReady = false;
 
 function initializeAnalytics(): PostHogClient | null {
   if (client !== undefined) {
@@ -20,44 +19,18 @@ function initializeAnalytics(): PostHogClient | null {
       return client;
     }
 
-    const analyticsClient = new PostHog(apiKey, {
+    client = new PostHog(apiKey, {
       host,
       captureAppLifecycleEvents: false,
       disableRemoteFeatureFlags: true,
       enableSessionReplay: false,
       sendFeatureFlagEvent: false,
     });
-    client = analyticsClient;
-    sdkReady = false;
-    // Persisted opt-out loads asynchronously, so readiness gates platform eligibility.
-    try {
-      void analyticsClient
-        .ready()
-        .then(() => {
-          sdkReady = true;
-        })
-        .catch(() => undefined);
-    } catch {
-      // Keep capture available while readiness remains unknown.
-    }
   } catch {
     client = null;
   }
 
   return client;
-}
-
-export function getPostAnalyticsPlatform(): 'native' | undefined {
-  try {
-    const analyticsClient = client;
-    if (!analyticsClient || !sdkReady || analyticsClient.optedOut || analyticsClient.isDisabled) {
-      return undefined;
-    }
-
-    return 'native';
-  } catch {
-    return undefined;
-  }
 }
 
 export function trackAnalytics<Name extends AnalyticsEventName>(

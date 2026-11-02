@@ -111,13 +111,18 @@ let mutationCalls: Array<{
         } | null;
       } | null;
     } | null,
-    errors?: Array<{ extensions?: { code?: unknown; field?: unknown }; message: string }> | null,
+    errors?: Array<{
+      extensions?: { code?: unknown; field?: unknown };
+      message: string;
+      path?: ReadonlyArray<number | string>;
+    }> | null,
   ) => void;
   onError: (error: Error) => void;
   variables: {
     input: Record<string, unknown>;
   };
 }> = [];
+const analyticsEvents: Array<{ event: string; properties: Record<string, unknown> }> = [];
 let sessionAccountId: string | null = 'account-1';
 let sessionSelectedProfileId: string | null = 'profile-a';
 const serverGeneratedRequestId = (callIndex: number) =>
@@ -290,7 +295,11 @@ mockModule('react-relay', {
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ accountId: sessionAccountId, selectedProfileId: sessionSelectedProfileId }),
 });
-mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/analytics/client', {
+  trackAnalytics: (event: string, properties: unknown) => {
+    analyticsEvents.push({ event, properties: properties as Record<string, unknown> });
+  },
+});
 mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
@@ -430,6 +439,7 @@ beforeEach(() => {
   relayEnvironmentGeneration = null;
   sessionAccountId = 'account-1';
   sessionSelectedProfileId = 'profile-a';
+  analyticsEvents.length = 0;
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
@@ -693,6 +703,12 @@ describe('PostComposer request acknowledgement cache projection', () => {
       );
       assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
       assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
+      assert.deepEqual(analyticsEvents, [
+        {
+          event: 'post_created',
+          properties: { selected_profile_id: profileA.id, visibility: 'UNLISTED' },
+        },
+      ]);
 
       const requestIds = (profileId: string) => {
         const operation = createOperationDescriptor(query, { profileId });
@@ -807,6 +823,13 @@ describe('PostComposer request acknowledgement cache projection', () => {
           ...(status === 'PUBLISHED' ? [{ id: publishedPostId }] : []),
           { id: authorBPostId },
         ]);
+        assert.deepEqual(analyticsEvents[1], {
+          event: 'post_created',
+          properties: {
+            selected_profile_id: profileB.id,
+            visibility: authorBCall.variables.input.visibility,
+          },
+        });
         assert.deepEqual(requestIds(profileA.id), []);
         assert.deepEqual(requestIds(profileB.id), []);
         assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
@@ -1392,6 +1415,7 @@ describe('PostComposer local author', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'DIRECT',
     );
+    assert.deepEqual(analyticsEvents, []);
     assert.deepEqual(toastCalls[0], [
       '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
       { tone: 'danger' },
@@ -1488,6 +1512,7 @@ describe('PostComposer local author', () => {
       '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
       { tone: 'danger' },
     ]);
+    assert.deepEqual(analyticsEvents, []);
     assert.equal(mutationCalls.length, 1);
 
     await act(async () => targetProps?.onSubmit());
@@ -1500,6 +1525,12 @@ describe('PostComposer local author', () => {
     assert.equal(acceptedCount, 1);
     assert.deepEqual(createdPosts, []);
     assert.equal(targetProps?.body, '');
+    assert.deepEqual(analyticsEvents, [
+      {
+        event: 'post_created',
+        properties: { selected_profile_id: profileA.id, visibility: 'DIRECT' },
+      },
+    ]);
   });
 
   it('ignores a mutation response after the composer actor and environment change', async () => {
@@ -1541,6 +1572,64 @@ describe('PostComposer local author', () => {
     assert.equal(acceptedCount, 0);
     assert.equal(toastCalls.length, 0);
     assert.equal(targetProps?.body, '');
+    assert.deepEqual(analyticsEvents, []);
+  });
+
+  it('records an accepted request even when a partial GraphQL error is present', async () => {
+    let acceptedCount = 0;
+    const createdPosts: Array<{ id: string }> = [];
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostRequestAccepted: () => acceptedCount++,
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('접수된 본문'));
+    await act(async () => targetProps?.onVisibilityChange('FOLLOWERS'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    await act(async () =>
+      call.onCompleted(acceptedRequestResponse(0), [
+        {
+          message: 'nullable Post projection failed',
+          path: ['createPost', 'request', 'post'],
+        },
+      ]),
+    );
+
+    assert.equal(targetProps?.body, '');
+    assert.equal(acceptedCount, 1);
+    assert.deepEqual(createdPosts, []);
+    assert.deepEqual(analyticsEvents, [
+      {
+        event: 'post_created',
+        properties: { selected_profile_id: profileA.id, visibility: 'FOLLOWERS' },
+      },
+    ]);
+  });
+
+  it('does not record a GraphQL response without an accepted request ID', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('접수되지 않은 본문'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    await act(async () =>
+      call.onCompleted({ createPost: { request: null } }, [{ message: 'request was rejected' }]),
+    );
+
+    assert.equal(targetProps?.body, '접수되지 않은 본문');
+    assert.deepEqual(analyticsEvents, []);
   });
 });
 

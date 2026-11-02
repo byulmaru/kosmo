@@ -5,6 +5,7 @@ import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
 import { commitLocalUpdate } from 'relay-runtime';
+import { trackAnalytics } from '@/analytics/client';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -513,6 +514,10 @@ function PostComposerContents({
         }
         const acceptedRequest = response?.createPost?.request;
         if (acceptedRequest?.id) {
+          trackAnalytics('post_created', {
+            selected_profile_id: profile.id,
+            visibility,
+          });
           const actorProfileId = input.actorProfileId;
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {

@@ -312,25 +312,17 @@ function MediaPreview({
   readonly selectedIndex: number;
 }) {
   const theme = useTheme();
-  const selectedPreviewUri = selected?.asset.uri ?? null;
   const selectedPreview = selected ? (
-    selectedPreviewUri ? (
-      <Image
-        accessibilityElementsHidden={Boolean(onPreviewPress)}
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
-        accessibilityRole="image"
-        fadeDuration={0}
-        resizeMode="contain"
-        source={{ uri: selectedPreviewUri }}
-        style={styles.selectedPreview}
-      />
-    ) : (
-      <View
-        accessibilityElementsHidden
-        style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}
-      />
-    )
+    <Image
+      accessibilityElementsHidden={Boolean(onPreviewPress)}
+      accessibilityIgnoresInvertColors
+      accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
+      accessibilityRole="image"
+      fadeDuration={0}
+      resizeMode="contain"
+      source={{ uri: selected.asset.uri }}
+      style={styles.selectedPreview}
+    />
   ) : (
     <View style={[styles.selectedPreview, { backgroundColor: theme.backgroundElevated }]}>
       <Text style={[styles.emptyCopy, { color: theme.foregroundSecondary }]}>
@@ -341,7 +333,7 @@ function MediaPreview({
 
   return (
     <View style={[styles.previewSection, { backgroundColor: theme.backgroundSurface }]}>
-      {selected && onPreviewPress && selectedPreviewUri ? (
+      {selected && onPreviewPress ? (
         <Pressable
           accessibilityLabel={`선택한 첨부 이미지 ${selectedIndex + 1} 미리보기`}
           accessibilityRole="button"
@@ -390,7 +382,6 @@ function MediaGallery({
     >
       {media.map((item, index) => {
         const selected = item.key === selectedKey;
-        const previewUri = item.asset.uri;
         return (
           <Pressable
             accessibilityLabel={`첨부 이미지 ${index + 1} 선택`}
@@ -407,23 +398,12 @@ function MediaGallery({
               },
             ]}
           >
-            {previewUri ? (
-              <Image
-                accessibilityIgnoresInvertColors
-                fadeDuration={0}
-                source={{ uri: previewUri }}
-                style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
-              />
-            ) : (
-              <View
-                accessibilityElementsHidden
-                style={[
-                  styles.thumbnail,
-                  mobile && styles.mobileThumbnail,
-                  { backgroundColor: theme.backgroundElevated },
-                ]}
-              />
-            )}
+            <Image
+              accessibilityIgnoresInvertColors
+              fadeDuration={0}
+              source={{ uri: item.asset.uri }}
+              style={[styles.thumbnail, mobile && styles.mobileThumbnail]}
+            />
           </Pressable>
         );
       })}

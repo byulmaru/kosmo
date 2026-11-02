@@ -4,11 +4,8 @@ import type { FormProps } from './Form';
 
 export function Form({
   accessibilityLabel,
-  accessibilityElementsHidden,
   children,
-  'aria-hidden': ariaHidden,
   onSubmit,
-  pointerEvents,
   submitOnModEnter = false,
   style,
 }: FormProps) {
@@ -30,13 +27,7 @@ export function Form({
   };
 
   return (
-    <View
-      accessibilityElementsHidden={accessibilityElementsHidden}
-      accessibilityLabel={accessibilityLabel}
-      aria-hidden={ariaHidden}
-      pointerEvents={pointerEvents}
-      style={style}
-    >
+    <View accessibilityLabel={accessibilityLabel} style={style}>
       <form
         onKeyDownCapture={submitOnModEnter ? handleKeyDown : undefined}
         onSubmit={handleSubmit}
