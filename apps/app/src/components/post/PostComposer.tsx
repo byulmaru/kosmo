@@ -749,13 +749,11 @@ export function MobileFullscreenComposerShellCandidate({
   const hasTrailingContent = (children !== undefined && children !== null) || hasMedia;
   const hasParent = beforeEditor !== undefined && beforeEditor !== null;
   const isReplyShell = mode === 'reply' && hasParent;
-  const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
+  const shouldAutoSizeBody = Platform.OS === 'web';
   const bodyUsesTrailingContentLayout =
     hasTrailingContent || (shouldAutoSizeBody && bodyContentHeight > 0);
-  const webReplyShellStyle =
-    Platform.OS === 'web' && mode === 'reply'
-      ? ({ overflow: 'clip' } as unknown as ViewStyle)
-      : null;
+  const webShellStyle =
+    Platform.OS === 'web' ? ({ overflow: 'clip' } as unknown as ViewStyle) : null;
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
@@ -1004,7 +1002,7 @@ export function MobileFullscreenComposerShellCandidate({
       style={[
         styles.mobileShell,
         fillContainer ? styles.mobileShellFill : null,
-        webReplyShellStyle,
+        webShellStyle,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="mobile-fullscreen-composer-candidate"
@@ -1063,7 +1061,7 @@ export function MobileFullscreenComposerShellCandidate({
           if (
             initialScrollPendingRef.current &&
             offset !== null &&
-            Math.abs(event.nativeEvent.contentOffset.y - offset) > 1
+            Math.abs(event.nativeEvent.contentOffset.y - offset) <= 1
           ) {
             initialScrollPendingRef.current = false;
           }

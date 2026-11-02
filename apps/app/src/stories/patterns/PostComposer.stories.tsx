@@ -1127,7 +1127,6 @@ export const MobileFlexLayoutContract: Story = {
 
     expect(body).toHaveStyle({ gap: '8px' });
     expect(getComputedStyle(body).overflow).toBe('visible');
-    expect(getComputedStyle(editor).flexGrow).toBe('1');
 
     await userEvent.click(editor);
     await waitFor(() => expect(editor).toHaveFocus());

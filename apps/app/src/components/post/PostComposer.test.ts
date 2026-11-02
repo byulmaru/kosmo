@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, useEffect, useState } from 'react';
+import { createElement, forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -22,9 +22,14 @@ import {
   prependPostRequestToLoadedProfileRequests,
   reconcilePublishedPostInHome,
 } from './postRequestCache';
+import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
+import type {
+  MobileFullscreenComposerShellCandidate as MobileFullscreenComposerShellCandidateComponent,
+  MobileFullscreenComposerShellCandidateProps,
+} from './PostComposer';
 import type { PostComposerController as PostComposerComponent } from './PostComposerController';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -151,7 +156,32 @@ let relayEnvironmentGeneration: { current: number } | null = null;
 let textInputMountCount = 0;
 let textInputUnmountCount = 0;
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
+let MobileFullscreenComposerShellCandidate: typeof MobileFullscreenComposerShellCandidateComponent;
 let toastCalls: Array<[string, { tone: string }]> = [];
+const mobileScrollRequests: Array<{ animated?: boolean; y?: number }> = [];
+let mobileScrollNodeDimensions: {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop?: number;
+} | null = null;
+
+const MobileComposerScrollView = forwardRef<
+  {
+    getScrollableNode: () => typeof mobileScrollNodeDimensions;
+    scrollTo: (options: { animated?: boolean; y?: number }) => void;
+  },
+  { children?: ReactNode; [key: string]: unknown }
+>(({ children, ...props }, ref) => {
+  useImperativeHandle(
+    ref,
+    () => ({
+      getScrollableNode: () => mobileScrollNodeDimensions,
+      scrollTo: (options) => mobileScrollRequests.push(options),
+    }),
+    [],
+  );
+  return createElement('ScrollView', props as never, children as ReactNode);
+});
 
 const profileA = {
   ' $fragmentSpreads': {
@@ -264,17 +294,27 @@ mockModule('react-native', {
   Modal: 'Modal',
   Platform: platform,
   Pressable: 'Pressable',
-  ScrollView: 'ScrollView',
+  ScrollView: MobileComposerScrollView,
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
+  TextInput: 'TextInput',
+  useWindowDimensions: () => ({ height: 800, width: 390 }),
   View: 'View',
 });
 mockModule(require.resolve('lucide-react-native'), {
   AtSignIcon: 'AtSignIcon',
+  ChartNoAxesColumnIncreasingIcon: 'ChartNoAxesColumnIncreasingIcon',
+  ChevronDownIcon: 'ChevronDownIcon',
+  ExpandIcon: 'ExpandIcon',
   GlobeIcon: 'GlobeIcon',
+  ImagePlusIcon: 'ImagePlusIcon',
   LockIcon: 'LockIcon',
   MoonIcon: 'MoonIcon',
+  SmileIcon: 'SmileIcon',
+  TriangleAlertIcon: 'TriangleAlertIcon',
+  XIcon: 'XIcon',
 });
+mockModule('react-native-svg', { Circle: 'Circle', Svg: 'Svg' });
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
@@ -335,8 +375,9 @@ mockModule('@/theme/ThemeProvider', {
   }),
 });
 mockModule('@/theme/tokens', {
-  borderWidths: { 1: 1 },
+  borderWidths: { 0: 0, 1: 1 },
   fontFamilies: { ui: 'ui' },
+  iconSizes: { 16: 16, 20: 20, 24: 24 },
   layoutRecipes: { labelSupportStack: {} },
   radii: { md: 12, sm: 8 },
   radius: { 12: 12 },
@@ -346,6 +387,9 @@ mockModule('@/theme/tokens', {
   typography: { sm: {}, xsm: {} },
 });
 mockModule('./ComposerMediaEditor', { ComposerMediaEditor: 'ComposerMediaEditor' });
+mockModule('./PostComposerMediaItemsTarget', {
+  PostComposerMediaItemsTarget: 'PostComposerMediaItemsTarget',
+});
 mockModule('./PostComposerProfileSwitcher', {
   PostComposerProfileSwitcher: (props: typeof switcherProps) => {
     switcherProps = props;
@@ -427,6 +471,13 @@ let PostComposer: typeof PostComposerComponent;
 
 before(async () => {
   ({ PostComposerMentionInput } = await import('./PostComposerMentionInput'));
+  // Load the real shell while the controller's `./PostComposer` import stays mocked above.
+  const mobileComposerModuleUrl = new URL('./PostComposer.tsx', import.meta.url);
+  mobileComposerModuleUrl.searchParams.set('test', 'initial-anchor-regression');
+  const mobileComposerModule = (await import(mobileComposerModuleUrl.href)) as {
+    MobileFullscreenComposerShellCandidate: typeof MobileFullscreenComposerShellCandidateComponent;
+  };
+  ({ MobileFullscreenComposerShellCandidate } = mobileComposerModule);
   ({ PostComposerController: PostComposer } = await import('./PostComposerController'));
 });
 
@@ -442,6 +493,8 @@ beforeEach(() => {
   analyticsEvents.length = 0;
   textInputMountCount = 0;
   textInputUnmountCount = 0;
+  mobileScrollRequests.length = 0;
+  mobileScrollNodeDimensions = null;
   toastCalls = [];
 });
 
@@ -1011,6 +1064,129 @@ describe('PostComposer native background', () => {
     assert.equal(appStateListeners.size, 0);
     await act(async () => emitAppState('background'));
     assert.equal(keyboardDismissCount, 0);
+  });
+});
+
+describe('Mobile fullscreen reply initial anchor', () => {
+  it('defers an unreachable anchor until layout growth and stops after reaching it', async () => {
+    platform.OS = 'web';
+    const animationFrames = new Map<number, (timestamp: number) => void>();
+    let nextAnimationFrame = 1;
+    Object.assign(globalThis, {
+      cancelAnimationFrame: (id: number) => animationFrames.delete(id),
+      requestAnimationFrame: (callback: (timestamp: number) => void) => {
+        const id = nextAnimationFrame++;
+        animationFrames.set(id, callback);
+        return id;
+      },
+    });
+
+    const scrollNodeDimensions = { clientHeight: 160, scrollHeight: 192, scrollTop: 0 };
+    mobileScrollNodeDimensions = scrollNodeDimensions;
+    const props: MobileFullscreenComposerShellCandidateProps = {
+      author: null,
+      beforeEditor: createElement('ReplyParentContext'),
+      body: '',
+      bodyRef: { current: null },
+      contentWarning: '',
+      contentWarningExpanded: false,
+      items: [],
+      mode: 'reply',
+      onBodyChange: () => undefined,
+      onContentWarningChange: () => undefined,
+      onContentWarningToggle: () => undefined,
+      onEmojiAction: () => undefined,
+      onMediaAction: () => undefined,
+      onMediaEdit: () => undefined,
+      onMediaRemove: () => undefined,
+      onMediaRetry: () => undefined,
+      onOverlayClose: () => undefined,
+      onPollAction: () => undefined,
+      onSelectionChange: () => undefined,
+      onSubmit: () => undefined,
+      onVisibilityChange: () => undefined,
+      remaining: 500,
+      selection: { end: 0, start: 0 },
+      sensitiveMedia: false,
+      showCWAction: false,
+      showEmojiAction: false,
+      showMediaAction: false,
+      showPollAction: false,
+      visibility: 'PUBLIC',
+    };
+
+    await act(async () => {
+      renderer = create(createElement(MobileFullscreenComposerShellCandidate, props));
+    });
+    const scrollView = () => renderer?.root.findByType('ScrollView' as never);
+    const parent = renderer?.root
+      .findAllByType('View' as never)
+      .find((view) => typeof view.props.onLayout === 'function');
+    assert.ok(parent);
+    assert.ok(scrollView());
+
+    await act(async () => {
+      (scrollView()?.props.onLayout as (event: unknown) => void)({
+        nativeEvent: { layout: { height: 160, width: 390 } },
+      });
+      (parent.props.onLayout as (event: unknown) => void)({
+        nativeEvent: { layout: { height: 116, width: 390, x: 0, y: 0 } },
+      });
+    });
+    const flushAnimationFrames = async () => {
+      const callbacks = Array.from(animationFrames.values());
+      animationFrames.clear();
+      await act(async () => callbacks.forEach((callback) => callback(0)));
+    };
+    await flushAnimationFrames();
+    assert.deepEqual(
+      mobileScrollRequests.map(({ y }) => y),
+      [],
+      'the initial reply anchor waits while it exceeds the available scroll range',
+    );
+
+    const emitScroll = async (offset: number) => {
+      scrollNodeDimensions.scrollTop = offset;
+      await act(async () => {
+        (scrollView()?.props.onScroll as (event: unknown) => void)({
+          nativeEvent: { contentOffset: { x: 0, y: offset } },
+        });
+      });
+    };
+    await emitScroll(32);
+
+    scrollNodeDimensions.clientHeight = 716;
+    scrollNodeDimensions.scrollHeight = 880;
+    await act(async () => {
+      (scrollView()?.props.onLayout as (event: unknown) => void)({
+        nativeEvent: { layout: { height: 716, width: 390 } },
+      });
+    });
+    await act(async () => {
+      (scrollView()?.props.onContentSizeChange as () => void)();
+    });
+    await flushAnimationFrames();
+    assert.deepEqual(
+      mobileScrollRequests.map(({ y }) => y),
+      [116],
+      'layout growth retries the still-pending reply anchor',
+    );
+
+    await emitScroll(116);
+    await emitScroll(72);
+    scrollNodeDimensions.clientHeight = 720;
+    await act(async () => {
+      (scrollView()?.props.onLayout as (event: unknown) => void)({
+        nativeEvent: { layout: { height: 720, width: 390 } },
+      });
+      (scrollView()?.props.onContentSizeChange as () => void)();
+    });
+    await flushAnimationFrames();
+    assert.deepEqual(
+      mobileScrollRequests.map(({ y }) => y),
+      [116],
+      'later manual scrolling and layout changes do not re-anchor',
+    );
   });
 });
 

@@ -357,35 +357,95 @@ export const MobileOverlayContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
     const document = canvasElement.ownerDocument;
+    const storyWindow = document.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Mobile reaction picker overlay story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(
+      visualViewport,
+      'offsetTop',
+    );
+    const originalHeight = visualViewport.height;
+    const originalOffsetTop = visualViewport.offsetTop;
     const page = within(document.body);
     const overlay = await page.findByTestId('full-reaction-picker-modal');
     const backdrop = within(overlay).getByTestId('full-reaction-picker-backdrop-dismiss');
     const sheet = within(overlay).getByTestId('full-reaction-picker-sheet');
     const search = within(overlay).getByRole('searchbox', { name: '반응 검색' });
-    const overlayBounds = overlay.getBoundingClientRect();
-    const sheetBounds = sheet.getBoundingClientRect();
 
-    expect(overlay).toBeVisible();
-    expect(page.getAllByRole('dialog', { name: '반응 선택' })).toHaveLength(1);
-    expect(sheetBounds.top).toBeGreaterThan(overlayBounds.top);
-    const searchBounds = search.getBoundingClientRect();
-    const insideHitTarget = document.elementFromPoint(
-      searchBounds.left + searchBounds.width / 2,
-      searchBounds.top + searchBounds.height / 2,
-    );
-    expect(insideHitTarget).not.toBeNull();
-    expect(search.contains(insideHitTarget)).toBe(true);
-    await userEvent.click(insideHitTarget as HTMLElement);
-    expect(overlay).toBeVisible();
+    try {
+      expect(overlay).toBeVisible();
+      expect(page.getAllByRole('dialog', { name: '반응 선택' })).toHaveLength(1);
 
-    const backdropHitTarget = document.elementFromPoint(
-      overlayBounds.left + overlayBounds.width / 2,
-      overlayBounds.top + (sheetBounds.top - overlayBounds.top) / 2,
-    );
-    expect(backdropHitTarget).not.toBeNull();
-    expect(backdrop.contains(backdropHitTarget)).toBe(true);
-    await userEvent.click(backdropHitTarget as HTMLElement);
-    await waitFor(() => expect(overlay).not.toBeVisible());
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 40 });
+      visualViewport.dispatchEvent(new storyWindow.Event('scroll'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(40, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+      expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0);
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+
+      Object.defineProperty(visualViewport, 'height', {
+        configurable: true,
+        value: originalHeight,
+      });
+      Object.defineProperty(visualViewport, 'offsetTop', {
+        configurable: true,
+        value: originalOffsetTop,
+      });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(originalHeight, 0);
+      });
+
+      const overlayBounds = overlay.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      expect(sheetBounds.top).toBeGreaterThan(overlayBounds.top);
+      const searchBounds = search.getBoundingClientRect();
+      const insideHitTarget = document.elementFromPoint(
+        searchBounds.left + searchBounds.width / 2,
+        searchBounds.top + searchBounds.height / 2,
+      );
+      expect(insideHitTarget).not.toBeNull();
+      expect(search.contains(insideHitTarget)).toBe(true);
+      await userEvent.click(insideHitTarget as HTMLElement);
+      expect(overlay).toBeVisible();
+
+      const backdropHitTarget = document.elementFromPoint(
+        overlayBounds.left + overlayBounds.width / 2,
+        overlayBounds.top + (sheetBounds.top - overlayBounds.top) / 2,
+      );
+      expect(backdropHitTarget).not.toBeNull();
+      expect(backdrop.contains(backdropHitTarget)).toBe(true);
+      await userEvent.click(backdropHitTarget as HTMLElement);
+      await waitFor(() => expect(overlay).not.toBeVisible());
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      if (originalOffsetTopDescriptor) {
+        Object.defineProperty(visualViewport, 'offsetTop', originalOffsetTopDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'offsetTop');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
   },
 };
 
