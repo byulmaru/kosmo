@@ -1,5 +1,5 @@
 diff --git a/build/fork/useLinking.js b/build/fork/useLinking.js
-index 6911c31922fd72621bfaa46c47b83274216a4744..f8df3ff4fc25da6aa7fa45fecc17d2e1a0e0ea06 100644
+index 6911c31922fd72621bfaa46c47b83274216a4744..8cc233c66bde1d28105831b50a36348e8124a08f 100644
 --- a/build/fork/useLinking.js
 +++ b/build/fork/useLinking.js
 @@ -10,6 +10,7 @@ const fast_deep_equal_1 = __importDefault(require("fast-deep-equal"));
@@ -64,3 +64,15 @@ index 6911c31922fd72621bfaa46c47b83274216a4744..f8df3ff4fc25da6aa7fa45fecc17d2e1
              // START FORK
              // previousStateRef.current = state;
              previousStateRef.current = rootState;
+diff --git a/build/layouts/StackClient.js b/build/layouts/StackClient.js
+index a8bc993e5b372d8159a739575d7729ef68bbc3fd..d12064c0d4af2eb3388dd74a200cb7dd2f9c4528 100644
+--- a/build/layouts/StackClient.js
++++ b/build/layouts/StackClient.js
+@@ -184,6 +184,7 @@ const stackRouterOverride = (original) => {
+                             routes.push({
+                                 ...route,
+                                 key,
++                                state: key === route.key ? route.state : undefined,
+                                 path: action.type === 'NAVIGATE' && action.payload.path !== undefined
+                                     ? action.payload.path
+                                     : route.path,
