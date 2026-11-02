@@ -121,6 +121,10 @@ Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 
 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤 저장 결과가
 확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
 
+과거 게시물 가져오기로 명시된 저장 요청은 일반 작성과 같은 Post Content 및 구조 관계를 보존한다. 이러한 요청은 새
+상호작용이 아니므로 Reply·Quote·Mention Notification과 그에 따른 push를 생성하지 않으며, Local Post의 outbound
+ActivityPub Create를 전달하거나 게시 생성 분석 기록을 남기지 않는다. 일반 Post 게시의 기존 동작은 유지한다.
+
 `PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
 `sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
 nullable list item으로 반환한다. Profile의 PostRequest 목록은 현재 상태가 `PUBLISHED`인 요청을 제외한다.

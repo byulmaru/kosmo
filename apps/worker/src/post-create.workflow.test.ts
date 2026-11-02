@@ -99,7 +99,6 @@ test(
     let blockedPostId = '';
     let effectStarted = Promise.withResolvers<void>();
     let effectReleased = Promise.withResolvers<void>();
-    let captureStarted = Promise.withResolvers<void>();
 
     const worker = await Worker.create({
       activities: {
@@ -130,10 +129,8 @@ test(
           };
         },
         createNotificationActivity: async (input: CreateNotificationInput) => {
-          const { kind, sourceId } = input;
           notificationCalls.push(input);
-          effectCalls.push(kind + ':' + sourceId);
-          if (sourceId === blockedPostId) {
+          if (input.sourceId === blockedPostId) {
             effectStarted.resolve();
             await effectReleased.promise;
           }
@@ -143,10 +140,6 @@ test(
         },
         capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
           analyticsCalls.push(input);
-          if (input.postId === blockedPostId) {
-            captureStarted.resolve();
-            await effectReleased.promise;
-          }
         },
       },
       connection: environment.nativeConnection,
@@ -210,7 +203,7 @@ test(
           },
           {
             args: {
-              createNotifications: true,
+              mode: 'publish',
               input: futureLocalInput,
               requestId: randomUUID(),
             },
@@ -223,13 +216,13 @@ test(
           {
             args: {
               analyticsPlatform: 'native',
-              createNotifications: false,
               input: futureLocalInput,
+              mode: 'import',
               requestId: randomUUID(),
             },
             expectedInput: expectedLocalInput,
-            expectedAnalytics: [{ analyticsPlatform: 'native', postId: postIds[2]! }],
-            expectedLocalSend: true,
+            expectedAnalytics: [],
+            expectedLocalSend: false,
             expectedNotificationKinds: [],
             postId: postIds[2]!,
           },
@@ -248,8 +241,8 @@ test(
           },
           {
             args: {
-              createNotifications: false,
               input: futureRemoteInput,
+              mode: 'import',
               requestId: randomUUID(),
             },
             expectedInput: { ...expectedRemoteInput, media: [remoteMedia] },
@@ -264,12 +257,9 @@ test(
           blockedPostId = item.postId;
           effectStarted = Promise.withResolvers<void>();
           effectReleased = Promise.withResolvers<void>();
-          captureStarted = Promise.withResolvers<void>();
           const resultPromise = runPostCreate(environment, taskQueue, item.args);
           if (item.expectedNotificationKinds.length > 0) {
             await effectStarted.promise;
-          } else if (item.expectedAnalytics.length > 0) {
-            await captureStarted.promise;
           }
 
           const expectedResult = {
@@ -283,19 +273,17 @@ test(
           const workflowId = postCreateWorkflow.workflowIdFromArgs(
             item.args as PostCreateWorkflowArgs,
           );
-          assert.equal(
-            (await environment.client.workflow.getHandle(workflowId).describe()).status.name,
-            'COMPLETED',
+          const workflowHandle = environment.client.workflow.getHandle(workflowId);
+          assert.equal((await workflowHandle.describe()).status.name, 'COMPLETED');
+          const history = await workflowHandle.fetchHistory();
+          const effectsChildStarted = (history.events ?? []).some((event) =>
+            Boolean(event.startChildWorkflowExecutionInitiatedEventAttributes),
           );
-
-          const childHandle = environment.client.workflow.getHandle(
-            'post-create-effects:' + item.postId,
-          );
-          if (item.expectedNotificationKinds.length > 0 || item.expectedAnalytics.length > 0) {
-            assert.equal((await childHandle.describe()).status.name, 'RUNNING');
-          } else {
-            await childHandle.result();
-          }
+          const hasEffects =
+            item.expectedNotificationKinds.length > 0 ||
+            item.expectedLocalSend ||
+            item.expectedAnalytics.length > 0;
+          assert.equal(effectsChildStarted, hasEffects);
 
           const attemptsForPost = createAttempts.filter(
             (attempt) => attempt.postId === item.postId,
@@ -306,9 +294,16 @@ test(
             index === 0 ? [item.expectedInput, item.expectedInput] : [item.expectedInput],
           );
 
-          effectReleased.resolve();
-          await childHandle.result();
-          assert.equal((await childHandle.describe()).status.name, 'COMPLETED');
+          if (hasEffects) {
+            const childHandle = environment.client.workflow.getHandle(
+              'post-create-effects:' + item.postId,
+            );
+            assert.equal((await childHandle.describe()).status.name, 'RUNNING');
+
+            effectReleased.resolve();
+            await childHandle.result();
+            assert.equal((await childHandle.describe()).status.name, 'COMPLETED');
+          }
 
           assert.deepEqual(
             notificationCalls
@@ -445,9 +440,9 @@ test(
         ...activityPubPostInput('https://remote.example/notes/invalid'),
         document: null,
       };
-      const malformedCreateNotificationsArgs = {
-        createNotifications: 'false',
+      const malformedModeArgs = {
         input: validLocalInput,
+        mode: 'unsupported',
         requestId: randomUUID(),
       };
 
@@ -457,11 +452,9 @@ test(
       await assert.rejects(executeInput(invalidRemoteInput), (error: unknown) =>
         isWorkflowFailureType(error, 'RemotePostCreateInputInvalid'),
       );
-      attemptedWorkflowArgs.push(
-        malformedCreateNotificationsArgs as unknown as PostCreateWorkflowArgs,
-      );
+      attemptedWorkflowArgs.push(malformedModeArgs as unknown as PostCreateWorkflowArgs);
       await assert.rejects(
-        runPostCreate(environment, taskQueue, malformedCreateNotificationsArgs),
+        runPostCreate(environment, taskQueue, malformedModeArgs),
         (error: unknown) => isWorkflowFailureType(error, 'VALIDATION'),
       );
       assert.deepEqual(generatedIds, []);
@@ -616,6 +609,8 @@ test(
     const postId = randomUUID();
     const generatedIds: string[] = [];
     const activityInputs: PostCreateActivityInput[] = [];
+    const effectCalls: string[] = [];
+    const analyticsCalls: CapturePostCreatedInput[] = [];
     const createPostActivityStub = async (
       activityInput: PostCreateActivityInput,
     ): Promise<PostCreateActivityResult> => {
@@ -637,8 +632,15 @@ test(
         },
         createPostActivity: createPostActivityStub,
         createPostActivityV2: createPostActivityStub,
-        createNotificationActivity: async () => {},
-        sendLocalPostCreateActivity: async () => {},
+        createNotificationActivity: async ({ sourceId }: CreateNotificationInput) => {
+          effectCalls.push('notification:' + sourceId);
+        },
+        sendLocalPostCreateActivity: async (createdPostId: string) => {
+          effectCalls.push('send:' + createdPostId);
+        },
+        capturePostCreatedActivity: async (input: CapturePostCreatedInput) => {
+          analyticsCalls.push(input);
+        },
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -648,7 +650,9 @@ test(
 
     await worker.runUntil(async () => {
       const args: PostCreateWorkflowArgs = {
+        analyticsPlatform: 'native',
         input: localPostInput('Stable post request'),
+        mode: 'import',
         postId,
         revalidateAuthorization: true,
         requestId: randomUUID(),
@@ -669,6 +673,17 @@ test(
       assert.deepEqual(activityInputs, [
         { input: args.input, postId, revalidateAuthorization: true },
       ]);
+      const history = await environment.client.workflow
+        .getHandle(postCreateWorkflowV2.workflowIdFromArgs(args))
+        .fetchHistory();
+      assert.equal(
+        (history.events ?? []).some((event) =>
+          Boolean(event.startChildWorkflowExecutionInitiatedEventAttributes),
+        ),
+        false,
+      );
+      assert.deepEqual(effectCalls, []);
+      assert.deepEqual(analyticsCalls, []);
     });
   },
 );

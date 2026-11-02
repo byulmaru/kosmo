@@ -68,11 +68,11 @@ const activityPubPostCreateInputSchema = z.object({
 });
 const workflowArgsSchema = z.object({
   analyticsPlatform: z.enum(['web', 'native']).optional(),
-  createNotifications: z.boolean().optional(),
   input: z.discriminatedUnion('origin', [
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
   ]),
+  mode: z.enum(['publish', 'import']).optional(),
   postId: z.uuid().optional(),
   revalidateAuthorization: z.boolean().optional(),
   requestId: z.uuid(),
@@ -100,7 +100,6 @@ export const startPostCreateEffects = async (
   origin: PostCreateWorkflowArgs['input']['origin'],
   postId: string,
   analyticsPlatform?: PostAnalyticsPlatform,
-  createNotifications?: boolean,
 ): Promise<void> => {
   try {
     await runChildWorkflow(postCreateEffectsDefinition, {
@@ -112,7 +111,6 @@ export const startPostCreateEffects = async (
           patched('post-create-effects-analytics-platform-v1')
             ? { analyticsPlatform }
             : {}),
-          ...(createNotifications === false ? { createNotifications: false } : {}),
         },
       ],
       cancellationType: ChildWorkflowCancellationType.ABANDON,
@@ -165,12 +163,11 @@ export async function postCreateWorkflow(
     );
   }
 
-  if (execution.result.status === 'created') {
+  if (execution.result.status === 'created' && parsed.mode !== 'import') {
     await startPostCreateEffects(
       parsed.input.origin,
       execution.result.postId,
       parsed.analyticsPlatform,
-      parsed.createNotifications,
     );
   }
 

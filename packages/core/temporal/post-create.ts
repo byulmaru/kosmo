@@ -47,8 +47,8 @@ export type PostCreateActivityResult =
 
 export type PostCreateWorkflowArgs = {
   readonly analyticsPlatform?: PostAnalyticsPlatform;
-  readonly createNotifications?: boolean;
   readonly input: LocalPostInput | ActivityPubPostCreateInput;
+  readonly mode?: 'publish' | 'import';
   readonly postId?: string;
   readonly revalidateAuthorization?: boolean;
   readonly requestId: string;
