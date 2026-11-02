@@ -41,6 +41,11 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
   다시 요청하거나 새로고침하지 않으며, 현재 탭과 route를 유지한다. 연속 입력이나 다른 경로의 새로고침 진행
   중에도 스크롤만 수행한다. 이는 PROD-1162의 2026-10-22 사용자 결정이다.
 - 비활성 탭 선택은 기존 타임라인 진입 동작을 따른다. 이 재선택 정책으로 전환에 별도 새로고침을 추가하지 않는다.
+- 같은 Profile actor에서 Home route로 재진입하면 유효한 Relay cache 데이터를 바로 표시하고, cache hit만으로
+  네트워크 요청을 강제하지 않는다. 데이터가 없거나 stale이면 기존 `store-or-network` query 경로를 사용한다.
+  Mute·unmute 또는 확정된 follow·unfollow 성공 후에는 다음 Home 재진입에서 서버의 목록 정책을 다시 적용한다.
+  Follow 요청 생성·취소는 해당하지 않으며, mutation 직후 timeline을 강제로 조회하지 않는다.
+  당겨서 새로고침은 명시적 새로고침으로 기존 동작을 유지한다.
 - Web의 sidebar·mobile drawer·하단 탭 바에서 `/local`의 active 홈 항목을 다시 실행하면 `/home`으로 이동하지
   않고 document scroll을 최상단으로 이동한 뒤 같은 Local 새로고침 경로를 실행한다.
 - compact·full Web의 Local 헤더 브랜드 마크도 현재 Local 타임라인을 재선택한다. 실제 link 대상은 `/home`으로

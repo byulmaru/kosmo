@@ -10,8 +10,11 @@ import {
   Network,
   Observable,
   RecordSource,
+  ROOT_ID,
   Store,
 } from 'relay-runtime';
+import homeQuery from '../timeline/__generated__/HomePageQuery.graphql';
+import localQuery from '../timeline/__generated__/LocalPageQuery.graphql';
 import followFragment from './__generated__/FollowButton_profile.graphql';
 import cancelMutation from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import followMutation from './__generated__/FollowButtonFollowProfileMutation.graphql';
@@ -53,8 +56,9 @@ mockModule('react-native', { StyleSheet: { create: (styles: object) => styles },
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
+const analyticsEvents: unknown[][] = [];
 mockModule('@/analytics/client', {
-  trackAnalytics: () => {},
+  trackAnalytics: (...args: unknown[]) => analyticsEvents.push(args),
 });
 const toasts: string[] = [];
 mockModule('@/components/ui/ToastProvider', {
@@ -89,6 +93,7 @@ afterEach(async () => {
   renderer = null;
   requests.length = 0;
   toasts.length = 0;
+  analyticsEvents.length = 0;
   selectedProfileId = 'owner-a';
   focusCount = 0;
 });
@@ -213,6 +218,327 @@ async function respond(index: number, response: GraphQLResponse) {
     requests[index]!.sink.complete();
   });
 }
+
+function seedTimelineQueries(environment: Environment, ownerId = selectedProfileId) {
+  const homeOperation = createOperationDescriptor(homeQuery, {});
+  const localOperation = createOperationDescriptor(localQuery, {});
+  const profile = {
+    id: ownerId,
+    relativeHandle: '@owner',
+    private: { defaultPostVisibility: 'PUBLIC' },
+    displayName: 'Owner',
+    handle: 'owner',
+    avatar: null,
+  };
+  const data = {
+    currentSession: { id: `session-${ownerId}`, selectedProfile: profile },
+    me: { id: 'account', name: 'Owner', profiles: [{ id: ownerId }] },
+    homeTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+    localTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+  };
+  environment.commitPayload(homeOperation, data);
+  environment.commitPayload(localOperation, data);
+  return { data, homeOperation, localOperation };
+}
+
+function followPayload(
+  resultType: 'ProfileFollow' | 'ProfileFollowRequest',
+  ownerId = selectedProfileId,
+) {
+  const relationId = resultType === 'ProfileFollow' ? 'follow-a' : 'request-a';
+  return {
+    followProfile: {
+      result: { __typename: resultType, id: relationId },
+      followerProfile: { id: ownerId, followingCount: resultType === 'ProfileFollow' ? 1 : 0 },
+      followeeProfile: {
+        displayName: '대상',
+        followPolicy: resultType === 'ProfileFollowRequest' ? 'APPROVAL_REQUIRED' : 'OPEN',
+        followersCount: resultType === 'ProfileFollow' ? 1 : 0,
+        handle: 'target',
+        id: targetId,
+        relativeHandle: '@target',
+        viewerState: {
+          isSelf: false,
+          follow:
+            resultType === 'ProfileFollow'
+              ? { id: relationId, follower: { id: ownerId, followingCount: 1 } }
+              : null,
+          followRequest: resultType === 'ProfileFollowRequest' ? { id: relationId } : null,
+          profileBlock: null,
+        },
+      },
+    },
+  };
+}
+
+function unfollowPayload(ownerId = selectedProfileId, profileFollowId: string | null = 'follow-a') {
+  return {
+    unfollowProfile: {
+      profileFollowId,
+      followerProfile: { id: ownerId, followingCount: 0 },
+      followeeProfile: {
+        displayName: '대상',
+        followPolicy: 'OPEN',
+        followersCount: 0,
+        handle: 'target',
+        id: targetId,
+        relativeHandle: '@target',
+        viewerState: {
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: null,
+        },
+      },
+    },
+  };
+}
+
+function partialFollowPayload(resultType: 'ProfileFollow' | 'ProfileFollowRequest') {
+  const { followProfile } = followPayload(resultType);
+  return {
+    followProfile: {
+      ...followProfile,
+      followeeProfile: { ...followProfile.followeeProfile, viewerState: null },
+    },
+  };
+}
+
+function partialUnfollowPayload(profileFollowId: string | null = 'follow-a') {
+  const { unfollowProfile } = unfollowPayload(selectedProfileId, profileFollowId);
+  return {
+    unfollowProfile: {
+      ...unfollowProfile,
+      followeeProfile: { ...unfollowProfile.followeeProfile, viewerState: null },
+    },
+  };
+}
+
+function setFollowing(environment: Environment) {
+  environment.commitUpdate((store) => {
+    const follower = store.get(selectedProfileId) ?? store.create(selectedProfileId, 'Profile');
+    follower.setValue(selectedProfileId, 'id');
+    follower.setValue(1, 'followingCount');
+    const follow = store.create('follow-a', 'ProfileFollow');
+    follow.setLinkedRecord(follower, 'follower');
+    store.get(stateId)?.setLinkedRecord(follow, 'follow');
+  });
+}
+
+test('follow/unfollow 성공은 loaded Home을 stale로 만들고 즉시 재요청하지 않는다', async () => {
+  const environment = createEnvironment();
+  const { data, homeOperation, localOperation } = seedTimelineQueries(environment);
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+  clearProfileBlock(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(requests[0]!.name, 'FollowButtonFollowProfileMutation');
+  await respond(0, { data: followPayload('ProfileFollow') });
+  assert.equal(button().props.children, '팔로잉');
+  assert.equal(environment.check(homeOperation).status, 'stale');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(requests.length, 1, 'follow must not query Home immediately');
+
+  const reentry = environment.execute({ operation: homeOperation }).subscribe({
+    error: (error: unknown) => {
+      throw error;
+    },
+  });
+  assert.equal(requests[1]!.name, 'HomePageQuery');
+  await respond(1, { data });
+  reentry.unsubscribe();
+  assert.equal(environment.check(homeOperation).status, 'available');
+
+  await act(async () => button().props.onPress());
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(requests[2]!.name, 'FollowButtonUnfollowProfileMutation');
+  await respond(2, { data: unfollowPayload() });
+  assert.equal(environment.check(homeOperation).status, 'stale');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(requests.length, 3, 'unfollow must not query Home immediately');
+});
+
+test('실제 follow request 생성과 취소는 loaded Home을 stale로 만들지 않는다', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  environment.commitUpdate((store) =>
+    store.get(targetId)?.setValue('APPROVAL_REQUIRED', 'followPolicy'),
+  );
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, { data: followPayload('ProfileFollowRequest') });
+  assert.equal(button().props.children, '요청됨');
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+
+  await act(async () => button().props.onPress());
+  assert.equal(requests[1]!.name, 'FollowButtonCancelProfileFollowRequestMutation');
+  await respond(1, {
+    data: { cancelProfileFollowRequest: { profileFollowRequestId: 'request-a' } },
+  });
+  assert.equal(button().props.children, '팔로우');
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+});
+
+test('network 실패 follow는 Home을 보존하고 부분 성공 unfollow는 Home을 stale로 만든다', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await act(async () => requests[0]!.sink.error(new Error('offline')));
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+
+  await act(async () => setFollowing(environment));
+  await act(async () => button().props.onPress());
+  await respond(1, {
+    data: partialUnfollowPayload(),
+    errors: [
+      {
+        message: 'viewer follow state unavailable',
+        path: ['unfollowProfile', 'followeeProfile', 'viewerState'],
+      },
+    ],
+  });
+  assert.equal(environment.check(homeOperation).status, 'stale');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(toasts.length, 2);
+});
+
+test('부분 성공 established follow는 Home을 stale로 만들고 실패 UI를 유지한다', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, {
+    data: partialFollowPayload('ProfileFollow'),
+    errors: [
+      {
+        message: 'viewer follow state unavailable',
+        path: ['followProfile', 'followeeProfile', 'viewerState'],
+      },
+    ],
+  });
+
+  assert.equal(environment.check(homeOperation).status, 'stale');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(toasts.length, 1);
+  assert.equal(analyticsEvents.length, 0);
+});
+
+test('부분 성공 follow request는 Home을 fresh로 유지한다', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  environment.commitUpdate((store) =>
+    store.get(targetId)?.setValue('APPROVAL_REQUIRED', 'followPolicy'),
+  );
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, {
+    data: partialFollowPayload('ProfileFollowRequest'),
+    errors: [
+      {
+        message: 'viewer follow state unavailable',
+        path: ['followProfile', 'followeeProfile', 'viewerState'],
+      },
+    ],
+  });
+
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(toasts.length, 1);
+  assert.equal(analyticsEvents.length, 0);
+});
+
+test('unfollow 성공 no-op의 null removal ID도 loaded Home을 stale로 만든다', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  await act(async () => setFollowing(environment));
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  assert.equal(environment.check(homeOperation).status, 'available');
+  await respond(0, { data: unfollowPayload(selectedProfileId, null) });
+
+  assert.equal(environment.check(homeOperation).status, 'stale');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(toasts.length, 0);
+});
+
+test('partial unfollow projection error without removal ID keeps Home fresh', async () => {
+  const environment = createEnvironment();
+  const { homeOperation, localOperation } = seedTimelineQueries(environment);
+  clearProfileBlock(environment);
+  await act(async () => setFollowing(environment));
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, {
+    data: partialUnfollowPayload(null),
+    errors: [
+      {
+        message: 'viewer follow state unavailable',
+        path: ['unfollowProfile', 'followeeProfile', 'viewerState'],
+      },
+    ],
+  });
+
+  assert.equal(environment.check(homeOperation).status, 'available');
+  assert.equal(environment.check(localOperation).status, 'available');
+  assert.equal(toasts.length, 1);
+});
+
+test('Home이 로드되지 않았어도 follow 성공 callback은 안전하다', async () => {
+  const environment = createEnvironment();
+  clearProfileBlock(environment);
+  await render(environment);
+
+  await act(async () => button().props.onPress());
+  await respond(0, { data: followPayload('ProfileFollow') });
+  assert.equal(button().props.children, '팔로잉');
+  assert.equal(
+    environment
+      .getStore()
+      .getSource()
+      .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')),
+    undefined,
+  );
+  assert.equal(requests.length, 1);
+});
+
+test('늦은 actor A follow callback은 B의 Home Store를 stale로 만들지 않는다', async () => {
+  const actorA = createEnvironment();
+  const { homeOperation: homeA } = seedTimelineQueries(actorA, 'owner-a');
+  clearProfileBlock(actorA);
+  await render(actorA);
+  await act(async () => button().props.onPress());
+
+  selectedProfileId = 'owner-b';
+  const actorB = createEnvironment();
+  const { homeOperation: homeB } = seedTimelineQueries(actorB, 'owner-b');
+  clearProfileBlock(actorB);
+  await render(actorB);
+  const before = actorB.getStore().getSource().toJSON();
+  assert.equal(actorB.check(homeB).status, 'available');
+
+  await respond(0, { data: followPayload('ProfileFollow', 'owner-a') });
+  assert.equal(actorA.check(homeA).status, 'stale');
+  assert.equal(actorB.check(homeB).status, 'available');
+  assert.deepEqual(actorB.getStore().getSource().toJSON(), before);
+});
 
 test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실패 후 같은 관계를 재시도한다', async () => {
   const environment = createEnvironment();
