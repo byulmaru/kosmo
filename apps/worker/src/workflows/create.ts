@@ -9,6 +9,7 @@ import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
   readonly analyticsPlatform?: PostAnalyticsPlatform;
+  readonly createNotifications?: boolean;
   readonly postId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
@@ -24,6 +25,7 @@ const {
 
 export async function postCreateEffectsWorkflow({
   analyticsPlatform,
+  createNotifications,
   postId,
   origin,
 }: PostCreateEffectsInput): Promise<void> {
@@ -31,23 +33,27 @@ export async function postCreateEffectsWorkflow({
   const mentionNotificationEnabled = patched('post-create-effects-mention-notification-v1');
   const postCreatedAnalyticsEnabled = patched('post-create-effects-post-created-analytics-v1');
   await settleEffects([
-    pushNotificationDispatchEnabled
-      ? createNotificationActivity({ kind: NotificationKind.REPLY, sourceId: postId })
-      : createReplyNotificationActivity(postId),
-    ...(patched('post-create-effects-quote-notification-v1')
-      ? [
+    ...(createNotifications === false
+      ? []
+      : [
           pushNotificationDispatchEnabled
-            ? createNotificationActivity({ kind: NotificationKind.QUOTE, sourceId: postId })
-            : createQuoteNotificationActivity(postId),
-        ]
-      : []),
-    ...(mentionNotificationEnabled
-      ? [
-          pushNotificationDispatchEnabled
-            ? createNotificationActivity({ kind: NotificationKind.MENTION, sourceId: postId })
-            : createMentionNotificationActivity(postId),
-        ]
-      : []),
+            ? createNotificationActivity({ kind: NotificationKind.REPLY, sourceId: postId })
+            : createReplyNotificationActivity(postId),
+          ...(patched('post-create-effects-quote-notification-v1')
+            ? [
+                pushNotificationDispatchEnabled
+                  ? createNotificationActivity({ kind: NotificationKind.QUOTE, sourceId: postId })
+                  : createQuoteNotificationActivity(postId),
+              ]
+            : []),
+          ...(mentionNotificationEnabled
+            ? [
+                pushNotificationDispatchEnabled
+                  ? createNotificationActivity({ kind: NotificationKind.MENTION, sourceId: postId })
+                  : createMentionNotificationActivity(postId),
+              ]
+            : []),
+        ]),
     ...match(origin)
       .with('LOCAL', () => [
         sendLocalPostCreateActivity(postId),

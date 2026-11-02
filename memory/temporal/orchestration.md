@@ -80,6 +80,11 @@
   `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
+- Shared `PostCreateWorkflowArgs`의 optional `createNotifications`는 생략하거나 `true`이면 기존 child input과
+  notification command path를 유지한다. 따라서 이 false-only child argument는 old history의 arguments와 command
+  trace를 바꾸지 않아 별도 `patched` marker가 필요하지 않다. Explicit `false`만 effects child에 전달해 Reply, Quote,
+  Mention notification Activities를 건너뛴다. Post 저장과 Local send·analytics 및 남은 effects의 settlement는 그대로
+  유지한다.
 
 - 신규 `postRequestWorkflow` history는 bulk READY lookup 뒤 `patched('post-request-media-parallel-v1')`로 non-READY Media 작업을 processing ID 순서로 시작하고 기존 `settleEffects`로 모두 정산한다. 한 batch `CancellationScope`는 PostRequest의 대기를 취소하면서 `ABANDON` shared upload는 유지한다. Marker 이전 history는 per-ID scope와 직렬 command 순서를 보존하며 per-ID Nexus·retry·READY recovery 동작은 그대로 둔다.
 

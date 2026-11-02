@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { PostVisibility } from '@kosmo/core/enums';
+import { NotificationKind, PostVisibility } from '@kosmo/core/enums';
 import {
   POST_CREATE_WORKFLOW_TYPE,
   POST_CREATE_WORKFLOW_V2_TYPE,
@@ -89,10 +89,11 @@ test(
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-workflow-' + process.pid;
-    const postIds = [randomUUID(), randomUUID()];
+    const postIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const generatedIds: string[] = [];
     const createAttempts: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
+    const notificationCalls: CreateNotificationInput[] = [];
     const analyticsCalls: CapturePostCreatedInput[] = [];
     let retryFirstLocalActivity = true;
     let blockedPostId = '';
@@ -128,7 +129,9 @@ test(
             },
           };
         },
-        createNotificationActivity: async ({ kind, sourceId }: CreateNotificationInput) => {
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          const { kind, sourceId } = input;
+          notificationCalls.push(input);
           effectCalls.push(kind + ':' + sourceId);
           if (sourceId === blockedPostId) {
             effectStarted.resolve();
@@ -186,6 +189,11 @@ test(
           media: [{ ...remoteMedia, futureField: true }],
         };
 
+        const notificationKinds = [
+          NotificationKind.MENTION,
+          NotificationKind.QUOTE,
+          NotificationKind.REPLY,
+        ];
         const cases = [
           {
             args: {
@@ -195,7 +203,35 @@ test(
               requestId: randomUUID(),
             },
             expectedInput: expectedLocalInput,
+            expectedAnalytics: [{ analyticsPlatform: 'web', postId: postIds[0]! }],
+            expectedLocalSend: true,
+            expectedNotificationKinds: notificationKinds,
             postId: postIds[0]!,
+          },
+          {
+            args: {
+              createNotifications: true,
+              input: futureLocalInput,
+              requestId: randomUUID(),
+            },
+            expectedInput: expectedLocalInput,
+            expectedAnalytics: [],
+            expectedLocalSend: true,
+            expectedNotificationKinds: notificationKinds,
+            postId: postIds[1]!,
+          },
+          {
+            args: {
+              analyticsPlatform: 'native',
+              createNotifications: false,
+              input: futureLocalInput,
+              requestId: randomUUID(),
+            },
+            expectedInput: expectedLocalInput,
+            expectedAnalytics: [{ analyticsPlatform: 'native', postId: postIds[2]! }],
+            expectedLocalSend: true,
+            expectedNotificationKinds: [],
+            postId: postIds[2]!,
           },
           {
             args: {
@@ -205,7 +241,22 @@ test(
               requestId: randomUUID(),
             },
             expectedInput: { ...expectedRemoteInput, media: [remoteMedia] },
-            postId: postIds[1]!,
+            expectedAnalytics: [],
+            expectedLocalSend: false,
+            expectedNotificationKinds: notificationKinds,
+            postId: postIds[3]!,
+          },
+          {
+            args: {
+              createNotifications: false,
+              input: futureRemoteInput,
+              requestId: randomUUID(),
+            },
+            expectedInput: { ...expectedRemoteInput, media: [remoteMedia] },
+            expectedAnalytics: [],
+            expectedLocalSend: false,
+            expectedNotificationKinds: [],
+            postId: postIds[4]!,
           },
         ];
 
@@ -215,8 +266,9 @@ test(
           effectReleased = Promise.withResolvers<void>();
           captureStarted = Promise.withResolvers<void>();
           const resultPromise = runPostCreate(environment, taskQueue, item.args);
-          await effectStarted.promise;
-          if (item.args.analyticsPlatform !== undefined) {
+          if (item.expectedNotificationKinds.length > 0) {
+            await effectStarted.promise;
+          } else if (item.expectedAnalytics.length > 0) {
             await captureStarted.promise;
           }
 
@@ -239,7 +291,11 @@ test(
           const childHandle = environment.client.workflow.getHandle(
             'post-create-effects:' + item.postId,
           );
-          assert.equal((await childHandle.describe()).status.name, 'RUNNING');
+          if (item.expectedNotificationKinds.length > 0 || item.expectedAnalytics.length > 0) {
+            assert.equal((await childHandle.describe()).status.name, 'RUNNING');
+          } else {
+            await childHandle.result();
+          }
 
           const attemptsForPost = createAttempts.filter(
             (attempt) => attempt.postId === item.postId,
@@ -247,20 +303,28 @@ test(
           assert.equal(attemptsForPost.length, index === 0 ? 2 : 1);
           assert.deepEqual(
             attemptsForPost.map((attempt) => attempt.input),
-            index === 0
-              ? [expectedLocalInput, expectedLocalInput]
-              : [{ ...expectedRemoteInput, media: [remoteMedia] }],
-          );
-          assert.deepEqual(
-            analyticsCalls.filter(({ postId: capturedPostId }) => capturedPostId === item.postId),
-            item.args.analyticsPlatform === undefined
-              ? []
-              : [{ analyticsPlatform: item.args.analyticsPlatform, postId: item.postId }],
+            index === 0 ? [item.expectedInput, item.expectedInput] : [item.expectedInput],
           );
 
           effectReleased.resolve();
           await childHandle.result();
           assert.equal((await childHandle.describe()).status.name, 'COMPLETED');
+
+          assert.deepEqual(
+            notificationCalls
+              .filter(({ sourceId }) => sourceId === item.postId)
+              .map(({ kind }) => kind)
+              .toSorted(),
+            item.expectedNotificationKinds.toSorted(),
+          );
+          assert.deepEqual(
+            effectCalls.filter((call) => call === 'send:' + item.postId),
+            item.expectedLocalSend ? ['send:' + item.postId] : [],
+          );
+          assert.deepEqual(
+            analyticsCalls.filter(({ postId: capturedPostId }) => capturedPostId === item.postId),
+            item.expectedAnalytics,
+          );
         }
 
         assert.deepEqual(generatedIds, postIds);
@@ -381,12 +445,24 @@ test(
         ...activityPubPostInput('https://remote.example/notes/invalid'),
         document: null,
       };
+      const malformedCreateNotificationsArgs = {
+        createNotifications: 'false',
+        input: validLocalInput,
+        requestId: randomUUID(),
+      };
 
       await assert.rejects(executeInput(invalidLocalInput), (error: unknown) =>
         isWorkflowFailureType(error, 'VALIDATION'),
       );
       await assert.rejects(executeInput(invalidRemoteInput), (error: unknown) =>
         isWorkflowFailureType(error, 'RemotePostCreateInputInvalid'),
+      );
+      attemptedWorkflowArgs.push(
+        malformedCreateNotificationsArgs as unknown as PostCreateWorkflowArgs,
+      );
+      await assert.rejects(
+        runPostCreate(environment, taskQueue, malformedCreateNotificationsArgs),
+        (error: unknown) => isWorkflowFailureType(error, 'VALIDATION'),
       );
       assert.deepEqual(generatedIds, []);
       assert.deepEqual(activityCalls, []);

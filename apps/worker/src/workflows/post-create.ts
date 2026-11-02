@@ -68,6 +68,7 @@ const activityPubPostCreateInputSchema = z.object({
 });
 const workflowArgsSchema = z.object({
   analyticsPlatform: z.enum(['web', 'native']).optional(),
+  createNotifications: z.boolean().optional(),
   input: z.discriminatedUnion('origin', [
     localPostCreateInputSchema,
     activityPubPostCreateInputSchema,
@@ -99,6 +100,7 @@ export const startPostCreateEffects = async (
   origin: PostCreateWorkflowArgs['input']['origin'],
   postId: string,
   analyticsPlatform?: PostAnalyticsPlatform,
+  createNotifications?: boolean,
 ): Promise<void> => {
   try {
     await runChildWorkflow(postCreateEffectsDefinition, {
@@ -110,6 +112,7 @@ export const startPostCreateEffects = async (
           patched('post-create-effects-analytics-platform-v1')
             ? { analyticsPlatform }
             : {}),
+          ...(createNotifications === false ? { createNotifications: false } : {}),
         },
       ],
       cancellationType: ChildWorkflowCancellationType.ABANDON,
@@ -167,6 +170,7 @@ export async function postCreateWorkflow(
       parsed.input.origin,
       execution.result.postId,
       parsed.analyticsPlatform,
+      parsed.createNotifications,
     );
   }
 
