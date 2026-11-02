@@ -119,7 +119,9 @@ for (const scenario of [
       page.getByRole('heading', { name: ownerProfile.displayName, exact: true }),
     ).toBeVisible();
 
-    const connectionCountLink = page.locator(`a[href="${connectionPath}"]`);
+    const connectionCountLink = page
+      .getByTestId('universal-shell-content')
+      .locator(`a[href="${connectionPath}"]`);
     await expect(connectionCountLink).toBeVisible();
     await connectionCountLink.click();
     await expect(page).toHaveURL(connectionPath);
