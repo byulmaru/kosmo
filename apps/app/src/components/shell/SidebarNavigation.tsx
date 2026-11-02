@@ -61,6 +61,7 @@ const hrefs: Partial<Record<NavigationDestination, Href>> = {
   followRequests: '/follow-requests',
   home: '/home',
   notifications: '/notifications',
+  postRequests: '/post-requests',
   search: '/search',
   settings: '/settings',
 };
@@ -256,6 +257,9 @@ function getCurrentDestination(
   }
   if (pathname === '/follow-requests') {
     return 'followRequests';
+  }
+  if (pathname === '/post-requests') {
+    return 'postRequests';
   }
   if (pathname === '/bookmarks') {
     return 'bookmarks';

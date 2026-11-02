@@ -588,10 +588,10 @@ function InteractiveComposer({
         <ComposerMediaEditor
           media={items.filter((item) => item.state === 'ready')}
           mobileState={editor.mobileState}
-          onApplyNightshadeChange={(key, value) => {
+          onApplyAiProhibitFilterChange={(key, value) => {
             setItems((current) =>
               current.map((item) =>
-                item.key === key ? { ...item, applyNightshade: value } : item,
+                item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
               ),
             );
           }}
@@ -722,10 +722,10 @@ function InteractiveComposer({
           {editor ? (
             <ComposerMediaEditor
               media={items.filter((item) => item.state === 'ready')}
-              onApplyNightshadeChange={(key, value) => {
+              onApplyAiProhibitFilterChange={(key, value) => {
                 setItems((current) =>
                   current.map((item) =>
-                    item.key === key ? { ...item, applyNightshade: value } : item,
+                    item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
                   ),
                 );
               }}
@@ -1181,7 +1181,7 @@ export const MobileRuntimeAltEditorContract: Story = {
         media={readyComposerMedia}
         mobileState="alt"
         onAltTextChange={fn()}
-        onApplyNightshadeChange={fn()}
+        onApplyAiProhibitFilterChange={fn()}
         onBack={fn()}
         onClose={fn()}
         onDone={fn()}

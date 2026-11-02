@@ -8,7 +8,8 @@ PostHog 증거를 확인한 뒤에만 시작한다.
 
 - 계산 규칙 버전: `multi-profile-usage.v1`
 - 수집 범위: production Web의 인증 Account 이벤트
-- 새 서버 `post_created` event는 Web·Native의 DB commit 뒤 기록한다. 이전 SDK Web event도 이 집계에 계속 포함한다.
+- 새 클라이언트 `post_created` event는 유효한 Post 접수 ACK를 확인한 뒤 기록한다. 이 의미는 해당 변경이 포함된 새 클라이언트 릴리스부터 적용하며, 배포일은 이 문서에서 정하지 않는다.
+- 기존 또는 별도로 요청된 Worker `post_created` event는 DB commit 뒤 기록한 Post 발행을 뜻한다. 이 server event와 기존 SDK Web event를 이 집계에 계속 포함한다. 릴리스 전후의 `post_created` 의미는 다를 수 있지만 계산 규칙 버전과 집계 식은 그대로 `multi-profile-usage.v1`을 유지한다.
 - 주차: `Asia/Seoul` 기준 월요일 00:00 이상, 다음 월요일 00:00 미만
 - 중복 기준: `Account × event × capture UUID`; 같은 UUID의 재전송은 가장 이른 행동 시각 하나만 유지
 - 집계 결과 metadata: 관측 기간, `calculated_at`, 계산 규칙 버전, 접근 제한 제외 목록 버전, 주차 상태
@@ -24,17 +25,17 @@ PostHog 증거를 확인한 뒤에만 시작한다.
 사용하며 custom property로 `account_id`를 복제하지 않는다. 화면 pathname, Profile 목록·이름·handle,
 Post Content, 검색 원문, Follow 대상 Profile ID도 수집하지 않는다.
 
-| 이벤트                   | 허용 custom property                                                                   | WAA              | 사용 Profile                             |
-| ------------------------ | -------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------- |
-| SDK `$pageview`          | 인증 화면이면 `selected_profile_id`                                                    | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
-| SDK `$identify` / `$set` | Person `available_profile_count` 갱신. event property가 아님                           | 단독으로 제외    | 단독으로 제외                            |
-| `profile_created`        | `selected_profile_id`                                                                  | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
-| `profile_selected`       | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id`               | 포함             | 선택한 Profile 포함                      |
-| `post_created`           | `selected_profile_id`, `visibility`; 서버 event에만 `client_platform` (`web`/`native`) | Web만 포함       | 행동 주체 Profile 포함                   |
-| `follow_succeeded`       | `selected_profile_id`, `result` (`follow`/`request`)                                   | 포함             | 행동 주체 Profile 포함                   |
-| `search_submitted`       | `tab`, `source`                                                                        | 포함             | 해당 없음                                |
-| `search_results_loaded`  | `tab`, `has_results`                                                                   | 포함             | 해당 없음                                |
-| `search_result_selected` | `tab`                                                                                  | 포함             | 해당 없음                                |
+| 이벤트                   | 허용 custom property                                                                     | WAA              | 사용 Profile                             |
+| ------------------------ | ---------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------- |
+| SDK `$pageview`          | 인증 화면이면 `selected_profile_id`                                                      | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
+| SDK `$identify` / `$set` | Person `available_profile_count` 갱신. event property가 아님                             | 단독으로 제외    | 단독으로 제외                            |
+| `profile_created`        | `selected_profile_id`                                                                    | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
+| `profile_selected`       | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id`                 | 포함             | 선택한 Profile 포함                      |
+| `post_created`           | `selected_profile_id`, `visibility`; Worker event에만 `client_platform` (`web`/`native`) | Web만 포함       | 행동 주체 Profile 포함                   |
+| `follow_succeeded`       | `selected_profile_id`, `result` (`follow`/`request`)                                     | 포함             | 행동 주체 Profile 포함                   |
+| `search_submitted`       | `tab`, `source`                                                                          | 포함             | 해당 없음                                |
+| `search_results_loaded`  | `tab`, `has_results`                                                                     | 포함             | 해당 없음                                |
+| `search_result_selected` | `tab`                                                                                    | 포함             | 해당 없음                                |
 
 `available_profile_count`는 해당 Account가 관측 당시 **동시에 선택할 수 있는** Profile의 수를 나타내는
 Person 속성이다. 기존
@@ -51,18 +52,24 @@ PostHog SDK의 Person 갱신 `$set` 및 최초 `$identify`와 이후 이벤트�
 `profile_selected`는 기존 성공 이벤트다. 직접 선택에는 `selection_cause=direct`를, 생성 직후 자동
 선택에는 `selection_cause=auto`를 붙인다. 선택 직전 Profile이 있으면 `previous_profile_id`를 붙인다.
 HogQL은 `direct`이고 이전 ID가 있으며 성공한 도착 ID와 다를 때만 직접 전환으로 센다. `follow_succeeded`는
-성공 이벤트의 행동 Profile ID를 그대로 재사용한다. 새 서버 `post_created`의 Profile과 visibility는 commit된 Post
-row에서 읽는다. 첫 Post 요청 admission에서 해당 client의 SDK가 ready·enabled 상태이고 opt-out되지 않았을 때만
-Web·Native platform을 snapshot에 고정한다. signal이 없거나 SDK가 not-ready·disabled·opted-out이면 Post 생성은
-계속되지만 서버 event는 보내지 않는다. 같은 request ID의 재전송이나 이후 SDK 상태 변화는 처음 snapshot을 바꾸지
-않는다. 서버 capture는 row가 없거나 `actorAccountId`가 null이면 건너뛰며, 기존 Account identity에 대한 일반 Person
-처리를 유지한다. system `database_counts_snapshot`의 `$process_person_profile: false` 설정은 복사하지 않는다.
+성공 이벤트의 행동 Profile ID를 그대로 재사용한다. 새 클라이언트 `post_created`는 접수한 Profile과 선택한
+visibility를 사용하며, 유효한 `acceptedRequest.id` 응답 분기에서 한 번 기록한다. Pending 응답의 `post: null`도
+포함하고, 같은 분기에 접수 ID가 있으면 부분 GraphQL 오류가 함께 있어도 기록한다. Network error나 접수 ID가 없는
+응답에는 기록하지 않으며 접수 뒤 게시 처리 실패·취소도 기록을 회수하지 않는다. 별도 Worker `post_created`의
+Profile과 visibility는 commit된 Post row에서 읽는다. Worker capture를 명시적으로 요청하면 첫 Post 요청 admission에서
+해당 client의 SDK가 ready·enabled 상태이고 opt-out되지 않았을 때만 Web·Native platform을 snapshot에 고정한다.
+signal이 없거나 SDK가 not-ready·disabled·opted-out이면 Post 처리는 계속되지만 Worker event는 보내지 않는다. 같은
+request ID의 재전송이나 이후 SDK 상태 변화는 처음 snapshot을 바꾸지 않는다. 서버 capture는 row가 없거나
+`actorAccountId`가 null이면 건너뛰며, 기존 Account identity에 대한 일반 Person 처리를 유지한다. system
+`database_counts_snapshot`의 `$process_person_profile: false` 설정은 복사하지 않는다. 일반 Composer 흐름은 Worker
+capture를 요청하지 않아 동일한 UI 제출에서 두 event가 발생하지 않는다.
 
-일반 SDK event와 기존 SDK `post_created` event의 `uuid`와 capture 시각은 PostHog SDK가 생성한다. 새 서버
-`post_created`는 예외로 stable UUID에 DB Post ID를, top-level timestamp에 persisted `Posts.createdAt`을 사용한다.
-이는 요청 제출 시각이나 정확한 transaction commit wall-clock 시각이 아니며, event 전송은 Post commit 뒤에 이뤄질
-수 있다. Native 서버 event도 기록하지만 이 Web 주간 집계에는 포함하지 않는다. raw server capture에는 브라우저
-URL·referrer metadata가 없으므로 이를 만들거나 SDK `$lib`를 추정하지 않는다.
+일반 SDK event와 새 클라이언트 `post_created` event의 `uuid`와 capture 시각은 PostHog SDK가 생성한다. 클라이언트
+event 시각은 접수 ACK 관측에 해당한다. Worker `post_created`는 예외로 stable UUID에 DB Post ID를,
+top-level timestamp에 persisted `Posts.createdAt`을 사용한다. 이는 요청 접수 시각이나 정확한 transaction commit
+wall-clock 시각이 아니며, event 전송은 Post commit 뒤에 이뤄질 수 있다. Native Worker event도 기록할 수 있지만 이
+Web 주간 집계에는 포함하지 않는다. raw Worker capture에는 브라우저 URL·referrer metadata가 없으므로 이를 만들거나
+SDK `$lib`를 추정하지 않는다.
 
 ## 집계 규칙
 
@@ -91,9 +98,9 @@ SDK 차단이나 전송 실패로 빠진 행동은 추정하지 않는다.
 ## HogQL 저장 쿼리 형태
 
 실제 Insight에는 아래 CTE 순서를 보존한 쿼리를 저장한다. 리텐션 조회의 `{from}`, `{to}`는 기준 주와
-W+4 비교 주까지 포함한다. 새 서버 `post_created`는 raw capture라 브라우저 URL·referrer나 SDK `$lib`가 없으며,
-`client_platform=web`일 때만 포함한다. `client_platform`이 없는 기존 SDK `post_created` event는 이전과 같은
-production Web metadata filter를 통과할 때 포함한다. Native 서버 event는 어느 branch에서도 포함하지 않는다.
+W+4 비교 주까지 포함한다. Worker `post_created`는 raw capture라 브라우저 URL·referrer나 SDK `$lib`가 없으며,
+`client_platform=web`일 때만 포함한다. `client_platform`이 없는 클라이언트 `post_created` event는 기존과 같은
+production Web metadata filter를 통과할 때 포함한다. Native Worker event는 어느 branch에서도 포함하지 않는다.
 다른 event에는 배포 환경의 표준 production Web metadata filter를 그대로 적용한다. 제외 Account 값은 접근 제한된
 runtime 목록에서 주입한다. 실제 값과 Follow 대상 식별자는 저장소나 문서에 남기지 않는다.
 
@@ -226,7 +233,7 @@ distinct Account 수가 분모다. 비교 주가 아직 완료되지 않았다�
 - 활성 사용률, 도달률
 - Profile 생성 총횟수, 생성 distinct Account 수
 - 직접 전환 총횟수, 활성 Account당 평균 전환
-- Post 생성, Follow 성공·Relationship·Request 수
+- Post 접수 성공, Follow 성공·Relationship·Request 수
 - 기능 리텐션 W+1/W+4, 대상 Account 제품 리텐션 W+1/W+4
 - 관측 기간, 집계 실행 시각, `multi-profile-usage.v1`, 제외 목록 버전, `complete`/`partial` 상태
 

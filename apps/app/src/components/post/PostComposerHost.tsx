@@ -117,7 +117,7 @@ export function PostComposerHost({
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
-        onPostCreated={() => requestClose('created')}
+        onPostRequestAccepted={() => requestClose('created')}
         onSubmittingChange={setSubmitting}
         profile={profile}
         profiles={profiles}
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
   nativeMobileSurface: { flex: 1 },
   // Only the visual surface clips; dropdown portals stay in the existing dialog focus scope.
-  dialog: { minHeight: 0, overflow: 'visible' },
+  dialog: { minHeight: 0, overflow: 'visible', position: 'relative' },
   clippedSurface: { minHeight: 0, flexShrink: 1, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {

@@ -15,7 +15,9 @@ let composerProps:
   | {
       body: string;
       onBodyChange: (body: string) => void;
+      onRequestClose?: () => void;
       onPostCreated?: (post: PostComposerCreatedPost) => void;
+      onPostRequestAccepted?: () => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
       renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
@@ -35,7 +37,10 @@ mockModule('react-native', {
   Platform: platform,
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    create: <T>(styles: T) => styles,
+  },
   Text: 'Text',
   View: 'View',
 });
@@ -56,6 +61,10 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('Pressable', props, children as never),
 });
+mockModule('@/components/ui/Button', {
+  Button: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
+    createElement('Pressable', props, children as never),
+});
 mockModule('@/components/ui/ToastProvider', {
   ToastProvider: ({ children }: { children?: unknown }) => children,
 });
@@ -67,15 +76,17 @@ mockModule('@/theme/ThemeProvider', {
     backgroundElevated: '#elevated',
     backgroundSurface: '#surface',
     borderSubtle: '#subtle',
+    borderDefault: '#border',
     foregroundPrimary: '#primary',
+    foregroundSecondary: '#secondary',
     overlayScrim: '#scrim',
   }),
 });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { lg: 16 },
-  spacing: { lg: 24, sm: 8 },
-  textStyles: { uiHeadingS: {} },
+  spacing: { lg: 24, md: 12, sm: 8, xl: 32 },
+  textStyles: { uiCopyM: {}, uiHeadingS: {} },
   typography: { lg: {} },
 });
 
@@ -283,7 +294,7 @@ describe('PostComposerHost', () => {
         }),
       );
     });
-    await act(async () => composerProps?.onPostCreated?.({ id: 'post-1' }));
+    await act(async () => composerProps?.onPostRequestAccepted?.());
 
     assert.deepEqual(events, ['created']);
   });

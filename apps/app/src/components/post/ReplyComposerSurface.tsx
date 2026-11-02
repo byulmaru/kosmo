@@ -332,6 +332,11 @@ function ReplyComposerSurfaceContents({
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
+  const handlePostRequestAccepted = useCallback(() => {
+    closeImmediately();
+    showToast('게시 요청을 접수했어요', { tone: 'success' });
+  }, [closeImmediately, showToast]);
+
   useEffect(() => {
     if (!discardConfirmOpen || Platform.OS !== 'web') {
       return;
@@ -478,6 +483,7 @@ function ReplyComposerSurfaceContents({
             initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
             presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
             onPostCreated={handlePostCreated}
+            onPostRequestAccepted={handlePostRequestAccepted}
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
             registerNativeBackHandler={registerNativeBackHandler}
