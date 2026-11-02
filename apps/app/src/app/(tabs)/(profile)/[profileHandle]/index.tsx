@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useCurrentRouteInfo } from 'expo-router';
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
@@ -31,10 +31,8 @@ const ProfilePostListPageQuery = graphql`
 `;
 
 export default function ProfilePostListPage() {
-  const { profileHandle } = useLocalSearchParams<{
-    profileHandle?: string | string[];
-  }>();
-  const handle = normalizeProfileHandle(profileHandle);
+  // A Web Slot remount can leave child-local params empty when returning to a profile.
+  const handle = normalizeProfileHandle(useCurrentRouteInfo()?.params.profileHandle);
   const { chrome, scrollKey } = useProfileRoute();
 
   return (

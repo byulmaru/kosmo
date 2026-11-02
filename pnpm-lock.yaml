@@ -33,7 +33,7 @@ overrides:
 
 patchedDependencies:
   decode-uri-component@0.5.0: 98948870151581b58082ba6d11049564c999baeb94af582330a6d69f0f3ab9af
-  expo-router@56.2.13: 6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531
+  expo-router@56.2.13: 5fdcd283caa57099b23e4445d6db211e13b32648124de85eab6bc4e58ad59e9e
   react-native@0.85.3: 6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd
 
 importers:
@@ -350,7 +350,7 @@ importers:
         version: 56.0.25(expo@56.0.14)(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@6.0.3)
       expo-router:
         specifier: ~56.2.13
-        version: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(44c2f50da56a8d2cec4cfc92ed841bbd)
+        version: 56.2.13(patch_hash=5fdcd283caa57099b23e4445d6db211e13b32648124de85eab6bc4e58ad59e9e)(44c2f50da56a8d2cec4cfc92ed841bbd)
       expo-secure-store:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.14)
@@ -10039,7 +10039,7 @@ snapshots:
       ws: 8.21.0
       zod: 3.25.76
     optionalDependencies:
-      expo-router: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(44c2f50da56a8d2cec4cfc92ed841bbd)
+      expo-router: 56.2.13(patch_hash=5fdcd283caa57099b23e4445d6db211e13b32648124de85eab6bc4e58ad59e9e)(44c2f50da56a8d2cec4cfc92ed841bbd)
       react-native: 0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1)
     transitivePeerDependencies:
       - '@expo/dom-webview'
@@ -10352,7 +10352,7 @@ snapshots:
       react: 19.2.3
     optionalDependencies:
       '@expo/metro-runtime': 56.0.16(@expo/log-box@56.0.14)(expo@56.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
-      expo-router: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(44c2f50da56a8d2cec4cfc92ed841bbd)
+      expo-router: 56.2.13(patch_hash=5fdcd283caa57099b23e4445d6db211e13b32648124de85eab6bc4e58ad59e9e)(44c2f50da56a8d2cec4cfc92ed841bbd)
       react-dom: 19.2.3(react@19.2.3)
     transitivePeerDependencies:
       - supports-color
@@ -14687,7 +14687,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-router@56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(44c2f50da56a8d2cec4cfc92ed841bbd):
+  expo-router@56.2.13(patch_hash=5fdcd283caa57099b23e4445d6db211e13b32648124de85eab6bc4e58ad59e9e)(44c2f50da56a8d2cec4cfc92ed841bbd):
     dependencies:
       '@expo/log-box': 56.0.14(@expo/dom-webview@56.0.6(expo@56.0.14)(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(expo@56.0.14)(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       '@expo/metro-runtime': 56.0.16(@expo/log-box@56.0.14)(expo@56.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
