@@ -1,5 +1,4 @@
 import { db, Instances, Posts, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
 import { profilePostListAccessWhere } from '@kosmo/core/visibility';
 import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -10,14 +9,6 @@ builder.objectField(Profile, 'pinnedPosts', (t) =>
   t.field({
     type: [Post],
     resolve: async (profile, _, ctx) => {
-      const instance = await db
-        .select({ kind: Instances.kind })
-        .from(Instances)
-        .where(eq(Instances.id, profile.instanceId))
-        .limit(1)
-        .then((rows) => rows[0]);
-      const remote = instance?.kind === InstanceKind.ACTIVITYPUB;
-
       return db
         .select(getColumns(Posts))
         .from(ProfilePinnedPosts)
@@ -34,11 +25,7 @@ builder.objectField(Profile, 'pinnedPosts', (t) =>
             }),
           ),
         )
-        .orderBy(
-          ...(remote
-            ? [asc(ProfilePinnedPosts.position), asc(ProfilePinnedPosts.id)]
-            : [asc(ProfilePinnedPosts.id)]),
-        );
+        .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
     },
   }),
 );

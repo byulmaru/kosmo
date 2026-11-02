@@ -9,6 +9,7 @@ import { WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type {
   ProfileBlockTransitionResult,
   ProfileUnblockTransitionResult,
@@ -17,7 +18,7 @@ import type {
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 const environment = await TestWorkflowEnvironment.createLocal({
-  server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+  server: { executable: temporalTestExecutable },
 });
 process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ProfilePostingSettings } from '@/components/settings/ProfilePostingSettings';
 import { ProfileSettingsScreen } from '@/components/settings/ProfileSettingsScreen';
@@ -20,24 +21,32 @@ type Args = {
   onStart: () => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onPhaseChange?: (phase: Phase) => void;
 };
 
-function ProfileSettingsExample(args: Args) {
+function ProfileSettingsExample({ onPhaseChange, ...args }: Args) {
   const { height } = useWindowDimensions();
   const [postingSettings, setPostingSettings] = useState<ProfilePostingSettingsValue>({
     defaultPostVisibility: 'PUBLIC',
     followPolicy: 'APPROVAL_REQUIRED',
   });
-  const [phase, setPhase] = useState<Phase>(args.phase);
+  const [localPhase, setLocalPhase] = useState<Phase>(args.phase);
+  const phase = onPhaseChange ? args.phase : localPhase;
+  const updatePhase = (nextPhase: Phase) => {
+    if (!onPhaseChange) {
+      setLocalPhase(nextPhase);
+    }
+    onPhaseChange?.(nextPhase);
+  };
   const request = async () => {
-    setPhase('pending');
+    updatePhase('pending');
     args.onConfirm();
     if (args.outcome === 'pending') {
       return;
     }
     // Simulates only the caller's request result; no API, authentication or navigation runs here.
     await new Promise<void>((resolve) => setTimeout(resolve, 400));
-    setPhase('error');
+    updatePhase('error');
   };
   return (
     <View style={{ alignSelf: 'center', maxWidth: 640, minHeight: height, width: '100%' }}>
@@ -54,11 +63,11 @@ function ProfileSettingsExample(args: Args) {
                 phase,
                 onStart: () => {
                   args.onStart();
-                  setPhase('idle');
+                  updatePhase('idle');
                 },
                 onCancel: () => {
                   args.onCancel();
-                  setPhase('entry');
+                  updatePhase('entry');
                 },
                 onConfirm: () => void request(),
               }
@@ -95,6 +104,7 @@ const meta = {
     embedded: { control: 'boolean' },
     phase: { control: 'select', options: ['entry', 'idle', 'pending', 'error'] },
     outcome: { control: 'inline-radio', options: ['error', 'pending'] },
+    onPhaseChange: { control: false },
   },
   component: ProfileSettingsExample,
   excludeStories: ['SettingsContract', 'DeleteFlowContract', 'PendingContract'],
@@ -112,10 +122,20 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<Args>();
+    return (
+      <ProfileSettingsExample
+        key={[args.outcome, args.deletionEnabled, args.embedded].join(':')}
+        {...args}
+        onPhaseChange={(phase) => updateArgs({ phase })}
+      />
+    );
+  },
   parameters: {
     controls: {
       disable: false,
-      include: ['deletionEnabled', 'phase', 'outcome', 'displayName', 'relativeHandle'],
+      include: ['deletionEnabled', 'phase', 'displayName', 'relativeHandle'],
     },
   },
 };

@@ -15,7 +15,19 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { isNotificationSuppressed } from './notification-policy';
-export { createPost, deletePost, repostPost } from './post';
+export type {
+  ActivityPubPostInput,
+  LocalPostInput,
+  PostCreateInput,
+  RemoteMediaCandidate,
+} from './post';
+export {
+  createPost,
+  createPostInTransaction,
+  deletePost,
+  isActivityPubPostUriConflict,
+  repostPost,
+} from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
 export { applyPostQuoteConsent } from './post-quote-consent';
 export { disableProfile } from './profile';
@@ -60,7 +72,12 @@ export type { PrepareProfileMigrationInput } from './profile-migration';
 export type { UnregisterProfileMigrationSourceInput } from './profile-migration';
 export { prepareProfileMigration, unregisterProfileMigrationSource } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
-export { pinProfilePost, unpinProfilePost } from './profile-pin';
+export {
+  generateProfilePinKey,
+  pinProfilePost,
+  reorderProfilePost,
+  unpinProfilePost,
+} from './profile-pin';
 export { updateProfile } from './profile-update';
 export { findEligiblePushInstallations, invalidatePushInstallation } from './push-installation';
 export { createQuoteNotification } from './quote-notification';

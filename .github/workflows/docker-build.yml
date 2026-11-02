@@ -59,6 +59,7 @@ jobs:
           cache-from: type=gha,scope=docker-build
           cache-to: type=gha,mode=max,scope=docker-build,ignore-error=true
           no-cache-filters: |
+            deps
             app-build
             runtime
           build-args: |

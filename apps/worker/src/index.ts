@@ -2,15 +2,17 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg, pgRead } from '@kosmo/core/db';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { closeFedifyQueue } from '@kosmo/fedify';
+import { closeFedifyMetrics, closeFedifyQueue, startFedifyMetrics } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
+import { mediaUploadServiceHandler } from './nexus/media-upload';
 import { runSchedules } from './schedule';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
 if (import.meta.main) {
   try {
     const { address, namespace, port, host } = validateWorkerEnvironment(process.env);
+    await startFedifyMetrics();
 
     let worker: Worker | undefined;
     const server = createServer((request, response) => {
@@ -36,6 +38,7 @@ if (import.meta.main) {
       worker = await Worker.create({
         activities,
         connection,
+        nexusServices: [mediaUploadServiceHandler],
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
         workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
@@ -74,5 +77,12 @@ if (import.meta.main) {
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
+  } finally {
+    try {
+      await closeFedifyMetrics();
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    }
   }
 }

@@ -6,6 +6,8 @@ import type { TestContext } from 'node:test';
 import type { ComponentType, ReactNode } from 'react';
 import type { ActionMenu as ActionMenuExport } from '../ui/ActionMenu';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
+import type * as ActionBackgroundModule from './PostActionBackground';
+import type { PostActionControl as PostActionControlExport } from './PostActionControl';
 import type { PostListItem as PostListItemExport } from './PostListItem';
 
 type HostProps = Record<string, unknown> & { style?: unknown };
@@ -40,6 +42,9 @@ const native = nativeHarness.nativeExports;
 const pressedColor = 'post-list-item-pressed-marker';
 let ActionMenu: ActionMenuComponent;
 let PostListItem: PostListItemComponent;
+let PostActionControl: typeof PostActionControlExport;
+let PostActionBackground: typeof ActionBackgroundModule.PostActionBackground;
+let PostActionBackgroundPressContext: typeof ActionBackgroundModule.PostActionBackgroundPressContext;
 let selections: string[] = [];
 let navigations: string[] = [];
 const router = { push: (href: string) => navigations.push(href) };
@@ -105,7 +110,7 @@ mockModule('@/theme/tokens', {
   space: { 4: 4, 8: 8, 12: 12, 16: 16 },
   spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxxl: 24 },
   textStyles: { uiCopyM: {}, uiCopyS: {}, uiHeadingS: {}, uiLabelL: {} },
-  typography: { sm: {} },
+  typography: { md: { fontSize: 16 }, sm: {} },
 });
 
 mockModule('@/theme/useOverlayMotion', {
@@ -158,6 +163,9 @@ mockModule('./PostActionSurface', {
 before(async () => {
   ({ ActionMenu } = await import('../ui/ActionMenu'));
   ({ PostListItem } = await import('./PostListItem'));
+  ({ PostActionControl } = await import('./PostActionControl'));
+  ({ PostActionBackground, PostActionBackgroundPressContext } =
+    await import('./PostActionBackground'));
 });
 
 afterEach(async () => {
@@ -384,4 +392,57 @@ for (const [variant, content, repostSource] of [
     assertFeedbackRest();
     assert.deepEqual(navigations, ['/@profile/post-1']);
   });
+}
+
+for (const os of ['ios', 'android']) {
+  for (const processing of ['default', 'disabled', 'pending'] as const) {
+    test(`${os} Action Bar ${processing} target stays independent from its background`, async (t) => {
+      native.Platform.OS = os;
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      await act(async () =>
+        nativeHarness.render(
+          createElement(
+            PostActionBackgroundPressContext.Provider,
+            { value: () => navigations.push('/@profile/post-1') },
+            createElement(
+              PostActionBackground,
+              { testID: 'action-background' },
+              createElement(PostActionControl, {
+                accessibilityLabel: 'Action',
+                icon: () => null,
+                onPress: () => selections.push('button'),
+                processing,
+                testID: 'example',
+              }),
+            ),
+          ),
+        ),
+      );
+      const background = requiredTag(
+        nativeHarness.tagByTestID('action-background'),
+        'Action Bar background',
+      );
+      const button = requiredTag(
+        nativeHarness.tagByTestID('post-action-example'),
+        'Action Bar button',
+      );
+      await act(async () => nativeHarness.layout(background));
+      await touchDown(button);
+      await release(t);
+      assert.deepEqual(selections, processing === 'default' ? ['button'] : []);
+      assert.deepEqual(navigations, []);
+
+      await touchDown(background);
+      assert.equal(nativeHarness.responderTag(), background);
+      await act(async () => nativeHarness.touchMove({ x: 50, y: 20 }));
+      await release(t);
+      assert.deepEqual(navigations, []);
+      await touchDown(background);
+      await cancel(t);
+      assert.deepEqual(navigations, []);
+      await touchDown(background);
+      await release(t);
+      assert.deepEqual(navigations, ['/@profile/post-1']);
+    });
+  }
 }

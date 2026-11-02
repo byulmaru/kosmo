@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { PostContentWarning } from '@/components/post/PostContentWarning';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -8,6 +9,12 @@ import type { PostContentWarningProps } from '@/components/post/PostContentWarni
 
 type CatalogProps = PostContentWarningProps & { containerWidth: number };
 export type PostContentWarningStoryArgs = CatalogProps;
+type PostContentWarningCatalogProps = CatalogProps & {
+  updateArgs?: (update: Partial<Pick<PostContentWarningStoryArgs, 'revealed'>>) => void;
+};
+type InteractiveWarningProps = PostContentWarningProps & {
+  updateArgs?: PostContentWarningCatalogProps['updateArgs'];
+};
 
 const meta = {
   args: {
@@ -34,7 +41,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {};
+export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<PostContentWarningStoryArgs>();
+    return <PostContentWarningCatalog {...args} updateArgs={updateArgs} />;
+  },
+};
 
 export const Revealed: Story = { args: { revealed: true } };
 
@@ -86,23 +98,31 @@ export const InteractionContract: Story = {
   },
 };
 
-function PostContentWarningCatalog({ containerWidth, ...props }: CatalogProps) {
+function PostContentWarningCatalog({
+  containerWidth,
+  updateArgs,
+  ...props
+}: PostContentWarningCatalogProps) {
   return (
     <View style={{ maxWidth: '100%', width: containerWidth }}>
-      <PostContentWarning {...props} />
+      <InteractiveWarning {...props} updateArgs={updateArgs} />
     </View>
   );
 }
 
-function InteractiveWarning(props: PostContentWarningProps) {
+function InteractiveWarning({ updateArgs, ...props }: InteractiveWarningProps) {
   const [revealed, setRevealed] = useState(props.revealed);
+
+  useEffect(() => setRevealed(props.revealed), [props.revealed]);
 
   return (
     <PostContentWarning
       {...props}
       onPress={() => {
         props.onPress();
-        setRevealed((value) => !value);
+        const nextRevealed = !revealed;
+        setRevealed(nextRevealed);
+        updateArgs?.({ revealed: nextRevealed });
       }}
       revealed={revealed}
     />

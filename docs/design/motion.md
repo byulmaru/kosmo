@@ -42,6 +42,36 @@ Underline Tabs에서는 64px 선택 바의 양 끝이 새 위치까지 서로 �
 
 상태의 의미와 accessible state는 motion 완료를 기다리지 않고 즉시 갱신한다. focus 이동·복원과 `requestAnimationFrame` scheduling은 시각 transition으로 분류하지 않는다.
 
+## 공용 컨트롤의 상태 전이
+
+hover·pressed의 진입과 해제는 모두 `fast` 120ms, selected·checked의 선택과 해제는 모두
+`standard` 200ms를 사용한다. 도착 상태가 선택되지 않았다는 이유로 선택 해제를 120ms로 줄이지 않는다.
+같은 속성에서 여러 상태가 겹치면 아래의 기존 시각 우선순위를 유지한다. hover·pressed 표현으로
+들어가거나 그 표현에서 복귀하는 전이는 120ms이고, 선택 표현만 바뀌는 전이는 200ms다.
+선택 상태가 hover를 가리는 컴포넌트에서는 가려진 hover 변화만으로 선택색을 바꾸지 않는다.
+
+| 컨트롤              | Hover·Pressed 120ms                                | Selected·Checked 200ms                              | 즉시 반영·겹침 규칙                                                                                                    |
+| ------------------- | -------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Button              | 기존 surface·opacity feedback                      | 없음                                                | disabled·busy 의미와 disabled 표현은 즉시 반영한다.                                                                    |
+| IconButton          | 원형 feedback surface                              | 없음                                                | 일회성 action에 selected 상태를 추가하지 않는다. disabled opacity는 즉시 반영한다.                                     |
+| ListboxOption       | hover·active·pressed surface                       | 선택 surface·border                                 | surface는 disabled > pressed > selected > active·hover 순서다. focus ring은 즉시 반영한다.                             |
+| BottomTabBar        | feedback surface·기존 pressed scale                | 선택 label·icon 색상                                | feedback과 선택 의미는 독립이다. 선택 glyph·unread 표시는 즉시 반영한다.                                               |
+| SidebarNavigation   | feedback surface·기존 pressed scale                | 선택 surface·label·icon 색상                        | 기본 surface는 disabled > pressed > hover > selected 순서다. 선택 font weight는 즉시 반영한다.                         |
+| SettingsLinkRow     | hover·pressed surface                              | 선택 surface·border                                 | surface는 pressed > hover > selected 순서이며, 선택 border는 유지한다. focus outline은 즉시 반영한다.                  |
+| ProfileMoreButton   | IconButton의 feedback surface                      | 없음                                                | expanded·busy 의미와 disabled surface·border는 즉시 반영한다.                                                          |
+| Tabs                | hover·pressed feedback                             | 기존 underline 이동·label 색상, pill surface·border | 선택 표시와 feedback은 독립이며 focus ring은 즉시 반영한다. pill label 색상은 선택 여부와 무관하게 유지한다.           |
+| Checkbox            | hover·pressed feedback                             | checked surface·border                              | checked·mixed 의미와 mark 형태는 즉시 반영한다. 기존 checked·interaction 색상 우선순위를 유지한다.                     |
+| RadioOption         | hover·pressed surface                              | 선택 indicator                                      | 선택 indicator와 interaction surface는 독립이며 checked 의미는 즉시 반영한다.                                          |
+| SelectTrigger       | 기존 hover surface                                 | 없음                                                | expanded 의미·focus ring·오류 border·disabled 표현은 즉시 반영한다. 새 pressed 표현은 추가하지 않는다.                 |
+| SegmentedControl    | hover·pressed feedback                             | 기존 선택 pill 이동                                 | 선택 pill의 60ms 늘림·140ms 정착을 유지한다. label 색상은 선택 여부와 무관하며 선택 의미와 focus ring은 즉시 반영한다. |
+| MultiSelectCombobox | 결과 행의 ListboxOption·지우기 IconButton feedback | 결과 행의 ListboxOption 선택 surface·border         | 선택 결과와 token 추가·제거는 즉시 반영하며 별도 layout motion을 추가하지 않는다.                                      |
+
+이 매핑은 Web과 KOSMO가 소유한 iOS·Android presentation에 동일하게 적용한다. 초기 표시, theme 변경,
+focus·오류·disabled 표현에는 새 전이를 추가하지 않는다. 빠른 연속 입력은 진행 중인 전이를 대기열에
+쌓지 않고 현재 표시에서 최신 상태로 이어진다. reduced-motion이 켜지면 진행 중인 전이도 중지하고
+최종 색상·위치를 즉시 반영하며, hover·pressed scale은 제거한다. 접근성 상태와 action·navigation·focus
+lifecycle은 이 시각 전이의 완료를 기다리지 않는다.
+
 ## 현행 표현 판정과 이관
 
 DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래 판정이 DSN-19·21의 migration 입력이며, 후속 구현은 duration·easing·reduced-motion 동작을 다시 결정하지 않는다.

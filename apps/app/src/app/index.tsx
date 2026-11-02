@@ -13,7 +13,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, space, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, space, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
 
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   accountNotice: { gap: spacing.xs },
   title: { fontFamily: fontFamilies.ui, fontSize: 30, fontWeight: '700', lineHeight: 36 },
   action: { alignItems: 'flex-start', gap: spacing.sm },
-  startButton: { borderRadius: radii.sm, height: 48, width: 200 },
+  startButton: { height: 48, width: 200 },
   hint: { fontFamily: fontFamilies.ui, ...typography.xsm },
   error: { fontFamily: fontFamilies.ui, ...typography.sm },
   privacyLink: { fontFamily: fontFamilies.ui, marginTop: spacing.lg, ...typography.sm },

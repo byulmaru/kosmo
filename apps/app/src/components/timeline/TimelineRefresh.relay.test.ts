@@ -12,6 +12,8 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
+import { colors } from '@/theme/tokens';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -68,9 +70,34 @@ const shellChrome = {
   registerTabReselection: tabRegistry.register,
   reselectTab: tabRegistry.reselect,
 };
+
+function timelineScreenWithPushContext(timeline: 'Home' | 'Local') {
+  const screen = createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen);
+  return timeline === 'Home'
+    ? createElement(
+        WebPushPermissionContext.Provider,
+        {
+          value: {
+            permission: 'default',
+            requestPermission: async () => undefined,
+            support: 'unsupported',
+          },
+        },
+        screen,
+      )
+    : screen;
+}
 class AnimatedValueMock {
   constructor(public value: number) {}
   setValue(value: number) {
+    this.value = value;
+  }
+  stopAnimation() {}
+}
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
     this.value = value;
   }
   stopAnimation() {}
@@ -80,10 +107,10 @@ class AnimatedValueMock {
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|fragment) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
     return require(
-      `${name.startsWith('PostList') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
+      `${name.startsWith('PostList') || name.startsWith('ProfilePinOrder') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
     ).default;
   },
 });
@@ -94,11 +121,23 @@ mockModule('expo-router', {
   }),
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('lucide-react-native', {
+  Bell: 'Bell',
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
+mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
+  UserRoundPlus: 'UserRoundPlus',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 mockModule('react-native', {
   Platform: platform,
   Animated: {
+    Color: AnimatedColorMock,
+    Text: 'Text',
     Value: AnimatedValueMock,
     View: 'View',
     subtract: (a: AnimatedValueMock, b: AnimatedValueMock) => a.value - b.value,
@@ -152,7 +191,7 @@ mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ text: '#111', textSecondary: '#777' }),
+  useTheme: () => colors.light,
   useReducedMotion: () => true,
 });
 
@@ -321,9 +360,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
           renderer = create(
             createElement(ReactRelay.RelayEnvironmentProvider, {
               environment,
-              children: createElement(
-                timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen,
-              ),
+              children: timelineScreenWithPushContext(timeline),
             }),
           );
         });
@@ -377,7 +414,7 @@ for (const timeline of ['Home', 'Local'] as const) {
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
-        children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+        children: timelineScreenWithPushContext(timeline),
       });
     await act(async () => {
       renderer = create(render());
@@ -534,7 +571,7 @@ for (const os of ['ios', 'android']) {
         renderer = create(
           createElement(ReactRelay.RelayEnvironmentProvider, {
             environment,
-            children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+            children: timelineScreenWithPushContext(timeline),
           }),
           {
             createNodeMock: ({ type }) =>

@@ -1,9 +1,9 @@
 <script lang="ts">
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
   import UsersIcon from '@lucide/svelte/icons/users';
+  import { Button } from '#lib/components/ui/button/index.js';
+  import * as Card from '#lib/components/ui/card/index.js';
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/components/ui/button';
-  import * as Card from '$lib/components/ui/card';
 </script>
 
 <svelte:head>

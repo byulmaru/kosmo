@@ -108,6 +108,28 @@ Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 A
 Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
+Local Post·Reply·Quote 작성은 모두 같은 PostRequest 경로로 접수한다. 서버는 각 `createPost` 호출에 새로운
+`requestId`를 생성하며, 클라이언트는 이 값을 제출하거나 재사용하지 않는다. 작성 내용이 같아도 각 호출은 별도 요청으로
+접수된다. 응답을 받지 못해 다시 제출하면 새 요청이 만들어질 수 있으며, HTTP 요청이 정확히 한 번만 접수된다고 보장하지 않는다.
+작성 화면은 요청 실패나 응답 유실 뒤에도 작성 내용을 유지하며, 사용자의 다음 제출은 새 요청으로 처리한다.
+
+새 요청은 제출 Media 상태에 따라 응답한다. Media가 없거나 모든 참조 Media가 Ready면 publication 결과를 기다려
+`PUBLISHED` PostRequest를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 접수 확인을 즉시 반환하고, 모든
+참조 Media가 Ready가 된 뒤 publication을 진행한다. 어느 경우에도 Media 준비 전에 Post나 Post Content를 만들지 않는다.
+Media 처리 실패로 작성에 이르지 못하면 Post나 Post Content를 만들지 않는다. 실제 Post 생성 transaction은 당시 Account가
+Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 유효한지 다시 확인한다. 확인할 수 없으면 Post를
+생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤 저장 결과가
+확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는 실패를 반환한다.
+
+`PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
+`sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
+nullable list item으로 반환한다. Profile의 PostRequest 목록은 현재 상태가 `PUBLISHED`인 요청을 제외한다.
+목록은 현재 선택한 Profile의 역할이 Member 이상인 세션에서 읽을 수 있으며, 조회한 Profile에 속하고 해당 세션 Account가 소유한 요청만 반환한다.
+`CreatePostPayload.post`는 nullable이며, 이 응답에서 반환된 request 상태가
+`PUBLISHED`일 때만 생성된 Post를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 즉시 반환하는 접수 확인의
+`post`는 `null`이며, 이후 publication을 기다리지 않는다. `request`와 `post` 선택은 접수 대기를 바꾸지 않는다.
+Media가 없거나 모든 참조 Media가 Ready인 요청은 기존처럼 publication 결과를 기다려 `PUBLISHED` PostRequest를 반환한다.
+
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 
@@ -365,6 +387,8 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   eligible remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 규칙은 DIRECT Note 역참조, Featured
   membership, signed-fetch 권한, inbound DIRECT 처리나 Notification을 추가하지 않는다. Canonical Mention node는
   `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에 포함하지 않는다.
+- Public·Unlisted Post의 게시·삭제는 멘션한 Remote Profile을 기존 수신자에 포함하며, 같은 수신자에는 중복 전달하지 않는다.
+  Followers Only와 Mentioned Profiles의 수신 범위는 기존 정책을 유지한다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -442,12 +466,13 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
   ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. Local first-party UI는
   server-authoritative 순서로 조회 가능한 고정 Post 전체를 표시하고, Remote는 검증된 Featured collection을 원격 순서로 표시한다.
-  새 pin은 기존 pin의 상대 순서를 보존해 추가한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
+  새 pin은 기존 pin의 상대 순서를 보존해 추가하며 앞·뒤 배치는 이 계약에서 고정하지 않는다. Local Profile의 수동 순서 변경은
+  [Profile 객체](./profile.md)의 행동을 따르며, Local Featured collection도 저장된 순서에서 조회 가능한 항목의 상대 순서를 유지한다.
 - Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
   추론할 수 있게 해서는 안 된다.
-- Local pin/unpin commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
+- Local pin/unpin 또는 고정 순서 변경 commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
   요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
 - Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
@@ -554,7 +579,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
   Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
-  따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
+  따른다. Custom emoji는 후속 계약에 남기고, inbound
   Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,

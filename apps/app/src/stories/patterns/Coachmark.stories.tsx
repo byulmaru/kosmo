@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useArgs } from 'storybook/preview-api';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
 import { Coachmark } from '@/components/ui/Coachmark';
-import { space, textStyles } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { View as NativeView } from 'react-native';
 import type { CoachmarkProps } from '@/components/ui/Coachmark';
@@ -13,7 +13,19 @@ type StoryArgs = Pick<CoachmarkProps, 'description' | 'title' | 'visible'> & {
   onBackgroundPress: () => void;
   onClose: () => void;
   onComplete: () => void;
+  onShown: () => void;
 };
+
+async function findReadySurface(actionName: string) {
+  const surface = await screen.findByTestId('coachmark-surface');
+  await waitFor(() => {
+    const action = within(surface).getByRole('button', { name: actionName });
+    expect(surface).toBeVisible();
+    expect(action).toBeVisible();
+    expect(action).toBeEnabled();
+  });
+  return surface;
+}
 
 type CoachmarkFixtureProps = StoryArgs & {
   updateArgs?: (update: Partial<StoryArgs>) => void;
@@ -24,6 +36,7 @@ function CoachmarkFixture({
   onBackgroundPress,
   onClose,
   onComplete,
+  onShown,
   title,
   updateArgs,
   visible,
@@ -60,7 +73,47 @@ function CoachmarkFixture({
           onComplete();
           setVisible(false);
         }}
+        onShown={onShown}
         visible={updateArgs ? visible : localVisible}
+      />
+    </View>
+  );
+}
+
+function TargetReadinessFixture({
+  onClose,
+  onComplete,
+  onShown,
+}: Pick<StoryArgs, 'onClose' | 'onComplete' | 'onShown'>) {
+  const anchorRef = useRef<NativeView>(null);
+  const triggerRef = useRef<NativeView>(null);
+  const [targetReady, setTargetReady] = useState(false);
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <View style={styles.stage}>
+      <Button controlRef={triggerRef} onPress={() => setTargetReady(true)}>
+        대상 준비
+      </Button>
+      {targetReady ? (
+        <Button controlRef={anchorRef} testID="coachmark-ready-target">
+          준비된 대상
+        </Button>
+      ) : null}
+      <Coachmark
+        anchorRef={anchorRef}
+        description="대상이 준비되면 안내를 표시합니다."
+        onClose={() => {
+          onClose();
+          setVisible(false);
+        }}
+        onComplete={() => {
+          onComplete();
+          setVisible(false);
+        }}
+        onShown={onShown}
+        preferredFocusRef={triggerRef}
+        visible={visible}
       />
     </View>
   );
@@ -71,6 +124,7 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
     useRef<NativeView>(null),
     useRef<NativeView>(null),
     useRef<NativeView>(null),
+    useRef<NativeView>(null),
   ] as const;
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -78,6 +132,7 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
     { description: '프로필을 열어 공개 범위를 확인하세요.', title: '프로필 확인' },
     { description: '표시할 항목을 고르고 순서를 바꿀 수 있어요.', title: '항목 선택' },
     { description: '설정을 저장해 안내를 마치세요.', title: '저장 완료' },
+    { description: '변경 사항을 확인하고 안내를 마칩니다.', title: '확인 완료' },
   ];
   const current = steps[step]!;
   const anchorRef = anchorRefs[step];
@@ -108,15 +163,9 @@ function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onCo
           onComplete();
           setVisible(false);
         }}
+        progress={{ current: step + 1, total: steps.length }}
         visible={visible}
-      >
-        <Text
-          accessibilityLabel={`${step + 1} / ${steps.length}단계`}
-          style={[textStyles.uiCopyS, { lineHeight: textStyles.uiCopyM.lineHeight }]}
-        >
-          {`${step + 1} / ${steps.length}`}
-        </Text>
-      </Coachmark>
+      />
     </View>
   );
 }
@@ -193,9 +242,8 @@ function SharedAnchorFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' 
           setVisible(false);
         }}
         onNext={step === 0 ? () => setStep(1) : undefined}
-      >
-        {step === 0 ? 0 : '1 / 2'}
-      </Coachmark>
+        progress={{ current: step + 1, total: 2 }}
+      />
     </View>
   );
 }
@@ -207,6 +255,7 @@ const meta = {
     onBackgroundPress: fn(),
     onClose: fn(),
     onComplete: fn(),
+    onShown: fn(),
     visible: false,
   },
   argTypes: {
@@ -227,6 +276,7 @@ const meta = {
     'PlacementContract',
     'StepsInteraction',
     'ViewportContract',
+    'Tests',
   ],
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Patterns/Coachmark',
@@ -258,14 +308,16 @@ export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onComplete.mockClear();
     args.onClose.mockClear();
+    args.onShown.mockClear();
     args.onBackgroundPress.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '안내 열기' });
     trigger.focus();
     await userEvent.click(trigger);
 
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('완료');
     const close = within(surface).getByRole('button', { name: '완료' });
+    await waitFor(() => expect(args.onShown).toHaveBeenCalledOnce());
     await waitFor(() => expect(close).toHaveFocus());
     const background = canvas.getByRole('button', { name: '배경 동작' });
     const backgroundRect = background.getBoundingClientRect();
@@ -282,13 +334,45 @@ export const InteractionContract: Story = {
 
     args.onClose.mockClear();
     await userEvent.click(trigger);
-    const reopenedSurface = await screen.findByTestId('coachmark-surface');
+    const reopenedSurface = await findReadySurface('완료');
     await waitFor(() =>
       expect(within(reopenedSurface).getByRole('button', { name: '완료' })).toHaveFocus(),
     );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
+  },
+};
+
+export const Tests: Story = {
+  render: (args) => (
+    <TargetReadinessFixture
+      onClose={args.onClose}
+      onComplete={args.onComplete}
+      onShown={args.onShown}
+    />
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onClose.mockClear();
+    args.onComplete.mockClear();
+    args.onShown.mockClear();
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '대상 준비' });
+    expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('coachmark-backdrop')).not.toBeInTheDocument();
+    expect(args.onShown).not.toHaveBeenCalled();
+
+    trigger.focus();
+    await userEvent.click(trigger);
+    const target = await canvas.findByTestId('coachmark-ready-target');
+    const surface = await findReadySurface('완료');
+    await waitFor(() => expect(target.getBoundingClientRect().width).toBeGreaterThan(0));
+    await waitFor(() => expect(args.onShown).toHaveBeenCalledOnce());
+    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+    expect(args.onComplete).toHaveBeenCalledOnce();
+    expect(args.onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
 
@@ -299,8 +383,10 @@ export const CompactContentContract: Story = {
     args.onComplete.mockClear();
     const trigger = within(canvasElement).getByRole('button', { name: '안내 열기' });
     await userEvent.click(trigger);
-    const surface = await screen.findByTestId('coachmark-surface');
-    expect(screen.getByRole('dialog', { name: '글을 저장하세요.' })).toBeVisible();
+    const surface = await findReadySurface('완료');
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: '글을 저장하세요.' })).toBeVisible(),
+    );
     expect(within(surface).queryByRole('heading')).not.toBeInTheDocument();
     expect(within(surface).getAllByRole('button')).toHaveLength(2);
     await waitFor(() => {
@@ -313,7 +399,7 @@ export const CompactContentContract: Story = {
     expect(args.onComplete).toHaveBeenCalledOnce();
     expect(args.onClose).not.toHaveBeenCalled();
     await userEvent.click(trigger);
-    const reopened = await screen.findByTestId('coachmark-surface');
+    const reopened = await findReadySurface('건너뛰기');
     await userEvent.click(within(reopened).getByRole('button', { name: '건너뛰기' }));
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
@@ -339,7 +425,7 @@ export const StepsInteraction: Story = {
       });
     };
 
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('다음');
     await assertArrowMatchesTarget(0);
     const previous = within(surface).getByRole('button', { name: '이전' });
     const next = within(surface).getByRole('button', { name: '다음' });
@@ -358,25 +444,33 @@ export const StepsInteraction: Story = {
     expect(nextRect.left - previousRect.right).toBeLessThanOrEqual(1);
     expect(previousRect.height).toBe(nextRect.height);
     await userEvent.click(next);
-    expect(await screen.findByRole('dialog', { name: '항목 선택' })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('dialog', { name: '항목 선택' })).toBeVisible());
     await assertArrowMatchesTarget(1);
     await waitFor(() =>
       expect(within(surface).getByRole('button', { name: '다음' })).toHaveFocus(),
     );
     const longBody = await screen.findByTestId('coachmark-body');
     await waitFor(() => expect(longBody.scrollHeight).toBeLessThanOrEqual(longBody.clientHeight));
-    await userEvent.click(within(surface).getByRole('button', { name: '이전' }));
+    await userEvent.click(
+      within(await findReadySurface('이전')).getByRole('button', { name: '이전' }),
+    );
     await assertArrowMatchesTarget(0);
-    await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
+    await userEvent.click(
+      within(await findReadySurface('다음')).getByRole('button', { name: '다음' }),
+    );
     await assertArrowMatchesTarget(1);
     await userEvent.click(
-      within(await screen.findByTestId('coachmark-surface')).getByRole('button', { name: '다음' }),
+      within(await findReadySurface('다음')).getByRole('button', { name: '다음' }),
     );
     await assertArrowMatchesTarget(2);
+    await userEvent.click(
+      within(await findReadySurface('다음')).getByRole('button', { name: '다음' }),
+    );
+    await assertArrowMatchesTarget(3);
     const shortBody = await screen.findByTestId('coachmark-body');
     await waitFor(() => expect(shortBody.scrollHeight).toBeLessThanOrEqual(shortBody.clientHeight));
     await userEvent.click(
-      within(await screen.findByTestId('coachmark-surface')).getByRole('button', { name: '완료' }),
+      within(await findReadySurface('완료')).getByRole('button', { name: '완료' }),
     );
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onComplete).toHaveBeenCalledOnce();
@@ -388,8 +482,8 @@ export const StepsInteraction: Story = {
 export const SharedAnchorContract: Story = {
   render: (args) => <SharedAnchorFixture onClose={args.onClose} onComplete={args.onComplete} />,
   play: async ({ canvasElement }) => {
-    const surface = await screen.findByTestId('coachmark-surface');
-    expect(within(surface).getByText('0')).toBeVisible();
+    const surface = await findReadySurface('다음');
+    expect(within(surface).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
     await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
     const target = within(canvasElement).getByTestId('shared-anchor-target');
     const arrow = await screen.findByTestId('coachmark-arrow');
@@ -400,8 +494,13 @@ export const SharedAnchorContract: Story = {
         Math.abs(arrowRect.top + arrowRect.height / 2 - (targetRect.bottom + 12)),
       ).toBeLessThanOrEqual(2);
     });
-    expect(within(surface).getByText('1 / 2')).toBeVisible();
-    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    const nextSurface = await findReadySurface('완료');
+    await waitFor(() =>
+      expect(within(nextSurface).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '2'),
+    );
+    await userEvent.click(
+      within(await findReadySurface('완료')).getByRole('button', { name: '완료' }),
+    );
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
   },
 };
@@ -410,7 +509,7 @@ export const ViewportContract: Story = {
   render: (args) => <LongContentFixture onClose={args.onClose} onComplete={args.onComplete} />,
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('완료');
     await waitFor(() => {
       const rect = surface.getBoundingClientRect();
       expect(rect.left).toBeGreaterThanOrEqual(0);
@@ -436,8 +535,12 @@ export const PlacementContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async () => {
     const target = await screen.findByRole('button', { name: '화면 끝 대상' });
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('완료');
     const arrow = await screen.findByTestId('coachmark-arrow');
+    const arrowStyle = getComputedStyle(arrow);
+    expect(arrowStyle.borderBottomWidth).toBe('1px');
+    expect(arrowStyle.borderRightWidth).toBe('1px');
+    expect(arrowStyle.borderBottomColor).toBe(getComputedStyle(surface).borderBottomColor);
     await waitFor(() => {
       const targetRect = target.getBoundingClientRect();
       const surfaceRect = surface.getBoundingClientRect();
@@ -477,7 +580,7 @@ export const CompactViewportContract: Story = {
 
     const target = await screen.findByRole('button', { name: '화면 끝 대상' });
     expect(target.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('완료');
     const body = await screen.findByTestId('coachmark-body');
     await waitFor(() => {
       const rect = surface.getBoundingClientRect();
@@ -537,7 +640,7 @@ export const LongerMessage: Story = {
 };
 
 const mobileContract: Story['play'] = async () => {
-  const surface = await screen.findByTestId('coachmark-surface');
+  const surface = await findReadySurface('완료');
   await waitFor(() => {
     const rect = surface.getBoundingClientRect();
     expect(rect.width).toBeLessThanOrEqual(256);
@@ -574,7 +677,7 @@ export const Mobile390Contract: Story = {
 export const TextScaleContract: Story = {
   ...LongerMessage,
   play: async (context) => {
-    const surface = await screen.findByTestId('coachmark-surface');
+    const surface = await findReadySurface('완료');
     const text = within(surface).getByText(context.args.description);
     const before = text.getBoundingClientRect().height;
     const computed = getComputedStyle(text);

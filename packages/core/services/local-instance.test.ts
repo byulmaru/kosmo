@@ -116,6 +116,59 @@ test('bootstrap creates and reuses the configured local instance', async () => {
   assert.equal(resolved.state, InstanceState.ACTIVE);
 });
 
+test('configured local Instance results omit stored ActivityPub key material', async () => {
+  const domain = `local-keys-${randomUUID()}.example`;
+  const publicOrigin = `https://${domain}`;
+  const instance = {
+    activityPubKeyPairs: [
+      {
+        publicKeyJwk: { kty: 'RSA', n: 'public-marker' },
+        privateKeyJwk: { kty: 'RSA', d: 'private-marker' },
+      },
+      {
+        publicKeyJwk: { crv: 'Ed25519', x: 'ed-public-marker' },
+        privateKeyJwk: { crv: 'Ed25519', d: 'ed-private-marker' },
+      },
+    ],
+    canonicalOrigin: publicOrigin,
+    createdAt: new Date(),
+    domain,
+    id: randomUUID(),
+    kind: InstanceKind.LOCAL,
+    state: InstanceState.ACTIVE,
+    updatedAt: new Date(),
+  };
+  const select = mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from() {
+          return this;
+        },
+        where() {
+          return this;
+        },
+        limit() {
+          return Promise.resolve([instance]);
+        },
+      }) as never,
+  );
+
+  try {
+    const resolved = await resolveConfiguredLocalInstance({ publicOrigin });
+    const serialized = JSON.stringify(resolved);
+
+    assert.equal(Object.hasOwn(resolved, 'activityPubKeyPairs'), false);
+    assert.equal(serialized.includes('public-marker'), false);
+    assert.equal(serialized.includes('private-marker'), false);
+    assert.equal(serialized.includes('ed-public-marker'), false);
+    assert.equal(serialized.includes('ed-private-marker'), false);
+  } finally {
+    select.mock.restore();
+  }
+});
+
 test('bootstrap and runtime resolution reject a mismatched configured row', async () => {
   const domain = `remote-${randomUUID()}.example`;
   const publicOrigin = `https://${domain}`;

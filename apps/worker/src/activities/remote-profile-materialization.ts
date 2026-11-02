@@ -10,6 +10,7 @@ import {
   federation,
   fetchRemoteProfileActorDocument,
   findStoredRemoteProfileActorByUri,
+  localInstanceActorIdentifier,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
 import { ApplicationFailure } from '@temporalio/activity';
@@ -222,7 +223,11 @@ export const fetchRemoteProfileActorActivity = async (
       origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
     } else {
       const selected = await db
-        .select({ actor: ActivityPubActors, instance: Instances })
+        .select({
+          actorUri: ActivityPubActors.uri,
+          instanceCanonicalOrigin: Instances.canonicalOrigin,
+          instanceKind: Instances.kind,
+        })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
@@ -236,8 +241,8 @@ export const fetchRemoteProfileActorActivity = async (
         );
       }
 
-      if (selected.instance.kind === InstanceKind.LOCAL) {
-        const localOrigin = selected.instance.canonicalOrigin;
+      if (selected.instanceKind === InstanceKind.LOCAL) {
+        const localOrigin = selected.instanceCanonicalOrigin;
         if (!localOrigin) {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Local Profile instance has no canonical origin.',
@@ -246,7 +251,7 @@ export const fetchRemoteProfileActorActivity = async (
         origin = localOrigin;
         signingProfileId = input.profileId;
       } else {
-        if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
+        if (selected.instanceKind !== InstanceKind.ACTIVITYPUB || !selected.actorUri) {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor metadata is missing.',
           );
@@ -254,7 +259,7 @@ export const fetchRemoteProfileActorActivity = async (
 
         let selectedActorUri: URL;
         try {
-          selectedActorUri = new URL(selected.actor.uri);
+          selectedActorUri = new URL(selected.actorUri);
         } catch {
           throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI is invalid.',
@@ -275,9 +280,19 @@ export const fetchRemoteProfileActorActivity = async (
     }
 
     const context = federation.createContext(new URL(origin), undefined);
-    const documentLoader = signingProfileId
-      ? await context.getDocumentLoader({ identifier: signingProfileId })
-      : undefined;
+    let signingContext = context;
+    if (!signingProfileId) {
+      const localInstance = await resolveConfiguredLocalInstance();
+      if (new URL(origin).origin !== localInstance.canonicalOrigin) {
+        signingContext = federation.createContext(
+          new URL(localInstance.canonicalOrigin),
+          undefined,
+        );
+      }
+    }
+    const documentLoader = await signingContext.getDocumentLoader({
+      identifier: signingProfileId ?? localInstanceActorIdentifier,
+    });
 
     return {
       actorJsonLd: await fetchRemoteProfileActorDocument(context, actorUri, documentLoader).catch(

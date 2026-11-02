@@ -36,6 +36,7 @@ import { eq, inArray } from 'drizzle-orm';
 import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type * as PostUriModule from './activitypub-post-uri';
 import type * as FederationModule from './federation';
 import type * as LocalPostNoteModule from './local-post-note';
@@ -78,11 +79,26 @@ let dispatchLocalPostEmojiReactions: typeof LocalPostReactionCollectionModule.di
 let firstLocalPostEmojiReactionsCursor: typeof LocalPostReactionCollectionModule.firstLocalPostEmojiReactionsCursor;
 let countLocalProfileFeatured: typeof LocalProfileFeaturedModule.countLocalProfileFeatured;
 let firstLocalProfileFeaturedCursor: typeof LocalProfileFeaturedModule.firstLocalProfileFeaturedCursor;
+let reorderProfilePost: typeof CoreServices.reorderProfilePost;
 let productionFederation: typeof FederationModule.federation;
 let testInstanceIds: string[] = [];
 let testHashtagIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
+
+const backfilledProfilePinOrderKey = (
+  id: string,
+  position: number | null = null,
+): CoreDb.ProfilePinOrderKey => {
+  const rank = Buffer.alloc(4);
+  rank.writeInt32BE(position ?? 0x7fffffff);
+  return Buffer.concat([
+    Buffer.from([0x94]),
+    rank,
+    Buffer.from([position === null ? 1 : 0]),
+    Buffer.from(id.replaceAll('-', ''), 'hex'),
+  ]) as CoreDb.ProfilePinOrderKey;
+};
 
 describe('ActivityPub Local Post Note', () => {
   before(async () => {
@@ -109,6 +125,7 @@ describe('ActivityPub Local Post Note', () => {
       Profiles,
       Reactions,
     } = await import('@kosmo/core/db'));
+    ({ reorderProfilePost } = await import('@kosmo/core/services'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote, projectLocalPostNote } =
@@ -507,7 +524,14 @@ describe('ActivityPub Local Post Note', () => {
     const note = await dispatchLocalPostNote(createContext(), { id: post.id });
     assert.ok(note);
     assert.equal(note.toId?.href, PUBLIC_COLLECTION.href);
-    assert.equal(note.ccId?.href, `${publicOrigin}/ap/actor/${author.id}/followers`);
+    assert.deepEqual(
+      note.ccIds.map((uri) => uri.href).sort(),
+      [
+        `${publicOrigin}/ap/actor/${author.id}/followers`,
+        remoteActorUri.href,
+        unsafeUrlActorUri.href,
+      ].sort(),
+    );
     const html = note.content?.toString() ?? '';
     assert.ok(html.includes('Hello &lt;script&gt;alert(1)&lt;/script&gt; &amp; '));
     assert.ok(
@@ -1381,12 +1405,23 @@ describe('ActivityPub Local Post Note', () => {
     const unlistedPost = await createPost(author.id, { visibility: PostVisibility.UNLISTED });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const directPost = await createPost(author.id, { visibility: PostVisibility.DIRECT });
-    await db.insert(ProfilePinnedPosts).values([
-      { profileId: author.id, postId: publicPost.id },
-      { profileId: author.id, postId: unlistedPost.id },
-      { profileId: author.id, postId: followersPost.id },
-      { profileId: author.id, postId: directPost.id },
-    ]);
+    await db.insert(ProfilePinnedPosts).values(
+      [publicPost, unlistedPost, followersPost, directPost].map((post, index) => {
+        const id = `00000000-0000-7000-8002-${String(index).padStart(12, '0')}`;
+        return {
+          id,
+          orderKey: backfilledProfilePinOrderKey(id),
+          profileId: author.id,
+          postId: post.id,
+        };
+      }),
+    );
+
+    await reorderProfilePost({
+      profileId: author.id,
+      postId: unlistedPost.id,
+      beforePostId: publicPost.id,
+    });
 
     const federation = createFeaturedFederation();
     const request = (url: string) =>
@@ -1420,7 +1455,7 @@ describe('ActivityPub Local Post Note', () => {
     const page = (await pageResponse.json()) as { orderedItems?: { id?: string }[] };
     assert.deepEqual(
       page.orderedItems?.map((item) => item.id),
-      [publicPost.id, unlistedPost.id].map((id) => `${publicOrigin}/ap/note/${id}`),
+      [unlistedPost.id, publicPost.id].map((id) => `${publicOrigin}/ap/note/${id}`),
     );
 
     const unsignedPrivateNote = await federation.fetch(
@@ -1477,7 +1512,7 @@ describe('ActivityPub Local Post Note', () => {
     const signedPage = (await signedPageResponse.json()) as { orderedItems?: { id?: string }[] };
     assert.deepEqual(
       signedPage.orderedItems?.map((item) => item.id),
-      [publicPost.id, unlistedPost.id, followersPost.id].map(
+      [unlistedPost.id, publicPost.id, followersPost.id].map(
         (id) => `${publicOrigin}/ap/note/${id}`,
       ),
     );
@@ -1506,13 +1541,20 @@ describe('ActivityPub Local Post Note', () => {
       handle: 'featured-boundary',
       kind: InstanceKind.LOCAL,
     });
-    const boundaryPins: { id: string; postId: string; profileId: string }[] = [];
+    const boundaryPins: {
+      id: string;
+      orderKey: CoreDb.ProfilePinOrderKey;
+      postId: string;
+      profileId: string;
+    }[] = [];
     for (let index = 0; index < 50; index++) {
       const post = await createPost(boundaryAuthor.id, {
         visibility: PostVisibility.FOLLOWERS,
       });
+      const id = `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`;
       boundaryPins.push({
-        id: `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+        id,
+        orderKey: backfilledProfilePinOrderKey(id),
         postId: post.id,
         profileId: boundaryAuthor.id,
       });
@@ -1520,8 +1562,10 @@ describe('ActivityPub Local Post Note', () => {
     const boundaryVisiblePost = await createPost(boundaryAuthor.id, {
       visibility: PostVisibility.PUBLIC,
     });
+    const visibleBoundaryPinId = '00000000-0000-7000-8000-000000000050';
     boundaryPins.push({
-      id: '00000000-0000-7000-8000-000000000050',
+      id: visibleBoundaryPinId,
+      orderKey: backfilledProfilePinOrderKey(visibleBoundaryPinId),
       postId: boundaryVisiblePost.id,
       profileId: boundaryAuthor.id,
     });
@@ -1547,6 +1591,74 @@ describe('ActivityPub Local Post Note', () => {
     assert.deepEqual(
       boundaryPage.orderedItems?.map((item) => item.id),
       [`${publicOrigin}/ap/note/${boundaryVisiblePost.id}`],
+    );
+  });
+
+  test('reordered Featured crosses binary cursor pages without duplicates or omissions', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const postIds: string[] = [];
+    for (let index = 0; index < 55; index++) {
+      const post = await createPost(author.id, { visibility: PostVisibility.PUBLIC });
+      postIds.push(post.id);
+      const id = `00000000-0000-7000-8001-${String(index).padStart(12, '0')}`;
+      await db.insert(ProfilePinnedPosts).values({
+        id,
+        orderKey: backfilledProfilePinOrderKey(id),
+        profileId: author.id,
+        postId: post.id,
+      });
+    }
+    await reorderProfilePost({
+      profileId: author.id,
+      postId: postIds[54],
+      beforePostId: postIds[0],
+    });
+    const federation = createFeaturedFederation();
+    const request = (url: string) =>
+      new Request(url, { headers: { accept: 'application/activity+json' } });
+    const collectionResponse = await federation.fetch(
+      request(`${publicOrigin}/ap/actor/${author.id}/featured`),
+      { contextData: undefined },
+    );
+    const collection = (await collectionResponse.json()) as { totalItems: number; first: string };
+    assert.equal(collection.totalItems, 55);
+    const ids: string[] = [];
+    let next: string | undefined = collection.first;
+    let pages = 0;
+    while (next) {
+      assert.ok(pages++ < 3);
+      const response = await federation.fetch(request(next), { contextData: undefined });
+      assert.equal(response.status, 200);
+      const page = (await response.json()) as { orderedItems: { id: string }[]; next?: string };
+      ids.push(...page.orderedItems.map((item) => item.id));
+      next = page.next;
+    }
+    const context = createContext();
+    const boundaryId = '00000000-0000-7000-8001-000000000050';
+    const legacyPage = await dispatchLocalProfileFeatured(
+      context,
+      author.id,
+      `v1:after:${boundaryId}`,
+    );
+    assert.deepEqual(
+      legacyPage?.items.map((item) => item.id?.href),
+      postIds.slice(51, 54).map((id) => `${publicOrigin}/ap/note/${id}`),
+    );
+    await db.delete(ProfilePinnedPosts).where(eq(ProfilePinnedPosts.id, boundaryId));
+    const deletedBoundaryPage = await dispatchLocalProfileFeatured(
+      context,
+      author.id,
+      `v1:after:${boundaryId}`,
+    );
+    assert.deepEqual(
+      deletedBoundaryPage?.items.map((item) => item.id?.href),
+      legacyPage?.items.map((item) => item.id?.href),
+    );
+    assert.equal(await dispatchLocalProfileFeatured(context, author.id, 'v2:after:bad:bad'), null);
+    assert.equal(pages, 2);
+    assert.deepEqual(
+      ids,
+      [postIds[54], ...postIds.slice(0, 54)].map((id) => `${publicOrigin}/ap/note/${id}`),
     );
   });
 });

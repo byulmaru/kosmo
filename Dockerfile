@@ -56,8 +56,9 @@ COPY packages ./packages
 COPY scripts ./scripts
 
 # Public client settings are selected from the channel configuration in the Web bundle.
-RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
-  pnpm build:sentry-artifacts
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
+  --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
+  PNPM_CONFIG_STORE_DIR=/var/cache/pnpm/store pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \

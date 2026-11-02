@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
 import { NativePushProvider } from '@/components/native-push/NativePushProvider';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionProvider, useSession } from '@/session/SessionProvider';
 import {
   ThemePreferenceProvider,
   useClearThemeStorageError,
@@ -64,14 +65,16 @@ export function AppProviders({
             <GraphQLErrorBoundary>
               <RelayActorProvider>
                 <SessionProvider>
-                  <FeatureFlagsProvider>
-                    <AnalyticsSessionBridge />
-                    <NativePushProvider>
-                      <PostContentWarningRevealProvider>
-                        {children}
-                      </PostContentWarningRevealProvider>
-                    </NativePushProvider>
-                  </FeatureFlagsProvider>
+                  <AccountCoachmarkBoundary>
+                    <FeatureFlagsProvider>
+                      <AnalyticsSessionBridge />
+                      <NativePushProvider>
+                        <PostContentWarningRevealProvider>
+                          {children}
+                        </PostContentWarningRevealProvider>
+                      </NativePushProvider>
+                    </FeatureFlagsProvider>
+                  </AccountCoachmarkBoundary>
                 </SessionProvider>
               </RelayActorProvider>
             </GraphQLErrorBoundary>
@@ -80,6 +83,11 @@ export function AppProviders({
       )}
     </ThemePreferenceProvider>
   );
+}
+
+function AccountCoachmarkBoundary({ children }: PropsWithChildren) {
+  const { accountId } = useSession();
+  return <CoachmarkProvider accountId={accountId}>{children}</CoachmarkProvider>;
 }
 
 function ThemeStorageErrorToast() {

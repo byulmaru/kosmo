@@ -1,7 +1,33 @@
 import type { WorkflowDefinition } from './client';
+import type { ActivityPubPostCreateInput } from './post-create';
 
 export const REMOTE_POST_LOOKUP_WORKFLOW_TYPE = 'remotePostLookupWorkflow';
 export const REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+export const REMOTE_POST_CREATE_WORKFLOW_TYPE = 'remotePostCreateWorkflow';
+
+export type RemotePostCreateWorkflowArgs = {
+  readonly input: ActivityPubPostCreateInput;
+  readonly requestId: string;
+};
+
+export type RemotePostCreateWorkflowResult =
+  | {
+      readonly authorProfileId: string;
+      readonly postId: string;
+      readonly replyParentFallback?: boolean;
+      readonly status: 'created' | 'duplicate';
+    }
+  | {
+      readonly reason: 'note_media_validation_rejected' | 'reply_profile_blocked';
+      readonly status: 'rejected';
+    };
+
+export const remotePostCreateWorkflow: WorkflowDefinition<
+  (args: RemotePostCreateWorkflowArgs) => Promise<RemotePostCreateWorkflowResult>
+> = {
+  workflow: REMOTE_POST_CREATE_WORKFLOW_TYPE,
+  workflowIdFromArgs: ({ requestId }) => `${REMOTE_POST_CREATE_WORKFLOW_TYPE}:${requestId}`,
+};
 
 export type RemotePostLookupInput = {
   readonly objectUri: string;

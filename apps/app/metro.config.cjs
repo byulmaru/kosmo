@@ -13,6 +13,8 @@ const FEDERATION_MEDIA_TYPES = new Set([
   'application/xrd+xml',
 ]);
 const config = getSentryExpoConfig(__dirname);
+// Web useFonts sources are package-provided WOFF2 assets.
+config.resolver.assetExts.push('woff2');
 const defaultEnhanceMiddleware = config.server.enhanceMiddleware;
 
 const preferredMediaTypes = (value) => {

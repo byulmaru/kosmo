@@ -125,7 +125,7 @@ function DiscoveryStory({ state = 'ready' }: { state?: State }) {
 const meta = {
   component: DiscoveryStory,
   globals: { theme: 'light', viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: { layout: 'fullscreen' },
+  parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Screens/First Profile Tag Discovery',
 } satisfies Meta<typeof DiscoveryStory>;
 export default meta;

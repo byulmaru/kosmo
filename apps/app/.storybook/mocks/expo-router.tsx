@@ -49,12 +49,14 @@ const RouterContext = createContext<RouterContextValue>({
 export function RouterMockProvider({
   children,
   params = {},
+  onNavigate,
   pathname: initialPathname = '/home',
   segments = [],
   slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
+  onNavigate?: (href: Href) => void;
   pathname?: string;
   segments?: readonly string[];
   slot?: ReactNode;
@@ -74,15 +76,17 @@ export function RouterMockProvider({
           return paths.at(-1) === next ? paths : [...paths.slice(0, -1), next];
         }),
       segments,
-      setPathname: (href: Href) =>
+      setPathname: (href: Href) => {
+        onNavigate?.(href);
         setHistory((paths) => {
           const next = typeof href === 'string' ? href : href.pathname;
           return paths.at(-1) === next ? paths : [...paths, next];
-        }),
+        });
+      },
       slot,
       slotLabel,
     }),
-    [history, params, pathname, segments, slot, slotLabel],
+    [history, onNavigate, params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -135,11 +139,15 @@ export function Link({
   children,
   href,
   onPress,
+  rel,
   replace = false,
+  target,
 }: PropsWithChildren<{
   asChild?: boolean;
   href: Href;
+  rel?: string;
   replace?: boolean;
+  target?: string;
   onPress?: (event: LinkPressEvent) => void;
 }>) {
   const { replacePathname, setPathname } = useContext(RouterContext);
@@ -148,6 +156,8 @@ export function Link({
     !isValidElement<{
       href?: string;
       onPress?: (event: LinkPressEvent) => void;
+      rel?: string;
+      target?: string;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
@@ -166,6 +176,7 @@ export function Link({
   };
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
+    ...(Platform.OS === 'web' ? { rel, target } : {}),
     ...(Platform.OS === 'web'
       ? {
           onClick: handlePress,

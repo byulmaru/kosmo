@@ -10,7 +10,7 @@ import {
   Profiles,
   Reactions,
 } from '@kosmo/core/db';
-import { InstanceKind, NotificationKind } from '@kosmo/core/enums';
+import { InstanceKind, NotificationKind, PushInstallationPlatform } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import {
@@ -25,6 +25,11 @@ import { applicationDefault, FirebaseError, getApps, initializeApp } from 'fireb
 import { getMessaging } from 'firebase-admin/messaging';
 import type { OperationalNotificationData } from '@kosmo/core/db';
 import type { Message } from 'firebase-admin/messaging';
+
+type UntargetedPushMessage = Omit<Message, 'fid' | 'token'> & {
+  readonly data: Record<string, string>;
+  readonly notification: NonNullable<Message['notification']>;
+};
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 const PREVIEW_MAX_CODE_POINTS = 160;
@@ -133,9 +138,10 @@ const isOperationalNotificationData = (value: unknown): value is OperationalNoti
   );
 };
 
-const isInvalidRegistrationToken = (code: string) =>
+const isInvalidRegistrationTarget = (code: string) =>
   code === 'messaging/invalid-registration-token' ||
-  code === 'messaging/registration-token-not-registered';
+  code === 'messaging/registration-token-not-registered' ||
+  code === 'messaging/installation-id-not-registered';
 
 const retryableProviderCodes = new Set([
   'messaging/device-message-rate-exceeded',
@@ -147,19 +153,39 @@ const retryableProviderCodes = new Set([
 ]);
 
 const sendPushMessage = async (
-  payload: Message,
+  payload: UntargetedPushMessage,
   projectId: string,
-  installation: { readonly accountId: string; readonly id: string; readonly token: string },
+  installation: {
+    readonly accountId: string;
+    readonly id: string;
+    readonly platform: PushInstallationPlatform;
+    readonly token: string;
+  },
+  remainingMilliseconds: number,
 ) => {
   const app =
     getApps().find(({ name }) => name === '[DEFAULT]') ??
     initializeApp({ credential: applicationDefault(), projectId });
 
   try {
-    await getMessaging(app).send(payload);
+    const message: Message =
+      installation.platform === PushInstallationPlatform.WEB
+        ? {
+            data: {
+              ...payload.data,
+              body: payload.notification.body ?? '',
+              title: payload.notification.title ?? '',
+            },
+            fid: installation.token,
+            webpush: {
+              headers: { TTL: String(Math.floor(remainingMilliseconds / 1000)) },
+            },
+          }
+        : { ...payload, token: installation.token };
+    await getMessaging(app).send(message);
   } catch (error) {
     if (error instanceof FirebaseError) {
-      if (isInvalidRegistrationToken(error.code)) {
+      if (isInvalidRegistrationTarget(error.code)) {
         await invalidatePushInstallation({
           accountId: installation.accountId,
           id: installation.id,
@@ -260,10 +286,10 @@ export const sendPushNotification = async (
           recipientAccountId: encodeGlobalId('Account', notification.recipientAccountId),
         },
         notification: { body: notification.data.body ?? '', title: notification.data.title },
-        token: installation.token,
       },
       projectId,
       installation,
+      ttl,
     );
     return;
   }
@@ -406,8 +432,7 @@ export const sendPushNotification = async (
       recipientProfileId: encodeGlobalId('Profile', notification.recipientProfileId),
     },
     notification: { body, title: actorName },
-    token: installation.token,
-  } satisfies Message;
+  } satisfies UntargetedPushMessage;
 
-  await sendPushMessage(payload, projectId, installation);
+  await sendPushMessage(payload, projectId, installation, ttl);
 };

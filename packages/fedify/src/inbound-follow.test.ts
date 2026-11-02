@@ -41,11 +41,13 @@ let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
@@ -64,11 +66,13 @@ describe('inbound Follow and Undo', () => {
       db,
       firstOrThrow,
       Instances,
+      Media,
       Notifications,
       pg,
       ProfileBlocks,
       ProfileFollowRequests,
       ProfileFollows,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -80,6 +84,8 @@ describe('inbound Follow and Undo', () => {
 
   beforeEach(async () => {
     await waitForProfileFollowWorkflows({ terminateIdlePairs: true });
+    await db.delete(ProfileMedia);
+    await db.delete(Media);
     await db.delete(Profiles);
     if (recipientAccountIds.length > 0) {
       await db.delete(Accounts).where(inArray(Accounts.id, recipientAccountIds));

@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { fn } from 'storybook/test';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Href } from 'expo-router';
+import type {
+  ReactionSummaryEntry,
+  ReactionSummaryProps,
+} from '@/components/reaction/ReactionSummary';
 
 export const canonicalReactionEntries = [
   { count: 24, type: '🥹' },
@@ -15,27 +20,47 @@ export const canonicalReactionEntries = [
   { count: 3, type: '🌈' },
 ] as const;
 
+export type ReactionSummaryPlaygroundArgs = {
+  disabled?: boolean;
+  entries: ReadonlyArray<ReactionSummaryEntry>;
+  errorTypeIds: ReadonlyArray<string>;
+  onMore: NonNullable<ReactionSummaryProps['onMore']>;
+  onToggle: NonNullable<ReactionSummaryProps['onToggle']>;
+  onSelectedTypeIdsChange?: (selectedTypeIds: ReadonlyArray<string>) => void;
+  pendingTypeIds: ReadonlyArray<string>;
+  selectedTypeIds: ReadonlyArray<string>;
+};
+
 function ReactionSummaryPlayground({
   disabled = false,
-  errorType,
-  pendingType,
-  selectedType = '❤️',
-}: {
-  disabled?: boolean;
-  errorType?: string;
-  pendingType?: string;
-  selectedType?: string;
-}) {
+  entries,
+  errorTypeIds,
+  onMore,
+  onToggle,
+  onSelectedTypeIdsChange,
+  pendingTypeIds,
+  selectedTypeIds: selectedTypeIdsArg,
+}: ReactionSummaryPlaygroundArgs) {
+  const [selectedTypeIds, setSelectedTypeIds] = useState(selectedTypeIdsArg);
+  useEffect(() => setSelectedTypeIds(selectedTypeIdsArg), [selectedTypeIdsArg]);
+
   return (
     <Catalog width={600}>
       <ReactionSummary
         disabled={disabled}
-        entries={canonicalReactionEntries}
-        errorTypeIds={errorType ? [errorType] : undefined}
-        onMore={fn()}
-        onToggle={fn()}
-        pendingTypeIds={pendingType ? [pendingType] : undefined}
-        selectedTypeIds={selectedType ? [selectedType] : []}
+        entries={entries}
+        errorTypeIds={errorTypeIds}
+        onMore={onMore}
+        onToggle={(intent) => {
+          const nextSelectedTypeIds = intent.nextSelected
+            ? [...selectedTypeIds, intent.optionId]
+            : selectedTypeIds.filter((type) => type !== intent.optionId);
+          setSelectedTypeIds(nextSelectedTypeIds);
+          onToggle(intent);
+          onSelectedTypeIdsChange?.(nextSelectedTypeIds);
+        }}
+        pendingTypeIds={pendingTypeIds}
+        selectedTypeIds={selectedTypeIds}
       />
     </Catalog>
   );
@@ -93,36 +118,46 @@ export function ReactionSummaryInteraction() {
 }
 
 const meta = {
+  args: {
+    entries: canonicalReactionEntries,
+    errorTypeIds: [],
+    onMore: fn(),
+    onToggle: fn(),
+    pendingTypeIds: [],
+    selectedTypeIds: ['❤️'],
+  },
+  argTypes: {
+    disabled: { control: 'boolean' },
+    entries: { control: 'object' },
+    errorTypeIds: { control: 'object' },
+    onMore: { action: 'more', control: false },
+    onSelectedTypeIdsChange: { control: false },
+    onToggle: { action: 'toggle', control: false },
+    pendingTypeIds: { control: 'object' },
+    selectedTypeIds: { control: 'object' },
+  },
   component: ReactionSummaryPlayground,
   excludeStories: [
     'canonicalReactionEntries',
     'ReactionSummaryInteraction',
     'ReactionSummaryStates',
   ],
+  render: (args) => {
+    const [, updateArgs] = useArgs<ReactionSummaryPlaygroundArgs>();
+    return (
+      <ReactionSummaryPlayground
+        {...args}
+        onSelectedTypeIdsChange={(selectedTypeIds) => updateArgs({ selectedTypeIds })}
+      />
+    );
+  },
   title: 'KOSMO/Patterns/Reaction/Summary',
 } satisfies Meta<typeof ReactionSummaryPlayground>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = {
-  args: { selectedType: '❤️' },
-  argTypes: {
-    disabled: { control: 'boolean' },
-    errorType: {
-      control: 'select',
-      options: ['', ...canonicalReactionEntries.map(({ type }) => type)],
-    },
-    pendingType: {
-      control: 'select',
-      options: ['', ...canonicalReactionEntries.map(({ type }) => type)],
-    },
-    selectedType: {
-      control: 'select',
-      options: ['', ...canonicalReactionEntries.map(({ type }) => type)],
-    },
-  },
-};
+export const Playground: Story = {};
 
 export const States: Story = {
   parameters: { controls: { disable: true } },

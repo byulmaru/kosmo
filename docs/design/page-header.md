@@ -45,9 +45,13 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 않는다. 최근 검색과 검색 결과의 바깥 컨테이너는 중앙 컬럼 전체 폭을 사용해 도구막대 바로 아래에 붙는다.
 최초 검색 empty 상태만 기존 본문 여백을 사용한다.
 
-검색 route가 검색 입력, `q`·`tab`, 포커스와 검색 상태를 계속 소유한다. 모바일 Web `< compact`에서는
-`UniversalShell`이 기본 메뉴 전용 헤더를 중복 렌더링하지 않으며, 셸은 drawer 상태와 왼쪽 가장자리 스와이프
-열기 동작을 계속 소유한다.
+Android/iOS 검색 도구막대도 높이 `48px`의 같은 입력, 기본 `border/subtle` 테두리와 포커스 테두리를 사용한다.
+Native `PageHeader`가 기존 `16px` 좌우 여백과 하단 구분선을 제공하고 도구막대는 남은 가로 폭을 채운다.
+
+검색 route가 `q`·`tab`, 포커스와 검색 상태를 소유하고 `SearchToolbar`가 편집 중 draft와 입력 UI를 소유한다.
+Web에서는 `SearchToolbar`를 route 본문에, Android/iOS에서는 `PageHeader` 안에 렌더링한다. 모바일 Web
+`< compact`에서는 `UniversalShell`이 기본 메뉴 전용 헤더를 중복 렌더링하지 않으며, 셸은 drawer 상태와 왼쪽
+가장자리 스와이프 열기 동작을 계속 소유한다.
 
 - 모바일 Web 최초 상태의 leading action은 햄버거 메뉴다. 입력 중과 결과 상태에서는 같은 `44×44px` 자리를
   뒤로가기로 교체한다. leading action이 바뀌어도 입력 영역의 시작점과 사용 가능한 너비는 바뀌지 않는다.

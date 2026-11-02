@@ -300,6 +300,81 @@ export const MobileReplyMediaScrollContract: Story = {
     expect(footer.getBoundingClientRect().top).toBe(initialFooterTop);
   },
 };
+const mobileReplyLongBody = Array.from({ length: 30 }, () => '긴 답글 본문 입력입니다').join('\n');
+
+export const MobileReplyLongBodyAutoSizeContract: Story = {
+  ...mobileReplyShellContract,
+  args: {
+    ...mobileReplyShellContract.args,
+    body: mobileReplyLongBody,
+    remaining: 81,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' }) as HTMLTextAreaElement;
+    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const parent = canvas.getByTestId('mobile-reply-parent');
+    const lineHeight = Number.parseFloat(getComputedStyle(body).lineHeight);
+    const lastLineBottom = () => {
+      const style = getComputedStyle(body);
+      const lastLineIndex = body.value.split('\n').length - 1;
+      return (
+        body.getBoundingClientRect().top +
+        body.clientTop +
+        Number.parseFloat(style.paddingTop) +
+        lastLineIndex * lineHeight -
+        body.scrollTop +
+        lineHeight
+      );
+    };
+
+    await waitFor(() => expect(body).toHaveValue(mobileReplyLongBody));
+    await waitFor(() => expect(body.clientHeight).toBeGreaterThanOrEqual(lineHeight * 30 - 1));
+    await userEvent.click(body);
+    await waitFor(() => expect(body).toHaveFocus());
+    body.setSelectionRange(body.value.length, body.value.length);
+    fireEvent.select(body);
+    await waitFor(() => expect(body.selectionStart).toBe(body.value.length));
+
+    scroll.scrollTop = scroll.scrollHeight;
+    scroll.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(scroll.scrollTop).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(lastLineBottom()).toBeLessThanOrEqual(scroll.getBoundingClientRect().bottom + 1),
+    );
+
+    fireEvent.click(canvas.getByTestId('mobile-reply-parent-resize'));
+    await waitFor(() => expect(parent.style.height).toBe('260px'));
+    expect(body).toHaveFocus();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+
+    await userEvent.type(body, '가', { skipClick: true });
+    await waitFor(() => expect(body).toHaveValue(`${mobileReplyLongBody}가`));
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(body.selectionStart).toBe(body.value.length);
+    expect(body.selectionEnd).toBe(body.value.length);
+    await waitFor(() =>
+      expect(lastLineBottom()).toBeLessThanOrEqual(scroll.getBoundingClientRect().bottom + 1),
+    );
+
+    await userEvent.keyboard('{Backspace}');
+    await waitFor(() => expect(body).toHaveValue(mobileReplyLongBody));
+    await waitFor(() =>
+      expect(lastLineBottom()).toBeLessThanOrEqual(scroll.getBoundingClientRect().bottom + 1),
+    );
+
+    body.setSelectionRange(0, body.value.length);
+    fireEvent.select(body);
+    await userEvent.keyboard('{Backspace}');
+    await waitFor(() => expect(body).toHaveValue(''));
+    expect(body).toHaveFocus();
+    await userEvent.type(body, '짧은 답글', { skipClick: true });
+    await waitFor(() => expect(body).toHaveValue('짧은 답글'));
+    expect(body).toHaveFocus();
+  },
+};
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileFullPickerBackdropDismissContract: Story = {
   ...mobilePlaygroundStory,

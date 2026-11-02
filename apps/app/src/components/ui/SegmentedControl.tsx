@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { RefObject } from 'react';
 import type { LayoutChangeEvent, ViewStyle } from 'react-native';
 
@@ -53,6 +54,37 @@ type SegmentedControlItemProps<Value extends string> = {
   options: SegmentedControlOptions<Value>;
   selectedValue: Value;
 };
+
+function SegmentedFeedback({
+  disabled,
+  hovered,
+  pressed,
+}: {
+  disabled: boolean;
+  hovered: boolean;
+  pressed: boolean;
+}) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const animatedColor = useAnimatedColorTransition({
+    color: disabled
+      ? 'transparent'
+      : pressed
+        ? theme.statePressed
+        : hovered
+          ? theme.stateHover
+          : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'interaction',
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.stateLayer, { backgroundColor: animatedColor } as unknown as ViewStyle]}
+    />
+  );
+}
 
 function SegmentedControlItem<Value extends string>({
   disabled,
@@ -139,14 +171,7 @@ function SegmentedControlItem<Value extends string>({
         const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
         return (
           <>
-            {hovered || state.pressed ? (
-              <View
-                style={[
-                  styles.stateLayer,
-                  { backgroundColor: state.pressed ? theme.statePressed : theme.stateHover },
-                ]}
-              />
-            ) : null}
+            <SegmentedFeedback disabled={disabled} hovered={hovered} pressed={state.pressed} />
             {focusVisible ? (
               <View style={[styles.focusRing, { borderColor: theme.stateFocusRing }]} />
             ) : null}

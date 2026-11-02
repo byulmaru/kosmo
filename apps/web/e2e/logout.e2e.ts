@@ -57,7 +57,7 @@ for (const surface of logoutSurfaces) {
         .getByRole('link', { name: '홈', exact: true }),
     ).toHaveCount(0);
     if (surface.name === 'mobile drawer') {
-      await expect(page.getByRole('navigation', { name: '하단 탐색' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: '하단 탐색' })).toHaveCount(0);
     }
     expect(await sessionCookie(context)).toBeUndefined();
     expect(await readSessionState(firstViewer.session.id)).toBe(SessionState.REVOKED);

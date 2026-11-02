@@ -9,3 +9,4 @@ Read this entire file when adding or reviewing `apps/app` Storybook stories, Rel
 - fixture는 production visual component를 별도로 복제하지 않으며, 실제 popup/listbox primitive가 소유하는 keyboard navigation·dismiss·focus return을 다시 구현하지 않는다. 표시 UI를 검증할 때는 필요한 composed menu·trigger·상태만 조합한다.
 - loading, error, empty, long display name/handle/content, selected/disabled, pagination retry와 platform width 상태를 포함한다.
 - interactive element에는 접근성 metadata를 넣고 Storybook a11y 검증과 web static build를 함께 통과시킨다.
+- `test:storybook`은 React Native Web의 기본 snapshot timing을 사용한다. 중간 프레임을 측정하는 `motion` 태그 스토리는 `test:motion`에서 `KOSMO_TEST_REAL_MOTION=1`로 실제 Animated를 실행한다. 앱의 aggregate `test`는 두 검증을 모두 포함하며, 모션 스토리를 추가하면 `test:motion`의 대상 파일도 갱신한다.

@@ -729,7 +729,7 @@ export const HeaderAndWebRefreshPolicy: Story = {
     expect(heading).toBeVisible();
     expect(headerRect.height).toBe(64);
     expect(headerRect.right - actionRect.right).toBe(16);
-    expect(action).toHaveStyle({ backgroundColor: theme.actionSecondaryBase });
+    expect(action.firstElementChild).toHaveStyle({ backgroundColor: theme.actionSecondaryBase });
     expect(action).toHaveStyle({ borderColor: theme.actionSecondaryBorder });
     expect(actionStyle.borderWidth).toBe('1px');
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();

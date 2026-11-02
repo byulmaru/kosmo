@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiPickerOptions } from '@/components/reaction/reactionEmojiCatalog';
@@ -242,6 +243,10 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
   },
 ];
 
+type PickerStoryProps = FullReactionPickerProps & {
+  updateArgs?: (update: Partial<Pick<FullReactionPickerProps, 'query' | 'selectedValues'>>) => void;
+};
+
 const meta = {
   args: {
     onClose: fn(),
@@ -294,7 +299,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = { render: (args) => <StoryPicker {...args} /> };
+export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<FullReactionPickerProps>();
+    return <StoryPicker {...args} updateArgs={updateArgs} />;
+  },
+};
 export const WebBrowse: Story = {};
 export const WebSearchResults: Story = { args: { query: '하트' } };
 export const WebEmpty: Story = { args: { query: '존재하지않음' } };
@@ -509,7 +519,7 @@ function expectQuickColumnsToAlign(canvasElement: HTMLElement) {
   }
 }
 
-function InteractivePicker(props: FullReactionPickerProps) {
+function InteractivePicker({ updateArgs, ...props }: PickerStoryProps) {
   const [query, setQuery] = useState(props.query);
   const [selectedValues, setSelectedValues] = useState(props.selectedValues ?? []);
 
@@ -522,14 +532,15 @@ function InteractivePicker(props: FullReactionPickerProps) {
       onQueryChange={(value) => {
         props.onQueryChange(value);
         setQuery(value);
+        updateArgs?.({ query: value });
       }}
       onSelect={(option) => {
         props.onSelect(option);
-        setSelectedValues((values) =>
-          values.includes(option.id)
-            ? values.filter((value) => value !== option.id)
-            : [...values, option.id],
-        );
+        const nextValues = selectedValues.includes(option.id)
+          ? selectedValues.filter((value) => value !== option.id)
+          : [...selectedValues, option.id];
+        setSelectedValues(nextValues);
+        updateArgs?.({ selectedValues: nextValues });
       }}
       query={query}
       selectedValues={selectedValues}
@@ -537,7 +548,7 @@ function InteractivePicker(props: FullReactionPickerProps) {
   );
 }
 
-function StoryPicker(props: FullReactionPickerProps) {
+function StoryPicker(props: PickerStoryProps) {
   if (props.presentation !== 'mobile') {
     return <InteractivePicker {...props} />;
   }
@@ -545,7 +556,7 @@ function StoryPicker(props: FullReactionPickerProps) {
   return <MobileStoryPicker {...props} />;
 }
 
-function MobileStoryPicker(props: FullReactionPickerProps) {
+function MobileStoryPicker(props: PickerStoryProps) {
   const [visible, setVisible] = useState(true);
   const close = () => {
     props.onClose();

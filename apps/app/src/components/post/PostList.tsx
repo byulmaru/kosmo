@@ -12,6 +12,8 @@ import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from './PostComposerCoordinator';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
+import { useProfilePinOrder } from './ProfilePinOrder';
+import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
@@ -63,6 +65,7 @@ const PostListProfileFragment = graphql`
 const PostListProfilePinnedFragment = graphql`
   fragment PostList_profile_pinned on Profile {
     id
+    ...ProfilePinOrder_profile
     pinnedPosts {
       id
       content {
@@ -255,6 +258,7 @@ export const PostList = memo(function PostList({
   const local = localPagination.data;
   const hashtag = hashtagPagination.data;
   const profile = profilePagination.data;
+  const pinOrderMenu = useProfilePinOrder(pinnedProfile ?? null);
   const pinnedPosts = (pinnedProfile?.pinnedPosts ?? [])
     .filter((post) => post != null)
     .filter(
@@ -357,12 +361,12 @@ export const PostList = memo(function PostList({
             {profileKey ? (
               <View style={styles.root}>
                 {pinnedPosts.map((post) => (
-                  <PostListItem
+                  <ProfilePinOrderContext.Provider
                     key={`pinned:${post.id}`}
-                    pinned
-                    post={post}
-                    presentation={postListPresentation}
-                  />
+                    value={pinOrderMenu(post.id)}
+                  >
+                    <PostListItem pinned post={post} presentation={postListPresentation} />
+                  </ProfilePinOrderContext.Provider>
                 ))}
               </View>
             ) : null}

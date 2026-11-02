@@ -4,6 +4,7 @@ import { HashtagMuteDecision, HashtagMuteScope } from '@kosmo/core/enums';
 import { hashtagMuteRuleWorkflow } from '@kosmo/core/temporal/hashtag-mute';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { temporalTestExecutable } from './temporal-test-executable.js';
 import type {
   HashtagMuteCommand,
   HashtagMuteRuleSnapshot,
@@ -34,7 +35,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+      server: { executable: temporalTestExecutable },
     });
     t.after(() => environment.teardown());
     const taskQueue = `hashtag-mute-test-${process.pid}`;

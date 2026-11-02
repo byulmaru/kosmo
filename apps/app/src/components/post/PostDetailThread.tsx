@@ -112,6 +112,7 @@ export function PostDetailFrame({
 }
 
 export function PostDetailThread({
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -124,6 +125,7 @@ export function PostDetailThread({
   preserveScrollPosition,
   replyProfile,
 }: {
+  onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -138,6 +140,7 @@ export function PostDetailThread({
 }) {
   return (
     <PostDetailThreadContent
+      onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
@@ -154,6 +157,7 @@ export function PostDetailThread({
 }
 
 function PostDetailThreadContent({
+  onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
@@ -165,6 +169,7 @@ function PostDetailThreadContent({
   preserveScrollPosition,
   replyProfile,
 }: {
+  onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
@@ -422,6 +427,7 @@ function PostDetailThreadContent({
               <PostLayout
                 contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
+                onActionBarBackgroundPress={onCurrentPostBackgroundPress}
                 onDeleted={onPostDeleted}
                 onReplyPress={currentPostReplyOnPress}
                 post={requireThreadFragment(item.post.detail, 'current detail')}

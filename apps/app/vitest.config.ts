@@ -14,10 +14,18 @@ export default defineConfig({
     projects: [
       {
         extends: true,
+        // Opt in when measuring frames; the default suite keeps RN Web's snapshot timing.
+        define: {
+          global: 'globalThis',
+          ...(process.env.KOSMO_TEST_REAL_MOTION === '1'
+            ? { 'process.env.NODE_ENV': JSON.stringify('development') }
+            : {}),
+        },
         plugins: [
           relayVitePlugin(),
           storybookTest({
             configDir: join(currentDirectory, '.storybook'),
+            tags: process.env.KOSMO_TEST_REAL_MOTION === '1' ? {} : { exclude: ['motion'] },
           }),
         ],
         resolve: {

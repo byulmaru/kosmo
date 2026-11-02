@@ -1,5 +1,5 @@
 import { AccountProfileRole } from '@kosmo/core/enums';
-import { pinProfilePost, unpinProfilePost } from '@kosmo/core/services';
+import { pinProfilePost, reorderProfilePost, unpinProfilePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
 import { postProfilePinLoader } from '@/graphql/resolvers/post/loader/profile-pin';
@@ -49,6 +49,26 @@ builder.mutationField('unpinProfilePost', (t) =>
       postProfilePinLoader(ctx).clear(input.postId.id);
 
       return { changed: result.changed, profile: ctx.session.profile.id, post: input.postId.id };
+    },
+  }),
+);
+
+builder.mutationField('reorderProfilePost', (t) =>
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
+    type: builder.simpleObject('ReorderProfilePostPayload', {
+      fields: (field) => ({ profile: field.field({ type: Profile }), changed: field.boolean() }),
+    }),
+    input: {
+      postId: t.input.globalID({ for: Post }),
+      beforePostId: t.input.globalID({ for: Post, required: false }),
+    },
+    resolve: async (_, { input }, ctx) => {
+      const result = await reorderProfilePost({
+        profileId: ctx.session.profile.id,
+        postId: input.postId.id,
+        beforePostId: input.beforePostId?.id,
+      });
+      return { changed: result.changed, profile: ctx.session.profile.id };
     },
   }),
 );

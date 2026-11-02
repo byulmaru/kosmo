@@ -3,6 +3,7 @@ import {
   Client,
   Connection,
   WithStartWorkflowOperation,
+  WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
@@ -51,9 +52,10 @@ export interface WorkflowUpdateDefinition<
 type RunWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = Omit<
   WorkflowStartOptions<T>,
   'workflowId' | 'taskQueue'
-> & {
-  readonly mode: Mode;
-};
+> &
+  (Mode extends 'execute'
+    ? { readonly mode: 'execute'; readonly returnExistingResult?: boolean }
+    : { readonly mode: 'start'; readonly returnExistingResult?: never });
 
 type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit<
   WorkflowStartOptions<T>,
@@ -63,6 +65,23 @@ type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit
   readonly updateId?: string;
   readonly workflowIdConflictPolicy: WorkflowIdConflictPolicy;
 } & (Args extends [] ? { readonly updateArgs?: Args } : { readonly updateArgs: Args });
+
+type RunWorkflowExistingUpdateOptions<T extends Workflow, Args extends unknown[]> = Pick<
+  WorkflowStartOptions<T>,
+  'args'
+> & {
+  readonly mode: 'update';
+  readonly updateId?: string;
+} & (Args extends [] ? { readonly updateArgs?: Args } : { readonly updateArgs: Args });
+
+type RunWorkflowExistingUpdateImplementationOptions<T extends Workflow> = Pick<
+  WorkflowStartOptions<T>,
+  'args'
+> & {
+  readonly mode: 'update';
+  readonly updateArgs?: unknown[];
+  readonly updateId?: string;
+};
 
 type RunWorkflowUpdateImplementationOptions<T extends Workflow> = Omit<
   WorkflowStartOptions<T>,
@@ -86,19 +105,43 @@ export function runWorkflow<T extends Workflow, Ret, Args extends unknown[]>(
   definition: WorkflowUpdateDefinition<T, Ret, Args>,
   options: RunWorkflowUpdateOptions<T, Args>,
 ): Promise<Ret>;
+export function runWorkflow<T extends Workflow, Ret, Args extends unknown[]>(
+  definition: WorkflowUpdateDefinition<T, Ret, Args>,
+  options: RunWorkflowExistingUpdateOptions<T, Args>,
+): Promise<Ret>;
 export function runWorkflow<T extends Workflow>(
   definition: WorkflowDefinition<T>,
   options: RunWorkflowOptions<T, 'start' | 'execute'>,
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T>>;
 export async function runWorkflow<T extends Workflow>(
   definition: WorkflowDefinition<T>,
-  options: RunWorkflowOptions<T, 'start' | 'execute'> | RunWorkflowUpdateImplementationOptions<T>,
+  options:
+    | RunWorkflowOptions<T, 'start' | 'execute'>
+    | RunWorkflowUpdateImplementationOptions<T>
+    | RunWorkflowExistingUpdateImplementationOptions<T>,
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T> | unknown> {
   const args = (options.args ?? []) as Parameters<T>;
   const workflowId = definition.workflowIdFromArgs(...args);
   const deadline = Date.now() + (definition.timeoutMs ?? 30_000);
 
   try {
+    if (options.mode === 'update') {
+      const { updateArgs, updateId } = options;
+      const update = (definition as WorkflowUpdateDefinition<T, unknown, unknown[]>).update;
+      return await temporalClient.withDeadline(deadline, () => {
+        const handle = temporalClient.workflow.getHandle<T>(workflowId);
+        return updateArgs?.length
+          ? handle.executeUpdate<unknown, [unknown, ...unknown[]]>(update, {
+              args: updateArgs as [unknown, ...unknown[]],
+              updateId,
+            })
+          : handle.executeUpdate<unknown, []>(update, {
+              args: (updateArgs ?? []) as [],
+              updateId,
+            });
+      });
+    }
+
     if (options.mode === 'update-with-start') {
       const { mode, args: workflowArgs, updateArgs, updateId, ...workflowOptions } = options;
       void mode;
@@ -126,7 +169,7 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    const { mode, ...workflowOptions } = options;
+    const { mode, returnExistingResult, ...workflowOptions } = options;
     const startOptions = {
       ...workflowOptions,
       workflowId,
@@ -139,9 +182,20 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    return await temporalClient.withDeadline(deadline, () =>
-      temporalClient.workflow.execute(definition.workflow, startOptions),
-    );
+    return await temporalClient.withDeadline(deadline, async () => {
+      try {
+        return await temporalClient.workflow.execute(definition.workflow, startOptions);
+      } catch (error) {
+        if (
+          returnExistingResult === true &&
+          error instanceof WorkflowExecutionAlreadyStartedError &&
+          error.workflowId === workflowId
+        ) {
+          return temporalClient.workflow.getHandle<T>(workflowId).result();
+        }
+        throw error;
+      }
+    });
   } catch (error) {
     let failure: unknown = error;
     while (failure instanceof Error && !(failure instanceof ApplicationFailure)) {

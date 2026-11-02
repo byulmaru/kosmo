@@ -85,26 +85,13 @@ export const SubmissionSuccess: Story = {
   },
 };
 
-export const BlockActionAfterReport: Story = {
+export const BlockFailureAfterReport: Story = {
   parameters: {
     relay: {
       ...baseMeta.parameters.relay,
       operationResponses: {
         ProfileBlockActionBlockMutation: {
-          sequence: [
-            { data: { blockProfile: { profileBlock: null, success: false } } },
-            {
-              data: {
-                blockProfile: {
-                  profileBlock: {
-                    id: 'content-report-profile-block',
-                    targetProfile: reportAuthor,
-                  },
-                  success: true,
-                },
-              },
-            },
-          ],
+          data: { blockProfile: { profileBlock: null, success: false } },
         },
       },
     },
@@ -114,8 +101,8 @@ export const BlockActionAfterReport: Story = {
     const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
-    let confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    let confirmation = within(confirmationDialog);
+    const confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    const confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() =>
       expect(page.getByRole('alert')).toHaveTextContent('프로필을 차단하지 못했어요'),
@@ -123,14 +110,38 @@ export const BlockActionAfterReport: Story = {
     expect(page.getByText('신고가 접수되었어요')).toBeVisible();
     await waitFor(() => expect(confirmationDialog).not.toBeInTheDocument());
     await waitFor(() => expect(block).toHaveFocus());
+  },
+};
+
+export const BlockSuccessAfterReport: Story = {
+  parameters: {
+    relay: {
+      ...baseMeta.parameters.relay,
+      operationResponses: {
+        ProfileBlockActionBlockMutation: {
+          data: {
+            blockProfile: {
+              profileBlock: {
+                id: 'content-report-profile-block',
+                targetProfile: reportAuthor,
+              },
+              success: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const { page } = await completeReport(canvasElement);
+    const block = page.getByRole('button', { name: /차단하기/ });
 
     await userEvent.click(block);
-    confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
-    confirmation = within(confirmationDialog);
+    const confirmationDialog = await page.findByRole('dialog', { name: '이 프로필을 차단할까요?' });
+    const confirmation = within(confirmationDialog);
     await userEvent.click(confirmation.getByRole('button', { name: '차단하기' }));
     await waitFor(() => {
       expect(page.queryByRole('button', { name: '게시물 신고 닫기' })).not.toBeInTheDocument();
-      expect(page.queryByText('신고가 접수되었어요')).not.toBeInTheDocument();
     });
     await waitFor(() => expect(page.getByRole('button', { name: '신고 메뉴 열기' })).toHaveFocus());
   },

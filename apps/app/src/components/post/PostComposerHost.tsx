@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
+import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -142,19 +143,31 @@ export function PostComposerHost({
             ]}
             testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
           >
-            {header}
-            <KeyboardAvoidingView
-              behavior="height"
-              keyboardVerticalOffset={insets.top}
+            <View
               style={[
-                styles.composerFrame,
+                styles.clippedSurface,
+                mode === 'overlay' ? { borderRadius: radii.lg } : null,
                 mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
                   ? styles.composerFrameFill
                   : null,
               ]}
             >
-              {form}
-            </KeyboardAvoidingView>
+              <OverlayPortalProvider hostRef={dialogRef}>
+                {header}
+                <KeyboardAvoidingView
+                  behavior="height"
+                  keyboardVerticalOffset={insets.top}
+                  style={[
+                    styles.composerFrame,
+                    mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                      ? styles.composerFrameFill
+                      : null,
+                  ]}
+                >
+                  {form}
+                </KeyboardAvoidingView>
+              </OverlayPortalProvider>
+            </View>
           </View>
         )}
         {...(mode === 'rail'
@@ -244,7 +257,9 @@ const styles = StyleSheet.create({
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
   nativeMobileSurface: { flex: 1 },
-  dialog: { minHeight: 0, overflow: 'hidden' },
+  // Only the visual surface clips; dropdown portals stay in the existing dialog focus scope.
+  dialog: { minHeight: 0, overflow: 'visible' },
+  clippedSurface: { minHeight: 0, flexShrink: 1, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,

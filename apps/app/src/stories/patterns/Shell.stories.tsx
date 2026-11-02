@@ -449,7 +449,7 @@ export const SharedNavigation: Story = {
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
-    const searchVisual = within(search).getByTestId('sidebar-control-visual');
+    const searchVisual = within(search).getByTestId('sidebar-control-feedback');
     const utility = canvas.getByRole('button', { name: '설정 및 기타' });
     const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
     const utilityIcons = utilityVisual.querySelectorAll('svg');
@@ -703,7 +703,7 @@ export const FeedbackNavigationCurrentState: Story = {
     const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
@@ -758,7 +758,7 @@ export const FollowRequestsNavigationCurrentState: Story = {
     const link = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(link).toHaveAttribute('href', '/follow-requests');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
   },
@@ -778,7 +778,7 @@ export const FeedbackNavigationCompactCurrentState: Story = {
     expect(within(menu).getByRole('menuitem', { name: '로그아웃' })).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
@@ -809,7 +809,7 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
@@ -2848,7 +2848,7 @@ export const UniversalCompactFeedbackOverlay: Story = {
     expect(home).not.toHaveAttribute('aria-current');
     await waitFor(() =>
       expect(
-        getComputedStyle(within(feedbackButton).getByTestId('sidebar-control-visual'))
+        getComputedStyle(within(feedbackButton).getByTestId('sidebar-control-feedback'))
           .backgroundColor,
       ).toBe('rgb(255, 249, 230)'),
     );

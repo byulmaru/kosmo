@@ -8,18 +8,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { ReactElement, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -43,6 +35,7 @@ export type TabListProps<Value extends string> = {
 };
 
 export type TabProps<Value extends string> = {
+  anchorRef?: RefObject<View | null>;
   option: TabOption<Value>;
 };
 
@@ -246,17 +239,27 @@ export function TabList<Value extends string>({
   return <TabContext.Provider value={contextValue}>{content}</TabContext.Provider>;
 }
 
-export function Tab<Value extends string>({ option }: TabProps<Value>) {
+export function Tab<Value extends string>({ anchorRef, option }: TabProps<Value>) {
   const context = useContext(TabContext);
   if (!context) {
     throw new Error('Tab은 TabList 안에서 사용해야 합니다.');
   }
 
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const optionRef = useRef<View>(null);
   const [focusVisible, setFocusVisible] = useState(false);
   context.optionRefs.set(option.value, optionRef);
+
+  useLayoutEffect(() => {
+    if (anchorRef) {
+      anchorRef.current = optionRef.current;
+    }
+    return () => {
+      if (anchorRef) {
+        anchorRef.current = null;
+      }
+    };
+  }, [anchorRef]);
 
   const disabled = Boolean(option.disabled);
   const selected = context.value === option.value;
@@ -374,58 +377,32 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
             : web && (state as { hovered?: boolean }).hovered
               ? theme.stateHover
               : 'transparent';
-        const feedbackTransition = web
-          ? ({
-              transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-              transitionProperty: 'background-color',
-              transitionTimingFunction: motion.easing.standard,
-            } as unknown as ViewStyle)
-          : undefined;
         const feedback = (
           <TabFeedback
             color={feedbackColor}
+            disabled={disabled}
             pill={context.variant === 'pill'}
-            pressedColor={theme.statePressed}
-            reducedMotion={reducedMotion}
-            web={web}
-            webTransition={feedbackTransition}
           />
         );
 
         return (
           <>
             {context.variant === 'pill' ? (
-              <View
-                style={[
-                  styles.pillSurface,
-                  {
-                    backgroundColor: selected ? theme.backgroundCanvas : theme.backgroundSurface,
-                    borderColor: selected ? theme.actionPrimaryBase : theme.borderDefault,
-                  },
-                ]}
-              >
-                {feedback}
-                <Text style={[styles.pillLabel, { color: theme.foregroundPrimary }]}>
-                  {option.label}
-                </Text>
-              </View>
+              <TabVisual
+                disabled={disabled}
+                feedback={feedback}
+                label={option.label}
+                pill
+                selected={selected}
+              />
             ) : (
-              <>
-                {feedback}
-                <Text
-                  style={[
-                    styles.underlineLabel,
-                    {
-                      color:
-                        context.variant === 'underline' && !selected
-                          ? theme.foregroundSecondary
-                          : theme.foregroundPrimary,
-                    },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </>
+              <TabVisual
+                disabled={disabled}
+                feedback={feedback}
+                label={option.label}
+                pill={false}
+                selected={selected}
+              />
             )}
           </>
         );
@@ -501,58 +478,87 @@ const styles = StyleSheet.create({
   pillLabel: textStyles.uiLabelM,
 });
 
-type TabFeedbackProps = {
-  color: string;
+type TabVisualProps = {
+  disabled: boolean;
+  feedback: ReactElement;
+  label: string;
   pill: boolean;
-  pressedColor: string;
-  reducedMotion: boolean;
-  web: boolean;
-  webTransition?: ViewStyle;
+  selected: boolean;
 };
 
-function TabFeedback({
-  color,
-  pill,
-  pressedColor,
-  reducedMotion,
-  web,
-  webTransition,
-}: TabFeedbackProps) {
-  const opacity = useRef(new Animated.Value(color === 'transparent' ? 0 : 1)).current;
-  const visible = color !== 'transparent';
+function TabVisual({ disabled, feedback, label, pill, selected }: TabVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const foreground = useAnimatedColorTransition({
+    color: pill || selected ? theme.foregroundPrimary : theme.foregroundSecondary,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled || pill ? 'instant' : 'selection',
+  });
+  const surface = useAnimatedColorTransition({
+    color: pill
+      ? selected
+        ? theme.backgroundCanvas
+        : theme.backgroundSurface
+      : theme.backgroundSurface,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
+  const border = useAnimatedColorTransition({
+    color: pill ? (selected ? theme.actionPrimaryBase : theme.borderDefault) : theme.borderDefault,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
+  const labelStyle = {
+    color: foreground,
+  } as unknown as ViewStyle;
 
-  useEffect(() => {
-    if (web) {
-      return;
-    }
+  if (pill) {
+    return (
+      <Animated.View
+        style={[
+          styles.pillSurface,
+          { backgroundColor: surface, borderColor: border } as unknown as ViewStyle,
+        ]}
+      >
+        {feedback}
+        <Animated.Text style={[styles.pillLabel, labelStyle] as never}>{label}</Animated.Text>
+      </Animated.View>
+    );
+  }
 
-    opacity.stopAnimation();
-    if (reducedMotion) {
-      opacity.setValue(visible ? 1 : 0);
-      return;
-    }
+  return (
+    <>
+      {feedback}
+      <Animated.Text style={[styles.underlineLabel, labelStyle] as never}>{label}</Animated.Text>
+    </>
+  );
+}
 
-    const animation = Animated.timing(opacity, {
-      duration: motion.duration.fast,
-      easing: Easing.bezier(...motion.easingPoints.standard),
-      toValue: visible ? 1 : 0,
-      useNativeDriver: true,
-    });
-    animation.start();
+type TabFeedbackProps = {
+  color: string;
+  disabled: boolean;
+  pill: boolean;
+};
 
-    return () => animation.stop();
-  }, [opacity, reducedMotion, visible, web]);
-
-  const style = [
-    styles.feedbackSurface,
-    pill && styles.pillFeedback,
-    web ? webTransition : undefined,
-    web ? { backgroundColor: color } : { backgroundColor: pressedColor, opacity },
-  ];
-
-  return web ? (
-    <View pointerEvents="none" style={style} />
-  ) : (
-    <Animated.View pointerEvents="none" style={style} />
+function TabFeedback({ color, disabled, pill }: TabFeedbackProps) {
+  const theme = useTheme();
+  const animatedColor = useAnimatedColorTransition({
+    color,
+    instantKey: theme,
+    reducedMotion: useReducedMotion(),
+    role: disabled ? 'instant' : 'interaction',
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.feedbackSurface,
+        pill && styles.pillFeedback,
+        { backgroundColor: animatedColor } as unknown as ViewStyle,
+      ]}
+    />
   );
 }

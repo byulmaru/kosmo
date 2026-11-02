@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
@@ -63,7 +64,7 @@ const meta = {
     onSensitiveMediaChange: { action: 'sensitiveMediaChange', control: false },
     onToolChange: { action: 'toolChange', control: false },
     presentation: { control: 'inline-radio', options: ['web', 'mobile'] },
-    selectedKey: { control: 'select', options: editorMedia.map(({ key }) => key) },
+    selectedKey: { control: 'text' },
     sensitiveMedia: { control: 'boolean' },
     showImageEditPreview: {
       control: 'boolean',
@@ -106,6 +107,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+type StoryStateArgs = Pick<
+  ComposerMediaEditorProps,
+  'media' | 'mobileState' | 'selectedKey' | 'sensitiveMedia' | 'tool'
+>;
+type InteractiveEditorProps = ComposerMediaEditorProps & {
+  updateArgs?: (update: Partial<StoryStateArgs>) => void;
+};
+
 function NightshadeFlagScope({
   children,
   enabled,
@@ -135,9 +144,16 @@ function NightshadeFlagToggleFixture({ children }: PropsWithChildren) {
 }
 
 export const Playground: Story = {
-  render: (args, context) => (
-    <ViewportAwareEditor {...args} mobile={context.globals.viewport?.value === 'kosmoMobile'} />
-  ),
+  render: (args, context) => {
+    const [, updateArgs] = useArgs<ComposerMediaEditorProps>();
+    return (
+      <ViewportAwareEditor
+        {...args}
+        mobile={context.globals.viewport?.value === 'kosmoMobile'}
+        updateArgs={updateArgs}
+      />
+    );
+  },
 };
 
 export const Sensitive: Story = {
@@ -190,7 +206,8 @@ export const MobileNightshade: Story = {
   render: (args) => <InteractiveEditor {...args} />,
 };
 
-function InteractiveEditor(props: ComposerMediaEditorProps) {
+function InteractiveEditor(props: InteractiveEditorProps) {
+  const { updateArgs, ...editorProps } = props;
   const [media, setMedia] = useState(props.media);
   const [mobileState, setMobileState] = useState(props.mobileState);
   const [selectedKey, setSelectedKey] = useState(props.selectedKey);
@@ -205,27 +222,33 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
 
   const editor = (
     <ComposerMediaEditor
-      {...props}
+      {...editorProps}
       media={media}
       mobileState={mobileState}
       onAltTextChange={(key, altText) => {
         props.onAltTextChange(key, altText);
-        setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)));
+        const nextMedia = media.map((item) => (item.key === key ? { ...item, altText } : item));
+        setMedia(nextMedia);
+        updateArgs?.({ media: nextMedia });
       }}
       onApplyNightshadeChange={(key, value) => {
         props.onApplyNightshadeChange(key, value);
-        setMedia((items) =>
-          items.map((item) => (item.key === key ? { ...item, applyNightshade: value } : item)),
+        const nextMedia = media.map((item) =>
+          item.key === key ? { ...item, applyNightshade: value } : item,
         );
+        setMedia(nextMedia);
+        updateArgs?.({ media: nextMedia });
       }}
       onSelectMedia={(key) => {
         props.onSelectMedia(key);
         setSelectedKey(key);
+        updateArgs?.({ selectedKey: key });
       }}
       onPreviewPress={
         props.presentation === 'mobile' && mobileState === 'altKeyboard'
           ? () => {
               setMobileState('default');
+              updateArgs?.({ mobileState: 'default' });
               props.onPreviewPress?.();
             }
           : undefined
@@ -233,18 +256,22 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
       onSensitiveMediaChange={(value) => {
         props.onSensitiveMediaChange(value);
         setSensitiveMedia(value);
+        updateArgs?.({ sensitiveMedia: value });
       }}
       onToolChange={(value) => {
         props.onToolChange(value);
         setTool(value);
         if (props.presentation === 'mobile') {
-          setMobileState((current) =>
-            value === 'alt' && current === 'altKeyboard'
+          const nextMobileState =
+            value === 'alt' && mobileState === 'altKeyboard'
               ? 'default'
               : value === 'alt'
                 ? 'altKeyboard'
-                : value,
-          );
+                : value;
+          setMobileState(nextMobileState);
+          updateArgs?.({ tool: value, mobileState: nextMobileState });
+        } else {
+          updateArgs?.({ tool: value });
         }
       }}
       selectedKey={selectedKey}
@@ -265,7 +292,7 @@ function InteractiveEditor(props: ComposerMediaEditorProps) {
   );
 }
 
-function WebEditorStory(props: ComposerMediaEditorProps) {
+function WebEditorStory(props: InteractiveEditorProps) {
   return (
     <View style={{ height: 678, width: 920 }} testID="composer-media-editor-story-surface">
       <InteractiveEditor {...props} />
@@ -273,7 +300,7 @@ function WebEditorStory(props: ComposerMediaEditorProps) {
   );
 }
 
-function ViewportAwareEditor({ mobile, ...props }: ComposerMediaEditorProps & { mobile: boolean }) {
+function ViewportAwareEditor({ mobile, ...props }: InteractiveEditorProps & { mobile: boolean }) {
   return mobile ? (
     <InteractiveEditor {...props} presentation="mobile" />
   ) : (

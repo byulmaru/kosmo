@@ -25,6 +25,7 @@ describe('Settings detail back navigation', () => {
       ['/settings/info', '/settings'],
       ['/settings/theme', '/settings'],
       ['/settings/developer', '/settings/info'],
+      ['/settings/licenses', '/settings/info'],
     ] as const;
 
     for (const [pathname] of routes) {

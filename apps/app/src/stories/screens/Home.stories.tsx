@@ -10,6 +10,7 @@ import {
 } from 'relay-runtime';
 import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import HomePageQueryNode from '@/components/timeline/__generated__/HomePageQuery.graphql';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
@@ -20,6 +21,7 @@ const emptyHomeTimeline = {
   edges: [],
   pageInfo: { endCursor: null, hasNextPage: false },
 };
+const homePushBannerDismissalKey = 'kosmo:home-notification-permission-banner-dismissed';
 const selectedProfileData = {
   currentSession: { id: 'home-session', selectedProfile: { id: 'home-profile' } },
   homeTimeline: emptyHomeTimeline,
@@ -61,6 +63,19 @@ const recoveredHomeData = {
 
 const meta = {
   component: HomeScreen,
+  decorators: [
+    (Story) => (
+      <WebPushPermissionContext.Provider
+        value={{
+          permission: 'default',
+          requestPermission: async () => undefined,
+          support: 'unsupported',
+        }}
+      >
+        <Story />
+      </WebPushPermissionContext.Provider>
+    ),
+  ],
   parameters: { layout: 'fullscreen', router: { pathname: '/home' } },
   title: 'KOSMO/Screens/Home',
 } satisfies Meta<typeof HomeScreen>;
@@ -70,13 +85,16 @@ type Story = StoryObj<typeof meta>;
 
 function expectHomeBrandHeader(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
-  const headings = canvas.getAllByRole('heading', { name: '홈' });
-  const mark = canvasElement.querySelector<HTMLImageElement>('[aria-hidden="true"] img');
 
-  expect(headings).toHaveLength(1);
-  expect(mark).not.toBeNull();
-  expect(mark?.getBoundingClientRect().width).toBe(38);
-  expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
+  return waitFor(() => {
+    const headings = canvas.getAllByRole('heading', { name: '홈' });
+    const mark = canvasElement.querySelector<HTMLImageElement>('[aria-hidden="true"] img');
+
+    expect(headings).toHaveLength(1);
+    expect(mark).not.toBeNull();
+    expect(mark?.getBoundingClientRect().width).toBe(38);
+    expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
 }
 
 function HomeRefreshStory() {
@@ -110,6 +128,22 @@ function HomeRefreshStory() {
         <HomeScreen />
       </View>
     </ShellChromeProvider>
+  );
+}
+
+function HomePushPermissionStory() {
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+
+  return (
+    <WebPushPermissionContext.Provider
+      value={{
+        permission,
+        requestPermission: async () => setPermission('granted'),
+        support: 'supported',
+      }}
+    >
+      <HomeScreen />
+    </WebPushPermissionContext.Provider>
   );
 }
 
@@ -158,8 +192,87 @@ export const EmptyTimelineFull: Story = {
     expect(emptyTitle).toBeVisible();
     expect(timeline).not.toBeNull();
     expect(timeline).toHaveStyle({ paddingBottom: '0px', paddingTop: '0px' });
-    expectHomeBrandHeader(canvasElement);
+    await expectHomeBrandHeader(canvasElement);
   },
+};
+
+export const PushPermissionBanner: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const enableButton = await canvas.findByRole('button', { name: '푸시 알림 켜기' });
+    const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
+
+    expect(
+      enableButton.compareDocumentPosition(emptyTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await userEvent.click(enableButton);
+    await waitFor(() =>
+      expect(canvas.queryByRole('button', { name: '푸시 알림 켜기' })).not.toBeInTheDocument(),
+    );
+  },
+  render: () => <HomePushPermissionStory />,
+};
+
+export const PushPermissionBannerDismissal: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const message = await canvas.findByText('푸시 알림 받기');
+    const banner = message.parentElement!;
+    const bannerHeight = banner.getBoundingClientRect().height;
+    const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
+    const initialTitleY = emptyTitle.getBoundingClientRect().top;
+
+    await userEvent.click(canvas.getByRole('button', { name: '배너 닫기' }));
+    await waitFor(() => expect(canvas.queryByText('푸시 알림 받기')).not.toBeInTheDocument());
+    expect(globalThis.localStorage.getItem(homePushBannerDismissalKey)).toBe('1');
+
+    const nextTitleY = canvas.getByText('아직 게시글이 없어요').getBoundingClientRect().top;
+    expect(initialTitleY - nextTitleY).toBeGreaterThan(bannerHeight + 16);
+  },
+  render: () => <HomePushPermissionStory />,
+};
+
+export const PushPermissionBannerNarrow320: Story = {
+  beforeEach: () => globalThis.localStorage?.removeItem(homePushBannerDismissalKey),
+  globals: { viewport: { isRotated: false, value: 'homePushBanner320' } },
+  parameters: {
+    relay: { operationResponses: { HomePageQuery: { data: selectedProfileData } } },
+    viewport: {
+      options: {
+        homePushBanner320: {
+          name: 'Home push banner 320',
+          styles: { height: '844px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const enableButton = await canvas.findByRole('button', { name: '푸시 알림 켜기' });
+    const dismissButton = canvas.getByRole('button', { name: '배너 닫기' });
+    const canvasBounds = canvasElement.getBoundingClientRect();
+    const enableBounds = enableButton.getBoundingClientRect();
+    const dismissBounds = dismissButton.getBoundingClientRect();
+    const documentElement = canvasElement.ownerDocument.documentElement;
+
+    expect(canvasBounds.width).toBe(320);
+    expect(enableBounds.left).toBeGreaterThanOrEqual(canvasBounds.left);
+    expect(dismissBounds.right).toBeLessThanOrEqual(canvasBounds.right);
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+    expect(documentElement.scrollWidth).toBeLessThanOrEqual(documentElement.clientWidth);
+  },
+  render: () => <HomePushPermissionStory />,
 };
 
 export const OnboardingCompact: Story = {
@@ -177,7 +290,11 @@ export const OnboardingCompact: Story = {
       },
     },
   },
-  play: ({ canvasElement }) => expectHomeBrandHeader(canvasElement),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findAllByRole('heading', { name: '홈' });
+    await expectHomeBrandHeader(canvasElement);
+  },
 };
 
 export const LoadingFull: Story = {
@@ -215,7 +332,7 @@ export const ErrorFull: Story = {
     expect(canvas.queryByText('사용할 프로필을 선택해주세요')).not.toBeInTheDocument();
     expect(canvas.queryByText('프로필을 만들어 시작하세요')).not.toBeInTheDocument();
     expect(canvas.getByText('잠시 후 다시 시도해주세요.')).toBeVisible();
-    expectHomeBrandHeader(canvasElement);
+    await expectHomeBrandHeader(canvasElement);
   },
 };
 

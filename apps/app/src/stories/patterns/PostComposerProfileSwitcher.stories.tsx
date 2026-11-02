@@ -3,6 +3,7 @@ import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerProfileSwitcher } from '@/components/post/PostComposerProfileSwitcher';
@@ -58,17 +59,32 @@ const profileSwitcherStoryData = {
 const draftMedia = [composerMedia[1]] as readonly ComposerMediaItem[];
 const globalProfile = composerProfiles[0]!;
 
-type ComposerProfileFixtureProps = Readonly<{
+type ComposerProfileFixtureArgs = Readonly<{
   body: string;
   contentWarning: string;
   contentWarningExpanded: boolean;
   items: readonly ComposerMediaItem[];
-  onSelectProfile?: (id: string) => void | Promise<void>;
   selectedProfileId: string;
   sensitiveMedia: boolean;
   surface: 'overlay' | 'rail';
   switching: boolean;
 }>;
+
+type ComposerProfileControlArgs = Pick<
+  ComposerProfileFixtureArgs,
+  | 'body'
+  | 'contentWarning'
+  | 'contentWarningExpanded'
+  | 'items'
+  | 'selectedProfileId'
+  | 'sensitiveMedia'
+>;
+
+type ComposerProfileFixtureProps = ComposerProfileFixtureArgs &
+  Readonly<{
+    onSelectProfile?: (id: string) => void | Promise<void>;
+    onArgsChange?: (args: Partial<ComposerProfileControlArgs>) => void;
+  }>;
 
 type SelectionFixtureProps = Readonly<{
   onSelectProfile: (id: string) => void | Promise<void>;
@@ -84,13 +100,14 @@ const defaultFixtureArgs = {
   sensitiveMedia: true,
   surface: 'rail',
   switching: false,
-} satisfies Omit<ComposerProfileFixtureProps, 'onSelectProfile'>;
+} satisfies Omit<ComposerProfileFixtureProps, 'onSelectProfile' | 'onArgsChange'>;
 
 export function ComposerProfileFixture({
   body: initialBody,
   contentWarning: initialContentWarning,
   contentWarningExpanded: initialContentWarningExpanded,
   items: initialItems,
+  onArgsChange,
   onSelectProfile = async () => undefined,
   selectedProfileId: initialSelectedProfileId,
   sensitiveMedia: initialSensitiveMedia,
@@ -105,6 +122,7 @@ export function ComposerProfileFixture({
   const switchingRef = useRef(switching);
   const resolveSelectionRef = useRef<(() => void) | null>(null);
   const [body, setBody] = useState(initialBody);
+  const bodyValueRef = useRef(initialBody);
   const [selection, setSelection] = useState({
     start: initialBody.length,
     end: initialBody.length,
@@ -123,8 +141,11 @@ export function ComposerProfileFixture({
     [...normalizePostContentPlainText(contentWarning)].length;
 
   useEffect(() => {
-    setBody(initialBody);
-    setSelection({ start: initialBody.length, end: initialBody.length });
+    if (initialBody !== bodyValueRef.current) {
+      bodyValueRef.current = initialBody;
+      setBody(initialBody);
+      setSelection({ start: initialBody.length, end: initialBody.length });
+    }
   }, [initialBody]);
   useEffect(() => setContentWarning(initialContentWarning), [initialContentWarning]);
   useEffect(
@@ -143,6 +164,7 @@ export function ComposerProfileFixture({
 
   const selectProfile = async (id: string) => {
     await onSelectProfile(id);
+    onArgsChange?.({ selectedProfileId: id });
     if (switchingRef.current) {
       await new Promise<void>((resolve) => {
         if (!switchingRef.current) {
@@ -185,15 +207,30 @@ export function ComposerProfileFixture({
         contentWarning={contentWarning}
         contentWarningExpanded={contentWarningExpanded}
         items={items}
-        onBodyChange={(value) => setBody(value)}
+        onBodyChange={(value) => {
+          bodyValueRef.current = value;
+          setBody(value);
+          onArgsChange?.({ body: value });
+        }}
         onSelectionChange={setSelection}
-        onContentWarningChange={setContentWarning}
-        onContentWarningToggle={() => setContentWarningExpanded((value) => !value)}
+        onContentWarningChange={(value) => {
+          setContentWarning(value);
+          onArgsChange?.({ contentWarning: value });
+        }}
+        onContentWarningToggle={() => {
+          const expanded = !contentWarningExpanded;
+          setContentWarningExpanded(expanded);
+          onArgsChange?.({ contentWarningExpanded: expanded });
+        }}
         onEmojiAction={fn()}
         onExpand={fn()}
         onMediaAction={fn()}
         onMediaEdit={fn()}
-        onMediaRemove={(itemId) => setItems((value) => value.filter((item) => item.key !== itemId))}
+        onMediaRemove={(itemId) => {
+          const nextItems = items.filter((item) => item.key !== itemId);
+          setItems(nextItems);
+          onArgsChange?.({ items: nextItems });
+        }}
         onMediaRetry={fn()}
         onPollAction={fn()}
         onSubmit={fn()}
@@ -281,6 +318,10 @@ const meta = {
     layout: 'centered',
     relay: { data: profileSwitcherStoryData },
   },
+  render: (args) => {
+    const [, updateArgs] = useArgs<ComposerProfileFixtureArgs>();
+    return <ComposerProfileFixture {...args} onArgsChange={updateArgs} />;
+  },
   title: 'KOSMO/Patterns/Post Composer Profile Switcher',
 } satisfies Meta<typeof ComposerProfileFixture>;
 
@@ -298,7 +339,6 @@ export const Playground: Story = {
         'contentWarningExpanded',
         'items',
         'sensitiveMedia',
-        'switching',
         'surface',
       ],
     },

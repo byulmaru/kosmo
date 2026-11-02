@@ -23,7 +23,11 @@ import {
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
+import {
+  trackLocalPostCreateWorkflows,
+  waitForLocalPostCreateWorkflows,
+  waitForProfileFollowWorkflows,
+} from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
@@ -54,9 +58,11 @@ let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
+let restoreLocalPostCreateWorkflowTracking: (() => void) | undefined;
 
 describe('Notification GraphQL Node boundary', () => {
   before(async () => {
+    restoreLocalPostCreateWorkflowTracking = trackLocalPostCreateWorkflows();
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -98,11 +104,17 @@ describe('Notification GraphQL Node boundary', () => {
   });
 
   beforeEach(async () => {
+    await waitForLocalPostCreateWorkflows();
     await resetFixtures();
   });
 
   after(async () => {
-    await pg.end();
+    try {
+      await waitForLocalPostCreateWorkflows();
+    } finally {
+      restoreLocalPostCreateWorkflowTracking?.();
+      await pg.end();
+    }
   });
 
   test('resolves FOLLOW rows through Node and preserves nodes input order', async () => {
@@ -2026,12 +2038,7 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(created);
     const replyId = created.data?.createPost.post.id;
     assert.ok(replyId);
-    const reply = await db
-      .select()
-      .from(Posts)
-      .where(eq(Posts.replyParentId, parent.id))
-      .then(firstOrThrow);
-    await createReplyNotificationFixture(parentAuthor.profile.id, reply.id);
+    await waitForLocalPostCreateWorkflows();
 
     const thread = await requestReplyDescendants(parent.id, parentAuthor.token);
     assertNoGraphQLErrors(thread);
@@ -2078,12 +2085,6 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
-    const visibleNotification = await createReplyNotificationFixture(
-      recipient.id,
-      visible.id,
-      '00000000-0000-8006-8000-000000000800',
-      olderCreatedAt,
-    );
     const hiddenAuthor = await createAuthenticatedSession();
     assertNoGraphQLErrors(await requestCreateReply(parent.id, hiddenAuthor.token));
     const hidden = await db
@@ -2091,12 +2092,33 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(and(eq(Posts.replyParentId, parent.id), ne(Posts.id, visible.id)))
       .then(firstOrThrow);
-    const hiddenNotification = await createReplyNotificationFixture(
-      recipient.id,
-      hidden.id,
-      '00000000-0000-8006-8000-000000000900',
-      newerCreatedAt,
-    );
+    await waitForLocalPostCreateWorkflows();
+    const visibleNotification = await db
+      .update(Notifications)
+      .set({ createdAt: olderCreatedAt })
+      .where(
+        and(
+          eq(Notifications.recipientAccountId, viewer.account.id),
+          eq(Notifications.recipientProfileId, recipient.id),
+          eq(Notifications.kind, NotificationKind.REPLY),
+          eq(Notifications.sourceId, visible.id),
+        ),
+      )
+      .returning()
+      .then(firstOrThrow);
+    const hiddenNotification = await db
+      .update(Notifications)
+      .set({ createdAt: newerCreatedAt })
+      .where(
+        and(
+          eq(Notifications.recipientAccountId, viewer.account.id),
+          eq(Notifications.recipientProfileId, recipient.id),
+          eq(Notifications.kind, NotificationKind.REPLY),
+          eq(Notifications.sourceId, hidden.id),
+        ),
+      )
+      .returning()
+      .then(firstOrThrow);
     await db
       .update(Profiles)
       .set({ state: ProfileState.SUSPENDED })
@@ -3817,8 +3839,9 @@ const createReplyNotificationFixture = async (
   sourceId: string,
   id?: string,
   createdAt?: Temporal.Instant,
-) =>
-  db
+) => {
+  await waitForLocalPostCreateWorkflows();
+  return db
     .insert(Notifications)
     .values({
       id,
@@ -3830,6 +3853,7 @@ const createReplyNotificationFixture = async (
     })
     .returning()
     .then(firstOrThrow);
+};
 
 const createQuoteNotificationFixture = async (
   recipientProfileId: string,

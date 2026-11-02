@@ -12,6 +12,7 @@ import {
   getShellLayout,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
+import { HomePushPermissionBanner } from '@/components/timeline/HomePushPermissionBanner';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -263,6 +264,7 @@ function HomeContentView({
 
   return (
     <View style={styles.timeline}>
+      <HomePushPermissionBanner />
       <PostList
         home={data}
         identityKey={`home:${selectedProfile.id}`}

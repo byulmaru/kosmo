@@ -200,6 +200,7 @@ describe('inbound actor Update', () => {
       .returning()
       .then(firstOrThrow);
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: Buffer.from([128, 0]) as CoreDb.ProfilePinOrderKey,
       position: 0,
       postId: post.id,
       profileId: fixture.profile.id,

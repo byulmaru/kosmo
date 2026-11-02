@@ -1,8 +1,9 @@
 import baseMeta, {
-  AndroidBackInteractionContract as androidBackInteractionContract,
+  BackInteractionContract as backInteractionContract,
+  ClearHoldInteractionContract as clearHoldInteractionContract,
   DisabledInteractionContract as disabledInteractionContract,
+  FocusVisibleInteractionContract as focusVisibleInteractionContract,
   InteractionContract as interactionContract,
-  IosBackInteractionContract as iosBackInteractionContract,
   ReducedMotionContract as reducedMotionContract,
 } from './SearchToolbar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -16,8 +17,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const BackInteractionContract: Story = backInteractionContract;
+export const ClearHoldInteractionContract: Story = clearHoldInteractionContract;
 export const InteractionContract: Story = interactionContract;
+export const FocusVisibleInteractionContract: Story = focusVisibleInteractionContract;
 export const ReducedMotionContract: Story = reducedMotionContract;
-export const IosBackInteractionContract: Story = iosBackInteractionContract;
-export const AndroidBackInteractionContract: Story = androidBackInteractionContract;
 export const DisabledInteractionContract: Story = disabledInteractionContract;

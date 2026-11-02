@@ -177,9 +177,8 @@ export function PostMediaViewer({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const targetInsideViewer = containsTarget(dialogRef, event.target);
-      if (event.key === 'Escape' && !targetInsideViewer) {
-        ignoreNextPlatformClose.current = true;
-        return;
+      if (event.key === 'Escape') {
+        ignoreNextPlatformClose.current = !targetInsideViewer || event.defaultPrevented;
       }
       if (
         event.defaultPrevented ||

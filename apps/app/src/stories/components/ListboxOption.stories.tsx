@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ListboxOption } from '@/components/ui/ListboxOption';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ListboxOptionProps } from '@/components/ui/ListboxOption';
+
+type CatalogProps = ListboxOptionProps & {
+  updateArgs?: (update: Partial<Pick<ListboxOptionProps, 'selected'>>) => void;
+};
 
 function ListboxOptionCatalog({
   active = false,
@@ -11,9 +16,12 @@ function ListboxOptionCatalog({
   disabled = false,
   label = '공개 이름',
   onSelect,
+  updateArgs,
   selected = false,
-}: ListboxOptionProps) {
+}: CatalogProps) {
   const [currentSelected, setCurrentSelected] = useState(selected);
+
+  useEffect(() => setCurrentSelected(selected), [selected]);
 
   return (
     <View
@@ -29,6 +37,7 @@ function ListboxOptionCatalog({
         onSelect={() => {
           setCurrentSelected(true);
           onSelect();
+          updateArgs?.({ selected: true });
         }}
         selected={currentSelected}
       />
@@ -74,12 +83,10 @@ export const Playground: Story = {
       include: ['active', 'description', 'disabled', 'label', 'selected'],
     },
   },
-  render: (args) => (
-    <ListboxOptionCatalog
-      key={`${args.active}:${args.description}:${args.disabled}:${args.label}:${args.selected}`}
-      {...args}
-    />
-  ),
+  render: (args) => {
+    const [, updateArgs] = useArgs<ListboxOptionProps>();
+    return <ListboxOptionCatalog {...args} updateArgs={updateArgs} />;
+  },
 };
 
 export const EnabledSelectionContract: Story = {

@@ -2,8 +2,8 @@ import { MoreHorizontal } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
-import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, motion, radius } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, radius } from '@/theme/tokens';
 import type { Ref } from 'react';
 import type { View, ViewStyle } from 'react-native';
 
@@ -16,7 +16,6 @@ type Props = {
 
 export function ProfileMoreButton({ controlRef, disabled, expanded, onPress }: Props) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const targetInset = Platform.OS === 'ios' ? 2 : Platform.OS === 'web' ? 0 : 4;
 
@@ -51,9 +50,6 @@ export function ProfileMoreButton({ controlRef, disabled, expanded, onPress }: P
               outlineOffset: 2,
               outlineStyle: focusVisible && !disabled ? 'solid' : 'none',
               outlineWidth: borderWidths[2],
-              transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-              transitionProperty: 'border-color',
-              transitionTimingFunction: motion.easing.standard,
             } as unknown as ViewStyle)
           : undefined,
       ]}

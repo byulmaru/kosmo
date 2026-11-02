@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ProfileSwitcherTarget } from '@/components/shell/ProfileSwitcherTarget';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -14,73 +15,57 @@ const profiles: readonly ProfilePickerProfile[] = [
     displayName: '코스모 작가',
     id: 'profile-kosmo',
     relativeHandle: '@kosmo',
+    unreadNotificationCount: 0,
   },
   {
     avatar: null,
     displayName: '먼 우주의 사용자',
     id: 'profile-remote',
     relativeHandle: '@remote',
+    unreadNotificationCount: 10,
   },
   {
     avatar: null,
     displayName: '아주 긴 이름을 가진 세 번째 프로필',
     id: 'profile-long',
     relativeHandle: '@a-very-long-profile-handle',
+    unreadNotificationCount: 10,
   },
   ...Array.from({ length: 5 }, (_, index) => ({
     avatar: null,
     displayName: `추가 프로필 ${index + 4}`,
     id: `profile-${index + 4}`,
     relativeHandle: `@profile-${index + 4}`,
+    unreadNotificationCount: 10,
   })),
 ];
 
 type ProfileSwitcherFixtureProps = Readonly<{
   disabled: boolean;
-  initialOpen: boolean;
+  open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectProfile: (id: string) => void;
-  otherUnreadCount: number;
-  profileCount: number;
+  profiles: readonly ProfilePickerProfile[];
   selectionOutcome: 'failure' | 'success';
   selectedProfileId: string;
-  selectedUnreadCount: number;
   surface: ProfilePickerSurface;
 }>;
 
 export function ProfileSwitcherFixture({
   disabled,
-  initialOpen,
+  open: initialOpen,
   onOpenChange,
   onSelectProfile,
-  otherUnreadCount,
-  profileCount,
+  profiles,
   selectionOutcome,
   selectedProfileId: initialSelectedProfileId,
-  selectedUnreadCount,
   surface,
 }: ProfileSwitcherFixtureProps) {
-  const availableProfiles = profiles.slice(0, profileCount);
-  const fallbackProfileId = availableProfiles[0]?.id ?? null;
   const [open, setOpen] = useState(initialOpen);
-  const [selectedProfileId, setSelectedProfileId] = useState(
-    availableProfiles.some((profile) => profile.id === initialSelectedProfileId)
-      ? initialSelectedProfileId
-      : fallbackProfileId,
-  );
-  const visibleProfiles = availableProfiles.map((profile) => ({
-    ...profile,
-    unreadNotificationCount:
-      profile.id === selectedProfileId ? selectedUnreadCount : otherUnreadCount,
-  }));
+  const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
 
-  useEffect(() => {
-    setSelectedProfileId(
-      availableProfiles.some((profile) => profile.id === initialSelectedProfileId)
-        ? initialSelectedProfileId
-        : fallbackProfileId,
-    );
-  }, [fallbackProfileId, initialSelectedProfileId, profileCount]);
+  useEffect(() => setOpen(initialOpen), [initialOpen]);
+  useEffect(() => setSelectedProfileId(initialSelectedProfileId), [initialSelectedProfileId]);
 
   return (
     <View
@@ -105,7 +90,7 @@ export function ProfileSwitcherFixture({
           }
         }}
         open={open}
-        profiles={visibleProfiles}
+        profiles={profiles}
         selectedProfileId={selectedProfileId}
         surface={surface}
       />
@@ -116,29 +101,22 @@ export function ProfileSwitcherFixture({
 const meta = {
   args: {
     disabled: false,
-    initialOpen: false,
+    open: false,
     onOpenChange: fn(),
     onSelectProfile: fn(),
-    otherUnreadCount: 10,
-    profileCount: 3,
+    profiles: profiles.slice(0, 3),
     selectionOutcome: 'success',
     selectedProfileId: 'profile-kosmo',
-    selectedUnreadCount: 0,
     surface: 'full',
   },
   argTypes: {
     disabled: { control: 'boolean' },
-    initialOpen: { control: false, table: { disable: true } },
+    open: { control: 'boolean' },
     onOpenChange: { action: 'open', control: false, table: { disable: true } },
     onSelectProfile: { action: 'selectProfile', control: false, table: { disable: true } },
-    otherUnreadCount: { control: 'select', options: [0, 1, 9, 10] },
-    profileCount: { control: { max: profiles.length, min: 0, step: 1, type: 'range' } },
+    profiles: { control: 'object' },
     selectionOutcome: { control: false, table: { disable: true } },
-    selectedProfileId: {
-      control: 'select',
-      options: profiles.map((profile) => profile.id),
-    },
-    selectedUnreadCount: { control: 'select', options: [0, 1, 9, 10] },
+    selectedProfileId: { control: 'text' },
     surface: { control: 'inline-radio', options: ['full', 'compact', 'drawer'] },
   },
   component: ProfileSwitcherFixture,
@@ -155,6 +133,24 @@ const meta = {
     'LongListContract',
   ],
   parameters: { layout: 'centered' },
+  render: () => {
+    const [args, updateArgs] = useArgs<ProfileSwitcherFixtureProps>();
+    return (
+      <ProfileSwitcherFixture
+        {...args}
+        onOpenChange={(nextOpen) => {
+          updateArgs({ open: nextOpen });
+          args.onOpenChange(nextOpen);
+        }}
+        onSelectProfile={(id) => {
+          args.onSelectProfile(id);
+          if (args.selectionOutcome === 'success') {
+            updateArgs({ selectedProfileId: id });
+          }
+        }}
+      />
+    );
+  },
   title: 'KOSMO/Patterns/Profile Switcher',
 } satisfies Meta<typeof ProfileSwitcherFixture>;
 
@@ -165,32 +161,38 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: [
-        'surface',
-        'selectedProfileId',
-        'profileCount',
-        'selectedUnreadCount',
-        'otherUnreadCount',
-        'disabled',
-      ],
+      include: ['surface', 'profiles', 'selectedProfileId', 'open', 'disabled'],
     },
   },
 };
 
 export const Compact: Story = { args: { surface: 'compact' } };
 export const Drawer: Story = { args: { surface: 'drawer' } };
-export const OpenUnreadCounts: Story = { args: { initialOpen: true } };
+export const OpenUnreadCounts: Story = { args: { open: true } };
 export const Empty: Story = {
-  args: { initialOpen: true, profileCount: 0, selectedProfileId: '' },
+  args: { open: true, profiles: [], selectedProfileId: '' },
 };
 export const LongContent: Story = {
-  args: { initialOpen: true, selectedProfileId: 'profile-long' },
+  args: {
+    open: true,
+    profiles: profiles.slice(0, 3).map((profile) => ({
+      ...profile,
+      unreadNotificationCount: profile.id === 'profile-long' ? 0 : 10,
+    })),
+    selectedProfileId: 'profile-long',
+  },
 };
-export const LongList: Story = { args: { initialOpen: true, profileCount: profiles.length } };
+export const LongList: Story = { args: { open: true, profiles } };
 export const Disabled: Story = { args: { disabled: true } };
 
 export const InteractionContract: Story = {
-  args: { initialOpen: false, otherUnreadCount: 9, profileCount: 2 },
+  args: {
+    open: false,
+    profiles: profiles.slice(0, 2).map((profile) => ({
+      ...profile,
+      unreadNotificationCount: profile.id === 'profile-kosmo' ? 0 : 9,
+    })),
+  },
   play: async ({ args, canvasElement }) => {
     args.onOpenChange.mockClear();
     args.onSelectProfile.mockClear();
@@ -228,7 +230,7 @@ export const InteractionContract: Story = {
 };
 
 export const SelectionFailureContract: Story = {
-  args: { initialOpen: true, profileCount: 2, selectionOutcome: 'failure' },
+  args: { open: true, profiles: profiles.slice(0, 2), selectionOutcome: 'failure' },
   play: async ({ args, canvasElement }) => {
     args.onOpenChange.mockClear();
     args.onSelectProfile.mockClear();
@@ -249,7 +251,7 @@ export const SelectionFailureContract: Story = {
 };
 
 export const EscapeDismissContract: Story = {
-  args: { initialOpen: true },
+  args: { open: true },
   play: async ({ args, canvasElement }) => {
     args.onOpenChange.mockClear();
     const canvas = within(canvasElement);
@@ -264,7 +266,7 @@ export const EscapeDismissContract: Story = {
 };
 
 export const OutsideDismissContract: Story = {
-  args: { initialOpen: true },
+  args: { open: true },
   play: async ({ args, canvasElement }) => {
     args.onOpenChange.mockClear();
     const canvas = within(canvasElement);
@@ -278,7 +280,7 @@ export const OutsideDismissContract: Story = {
 };
 
 export const LongListContract: Story = {
-  args: { initialOpen: true, profileCount: profiles.length },
+  args: { open: true, profiles },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const group = canvas.getByRole('group', { name: '프로필 전환' });
@@ -299,7 +301,7 @@ export const LongListContract: Story = {
 };
 
 export const WideClosedUnreadContract: Story = {
-  args: { initialOpen: false, surface: 'full' },
+  args: { open: false, surface: 'full' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', {
@@ -324,12 +326,12 @@ export const WideClosedUnreadContract: Story = {
 };
 
 export const DrawerClosedUnreadContract: Story = {
-  args: { initialOpen: false, surface: 'drawer' },
+  args: { open: false, surface: 'drawer' },
   play: WideClosedUnreadContract.play,
 };
 
 export const CompactClosedUnreadContract: Story = {
-  args: { initialOpen: false, surface: 'compact' },
+  args: { open: false, surface: 'compact' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
@@ -347,7 +349,7 @@ export const CompactClosedUnreadContract: Story = {
 };
 
 export const OpenUnreadContract: Story = {
-  args: { initialOpen: true, otherUnreadCount: 10, profileCount: 2 },
+  args: { open: true, profiles: profiles.slice(0, 2) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const group = canvas.getByRole('group', { name: '프로필 전환' });

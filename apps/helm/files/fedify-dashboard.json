@@ -1,0 +1,344 @@
+{
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (namespace) (fedify_queue_depth{fedify_queue_role=\"shared\", fedify_queue_backend=\"PostgresMessageQueue\", fedify_queue_depth_state=\"ready\", namespace=\"$namespace\"})",
+          "legendFormat": "Ready",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (namespace) (fedify_queue_depth{fedify_queue_role=\"shared\", fedify_queue_backend=\"PostgresMessageQueue\", fedify_queue_depth_state=\"delayed\", namespace=\"$namespace\"})",
+          "legendFormat": "Delayed",
+          "refId": "B"
+        }
+      ],
+      "title": "Queue depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (namespace) (fedify_queue_task_in_flight{fedify_queue_backend=\"PostgresMessageQueue\", job=\"fedify-consumer\", namespace=\"$namespace\"})",
+          "legendFormat": "In flight",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker tasks in flight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (namespace, le) (rate(activitypub_inbox_processing_duration_bucket{namespace=\"$namespace\"}[5m])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Inbox processing p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 16
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(sum by (namespace) (rate(activitypub_delivery_sent_total{activitypub_delivery_success=\"false\", namespace=\"$namespace\"}[5m])) or sum by (namespace) (rate(activitypub_delivery_sent_total{namespace=\"$namespace\"}[5m])) * 0) / sum by (namespace) (rate(activitypub_delivery_sent_total{namespace=\"$namespace\"}[5m]))",
+          "legendFormat": "Failed attempts",
+          "refId": "A"
+        }
+      ],
+      "title": "Delivery failure rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (namespace) (increase(activitypub_delivery_sent_total{namespace=\"$namespace\"}[5m]))",
+          "legendFormat": "Attempts",
+          "refId": "A"
+        }
+      ],
+      "title": "Delivery attempts / 5m",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (namespace, http_response_status_code) (increase(activitypub_delivery_permanent_failure_total{http_response_status_code=~\"404|410\", namespace=\"$namespace\"}[5m]))",
+          "legendFormat": "{{http_response_status_code}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Permanent 404/410 failures / 5m",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "Production",
+          "value": "kosmo-prod"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Environment",
+        "multi": false,
+        "name": "namespace",
+        "options": [
+          {
+            "selected": false,
+            "text": "Development",
+            "value": "kosmo-dev"
+          },
+          {
+            "selected": true,
+            "text": "Production",
+            "value": "kosmo-prod"
+          }
+        ],
+        "query": "Development : kosmo-dev, Production : kosmo-prod",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Fedify",
+  "uid": "kosmo-fedify-monitoring",
+  "version": 1
+}

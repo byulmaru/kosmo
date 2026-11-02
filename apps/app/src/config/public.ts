@@ -2,6 +2,14 @@ import { getNativeDeploymentChannel } from './nativeChannel';
 
 export type DeploymentChannel = 'dev' | 'prod';
 
+export type PublicWebPushConfig = {
+  apiKey: string;
+  appId: string;
+  messagingSenderId: string;
+  projectId: string;
+  vapidKey: string;
+};
+
 export type PublicConfig = {
   apiOrigin: string;
   channel: DeploymentChannel;
@@ -10,6 +18,7 @@ export type PublicConfig = {
   posthogHost: string | undefined;
   posthogKey: string | undefined;
   sentryDsn: string;
+  webPush?: PublicWebPushConfig;
   webOrigin: string;
 };
 
@@ -18,9 +27,17 @@ const commonPublicConfig = {
   oidcIssuer: 'https://id.byulmaru.co',
   sentryDsn:
     'https://07f92d1f243d540b91a3edb9e22eafa2@o4507210007117824.ingest.us.sentry.io/4507210010329088',
+  webPush: {
+    apiKey: 'AIzaSyBDuX-H9OHs2qYgGulLD8PFxukdzqw-mYI',
+    appId: '1:923646593571:web:a80a73956feb357bc2bf96',
+    messagingSenderId: '923646593571',
+    projectId: 'byulmaru-kosmo',
+    vapidKey:
+      'BFWDc9gACcGvTzCZlUKUBd7qAuyF8rkRHpJVMbT2VBcZ4-dzO8QP0XEndWSevA5K8YGwUX_xfCT9bauQK19tkoE',
+  },
 } as const;
 
-const publicConfigByChannel = {
+const publicConfigByChannel: Record<DeploymentChannel, PublicConfig> = {
   dev: {
     ...commonPublicConfig,
     apiOrigin: 'https://dev-api.kos.moe',
@@ -37,7 +54,7 @@ const publicConfigByChannel = {
     posthogKey: 'phc_wtHL2JZViyDBizGfTYXqjHwejEwJiEwHoEzPZ3DtUmDS',
     webOrigin: 'https://kos.moe',
   },
-} satisfies Record<DeploymentChannel, PublicConfig>;
+};
 
 export function getPublicConfig<Key extends keyof PublicConfig>(key: Key): PublicConfig[Key] {
   return publicConfigByChannel[getCurrentChannel()][key];

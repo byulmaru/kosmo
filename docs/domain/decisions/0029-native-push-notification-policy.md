@@ -127,6 +127,24 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   정확한 retry/backoff 정책과 route data 및 OS 표시용 title/body 밖의 provider payload는 이 ADR에서 정하지 않는다.
 
+## Web Push 확장 · PROD-1215
+
+- Web Push는 Web Push를 지원하는 Android·Desktop browser/PWA와 iOS/iPadOS 홈 화면 앱에서 제공한다. 지원 여부는
+  OS, browser와 설치 방식이 지원하는 조건을 따른다.
+- Web에서는 앱 시작이나 로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 직접 활성화할
+  때만 OS 권한 요청을 시작한다. Foreground와 background 모두 OS 알림으로 표시하며 custom in-app Push banner는
+  추가하지 않는다.
+- Web Push도 위의 Recipient 자격과 현재 Profile membership 확인, 설치별 fan-out, visibility·Mute·Block 및
+  preview privacy, no-backlog, Notification 생성 시각 기준 24시간 만료, read state 독립성을 따른다.
+- Web Push target은 실제 browser notification click에서만 유래해야 하며, 임의 URL 입력으로 Profile을 선택하거나
+  외부 주소를 열지 않는다.
+- 탭한 target은 현재 인증 상태와 기존 route 규칙으로 검증한다. Guest는 target을 버리고 일반 로그인 흐름으로
+  이동하며, 로그인 뒤 target으로 복귀하지 않는다. Social Push의 Recipient Profile이 현재 Profile과 다르면 현재
+  Account의 membership를 확인하고 기존 Profile 전환을 거쳐 검증된 내부 경로를 연다. Operational Push는 Profile을
+  전환하지 않고 기존 Account target 규칙에 따라 안전한 내부 경로나 HTTP(S) 외부 주소를 연다.
+- Browser와 설치된 앱의 링크 열기는 OS·browser의 기본 동작을 따른다. Desktop은 새 탭을 열 수 있고 Android의
+  설치 앱은 기존 앱을 재사용할 수 있다.
+
 ## 남은 결정
 
 - OS가 소유하는 줄 수·줄바꿈·자름·접힘·펼침의 구체 규칙은 정하지 않는다.
@@ -137,5 +155,6 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 
 - [Notification presentation](../../design/notifications.md#native-fcm-push-권한-요청과-잠금-화면-미리보기--prod-875)은
   앱 설정의 권한 처리, 알림 대상 범위, 잠금 화면과 foreground OS 표시를 정의한다.
+- [Notification presentation](../../design/notifications.md)은 Web Push의 지원 플랫폼, 권한 요청과 OS 표시 범위를 정의한다.
 - [Notification 객체](../objects/notification.md)는 Recipient와 인앱 Notification lifecycle을 계속 소유하며,
   native transport와 device token은 이 결정의 후속 구현 범위에서 별도로 다룬다.

@@ -96,7 +96,11 @@ stub('react-native', {
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: (styles: object) => styles },
+  StyleSheet: {
+    create: (styles: object) => styles,
+    flatten: (styles: unknown) =>
+      Array.isArray(styles) ? Object.assign({}, ...styles.flat(Infinity).filter(Boolean)) : styles,
+  },
   Text: 'Text',
   View: 'View',
   findNodeHandle: () => null,
@@ -107,7 +111,12 @@ stub('expo-router', {
   usePathname: () => '/home',
   useRouter: () => ({ push: () => undefined }),
 });
-stub('lucide-react-native', { MessageCircle: 'MessageCircle', Pin: 'Pin' });
+stub('lucide-react-native', {
+  MessageCircle: 'MessageCircle',
+  Pin: 'Pin',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+});
 stub('react-native-svg', {
   Circle: 'Circle',
   Defs: 'Defs',

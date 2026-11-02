@@ -1,0 +1,1 @@
+ALTER TABLE "account" ADD COLUMN "metadata" jsonb DEFAULT '{}' NOT NULL;

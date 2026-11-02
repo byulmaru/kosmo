@@ -1,4 +1,5 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, RefObject } from 'react';
+import type { View } from 'react-native';
 
 export type NavigationChromePlatform = 'android' | 'ios' | 'web';
 
@@ -28,6 +29,7 @@ export type BottomTabDestination = Extract<
 >;
 
 export type BottomTabBarProps = {
+  composeControlRef?: RefObject<View | null>;
   currentDestination?: BottomTabDestination | null;
   onNavigate: (destination: BottomTabDestination) => void;
   platform?: NavigationChromePlatform;

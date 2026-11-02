@@ -92,7 +92,7 @@ export function useOverlayLifecycle({
       if (event.key === 'Escape') {
         if (
           focusScope?.querySelector(
-            '[role="menu"], [role="radiogroup"], [data-testid="post-composer-profile-picker"]',
+            '[role="menu"], [role="radiogroup"], [data-testid="post-composer-profile-picker"], [data-dropdown-open="true"]',
           )
         ) {
           return;

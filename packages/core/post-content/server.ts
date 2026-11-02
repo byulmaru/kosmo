@@ -65,6 +65,18 @@ export interface RemotePostContentHashtagMatch {
   readonly token: string;
 }
 
+export interface LocalPostContentHashtagCandidate {
+  readonly end: number;
+  readonly paragraphIndex: number;
+  readonly start: number;
+  readonly token: string;
+}
+
+type PostContentHashtagMatchWithId = Pick<
+  RemotePostContentHashtagMatch,
+  'end' | 'paragraphIndex' | 'start' | 'token'
+> & { readonly hashtagId: string };
+
 export function postContentDocumentFromText(
   bodyText: string,
   summary: string | null = null,
@@ -148,6 +160,70 @@ export function postContentHashtagCandidatesFromText(
   }
 
   return candidates;
+}
+
+export function findLocalPostContentHashtagCandidates(
+  document: PostContentDocumentV1,
+): LocalPostContentHashtagCandidate[] {
+  const paragraphs: { readonly index: number; readonly start: number; readonly text: string }[] =
+    [];
+  const mentions: PostContentMentionReference[] = [];
+  const existingHashtags: PostContentHashtagCandidate[] = [];
+  const linkedText: PostContentHashtagCandidate[] = [];
+  let bodyOffset = 0;
+
+  for (const block of document.body.content) {
+    if (block.type !== 'paragraph') {
+      continue;
+    }
+
+    let text = '';
+    for (const node of block.content ?? []) {
+      const start = bodyOffset + text.length;
+      const nodeText = postContentInlineNodeText(node);
+      if (node.type === 'mention') {
+        const handle = node.attrs.handle ?? postContentMentionFallbackText;
+        mentions.push({
+          end: start + nodeText.length,
+          handle,
+          profileId: node.attrs.profileId,
+          relativeHandle: handle,
+          start,
+        });
+      } else if (node.type === 'hashtag') {
+        existingHashtags.push({ start, end: start + nodeText.length });
+      } else if (node.type === 'text' && node.marks?.some(({ type }) => type === 'link')) {
+        linkedText.push({ start, end: start + nodeText.length });
+      }
+      text += nodeText;
+    }
+    paragraphs.push({ index: paragraphs.length, start: bodyOffset, text });
+    bodyOffset += text.length + 2;
+  }
+
+  const bodyText = paragraphs.map(({ text }) => text).join('\n\n');
+  return postContentHashtagCandidatesFromText(bodyText, mentions)
+    .filter(
+      ({ end, start }) =>
+        !existingHashtags.some((range) => rangesOverlap(start, end, range.start, range.end)) &&
+        !linkedText.some((range) => rangesOverlap(start, end, range.start, range.end)),
+    )
+    .flatMap(({ end, start }) => {
+      const paragraph = paragraphs.find(
+        ({ start: paragraphStart, text }) =>
+          start >= paragraphStart && end <= paragraphStart + text.length,
+      );
+      return paragraph
+        ? [
+            {
+              end: end - paragraph.start,
+              paragraphIndex: paragraph.index,
+              start: start - paragraph.start,
+              token: bodyText.slice(start, end),
+            },
+          ]
+        : [];
+    });
 }
 
 export function findRemotePostContentHashtags(
@@ -238,11 +314,18 @@ export function applyRemotePostContentHashtags(
   if (matches.length === 0) {
     return document;
   }
+  return canonicalizePostContentDocument(applyPostContentHashtags(document, matches));
+}
 
-  const matchesByParagraph = new Map<
-    number,
-    (RemotePostContentHashtagMatch & { hashtagId: string })[]
-  >();
+export function applyPostContentHashtags(
+  document: PostContentDocumentV1,
+  matches: readonly PostContentHashtagMatchWithId[],
+): PostContentDocumentV1 {
+  if (matches.length === 0) {
+    return document;
+  }
+
+  const matchesByParagraph = new Map<number, PostContentHashtagMatchWithId[]>();
   for (const match of matches) {
     const paragraphMatches = matchesByParagraph.get(match.paragraphIndex) ?? [];
     paragraphMatches.push(match);
@@ -272,7 +355,7 @@ export function applyRemotePostContentHashtags(
         return;
       }
       const runEnd = runStart + runLength;
-      const runMatches: (RemotePostContentHashtagMatch & { hashtagId: string })[] = [];
+      const runMatches: PostContentHashtagMatchWithId[] = [];
       while (matchIndex < paragraphMatches.length) {
         const match = paragraphMatches[matchIndex]!;
         if (match.start < runStart) {
@@ -336,10 +419,10 @@ export function applyRemotePostContentHashtags(
     return { ...block, content: result };
   });
 
-  return canonicalizePostContentDocument({
+  return {
     ...document,
     body: { ...document.body, content },
-  });
+  };
 }
 
 export function postContentDocumentToHtml(
@@ -587,7 +670,7 @@ function findRemoteHashtagMatchesInTextRun({
 function applyRemoteHashtagMatchesToTextRun(
   nodes: readonly PostContentTextNode[],
   runStart: number,
-  matches: readonly (RemotePostContentHashtagMatch & { readonly hashtagId: string })[],
+  matches: readonly PostContentHashtagMatchWithId[],
 ): PostContentInlineNode[] {
   const runText = nodes.map(({ text }) => text).join('');
   const result: PostContentInlineNode[] = [];

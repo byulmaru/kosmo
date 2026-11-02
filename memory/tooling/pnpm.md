@@ -9,6 +9,7 @@
 - `scripts/vault-run.mjs`는 Vault CLI의 현재 인증 상태를 사용해 기본 `secret/kubernetes/kosmo/local` 값을 env로 주입하고, 토큰 조회가 실패하면 `vault login -method=oidc`를 실행한다. 다른 path가 필요하면 wrapper CLI 옵션 `--env <name>` 또는 `--secret-path <path>`를 `-- <command>` 앞에 둔다.
 - 새 local PostgreSQL volume은 `pnpm local:prepare`로만 role/database, immutable migration, Local Instance를 준비한다. 평상시 `pnpm dev`는 migration, bootstrap, reset, seed와 data deletion을 실행하지 않고 준비된 volume을 재사용한다.
 - 로컬 `pnpm dev`는 `127.0.0.1:54328`의 영속 PostgreSQL과 기존 `apps/worker/src/temporal-test-server.ts`의 ephemeral Temporal server를 사용해 API, Web, App, Worker, Fedify consumer를 실행한다. Coordinator는 고정된 local target과 필수 key만 검증하고 role/ACL invariant는 `pnpm local:prepare`와 통합 검증이 소유한다. Application DB는 canonical `PG*`와 `kosmo_runtime`, queue는 별도 URL/password와 `kosmo_fedify_queue`를 사용하며 `DATABASE_URL`이나 owner/bootstrap credential을 child process에 전달하지 않는다. DB를 사용하지 않는 Expo App과 Temporal helper에는 PG/queue credential도 전달하지 않는다.
+- 루트 `mise install`은 로컬 Temporal helper와 worker `createLocal` 테스트가 사용하는 Temporal CLI 1.8.2를 설치하며, SDK는 테스트 서버를 다운로드하지 않고 해당 고정 실행 파일을 사용한다.
 - Local PostgreSQL data는 named volume에 보존하고 `pnpm local:down`도 volume을 제거하지 않는다. Local Temporal은 개발용 임시 저장소이며 persistent SQLite volume을 사용하지 않는다. Worker health는 `127.0.0.1:8081`, Fedify consumer health는 `127.0.0.1:8082`이다.
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.
@@ -33,3 +34,4 @@
 - test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
 - workspace package의 기본 `test`는 CI에서 해당 package의 전체 테스트를 실행한다. API integration처럼 DB가 필요한 suite는 package 단위 aggregate script 하나가 격리 DB를 준비해 전체 suite를 실행하며, 개별 테스트 파일 선택용 root script를 추가하지 않는다.
 - 특정 API integration 파일만 디버깅할 때는 package manifest에 파일별 alias를 늘리지 말고 준비된 test DB에서 Node test runner에 파일 경로를 직접 전달한다.
+- Worker tests are recursively discovered from `apps/worker/src/**/*.test.ts`: `.native-database.test.ts` selects native database, then `.database.test.ts` selects standard database, then `.workflow.test.ts` selects workflow; other test files enter unit. Standard database files run serially with the Temporal test-client preload and `KOSMO_TEST_TEMPORAL_RUNTIME=0`; native database files run serially with the native Temporal runtime.

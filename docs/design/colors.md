@@ -189,6 +189,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 - Button은 `action/primary/*`, `action/secondary/*`, feedback `base/on-base`, disabled pair를 사용한다. Focus는 fill을 교체하지 않고 tone별 현재 fill을 유지한 채 `state/focus-ring`을 추가한다.
 - TextField는 `background/surface`, foreground hierarchy, `border/default/focus`와 feedback border를 사용한다.
+- Banner는 중립적인 인라인 맥락 정보에 `background/surface`, `border/default`, `foreground/primary`를 사용한다. 지속 인라인 오류와 일시적 feedback의 구분은 [오류 피드백 원칙](./foundations.md#오류-피드백)을 따른다. 상세 Banner geometry와 typography는 [banners.md](./banners.md)를 따른다.
 - route body와 loading·empty state host는 `background/canvas` 하나의 기본 평면으로 본다. `PageHeader` 같은 공통 header chrome도 같은 canvas를 사용하고 `border/subtle`, sticky 위치와 필요할 때의 elevation effect로만 구조를 구분한다. Header가 있다는 이유로 아래 본문이나 state를 `background/surface`로 올리지 않는다.
 - 연속 피드와 목록도 같은 canvas 평면을 이어 쓴다. `PostListItem`·`PostLayout` 같은 post presentation root는 Web·Native host의 중립 배경이 비치지 않도록 `background/canvas`를 직접 적용하고 `border/subtle`로 구분한다. 이는 목록과 같은 canvas 색을 명시하는 것이며 각 row를 `background/surface`나 `background/elevated` card로 올리는 계약이 아니다. post 내부에서 의도적으로 투명한 요소는 이 root canvas를 그대로 보인다.
 - post 내부의 일반 link preview처럼 resting surface가 필요한 영역은 `background/surface`, modal·menu·독립 floating card는 `background/elevated`를 사용한다. direct Quote Source preview는 예외적으로 resting fill 없이 주변 Post background를 그대로 보이고 semantic border로만 경계를 구분한다. Web의 interactive Quote Source preview만 pointer hover 동안 root 전체에 `state/hover` overlay를 사용하며, Native와 `interactive=false` preview에는 이 hover 표현을 투영하지 않는다.
