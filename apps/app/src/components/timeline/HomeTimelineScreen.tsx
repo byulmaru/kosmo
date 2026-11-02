@@ -172,6 +172,7 @@ function HomeContent({
     { fetchKey, fetchPolicy: 'store-or-network' },
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [postRequestRefreshKey, setPostRequestRefreshKey] = useState(0);
 
   useEffect(() => {
     let refreshInFlight = false;
@@ -183,6 +184,7 @@ function HomeContent({
       }
 
       refreshInFlight = true;
+      setPostRequestRefreshKey((key) => key + 1);
       setRefreshing(true);
       subscription = fetchQuery(
         environment,
@@ -221,6 +223,7 @@ function HomeContent({
       data={data}
       fetchKey={fetchKey}
       onRefresh={onRefresh}
+      postRequestRefreshKey={postRequestRefreshKey}
       refreshing={refreshing}
     />
   );
@@ -230,11 +233,13 @@ function HomeContentView({
   data,
   fetchKey,
   onRefresh,
+  postRequestRefreshKey,
   refreshing,
 }: {
   data: HomePageQuery$data;
   fetchKey: string;
   onRefresh: () => void;
+  postRequestRefreshKey: number;
   refreshing: boolean;
 }) {
   const theme = useTheme();
@@ -243,7 +248,9 @@ function HomeContentView({
   const accountId = data.me?.id ?? null;
   const selectedProfileId = selectedProfile?.id ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
-  const postRequestFetchKey = `${fetchKey}:${refreshing}`;
+  const postRequestFetchKey = `${fetchKey}:${postRequestRefreshKey}`;
+  const postRequestFetchPolicy =
+    postRequestRefreshKey === 0 ? 'store-or-network' : 'store-and-network';
   const openComposer = shellChrome?.openComposer;
   const postRequestCards = useMemo(
     () =>
@@ -256,13 +263,14 @@ function HomeContentView({
           <Suspense fallback={null}>
             <PostRequestListSummary
               fetchKey={postRequestFetchKey}
+              fetchPolicy={postRequestFetchPolicy}
               onCompose={openComposer}
               profileId={selectedProfileId}
             />
           </Suspense>
         </ErrorBoundary>
       ) : null,
-    [accountId, openComposer, postRequestFetchKey, selectedProfileId],
+    [accountId, openComposer, postRequestFetchKey, postRequestFetchPolicy, selectedProfileId],
   );
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {

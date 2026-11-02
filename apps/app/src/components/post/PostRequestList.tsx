@@ -7,6 +7,7 @@ import {
   reconcilePublishedPostInHome,
 } from './postRequestCache';
 import { PostRequestCard } from './PostRequestCard';
+import type { FetchPolicy } from 'relay-runtime';
 import type { PostRequestList_request$key } from './__generated__/PostRequestList_request.graphql';
 import type { PostRequestListQuery } from './__generated__/PostRequestListQuery.graphql';
 
@@ -41,6 +42,7 @@ type PublishedPost = Readonly<{
 }>;
 type RequestSummaryProps = Readonly<{
   fetchKey?: string;
+  fetchPolicy?: FetchPolicy;
   profileId: string;
   onCompose?: () => void;
 }>;
@@ -66,13 +68,18 @@ function usePostRequestCardHandlers(profileId: string) {
   return { onPublished };
 }
 
-export function PostRequestListSummary({ fetchKey, onCompose, profileId }: RequestSummaryProps) {
+export function PostRequestListSummary({
+  fetchKey,
+  fetchPolicy = 'store-or-network',
+  onCompose,
+  profileId,
+}: RequestSummaryProps) {
   const data = useLazyLoadQuery<PostRequestListQuery>(
     PostRequestListQuery,
     { profileId },
     {
       fetchKey,
-      fetchPolicy: 'store-or-network',
+      fetchPolicy,
     },
   );
   const profile = data.node?.__typename === 'Profile' ? data.node : null;

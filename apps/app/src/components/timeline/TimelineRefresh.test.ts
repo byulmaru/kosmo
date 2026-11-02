@@ -20,6 +20,11 @@ let activeProfileId = 'profile-a';
 let postRequestSummaryMode: 'ready' | 'pending' | 'error' = 'ready';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
+const postRequestSummaryCalls: Array<{
+  fetchKey?: string;
+  fetchPolicy: string;
+  profileId: string;
+}> = [];
 let HomeTimelineScreen: ComponentType;
 let LocalTimelineScreen: ComponentType;
 
@@ -49,11 +54,14 @@ function MockPostList({ header, ...props }: { header?: ReactNode; [key: string]:
 
 function MockPostRequestListSummary({
   fetchKey,
+  fetchPolicy,
   profileId,
 }: {
   fetchKey?: string;
+  fetchPolicy: string;
   profileId: string;
 }) {
+  postRequestSummaryCalls.push({ fetchKey, fetchPolicy, profileId });
   if (postRequestSummaryMode === 'pending') {
     throw new Promise(() => undefined);
   }
@@ -205,6 +213,7 @@ afterEach(async () => {
   homeRequests.length = 0;
   localRefetchRequests.length = 0;
   toasts.length = 0;
+  postRequestSummaryCalls.length = 0;
   toastCleanupCount = 0;
   nativeHomeReselectionHandler = null;
   activeProfileId = 'profile-a';
@@ -252,6 +261,11 @@ describe('Timeline refresh', () => {
         .findAll((node) => typeof node.type === 'string').length,
       1,
     );
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:0',
+      fetchPolicy: 'store-or-network',
+      profileId: 'profile-a',
+    });
 
     postRequestSummaryMode = 'ready';
     await act(async () => {
@@ -260,9 +274,19 @@ describe('Timeline refresh', () => {
 
     assert.equal(homeRequests.length, 1);
     assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:1',
+      fetchPolicy: 'store-and-network',
+      profileId: 'profile-a',
+    });
 
     await act(async () => homeRequests[0]?.complete?.());
     assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:1',
+      fetchPolicy: 'store-and-network',
+      profileId: 'profile-a',
+    });
   });
 
   it('places the eligible Web permission banner before Home posts', async () => {

@@ -17,7 +17,7 @@ import {
   Store,
 } from 'relay-runtime';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { GraphQLResponse } from 'relay-runtime';
+import type { FetchPolicy, GraphQLResponse, Variables } from 'relay-runtime';
 import type { PostRequestListSummary as PostRequestListSummaryComponent } from './PostRequestList';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -74,6 +74,11 @@ mockModule('./PostRequestCard', {
 let renderer: ReactTestRenderer | null = null;
 let PostRequestListSummary: typeof PostRequestListSummaryComponent;
 let selectedProfileId = 'profile-a';
+const networkRequests: Array<{
+  variables: Variables;
+  respond: (response: GraphQLResponse) => void;
+  complete: () => void;
+}> = [];
 
 const PROFILE_ID = 'profile-a';
 const postRequestListQuery = generated('PostRequestListQuery');
@@ -89,12 +94,21 @@ afterEach(async () => {
     renderer = null;
   }
   selectedProfileId = 'profile-a';
+  networkRequests.length = 0;
   mock.restoreAll();
 });
 
 function createEnvironment() {
   return new Environment({
-    network: Network.create(() => Observable.create<GraphQLResponse>(() => undefined)),
+    network: Network.create((_operation, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        networkRequests.push({
+          variables,
+          respond: (response) => sink.next(response),
+          complete: () => sink.complete(),
+        });
+      }),
+    ),
     store: new Store(new RecordSource()),
   });
 }
@@ -248,19 +262,31 @@ function connectionNodeIds(environment: Environment, connectionId: string) {
   });
 }
 
-async function renderSummary(environment: Environment, onCompose: () => void = () => undefined) {
-  const view = createElement(ReactRelay.RelayEnvironmentProvider, {
+function summaryView(
+  environment: Environment,
+  queryOptions: Readonly<{ fetchKey?: string; fetchPolicy?: FetchPolicy }> = {},
+  onCompose: () => void = () => undefined,
+) {
+  return createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
     children: createElement(Suspense, {
       fallback: null,
       children: createElement(PostRequestListSummary, {
+        ...queryOptions,
         onCompose,
         profileId: PROFILE_ID,
       }),
     }),
   });
+}
+
+async function renderSummary(
+  environment: Environment,
+  onCompose: () => void = () => undefined,
+  queryOptions: Readonly<{ fetchKey?: string; fetchPolicy?: FetchPolicy }> = {},
+) {
   await act(async () => {
-    renderer = create(view);
+    renderer = create(summaryView(environment, queryOptions, onCompose));
   });
   assert.ok(renderer);
 }
@@ -313,6 +339,46 @@ describe('Home post request cards', () => {
     await renderSummary(environment);
 
     assert.equal(renderer?.toJSON(), null);
+  });
+
+  it('reuses a complete empty cache on re-entry and refreshes it with store-and-network', async () => {
+    const environment = createEnvironment();
+    seedPostRequestLists(environment, []);
+
+    await renderSummary(environment);
+    assert.equal(renderer?.toJSON(), null);
+    assert.equal(networkRequests.length, 0);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = null;
+    });
+    await renderSummary(environment);
+    assert.equal(renderer?.toJSON(), null);
+    assert.equal(networkRequests.length, 0);
+
+    await act(async () => {
+      renderer?.update(
+        summaryView(environment, {
+          fetchKey: '0:1',
+          fetchPolicy: 'store-and-network',
+        }),
+      );
+    });
+
+    assert.equal(networkRequests.length, 1);
+    assert.deepEqual(networkRequests[0]?.variables, { profileId: PROFILE_ID });
+    await act(async () => {
+      networkRequests[0]?.respond({
+        data: makeListPayload([makeRequest('request-from-another-device', 'QUEUED')]),
+      });
+      networkRequests[0]?.complete();
+    });
+
+    assert.deepEqual(
+      all('PostRequestCard').map((node) => node.props.requestId),
+      ['request-from-another-device'],
+    );
   });
 
   it('passes the shell compose action to failed requests', async () => {
