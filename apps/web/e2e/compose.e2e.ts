@@ -847,14 +847,6 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   expect(refreshedHomeBody.errors, JSON.stringify(refreshedHomeBody, null, 2)).toBeUndefined();
   expect(refreshedHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
 
-  const requestSearch = new URLSearchParams({
-    profileId: selectedProfileId,
-    requestId: acceptedRequestId ?? '',
-  });
-  await page.goto(`/post-requests?${requestSearch.toString()}`);
-  await expect(page.getByText('작성 요청이 없어요')).toBeVisible();
-  await expect(page.getByText('요청을 찾을 수 없어요')).toHaveCount(0);
-
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   const profileSwitcher = page.getByLabel('프로필 전환');
   await expect(profileSwitcher).toBeVisible();

@@ -602,6 +602,53 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(routerBackCount, 1);
   });
 
+  it('Web Slot remount after app-header Back uses the scoped profile handle for posts', async () => {
+    await renderRoute('@owner', '/@owner');
+
+    currentRouteInfo = { params: { profileHandle: '@owner' }, pathname: '/@owner' };
+    globalParams = {};
+    screenLocalParams = {};
+    await act(async () =>
+      renderer!.update(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      ),
+    );
+
+    const latestPostQuery = queryHistory.findLast(
+      ({ query }) => query === 'ProfilePostListPageQuery',
+    );
+    assert.equal(latestPostQuery?.handle, 'owner');
+    assert.deepEqual(identities('PostList'), ['owner']);
+  });
+
+  it('background profile posts stay scoped to their route when another profile is global', async () => {
+    await renderRoute('@owner', '/@owner');
+
+    currentRouteInfo = { params: { profileHandle: '@owner' }, pathname: '/@owner' };
+    globalParams = { profileHandle: '@other' };
+    screenLocalParams = {};
+    pathname = '/@other/post-id';
+    await act(async () =>
+      renderer!.update(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      ),
+    );
+
+    const latestPostQuery = queryHistory.findLast(
+      ({ query }) => query === 'ProfilePostListPageQuery',
+    );
+    assert.equal(latestPostQuery?.handle, 'owner');
+    assert.deepEqual(identities('PostList'), ['owner']);
+  });
+
   it('directly opened Profile Home returns to Home instead of dispatching an unhandled back action', async () => {
     routerCanGoBack = false;
     await renderRoute('@local', '/@local');
