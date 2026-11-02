@@ -39,11 +39,80 @@ if (hasParentRuntime) {
       assert.equal(capture.address, inheritedAddress);
       assert.equal(capture.bundlePath, inheritedBundlePath);
       assert.equal(capture.cwd, repositoryRoot);
-      await waitForProcessGroupUnavailable(capture.processGroupId);
+      await waitForProcessUnavailable(capture.processId);
       await access(inheritedBundlePath!);
       await assertTemporalServerAvailable(inheritedAddress!);
     });
   });
+
+  test(
+    'nested Temporal wrappers keep command descendants in their parent process group',
+    { skip: process.platform === 'win32' && 'Requires POSIX process groups.' },
+    async () => {
+      await withMarkerDirectory(async (markerDirectory) => {
+        const nestedMarker = join(markerDirectory, 'nested-wait.json');
+        const nested = startWrapper(['nested-wait', nestedMarker], { ...process.env }, false, true);
+        const processGroupId = nested.child.pid;
+        assert.ok(processGroupId && processGroupId > 0);
+
+        let wrapperCapture: NestedWaitCapture | undefined;
+        let commandCapture: Capture | undefined;
+        try {
+          wrapperCapture = await waitForCaptureWithin<NestedWaitCapture>(
+            nestedMarker,
+            nested.child,
+          );
+          commandCapture = await waitForCaptureWithin<Capture>(
+            `${nestedMarker}.nested`,
+            nested.child,
+          );
+
+          assert.equal(wrapperCapture.address, inheritedAddress);
+          assert.equal(wrapperCapture.bundlePath, inheritedBundlePath);
+          assert.equal(wrapperCapture.cwd, repositoryRoot);
+          assert.equal(commandCapture.address, inheritedAddress);
+          assert.equal(commandCapture.bundlePath, inheritedBundlePath);
+          assert.equal(commandCapture.cwd, repositoryRoot);
+          assert.ok(commandCapture.grandchildPid && commandCapture.grandchildPid > 0);
+
+          signalProcessGroup(processGroupId, 'SIGTERM');
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+          signalProcessGroup(processGroupId, 'SIGKILL');
+
+          await waitForProcessesUnavailable([
+            processGroupId,
+            wrapperCapture.processId,
+            wrapperCapture.nestedWrapperPid,
+            commandCapture.processId,
+            commandCapture.grandchildPid,
+          ]);
+          await access(inheritedBundlePath!);
+          await assertTemporalServerAvailable(inheritedAddress!);
+        } finally {
+          signalProcessGroup(processGroupId, 'SIGKILL');
+          if (!wrapperCapture) {
+            wrapperCapture = await readCaptureIfAvailable<NestedWaitCapture>(nestedMarker);
+          }
+          if (!commandCapture) {
+            commandCapture = await readCaptureIfAvailable<Capture>(`${nestedMarker}.nested`);
+          }
+
+          const capturedPids = [
+            wrapperCapture?.processId,
+            wrapperCapture?.nestedWrapperPid,
+            commandCapture?.processId,
+            commandCapture?.grandchildPid,
+          ].filter((processId): processId is number => processId !== undefined);
+          for (const processId of capturedPids) {
+            signalProcess(processId, 'SIGKILL');
+            signalProcessGroup(processId, 'SIGKILL');
+          }
+
+          await waitForResult(nested.result);
+        }
+      });
+    },
+  );
 } else {
   test('Temporal test wrapper succeeds with a nested wrapper sharing its runtime', async () => {
     await withMarkerDirectory(async (markerDirectory) => {
@@ -85,8 +154,16 @@ type Capture = {
   address: string;
   bundlePath: string;
   cwd: string;
-  processGroupId: number;
+  processId: number;
   grandchildPid?: number;
+};
+
+type NestedWaitCapture = {
+  address: string;
+  bundlePath: string;
+  cwd: string;
+  processId: number;
+  nestedWrapperPid: number;
 };
 
 type ChildResult = {
@@ -108,6 +185,7 @@ function startWrapper(
   probeArgs: string[],
   env: NodeJS.ProcessEnv = { ...process.env },
   clearInheritedRuntime = true,
+  detached = false,
 ): { child: ReturnType<typeof spawn>; result: Promise<ChildResult> } {
   const command = [process.execPath, '--import', tsxLoaderPath, probePath, ...probeArgs];
   const childEnvironment = { ...env };
@@ -120,6 +198,7 @@ function startWrapper(
     ['--import', tsxLoaderPath, wrapperPath, '--', ...command],
     {
       cwd: repositoryRoot,
+      detached,
       env: childEnvironment,
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -173,6 +252,24 @@ async function waitForCapture(
   throw new Error(`Timed out waiting for Temporal wrapper to write ${markerPath}.`);
 }
 
+async function waitForCaptureWithin<T extends Capture | NestedWaitCapture>(
+  markerPath: string,
+  child: ReturnType<typeof spawn>,
+): Promise<T> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      return JSON.parse(await readFile(markerPath, 'utf8')) as T;
+    } catch (error) {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(`Temporal wrapper exited before writing ${markerPath}.`, { cause: error });
+      }
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+    }
+  }
+  throw new Error(`Timed out waiting for Temporal wrapper to write ${markerPath}.`);
+}
+
 async function readCapture(path: string): Promise<Capture> {
   return JSON.parse(await readFile(path, 'utf8')) as Capture;
 }
@@ -181,10 +278,90 @@ async function assertCleanedUp(capture: Capture): Promise<void> {
   assert.ok(capture.address);
   assert.ok(capture.bundlePath);
   assert.equal(capture.cwd, repositoryRoot);
-  assert.ok(capture.processGroupId > 0);
+  assert.ok(capture.processId > 0);
   await assert.rejects(access(capture.bundlePath));
-  await waitForProcessGroupUnavailable(capture.processGroupId);
+  await waitForProcessGroupUnavailable(capture.processId);
   await waitForTemporalServerUnavailable(capture.address);
+}
+
+async function readCaptureIfAvailable<T extends Capture | NestedWaitCapture>(
+  path: string,
+): Promise<T | undefined> {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+async function waitForProcessesUnavailable(processIds: number[]): Promise<void> {
+  const pending = new Set(processIds);
+  const deadline = Date.now() + 5_000;
+  while (pending.size > 0 && Date.now() < deadline) {
+    for (const processId of pending) {
+      if (!processExists(processId)) {
+        pending.delete(processId);
+      }
+    }
+    if (pending.size > 0) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+    }
+  }
+  assert.deepEqual([...pending], [], `Processes remained alive: ${[...pending].join(', ')}`);
+}
+
+async function waitForProcessUnavailable(processId: number): Promise<void> {
+  await waitForProcessesUnavailable([processId]);
+}
+
+async function waitForResult(result: Promise<ChildResult>): Promise<void> {
+  let timeout: NodeJS.Timeout | undefined;
+  const completed = await Promise.race([
+    result.then((value) => ({ value })),
+    new Promise<undefined>((resolvePromise) => {
+      timeout = setTimeout(() => resolvePromise(undefined), 5_000);
+    }),
+  ]);
+  if (timeout) {
+    clearTimeout(timeout);
+  }
+  assert.ok(completed, 'Nested Temporal test wrapper did not close after fixture cleanup.');
+}
+
+function processExists(processId: number): boolean {
+  try {
+    process.kill(processId, 0);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function signalProcess(processId: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(processId, signal);
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') {
+      throw error;
+    }
+  }
+}
+
+function signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void {
+  if (process.platform === 'win32') {
+    signalProcess(processGroupId, signal);
+    return;
+  }
+  try {
+    process.kill(-processGroupId, signal);
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') {
+      throw error;
+    }
+  }
 }
 
 async function waitForProcessGroupUnavailable(processGroupId: number): Promise<void> {

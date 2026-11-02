@@ -53,13 +53,17 @@ type ChildResult = {
   error?: Error;
 };
 
-function runCommand(command: string[], env: NodeJS.ProcessEnv): Promise<ChildResult> {
+function runCommand(
+  command: string[],
+  env: NodeJS.ProcessEnv,
+  ownsCommandGroup: boolean,
+): Promise<ChildResult> {
   return new Promise((resolvePromise) => {
     let spawnError: Error | undefined;
     try {
       child = spawn(command[0], command.slice(1), {
         cwd: repositoryRoot,
-        detached: process.platform !== 'win32',
+        detached: ownsCommandGroup && process.platform !== 'win32',
         env,
         stdio: 'inherit',
       });
@@ -85,46 +89,50 @@ function runCommand(command: string[], env: NodeJS.ProcessEnv): Promise<ChildRes
     };
     child.once('close', async (code, signal) => {
       const closedChild = commandChild;
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer);
-        forceKillTimer = undefined;
-      }
-
       let cleanupError: Error | undefined;
-      try {
-        if (await stopProcessGroup(closedChild?.pid, 'Temporal test command', closedChild)) {
-          cleanupError = new Error(
-            'Temporal test command process group required SIGKILL after its shutdown grace period.',
-          );
+      if (ownsCommandGroup) {
+        if (forceKillTimer) {
+          clearTimeout(forceKillTimer);
+          forceKillTimer = undefined;
         }
-        if (forcedCommandGroupKill) {
-          cleanupError = new Error(
-            'Temporal test command process group required SIGKILL after its shutdown grace period.',
-          );
+
+        try {
+          if (await stopProcessGroup(closedChild?.pid, 'Temporal test command', closedChild)) {
+            cleanupError = new Error(
+              'Temporal test command process group required SIGKILL after its shutdown grace period.',
+            );
+          }
+          if (forcedCommandGroupKill) {
+            cleanupError = new Error(
+              'Temporal test command process group required SIGKILL after its shutdown grace period.',
+            );
+          }
+        } catch (error) {
+          cleanupError = error instanceof Error ? error : new Error(String(error));
         }
-      } catch (error) {
-        cleanupError = error instanceof Error ? error : new Error(String(error));
-      }
-      if (signalForwardError) {
-        cleanupError = combineErrors(
-          cleanupError,
-          signalForwardError instanceof Error
-            ? signalForwardError
-            : new Error(String(signalForwardError)),
-        );
-        signalForwardError = undefined;
+        if (signalForwardError) {
+          cleanupError = combineErrors(
+            cleanupError,
+            signalForwardError instanceof Error
+              ? signalForwardError
+              : new Error(String(signalForwardError)),
+          );
+          signalForwardError = undefined;
+        }
+        forcedCommandGroupKill = false;
+        signalForwardedChildPid = undefined;
       }
       child = undefined;
-      forcedCommandGroupKill = false;
-      signalForwardedChildPid = undefined;
       resolvePromise({
         code,
         signal,
         error: combineErrors(spawnError, cleanupError),
       });
     });
-    child.once('spawn', forwardPendingSignal);
-    forwardPendingSignal();
+    if (ownsCommandGroup) {
+      child.once('spawn', forwardPendingSignal);
+      forwardPendingSignal();
+    }
   });
 }
 
@@ -147,8 +155,11 @@ async function run(): Promise<void> {
     );
   }
 
-  process.once('SIGINT', onSigint);
-  process.once('SIGTERM', onSigterm);
+  const ownsRuntime = !inheritedAddress && !inheritedBundlePath;
+  if (ownsRuntime) {
+    process.once('SIGINT', onSigint);
+    process.once('SIGTERM', onSigterm);
+  }
 
   let result: ChildResult | undefined;
   let testEnvironment: TestWorkflowEnvironment | undefined;
@@ -158,7 +169,7 @@ async function run(): Promise<void> {
 
   try {
     if (inheritedAddress && inheritedBundlePath) {
-      result = await runCommand(command, { ...process.env });
+      result = await runCommand(command, { ...process.env }, false);
     } else {
       bundleDirectory = await mkdtemp(join(tmpdir(), 'kosmo-temporal-test-'));
       const bundlePath = join(bundleDirectory, 'workflows.js');
@@ -178,11 +189,15 @@ async function run(): Promise<void> {
       }
 
       if (!requestedSignal && testEnvironment) {
-        result = await runCommand(command, {
-          ...process.env,
-          [temporalAddressKey]: testEnvironment.address,
-          [workflowBundlePathKey]: bundlePath,
-        });
+        result = await runCommand(
+          command,
+          {
+            ...process.env,
+            [temporalAddressKey]: testEnvironment.address,
+            [workflowBundlePathKey]: bundlePath,
+          },
+          true,
+        );
       }
     }
   } catch (error) {
@@ -204,11 +219,13 @@ async function run(): Promise<void> {
       }
     }
 
-    process.off('SIGINT', onSigint);
-    process.off('SIGTERM', onSigterm);
-    if (forceKillTimer) {
-      clearTimeout(forceKillTimer);
-      forceKillTimer = undefined;
+    if (ownsRuntime) {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer);
+        forceKillTimer = undefined;
+      }
     }
   }
 

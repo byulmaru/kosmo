@@ -29,6 +29,8 @@ try {
 }
 
 let grandchildPid: number | undefined;
+let nestedWrapperPid: number | undefined;
+let nestedWaitWrapper: ReturnType<typeof spawn> | undefined;
 if (mode === 'nested') {
   const nestedMarkerPath = `${markerPath}.nested`;
   const nested = spawn(
@@ -66,6 +68,27 @@ if (mode === 'nested') {
   }
 }
 
+if (mode === 'nested-wait') {
+  nestedWaitWrapper = spawn(
+    process.execPath,
+    [
+      '--import',
+      tsxLoaderPath,
+      wrapperPath,
+      '--',
+      process.execPath,
+      '--import',
+      tsxLoaderPath,
+      probePath,
+      'wait',
+      `${markerPath}.nested`,
+    ],
+    { cwd: repositoryRoot, env: { ...process.env }, stdio: 'inherit' },
+  );
+  nestedWrapperPid = nestedWaitWrapper.pid;
+  assert.ok(nestedWrapperPid && nestedWrapperPid > 0);
+}
+
 if (mode === 'wait') {
   process.on('SIGTERM', () => {});
   const grandchild = spawn(
@@ -86,8 +109,9 @@ await writeFile(
     address,
     bundlePath,
     cwd: process.cwd(),
-    processGroupId: process.pid,
+    processId: process.pid,
     grandchildPid,
+    nestedWrapperPid,
   }),
 );
 
@@ -95,6 +119,8 @@ if (mode === 'failure') {
   process.exitCode = 17;
 } else if (mode === 'wait') {
   setInterval(() => {}, 1_000);
+} else if (mode === 'nested-wait') {
+  await once(nestedWaitWrapper!, 'close');
 } else {
   assert.ok(mode === 'success' || mode === 'nested');
 }
