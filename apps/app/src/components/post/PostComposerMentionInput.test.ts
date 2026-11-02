@@ -452,3 +452,132 @@ test('shows empty-result feedback without a selection action', async () => {
   );
   assert.equal(empty.renderer?.root.findAllByType('Pressable' as never).length, 0);
 });
+
+test('keeps the reply parent scroll pending until the Web viewport can reach it', async () => {
+  const originalPlatform = platform.OS;
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrameId = 0;
+  globalThis.requestAnimationFrame = (callback) => {
+    const id = ++nextFrameId;
+    frames.set(id, callback);
+    return id;
+  };
+  globalThis.cancelAnimationFrame = (id) => {
+    if (typeof id === 'number') {
+      frames.delete(id);
+    }
+  };
+  platform.OS = 'web';
+
+  const viewport = { clientHeight: 716, scrollHeight: 748, scrollTop: 0 };
+  let renderer: ReactTestRenderer | null = null;
+  const emitScroll = (requestedTop: number) => {
+    viewport.scrollTop = Math.max(
+      0,
+      Math.min(requestedTop, viewport.scrollHeight - viewport.clientHeight),
+    );
+    renderer?.root.findByProps({ testID: 'mobile-fullscreen-composer-scroll' }).props.onScroll({
+      nativeEvent: {
+        contentOffset: { y: viewport.scrollTop },
+        contentSize: { height: viewport.scrollHeight, width: 390 },
+        layoutMeasurement: { height: viewport.clientHeight, width: 390 },
+      },
+    });
+  };
+  const flushFrames = async () => {
+    await act(async () => {
+      while (frames.size > 0) {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) {
+          callback(0);
+        }
+      }
+    });
+  };
+
+  try {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileFullscreenComposerShellCandidate, {
+          author: null,
+          authorProfileId: 'profile-author',
+          beforeEditor: createElement('Text', { testID: 'parent-reply' }, 'Parent reply'),
+          body: '',
+          contentWarning: '',
+          contentWarningExpanded: false,
+          items: [],
+          mentionCandidates: { authorProfileId: 'profile-author', profiles: [], query: '' },
+          mentionSearchState: 'ready',
+          mode: 'reply',
+          onBodyChange: () => undefined,
+          onContentWarningChange: () => undefined,
+          onContentWarningToggle: () => undefined,
+          onEmojiAction: () => undefined,
+          onMediaAction: () => undefined,
+          onMediaEdit: () => undefined,
+          onMediaRemove: () => undefined,
+          onMediaRetry: () => undefined,
+          onOverlayClose: () => undefined,
+          onPollAction: () => undefined,
+          onSelectionChange: () => undefined,
+          onSubmit: () => undefined,
+          onVisibilityChange: () => undefined,
+          remaining: 500,
+          selection: { end: 0, start: 0 },
+          sensitiveMedia: false,
+          visibility: 'PUBLIC',
+        }),
+        {
+          createNodeMock: (element) => {
+            if (
+              element.type === 'ScrollView' &&
+              (element.props as Record<string, unknown>).testID ===
+                'mobile-fullscreen-composer-scroll'
+            ) {
+              return {
+                getScrollableNode: () => viewport,
+                scrollTo: ({ y }: { y: number }) => emitScroll(y),
+              };
+            }
+            return null;
+          },
+        },
+      );
+    });
+
+    const scroll = renderer!.root.findByProps({ testID: 'mobile-fullscreen-composer-scroll' });
+    const parentContainer = renderer!.root.findByProps({ testID: 'parent-reply' }).parent!;
+    const input = renderer!.root.findByType('TextInput' as never);
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 716 } } });
+      parentContainer.props.onLayout({ nativeEvent: { layout: { height: 116, y: 0 } } });
+      input.props.onFocus();
+    });
+    const scrollTopBeforeContentGrowth = viewport.scrollTop;
+    await flushFrames();
+
+    viewport.scrollHeight = 880;
+    await act(async () => {
+      scroll.props.onContentSizeChange(390, 880);
+    });
+    await flushFrames();
+    assert.equal(viewport.scrollTop, 116);
+    assert.equal(scrollTopBeforeContentGrowth, 0);
+
+    await act(async () => {
+      emitScroll(0);
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 716 } } });
+      scroll.props.onContentSizeChange(390, 880);
+    });
+    await flushFrames();
+    assert.equal(viewport.scrollTop, 0);
+  } finally {
+    await act(async () => renderer?.unmount());
+    platform.OS = originalPlatform;
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+  }
+});
