@@ -1,16 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
-import { createRequire } from 'node:module';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { collectDistributionPackageKeys } from './app-license-scope.mjs';
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifactPath = join(workspaceRoot, 'apps/app/src/data/open-source-licenses.json');
@@ -256,33 +249,6 @@ function isWorkspacePackage(name, packagePath, packageManifestPath, root) {
   return packageManifestPath.name === name;
 }
 
-function resolveInstalledPackage(parentPath, dependencyName) {
-  const searchPaths =
-    createRequire(join(parentPath, 'package.json')).resolve.paths(dependencyName) ?? [];
-  for (const searchPath of searchPaths) {
-    const packagePath = join(searchPath, ...dependencyName.split('/'));
-    const manifestPath = join(packagePath, 'package.json');
-    if (!existsSync(manifestPath)) {
-      continue;
-    }
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    if (typeof manifest.name === 'string' && typeof manifest.version === 'string') {
-      return { manifest, packagePath };
-    }
-  }
-  return null;
-}
-
-function packageLicense(manifest, name, version) {
-  if (typeof manifest.license === 'string') {
-    return manifest.license;
-  }
-  if (typeof manifest.license?.type === 'string') {
-    return manifest.license.type;
-  }
-  throw new Error(`Missing string license metadata for ${name}@${version}`);
-}
-
 function addLicensePackage(records, packageInfo, root) {
   const { manifest, packagePath } = packageInfo;
   if (isWorkspacePackage(manifest.name, packagePath, manifest, root)) {
@@ -307,72 +273,25 @@ function addLicensePackage(records, packageInfo, root) {
   return record;
 }
 
-function expandOptionalPackages(records, root, strictOptionalDependencies) {
-  const pending = [];
-  const missing = [];
-  const addDependency = (parent, dependencyName, { optional = false } = {}) => {
-    const resolved = resolveInstalledPackage(parent.packagePath, dependencyName);
-    if (!resolved) {
-      if (!optional || strictOptionalDependencies) {
-        missing.push(
-          `${parent.name}@${parent.version} -> ${dependencyName}${optional ? ' (optional)' : ''}`,
-        );
-      }
-      return;
-    }
-    const license = packageLicense(
-      resolved.manifest,
-      resolved.manifest.name,
-      resolved.manifest.version,
-    );
-    const record = addLicensePackage(records, { ...resolved, license }, root);
-    if (record) {
-      pending.push(record);
-    }
-  };
-
-  for (const parent of [...records.values()]) {
-    for (const dependencyName of Object.keys(parent.manifest.optionalDependencies ?? {})) {
-      addDependency(parent, dependencyName, { optional: true });
-    }
-  }
-
-  for (let index = 0; index < pending.length; index += 1) {
-    const parent = pending[index];
-    const dependencies = new Map(
-      Object.keys(parent.manifest.dependencies ?? {}).map((name) => [name, false]),
-    );
-    for (const name of Object.keys(parent.manifest.optionalDependencies ?? {})) {
-      dependencies.set(name, true);
-    }
-    for (const [dependencyName, optional] of dependencies) {
-      addDependency(parent, dependencyName, { optional });
-    }
-  }
-
-  if (missing.length) {
-    throw new Error(
-      `Could not resolve installed package edges after pnpm synchronization:\n${[
-        ...new Set(missing),
-      ]
-        .sort(compare)
-        .map((edge) => `- ${edge}`)
-        .join(
-          '\n',
-        )}\nRun pnpm --filter @kosmo/app licenses:generate to synchronize platform packages.`,
-    );
-  }
-}
-
-export function collectLicensePackages(
-  report,
-  { root = workspaceRoot, strictOptionalDependencies = true } = {},
-) {
+export function collectLicensePackages(report, { root = workspaceRoot, packageKeys } = {}) {
   const records = new Map();
+  const selected = packageKeys === undefined ? null : new Set(packageKeys);
+  const found = new Set();
   for (const [licenseKey, packages] of Object.entries(report)) {
     for (const packageInfo of packages) {
+      if (!Array.isArray(packageInfo.versions)) {
+        if (selected === null) {
+          throw new Error(`pnpm license metadata has invalid versions for ${packageInfo.name}`);
+        }
+        continue;
+      }
+      const selectedVersions = packageInfo.versions.filter((version) =>
+        selected === null ? true : selected.has(`${packageInfo.name}@${version}`),
+      );
+      if (!selectedVersions.length) {
+        continue;
+      }
       if (
-        !Array.isArray(packageInfo.versions) ||
         !Array.isArray(packageInfo.paths) ||
         packageInfo.versions.length !== packageInfo.paths.length
       ) {
@@ -382,10 +301,14 @@ export function collectLicensePackages(
       }
 
       for (const [index, version] of packageInfo.versions.entries()) {
+        const key = `${packageInfo.name}@${version}`;
+        if (selected !== null && !selected.has(key)) {
+          continue;
+        }
         const packagePath = packageInfo.paths[index];
         const manifest = JSON.parse(readFileSync(join(packagePath, 'package.json'), 'utf8'));
         if (manifest.name !== packageInfo.name || manifest.version !== version) {
-          throw new Error(`pnpm license metadata did not match ${packageInfo.name}@${version}`);
+          throw new Error(`pnpm license metadata did not match ${key}`);
         }
         const license = packageInfo.license ?? licenseKey;
         if (typeof license !== 'string') {
@@ -394,10 +317,20 @@ export function collectLicensePackages(
           );
         }
         addLicensePackage(records, { manifest, packagePath, license }, root);
+        found.add(key);
       }
     }
   }
-  expandOptionalPackages(records, root, strictOptionalDependencies);
+  if (selected !== null) {
+    const missing = [...selected].filter((key) => !found.has(key)).sort(compare);
+    if (missing.length) {
+      throw new Error(
+        `Selected distribution packages are missing from pnpm production metadata:\n${missing
+          .map((key) => `- ${key}`)
+          .join('\n')}`,
+      );
+    }
+  }
   return [...records.values()];
 }
 
@@ -408,7 +341,7 @@ export function buildLicenseEntries(
     notice = noticePath,
     supplementalFiles = supplementalPaths.map((path) => join(root, path)),
     pendingFile = join(root, pendingRelativePath),
-    strictOptionalDependencies = true,
+    packageKeys,
   } = {},
 ) {
   const supplemental = readSupplementalLicenses(supplementalFiles);
@@ -418,7 +351,7 @@ export function buildLicenseEntries(
   const entries = [];
   for (const { name, version, license, manifest, packagePath } of collectLicensePackages(report, {
     root,
-    strictOptionalDependencies,
+    packageKeys,
   })) {
     const documents = readPackageLicenseDocuments(packagePath);
     let text;
@@ -513,6 +446,33 @@ function sameNotice(left, right) {
 }
 
 export function checkLicenseArtifact(current, outputPath, pendingFile = pendingPath) {
+  const { committed, committedByKey } = readLicenseArtifact(outputPath, pendingFile);
+  assertArtifactSourceSha(committed, current.sourceSha256);
+
+  const currentKeys = new Set(current.notices.map(entryKey));
+  const missing = [...currentKeys].filter((key) => !committedByKey.has(key)).sort(compare);
+  const unshipped = [...committedByKey.keys()].filter((key) => !currentKeys.has(key)).sort(compare);
+  if (missing.length || unshipped.length) {
+    const lines = [
+      ...missing.map((key) => `- missing from generated data: ${key}`),
+      ...unshipped.map((key) => `- no longer distributed: ${key}`),
+    ];
+    throw new Error(
+      `Generated app license data has a stale package set:\n${lines.join('\n')}\nRun pnpm --filter @kosmo/app licenses:generate.`,
+    );
+  }
+
+  for (const entry of current.notices) {
+    const key = entryKey(entry);
+    if (!sameNotice(entry, committedByKey.get(key) ?? {})) {
+      throw new Error(
+        `Generated app license data is stale for ${key}. Run pnpm --filter @kosmo/app licenses:generate.`,
+      );
+    }
+  }
+}
+
+function readLicenseArtifact(outputPath, pendingFile) {
   let committed;
   try {
     committed = JSON.parse(readFileSync(outputPath, 'utf8'));
@@ -527,19 +487,13 @@ export function checkLicenseArtifact(current, outputPath, pendingFile = pendingP
   if (
     !committed ||
     typeof committed !== 'object' ||
-    typeof committed.sourceSha256 !== 'string' ||
+    !/^[\da-f]{64}$/.test(committed.sourceSha256 ?? '') ||
     !Array.isArray(committed.notices)
   ) {
     throw new Error(
       'Generated app license data has an invalid shape. Run pnpm --filter @kosmo/app licenses:generate.',
     );
   }
-  if (committed.sourceSha256 !== current.sourceSha256) {
-    throw new Error(
-      'Generated app license data is stale for pnpm-lock.yaml, supplemental license texts, pending notices, or the app notice. Run pnpm --filter @kosmo/app licenses:generate.',
-    );
-  }
-
   const pending = readPendingNotices(pendingFile);
   const committedByKey = new Map();
   for (const entry of committed.notices) {
@@ -552,6 +506,8 @@ export function checkLicenseArtifact(current, outputPath, pendingFile = pendingP
       ) ||
       !entry.name ||
       !entry.license ||
+      (!entry.version &&
+        !(entry.name === noticeEntry.name && entry.license === noticeEntry.license)) ||
       (entry.text.trim() === '' && pending.get(entryKey(entry))?.license !== entry.license) ||
       !isHttpsUrl(entry.sourceUrl)
     ) {
@@ -567,13 +523,14 @@ export function checkLicenseArtifact(current, outputPath, pendingFile = pendingP
     }
     committedByKey.set(key, entry);
   }
-  for (const entry of current.notices) {
-    const key = entryKey(entry);
-    if (!sameNotice(entry, committedByKey.get(key) ?? {})) {
-      throw new Error(
-        `Generated app license data is stale for ${key}. Run pnpm --filter @kosmo/app licenses:generate.`,
-      );
-    }
+  return { committed, committedByKey };
+}
+
+function assertArtifactSourceSha(committed, currentSourceSha) {
+  if (committed.sourceSha256 !== currentSourceSha) {
+    throw new Error(
+      'Generated app license data is stale for pnpm-lock.yaml, supplemental license texts, pending notices, or the app notice. Run pnpm --filter @kosmo/app licenses:generate.',
+    );
   }
 }
 
@@ -599,54 +556,41 @@ function readPnpmLicenseReport(root) {
   return JSON.parse(result.stdout);
 }
 
-function synchronizeAllPlatforms(root) {
-  const result = spawnSync(
-    'pnpm',
-    [
-      'install',
-      '--frozen-lockfile',
-      '--force',
-      '--config.forceIgnoresPlatform=true',
-      '--ignore-scripts',
-    ],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...process.env, CI: 'true' },
-      maxBuffer: 50 * 1024 * 1024,
-      stdio: 'inherit',
-    },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `Could not synchronize all optional platform packages for app license generation (exit ${result.status}).`,
-    );
-  }
-}
-
 export function run(args = process.argv.slice(2)) {
-  if (args.some((arg) => arg !== '--check') || args.length > 1) {
-    throw new Error('Usage: node scripts/generate-app-licenses.mjs [--check]');
+  if (args.some((arg) => !['--check', '--verify'].includes(arg)) || args.length > 1) {
+    throw new Error('Usage: node scripts/generate-app-licenses.mjs [--check|--verify]');
   }
   const check = args.includes('--check');
-  if (!check) {
-    synchronizeAllPlatforms(workspaceRoot);
-  }
-  const data = buildLicenseData(readPnpmLicenseReport(workspaceRoot), {
-    strictOptionalDependencies: !check,
-  });
+  const verify = args.includes('--verify');
+  let packageKeys;
   if (check) {
+    const { committed } = readLicenseArtifact(artifactPath, pendingPath);
+    assertArtifactSourceSha(committed, sourceSha256(workspaceRoot));
+    packageKeys = new Set(
+      committed.notices
+        .filter((entry) => !(entry.name === noticeEntry.name && entry.version === ''))
+        .map(entryKey),
+    );
+  } else {
+    if (verify) {
+      const { committed } = readLicenseArtifact(artifactPath, pendingPath);
+      assertArtifactSourceSha(committed, sourceSha256(workspaceRoot));
+    }
+    packageKeys = new Set(collectDistributionPackageKeys(workspaceRoot));
+  }
+
+  const data = buildLicenseData(readPnpmLicenseReport(workspaceRoot), { packageKeys });
+  if (check || verify) {
     checkLicenseArtifact(data, artifactPath);
   } else {
     writeLicenseArtifact(data, artifactPath);
   }
   console.log(
     check
-      ? `Checked ${data.notices.length} installed app license entries.`
-      : `Generated ${data.notices.length} app license entries.`,
+      ? `Checked ${data.notices.length} app license entries.`
+      : verify
+        ? `Verified ${data.notices.length} distributed app license entries.`
+        : `Generated ${data.notices.length} distributed app license entries.`,
   );
 }
 
