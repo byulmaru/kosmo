@@ -1,3 +1,5 @@
+import './resolvers/profile/projection';
+
 import { AccountProfileRoleOrder } from '@kosmo/core/enums';
 import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
@@ -39,6 +41,7 @@ export const builder = new SchemaBuilder<{
 }>({
   plugins: [
     RelayPlugin,
+    'profileProjection',
     ScopeAuthPlugin,
     SimpleObjectsPlugin,
     ValidationPlugin,

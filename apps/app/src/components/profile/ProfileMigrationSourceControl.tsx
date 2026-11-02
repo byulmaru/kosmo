@@ -74,6 +74,11 @@ export function ProfileMigrationSourceControl({
   const [unregisterCommit, unregistering] =
     useMutation<ProfileMigrationSourceControlUnregisterMutation>(UnregisterMutation);
   const busy = registering || unregistering;
+  if (profile.displayName == null || profile.instance == null) {
+    return null;
+  }
+
+  const displayName = profile.displayName;
   const destinationHandle = getQualifiedDestinationHandle(profile);
 
   const register = () => {
@@ -128,7 +133,7 @@ export function ProfileMigrationSourceControl({
   };
 
   const preparedSource = profile.migrationSource;
-  const controlLabel = `Kosmo 프로필 이전 원본 ${profile.displayName} ${profile.relativeHandle}`;
+  const controlLabel = `Kosmo 프로필 이전 원본 ${displayName} ${profile.relativeHandle}`;
   const registerButtonLabel = '기존 계정 등록';
   const unregisterButtonLabel = '기존 계정 등록 해제';
 
@@ -146,13 +151,13 @@ export function ProfileMigrationSourceControl({
         팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.
       </Text>
       <View
-        accessibilityLabel={`이전받을 Kosmo 프로필 ${profile.displayName} ${destinationHandle ?? ''}`.trim()}
+        accessibilityLabel={`이전받을 Kosmo 프로필 ${displayName} ${destinationHandle ?? ''}`.trim()}
         role="group"
       >
         <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>
           이전받을 Kosmo 프로필
         </Text>
-        <Text style={[styles.sourceName, { color: theme.text }]}>{profile.displayName}</Text>
+        <Text style={[styles.sourceName, { color: theme.text }]}>{displayName}</Text>
         {destinationHandle ? (
           <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
             {destinationHandle}
@@ -170,7 +175,7 @@ export function ProfileMigrationSourceControl({
         >
           <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>현재 등록된 원본</Text>
           <Text style={[styles.sourceName, { color: theme.text }]}>
-            {preparedSource.displayName}
+            {preparedSource.displayName ?? preparedSource.relativeHandle}
           </Text>
           <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
             {preparedSource.relativeHandle}
@@ -256,11 +261,12 @@ export function ProfileMigrationSourceControl({
 function getQualifiedDestinationHandle(
   profile: ProfileMigrationSourceControl_profile$data,
 ): string | null {
-  if (!profile.instance.canonicalOrigin) {
+  const canonicalOrigin = profile.instance?.canonicalOrigin;
+  if (!canonicalOrigin) {
     return null;
   }
 
-  return `@${profile.handle}@${new URL(profile.instance.canonicalOrigin).host}`;
+  return `@${profile.handle}@${new URL(canonicalOrigin).host}`;
 }
 
 const styles = StyleSheet.create({

@@ -445,15 +445,15 @@ describe('Bookmark GraphQL 경계', () => {
       owner.token,
       { first: 10 },
     );
-    assert.equal(wrongProfile.data?.node, null);
+    assert.deepEqual(wrongProfile.data?.node, { bookmarks: null });
     assert.equal(wrongProfile.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
     const otherViewer = await loadBookmarkConnection(ownerProfileId, other.token, { first: 10 });
-    assert.equal(otherViewer.data?.node, null);
+    assert.deepEqual(otherViewer.data?.node, { bookmarks: null });
     assert.equal(otherViewer.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
     const unauthenticated = await loadBookmarkConnection(ownerProfileId, undefined, { first: 10 });
-    assert.equal(unauthenticated.data?.node, null);
+    assert.deepEqual(unauthenticated.data?.node, { bookmarks: null });
     assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
     assert.deepEqual(await loadBookmarkNode(bookmarkId, owner.token), {
@@ -494,14 +494,14 @@ describe('Bookmark GraphQL 경계', () => {
       first,
       [bookmarks[0]!, bookmarks[2]!].map(({ id }) => encodeGlobalId('Bookmark', id)),
     );
-    assert.equal(first.data?.node?.bookmarks.pageInfo.hasNextPage, true);
+    assert.equal(first.data?.node?.bookmarks!.pageInfo.hasNextPage, true);
 
     const second = await loadBookmarkConnection(profileId, owner.token, {
-      after: first.data?.node?.bookmarks.pageInfo.endCursor,
+      after: first.data?.node?.bookmarks!.pageInfo.endCursor,
       first: 2,
     });
     assertBookmarkIds(second, [encodeGlobalId('Bookmark', bookmarks[4]!.id)]);
-    assert.equal(second.data?.node?.bookmarks.pageInfo.hasNextPage, false);
+    assert.equal(second.data?.node?.bookmarks!.pageInfo.hasNextPage, false);
   });
 
   test('inherits author Profile, Instance and follower visibility and re-exposes retained rows', async () => {
@@ -652,7 +652,7 @@ const loadBookmarkConnection = (
   token: string | undefined,
   variables: { after?: string | null; first: number },
 ) =>
-  requestGraphQL<{ node: { bookmarks: BookmarkConnection } | null }>(
+  requestGraphQL<{ node: { bookmarks: BookmarkConnection | null } | null }>(
     `query ProfileBookmarks($id: ID!, $first: Int!, $after: String) {
       node(id: $id) {
         ... on Profile {
@@ -708,12 +708,14 @@ const loadPostViewerBookmarks = async (postIds: string[], token?: string) => {
 };
 
 const assertBookmarkIds = (
-  result: GraphQLResult<{ node: { bookmarks: BookmarkConnection } | null }>,
+  result: GraphQLResult<{ node: { bookmarks: BookmarkConnection | null } | null }>,
   expected: string[],
 ) => {
   assertNoGraphQLErrors(result);
+  const bookmarks = result.data?.node?.bookmarks;
+  assert.ok(bookmarks);
   assert.deepEqual(
-    result.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+    bookmarks.edges.map(({ node }) => node.id),
     expected,
   );
 };

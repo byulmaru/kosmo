@@ -27,8 +27,8 @@ type AuthorProfile = ProfileNameBlock_profile$key & {
       }
     | null
     | undefined;
-  readonly displayName: string;
-  readonly handle: string;
+  readonly displayName: string | null | undefined;
+  readonly relativeHandle: string;
 };
 
 type MentionedProfile = PostContentMention_profile$key & {
@@ -74,7 +74,6 @@ const PostSourcePreviewFragment = graphql`
         url
       }
       displayName
-      handle
       relativeHandle
       ...ProfileNameBlock_profile
     }
@@ -105,7 +104,6 @@ const PostSourcePresentationViewFragment = graphql`
         url
       }
       displayName
-      handle
       relativeHandle
       ...ProfileNameBlock_profile
     }
@@ -157,7 +155,7 @@ export function PostSourcePresentationView({
     <PostDetailBackground onBackgroundPress={openPost} style={styles.authorHeader}>
       <PostDetailBackground onBackgroundPress={openPost} style={styles.authorSlot}>
         <PresentationLink
-          accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+          accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
           href={postProfileHref}
           resetScroll
           style={{ paddingTop: authorTopInset }}
@@ -166,7 +164,7 @@ export function PostSourcePresentationView({
         </PresentationLink>
       </PostDetailBackground>
       <PresentationLink
-        accessibilityLabel={`${post.profile.displayName}의 게시글 보기`}
+        accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
         href={postDetailHref}
         style={{ paddingTop: authorTopInset }}
       >
@@ -257,7 +255,7 @@ export function PostSourcePreview({
         >
           {interactive ? (
             <PresentationLink
-              accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
+              accessibilityLabel={`${source.profile.displayName ?? source.profile.relativeHandle} 프로필 보기`}
               href={sourceProfileHref}
               resetScroll
               style={{ paddingTop: authorTopInset }}
@@ -439,7 +437,7 @@ function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: b
       {showAvatar ? (
         <Avatar
           imageUri={profile.avatar?.url}
-          label={profile.displayName || profile.handle}
+          label={profile.displayName || profile.relativeHandle}
           size={40}
         />
       ) : null}

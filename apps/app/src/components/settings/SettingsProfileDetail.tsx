@@ -136,8 +136,15 @@ function SettingsProfileDetailContents() {
     { fetchKey, fetchPolicy: 'network-only' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
+  const displayName = profile?.displayName;
+  const followPolicy = profile?.followPolicy;
 
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (
+    !profile ||
+    profile.instance?.kind !== 'LOCAL' ||
+    displayName == null ||
+    followPolicy == null
+  ) {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
@@ -147,23 +154,30 @@ function SettingsProfileDetailContents() {
     );
   }
 
+  const profileForEditor = profile as SettingsProfileEditorProfile;
+
   return (
     <SettingsProfileEditor
-      key={`${profile.id}:${profile.viewerState?.membership?.role ?? 'NONE'}`}
+      key={`${profileForEditor.id}:${profileForEditor.viewerState?.membership?.role ?? 'NONE'}`}
       openProfileSwitcher={shellChrome?.openProfileSwitcher}
-      profile={profile}
+      profile={profileForEditor}
     />
   );
 }
+
+type SettingsProfileEditorProfile = NonNullable<
+  NonNullable<SettingsProfileDetailQuery['response']['currentSession']>['selectedProfile']
+> & {
+  displayName: string;
+  followPolicy: string;
+};
 
 function SettingsProfileEditor({
   openProfileSwitcher,
   profile,
 }: {
   openProfileSwitcher?: () => void;
-  profile: NonNullable<
-    NonNullable<SettingsProfileDetailQuery['response']['currentSession']>['selectedProfile']
-  >;
+  profile: SettingsProfileEditorProfile;
 }) {
   const editable = profile.viewerState?.membership?.role === 'OWNER';
   const theme = useTheme();

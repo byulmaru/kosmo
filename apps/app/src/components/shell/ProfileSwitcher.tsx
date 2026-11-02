@@ -50,7 +50,6 @@ const ProfileSwitcherFragment = graphql`
     currentSession {
       selectedProfile {
         id
-        handle
         relativeHandle
         displayName
         followingCount
@@ -77,7 +76,6 @@ const ProfileSwitcherFragment = graphql`
       id
       profiles {
         id
-        handle
         relativeHandle
         displayName
         unreadNotificationCount
@@ -525,7 +523,9 @@ export function ProfileSwitcher({
   const triggerCopy = !compact ? (
     <>
       <Text numberOfLines={1} style={[styles.triggerName, { color: theme.foregroundPrimary }]}>
-        {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+        {active?.displayName ??
+          active?.relativeHandle ??
+          (profiles.length ? '프로필 선택' : '프로필')}
       </Text>
       <View style={styles.chevron}>
         <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
@@ -556,7 +556,11 @@ export function ProfileSwitcher({
     >
       {compact ? (
         <View style={styles.compactAvatar}>
-          <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+          <Avatar
+            imageUri={active?.avatar?.url}
+            label={active?.displayName ?? active?.relativeHandle ?? '?'}
+            size={40}
+          />
           <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
         </View>
       ) : null}
@@ -578,38 +582,40 @@ export function ProfileSwitcher({
       >
         {active.relativeHandle}
       </Text>
-      <View style={styles.counts}>
-        <NavigationLink
-          href={`/${active.relativeHandle}/following`}
-          onNavigate={profileSummaryOnNavigate}
-        >
-          <Pressable
-            accessibilityRole="link"
-            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
-            style={styles.countLink}
+      {active.followingCount != null && active.followersCount != null ? (
+        <View style={styles.counts}>
+          <NavigationLink
+            href={`/${active.relativeHandle}/following`}
+            onNavigate={profileSummaryOnNavigate}
           >
-            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-              {countFormatter.format(active.followingCount).toLowerCase()}
-            </Text>
-            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로잉</Text>
-          </Pressable>
-        </NavigationLink>
-        <NavigationLink
-          href={`/${active.relativeHandle}/followers`}
-          onNavigate={profileSummaryOnNavigate}
-        >
-          <Pressable
-            accessibilityRole="link"
-            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
-            style={styles.countLink}
+            <Pressable
+              accessibilityRole="link"
+              onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
+              style={styles.countLink}
+            >
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                {countFormatter.format(active.followingCount).toLowerCase()}
+              </Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로잉</Text>
+            </Pressable>
+          </NavigationLink>
+          <NavigationLink
+            href={`/${active.relativeHandle}/followers`}
+            onNavigate={profileSummaryOnNavigate}
           >
-            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-              {countFormatter.format(active.followersCount).toLowerCase()}
-            </Text>
-            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로워</Text>
-          </Pressable>
-        </NavigationLink>
-      </View>
+            <Pressable
+              accessibilityRole="link"
+              onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
+              style={styles.countLink}
+            >
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                {countFormatter.format(active.followersCount).toLowerCase()}
+              </Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로워</Text>
+            </Pressable>
+          </NavigationLink>
+        </View>
+      ) : null}
     </>
   ) : (
     <Text style={[styles.emptyProfile, { color: theme.foregroundSecondary }]}>
@@ -652,7 +658,7 @@ export function ProfileSwitcher({
       <View style={styles.largeAvatar}>
         <Avatar
           imageUri={active?.avatar?.url}
-          label={active?.displayName || active?.handle || '?'}
+          label={active?.displayName || active?.relativeHandle || '?'}
           size={96}
           style={avatarShadow}
         />

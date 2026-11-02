@@ -242,17 +242,24 @@ Hashtag에는 영향을 주지 않는다.
 
 ## 조회 정책
 
-- 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
-- GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 위 공개 조회 정책과 기존 lifecycle·membership 정책을 적용해
-  기본 Profile 정보 범위를 제공한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를
-  유지하며 Block 전용 identity payload를 만들지 않는다.
+- 일반 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
+- 이미 알려진 Profile ID에 대한 GraphQL `node(id:)` 참조와 게시물 등에서 참조하는 Profile 객체는 현재 Profile 상태와
+  관계없이 저장된 Profile을 반환한다.
+  Active/Normal Profile은 각 필드의 기존 조회 권한을 적용하고, 그 외 상태의 Profile은 `id`, `handle`, `relativeHandle`
+  만 제공한다. 나머지 GraphQL Profile 필드는 요청자가 Owner여도 `null`로 반환하며, 이 제한 응답으로 GraphQL 오류를
+  발생시키지 않는다. 이 제한은 Profile 상태만으로 결정하며, 알려진 ID의 참조를 위해 연결된 Instance 상태를 별도로
+  검사하지 않는다.
+- `profileByHandle` 직접 조회, Profile 검색 후보와 Profile collection은 기존 Active/lifecycle·membership·moderation
+  조회 조건을 유지한다. 이 경로는 비활성 Profile을 새로 찾거나 검색하는 기능이 아니다. Profile이 기존 직접 조회
+  조건을 통과하지 못하면 기존 null/unavailable 결과를 유지하며 Block 전용 identity payload를 만들지 않는다.
 - 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용한다. GraphQL `searchProfiles`가
   exact-match 또는 partial-match 후보를 반환할 때는 위 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Profile
   Block 관계인 Profile을 pagination·cursor·limit 전에 제외한다.
 - selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
   selected Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
   재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
-- Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
+- Local Profile Owner와 운영자 Account의 운영상 비공개 상태 조회는 기존 별도 운영 조회 경계에 따른다. 이는 public
+  GraphQL Profile projection과 구분되며, 비활성 Profile의 나머지 GraphQL Profile 필드를 허용하지 않는다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
@@ -294,9 +301,10 @@ materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 l
 검증된 actor document apply가 성공한 경우에만 조회 관측 시각으로 7일 기준을 갱신한다. 검증된 inbound Update의
 document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unresponsive Instance를 복구할 수 있다.
 
-- Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
+- 새 Remote Profile lookup 요청은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
   Reachability State가 Reachable이면 새 원격 요청을 보낼 수 있다. Unreachable이면 Remote Profile materialization·갱신에
-  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다.
+  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다. 이 원격 요청 조건은 이미 저장된 Profile ID의
+  `node(id:)` 참조에는 별도로 적용하지 않는다.
 
 ### Profile 고정 Post
 

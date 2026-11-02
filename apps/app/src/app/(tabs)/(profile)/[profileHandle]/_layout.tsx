@@ -45,7 +45,6 @@ const ProfileLayoutQuery = graphql`
     profileByHandle(handle: $handle) {
       id
       displayName
-      handle
       relativeHandle
       instance {
         kind
@@ -200,7 +199,7 @@ function ProfileLayoutContent({
   const blocking = Boolean(profile?.viewerState?.profileBlock);
   const blockedBy = Boolean(profile?.viewerState?.blockedBy);
 
-  if (!profile) {
+  if (!profile || !profile.instance) {
     const missingState = (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
@@ -221,7 +220,7 @@ function ProfileLayoutContent({
   if (connectionKind) {
     const chrome = (
       <ProfileConnectionChrome
-        displayName={profile.displayName || profile.handle}
+        displayName={profile.displayName || profile.relativeHandle}
         kind={connectionKind}
         relativeHandle={profile.relativeHandle}
       />
@@ -257,7 +256,11 @@ function ProfileLayoutContent({
     <>
       <ProfileViewAnalytics key={profile.id} />
       {showPageHeader ? (
-        <PageHeader leading={headerLeading} title={profile.displayName} titleLines={1} />
+        <PageHeader
+          leading={headerLeading}
+          title={profile.displayName ?? profile.relativeHandle}
+          titleLines={1}
+        />
       ) : null}
       <ProfileHero
         key={selectedProfileId}

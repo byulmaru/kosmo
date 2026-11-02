@@ -41,7 +41,6 @@ const PostListRowFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
@@ -64,7 +63,6 @@ const PostListItemFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
     }
@@ -72,6 +70,7 @@ const PostListItemFragment = graphql`
       id
       profile {
         displayName
+        relativeHandle
       }
     }
     ...PostReplySurface_post
@@ -179,7 +178,8 @@ export function PostListItem({
           numberOfLines={1}
           style={[styles.attributionLabel, { color: theme.textSecondary, pointerEvents: 'none' }]}
         >
-          {post.replyParent.profile.displayName}님에게 답글
+          {post.replyParent.profile.displayName ?? post.replyParent.profile.relativeHandle}님에게
+          답글
         </Text>
       </PostAttributionRow>
     ) : null;
@@ -228,7 +228,7 @@ export function PostListItem({
         >
           <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
-              accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+              accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
               accessibilityRole="link"
               style={styles.repostLabelTarget}
             >
@@ -236,7 +236,7 @@ export function PostListItem({
                 numberOfLines={1}
                 style={[styles.attributionLabel, { color: theme.textSecondary }]}
               >
-                {post.profile.displayName}님이 재게시함
+                {post.profile.displayName ?? post.profile.relativeHandle}님이 재게시함
               </Text>
             </Pressable>
           </NavigationLink>
@@ -271,7 +271,7 @@ export function PostListItem({
           >
             <Avatar
               imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
+              label={post.profile.displayName || post.profile.relativeHandle}
               size={48}
             />
           </Pressable>
@@ -422,7 +422,7 @@ function PostListRow({
         >
           <Avatar
             imageUri={post.profile.avatar?.url}
-            label={post.profile.displayName || post.profile.handle}
+            label={post.profile.displayName || post.profile.relativeHandle}
             size={48}
           />
         </Pressable>

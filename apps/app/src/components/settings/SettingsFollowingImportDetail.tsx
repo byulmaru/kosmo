@@ -96,7 +96,7 @@ function SettingsFollowingImportDetailContents() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const profile = data.currentSession?.selectedProfile ?? null;
 
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (!profile || profile.instance?.kind !== 'LOCAL') {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}

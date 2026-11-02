@@ -123,12 +123,14 @@ export function NotificationList({ profile }: NotificationListProps) {
     notificationListMarkReadMutation,
   );
   const [refreshing, startTransition] = useTransition();
-  const { edges } = pagination.data.notifications;
+  const notificationConnection = pagination.data.notifications;
+  const edges = notificationConnection?.edges;
+  const visibleEdges = edges ?? [];
   const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
     {
-      hasNext: pagination.hasNext,
-      isLoadingNext: pagination.isLoadingNext,
-      itemCount: edges.length,
+      hasNext: notificationConnection != null && pagination.hasNext,
+      isLoadingNext: notificationConnection != null && pagination.isLoadingNext,
+      itemCount: visibleEdges.length,
       loadNext: pagination.loadNext,
       pageSize: 20,
       webScrollTarget: 'container',
@@ -136,10 +138,11 @@ export function NotificationList({ profile }: NotificationListProps) {
   );
 
   useEffect(
-    () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
+    () =>
+      publishUnreadIds(edges?.flatMap(({ node }) => (node.readAt === null ? [node.id] : [])) ?? []),
     [edges, publishUnreadIds],
   );
-  const notifications = edges.flatMap(({ node }) => {
+  const notifications = visibleEdges.flatMap(({ node }) => {
     if (node.__typename === 'FollowNotification' && node.follow) {
       return <NotificationListItem key={node.id} notification={node.follow} />;
     }
@@ -253,8 +256,8 @@ export function NotificationList({ profile }: NotificationListProps) {
               endRef={endRef}
               error={loadError}
               errorMessage="알림을 더 불러오지 못했어요"
-              hasNext={pagination.hasNext}
-              isLoading={pagination.isLoadingNext}
+              hasNext={notificationConnection != null && pagination.hasNext}
+              isLoading={notificationConnection != null && pagination.isLoadingNext}
               loadingLabel="알림을 더 불러오는 중"
               onRetry={loadNextPage}
               style={[styles.pagination, { borderColor: theme.border }]}

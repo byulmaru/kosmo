@@ -64,7 +64,6 @@ const ReplyComposerSurfaceParentFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -437,7 +436,7 @@ function ReplyComposerSurfaceContents({
                   <View style={styles.parentAvatarColumn}>
                     <Avatar
                       imageUri={parent.profile.avatar?.url}
-                      label={parent.profile.displayName || parent.profile.handle}
+                      label={parent.profile.displayName || parent.profile.relativeHandle}
                       size={40}
                     />
                     <PostThreadConnector

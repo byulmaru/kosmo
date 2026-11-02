@@ -260,7 +260,7 @@ test(
 );
 
 test(
-  'keeps a cached contentless repost source readable but drops the repost when its source is deleted',
+  'projects inactive Profile identities for a cached contentless repost before dropping a deleted source',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
@@ -322,6 +322,105 @@ test(
       [[encodeGlobalId('Post', repost.id), null, 'cached repost source body']],
     );
     assert.equal(stale.data?.directSource, null);
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(inArray(Profiles.id, [repostAuthor.id, sourceAuthor.id]));
+
+    const projected = await requestGraphQL<{
+      homeTimeline: {
+        edges: readonly {
+          readonly node: {
+            readonly id: string;
+            readonly content: { readonly bodyText: string } | null;
+            readonly profile: {
+              readonly id: string;
+              readonly handle: string;
+              readonly relativeHandle: string;
+              readonly displayName: string | null;
+              readonly avatar: { readonly id: string; readonly url: string } | null;
+              readonly viewerState: {
+                readonly profileBlock: { readonly id: string } | null;
+              } | null;
+            };
+            readonly repostSource: {
+              readonly id: string;
+              readonly content: { readonly bodyText: string } | null;
+              readonly profile: {
+                readonly id: string;
+                readonly handle: string;
+                readonly relativeHandle: string;
+                readonly displayName: string | null;
+                readonly avatar: { readonly id: string; readonly url: string } | null;
+                readonly viewerState: {
+                  readonly profileBlock: { readonly id: string } | null;
+                } | null;
+              };
+            } | null;
+          };
+        }[];
+      } | null;
+    }>(
+      `query CachedInactiveRepostProfiles {
+        homeTimeline(first: 10) {
+          edges {
+            node {
+              id
+              content { bodyText }
+              profile { ...HomePostProfile }
+              repostSource {
+                id
+                content { bodyText }
+                profile { ...HomePostProfile }
+              }
+            }
+          }
+        }
+      }
+
+      fragment HomePostProfile on Profile {
+        id
+        handle
+        relativeHandle
+        displayName
+        avatar { id url }
+        viewerState { profileBlock { id } }
+      }`,
+      {},
+      viewer.token,
+    );
+
+    assert.equal(projected.errors, undefined, JSON.stringify(projected.errors));
+    const cachedRepost = projected.data?.homeTimeline?.edges
+      .map(({ node }) => node)
+      .find(({ id }) => id === encodeGlobalId('Post', repost.id));
+    assert.ok(cachedRepost);
+    const localInstance = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, localInstanceId))
+      .then(firstOrThrow);
+
+    const expectedInactiveProfile = (profile: typeof repostAuthor) => ({
+      id: encodeGlobalId('Profile', profile.id),
+      handle: profile.handle,
+      relativeHandle: `@${profile.handle}@${localInstance.domain}`,
+      displayName: null,
+      avatar: null,
+      viewerState: null,
+    });
+
+    assert.deepEqual(cachedRepost, {
+      id: encodeGlobalId('Post', repost.id),
+      content: null,
+      profile: expectedInactiveProfile(repostAuthor),
+      repostSource: {
+        id: encodeGlobalId('Post', source.id),
+        content: { bodyText: 'cached repost source body' },
+        profile: expectedInactiveProfile(sourceAuthor),
+      },
+    });
 
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
     const deletedSource = await requestHome(viewer.token, { first: 10 });

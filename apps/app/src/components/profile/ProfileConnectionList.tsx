@@ -138,14 +138,16 @@ function FollowersList({ profile }: { profile: ProfileConnectionList_followersPr
     ProfileFollowersNextPageQuery,
     ProfileConnectionList_followersProfile$key
   >(followersFragment, profile);
-  const profiles = pagination.data.followers.edges.flatMap((edge) =>
-    edge.node.follower ? [{ cursor: edge.cursor, profile: edge.node.follower }] : [],
-  );
+  const followers = pagination.data.followers;
+  const profiles =
+    followers?.edges.flatMap((edge) =>
+      edge.node.follower ? [{ cursor: edge.cursor, profile: edge.node.follower }] : [],
+    ) ?? [];
 
   return (
     <ConnectionList
-      hasNext={pagination.hasNext}
-      isLoadingNext={pagination.isLoadingNext}
+      hasNext={followers != null && pagination.hasNext}
+      isLoadingNext={followers != null && pagination.isLoadingNext}
       kind="followers"
       loadNext={pagination.loadNext}
       profiles={profiles}
@@ -158,14 +160,16 @@ function FollowingList({ profile }: { profile: ProfileConnectionList_followingPr
     ProfileFollowingNextPageQuery,
     ProfileConnectionList_followingProfile$key
   >(followingFragment, profile);
-  const profiles = pagination.data.following.edges.flatMap((edge) =>
-    edge.node.followee ? [{ cursor: edge.cursor, profile: edge.node.followee }] : [],
-  );
+  const following = pagination.data.following;
+  const profiles =
+    following?.edges.flatMap((edge) =>
+      edge.node.followee ? [{ cursor: edge.cursor, profile: edge.node.followee }] : [],
+    ) ?? [];
 
   return (
     <ConnectionList
-      hasNext={pagination.hasNext}
-      isLoadingNext={pagination.isLoadingNext}
+      hasNext={following != null && pagination.hasNext}
+      isLoadingNext={following != null && pagination.isLoadingNext}
       kind="following"
       loadNext={pagination.loadNext}
       profiles={profiles}

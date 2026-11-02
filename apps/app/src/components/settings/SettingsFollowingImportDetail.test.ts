@@ -19,9 +19,9 @@ import type { SettingsFollowingImportDetailMutation } from './__generated__/Sett
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type Profile = {
-  displayName: string;
+  displayName: string | null;
   relativeHandle: string;
-  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' } | null;
   viewerState: { membership: { role: 'MEMBER' | 'OWNER' } | null } | null;
 };
 
