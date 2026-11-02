@@ -3795,11 +3795,11 @@ test(
     assert.deepEqual(hopeInputs, [
       {
         id: success.prepared.id,
-        hope: { algorithm: 'glaze', iterations: 562, intensity: 0.3 },
+        hope: { algorithm: 'glaze', iterations: 450, intensity: 0.3 },
       },
       {
         id: nightshadeFailure.prepared.id,
-        hope: { algorithm: 'glaze', iterations: 562, intensity: 0.3 },
+        hope: { algorithm: 'glaze', iterations: 450, intensity: 0.3 },
       },
     ]);
     assert.deepEqual(activityCalls, [

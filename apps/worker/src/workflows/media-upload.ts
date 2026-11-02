@@ -76,7 +76,7 @@ export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
       'applyHope',
       {
         id: prepared.id,
-        hope: { algorithm: 'glaze', iterations: 562, intensity: 0.3 },
+        hope: { algorithm: 'glaze', iterations: 450, intensity: 0.3 },
       },
       { scheduleToCloseTimeout: '25 hours' },
     );
