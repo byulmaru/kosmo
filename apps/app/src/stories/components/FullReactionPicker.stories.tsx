@@ -754,18 +754,29 @@ export const SequentialKeyboardBrowseContract: Story = {
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
-    scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
-    // Avoid formatting the whole virtualized list on each missing-role poll.
     await waitFor(
-      () => expect(within(scroll).queryByRole('button', { name: tailName })).not.toBeNull(),
+      () => {
+        expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+        scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
+        const scrollMetrics = `scrollTop=${scroll.scrollTop}, clientHeight=${scroll.clientHeight}, scrollHeight=${scroll.scrollHeight}`;
+        expect(scroll.scrollTop + scroll.clientHeight, scrollMetrics).toBeGreaterThanOrEqual(
+          scroll.scrollHeight - 1,
+        );
+
+        // Avoid formatting the whole virtualized list on each missing-role poll.
+        const tailOption = within(scroll).queryByRole('button', { name: tailName });
+        expect(tailOption, scrollMetrics).not.toBeNull();
+        const tailRect = tailOption!.getBoundingClientRect();
+        const scrollRect = scroll.getBoundingClientRect();
+        const viewportTop = scrollRect.top + scroll.clientTop;
+        const viewportBottom = viewportTop + scroll.clientHeight;
+        expect(tailRect.top < viewportBottom && tailRect.bottom > viewportTop, scrollMetrics).toBe(
+          true,
+        );
+      },
       { container: scroll },
     );
     const tailOption = within(scroll).getByRole('button', { name: tailName });
-    await waitFor(() => {
-      const tailRect = tailOption.getBoundingClientRect();
-      const scrollRect = scroll.getBoundingClientRect();
-      expect(tailRect.top < scrollRect.bottom && tailRect.bottom > scrollRect.top).toBe(true);
-    });
 
     tailOption.focus();
     expect(tailOption).toHaveFocus();
