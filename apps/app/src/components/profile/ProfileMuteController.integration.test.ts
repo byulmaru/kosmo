@@ -162,6 +162,47 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
   });
 
+  it('mute succeeds when the durable relation is returned with a viewerState projection error', async () => {
+    const { environment, ownerA, targetA } = createEnvironment({
+      loadOwnerAConnection: true,
+      loadOwnerBConnection: false,
+    });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    await renderController(environment);
+
+    const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
+    const pending = pendingRequests[0];
+    assert.ok(pending);
+    await respond(pending, {
+      data: {
+        muteProfile: {
+          profileMute: {
+            __typename: 'ProfileMute',
+            id: 'profile-mute:partial',
+            targetProfile: {
+              __typename: 'Profile',
+              id: targetA,
+              viewerState: null,
+            },
+          },
+        },
+      },
+      errors: [
+        {
+          message: 'viewerState projection failed',
+          path: ['muteProfile', 'profileMute', 'targetProfile', 'viewerState'],
+        },
+      ],
+    });
+    await request;
+
+    assert.equal(environment.check(homeOperation).status, 'stale');
+    assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), [
+      'profile-mute:partial',
+    ]);
+  });
+
   it('mute does not create an unloaded owner connection', async () => {
     const { environment, ownerA, targetA } = createEnvironment({
       loadOwnerAConnection: false,
@@ -243,6 +284,86 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     assert.equal(viewerStateMuteId(environment, targetB), 'profile-mute:b');
     assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerB)), [
       'profile-mute:b',
+    ]);
+  });
+
+  it('unmute succeeds when the exact deleted ID is returned with a viewerState projection error', async () => {
+    const relationId = 'profile-mute:partial';
+    const { environment, ownerA, targetA } = createEnvironment({
+      loadOwnerAConnection: true,
+      loadOwnerBConnection: false,
+      ownerARelationId: relationId,
+      targetARelationId: relationId,
+    });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    await renderController(environment);
+
+    const request = startChangeMuted(
+      { ownerProfileId: ownerA, profileMuteId: relationId, targetProfileId: targetA },
+      false,
+    );
+    const pending = pendingRequests[0];
+    assert.ok(pending);
+    await respond(pending, {
+      data: {
+        unmuteProfile: {
+          profileMuteId: relationId,
+          deletedProfileMuteId: relationId,
+          targetProfile: {
+            __typename: 'Profile',
+            id: targetA,
+            viewerState: null,
+          },
+        },
+      },
+      errors: [
+        {
+          message: 'viewerState projection failed',
+          path: ['unmuteProfile', 'targetProfile', 'viewerState'],
+        },
+      ],
+    });
+    await request;
+
+    assert.equal(environment.check(homeOperation).status, 'stale');
+    assert.equal(environment.getStore().getSource().get(relationId), null);
+    assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerA)), []);
+  });
+
+  it('null unmute acknowledgment preserves the successful no-op behavior and other-owner relation', async () => {
+    const relationId = 'profile-mute:other-owner';
+    const { environment, ownerA, ownerB, targetB } = createEnvironment({
+      loadOwnerAConnection: true,
+      loadOwnerBConnection: true,
+      ownerBRelationId: relationId,
+      targetBRelationId: relationId,
+    });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    await renderController(environment);
+
+    const request = startChangeMuted(
+      { ownerProfileId: ownerA, profileMuteId: relationId, targetProfileId: targetB },
+      false,
+    );
+    const pending = pendingRequests[0];
+    assert.ok(pending);
+    await respond(pending, {
+      data: {
+        unmuteProfile: {
+          profileMuteId: null,
+          deletedProfileMuteId: null,
+          targetProfile: null,
+        },
+      },
+    });
+    await request;
+
+    assert.equal(environment.check(homeOperation).status, 'stale');
+    assert.ok(environment.getStore().getSource().get(relationId));
+    assert.deepEqual(connectionNodeIds(environment, getProfileMuteConnectionId(ownerB)), [
+      relationId,
     ]);
   });
 

@@ -122,17 +122,19 @@ export function useProfileMuteMutations() {
           if (nextMuted) {
             commitMute({
               onCompleted: (response, errors) => {
-                const error = responseError(errors);
                 const profileMute = response?.muteProfile?.profileMute;
-                if (!error && profileMute) {
+                if (profileMute) {
                   invalidateHome();
                 }
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                if (error || !profileMute) {
-                  finish(error ?? new Error('Profile mute response did not confirm the relation.'));
+                if (!profileMute) {
+                  finish(
+                    responseError(errors) ??
+                      new Error('Profile mute response did not confirm the relation.'),
+                  );
                   return;
                 }
                 finish();
@@ -150,24 +152,20 @@ export function useProfileMuteMutations() {
             const profileMuteId = change.profileMuteId as string;
             commitUnmute({
               onCompleted: (response, errors) => {
-                const error = responseError(errors);
                 const responseProfileMuteId = response?.unmuteProfile?.profileMuteId;
-                if (
-                  !error &&
-                  (responseProfileMuteId === null || responseProfileMuteId === profileMuteId)
-                ) {
+                const acknowledged =
+                  responseProfileMuteId === profileMuteId || responseProfileMuteId === null;
+                if (acknowledged) {
                   invalidateHome();
                 }
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                if (
-                  error ||
-                  (responseProfileMuteId !== null && responseProfileMuteId !== profileMuteId)
-                ) {
+                if (!acknowledged) {
                   finish(
-                    error ?? new Error('Profile unmute response did not confirm the relation.'),
+                    responseError(errors) ??
+                      new Error('Profile unmute response did not confirm the relation.'),
                   );
                   return;
                 }
