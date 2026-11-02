@@ -16,7 +16,6 @@ import {
 import { useTheme, useThemeMode } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
-import { PostRequestPreviewProvider } from './post/PostRequestPreviewContext';
 import { ToastProvider, useToast } from './ui/ToastProvider';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren } from 'react';
@@ -70,11 +69,9 @@ export function AppProviders({
                     <FeatureFlagsProvider>
                       <AnalyticsSessionBridge />
                       <NativePushProvider>
-                        <PostRequestPreviewProvider>
-                          <PostContentWarningRevealProvider>
-                            {children}
-                          </PostContentWarningRevealProvider>
-                        </PostRequestPreviewProvider>
+                        <PostContentWarningRevealProvider>
+                          {children}
+                        </PostContentWarningRevealProvider>
                       </NativePushProvider>
                     </FeatureFlagsProvider>
                   </AccountCoachmarkBoundary>

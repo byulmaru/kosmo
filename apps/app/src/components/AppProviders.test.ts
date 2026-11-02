@@ -291,9 +291,6 @@ mockModule(new URL('../analytics/client.ts', import.meta.url), {
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
   PostContentWarningRevealProvider: ({ children }: PropsWithChildren) => children,
 });
-mockModule('@/components/media/imageUpload', {
-  releaseImagePreview: () => undefined,
-});
 mockModule('@/components/feedback/FeedbackOverlay', {
   FeedbackOverlay: () => null,
 });

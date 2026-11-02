@@ -29,7 +29,6 @@ import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/PostComposerIssueMediaUploadUrlMutation.graphql';
-import type { PostRequestPreview } from './PostRequestPreviewContext';
 
 type ComposerMediaItemFields = {
   readonly key: string;
@@ -54,7 +53,6 @@ export type PostComposerMediaValue = {
   }[];
   readonly requirePostRequestMediaReselection: (mediaId: string) => void;
   readonly sensitiveMedia: boolean;
-  readonly takePostRequestPreview: () => PostRequestPreview | undefined;
 };
 
 export type PostRequestMediaItem = Readonly<{
@@ -86,7 +84,6 @@ export const emptyPostComposerMediaValue: PostComposerMediaValue = {
   items: [],
   requirePostRequestMediaReselection: () => undefined,
   sensitiveMedia: false,
-  takePostRequestPreview: () => undefined,
 };
 
 const mediaActionEffectiveTargetSize = 48;
@@ -375,31 +372,12 @@ export function PostComposerMediaControls({
       );
     };
 
-    const takePostRequestPreview = (): PostRequestPreview | undefined => {
-      if (!mounted.current || mediaRef.current !== media) {
-        return undefined;
-      }
-
-      const item = mediaRef.current.find(
-        (candidate) =>
-          candidate.state === 'ready' && candidate.mediaId && !candidate.requiresReselection,
-      );
-      if (!item?.mediaId) {
-        return undefined;
-      }
-
-      // The accepted request takes ownership, so reset cleanup must skip this URI.
-      mediaRef.current = mediaRef.current.filter((candidate) => candidate.key !== item.key);
-      return { mediaId: item.mediaId, uri: item.asset.uri };
-    };
-
     onValueChange({
       getPostRequestMedia,
       hasPendingMedia: media.some((item) => item.state !== 'ready'),
       items,
       requirePostRequestMediaReselection,
       sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
-      takePostRequestPreview,
     });
   }, [media, onValueChange, sensitiveMedia]);
 

@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import { PostRequestCard } from '@/components/post/PostRequestCard';
-import { usePostRequestPreviewStore } from '@/components/post/PostRequestPreviewContext';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import { post, profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
@@ -23,7 +21,7 @@ const mediaUrl =
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#8b7dea"/></svg>',
   );
-const media: { __typename: 'Media'; altText: string; id: string; url: string | null } = {
+const media = {
   __typename: 'Media' as const,
   altText: '보라색 하늘',
   id: 'post-request-card-media',
@@ -34,7 +32,6 @@ function request({
   id,
   status,
   bodyText,
-  requestMedia = [media],
   contentWarning = null,
   sensitiveMedia = false,
   publishedPost = null,
@@ -42,7 +39,6 @@ function request({
   id: string;
   status: 'PROCESSING' | 'FAILED' | 'PUBLISHED';
   bodyText: string;
-  requestMedia?: Array<typeof media>;
   contentWarning?: string | null;
   sensitiveMedia?: boolean;
   publishedPost?: ReturnType<typeof post> | null;
@@ -53,7 +49,7 @@ function request({
     bodyText,
     contentWarning,
     id: `post-request-card-node-${id}`,
-    media: requestMedia,
+    media: [media],
     post: publishedPost,
     requestId: `post-request-card-${id}`,
     status,
@@ -61,11 +57,9 @@ function request({
   };
 }
 
-const processingMedia = { ...media, id: 'post-request-card-processing-media', url: null };
 const processing = request({
   bodyText: '빛이 천천히 번지는 저녁 하늘을 기록했어요.',
   id: 'processing',
-  requestMedia: [processingMedia],
   status: 'PROCESSING',
 });
 const failed = request({
@@ -121,16 +115,6 @@ function requireRequest(requests: ReturnType<typeof useStoryRequests>, requestNo
   return result;
 }
 
-function PostRequestPreviewSeed() {
-  const store = usePostRequestPreviewStore();
-
-  useEffect(() => {
-    store.set(processing.id, { mediaId: processingMedia.id, uri: mediaUrl });
-  }, [store]);
-
-  return null;
-}
-
 function PostRequestCardFixture({
   onCompose,
   requestNodeId = processing.id,
@@ -142,12 +126,9 @@ function PostRequestCardFixture({
   const selected = requireRequest(storyRequests, requestNodeId);
 
   return (
-    <>
-      {selected.id === processing.id ? <PostRequestPreviewSeed /> : null}
-      <Catalog>
-        <PostRequestCard onCompose={onCompose} request={selected.request} />
-      </Catalog>
-    </>
+    <Catalog>
+      <PostRequestCard onCompose={onCompose} request={selected.request} />
+    </Catalog>
   );
 }
 
@@ -155,23 +136,20 @@ function RepresentativeStatesCatalog({ onCompose }: { onCompose: () => void }) {
   const storyRequests = useStoryRequests();
 
   return (
-    <>
-      <PostRequestPreviewSeed />
-      <Catalog>
-        <Section title="Processing">
-          <PostRequestCard request={requireRequest(storyRequests, processing.id).request} />
-        </Section>
-        <Section title="Failed, available to compose">
-          <PostRequestCard
-            onCompose={onCompose}
-            request={requireRequest(storyRequests, failed.id).request}
-          />
-        </Section>
-        <Section title="Published">
-          <PostRequestCard request={requireRequest(storyRequests, published.id).request} />
-        </Section>
-      </Catalog>
-    </>
+    <Catalog>
+      <Section title="Processing">
+        <PostRequestCard request={requireRequest(storyRequests, processing.id).request} />
+      </Section>
+      <Section title="Failed, available to compose">
+        <PostRequestCard
+          onCompose={onCompose}
+          request={requireRequest(storyRequests, failed.id).request}
+        />
+      </Section>
+      <Section title="Published, sensitive media hidden">
+        <PostRequestCard request={requireRequest(storyRequests, published.id).request} />
+      </Section>
+    </Catalog>
   );
 }
 
