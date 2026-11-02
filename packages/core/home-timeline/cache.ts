@@ -203,8 +203,12 @@ export const fanoutHomeTimelinePost = async ({
 }: {
   readonly postId: string;
 }): Promise<void> => {
-  if ((await runRedisCommand((client) => client.ping())) === null) {
+  if (!process.env.REDIS_URL?.trim()) {
     return;
+  }
+
+  if ((await runRedisCommand((client) => client.ping())) === null) {
+    throw new Error('Redis unavailable while fanning out Home timeline post');
   }
 
   const viewerFollowsAuthor = exists(
@@ -263,7 +267,7 @@ export const fanoutHomeTimelinePost = async ({
       return transaction.exec();
     });
     if (result === null) {
-      return;
+      throw new Error('Redis unavailable while fanning out Home timeline post');
     }
   }
 };
