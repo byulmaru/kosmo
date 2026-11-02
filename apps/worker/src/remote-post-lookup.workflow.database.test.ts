@@ -327,6 +327,7 @@ test(
           }
           return createNotificationActivity(input);
         },
+        fanoutHomeTimelinePostActivity: async () => {},
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -858,6 +859,7 @@ test(
           };
         },
         createNotificationActivity: async () => {},
+        fanoutHomeTimelinePostActivity: async () => {},
         sendLocalPostCreateActivity: async () => {},
       },
       connection: environment.nativeConnection,

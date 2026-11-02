@@ -500,6 +500,7 @@ const committedPost = (input: PostCreateActivityInput): PostCreateActivityResult
 const postCreateEffectsActivities = {
   createNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => [],
+  fanoutHomeTimelinePostActivity: async () => {},
   sendLocalPostCreateActivity: async () => {},
 };
 
@@ -1844,6 +1845,7 @@ test(
       },
       createNotificationActivity: async () => {},
       createReplyNotificationActivity: async () => [],
+      fanoutHomeTimelinePostActivity: async () => {},
       sendLocalPostCreateActivity: async () => {
         effectsStarted.resolve();
         await releaseEffects.promise;

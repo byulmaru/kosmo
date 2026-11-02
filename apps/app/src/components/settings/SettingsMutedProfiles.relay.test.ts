@@ -358,7 +358,7 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
       });
     });
     rows = all('ProfileRow');
-    assert.equal(rows[0]?.props.avatarLabel, 'target');
+    assert.equal(rows[0]?.props.avatarLabel, '@updated');
     assert.equal(rows[1]?.props.avatarLabel, '같은 이름');
   });
 
@@ -368,8 +368,14 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
     await render(environment, onUnmuteSuccess);
     assert.equal(one('StateView').props.loading, true);
 
-    await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
+    const page = firstPage();
+    const inactiveTarget =
+      page.currentSession.selectedProfile.profileMutes.edges[0]!.node.targetProfile;
+    Object.assign(inactiveTarget, { avatar: null, displayName: null, viewerState: null });
+    await respond(latestRequest('SettingsMutedProfilesQuery'), page);
     assert.equal(all('ProfileRow').length, 1);
+    assert.equal(all('ProfileRow')[0]?.props.displayName, '@target');
+    assert.equal(button('뮤트 해제').props.accessibilityLabel, '@target 뮤트 해제');
     assert.equal(button('뮤트 해제').props.loading, false);
 
     await act(async () => button('뮤트 해제').props.onPress());

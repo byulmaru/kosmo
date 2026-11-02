@@ -2,6 +2,7 @@ import { and, DrizzleQueryError, eq, exists, sql } from 'drizzle-orm';
 import { first, getDatabaseConnection, ProfileFollows, Profiles, Sessions } from '../db';
 import { ProfileState } from '../enums';
 import { NotFoundError } from '../error';
+import { invalidateHomeTimelines } from '../home-timeline/cache';
 import type { Database } from '../db';
 
 const disableProfileOnce = (profileId: string, handle?: Database) =>
@@ -21,7 +22,7 @@ const disableProfileOnce = (profileId: string, handle?: Database) =>
         .then(first);
 
       if (existing?.state === ProfileState.DISABLED) {
-        return;
+        return false;
       }
 
       throw new NotFoundError('Profile not found');
@@ -70,11 +71,13 @@ const disableProfileOnce = (profileId: string, handle?: Database) =>
       .update(Sessions)
       .set({ activeProfileId: null })
       .where(eq(Sessions.activeProfileId, profileId));
+    return true;
   });
 
-export const disableProfile = async (profileId: string, handle?: Database) => {
+export const disableProfile = async (profileId: string, handle?: Database): Promise<void> => {
+  let disabled: boolean;
   try {
-    return await disableProfileOnce(profileId, handle);
+    disabled = await disableProfileOnce(profileId, handle);
   } catch (error) {
     const deadlock =
       error instanceof DrizzleQueryError &&
@@ -86,6 +89,12 @@ export const disableProfile = async (profileId: string, handle?: Database) => {
       throw error;
     }
 
-    return disableProfileOnce(profileId, handle);
+    disabled = await disableProfileOnce(profileId, handle);
+  }
+
+  if (disabled) {
+    void invalidateHomeTimelines().catch((error: unknown) => {
+      console.error('Profile disable Home timeline invalidation failed', { error, profileId });
+    });
   }
 };

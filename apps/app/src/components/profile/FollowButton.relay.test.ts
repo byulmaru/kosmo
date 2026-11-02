@@ -551,7 +551,7 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
     modal().props.onClose();
   });
   assert.equal(requests.length, 1);
-  assert.deepEqual(requests[0]!.variables, { id: blockId });
+  assert.deepEqual(requests[0]!.variables, { connections: [], id: blockId });
   assert.equal(confirmation().props.pending, true);
   assert.equal(modal().props.visible, true);
   assert.equal(modal().props.dismissDisabled, true);
@@ -586,6 +586,20 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 
   assert.equal(button().props.children, '차단 해제');
   assert.equal(button().props.disabled, false);
   assert.deepEqual(actorB.getStore().getSource().toJSON(), before);
+});
+
+test('FollowButton은 identity만 있는 비활성 Profile에서 관계 action을 숨긴다', async () => {
+  const restrictedProfile = createEnvironment();
+  restrictedProfile.commitUpdate((store) => {
+    const target = store.get(targetId);
+    assert.ok(target);
+    target.setValue(null, 'displayName');
+    target.setValue(null, 'followPolicy');
+    target.setValue(null, 'followersCount');
+    target.setValue(null, 'viewerState');
+  });
+  await render(restrictedProfile);
+  assert.equal(renderer!.root.findAll((node) => (node.type as unknown) === 'Button').length, 0);
 });
 
 test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {

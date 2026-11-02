@@ -534,31 +534,31 @@ enum PostVisibility {
 type Profile implements Node {
   avatar: Media
   bio: String
-  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
-  createdAt: DateTime!
-  displayName: String!
-  followPolicy: ProfileFollowPolicy!
-  followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection!
-  followersCount: Int!
-  following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection!
-  followingCount: Int!
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection
+  createdAt: DateTime
+  displayName: String
+  followPolicy: ProfileFollowPolicy
+  followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection
+  followersCount: Int
+  following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection
+  followingCount: Int
   handle: String!
-  hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection!
+  hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection
   header: Media
   id: ID!
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
-  instance: ProfileInstance!
+  instance: ProfileInstance
   migrationSource: Profile
-  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
+  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
-  pinnedPosts: [Post!]!
-  postRequests: [PostRequest!]!
-  posts(after: String, before: String, first: Int, last: Int): PostConnection!
+  pinnedPosts: [Post!]
+  postRequests: [PostRequest!]
+  posts(after: String, before: String, first: Int, last: Int): PostConnection
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
-  profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
+  profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection
   relativeHandle: String!
-  tags: [Hashtag!]!
+  tags: [Hashtag!]
   unreadNotificationCount: Int
   viewerState: ProfileViewerState
 }

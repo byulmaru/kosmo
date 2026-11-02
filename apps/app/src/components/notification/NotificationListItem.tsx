@@ -31,7 +31,6 @@ const notificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -149,15 +148,14 @@ export function MentionNotificationListItem({
 
 function actor(profile: {
   avatar?: { url: string | null | undefined } | null;
-  displayName: string;
-  handle: string;
+  displayName: string | null | undefined;
   id: string;
   relativeHandle: string;
 }) {
   return {
     avatarUrl: profile.avatar?.url,
     id: profile.id,
-    name: profile.displayName || profile.handle,
+    name: profile.displayName || profile.relativeHandle,
     profileHref: `/${profile.relativeHandle}`,
   };
 }
@@ -199,7 +197,6 @@ const followRequestNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -247,7 +244,6 @@ const reactionNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -391,7 +387,6 @@ const repostNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id

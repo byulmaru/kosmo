@@ -83,7 +83,7 @@ const PostComposerFragment = graphql`
       defaultPostVisibility
     }
     displayName
-    handle
+    relativeHandle
     avatar {
       id
       url
@@ -676,7 +676,7 @@ function PostComposerContents({
               ? [
                   {
                     avatar: candidate.avatar ? { url: candidate.avatar.url } : candidate.avatar,
-                    displayName: candidate.displayName,
+                    displayName: candidate.displayName ?? candidate.relativeHandle,
                     id: candidate.id,
                     relativeHandle: candidate.relativeHandle,
                   },
@@ -735,7 +735,7 @@ function PostComposerContents({
                       <>
                         <Avatar
                           imageUri={profile.avatar?.url}
-                          label={profile.displayName}
+                          label={profile.displayName ?? profile.relativeHandle}
                           size={40}
                         />
                         <ProfileNameBlock profile={profile} />

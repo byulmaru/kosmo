@@ -133,7 +133,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         ?.invalidateRecord();
     });
 
-  if (!viewerState || viewerState.isSelf) {
+  if (!viewerState || viewerState.isSelf !== false || !data.followPolicy) {
     return null;
   }
 
@@ -160,6 +160,10 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
     if (isFollowing) {
       const follower = viewerState.follow?.follower;
+      const followerCount = data.followersCount;
+      const followingCount = follower?.followingCount;
+      const canOptimisticallyUnfollow =
+        typeof followerCount === 'number' && typeof followingCount === 'number';
 
       commitUnfollow({
         ...callbacks,
@@ -173,31 +177,32 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
           }
           invalidateHome();
         },
-        optimisticResponse: follower
-          ? {
-              unfollowProfile: {
-                profileFollowId: null,
-                followeeProfile: {
-                  displayName: data.displayName,
-                  followPolicy: data.followPolicy,
-                  followersCount: Math.max(data.followersCount - 1, 0),
-                  handle: data.handle,
-                  id: data.id,
-                  relativeHandle: data.relativeHandle,
-                  viewerState: {
-                    follow: null,
-                    followRequest: null,
-                    isSelf: viewerState.isSelf,
-                    profileBlock: null,
+        optimisticResponse:
+          follower && canOptimisticallyUnfollow
+            ? {
+                unfollowProfile: {
+                  profileFollowId: null,
+                  followeeProfile: {
+                    displayName: data.displayName,
+                    followPolicy: data.followPolicy,
+                    followersCount: Math.max(followerCount - 1, 0),
+                    handle: data.handle,
+                    id: data.id,
+                    relativeHandle: data.relativeHandle,
+                    viewerState: {
+                      follow: null,
+                      followRequest: null,
+                      isSelf: viewerState.isSelf,
+                      profileBlock: null,
+                    },
+                  },
+                  followerProfile: {
+                    followingCount: Math.max(followingCount - 1, 0),
+                    id: follower.id,
                   },
                 },
-                followerProfile: {
-                  followingCount: Math.max(follower.followingCount - 1, 0),
-                  id: follower.id,
-                },
-              },
-            }
-          : undefined,
+              }
+            : undefined,
         variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {

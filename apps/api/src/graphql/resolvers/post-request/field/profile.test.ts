@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole } from '@kosmo/core/enums';
+import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
@@ -77,7 +77,7 @@ const accountContext = (
         },
       };
 
-type ProfileRow = { readonly id: string };
+type ProfileRow = { readonly id: string; readonly state: ProfileState };
 type ProfileSelectChain = {
   from: (...args: unknown[]) => ProfileSelectChain;
   innerJoin: (...args: unknown[]) => ProfileSelectChain;
@@ -88,7 +88,7 @@ const profileSelectChain = (): ProfileSelectChain => {
   let selectedRows: ProfileRow[] = [];
   const chain: ProfileSelectChain = {
     from: (table) => {
-      selectedRows = table === Profiles ? [{ id: profileId }] : [];
+      selectedRows = table === Profiles ? [{ id: profileId, state: ProfileState.ACTIVE }] : [];
       return chain;
     },
     innerJoin: () => chain,

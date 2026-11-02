@@ -1,4 +1,23 @@
 services:
+  redis:
+    image: redis:8.2.11-alpine3.22@sha256:489a769e0a54dc245896132a15c72d2bc7296719954da99398f43a3877e5f8eb
+    ports:
+      - '127.0.0.1:${KOSMO_TEST_REDIS_PORT:-63799}:6379'
+    command:
+      - redis-server
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 5s
+      retries: 15
   postgres:
     image: postgres:18.4-alpine
     ports:

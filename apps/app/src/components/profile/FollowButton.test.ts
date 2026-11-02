@@ -11,7 +11,7 @@ import type { ProfileListItem as ProfileListItemExport } from './ProfileListItem
 
 const platform = { OS: 'web' };
 let renderer: ReactTestRenderer | null = null;
-const mutationCalls: Array<{ id: string }> = [];
+const mutationCalls: Array<{ connections?: string[]; id: string }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const relayEnvironment = { commitUpdate: () => undefined };
 let mutationError: Error | null = null;
@@ -50,7 +50,7 @@ mockModule('react-relay', {
     (options: {
       onCompleted: (response: Record<string, unknown>) => void;
       onError: (error: Error) => void;
-      variables: { id: string };
+      variables: { connections?: string[]; id: string };
     }) => {
       mutationCalls.push(options.variables);
       if (mutationError) {
@@ -142,7 +142,7 @@ test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사
   assert.equal(confirmation?.props.confirmLabel, '차단 해제');
 
   await act(async () => confirmation?.props.onConfirm());
-  assert.deepEqual(mutationCalls[0], { id: 'profile-block-a' });
+  assert.deepEqual(mutationCalls[0], { connections: [], id: 'profile-block-a' });
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
   await act(async () =>
     renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet').props.onDismiss(),
@@ -217,7 +217,7 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
   assert.equal(confirmation?.props.tone, 'danger');
 
   await act(async () => confirmation?.props.onConfirm());
-  assert.deepEqual(mutationCalls, [{ id: 'profile-block-a' }]);
+  assert.deepEqual(mutationCalls, [{ connections: [], id: 'profile-block-a' }]);
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
   await act(async () => modal?.props.onDismiss());
 });
@@ -274,7 +274,7 @@ test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', as
       .find((node) => (node.type as unknown) === 'ConfirmationContent')
       .props.onConfirm(),
   );
-  assert.deepEqual(mutationCalls[0], { id: 'profile-block-list' });
+  assert.deepEqual(mutationCalls[0], { connections: [], id: 'profile-block-list' });
 });
 
 test('FollowButton은 높이를 공용 Button에 위임하고 96px 관계 action 폭을 사용한다', async () => {

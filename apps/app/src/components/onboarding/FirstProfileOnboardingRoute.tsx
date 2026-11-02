@@ -220,7 +220,7 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
     selectedProfileId &&
     (selectedProfileId !== flow.createdProfile.id ||
       selected?.id !== flow.createdProfile.id ||
-      selected.instance.kind !== 'LOCAL' ||
+      selected.instance?.kind !== 'LOCAL' ||
       selected.viewerState?.membership?.role !== 'OWNER')
   ) {
     return (
@@ -235,16 +235,20 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
   }
   const visibility = profile?.private?.defaultPostVisibility;
   const followPolicy = profile?.followPolicy;
+  const displayName = profile?.displayName;
+  const tags = profile?.tags;
   const summary =
     profile &&
+    displayName != null &&
+    tags != null &&
     (visibility === 'PUBLIC' || visibility === 'UNLISTED' || visibility === 'FOLLOWERS') &&
     (followPolicy === 'OPEN' || followPolicy === 'APPROVAL_REQUIRED')
       ? {
           draft: {
             handle: profile.handle,
-            displayName: profile.displayName,
+            displayName,
             bio: profile.bio ?? '',
-            tags: profile.tags.map((tag) => tag.name),
+            tags: tags.map((tag) => tag.name),
             tagInput: '',
             defaultPostVisibility: visibility,
             followPolicy,

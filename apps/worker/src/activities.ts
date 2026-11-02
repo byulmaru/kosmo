@@ -68,6 +68,10 @@ export {
   prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
 export {
+  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
+  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
+} from '@kosmo/core/home-timeline/cache';
+export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
   loadPendingFollowRequestId as loadPendingFollowRequestIdActivity,

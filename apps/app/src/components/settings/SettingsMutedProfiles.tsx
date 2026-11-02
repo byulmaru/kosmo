@@ -71,7 +71,8 @@ function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: (
     SettingsMutedProfilesNextPageQuery,
     SettingsMutedProfiles_profile$key
   >(SettingsMutedProfilesFragment, profile ?? null);
-  const edges = pagination.data?.profileMutes.edges ?? [];
+  const profileMutes = pagination.data?.profileMutes;
+  const edges = profileMutes?.edges ?? [];
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
     hasNext: pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
@@ -80,7 +81,7 @@ function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: (
     pageSize: 20,
   });
   usePaginationScrollRegistration(nativeScrollProps);
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (!profile || profile.instance?.kind !== 'LOCAL' || !profileMutes) {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
@@ -107,6 +108,7 @@ function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: (
               onUnmuteSuccess?.();
             }
           }}
+          profileMuteId={edge.node.id}
           profile={edge.node.targetProfile}
           surface="button"
         />

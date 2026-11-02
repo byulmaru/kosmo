@@ -244,6 +244,7 @@ mockModule('react-relay', {
       profileByHandle: profileAvailable
         ? {
             displayName: profileDisplayName ?? `Display ${variables.handle}`,
+            followPolicy: 'OPEN',
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
@@ -835,10 +836,10 @@ describe('profile route parameter lifecycle', () => {
     profileDisplayName = '';
 
     await renderRoute('@local', '/@local/followers');
-    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로워');
+    assert.equal(requireRendered('PageHeader').props.title, '@local님의 팔로워');
 
     await renderRoute('@local', '/@local/following');
-    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로잉');
+    assert.equal(requireRendered('PageHeader').props.title, '@local님의 팔로잉');
   });
 
   it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {

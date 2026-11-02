@@ -28,6 +28,7 @@ let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
 let muteHeadingFocusCalls = 0;
+let blockedHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
@@ -300,6 +301,7 @@ afterEach(async () => {
   otaDownloadError = null;
   publicChannel = 'prod';
   muteHeadingFocusCalls = 0;
+  blockedHeadingFocusCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -529,12 +531,15 @@ describe('Settings routes', () => {
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
-  it('mobile Web blocked profile은 별도 heading focus 계약 없이 목록을 표시한다', async () => {
+  it('mobile Web blocked profile 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
     width = 390;
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
     assert.equal(rendered('PageHeader').length, 0);
-    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
+    const list = rendered('SettingsBlockedProfiles')[0];
+    assert.ok(list);
+    await act(async () => list.props.onUnblockSuccess());
+    assert.equal(blockedHeadingFocusCalls, 1);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
@@ -969,7 +974,9 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
       createNodeMock: ({ props }) =>
         (props as { testID?: string }).testID === 'mute-heading-focus'
           ? { focus: () => (muteHeadingFocusCalls += 1) }
-          : null,
+          : (props as { testID?: string }).testID === 'blocked-heading-focus'
+            ? { focus: () => (blockedHeadingFocusCalls += 1) }
+            : null,
     });
   });
   assert.ok(renderer);

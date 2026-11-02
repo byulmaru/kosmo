@@ -9,7 +9,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 type Profile = {
   id: string;
-  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' } | null;
   migrationSource?: unknown;
   viewerState: { membership: { role: 'MEMBER' | 'OWNER' } | null } | null;
 };
