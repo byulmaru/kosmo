@@ -1,6 +1,14 @@
 import { Redirect } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
-import { startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
@@ -236,22 +244,26 @@ function HomeContentView({
   const selectedProfileId = selectedProfile?.id ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
   const postRequestFetchKey = `${fetchKey}:${refreshing}`;
-  const postRequestCards =
-    accountId !== null && selectedProfileId !== null ? (
-      <ErrorBoundary
-        key={`${accountId}:${selectedProfileId}`}
-        fallback={null}
-        resetKeys={[postRequestFetchKey]}
-      >
-        <Suspense fallback={null}>
-          <PostRequestListSummary
-            fetchKey={postRequestFetchKey}
-            onCompose={shellChrome?.openComposer}
-            profileId={selectedProfileId}
-          />
-        </Suspense>
-      </ErrorBoundary>
-    ) : null;
+  const openComposer = shellChrome?.openComposer;
+  const postRequestCards = useMemo(
+    () =>
+      accountId !== null && selectedProfileId !== null ? (
+        <ErrorBoundary
+          key={`${accountId}:${selectedProfileId}`}
+          fallback={null}
+          resetKeys={[postRequestFetchKey]}
+        >
+          <Suspense fallback={null}>
+            <PostRequestListSummary
+              fetchKey={postRequestFetchKey}
+              onCompose={openComposer}
+              profileId={selectedProfileId}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      ) : null,
+    [accountId, openComposer, postRequestFetchKey, selectedProfileId],
+  );
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {
     return <Redirect href="/first-profile/handle" />;

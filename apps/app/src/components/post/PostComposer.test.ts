@@ -668,6 +668,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
       const call = mutationCalls[0];
       assert.ok(call);
       assert.equal(call.variables.input.actorProfileId, profileA.id);
+      assert.equal(call.variables.input.sensitiveMedia, true);
       const requestId = serverGeneratedRequestId(0);
       const variables = call.variables as PostComposerCreatePostMutation['variables'];
       const mutationOperation = createOperationDescriptor(
@@ -766,7 +767,6 @@ describe('PostComposer request acknowledgement cache projection', () => {
 
       const requestRecord = environment.getStore().getSource().get(requestNodeId);
       assert.equal(requestRecord?.bodyText, '접수된 본문');
-      assert.equal(requestRecord?.sensitiveMedia, true);
       assert.equal(requestRecord?.status, status);
       assert.equal(requestRecord?.draft, undefined);
 

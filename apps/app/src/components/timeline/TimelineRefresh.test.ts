@@ -227,7 +227,13 @@ describe('Timeline refresh', () => {
 
     assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
     assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
-    assert.equal(renderer?.root.findByType('TimelineRows' as never).children.length, 0);
+    // Count emitted host UI; `children` also includes the hidden ErrorBoundary composite.
+    assert.equal(
+      renderer?.root
+        .findByType('TimelineRows' as never)
+        .findAll((node) => typeof node.type === 'string').length,
+      1,
+    );
   });
 
   it('hides a Home request query error and restores cards after Home refresh', async () => {
@@ -239,7 +245,13 @@ describe('Timeline refresh', () => {
 
     assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
     assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
-    assert.equal(renderer?.root.findByType('TimelineRows' as never).children.length, 0);
+    // Count emitted host UI; `children` also includes the hidden ErrorBoundary composite.
+    assert.equal(
+      renderer?.root
+        .findByType('TimelineRows' as never)
+        .findAll((node) => typeof node.type === 'string').length,
+      1,
+    );
 
     postRequestSummaryMode = 'ready';
     await act(async () => {
