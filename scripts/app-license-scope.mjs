@@ -582,6 +582,7 @@ export function collectDistributionPackageKeys(root = workspaceRoot) {
           exportDir,
           '--source-maps=external',
           '--dump-assetmap',
+          '--no-bytecode',
           '--clear',
         ],
         {

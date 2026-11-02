@@ -30,7 +30,7 @@ pnpm --filter @kosmo/app licenses:verify
 pnpm --filter @kosmo/app licenses:check
 ```
 
-`licenses:generate` runs Relay, performs fresh production exports, and writes the exact union. `licenses:verify` repeats scope collection and checks the exact package set, full notice records, and source checksum without writing. `licenses:check` performs no exports or installs; it checks the committed artifact and its selected records against installed production metadata. The app `check` runs that light check, Relay, `licenses:verify`, then TypeScript. Install-time `prepare` does not run exports.
+`licenses:generate` runs Relay, performs fresh production exports with `--no-bytecode`, and writes the exact union. These temporary exports retain the source and asset maps used for package collection; they are analysis inputs, not release artifacts. `licenses:verify` repeats scope collection and checks the exact package set, full notice records, and source checksum without writing. `licenses:check` performs no exports or installs; it checks the committed artifact and its selected records against installed production metadata. The app `check` runs that light check, Relay, `licenses:verify`, then TypeScript. Install-time `prepare` does not run exports.
 
 ## Audit boundary
 
