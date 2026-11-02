@@ -225,9 +225,9 @@ describe('Timeline refresh', () => {
       renderer = create(homeWithWebPush('unsupported'));
     });
 
-    assert.equal(renderer?.root.findAllByType('TimelineRows').length, 1);
-    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 0);
-    assert.equal(renderer?.root.findByType('TimelineRows').children.length, 0);
+    assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
+    assert.equal(renderer?.root.findByType('TimelineRows' as never).children.length, 0);
   });
 
   it('hides a Home request query error and restores cards after Home refresh', async () => {
@@ -237,20 +237,20 @@ describe('Timeline refresh', () => {
       renderer = create(homeWithWebPush('unsupported'));
     });
 
-    assert.equal(renderer?.root.findAllByType('TimelineRows').length, 1);
-    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 0);
-    assert.equal(renderer?.root.findByType('TimelineRows').children.length, 0);
+    assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
+    assert.equal(renderer?.root.findByType('TimelineRows' as never).children.length, 0);
 
     postRequestSummaryMode = 'ready';
     await act(async () => {
-      renderer?.root.findByType('TimelineRows').props.onRefresh();
+      renderer?.root.findByType('TimelineRows' as never).props.onRefresh();
     });
 
     assert.equal(homeRequests.length, 1);
-    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
 
     await act(async () => homeRequests[0]?.complete?.());
-    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
   });
 
   it('places the eligible Web permission banner before Home posts', async () => {
