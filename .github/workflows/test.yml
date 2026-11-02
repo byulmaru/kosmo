@@ -53,14 +53,14 @@ jobs:
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
               test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404
           - name: Core
-            command: pnpm --filter @kosmo/core test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/core test
             database: true
             redis: true
           - name: Fedify
-            command: pnpm --filter @kosmo/fedify test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/fedify test
             database: true
           - name: API
-            command: pnpm --filter @kosmo/api test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/api test
             database: true
             redis: true
           - name: App
@@ -69,7 +69,7 @@ jobs:
           - name: Web
             command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit
           - name: Worker
-            command: pnpm --filter @kosmo/worker test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/worker test
             database: true
             redis: true
     steps:
@@ -147,6 +147,8 @@ jobs:
           # Keep the derived service ports below Linux's default ephemeral range.
           - shard: 3
             port_offset: 25000
+          - shard: 4
+            port_offset: 26000
     env:
       DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/kosmo_test_web_e2e_shard_${{ matrix.shard }}
       KOSMO_TEST_PORT_OFFSET: ${{ matrix.port_offset }}

@@ -19,10 +19,10 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporalio/nexus';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { operation, service, serviceHandler } from 'nexus-rpc';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
+import { createMediaUploadTestEndpoint } from './temporal-test-media-endpoint.js';
 import {
   MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL,
   MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL,
@@ -151,9 +151,7 @@ test(
   'Remote Featured Workflow uses lookup children, shares the byte budget, and preserves pins on failure',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     const workerCleanup: { worker?: Worker; run?: Promise<void> } = {};
     t.after(async () => {
       try {
@@ -296,7 +294,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     workerCleanup.worker = worker;
     workerCleanup.run = worker.run();
@@ -433,9 +431,7 @@ test(
   'Remote Featured Workflow replays the pre-patch collection and replacement trace',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-replay-${process.pid}`;
     const profileId = '00000000-0000-8000-8000-000000000221';
@@ -500,9 +496,7 @@ test(
   'Reaction Effects Workflow의 origin 분기와 sibling Activity 격리를 검증한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-reaction-effects-test-${process.pid}`;
     const calls: ActivityCall[] = [];
@@ -529,7 +523,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const executeCreate = (input: ReactionCreateEffectsInput) =>
@@ -629,9 +623,7 @@ test(
   'Post Delete Workflows settle notification cleanup and protocol effects for both origins',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-effects-${process.pid}`;
     const calls: string[] = [];
@@ -676,7 +668,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const start = (workflow: string, postId: string, origin: 'LOCAL' | 'ACTIVITYPUB') =>
       environment.client.workflow.start(workflow, {
@@ -805,9 +797,7 @@ test(
   'Post Delete Workflows replay their pre-cleanup Activity command traces',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-delete-replay-${process.pid}`;
     const calls: string[] = [];
@@ -874,9 +864,7 @@ test(
   'Post Create Effects Workflow는 공통 Notification Activity로 Reply, Quote, Mention을 실행한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
     const localPostId = '00000000-0000-8000-8000-000000000301';
@@ -916,7 +904,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1020,9 +1008,7 @@ test(
   'Post Create Effects Workflow는 Quote 도입 전 Local·Remote history를 재생한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-replay-${process.pid}`;
     const worker = await Worker.create({
@@ -1057,9 +1043,7 @@ test(
   'Post Repost Effects Workflow는 공통 Notification Activity를 실행한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-repost-effects-${process.pid}`;
     const postId = '00000000-0000-8000-8000-000000000401';
@@ -1075,7 +1059,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1106,9 +1090,7 @@ test(
   'Pre-push Reaction, Repost, Follow CREATE history는 이전 Activity 이름으로 재생된다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-notification-legacy-replay-${process.pid}`;
     const pair = {
@@ -1229,9 +1211,7 @@ test(
   'Push delivery는 per-installation Activity를 재시도하고 확인된 형제 send를 다시 호출하지 않는다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-push-delivery-retry-${process.pid}`;
     const notificationId = '00000000-0000-8000-8000-000000000311';
@@ -1254,7 +1234,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1276,9 +1256,7 @@ test(
   'Notification child start is detached and a stable completed ID cannot reopen',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-push-detached-${process.pid}`;
     const notificationId = '00000000-0000-8000-8000-000000000312';
@@ -1329,7 +1307,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1377,9 +1355,7 @@ test(
   'Profile Update Effects Workflow는 production registry에서 stable input으로 Activity를 재시도한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-profile-update-test-${process.pid}`;
     const profileId = '00000000-0000-8000-8000-000000000201';
@@ -1400,7 +1376,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1423,9 +1399,7 @@ test(
   'Pair Follow Update는 pending request ID를 history에 보존하고 effects보다 먼저 반환한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-early-' + process.pid;
@@ -1513,7 +1487,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1567,9 +1541,7 @@ test(
   'Pair Follow transaction Activity retry는 effects를 중복하지 않고 ESTABLISHED로 수렴한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-completion-loss-' + process.pid;
@@ -1623,7 +1595,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1670,9 +1642,7 @@ test(
   'Inbound Follow Accept는 같은 request generation의 최신 envelope를 쓰고 누락 시 fallback에 넘긴다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-accept-envelope-' + process.pid;
@@ -1760,7 +1730,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -1903,9 +1873,7 @@ test(
   'Open/Pending/Approve 이전 Profile Follow history를 현재 Workflow bundle로 replay한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-replay-' + process.pid;
@@ -2142,9 +2110,7 @@ test(
   'Pending pair는 effect failure와 terminal NOOP 뒤 같은 명령을 재실행한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-pending-' + process.pid;
@@ -2238,7 +2204,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2301,9 +2267,7 @@ test(
   'Pair Workflow의 terminal transaction Activity non-retryable failure는 PENDING 대기를 닫는다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-terminal-failure-' + process.pid;
@@ -2339,7 +2303,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2389,9 +2353,7 @@ test(
   'Pair Workflow의 terminal transaction Activity retry exhaustion은 PENDING Workflow를 닫는다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-retry-exhaustion-' + process.pid;
@@ -2430,7 +2392,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2480,9 +2442,7 @@ test(
   'Pair Workflow의 INITIAL orphan guard는 Update 없는 직접 시작을 닫는다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-orphan-' + process.pid;
     const pair = {
@@ -2500,7 +2460,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2518,9 +2478,7 @@ test(
   'Follow Workflow Update validator는 malformed wire input을 Activity 전에 거부한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-validation-' + process.pid;
     const pair = {
@@ -2555,7 +2513,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2661,9 +2619,7 @@ test(
   'Separate removal Workflow는 exact source를 검증하고 commit retry 뒤 effects를 한 번 drain한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-' + process.pid;
     const pair = {
@@ -2740,7 +2696,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2819,9 +2775,7 @@ test(
   'Separate removal Workflow는 transaction Activity retry exhaustion을 Update와 Workflow 실패로 남긴다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-failure-' + process.pid;
     const pair = {
@@ -2857,7 +2811,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2899,9 +2853,7 @@ test(
   'Notification Cleanup Workflow는 cleanup Activity를 한 번만 호출한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-test-${process.pid}`;
     let activityCalls = 0;
@@ -2914,7 +2866,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2933,9 +2885,7 @@ test(
   'Database Counts Snapshot Workflow는 같은 스냅샷과 run ID로 capture를 재시도하고 dev 결과는 건너뛴다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-database-counts-test-${process.pid}`;
     const snapshot: DatabaseCountsSnapshot = {
@@ -2970,7 +2920,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3003,9 +2953,7 @@ test(
   'Account deletion Workflow는 accountId를 transaction Activity에 전달하고 결과를 반환한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-account-deletion-test-${process.pid}`;
     const eligibleAccountId = '00000000-0000-8000-8000-000000000901';
@@ -3021,7 +2969,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3051,9 +2999,7 @@ test(
   'Profile Block Update는 effect 실패 시 accepted duplicate handler 완료까지 Workflow를 유지한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-profile-block-success-' + process.pid;
@@ -3123,7 +3069,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3236,9 +3182,7 @@ test(
   'Profile Unblock Workflow passes only the exact Profile Block row ID and preserves a stale replacement',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-exact-' + process.pid;
@@ -3269,7 +3213,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3305,9 +3249,7 @@ test(
   'Profile Unblock Update는 committed result를 반환하고 Undo effect 실패는 Workflow 실패로 남긴다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-effect-failure-' + process.pid;
@@ -3339,7 +3281,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3369,9 +3311,7 @@ test(
   'Profile Migration Move Workflow는 준비 후 이전하고 Continue-As-New에서 준비 결과를 재사용한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = KOSMO_TASK_QUEUE + '-profile-migration-' + process.pid;
     const sourceProfileId = '00000000-0000-8000-8000-000000000701';
@@ -3451,7 +3391,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3519,9 +3459,7 @@ test(
   'Operational Notification Workflow는 수신자를 한 번 캡처하고 다음 페이지에서 이어서 처리한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const sendId = '00000000-0000-4000-8000-000000000101';
@@ -3557,7 +3495,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -3645,14 +3583,36 @@ test(
   'Media Upload Workflow는 선택한 Nightshade를 await한 뒤 publish하고 원격 결과로 finalize한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
+    const environment = await createTestWorkflowEnvironment();
+    let endpointCleanup = () => Promise.resolve();
+    t.after(async () => {
+      const failures: unknown[] = [];
+      try {
+        await endpointCleanup();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await environment.teardown();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) {
+        throw failures[0];
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(failures, 'Media Upload Workflow test cleanup failed.');
+      }
     });
-    t.after(() => environment.teardown());
 
     const callerTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-caller-${process.pid}`;
     const nexusTaskQueue = `${KOSMO_TASK_QUEUE}-media-upload-nexus-${process.pid}`;
-    const nexusEndpoint = await environment.createNexusEndpoint('media-upload', nexusTaskQueue);
+    const nexusEndpoint = await createMediaUploadTestEndpoint(
+      environment,
+      nexusTaskQueue,
+      t.signal,
+    );
+    endpointCleanup = nexusEndpoint.dispose;
     const createUpload = (
       contentType: NexusMediaUploadStartInput['contentType'],
       shouldFail = false,
@@ -3793,7 +3753,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue: callerTaskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const nexusWorkerRun = nexusWorker.run();
@@ -3908,7 +3868,7 @@ test(
     } finally {
       nexusWorker.shutdown();
       await nexusWorkerRun;
-      await environment.deleteNexusEndpoint(nexusEndpoint);
+      await nexusEndpoint.dispose();
     }
 
     assert.deepEqual(

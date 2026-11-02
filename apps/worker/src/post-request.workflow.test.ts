@@ -22,15 +22,14 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporalio/nexus';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { operation, service, serviceHandler } from 'nexus-rpc';
 import { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 import { getPostRequestMediaStateActivity } from './activities/post-request';
 import { mediaUploadServiceHandler } from './nexus/media-upload';
-import { temporalTestExecutable } from './temporal-test-executable.js';
-import { POST_REQUEST_TEST_SEARCH_ATTRIBUTES } from './temporal-test-search-attributes.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
+import { createMediaUploadTestEndpoint } from './temporal-test-media-endpoint.js';
 import {
   MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_CANCEL_SIGNAL,
   MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_FINISH_SIGNAL,
@@ -46,11 +45,11 @@ import type {
   PostCreateActivityResult,
 } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState, PostRequestWorkflowArgs } from '@kosmo/core/temporal/post-request';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type { SQL } from 'drizzle-orm';
 import type * as activities from './activities';
 import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 const mediaUploadNexusWorkflowPath = new URL(
   './test-fixtures/media-upload-nexus-operation.ts',
@@ -126,7 +125,7 @@ const createWorker = (
     connection: environment.nativeConnection,
     namespace: environment.namespace,
     taskQueue,
-    workflowsPath,
+    ...testWorkflowSource,
     ...options,
   });
 
@@ -165,14 +164,21 @@ const registerTestCleanup = (
   environment: TestWorkflowEnvironment,
   releaseGates: readonly (() => void)[] = [],
   workers: RunningTestWorker[] = [],
+  resourceCleanups: readonly (() => Promise<void>)[] = [],
 ): void => {
   t.after(async () => {
     releaseGates.forEach((release) => release());
     const failures: unknown[] = [];
     const stopResults = await Promise.allSettled([stopWorkers(workers)]);
+    const resourceCleanupResults = await Promise.allSettled(
+      resourceCleanups.map((cleanup) => cleanup()),
+    );
     const teardownResults = await Promise.allSettled([environment.teardown()]);
     failures.push(
       ...stopResults.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
+      ...resourceCleanupResults.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      ),
       ...teardownResults.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
     );
     if (failures.length > 0) {
@@ -351,10 +357,23 @@ const createMediaUploadTestNexusWorker = async (
   return { worker, workerRun };
 };
 
-const createMediaUploadNexusEndpoints = async (environment: TestWorkflowEnvironment) => {
+const createMediaUploadNexusEndpoints = async (
+  environment: TestWorkflowEnvironment,
+  signal: AbortSignal,
+  resourceCleanups: Array<() => Promise<void>>,
+) => {
   const remoteTaskQueue = `post-request-remote-media-${process.pid}-${randomUUID()}`;
-  await environment.createNexusEndpoint(`${environment.namespace}-media-upload`, KOSMO_TASK_QUEUE);
-  await environment.createNexusEndpoint('media-upload', remoteTaskQueue);
+  const namespaceEndpoint = await environment.createNexusEndpoint(
+    `${environment.namespace}-media-upload`,
+    KOSMO_TASK_QUEUE,
+  );
+  resourceCleanups.push(() => environment.deleteNexusEndpoint(namespaceEndpoint));
+  const mediaUploadEndpoint = await createMediaUploadTestEndpoint(
+    environment,
+    remoteTaskQueue,
+    signal,
+  );
+  resourceCleanups.push(mediaUploadEndpoint.dispose);
   return remoteTaskQueue;
 };
 
@@ -485,14 +504,7 @@ const postCreateEffectsActivities = {
   sendLocalPostCreateActivity: async () => {},
 };
 
-const createPostRequestTestEnvironment = () =>
-  TestWorkflowEnvironment.createLocal({
-    server: {
-      executable: temporalTestExecutable,
-      namespace: 'default',
-      searchAttributes: [...POST_REQUEST_TEST_SEARCH_ATTRIBUTES],
-    },
-  });
+const createPostRequestTestEnvironment = () => createTestWorkflowEnvironment();
 
 const createMockMediaUploadActivities = (
   mediaRows: Map<string, PostRequestMediaRow>,
@@ -527,11 +539,16 @@ const createParallelMediaUploadHarness = async (
   },
 ) => {
   const remoteWorkers: RunningTestWorker[] = [];
-  registerTestCleanup(t, environment, options.releaseGates, remoteWorkers);
+  const resourceCleanups: Array<() => Promise<void>> = [];
+  registerTestCleanup(t, environment, options.releaseGates, remoteWorkers, resourceCleanups);
   mockPostRequestMediaDatabase(t, mediaRows);
 
   const startedUploadIds: string[] = [];
-  const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+  const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+    environment,
+    t.signal,
+    resourceCleanups,
+  );
   remoteWorkers.push(
     await createMediaUploadTestNexusWorker(environment, remoteTaskQueue, [], {
       beforePublish: options.beforePublish,
@@ -566,7 +583,14 @@ test(
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -602,7 +626,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -1063,7 +1091,14 @@ test(
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -1082,7 +1117,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -1355,7 +1394,14 @@ test(
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -1374,7 +1420,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -1480,7 +1530,8 @@ test(
   async (t) => {
     const environment = await createPostRequestTestEnvironment();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(t, environment, [], remoteWorkers, resourceCleanups);
 
     const mediaIdA = randomUUID();
     const mediaIdB = randomUUID();
@@ -1529,7 +1580,11 @@ test(
     mockPostRequestMediaDatabase(t, mediaRows);
 
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
