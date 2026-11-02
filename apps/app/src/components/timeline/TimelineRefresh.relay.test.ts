@@ -359,7 +359,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
-        children: createElement(HomeTimelineScreen),
+        children: timelineScreenWithPushContext('Home'),
       });
 
     await act(async () => {

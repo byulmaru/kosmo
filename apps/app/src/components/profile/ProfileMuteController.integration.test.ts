@@ -14,10 +14,10 @@ import {
   ROOT_ID,
   Store,
 } from 'relay-runtime';
-import MuteMutation from './__generated__/ProfileMuteControllerMuteMutation.graphql';
-import UnmuteMutation from './__generated__/ProfileMuteControllerUnmuteMutation.graphql';
 import HomeConnectionQuery from '../post/__generated__/PostListHomeNextPageQuery.graphql';
 import LocalConnectionQuery from '../post/__generated__/PostListLocalNextPageQuery.graphql';
+import MuteMutation from './__generated__/ProfileMuteControllerMuteMutation.graphql';
+import UnmuteMutation from './__generated__/ProfileMuteControllerUnmuteMutation.graphql';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';

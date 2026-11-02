@@ -13,12 +13,12 @@ import {
   ROOT_ID,
   Store,
 } from 'relay-runtime';
+import homeQuery from '../timeline/__generated__/HomePageQuery.graphql';
+import localQuery from '../timeline/__generated__/LocalPageQuery.graphql';
 import followFragment from './__generated__/FollowButton_profile.graphql';
 import cancelMutation from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import followMutation from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import unfollowMutation from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
-import homeQuery from '../timeline/__generated__/HomePageQuery.graphql';
-import localQuery from '../timeline/__generated__/LocalPageQuery.graphql';
 import profileFragment from './__generated__/ProfileBlockAction_profile.graphql';
 import blockFragment from './__generated__/ProfileBlockAction_profileBlock.graphql';
 import blockMutation from './__generated__/ProfileBlockActionBlockMutation.graphql';

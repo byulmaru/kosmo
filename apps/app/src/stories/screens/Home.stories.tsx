@@ -372,19 +372,18 @@ export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   render: () => <HomeRefreshStory />,
 };
 
-export const CachedMountRevalidationFailureKeepsTimeline: Story = {
+export const CachedMountReusesTimelineWithoutRequest: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('캐시된 홈 게시글')).resolves.toBeVisible();
 
-    const refreshToast = await body.findByText('홈을 새로 불러오지 못했어요.');
-    await waitFor(() => expect(refreshToast).toBeVisible());
+    expect(body.queryByText('홈을 새로 불러오지 못했어요.')).not.toBeInTheDocument();
     expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
     expect(canvas.queryByText('홈을 불러오는 중입니다.')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent('1');
+    expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent('0');
   },
   render: () => <CachedHomeAutoRevalidationStory />,
 };
