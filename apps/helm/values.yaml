@@ -30,6 +30,19 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 migration:
   enabled: false
+redis:
+  enabled: false
+  image: redis:8.2.11-alpine3.22
+  digest: sha256:489a769e0a54dc245896132a15c72d2bc7296719954da99398f43a3877e5f8eb
+  maxmemory: 128mb
+  maxmemoryPolicy: allkeys-lru
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
 fedify:
   consumer:
     replicas:

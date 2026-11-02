@@ -13,6 +13,8 @@ jobs:
     name: Test (${{ matrix.name }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
+    env:
+      KOSMO_TEST_REDIS_URL: ${{ matrix.redis && 'redis://127.0.0.1:63799' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -26,9 +28,14 @@ jobs:
               set -euo pipefail
               helm lint apps/helm --set env=dev
               helm template kosmo apps/helm --namespace kosmo-dev --set env=dev >/dev/null
+              helm lint apps/helm --set env=dev --set redis.enabled=true
+              helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --set redis.enabled=true >/dev/null
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
+              helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set redis.enabled=true
+              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set redis.enabled=true >/dev/null
               ruby apps/helm/temporal-namespace.test.rb
+              ruby apps/helm/redis.test.rb
           - name: Admin Image
             command: |
               set -euo pipefail
@@ -53,12 +60,14 @@ jobs:
           - name: Core
             command: pnpm --filter @kosmo/core test
             database: true
+            redis: true
           - name: Fedify
             command: pnpm --filter @kosmo/fedify test
             database: true
           - name: API
             command: pnpm --filter @kosmo/api test
             database: true
+            redis: true
           - name: App
             command: pnpm --filter @kosmo/app test
             playwright: true
@@ -67,6 +76,7 @@ jobs:
           - name: Worker
             command: pnpm --filter @kosmo/worker test
             database: true
+            redis: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -113,6 +123,12 @@ jobs:
       - name: Install Playwright Chromium
         if: matrix.playwright && steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @kosmo/app exec playwright install chromium
+
+      - name: Start Redis for integration tests
+        if: matrix.redis
+        run: |
+          docker compose -f docker-compose.test.yml up -d redis
+          timeout 30 sh -c 'until docker compose -f docker-compose.test.yml exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done'
 
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}

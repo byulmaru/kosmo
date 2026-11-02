@@ -1,4 +1,5 @@
 import { and, eq, ne } from 'drizzle-orm';
+import { invalidateHomeTimelines } from '../home-timeline/cache';
 import { db, first, Instances, ProfileMutes, Profiles } from '../db';
 import { InstanceState, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
@@ -13,6 +14,12 @@ type ProfileMuteInput = {
 type ProfileUnmuteInput = {
   readonly ownerProfileId: string;
   readonly profileMuteId: string;
+};
+
+const invalidateOwnerHomeTimeline = (ownerProfileId: string): void => {
+  void invalidateHomeTimelines({ profileIds: [ownerProfileId] }).catch((error: unknown) => {
+    console.error('Profile Mute Home timeline invalidation failed', { error, ownerProfileId });
+  });
 };
 
 const ensureOwner = async (tx: Transaction, id: string) => {
@@ -56,7 +63,7 @@ export const muteProfile = async ({ ownerProfileId, targetProfileId }: ProfileMu
     throw new ConflictError({ message: 'Profile cannot mute itself' });
   }
 
-  return db.transaction(async (tx) => {
+  const profileMute = await db.transaction(async (tx) => {
     await ensureOwner(tx, ownerProfileId);
     await ensureTarget(tx, targetProfileId);
 
@@ -76,10 +83,13 @@ export const muteProfile = async ({ ownerProfileId, targetProfileId }: ProfileMu
 
     return profileMute;
   });
+
+  invalidateOwnerHomeTimeline(ownerProfileId);
+  return profileMute;
 };
 
-export const unmuteProfile = async ({ ownerProfileId, profileMuteId }: ProfileUnmuteInput) =>
-  db.transaction(async (tx) => {
+export const unmuteProfile = async ({ ownerProfileId, profileMuteId }: ProfileUnmuteInput) => {
+  const removed = await db.transaction(async (tx) => {
     await ensureOwner(tx, ownerProfileId);
 
     return tx
@@ -91,3 +101,9 @@ export const unmuteProfile = async ({ ownerProfileId, profileMuteId }: ProfileUn
       .then(first)
       .then((profileMute) => profileMute ?? null);
   });
+
+  if (removed !== null) {
+    invalidateOwnerHomeTimeline(ownerProfileId);
+  }
+  return removed;
+};

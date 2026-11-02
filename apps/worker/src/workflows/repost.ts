@@ -10,13 +10,19 @@ type PostRepostInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createNotificationActivity, createRepostNotificationActivity, sendRepostAnnounceActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  createNotificationActivity,
+  createRepostNotificationActivity,
+  fanoutHomeTimelinePostActivity,
+  sendRepostAnnounceActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
   const pushNotificationDispatchEnabled = patched('post-repost-push-notification-v1');
+  const homeTimelineFanoutEnabled = patched('post-repost-home-timeline-fanout-v1');
 
   await settleEffects([
+    ...(homeTimelineFanoutEnabled ? [fanoutHomeTimelinePostActivity({ postId })] : []),
     pushNotificationDispatchEnabled
       ? createNotificationActivity({ kind: NotificationKind.REPOST, sourceId: postId })
       : createRepostNotificationActivity(postId),

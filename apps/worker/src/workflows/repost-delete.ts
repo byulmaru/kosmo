@@ -12,11 +12,14 @@ type RepostDeleteInput = {
 const {
   deletePostRelatedNotificationsActivity,
   deleteRepostNotificationActivity,
+  invalidateHomeTimelinesActivity,
   sendRepostUndoActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function repostDeleteWorkflow({ postId, origin }: RepostDeleteInput): Promise<void> {
+  const homeTimelineInvalidationEnabled = patched('repost-delete-home-timeline-invalidation-v1');
   await settleEffects([
+    ...(homeTimelineInvalidationEnabled ? [invalidateHomeTimelinesActivity()] : []),
     patched('repost-delete-related-notifications-v1')
       ? deletePostRelatedNotificationsActivity(postId)
       : deleteRepostNotificationActivity(postId),

@@ -135,6 +135,7 @@ test(
             await effectReleased.promise;
           }
         },
+        fanoutHomeTimelinePostActivity: async () => {},
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
         },
@@ -411,6 +412,7 @@ test(
         createNotificationActivity: async ({ sourceId }: CreateNotificationInput) => {
           effectCalls.push('notification:' + sourceId);
         },
+        fanoutHomeTimelinePostActivity: async () => {},
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
         },
@@ -551,6 +553,7 @@ test(
             await effectReleased.promise;
           }
         },
+        fanoutHomeTimelinePostActivity: async () => {},
         sendLocalPostCreateActivity: async (createdPostId: string) => {
           effectCalls.push('send:' + createdPostId);
         },
@@ -634,6 +637,9 @@ test(
         createPostActivityV2: createPostActivityStub,
         createNotificationActivity: async ({ sourceId }: CreateNotificationInput) => {
           effectCalls.push('notification:' + sourceId);
+        },
+        fanoutHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) => {
+          effectCalls.push('fanout:' + postId);
         },
         sendLocalPostCreateActivity: async (createdPostId: string) => {
           effectCalls.push('send:' + createdPostId);

@@ -280,6 +280,7 @@ test(
           throw new Error(`Unexpected remote Note URI: ${input.objectUri}`);
         },
         createNotificationActivity: async () => undefined,
+        fanoutHomeTimelinePostActivity: async () => undefined,
         replaceRemoteFeaturedActivity: async (input: {
           profileId: string;
           postIds: readonly string[];
@@ -641,6 +642,10 @@ test(
     const failedRepostUndoIds = new Set<string>();
     const worker = await Worker.create({
       activities: {
+        invalidateHomeTimelinesActivity: async ({
+          profileIds,
+        }: { readonly profileIds?: readonly string[] } = {}) =>
+          calls.push(`invalidate:${profileIds?.join(',') ?? 'all'}`),
         deletePostRelatedNotificationsActivity: async (postId: string) => {
           calls.push(`cleanup:${postId}`);
           const attempt = (cleanupAttempts.get(postId) ?? 0) + 1;
@@ -692,6 +697,7 @@ test(
           assert.deepEqual(
             calls.toSorted(),
             [
+              `invalidate:all`,
               `cleanup:${postId}`,
               ...(origin === 'LOCAL'
                 ? [
@@ -713,7 +719,11 @@ test(
       await assert.rejects(cleanupFailure.result());
       assert.deepEqual(
         calls.toSorted(),
-        [`cleanup:${cleanupFailureId}`, `post-delete:${cleanupFailureId}`].toSorted(),
+        [
+          `cleanup:${cleanupFailureId}`,
+          `invalidate:all`,
+          `post-delete:${cleanupFailureId}`,
+        ].toSorted(),
       );
 
       const protocolFailureId = 'postDeleteWorkflow:LOCAL:protocol-failure';
@@ -723,7 +733,11 @@ test(
       await assert.rejects(protocolFailure.result());
       assert.deepEqual(
         calls.toSorted(),
-        [`cleanup:${protocolFailureId}`, `post-delete:${protocolFailureId}`].toSorted(),
+        [
+          `cleanup:${protocolFailureId}`,
+          `invalidate:all`,
+          `post-delete:${protocolFailureId}`,
+        ].toSorted(),
       );
 
       const repostCleanupFailureId = 'repostDeleteWorkflow:LOCAL:cleanup-failure';
@@ -737,7 +751,11 @@ test(
       await assert.rejects(repostCleanupFailure.result());
       assert.deepEqual(
         calls.toSorted(),
-        [`cleanup:${repostCleanupFailureId}`, `repost-undo:${repostCleanupFailureId}`].toSorted(),
+        [
+          `cleanup:${repostCleanupFailureId}`,
+          `invalidate:all`,
+          `repost-undo:${repostCleanupFailureId}`,
+        ].toSorted(),
       );
 
       const repostProtocolFailureId = 'repostDeleteWorkflow:LOCAL:protocol-failure';
@@ -751,7 +769,11 @@ test(
       await assert.rejects(repostProtocolFailure.result());
       assert.deepEqual(
         calls.toSorted(),
-        [`cleanup:${repostProtocolFailureId}`, `repost-undo:${repostProtocolFailureId}`].toSorted(),
+        [
+          `cleanup:${repostProtocolFailureId}`,
+          `invalidate:all`,
+          `repost-undo:${repostProtocolFailureId}`,
+        ].toSorted(),
       );
 
       const retryId = 'postDeleteWorkflow:LOCAL:cleanup-retry';
@@ -761,8 +783,20 @@ test(
       await retriedCleanup.result();
       assert.equal(cleanupAttempts.get(retryId), 2);
       assert.equal(calls.filter((call) => call === `cleanup:${retryId}`).length, 2);
+      assert.equal(calls.filter((call) => call === 'invalidate:all').length, 1);
       assert.equal(calls.filter((call) => call === `post-delete:${retryId}`).length, 1);
       await replay(retriedCleanup);
+
+      const repostRetryId = 'repostDeleteWorkflow:LOCAL:cleanup-retry';
+      retryCleanupIds.add(repostRetryId);
+      calls.length = 0;
+      const retriedRepostCleanup = await start('repostDeleteWorkflow', repostRetryId, 'LOCAL');
+      await retriedRepostCleanup.result();
+      assert.equal(cleanupAttempts.get(repostRetryId), 2);
+      assert.equal(calls.filter((call) => call === `cleanup:${repostRetryId}`).length, 2);
+      assert.equal(calls.filter((call) => call === 'invalidate:all').length, 1);
+      assert.equal(calls.filter((call) => call === `repost-undo:${repostRetryId}`).length, 1);
+      await replay(retriedRepostCleanup);
     });
   },
 );
@@ -875,6 +909,8 @@ test(
           readonly analyticsPlatform: 'web' | 'native';
           readonly postId: string;
         }) => calls.push(`capture:${analyticsPlatform}:${postId}`),
+        fanoutHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) =>
+          calls.push(`fanout:${postId}`),
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -908,6 +944,7 @@ test(
                 `${NotificationKind.MENTION}:${postId}`,
                 `${NotificationKind.QUOTE}:${postId}`,
                 `${NotificationKind.REPLY}:${postId}`,
+                `fanout:${postId}`,
                 `send:${postId}`,
               ]
             : [
@@ -915,6 +952,7 @@ test(
                 `${NotificationKind.REPLY}:${postId}`,
                 `${NotificationKind.MENTION}:${postId}`,
                 `${NotificationKind.MENTION}:${postId}`,
+                `fanout:${postId}`,
               ]
           ).toSorted(),
         );
@@ -942,6 +980,7 @@ test(
           `${NotificationKind.MENTION}:${capturedPostId}`,
           `${NotificationKind.QUOTE}:${capturedPostId}`,
           `${NotificationKind.REPLY}:${capturedPostId}`,
+          `fanout:${capturedPostId}`,
           `capture:native:${capturedPostId}`,
           `send:${capturedPostId}`,
         ].toSorted(),
@@ -969,6 +1008,7 @@ test(
           `${NotificationKind.QUOTE}:${failingPostId}`,
           `${NotificationKind.REPLY}:${failingPostId}`,
           `${NotificationKind.MENTION}:${failingPostId}`,
+          `fanout:${failingPostId}`,
         ].toSorted(),
       );
       assert.equal(mentionAttempts, 1);
@@ -1028,6 +1068,8 @@ test(
       activities: {
         createNotificationActivity: async (input: CreateNotificationInput) =>
           calls.push(`${input.kind}:${input.sourceId}`),
+        fanoutHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) =>
+          calls.push(`fanout:${postId}`),
         sendRepostAnnounceActivity: async (id: string) => calls.push(`announce:${id}`),
       },
       connection: environment.nativeConnection,
@@ -1045,7 +1087,11 @@ test(
       await handle.result();
       assert.deepEqual(
         calls.toSorted(),
-        [`${NotificationKind.REPOST}:${postId}`, `announce:${postId}`].toSorted(),
+        [
+          `${NotificationKind.REPOST}:${postId}`,
+          `fanout:${postId}`,
+          `announce:${postId}`,
+        ].toSorted(),
       );
       await Worker.runReplayHistory(
         { workflowsPath },
@@ -1444,6 +1490,12 @@ test(
           assert.equal('followCandidateId' in input, false);
           return execution;
         },
+        invalidateHomeTimelinesActivity: async (input: {
+          readonly profileIds?: readonly string[];
+        }) => {
+          assert.deepEqual(input.profileIds, [pair.followerProfileId]);
+          calls.push('invalidate:' + pair.followerProfileId);
+        },
         loadPendingFollowRequestIdActivity: async () => requestId,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
@@ -1498,6 +1550,7 @@ test(
         assert.deepEqual(
           new Set(calls),
           new Set([
+            'invalidate:' + pair.followerProfileId,
             'delete:' + requestId,
             'notification:' + followId,
             'follow:' + JSON.stringify({ sourceId: followId, sourceKind: 'FOLLOW' }),
@@ -1552,6 +1605,12 @@ test(
             },
             effectPlan: [],
           };
+        },
+        invalidateHomeTimelinesActivity: async (input: {
+          readonly profileIds?: readonly string[];
+        }) => {
+          assert.deepEqual(input.profileIds, [pair.followerProfileId]);
+          effectCallCount += 1;
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
         createNotificationActivity: async () => {
@@ -1693,6 +1752,7 @@ test(
           };
         },
         loadPendingFollowRequestIdActivity: async () => undefined,
+        invalidateHomeTimelinesActivity: async () => undefined,
         sendProfileFollowAcceptActivity: async (input: ProfileFollowAcceptEffectInput) => {
           acceptInputs.push(input);
         },
@@ -2667,6 +2727,12 @@ test(
           effectStarted();
           await effectReleased;
         },
+        invalidateHomeTimelinesActivity: async (value: {
+          readonly profileIds?: readonly string[];
+        }) => {
+          assert.deepEqual(value.profileIds, [pair.followerProfileId]);
+          calls.push('invalidate:' + pair.followerProfileId);
+        },
         sendProfileUnfollowActivity: async (input: unknown) => {
           calls.push('undo:' + JSON.stringify(input));
         },
@@ -2722,7 +2788,7 @@ test(
         );
         releaseEffect();
         await handle.result();
-        assert.equal(calls.length, 5);
+        assert.equal(calls.length, 6);
         assert.deepEqual(calls.slice(0, 3), [
           'verify:' + followId,
           'remove:' + followId,
@@ -2731,6 +2797,7 @@ test(
         assert.deepEqual(
           new Set(calls.slice(3)),
           new Set([
+            'invalidate:' + pair.followerProfileId,
             'delete:' + followId,
             'undo:' +
               JSON.stringify({
@@ -3035,6 +3102,13 @@ test(
           }
           return execution;
         },
+        invalidateHomeTimelinesActivity: async (value: {
+          readonly profileIds?: readonly string[];
+        }) => {
+          const profileIds = value.profileIds ?? [];
+          assert.deepEqual(profileIds, [input.ownerProfileId, input.targetProfileId]);
+          calls.push('invalidate:' + profileIds.join(','));
+        },
         sendProfileUnfollowActivity: async (value: unknown) => {
           calls.push('undo:' + JSON.stringify(value));
           effectStarted();
@@ -3146,6 +3220,7 @@ test(
         assert.deepEqual(
           new Set(calls),
           new Set([
+            `invalidate:${input.ownerProfileId},${input.targetProfileId}`,
             'undo:' + JSON.stringify(effectInput),
             'block:' + execution.result.profileBlockId,
           ]),
@@ -3179,12 +3254,16 @@ test(
       targetProfileId: input.targetProfileId,
     };
     let receivedInput: unknown;
+    let invalidationCalls = 0;
 
     const worker = await Worker.create({
       activities: {
         executeProfileUnblockTransitionActivity: async (value: unknown) => {
           receivedInput = value;
           return { ok: true as const, result };
+        },
+        invalidateHomeTimelinesActivity: async () => {
+          invalidationCalls += 1;
         },
       },
       connection: environment.nativeConnection,
@@ -3215,6 +3294,7 @@ test(
         profileBlockId: input.profileBlockId,
         origin: 'LOCAL',
       });
+      assert.equal(invalidationCalls, 0);
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
     });
@@ -3242,10 +3322,16 @@ test(
       ownerProfileId: input.ownerProfileId,
       targetProfileId: input.targetProfileId,
     };
+    let invalidatedProfileIds: readonly string[] | undefined;
 
     const worker = await Worker.create({
       activities: {
         executeProfileUnblockTransitionActivity: async () => ({ ok: true as const, result }),
+        invalidateHomeTimelinesActivity: async (value: {
+          readonly profileIds?: readonly string[];
+        }) => {
+          invalidatedProfileIds = value.profileIds;
+        },
         sendProfileBlockUndoActivity: async () => {
           throw ApplicationFailure.nonRetryable('Undo effect failed');
         },
@@ -3274,6 +3360,7 @@ test(
       );
       const handle = await startWorkflowOperation.workflowHandle();
       await assert.rejects(handle.result());
+      assert.deepEqual(invalidatedProfileIds, [input.ownerProfileId, input.targetProfileId]);
     });
   },
 );

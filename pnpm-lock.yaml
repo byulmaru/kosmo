@@ -612,6 +612,9 @@ importers:
       '@kosmo/fedify':
         specifier: workspace:*
         version: link:../fedify
+      '@redis/client':
+        specifier: ^6.3.0
+        version: 6.3.0(@opentelemetry/api@1.9.1)
       '@temporalio/client':
         specifier: ^1.22.0
         version: 1.22.0
@@ -3190,6 +3193,18 @@ packages:
       react-native: 0.85.3
     peerDependenciesMeta:
       '@types/react':
+        optional: true
+
+  '@redis/client@6.3.0':
+    resolution: {integrity: sha512-fHrjwGCBvAANGi+TuRuwKi83sIOzgHr8eh+Uf48w3fSX7Hhrz174NrWqfJhAC2vnN0d/tfaZpdr6+o6JC3QHwg==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@node-rs/xxhash': ^1.1.0
+      '@opentelemetry/api': '>=1 <2'
+    peerDependenciesMeta:
+      '@node-rs/xxhash':
+        optional: true
+      '@opentelemetry/api':
         optional: true
 
   '@repeaterjs/repeater@3.0.6':
@@ -12018,6 +12033,10 @@ snapshots:
       react-native: 0.85.3(patch_hash=6d32a14911bc2e87e8f00adc88b76cd73c8b91b9f9d6d35406a744ae142c7bfd)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1)
     optionalDependencies:
       '@types/react': 19.2.15
+
+  '@redis/client@6.3.0(@opentelemetry/api@1.9.1)':
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
 
   '@repeaterjs/repeater@3.0.6': {}
 

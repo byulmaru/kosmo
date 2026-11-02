@@ -6,6 +6,10 @@
 {{- printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "kosmo.redisName" -}}
+{{- printf "%s-redis" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "kosmo.postgresPoolerName" -}}
 {{- printf "%s-pooler-rw" (include "kosmo.postgresName" . | trunc 53 | trimSuffix "-") -}}
 {{- end -}}
@@ -52,6 +56,13 @@
 {{- fail "temporal.adminTools.digest must be a sha256 digest" -}}
 {{- end -}}
 {{- printf "%s@%s" .Values.temporal.adminTools.image .Values.temporal.adminTools.digest -}}
+{{- end -}}
+
+{{- define "kosmo.redisImageRef" -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.redis.digest) -}}
+{{- fail "redis.digest must be a sha256 digest" -}}
+{{- end -}}
+{{- printf "%s@%s" .Values.redis.image .Values.redis.digest -}}
 {{- end -}}
 
 {{- define "kosmo.temporalNamespaceName" -}}

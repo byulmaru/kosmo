@@ -3,6 +3,7 @@ import {
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -50,6 +51,7 @@ const profileFollowRemovalInputSchema = z.strictObject({
 const {
   deleteFollowNotificationActivity,
   executeProfileFollowRemovalActivity,
+  invalidateHomeTimelinesActivity,
   sendProfileUnfollowActivity,
   verifyProfileFollowRemovalActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -156,7 +158,11 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   if (effect === undefined) {
     return;
   }
+  const homeTimelineInvalidationEnabled = patched('profile-follow-removal-home-invalidation-v1');
   await settleEffects([
+    ...(homeTimelineInvalidationEnabled
+      ? [invalidateHomeTimelinesActivity({ profileIds: [effect.input.followerProfileId] })]
+      : []),
     deleteFollowNotificationActivity(effect.input.sourceId),
     ...match(effect.input)
       .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(effect.input)])

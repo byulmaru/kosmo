@@ -9,11 +9,16 @@ type PostDeleteInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { deletePostRelatedNotificationsActivity, sendLocalPostDeleteActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  deletePostRelatedNotificationsActivity,
+  invalidateHomeTimelinesActivity,
+  sendLocalPostDeleteActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postDeleteWorkflow({ postId, origin }: PostDeleteInput): Promise<void> {
+  const homeTimelineInvalidationEnabled = patched('post-delete-home-timeline-invalidation-v1');
   await settleEffects([
+    ...(homeTimelineInvalidationEnabled ? [invalidateHomeTimelinesActivity()] : []),
     ...(patched('post-delete-related-notifications-v1')
       ? [deletePostRelatedNotificationsActivity(postId)]
       : []),

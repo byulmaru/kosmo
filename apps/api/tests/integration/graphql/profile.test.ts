@@ -4700,9 +4700,10 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(firstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
     assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
     assert.ok(firstPage.data?.profile?.posts.pageInfo.endCursor);
-    assert.equal(
-      firstPage.data?.profile?.posts.pageInfo.endCursor,
-      firstPage.data?.homeTimeline?.pageInfo.endCursor,
+    assert.match(firstPage.data?.profile?.posts.pageInfo.endCursor ?? '', /^[0-9a-f-]{36}$/i);
+    assert.match(
+      firstPage.data?.homeTimeline?.pageInfo.endCursor ?? '',
+      /^(?:db:[0-9a-f-]{36}|redis:\d+)$/i,
     );
 
     const secondPage = await requestRemotePostRead({
@@ -5599,7 +5600,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.ok(homeFirstPage.data?.homeTimeline?.pageInfo.endCursor);
 
     const homeSecondPage = await requestRemotePostRead({
-      after: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5869,7 +5870,7 @@ describe('GraphQL remote profile boundary', () => {
     ]);
 
     const secondPage = await requestRemotePostRead({
-      after: firstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: firstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5883,7 +5884,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
 
     const thirdPage = await requestRemotePostRead({
-      after: secondPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: secondPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5895,7 +5896,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(thirdPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
 
     const homeBackward = await requestRemotePostRead({
-      before: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeBefore: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
       last: 2,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -6240,6 +6241,8 @@ const requestRemotePostRead = ({
   after,
   before,
   first,
+  homeAfter,
+  homeBefore,
   last,
   nodeIds,
   profileId,
@@ -6248,6 +6251,8 @@ const requestRemotePostRead = ({
   after?: string | null;
   before?: string | null;
   first?: number;
+  homeAfter?: string | null;
+  homeBefore?: string | null;
   last?: number;
   nodeIds: string[];
   profileId: string;
@@ -6259,6 +6264,8 @@ const requestRemotePostRead = ({
       $before: String
       $first: Int
       $last: Int
+      $homeAfter: String
+      $homeBefore: String
       $nodeIds: [ID!]!
       $profileId: ID!
     ) {
@@ -6292,12 +6299,21 @@ const requestRemotePostRead = ({
           }
         }
       }
-      homeTimeline(first: $first, after: $after, last: $last, before: $before) {
+      homeTimeline(first: $first, after: $homeAfter, last: $last, before: $homeBefore) {
         edges { cursor node { id } }
         pageInfo { endCursor hasNextPage hasPreviousPage }
       }
     }`,
-    { after: after ?? null, before: before ?? null, first, last, nodeIds, profileId },
+    {
+      after: after ?? null,
+      before: before ?? null,
+      first,
+      homeAfter: homeAfter === undefined ? (after ?? null) : homeAfter,
+      homeBefore: homeBefore === undefined ? (before ?? null) : homeBefore,
+      last,
+      nodeIds,
+      profileId,
+    },
     token,
   );
 
