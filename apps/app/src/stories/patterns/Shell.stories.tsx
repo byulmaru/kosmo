@@ -414,6 +414,7 @@ const meta = {
   excludeStories: [
     'UniversalCompactComposerLifecycle',
     'UniversalCompactComposerMediaEditorGeometry',
+    'UniversalCompactComposerMediaEditorViewportFocusRace',
     'UniversalFullComposerLifecycle',
     'UniversalFullComposerMediaEditorLifecycle',
     'UniversalMobileComposerLifecycle',
@@ -2678,6 +2679,112 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
       const reopenedDialog = await page.findByRole('dialog', { name: '글쓰기' });
       expect(within(reopenedDialog).queryByTestId('web-composer-media-editor')).toBeNull();
     } finally {
+      restoreFetch();
+      resetImagePickerMock();
+    }
+  },
+};
+
+export const UniversalCompactComposerMediaEditorViewportFocusRace: Story = {
+  ...UniversalCompactComposerMediaEditorGeometry,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Media editor focus story requires a browser visual viewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const restoreFetch = installComposerMediaUploadFetch();
+    let intersectionObserver: IntersectionObserver | null = null;
+
+    try {
+      expect(storyWindow.innerWidth).toBe(390);
+      expect(storyWindow.innerHeight).toBe(844);
+      expect(visualViewport.height).toBe(844);
+      setNextImagePickerResult({
+        assets: [createComposerPickerAsset('focus-resize-race.svg')],
+        canceled: false,
+      });
+
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+
+      const editor = within(dialog).getByTestId('mobile-composer-media-editor');
+      const mediaDialog = within(dialog).getByTestId('post-composer-dialog');
+      const altTextInput = within(editor).getByRole('textbox', {
+        name: '이미지 설명',
+      }) as HTMLTextAreaElement;
+      const doneButton = within(editor).getByRole('button', { name: '완료' });
+      const backButton = within(editor).getByRole('button', { name: '미디어 편집에서 뒤로' });
+      await userEvent.type(altTextInput, '보존할 이미지 설명');
+      altTextInput.blur();
+      expect(altTextInput).not.toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 320 });
+      altTextInput.focus();
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(320, 0));
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+      const mediaDialogBounds = mediaDialog.getBoundingClientRect();
+      expect(mediaDialogBounds.top).toBeGreaterThanOrEqual(0);
+      expect(mediaDialogBounds.bottom).toBeLessThanOrEqual(320);
+      expectElementInsideBounds(doneButton, mediaDialogBounds);
+      expectElementInsideBounds(backButton, mediaDialogBounds);
+
+      let intersectionRatio = 0;
+      intersectionObserver = new storyWindow.IntersectionObserver(([entry]) => {
+        intersectionRatio = entry?.intersectionRatio ?? 0;
+      });
+      intersectionObserver.observe(altTextInput);
+      await waitFor(() => expect(intersectionRatio).toBeGreaterThan(0));
+
+      let scrollView = altTextInput.parentElement;
+      while (scrollView) {
+        const overflowY = storyWindow.getComputedStyle(scrollView).overflowY;
+        if (
+          scrollView.scrollHeight > scrollView.clientHeight &&
+          (overflowY === 'auto' || overflowY === 'scroll')
+        ) {
+          break;
+        }
+        scrollView = scrollView.parentElement;
+      }
+      if (!scrollView) {
+        throw new Error('Media editor did not render a scrollable viewport.');
+      }
+
+      scrollView.scrollTop = 0;
+      scrollView.dispatchEvent(new storyWindow.Event('scroll'));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 400 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(400, 0));
+      await new Promise<void>((resolve) => storyWindow.requestAnimationFrame(() => resolve()));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+    } finally {
+      intersectionObserver?.disconnect();
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       restoreFetch();
       resetImagePickerMock();
     }

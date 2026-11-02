@@ -3,6 +3,7 @@ import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalCompactComposerMediaEditorGeometry as universalCompactComposerMediaEditorGeometry,
+  UniversalCompactComposerMediaEditorViewportFocusRace as universalCompactComposerMediaEditorViewportFocusRace,
   UniversalComposerMediaEditorResponsiveAt768 as universalComposerMediaEditorResponsiveAt768,
   UniversalComposerMediaEditorResponsiveAt800 as universalComposerMediaEditorResponsiveAt800,
   UniversalComposerMediaEditorResponsiveAt968 as universalComposerMediaEditorResponsiveAt968,
@@ -65,6 +66,8 @@ export const UniversalCompactComposerLifecycle: Story = {
 };
 export const UniversalCompactComposerMediaEditorGeometry: Story =
   universalCompactComposerMediaEditorGeometry;
+export const UniversalCompactComposerMediaEditorViewportFocusRace: Story =
+  universalCompactComposerMediaEditorViewportFocusRace;
 export const UniversalComposerMediaEditorResponsiveAt768: Story =
   universalComposerMediaEditorResponsiveAt768;
 export const UniversalComposerMediaEditorResponsiveAt800: Story =

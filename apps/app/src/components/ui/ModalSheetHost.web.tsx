@@ -1,8 +1,39 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Modal } from 'react-native';
+import type { FocusEvent as ReactFocusEvent } from 'react';
 import type { ModalSheetHostProps } from './ModalSheetHost';
 
 type VisualViewportBounds = { height: number; offsetTop: number };
+
+function handleViewportFocusCapture(
+  event: ReactFocusEvent<HTMLElement>,
+  renderedBounds: VisualViewportBounds | null,
+) {
+  const root = event.currentTarget;
+  const target = event.target;
+  const ownerWindow = root.ownerDocument.defaultView;
+  const viewport = ownerWindow?.visualViewport;
+  if (
+    !renderedBounds ||
+    !ownerWindow ||
+    !viewport ||
+    !(target instanceof ownerWindow.HTMLElement)
+  ) {
+    return;
+  }
+  if (
+    Math.abs(renderedBounds.height - viewport.height) <= 1 &&
+    Math.abs(renderedBounds.offsetTop - viewport.offsetTop) <= 1
+  ) {
+    return;
+  }
+
+  ownerWindow.requestAnimationFrame(() => {
+    if (root.contains(target) && root.ownerDocument.activeElement === target) {
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  });
+}
 
 function useVisualViewportBounds(visible: boolean) {
   const [bounds, setBounds] = useState<VisualViewportBounds | null>(null);
@@ -68,6 +99,7 @@ export function ModalSheetHost({
     <Modal {...props}>
       <div
         inert={interactionDisabled}
+        onFocusCapture={(event) => handleViewportFocusCapture(event, visualViewportBounds)}
         style={{ display: 'flex', flex: 1, ...getVisualViewportStyle(visualViewportBounds) }}
       >
         {children}
@@ -121,6 +153,7 @@ function AlertDialog({
       data-kosmo-modal-sheet
       ref={ref}
       role="alertdialog"
+      onFocusCapture={(event) => handleViewportFocusCapture(event, visualViewportBounds)}
       style={{
         background: 'transparent',
         border: 0,
