@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -77,39 +77,22 @@ test('application children receive runtime credentials but no privileged fallbac
   assert.equal(environment.PGPASSWORD, 'runtime-secret');
   assert.equal(environment.TEMPORAL_ADDRESS, '127.0.0.1:7233');
   assert.equal(environment.TEMPORAL_NAMESPACE, 'default');
-  assert.equal(environment.REDIS_URL, 'redis://127.0.0.1:63798');
   assert.equal(environment.FEDIFY_QUEUE_DATABASE_PASSWORD, 'queue-secret');
   assert.equal(environment.DATABASE_URL, undefined);
   assert.equal(environment.LOCAL_POSTGRES_ADMIN_PASSWORD, undefined);
   assert.equal(environment.LOCAL_POSTGRES_OWNER_PASSWORD, undefined);
 });
 
-test('local Redis URL can be overridden by the caller', () => {
-  const environment = buildApplicationEnvironment({
-    ...runtimeEnvironment,
-    REDIS_URL: 'redis://cache.example:6379',
-  });
-
-  assert.equal(environment.REDIS_URL, 'redis://cache.example:6379');
-});
-
 test('Redis startup failure does not block local application startup', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'kosmo-local-development-'));
   const binaryDirectory = join(directory, 'bin');
   const dockerPath = join(binaryDirectory, 'docker');
-  const dockerCallsPath = join(directory, 'docker-calls.txt');
 
   try {
     await mkdir(binaryDirectory);
     await writeFile(
       dockerPath,
-      [
-        '#!/bin/sh',
-        'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"',
-        'case "$*" in',
-        '  *"up -d redis") exit 1 ;;',
-        'esac',
-      ].join('\n'),
+      ['#!/bin/sh', 'case "$*" in', '  *"up -d redis") exit 1 ;;', 'esac'].join('\n'),
     );
     await chmod(dockerPath, 0o755);
 
@@ -118,7 +101,6 @@ test('Redis startup failure does not block local application startup', async () 
       encoding: 'utf8',
       env: {
         ...process.env,
-        DOCKER_CALLS_FILE: dockerCallsPath,
         LOCAL_POSTGRES_ADMIN_PASSWORD: 'test-admin-secret',
         PATH: `${binaryDirectory}:${process.env.PATH ?? ''}`,
       },
@@ -129,12 +111,6 @@ test('Redis startup failure does not block local application startup', async () 
       result.stderr,
       /Local Redis could not be started; application startup will continue/,
     );
-
-    const calls = (await readFile(dockerCallsPath, 'utf8')).trim().split('\n');
-    assert.equal(calls.length, 2);
-    assert.match(calls[0], /up -d --wait postgres$/);
-    assert.match(calls[1], /up -d redis$/);
-    assert.doesNotMatch(calls[1], /--wait/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

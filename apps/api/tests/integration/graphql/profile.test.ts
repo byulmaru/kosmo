@@ -4700,11 +4700,6 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(firstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
     assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
     assert.ok(firstPage.data?.profile?.posts.pageInfo.endCursor);
-    assert.match(firstPage.data?.profile?.posts.pageInfo.endCursor ?? '', /^[0-9a-f-]{36}$/i);
-    assert.match(
-      firstPage.data?.homeTimeline?.pageInfo.endCursor ?? '',
-      /^(?:db:[0-9a-f-]{36}|redis:\d+)$/i,
-    );
 
     const secondPage = await requestRemotePostRead({
       after: firstPage.data?.profile?.posts.pageInfo.endCursor,

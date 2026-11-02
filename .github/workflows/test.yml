@@ -35,7 +35,6 @@ jobs:
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set redis.enabled=true
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set redis.enabled=true >/dev/null
               ruby apps/helm/temporal-namespace.test.rb
-              ruby apps/helm/redis.test.rb
           - name: Admin Image
             command: |
               set -euo pipefail

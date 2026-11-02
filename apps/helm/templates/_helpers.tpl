@@ -58,13 +58,6 @@
 {{- printf "%s@%s" .Values.temporal.adminTools.image .Values.temporal.adminTools.digest -}}
 {{- end -}}
 
-{{- define "kosmo.redisImageRef" -}}
-{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.redis.digest) -}}
-{{- fail "redis.digest must be a sha256 digest" -}}
-{{- end -}}
-{{- printf "%s@%s" .Values.redis.image .Values.redis.digest -}}
-{{- end -}}
-
 {{- define "kosmo.temporalNamespaceName" -}}
 {{- $name := get .Values.temporal.namespace.names .Values.env | default "" -}}
 {{- if not $name -}}

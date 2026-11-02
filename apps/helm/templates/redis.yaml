@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: {{ include "kosmo.redisImageRef" . | quote }}
+          image: "redis:8.2.11-alpine3.22@sha256:489a769e0a54dc245896132a15c72d2bc7296719954da99398f43a3877e5f8eb"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -42,9 +42,9 @@ spec:
             - --appendonly
             - "no"
             - --maxmemory
-            - {{ .Values.redis.maxmemory | quote }}
+            - "128mb"
             - --maxmemory-policy
-            - {{ .Values.redis.maxmemoryPolicy | quote }}
+            - "allkeys-lru"
           ports:
             - name: redis
               containerPort: 6379
@@ -63,7 +63,12 @@ spec:
               port: redis
             periodSeconds: 5
           resources:
-{{ toYaml .Values.redis.resources | indent 12 }}
+            limits:
+              cpu: 250m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
 ---
 apiVersion: v1
 kind: Service
