@@ -4901,7 +4901,11 @@ export const QuoteComposerListIntegration: Story = {
     const success = await screen.findByRole('alert');
     expect(success).toHaveTextContent('게시 요청을 접수했어요');
     expect(within(success).queryByRole('button', { name: '보기' })).not.toBeInTheDocument();
-    expect(trackAnalytics).not.toHaveBeenCalled();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <QuoteListSurfaceStory />,
 };
@@ -6251,7 +6255,11 @@ export const PostDetailReplyTargetedRefetch: Story = {
     expect(submittedInput).not.toHaveProperty('repostSourceId');
     const success = await screen.findByRole('alert');
     expect(success).toHaveTextContent('게시 요청을 접수했어요');
-    expect(trackAnalytics).not.toHaveBeenCalled();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <PostDetailScreen />,
 };
@@ -9284,7 +9292,11 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
     expect(submittedInput).not.toHaveProperty('contentWarning');
     expect(submittedInput).not.toHaveProperty('mentions');
     expect(submittedInput).not.toHaveProperty('repostSourceId');
-    expect(trackAnalytics).not.toHaveBeenCalled();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <ReplyListSurfaceStory />,
 };
