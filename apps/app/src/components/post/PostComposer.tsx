@@ -789,9 +789,17 @@ export function MobileFullscreenComposerShellCandidate({
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
   const scrollToBody = () => {
-    if (isReplyShell && parentOffsetRef.current !== null) {
-      scrollRef.current?.scrollTo({ animated: false, y: parentOffsetRef.current });
+    const offset = parentOffsetRef.current;
+    if (!isReplyShell || offset === null) {
+      return;
     }
+    if (Platform.OS === 'web') {
+      const scrollNode = scrollRef.current?.getScrollableNode() as HTMLElement | null;
+      if (!scrollNode || offset > scrollNode.scrollHeight - scrollNode.clientHeight) {
+        return;
+      }
+    }
+    scrollRef.current?.scrollTo({ animated: false, y: offset });
   };
   const scheduleInitialScroll = () => {
     if (initialScrollFrameRef.current !== null) {
@@ -799,9 +807,8 @@ export function MobileFullscreenComposerShellCandidate({
     }
     initialScrollFrameRef.current = requestAnimationFrame(() => {
       initialScrollFrameRef.current = null;
-      const offset = parentOffsetRef.current;
-      if (initialScrollPendingRef.current && offset !== null) {
-        scrollRef.current?.scrollTo({ animated: false, y: offset });
+      if (initialScrollPendingRef.current) {
+        scrollToBody();
       }
     });
   };
