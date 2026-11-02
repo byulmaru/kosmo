@@ -1,6 +1,9 @@
 import baseMeta, {
+  DesktopOverlayCreatePostFailure as desktopOverlayCreatePostFailure,
   DesktopOverlayVisibleViewportContract as desktopOverlayVisibleViewportContract,
+  MobileFullscreenCreatePostFailure as mobileFullscreenCreatePostFailure,
   MobileFullscreenVisibleViewportContract as mobileFullscreenVisibleViewportContract,
+  RailCreatePostFailure as railCreatePostFailure,
 } from './PostComposerHost.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -17,3 +20,6 @@ type Story = StoryObj<typeof meta>;
 export const MobileFullscreenVisibleViewportContract: Story =
   mobileFullscreenVisibleViewportContract;
 export const DesktopOverlayVisibleViewportContract: Story = desktopOverlayVisibleViewportContract;
+export const DesktopOverlayCreatePostFailure: Story = desktopOverlayCreatePostFailure;
+export const MobileFullscreenCreatePostFailure: Story = mobileFullscreenCreatePostFailure;
+export const RailCreatePostFailure: Story = railCreatePostFailure;

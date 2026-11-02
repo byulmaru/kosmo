@@ -6,6 +6,11 @@ import { PostComposerHost } from '@/components/post/PostComposerHost';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PostComposerHostStoriesQuery as Query } from './__generated__/PostComposerHostStoriesQuery.graphql';
 
+const createPostFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const createPostFailureParameters = {
+  relay: { mutationError: 'create post failed' },
+};
+
 function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'overlay' | 'rail' }) {
   const data = useLazyLoadQuery<Query>(
     graphql`
@@ -46,6 +51,9 @@ const meta = {
   excludeStories: [
     'DesktopOverlayVisibleViewportContract',
     'MobileFullscreenVisibleViewportContract',
+    'DesktopOverlayCreatePostFailure',
+    'MobileFullscreenCreatePostFailure',
+    'RailCreatePostFailure',
   ],
   title: 'KOSMO/Patterns/Post Composer Host',
   parameters: {
@@ -100,6 +108,58 @@ export const Rail: Story = {
 export const MobileFullscreenKeyboardFixture: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   render: () => <HostFixture mode="mobile" />,
+};
+
+async function assertCreatePostFailureToast(canvasElement: HTMLElement, mode: 'modal' | 'rail') {
+  const ownerDocument = canvasElement.ownerDocument;
+  const page = within(ownerDocument.body);
+  const dialog = mode === 'modal' ? await page.findByRole('dialog', { name: '글쓰기' }) : null;
+  const body = await page.findByRole('textbox', { name: '게시글 본문' });
+  const submit = page.getByRole('button', { name: '게시' });
+
+  await userEvent.type(body, '실패 뒤에도 보존할 게시글');
+  await userEvent.click(submit);
+
+  const alert = await page.findByRole('alert');
+  const message = within(alert).getByText(createPostFailureMessage);
+  expect(alert).toBeVisible();
+  expect(body).toHaveValue('실패 뒤에도 보존할 게시글');
+  expect(submit).toBeEnabled();
+  if (dialog) {
+    expect(dialog.contains(alert)).toBe(true);
+  }
+
+  await waitFor(() => {
+    const bounds = message.getBoundingClientRect();
+    const hitTarget = ownerDocument.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    );
+
+    expect(bounds.width).toBeGreaterThan(0);
+    expect(bounds.height).toBeGreaterThan(0);
+    expect(alert.contains(hitTarget)).toBe(true);
+  });
+}
+
+export const DesktopOverlayCreatePostFailure: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: createPostFailureParameters,
+  render: () => <HostFixture mode="overlay" />,
+  play: ({ canvasElement }) => assertCreatePostFailureToast(canvasElement, 'modal'),
+};
+
+export const MobileFullscreenCreatePostFailure: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: createPostFailureParameters,
+  render: () => <HostFixture mode="mobile" />,
+  play: ({ canvasElement }) => assertCreatePostFailureToast(canvasElement, 'modal'),
+};
+
+export const RailCreatePostFailure: Story = {
+  parameters: createPostFailureParameters,
+  render: () => <HostFixture mode="rail" />,
+  play: ({ canvasElement }) => assertCreatePostFailureToast(canvasElement, 'rail'),
 };
 
 export const DesktopOverlayVisibleViewportContract: Story = {

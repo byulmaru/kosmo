@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
-import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
+import { OverlayPortal, OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -114,7 +114,17 @@ export function PostComposerHost({
     ) : null;
 
   const composer = (
-    <ToastProvider>
+    <ToastProvider
+      renderToast={
+        web && mode !== 'rail'
+          ? (toast) => (
+              <OverlayPortalProvider hostRef={dialogRef}>
+                <OverlayPortal>{toast}</OverlayPortal>
+              </OverlayPortalProvider>
+            )
+          : undefined
+      }
+    >
       <PostComposerController
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
