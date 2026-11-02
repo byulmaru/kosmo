@@ -79,6 +79,7 @@ const cancelProfileFollowRequestMutation = graphql`
 const unfollowProfileMutation = graphql`
   mutation FollowButtonUnfollowProfileMutation($id: ID!) {
     unfollowProfile(input: { id: $id }) {
+      profileFollowId
       followerProfile {
         id
         followingCount
@@ -162,8 +163,11 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
       commitUnfollow({
         ...callbacks,
-        onCompleted: (_response, errors) => {
+        onCompleted: (response, errors) => {
           if (errors?.length) {
+            if (response?.unfollowProfile?.profileFollowId != null) {
+              invalidateHome();
+            }
             showFailureToast();
             return;
           }
@@ -172,6 +176,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         optimisticResponse: follower
           ? {
               unfollowProfile: {
+                profileFollowId: null,
                 followeeProfile: {
                   displayName: data.displayName,
                   followPolicy: data.followPolicy,
@@ -208,13 +213,14 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     } else {
       commitFollow({
         onCompleted: (response, errors) => {
+          const result = response?.followProfile?.result;
+          if (result?.__typename === 'ProfileFollow') {
+            invalidateHome();
+          }
           const failed = Boolean(errors?.length);
           if (failed) {
             showFailureToast();
             return;
-          }
-          if (response.followProfile.result.__typename === 'ProfileFollow') {
-            invalidateHome();
           }
           if (!selectedProfileId) {
             return;

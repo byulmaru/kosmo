@@ -102,15 +102,17 @@ export function useProfileMuteMutations() {
           currentEnvironmentRef.current === requestEnvironment &&
           environmentGenerationRef?.current === requestGeneration &&
           selectedProfileIdRef.current === change.ownerProfileId;
+        const invalidateHome = () => {
+          requestEnvironment.commitUpdate((store) => {
+            store
+              .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+              ?.invalidateRecord();
+          });
+        };
         const finish = (error?: Error) => {
           if (error) {
             reject(error);
           } else {
-            requestEnvironment.commitUpdate((store) => {
-              store
-                .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
-                ?.invalidateRecord();
-            });
             resolve();
           }
         };
@@ -120,12 +122,15 @@ export function useProfileMuteMutations() {
           if (nextMuted) {
             commitMute({
               onCompleted: (response, errors) => {
+                const error = responseError(errors);
+                const profileMute = response?.muteProfile?.profileMute;
+                if (!error && profileMute) {
+                  invalidateHome();
+                }
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                const error = responseError(errors);
-                const profileMute = response?.muteProfile?.profileMute;
                 if (error || !profileMute) {
                   finish(error ?? new Error('Profile mute response did not confirm the relation.'));
                   return;
@@ -145,12 +150,18 @@ export function useProfileMuteMutations() {
             const profileMuteId = change.profileMuteId as string;
             commitUnmute({
               onCompleted: (response, errors) => {
+                const error = responseError(errors);
+                const responseProfileMuteId = response?.unmuteProfile?.profileMuteId;
+                if (
+                  !error &&
+                  (responseProfileMuteId === null || responseProfileMuteId === profileMuteId)
+                ) {
+                  invalidateHome();
+                }
                 if (!isCurrent()) {
                   finishStale();
                   return;
                 }
-                const error = responseError(errors);
-                const responseProfileMuteId = response?.unmuteProfile?.profileMuteId;
                 if (
                   error ||
                   (responseProfileMuteId !== null && responseProfileMuteId !== profileMuteId)

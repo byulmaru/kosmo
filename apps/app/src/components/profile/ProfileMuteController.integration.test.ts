@@ -290,7 +290,9 @@ describe('ProfileMuteController real Relay mutation contract', () => {
       loadOwnerAConnection: false,
       loadOwnerBConnection: true,
     });
+    const actorAHomeOperation = loadHomeTimeline(actorA.environment);
     const actorBHomeOperation = loadHomeTimeline(actorB.environment);
+    assert.equal(actorA.environment.check(actorAHomeOperation).status, 'available');
     assert.equal(actorB.environment.check(actorBHomeOperation).status, 'available');
     selectedProfileId = actorA.ownerA;
     await renderController(actorA.environment);
@@ -316,6 +318,8 @@ describe('ProfileMuteController real Relay mutation contract', () => {
 
     await respond(pending, muteResponse('profile-mute:actor-a', actorA.targetA));
     assert.match(String(await rejection), /inactive Profile/);
+    assert.equal(actorA.environment.check(actorAHomeOperation).status, 'stale');
+    assert.equal(viewerStateMuteId(actorA.environment, actorA.targetA), 'profile-mute:actor-a');
     assert.equal(actorB.environment.check(actorBHomeOperation).status, 'available');
     assert.equal(viewerStateMuteId(actorB.environment, actorA.targetA), null);
     assert.deepEqual(
@@ -324,11 +328,13 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     );
   });
 
-  it('an unmounted controller does not classify a delayed response as current', async () => {
+  it('an unmounted mute rejects its stale result but invalidates loaded Home', async () => {
     const { environment, ownerA, targetA } = createEnvironment({
       loadOwnerAConnection: false,
       loadOwnerBConnection: false,
     });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
     await renderController(environment);
 
     const request = startChangeMuted({ ownerProfileId: ownerA, targetProfileId: targetA }, true);
@@ -341,6 +347,49 @@ describe('ProfileMuteController real Relay mutation contract', () => {
     await respond(pending, muteResponse('profile-mute:unmounted', targetA));
 
     assert.match(String(await rejection), /inactive Profile/);
+    assert.equal(viewerStateMuteId(environment, targetA), 'profile-mute:unmounted');
+    assert.equal(environment.check(homeOperation).status, 'stale');
+  });
+
+  it('an unmounted unmute rejects its stale result but invalidates loaded Home', async () => {
+    const relationId = 'profile-mute:unmounted';
+    const { environment, ownerA, targetA } = createEnvironment({
+      loadOwnerAConnection: true,
+      loadOwnerBConnection: false,
+      ownerARelationId: relationId,
+      targetARelationId: relationId,
+    });
+    const homeOperation = loadHomeTimeline(environment);
+    assert.equal(environment.check(homeOperation).status, 'available');
+    await renderController(environment);
+
+    const request = startChangeMuted(
+      { ownerProfileId: ownerA, profileMuteId: relationId, targetProfileId: targetA },
+      false,
+    );
+    const rejection = request.catch((error: unknown) => error);
+    const pending = pendingRequests[0];
+    assert.ok(pending);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await respond(pending, {
+      data: {
+        unmuteProfile: {
+          profileMuteId: relationId,
+          deletedProfileMuteId: relationId,
+          targetProfile: {
+            __typename: 'Profile',
+            id: targetA,
+            viewerState: { __typename: 'ProfileViewerState', profileMute: null },
+          },
+        },
+      },
+    });
+
+    assert.match(String(await rejection), /inactive Profile/);
+    assert.equal(viewerStateMuteId(environment, targetA), null);
+    assert.equal(environment.check(homeOperation).status, 'stale');
   });
 });
 
