@@ -1,6 +1,5 @@
 import { fn } from 'storybook/test';
 import { PostRequestListSummary } from '@/components/post/PostRequestList';
-import { PostRequestPreviewProvider } from '@/components/post/PostRequestPreviewContext';
 import { profile } from '../fixtures';
 import { Catalog } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -34,11 +33,9 @@ const queuedRequest = {
 
 function PostRequestListFixture({ onCompose }: { onCompose: () => void }) {
   return (
-    <PostRequestPreviewProvider>
-      <Catalog>
-        <PostRequestListSummary onCompose={onCompose} profileId={profileId} />
-      </Catalog>
-    </PostRequestPreviewProvider>
+    <Catalog>
+      <PostRequestListSummary onCompose={onCompose} profileId={profileId} />
+    </Catalog>
   );
 }
 

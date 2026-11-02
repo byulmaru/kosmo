@@ -9,6 +9,7 @@ import { sb } from 'storybook/test';
 import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
+import { PostRequestPreviewProvider } from '@/components/post/PostRequestPreviewContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
@@ -64,25 +65,28 @@ const preview: Preview = {
                     queryData={relay.data}
                     queryRequestObserver={relay.queryRequestObserver}
                   >
-                    <RouterMockProvider
-                      onNavigate={router.onNavigate}
-                      params={router.params}
-                      pathname={router.pathname}
-                      segments={router.segments}
-                      slotLabel={router.slotLabel}
-                    >
-                      <Suspense
-                        fallback={
-                          <View style={{ padding: 24 }}>
-                            <Text>스토리를 불러오는 중입니다.</Text>
-                          </View>
-                        }
+                    {/* context.id gives temporary preview object URLs a story-scoped lifetime. */}
+                    <PostRequestPreviewProvider key={context.id}>
+                      <RouterMockProvider
+                        onNavigate={router.onNavigate}
+                        params={router.params}
+                        pathname={router.pathname}
+                        segments={router.segments}
+                        slotLabel={router.slotLabel}
                       >
-                        <ThemedStory>
-                          <Story />
-                        </ThemedStory>
-                      </Suspense>
-                    </RouterMockProvider>
+                        <Suspense
+                          fallback={
+                            <View style={{ padding: 24 }}>
+                              <Text>스토리를 불러오는 중입니다.</Text>
+                            </View>
+                          }
+                        >
+                          <ThemedStory>
+                            <Story />
+                          </ThemedStory>
+                        </Suspense>
+                      </RouterMockProvider>
+                    </PostRequestPreviewProvider>
                   </RelayStoryProvider>
                 </PostContentWarningRevealProvider>
               </ToastProvider>

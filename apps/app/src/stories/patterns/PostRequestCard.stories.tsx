@@ -2,10 +2,7 @@ import { useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import { PostRequestCard } from '@/components/post/PostRequestCard';
-import {
-  PostRequestPreviewProvider,
-  usePostRequestPreviewStore,
-} from '@/components/post/PostRequestPreviewContext';
+import { usePostRequestPreviewStore } from '@/components/post/PostRequestPreviewContext';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import { post, profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
@@ -145,12 +142,12 @@ function PostRequestCardFixture({
   const selected = requireRequest(storyRequests, requestNodeId);
 
   return (
-    <PostRequestPreviewProvider>
+    <>
       {selected.id === processing.id ? <PostRequestPreviewSeed /> : null}
       <Catalog>
         <PostRequestCard onCompose={onCompose} request={selected.request} />
       </Catalog>
-    </PostRequestPreviewProvider>
+    </>
   );
 }
 
@@ -158,7 +155,7 @@ function RepresentativeStatesCatalog({ onCompose }: { onCompose: () => void }) {
   const storyRequests = useStoryRequests();
 
   return (
-    <PostRequestPreviewProvider>
+    <>
       <PostRequestPreviewSeed />
       <Catalog>
         <Section title="Processing">
@@ -174,7 +171,7 @@ function RepresentativeStatesCatalog({ onCompose }: { onCompose: () => void }) {
           <PostRequestCard request={requireRequest(storyRequests, published.id).request} />
         </Section>
       </Catalog>
-    </PostRequestPreviewProvider>
+    </>
   );
 }
 
