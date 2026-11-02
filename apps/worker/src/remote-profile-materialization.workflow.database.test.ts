@@ -12,10 +12,9 @@ import {
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure } from '@temporalio/activity';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type {
@@ -30,7 +29,6 @@ import type * as RemoteProfileMaterializationActivities from './activities/remot
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const remoteDomain = 'remote.example';
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
 process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -132,9 +130,7 @@ test(
         }) as never,
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-${process.pid}`;
     const worker = await Worker.create({
@@ -147,7 +143,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const input: RemoteProfileLookupInput = { domain: remoteDomain, handle: 'alice' };
@@ -215,9 +211,7 @@ test(
       } as never;
     });
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-retry-${process.pid}`;
     const worker = await Worker.create({
@@ -230,7 +224,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const input: RemoteProfileLookupInput = {
       actorUri: actorUri.href,
@@ -284,9 +278,7 @@ test(
       } as never;
     });
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-invalid-${process.pid}`;
     const worker = await Worker.create({
@@ -299,7 +291,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const input: RemoteProfileLookupInput = {
       actorUri: actorUri.href,
@@ -425,9 +417,7 @@ test(
         }) as never,
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-retry-${process.pid}`;
     const worker = await Worker.create({
@@ -440,7 +430,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const input: RemoteProfileLookupInput = { domain: remoteDomain, handle: 'alice' };
@@ -479,9 +469,7 @@ test(
     };
     t.mock.method(federation, 'createContext', () => ({ lookupWebFinger }) as never);
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-no-match-${process.pid}`;
     const worker = await Worker.create({
@@ -496,7 +484,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -539,9 +527,7 @@ test(
     };
     t.mock.method(federation, 'createContext', () => ({ lookupWebFinger }) as never);
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-webfinger-${process.pid}`;
     const worker = await Worker.create({
@@ -556,7 +542,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await assert.rejects(
@@ -645,9 +631,7 @@ test(
         }) as never,
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-rejection-${process.pid}`;
     const worker = await Worker.create({
@@ -660,7 +644,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const input: RemoteProfileLookupInput = { domain: handleDomain, handle: 'alice' };
@@ -1845,9 +1829,7 @@ test(
     let fetchCalls = 0;
     let applyCalls = 0;
     let recoverCalls = 0;
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-fresh-${process.pid}`;
     const worker = await Worker.create({
@@ -1877,7 +1859,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const result = await worker.runUntil(() =>
@@ -1917,9 +1899,7 @@ test(
     const storedBefore = await readStoredProfile(profile.id);
     let fetchCalls = 0;
     let recoveryCalls = 0;
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-receipt-${process.pid}`;
     const worker = await Worker.create({
@@ -1937,7 +1917,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const result = await worker.runUntil(() =>
@@ -1998,9 +1978,7 @@ test(
     const fetchReleased = new Promise<void>((resolve) => {
       releaseFetch = resolve;
     });
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-stale-${process.pid}`;
     const worker = await Worker.create({
@@ -2017,7 +1995,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     try {
@@ -2091,9 +2069,7 @@ test(
       markRefreshComplete = resolve;
     });
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-fresh-${process.pid}`;
     const worker = await Worker.create({
@@ -2109,7 +2085,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2175,9 +2151,7 @@ test(
         }) as never,
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-stale-${process.pid}`;
     const worker = await Worker.create({
@@ -2190,7 +2164,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const input: RemoteProfileLookupInput = { domain: remoteDomain, handle: 'alice' };
     const materializationInput: RemoteProfileMaterializationInput = {
@@ -2310,9 +2284,7 @@ test(
     const fetchCalls: string[] = [];
     const recoveryCalls: string[] = [];
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-failure-${process.pid}`;
     const worker = await Worker.create({
@@ -2332,7 +2304,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -2404,9 +2376,7 @@ test(
       'RemoteActorMaterializationError',
     );
     let fetchCalls = 0;
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-missing-${process.pid}`;
     const worker = await Worker.create({
@@ -2421,7 +2391,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await assert.rejects(
@@ -2542,9 +2512,7 @@ test(
   { timeout: 120_000 },
   async (t) => {
     let lookupActivityCalls = 0;
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-input-${process.pid}`;
     const worker = await Worker.create({
@@ -2580,7 +2548,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const invalidLookupInputs = [
       { actorUri: 'ftp://remote.example/users/alice' },
@@ -2642,9 +2610,7 @@ test(
 type PersonOptions = ConstructorParameters<typeof Person>[0];
 
 const runRemoteProfileUpdateWorkflow = async (input: RemoteProfileUpdateInput) => {
-  const environment = await TestWorkflowEnvironment.createLocal({
-    server: { executable: temporalTestExecutable },
-  });
+  const environment = await createTestWorkflowEnvironment();
   const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-update-${crypto.randomUUID()}`;
 
   try {
@@ -2656,7 +2622,7 @@ const runRemoteProfileUpdateWorkflow = async (input: RemoteProfileUpdateInput) =
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     return await worker.runUntil(() =>

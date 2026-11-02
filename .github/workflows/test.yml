@@ -51,13 +51,13 @@ jobs:
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
               test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404
           - name: Core
-            command: pnpm --filter @kosmo/core test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/core test
             database: true
           - name: Fedify
-            command: pnpm --filter @kosmo/fedify test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/fedify test
             database: true
           - name: API
-            command: pnpm --filter @kosmo/api test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/api test
             database: true
           - name: App
             command: pnpm --filter @kosmo/app test
@@ -65,7 +65,7 @@ jobs:
           - name: Web
             command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit
           - name: Worker
-            command: pnpm --filter @kosmo/worker test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/worker test
             database: true
     steps:
       - name: Checkout repository
