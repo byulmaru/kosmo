@@ -3,10 +3,12 @@ import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposerHost } from '@/components/post/PostComposerHost';
+import { SessionProvider } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PostComposerHostStoriesQuery as Query } from './__generated__/PostComposerHostStoriesQuery.graphql';
 
-const createPostFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const createPostFailureMessage =
+  '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.';
 const createPostFailureParameters = {
   relay: { mutationError: 'create post failed' },
 };
@@ -48,6 +50,13 @@ function HostFixture({ mode = 'rail' }: { mode?: 'mobile' | 'overlay' | 'rail' }
 
 const meta = {
   component: HostFixture,
+  decorators: [
+    (Story) => (
+      <SessionProvider>
+        <Story />
+      </SessionProvider>
+    ),
+  ],
   excludeStories: [
     'DesktopOverlayVisibleViewportContract',
     'MobileFullscreenVisibleViewportContract',
@@ -59,9 +68,15 @@ const meta = {
   parameters: {
     relay: {
       data: {
+        currentSession: {
+          __typename: 'Session',
+          id: 'host-story-session',
+          selectedProfile: { __typename: 'Profile', id: 'host-story-profile' },
+        },
         me: {
           __typename: 'Account',
           id: 'host-story-account',
+          name: '호스트 테스트 계정',
           profiles: [
             {
               __typename: 'Profile',

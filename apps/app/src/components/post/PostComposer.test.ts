@@ -159,10 +159,15 @@ let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
 let MobileFullscreenComposerShellCandidate: typeof MobileFullscreenComposerShellCandidateComponent;
 let toastCalls: Array<[string, { tone: string }]> = [];
 const mobileScrollRequests: Array<{ animated?: boolean; y?: number }> = [];
+let mobileScrollNodeDimensions: {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop?: number;
+} | null = null;
 
 const MobileComposerScrollView = forwardRef<
   {
-    getScrollableNode: () => null;
+    getScrollableNode: () => typeof mobileScrollNodeDimensions;
     scrollTo: (options: { animated?: boolean; y?: number }) => void;
   },
   { children?: ReactNode; [key: string]: unknown }
@@ -170,7 +175,7 @@ const MobileComposerScrollView = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getScrollableNode: () => null,
+      getScrollableNode: () => mobileScrollNodeDimensions,
       scrollTo: (options) => mobileScrollRequests.push(options),
     }),
     [],
@@ -489,6 +494,7 @@ beforeEach(() => {
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   mobileScrollRequests.length = 0;
+  mobileScrollNodeDimensions = null;
   toastCalls = [];
 });
 
@@ -1062,7 +1068,7 @@ describe('PostComposer native background', () => {
 });
 
 describe('Mobile fullscreen reply initial anchor', () => {
-  it('retries a clamped anchor after layout growth and stops after reaching it', async () => {
+  it('defers an unreachable anchor until layout growth and stops after reaching it', async () => {
     platform.OS = 'web';
     const animationFrames = new Map<number, (timestamp: number) => void>();
     let nextAnimationFrame = 1;
@@ -1075,7 +1081,8 @@ describe('Mobile fullscreen reply initial anchor', () => {
       },
     });
 
-    let maximumScrollOffset = 32;
+    const scrollNodeDimensions = { clientHeight: 160, scrollHeight: 192, scrollTop: 0 };
+    mobileScrollNodeDimensions = scrollNodeDimensions;
     const props: MobileFullscreenComposerShellCandidateProps = {
       author: null,
       beforeEditor: createElement('ReplyParentContext'),
@@ -1134,20 +1141,22 @@ describe('Mobile fullscreen reply initial anchor', () => {
     await flushAnimationFrames();
     assert.deepEqual(
       mobileScrollRequests.map(({ y }) => y),
-      [116],
-      'the initial reply anchor requests the parent bottom offset',
+      [],
+      'the initial reply anchor waits while it exceeds the available scroll range',
     );
 
     const emitScroll = async (offset: number) => {
+      scrollNodeDimensions.scrollTop = offset;
       await act(async () => {
         (scrollView()?.props.onScroll as (event: unknown) => void)({
           nativeEvent: { contentOffset: { x: 0, y: offset } },
         });
       });
     };
-    await emitScroll(Math.min(mobileScrollRequests.at(-1)?.y ?? 0, maximumScrollOffset));
+    await emitScroll(32);
 
-    maximumScrollOffset = 164;
+    scrollNodeDimensions.clientHeight = 716;
+    scrollNodeDimensions.scrollHeight = 880;
     await act(async () => {
       (scrollView()?.props.onLayout as (event: unknown) => void)({
         nativeEvent: { layout: { height: 716, width: 390 } },
@@ -1159,15 +1168,14 @@ describe('Mobile fullscreen reply initial anchor', () => {
     await flushAnimationFrames();
     assert.deepEqual(
       mobileScrollRequests.map(({ y }) => y),
-      [116, 116],
+      [116],
       'layout growth retries the still-pending reply anchor',
     );
 
-    await emitScroll(Math.min(mobileScrollRequests.at(-1)?.y ?? 0, maximumScrollOffset));
+    await emitScroll(116);
+    await emitScroll(72);
+    scrollNodeDimensions.clientHeight = 720;
     await act(async () => {
-      (scrollView()?.props.onScroll as (event: unknown) => void)({
-        nativeEvent: { contentOffset: { x: 0, y: 72 } },
-      });
       (scrollView()?.props.onLayout as (event: unknown) => void)({
         nativeEvent: { layout: { height: 720, width: 390 } },
       });
@@ -1176,7 +1184,7 @@ describe('Mobile fullscreen reply initial anchor', () => {
     await flushAnimationFrames();
     assert.deepEqual(
       mobileScrollRequests.map(({ y }) => y),
-      [116, 116],
+      [116],
       'later manual scrolling and layout changes do not re-anchor',
     );
   });
