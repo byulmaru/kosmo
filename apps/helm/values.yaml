@@ -30,8 +30,6 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 migration:
   enabled: false
-redis:
-  enabled: false
 fedify:
   consumer:
     replicas:

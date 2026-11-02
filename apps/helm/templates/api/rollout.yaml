@@ -65,10 +65,8 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
-{{- if .Values.redis.enabled }}
             - name: REDIS_URL
               value: {{ printf "redis://%s:6379" (include "kosmo.redisName" .) | quote }}
-{{- end }}
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
