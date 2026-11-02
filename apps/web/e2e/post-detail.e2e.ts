@@ -142,7 +142,7 @@ test('현재 Light 정책의 실제 게시글 액션은 Home·Local·Profile·�
   const routes = [
     { path: '/home', query: 'HomePageQuery' },
     { path: '/local', query: 'LocalPageQuery' },
-    { path: `/${relativeHandle}`, query: 'ProfilePostListPageQuery' },
+    { path: `/${relativeHandle}`, query: 'ProfileScreenQuery' },
     { path: detailPath, query: 'PostDetailQuery' },
     { path: '/bookmarks', query: 'BookmarksPageQuery' },
   ] as const;

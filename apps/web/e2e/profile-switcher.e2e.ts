@@ -148,7 +148,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await expect(page.getByText('@gamma', { exact: true }).last()).toBeVisible();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.operationNames).toContain('ProfileLayoutQuery');
+  expect(graphQLRequests.operationNames).toContain('ProfileScreenQuery');
 });
 
 test('home route active profile query refetches after switching profiles', async ({ page }) => {

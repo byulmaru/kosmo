@@ -1,26 +1,43 @@
-import { Text } from 'react-native';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
-import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
-import { useProfileRoute } from '@/components/profile/ProfileRouteShell';
+import ProfileScreen from '@/components/profile/ProfileScreen';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { SessionProvider } from '@/session/SessionProvider';
 import { RouterMockProvider, usePathname, useRouter } from '../../../.storybook/mocks/expo-router';
-import { profile } from '../fixtures';
+import { profile, profileWithPosts } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-const target = profile({
+const conversionViewerState = {
+  blockedBy: false,
+  follow: null,
+  followRequest: null,
+  isSelf: false,
+  membership: null,
+  profileBlock: null,
+  profileMute: null,
+};
+const target = profileWithPosts([], {
   id: 'conversion-target',
   displayName: '탐색 대상',
   handle: 'conversion',
   relativeHandle: '@conversion',
+  viewerState: conversionViewerState,
 });
 const data = {
-  currentSession: { id: 'conversion-session', selectedProfile: { id: 'conversion-viewer' } },
+  currentSession: {
+    id: 'conversion-session',
+    selectedProfile: profile({
+      id: 'conversion-viewer',
+      displayName: '테스트 계정 프로필',
+      handle: 'viewer',
+      relativeHandle: '@viewer',
+      viewerState: { ...conversionViewerState, isSelf: true },
+    }),
+  },
   me: { id: 'conversion-account', name: '테스트 계정' },
   searchProfiles: {
     edges: [{ cursor: 'one', node: target }],
@@ -60,17 +77,6 @@ const followResponse = (request = false) => ({
   },
 });
 
-// Expo's Slot boundary is replaced, while the production layout constructs and mounts its chrome.
-function ProfileContent() {
-  const { chrome } = useProfileRoute();
-  return (
-    <>
-      {chrome}
-      <Text>프로필 콘텐츠</Text>
-    </>
-  );
-}
-
 function Routes() {
   const pathname = usePathname();
   const router = useRouter();
@@ -78,7 +84,11 @@ function Routes() {
     <>
       <AnalyticsSessionBridge />
       <Button onPress={() => router.push('/search')}>검색으로 돌아가기</Button>
-      {pathname.startsWith('/@') ? <ProfileLayout /> : <SearchScreen />}
+      {pathname.startsWith('/@') ? (
+        <ProfileScreen connectionKind={null} handle="conversion" />
+      ) : (
+        <SearchScreen />
+      )}
     </>
   );
 }
@@ -88,7 +98,6 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
     <RouterMockProvider
       params={{ q: 'conversion', tab: 'people', profileHandle: '@conversion' }}
       pathname={startPath}
-      slot={<ProfileContent />}
     >
       <ShellChromeProvider
         navigationDrawerOpen={false}
@@ -123,7 +132,7 @@ const meta = {
     return () => mocked(trackAnalytics).mockReset();
   },
   parameters: {
-    relay: { data, mutationResponse: followResponse() },
+    relay: { actorBoundary: true, data, mutationResponse: followResponse() },
     controls: { disable: true },
   },
 } satisfies Meta<typeof SearchConversionFixture>;
@@ -134,14 +143,14 @@ export const SelectedProfileVisible: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        ProfileLayoutQuery: { data: { profileByHandle: target }, delayMs: 300 },
+        ProfileScreenQuery: { data, delayMs: 300 },
       },
     },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await expect(within(canvasElement).findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await waitFor(() =>
       expect(events().map(([name]) => name)).toEqual([
         'search_result_selected',
@@ -156,7 +165,7 @@ export const SelectedProfileVisible: Story = {
 export const DirectProfileHasNoSearchSelection: Story = {
   args: { startPath: '/@conversion' },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await expect(within(canvasElement).findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await waitFor(() => expect(events()).toEqual([['profile_view_succeeded', {}]]));
   },
 };
@@ -173,7 +182,13 @@ export const ModifiedSelectionHasNoSearchSelection: Story = {
 
 export const ProfileMissing: Story = {
   parameters: {
-    relay: { operationResponses: { ProfileLayoutQuery: { data: { profileByHandle: null } } } },
+    relay: {
+      operationResponses: {
+        ProfileScreenQuery: {
+          data: { currentSession: data.currentSession, profileByHandle: null },
+        },
+      },
+    },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
@@ -186,7 +201,7 @@ export const ProfileMissing: Story = {
 
 export const ProfileFailure: Story = {
   parameters: {
-    relay: { operationResponses: { ProfileLayoutQuery: { error: 'profile failed' } } },
+    relay: { operationResponses: { ProfileScreenQuery: { error: 'profile failed' } } },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
