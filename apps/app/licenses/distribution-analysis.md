@@ -14,6 +14,8 @@ The inventory was captured from repository base `bbb7820dc57693f23d4eb30e0064aba
 
 The collector uses production Expo exports and their source and asset maps for all three targets, Expo and React Native native autolinking for Android and iOS, and font resources from evaluated Expo public config. It selects those package identities from pnpm's production license report before reading license text. The 13 pending-notice rows remain unchanged; only `standard-navigation@0.0.5` is in this distribution set. Its artifact text remains blank.
 
+The exact union of 162 npm package versions was verified again on `cdaff941609dc5e1d5be2911b04570aff61589bb`; the committed 163-entry app artifact retains the separate emoji attribution row.
+
 ## `standard-navigation@0.0.5`
 
 The [npm version record](https://registry.npmjs.org/standard-navigation/0.0.5) declares MIT and points to upstream commit `0016fae7800b9f27bab91326697b740a6d2266dc`. The [published npm tarball](https://registry.npmjs.org/standard-navigation/-/standard-navigation-0.0.5.tgz) matched the registry SHA-1 and SRI. Neither that exact tarball nor the [linked immutable source commit](https://github.com/react-navigation/standard-navigation/tree/0016fae7800b9f27bab91326697b740a6d2266dc) contained a nonempty license or notice file or copyright/license text in the inspected text files. There is no authentic original text to add. The artifact preserves the empty pending row; the UI omits blank-text rows, which does not resolve this evidence gap.
