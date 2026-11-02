@@ -48,13 +48,14 @@ let captureMediaValues = true;
 let mediaRenderProps: PostComposerMediaControlsRenderProps | undefined;
 let issueCalls: MediaMutationConfig[] = [];
 let uploadCalls = 0;
+let releasedPreviewUris: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 let nextIssuedId = 0;
 let releasePendingUpload: (() => void) | undefined;
 let PostComposerMediaControls: typeof PostComposerMediaControlsComponent;
 
-const asset = (): ImagePickerAsset =>
-  ({ height: 100, uri: 'file:///local/image.jpg', width: 100 }) as ImagePickerAsset;
+const asset = (uri = 'file:///local/image.jpg'): ImagePickerAsset =>
+  ({ height: 100, uri, width: 100 }) as ImagePickerAsset;
 
 mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => pickerResult,
@@ -126,7 +127,7 @@ const renderMedia = (props: PostComposerMediaControlsRenderProps) => {
 before(async () => {
   mockModule('@/components/media/imageUpload', {
     reportImageUploadError: () => undefined,
-    releaseImagePreview: () => undefined,
+    releaseImagePreview: (uri: string) => releasedPreviewUris.push(uri),
     uploadImage: (options: UploadOptions) => {
       uploadCalls += 1;
       return uploadImageImpl(options);
@@ -152,6 +153,7 @@ beforeEach(() => {
   mediaRenderProps = undefined;
   issueCalls = [];
   uploadCalls = 0;
+  releasedPreviewUris = [];
   nextIssuedId = 0;
   releasePendingUpload = undefined;
 });
@@ -226,6 +228,33 @@ describe('PostComposerMediaControls post request media', () => {
 
     assert.equal(mediaValues.at(-1)?.hasPendingMedia, true);
     assert.throws(() => mediaValues.at(-1)?.getPostRequestMedia());
+    assert.equal(mediaValues.at(-1)?.takePostRequestPreview(), undefined);
+  });
+
+  it('hands off the first ready preview and releases the remaining assets on reset', async () => {
+    pickerResult = {
+      assets: [asset('blob:first'), asset('blob:removed'), asset('blob:remaining')],
+      canceled: false,
+    };
+    await renderControls();
+    await act(async () => mediaRenderProps?.onMediaAction());
+    await flush();
+
+    assert.deepEqual(mediaValues.at(-1)?.takePostRequestPreview(), {
+      mediaId: 'media-1',
+      uri: 'blob:first',
+    });
+    assert.deepEqual(releasedPreviewUris, []);
+
+    const removedItem = mediaRenderProps?.items[1];
+    assert.ok(removedItem);
+    await act(async () => mediaRenderProps?.onMediaRemove(removedItem.key));
+    assert.deepEqual(releasedPreviewUris, ['blob:removed']);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    assert.deepEqual(releasedPreviewUris, ['blob:removed', 'blob:remaining']);
   });
 
   it('requires a new file after admission rejects an uploaded image and replaces only that slot', async () => {

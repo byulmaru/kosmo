@@ -36,6 +36,7 @@ import {
   prependPostRequestToLoadedProfileRequests,
   reconcilePublishedPostInHome,
 } from './postRequestCache';
+import { usePostRequestPreviewStore } from './PostRequestPreviewContext';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -287,6 +288,7 @@ function PostComposerContents({
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const { selectedProfileId } = useSession();
+  const postRequestPreviewStore = usePostRequestPreviewStore();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
@@ -514,6 +516,19 @@ function PostComposerContents({
         }
         const acceptedRequest = response?.createPost?.request;
         if (acceptedRequest?.id) {
+          const firstMediaId = input.media?.[0]?.mediaId;
+          if (
+            acceptedRequest.status !== 'PUBLISHED' &&
+            acceptedRequest.status !== 'CANCELLED' &&
+            firstMediaId &&
+            media.items[0]?.mediaId === firstMediaId
+          ) {
+            const preview = media.takePostRequestPreview();
+            if (preview) {
+              postRequestPreviewStore.set(acceptedRequest.id, preview);
+            }
+          }
+
           trackAnalytics('post_created', {
             selected_profile_id: profile.id,
             visibility,

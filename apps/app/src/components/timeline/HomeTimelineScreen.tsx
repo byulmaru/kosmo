@@ -1,25 +1,13 @@
-import { Link, Redirect } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
-import {
-  startTransition,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
-import {
-  PostRequestHomeSummaryFallback,
-  PostRequestHomeSummaryLoading,
-  PostRequestListSummary,
-} from '@/components/post/PostRequestList';
+import { PostRequestListSummary } from '@/components/post/PostRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -220,15 +208,24 @@ function HomeContent({
     };
   }, [environment, registerHomeRefresh, showToast]);
 
-  return <HomeContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />;
+  return (
+    <HomeContentView
+      data={data}
+      fetchKey={fetchKey}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    />
+  );
 }
 
 function HomeContentView({
   data,
+  fetchKey,
   onRefresh,
   refreshing,
 }: {
   data: HomePageQuery$data;
+  fetchKey: string;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
@@ -238,18 +235,23 @@ function HomeContentView({
   const accountId = data.me?.id ?? null;
   const selectedProfileId = selectedProfile?.id ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
-  const postRequestHeader = useMemo(() => {
-    if (accountId === null || selectedProfileId === null) {
-      return null;
-    }
-
-    return (
-      <HomePostRequestSummaryHeader
+  const postRequestFetchKey = `${fetchKey}:${refreshing}`;
+  const postRequestCards =
+    accountId !== null && selectedProfileId !== null ? (
+      <ErrorBoundary
         key={`${accountId}:${selectedProfileId}`}
-        profileId={selectedProfileId}
-      />
-    );
-  }, [accountId, selectedProfileId]);
+        fallback={null}
+        resetKeys={[postRequestFetchKey]}
+      >
+        <Suspense fallback={null}>
+          <PostRequestListSummary
+            fetchKey={postRequestFetchKey}
+            onCompose={shellChrome?.openComposer}
+            profileId={selectedProfileId}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    ) : null;
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {
     return <Redirect href="/first-profile/handle" />;
@@ -280,50 +282,13 @@ function HomeContentView({
     <View style={styles.timeline}>
       <HomePushPermissionBanner />
       <PostList
-        header={postRequestHeader}
+        header={postRequestCards}
         home={data}
         identityKey={`home:${selectedProfile.id}`}
         onRefresh={onRefresh}
         replyProfile={selectedProfile}
         refreshing={refreshing}
       />
-    </View>
-  );
-}
-
-function HomePostRequestSummaryHeader({ profileId }: { profileId: string }) {
-  const onCompose = useShellChrome()?.openComposer;
-  const theme = useTheme();
-  const [fetchKey, setFetchKey] = useState(0);
-
-  return (
-    <View style={[styles.postRequestHeader, { borderBottomColor: theme.borderSubtle }]}>
-      <Link asChild href={{ pathname: '/post-requests', params: { profileId } }}>
-        <Pressable accessibilityRole="link" style={styles.postRequestLink}>
-          <Text style={[styles.postRequestLinkText, { color: theme.actionPrimaryBase }]}>
-            게시 요청
-          </Text>
-        </Pressable>
-      </Link>
-      <ErrorBoundary
-        fallbackRender={({ resetErrorBoundary }) => (
-          <PostRequestHomeSummaryFallback
-            onRetry={() => {
-              setFetchKey((current) => current + 1);
-              resetErrorBoundary();
-            }}
-          />
-        )}
-        resetKeys={[fetchKey]}
-      >
-        <Suspense fallback={<PostRequestHomeSummaryLoading />}>
-          <PostRequestListSummary
-            fetchKey={String(fetchKey)}
-            onCompose={onCompose}
-            profileId={profileId}
-          />
-        </Suspense>
-      </ErrorBoundary>
     </View>
   );
 }
@@ -335,13 +300,6 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, minHeight: 0 },
   timeline: { flex: 1, minHeight: 0, width: '100%' },
-  postRequestHeader: { borderBottomWidth: 1, gap: spacing.sm, padding: spacing.md },
-  postRequestLink: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44 },
-  postRequestLinkText: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '600',
-    ...typography.sm,
-  },
   webTimelineTabs: { position: 'sticky' as never, zIndex: 10 } as ViewStyle,
   onboardingRoot: {
     alignItems: 'center',

@@ -72,10 +72,11 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 ## Local Post 제출과 요청 상태
 
 - 모든 Local Post·Reply·Quote 제출은 같은 PostRequest 경로를 사용하며 `CreatePostInput`은 요청 ID를 받지 않는다. 각 제출의 `requestId`는 서버가 생성하므로, 오류 뒤 수동 재제출도 이전 요청의 재시도가 아닌 새 요청이다. 응답이 손실된 경우 기존 요청을 확인하거나 재생하지 않고 작성 내용을 보존해 일반 오류를 표시한다. 새 요청에 Media가 없거나 모든 참조 Media가 Ready면 publication 결과인 `PUBLISHED`를 기다린다. 유효한 Local Uploading Media가 하나라도 있으면 요청 접수를 즉시 확인하고 Media 처리와 publication은 계속 진행한다. 응답이 성공으로 확인되면 Composer를 닫고 초안을 비운다. 실제 Post 구조와 권한은 [Post 객체](../domain/objects/post.md)를 따른다.
-- 접수된 요청의 전체 제출 snapshot은 Temporal Workflow 안에 보존해 게시와 workflow 내부 멱등 처리를 완료하며, UI에는 공개하지 않고 Composer에 복구하지 않는다. 요청 상태는 `QUEUED`, `PROCESSING`, `PUBLISHING`, `CONFIRMING`, `FAILED`, `CANCELLED`, `PUBLISHED` 중 하나로 표시하고 백분율이나 남은 시간을 만들어 보여주지 않는다.
+- 접수된 요청의 전체 제출 snapshot은 Temporal Workflow 안에 보존해 게시와 workflow 내부 멱등 처리를 완료하며, UI에는 공개하지 않고 Composer에 복구하지 않는다. 서버 요청 상태는 `QUEUED`, `PROCESSING`, `PUBLISHING`, `CONFIRMING`, `FAILED`, `CANCELLED`, `PUBLISHED` 중 하나이며, 상태 백분율이나 남은 시간은 계산하지 않는다.
 - 제출 초안을 로컬에 영구 저장하거나 새 전역 게시글 이력을 만들지 않는다.
-- Home에는 현재 선택한 작성 Profile의 게시 요청 요약을 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. Home 요약은 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED` 상태를 표시하고 `CANCELLED`는 숨긴다. 비공개 `/post-requests` 화면에는 Profile에 남아 있는 Account 소유 요청 중 `PUBLISHED`가 아닌 모든 상태를 표시하며, `PUBLISHED` 요청은 요청 목록에서 사라진 뒤 일반 Post 화면에서 확인한다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. 요청 카드는 작성자 본인 전용 요약이므로 Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일을 표시한다. Sensitive Media 썸네일은 생략하며, 게시된 Post의 Content Warning 가림과 공용 reveal 동작은 그대로 유지한다.
-- `QUEUED`·`PROCESSING` 요청은 취소를 요청할 수 있으며, 서버가 `CANCELLED`로 확인한 뒤 취소 완료로 처리한다. `PUBLISHING`과 `CONFIRMING`은 취소할 수 없다. `CANCELLED` 요청은 Account 요청 이력에 남으며 Home 요약에서만 제거한다. `FAILED`는 Post나 Tombstone이 아닌 종료된 요청 상태로 workflow 보존 기간에만 남는다. `FAILED`와 `CANCELLED`의 `새 글 작성`은 현재 선택한 Profile의 일반 Post Composer를 연다. 요청의 본문·Content Warning·Media·Mention·Reply·Quote 관계·작성 Profile·기본값은 복사하지 않는다. 기존 일반 Composer draft는 기존 정책을 따르며, 로컬 draft가 없을 때만 새 입력이 비어 있다.
+- Home에는 현재 선택한 작성 Profile의 실제 표시 조건을 충족하는 게시 요청 중 처리 중이거나 실패한 카드만 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED`를 표시한다. 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청은 Home 카드에서 사라지고, 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역을 표시하지 않는다. 빈 상태·로딩·오류 안내, 영역 제목, 테두리, 이력·전체 보기 링크, 전용 게시 요청 화면·사이드바 메뉴·대체 경로는 두지 않는다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. 요청 카드는 작성자 본인 전용 요약이므로 Content Warning과 Sensitive Media 여부와 무관하게 첨부한 첫 이미지 썸네일을 표시한다. 게시된 Post의 Content Warning 가림과 공용 reveal 동작은 그대로 유지한다.
+- 접수가 확인된 요청의 첨부 이미지 미리보기는 현재 앱 세션 동안 해당 요청에만 표시한다. 같은 Account에서 Profile을 전환해도 유지하며, 다른 요청·Account에는 표시하지 않는다. `FAILED` 요청은 같은 세션에서 미리보기를 유지할 수 있고, 접수 전 실패는 Composer 초안과 첨부를 유지한다. 새로고침·앱 재시작·다른 기기에서는 미리보기를 복구하지 않는다. Media가 `READY`로 확인되면 미리보기를 최종 `Media.url` 이미지로 바꾼다. 게시 완료(`PUBLISHED`)나 취소(`CANCELLED`)를 확인하면, 또는 로그아웃·Account 변경·세션 종료 시 미리보기를 버린다.
+- `QUEUED`·`PROCESSING` 요청은 취소를 요청할 수 있으며, 서버가 `CANCELLED`로 확인한 뒤 취소 완료로 처리한다. `PUBLISHING`과 `CONFIRMING`은 취소할 수 없다. `CANCELLED` 요청은 Account 소유 데이터에 기존 보존 정책으로 남지만 Home에는 표시하지 않는다. `FAILED`는 Post나 Tombstone이 아닌 종료된 요청 상태로 workflow 보존 기간에만 남는다. `FAILED` 카드의 `새 글 작성`은 현재 선택한 Profile의 일반 Post Composer를 연다. 요청의 본문·Content Warning·Media·Mention·Reply·Quote 관계·작성 Profile·기본값은 복사하지 않는다. 기존 일반 Composer draft는 기존 정책을 따르며, 로컬 draft가 없을 때만 새 입력이 비어 있다.
 - `PUBLISHED`는 Post 저장 transaction이 commit됐음을 뜻한다. 후속 게시 작업의 완료를 뜻하지 않으며, 이 상태가 되어도 Post 상세로 자동 이동하지 않는다. 실제 publish 시점에 작성 Profile 권한을 다시 확인한다.
 
 ## Web 관계형 Composer modal
@@ -237,7 +238,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Reply·Quote Composer에는 이 local 전환을 제공하지 않는다.
 - local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
   picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
-- 접수 전 Media raw-byte 업로드와 게시 요청 접수 중에는 작성 Profile 전환을 잠근다. 접수 전 Media 업로드 실패는 첨부와 draft를 유지하며, 접수 뒤 `FAILED`·`CANCELLED` 요청은 `Local Post 제출과 요청 상태`의 `새 글 작성`을 따른다.
+- 접수 전 Media raw-byte 업로드와 게시 요청 접수 중에는 작성 Profile 전환을 잠근다. 접수 전 Media 업로드 실패는 첨부와 draft를 유지하며, 접수 뒤 `FAILED` 요청은 `Local Post 제출과 요청 상태`의 `새 글 작성`을 따른다.
 - 선택한 작성 Profile은 접수된 요청 snapshot에 유지되며, 접수만으로 Post 목록이나 Post 상세를 갱신하지 않는다.
   actual Post가 저장된 뒤의 현재 actor Home 목록 반영은 Relay 연결 계약을 따른다. 접수 완료 후 Composer는 닫히며,
   다음 Composer는 기존 기본 작성 Profile을 사용한다.
@@ -321,10 +322,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Web 390px에서는 지원 브라우저의 Back·Forward, 계속 작성의 초안·URL 유지, 폐기 후 원래 목적지 이동과
   history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
-- Post·Reply·Quote의 raw Media upload 완료 뒤 Media 상태에 따른 응답 확인(첨부 Media가 없거나 모두 Ready면 `PUBLISHED`, 유효한 Local Uploading Media가 있으면 즉시 request acknowledgement), Composer 종료·draft reset, 접수 acknowledgement만으로 Post를 만들지 않는 동작, 요청 상태와
-  Home 요약·비공개 `/post-requests` 표시를 확인한다. Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일이 표시되고, Sensitive Media 썸네일은 생략되는지, 일곱 요청 상태의 표시와
-  백분율·ETA 부재, `PROCESSING` 취소 확인, `PUBLISHING`·`CONFIRMING` 취소 불가를 확인한다. `PROCESSING` 취소는 서버가
-  `CANCELLED`를 확인하기 전에 Composer를 열지 않고, `FAILED`·`CANCELLED`의 `새 글 작성`은 현재 Profile의 일반 Post Composer를
+- Post·Reply·Quote의 raw Media upload 완료 뒤 Media 상태에 따른 응답 확인(첨부 Media가 없거나 모두 Ready면 `PUBLISHED`, 유효한 Local Uploading Media가 있으면 즉시 request acknowledgement), Composer 종료·draft reset, 접수 acknowledgement만으로 Post를 만들지 않는 동작, 요청 상태와 Home의 실제 게시 요청 카드 표시를 확인한다. 처리 중이거나 실패한 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED` 카드만 보이는지, 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청이 카드에서 사라지는지 확인한다. 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역과 빈 상태·로딩·오류 안내, 제목, 테두리, 이력·전체 보기 링크가 나타나지 않고 전용 게시 요청 화면이나 사이드바 메뉴가 없는지 확인한다. 본인 요청의 첫 이미지가 Content Warning·Sensitive Media와 무관하게 표시되고, 미리보기가 같은 Account의 Profile 전환 뒤에도 해당 요청에만 남으며 다른 요청·Account에 보이지 않는지 확인한다. 접수 실패 시 Composer draft를 유지하고 `FAILED` 요청은 세션 내 미리보기를 유지할 수 있는지 확인한다. 새로고침·앱 재시작·다른 기기에서는 미리보기를 복구하지 않으며, Media `READY` 뒤 최종 `Media.url`로 바뀌고 게시 완료·취소 확인 또는 세션 종료 뒤 사라지는지 확인한다. 백분율·ETA 부재, `PROCESSING` 취소 확인, `PUBLISHING`·`CONFIRMING` 취소 불가도 확인한다. `PROCESSING` 취소는 서버가
+  `CANCELLED`를 확인하기 전에 Composer를 열지 않고, `FAILED` 카드의 `새 글 작성`은 현재 Profile의 일반 Post Composer를
   열면서 요청 snapshot을 복사하지 않는지 확인한다. 기존 일반 draft는 일반 Composer 정책을 유지하고,
   로컬 draft가 없을 때만 새 입력이 비어 있는지 확인한다. 오류 뒤 draft가 편집 가능하고 수동 재제출에
   client request ID가 포함되지 않으며 성공 응답에서 Composer가 닫히고 draft가 비워지는지 확인한다.

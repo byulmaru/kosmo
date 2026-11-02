@@ -1,5 +1,6 @@
 import { fn } from 'storybook/test';
-import { PostRequestList } from '@/components/post/PostRequestList';
+import { PostRequestListSummary } from '@/components/post/PostRequestList';
+import { PostRequestPreviewProvider } from '@/components/post/PostRequestPreviewContext';
 import { profile } from '../fixtures';
 import { Catalog } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -23,12 +24,21 @@ const failedRequest = {
   status: 'FAILED' as const,
   sensitiveMedia: false,
 };
+const queuedRequest = {
+  ...failedRequest,
+  bodyText: '처리 중인 게시 요청입니다.',
+  id: 'post-request-list-node-queued',
+  requestId: 'post-request-list-queued',
+  status: 'QUEUED' as const,
+};
 
 function PostRequestListFixture({ onCompose }: { onCompose: () => void }) {
   return (
-    <Catalog>
-      <PostRequestList onCompose={onCompose} profileId={profileId} />
-    </Catalog>
+    <PostRequestPreviewProvider>
+      <Catalog>
+        <PostRequestListSummary onCompose={onCompose} profileId={profileId} />
+      </Catalog>
+    </PostRequestPreviewProvider>
   );
 }
 
@@ -45,7 +55,7 @@ const meta = {
         node: {
           __typename: 'Profile',
           id: profileId,
-          postRequests: [failedRequest],
+          postRequests: [failedRequest, queuedRequest],
         },
       },
     },

@@ -23,7 +23,7 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
   인디케이터는 이 하단 boundary 위에 놓이며 Home과 Local 사이의 세로 border나 바깥 좌우 border는 추가하지 않는다.
 - 탭은 상단에 고정하고 목록만 스크롤한다.
 - Home과 Local은 기존 `PostListItem`을 사용하며 Local 전용 게시글 카드나 목록 primitive를 만들지 않는다.
-- Home은 목록 위에 선택한 Profile의 최신 활성·실패 게시 요청 하나를 공유 `PostRequestCard`로 표시하고 `게시 요청` 링크를 제공한다. 이 요약은 게시글 목록의 header로 조합해 Native에서는 하나의 `FlatList`가 스크롤을 소유하고 Web에서는 기존 문서 흐름을 유지한다.
+- Home은 선택한 Profile의 실제 게시 요청 가운데 처리 중이거나 실패한 항목만 카드로 게시글 목록 위에 표시하며, 카드 배치는 목록의 header로 조합한다. 표시 상태는 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED`다. 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청은 Home 카드에서 사라지고, 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역을 생략하고 빈 상태·로딩·오류 안내, 제목, 테두리, 이력·전체 보기 링크를 표시하지 않는다. 전용 게시 요청 화면이나 사이드바 메뉴·대체 경로를 두지 않는다. Native에서는 하나의 `FlatList`가 스크롤을 소유하고 Web에서는 기존 문서 흐름을 유지한다.
 - 목록의 색상, 간격과 typography는 기존 semantic token을 사용한다. 현재 앱 설정과 전역 Provider가 Light로
   고정되어 있으므로 Local은 별도 theme 전환을 추가하지 않으며, Dark 실화면 검증은 앱 전역 theme 활성화 뒤
   수행한다.

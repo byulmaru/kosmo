@@ -2,6 +2,10 @@ import { Link, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { AppState, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
+import {
+  usePostRequestPreview,
+  usePostRequestPreviewStore,
+} from '@/components/post/PostRequestPreviewContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -31,7 +35,6 @@ const PostRequestCardFragment = graphql`
       url
       altText
     }
-    sensitiveMedia
     id
     post {
       id
@@ -54,6 +57,7 @@ const CancelPostRequestMutation = graphql`
   mutation PostRequestCardCancelMutation($input: CancelPostRequestInput!) {
     cancelPostRequest(input: $input) {
       request {
+        status
         ...PostRequestCard_request
       }
     }
@@ -84,6 +88,8 @@ export function PostRequestCard({
   >(PostRequestCardFragment, requestKey);
   const [commitCancel, cancelInFlight] =
     useMutation<PostRequestCardCancelMutation>(CancelPostRequestMutation);
+  const requestPreview = usePostRequestPreview(request.id);
+  const requestPreviewStore = usePostRequestPreviewStore();
   const [queryError, setQueryError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
@@ -94,6 +100,9 @@ export function PostRequestCard({
   });
 
   useEffect(() => {
+    if (request.status === 'PUBLISHED' || request.status === 'CANCELLED') {
+      requestPreviewStore.delete(request.id);
+    }
     if (
       previousRequest.id === request.id &&
       ACTIVE_STATUSES.has(previousRequest.status) &&
@@ -108,7 +117,16 @@ export function PostRequestCard({
     if (previousRequest.id !== request.id || previousRequest.status !== request.status) {
       setPreviousRequest({ id: request.id, status: request.status });
     }
-  }, [onPublished, previousRequest, request.id, request.post, request.status]);
+  }, [onPublished, previousRequest, request.id, request.post, request.status, requestPreviewStore]);
+
+  useEffect(() => {
+    if (
+      requestPreview &&
+      request.media.some((item) => item?.id === requestPreview.mediaId && Boolean(item.url))
+    ) {
+      requestPreviewStore.delete(request.id);
+    }
+  }, [request.id, request.media, requestPreview, requestPreviewStore]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -180,6 +198,11 @@ export function PostRequestCard({
       variables: {
         input: { requestId: request.requestId },
       },
+      onCompleted: (response) => {
+        if (response.cancelPostRequest?.request?.status === 'CANCELLED') {
+          requestPreviewStore.delete(request.id);
+        }
+      },
       onError: () => refreshRequest(),
     });
   };
@@ -188,9 +211,13 @@ export function PostRequestCard({
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
   const canCompose = request.status === 'FAILED' || request.status === 'CANCELLED';
   const excerpt = request.bodyText.trim();
-  const thumbnail = request.sensitiveMedia
-    ? undefined
-    : request.media.find((item) => Boolean(item?.url));
+  const thumbnail = request.media.find(
+    (item) =>
+      Boolean(item?.url) || (requestPreview !== undefined && item?.id === requestPreview.mediaId),
+  );
+  const thumbnailUrl =
+    thumbnail?.url ??
+    (requestPreview && thumbnail?.id === requestPreview.mediaId ? requestPreview.uri : undefined);
   const publishedHref = request.post?.profile.relativeHandle
     ? `/${request.post.profile.relativeHandle}/${request.post.id}`
     : undefined;
@@ -231,18 +258,18 @@ export function PostRequestCard({
         <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{statusLabel}</Text>
       </View>
 
-      {excerpt || thumbnail?.url ? (
+      {excerpt || thumbnailUrl ? (
         <View style={styles.preview}>
           {excerpt ? (
             <Text numberOfLines={2} style={[styles.excerpt, { color: theme.foregroundPrimary }]}>
               {excerpt}
             </Text>
           ) : null}
-          {thumbnail?.url ? (
+          {thumbnailUrl ? (
             <Image
-              accessibilityLabel={thumbnail.altText || '첨부 이미지'}
+              accessibilityLabel={thumbnail?.altText || '첨부 이미지'}
               resizeMode="cover"
-              source={{ uri: thumbnail.url }}
+              source={{ uri: thumbnailUrl }}
               style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
             />
           ) : null}

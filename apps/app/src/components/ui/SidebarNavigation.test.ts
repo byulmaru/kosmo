@@ -64,7 +64,6 @@ mockModule(require.resolve('lucide-react-native'), {
   Bookmark: 'Bookmark',
   ChevronDown: 'ChevronDown',
   ChevronUp: 'ChevronUp',
-  ClipboardList: 'ClipboardList',
   Ellipsis: 'Ellipsis',
   House: 'House',
   LogIn: 'LogIn',
@@ -166,7 +165,7 @@ describe('guest public-content sidebar', () => {
     assert.ok(!labels.includes('로그아웃'));
   });
 
-  it('shows the protected post request destination in primary navigation', async () => {
+  it('omits post requests while keeping the existing primary navigation', async () => {
     await act(async () => {
       renderer = create(
         createElement(SidebarNavigation, {
@@ -177,11 +176,15 @@ describe('guest public-content sidebar', () => {
       );
     });
     assert.ok(renderer);
-    const request = renderer.root
+    const labels = renderer.root
       .findAllByType('Pressable' as never)
-      .find((node) => node.props.accessibilityLabel === '작성 요청');
+      .map((node) => node.props.accessibilityLabel);
 
-    assert.ok(request);
+    assert.ok(labels.includes('홈'));
+    assert.ok(labels.includes('검색'));
+    assert.ok(labels.includes('팔로워 요청'));
+    assert.ok(labels.includes('북마크'));
+    assert.ok(!labels.includes('작성 요청'));
   });
 
   it('keeps both compact actions discoverable by their accessible names', async () => {

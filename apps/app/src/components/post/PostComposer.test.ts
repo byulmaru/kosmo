@@ -61,9 +61,26 @@ const mediaValue = {
     return [{ altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' }];
   },
   requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
+  takePostRequestPreview: () => {
+    previewTakeCount += 1;
+    const preview = mediaPreview;
+    mediaPreview = undefined;
+    return preview;
+  },
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
 let reselectionMediaIds: string[] = [];
+let mediaPreview: { mediaId: string; uri: string } | undefined;
+let previewTakeCount = 0;
+const requestPreviews = new Map<string, Readonly<{ mediaId: string; uri: string }>>();
+const postRequestPreviewStore = {
+  clear: () => requestPreviews.clear(),
+  delete: (requestId: string) => requestPreviews.delete(requestId),
+  get: (requestId: string) => requestPreviews.get(requestId),
+  set: (requestId: string, preview: { mediaId: string; uri: string }) =>
+    requestPreviews.set(requestId, preview),
+  subscribe: () => () => undefined,
+};
 let refreshMedia: (() => void) | undefined;
 let switcherProps:
   | {
@@ -317,6 +334,9 @@ mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'Text
 mockModule('@/relay/RelayEnvironmentBoundary', {
   useRelayEnvironmentGeneration: () => relayEnvironmentGeneration,
 });
+mockModule('./PostRequestPreviewContext', {
+  usePostRequestPreviewStore: () => postRequestPreviewStore,
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
   useTheme: () => ({
@@ -359,6 +379,7 @@ mockModule('./PostComposerMediaControls', {
     items: [],
     sensitiveMedia: false,
     requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
+    takePostRequestPreview: () => undefined,
   },
   PostComposerMediaControls: ({
     onValueChange,
@@ -439,6 +460,9 @@ beforeEach(() => {
   relayEnvironmentGeneration = null;
   sessionAccountId = 'account-1';
   sessionSelectedProfileId = 'profile-a';
+  mediaPreview = { mediaId: 'media-1', uri: 'blob:composer-preview' };
+  previewTakeCount = 0;
+  requestPreviews.clear();
   analyticsEvents.length = 0;
   textInputMountCount = 0;
   textInputUnmountCount = 0;
@@ -703,6 +727,11 @@ describe('PostComposer request acknowledgement cache projection', () => {
       );
       assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
       assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
+      assert.equal(previewTakeCount, status === 'QUEUED' ? 1 : 0);
+      assert.deepEqual(
+        requestPreviews.get(requestNodeId),
+        status === 'QUEUED' ? { mediaId: 'media-1', uri: 'blob:composer-preview' } : undefined,
+      );
       assert.deepEqual(analyticsEvents, [
         {
           event: 'post_created',
@@ -837,6 +866,42 @@ describe('PostComposer request acknowledgement cache projection', () => {
     });
   }
 });
+
+for (const status of ['CANCELLED', 'FAILED'] as const) {
+  it(`applies the ${status} preview handoff policy after a current acknowledgement`, async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('접수된 본문'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    await act(async () =>
+      call.onCompleted({
+        createPost: {
+          request: {
+            id: `request-${status.toLowerCase()}`,
+            requestId: serverGeneratedRequestId(0),
+            status,
+          },
+        },
+      }),
+    );
+
+    assert.equal(previewTakeCount, status === 'FAILED' ? 1 : 0);
+    assert.deepEqual(
+      requestPreviews.get(`request-${status.toLowerCase()}`),
+      status === 'FAILED' ? { mediaId: 'media-1', uri: 'blob:composer-preview' } : undefined,
+    );
+  });
+}
 
 it('requires a published Post ID and a completion handler before skipping the request acknowledgement', async () => {
   const createdPosts: Array<{ id: string }> = [];
@@ -1514,6 +1579,8 @@ describe('PostComposer local author', () => {
     ]);
     assert.deepEqual(analyticsEvents, []);
     assert.equal(mutationCalls.length, 1);
+    assert.equal(previewTakeCount, 0);
+    assert.equal(requestPreviews.size, 0);
 
     await act(async () => targetProps?.onSubmit());
     const secondCall = mutationCalls[1];
@@ -1531,6 +1598,11 @@ describe('PostComposer local author', () => {
         properties: { selected_profile_id: profileA.id, visibility: 'DIRECT' },
       },
     ]);
+    assert.equal(previewTakeCount, 1);
+    assert.deepEqual(requestPreviews.get('post-request-node-1'), {
+      mediaId: 'media-1',
+      uri: 'blob:composer-preview',
+    });
   });
 
   it('ignores a mutation response after the composer actor and environment change', async () => {
@@ -1573,6 +1645,8 @@ describe('PostComposer local author', () => {
     assert.equal(toastCalls.length, 0);
     assert.equal(targetProps?.body, '');
     assert.deepEqual(analyticsEvents, []);
+    assert.equal(previewTakeCount, 0);
+    assert.equal(requestPreviews.size, 0);
   });
 
   it('records an accepted request even when a partial GraphQL error is present', async () => {
@@ -1613,6 +1687,11 @@ describe('PostComposer local author', () => {
         properties: { selected_profile_id: profileA.id, visibility: 'FOLLOWERS' },
       },
     ]);
+    assert.equal(previewTakeCount, 1);
+    assert.deepEqual(requestPreviews.get('post-request-node-0'), {
+      mediaId: 'media-1',
+      uri: 'blob:composer-preview',
+    });
   });
 
   it('does not record a GraphQL response without an accepted request ID', async () => {
@@ -1630,6 +1709,8 @@ describe('PostComposer local author', () => {
 
     assert.equal(targetProps?.body, '접수되지 않은 본문');
     assert.deepEqual(analyticsEvents, []);
+    assert.equal(previewTakeCount, 0);
+    assert.equal(requestPreviews.size, 0);
   });
 });
 

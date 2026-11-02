@@ -17,6 +17,7 @@ const require = createRequire(import.meta.url);
 const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 let activeProfileId = 'profile-a';
+let postRequestSummaryMode: 'ready' | 'pending' | 'error' = 'ready';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
 let HomeTimelineScreen: ComponentType;
@@ -42,8 +43,24 @@ const environment = {
   retain: () => ({ dispose: () => undefined }),
 };
 
-function MockPostList({ identityKey }: { identityKey?: string }) {
-  return createElement('TimelineRows', { identityKey });
+function MockPostList({ header, ...props }: { header?: ReactNode; [key: string]: unknown }) {
+  return createElement('TimelineRows', props, header);
+}
+
+function MockPostRequestListSummary({
+  fetchKey,
+  profileId,
+}: {
+  fetchKey?: string;
+  profileId: string;
+}) {
+  if (postRequestSummaryMode === 'pending') {
+    throw new Promise(() => undefined);
+  }
+  if (postRequestSummaryMode === 'error') {
+    throw new Error('post requests unavailable');
+  }
+  return createElement('PostRequestSummary', { fetchKey, profileId });
 }
 
 function MockBanner() {
@@ -139,9 +156,7 @@ mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/components/ui/Banner', { Banner: MockBanner });
 mockModule('@/components/post/PostRequestList', {
-  PostRequestHomeSummaryFallback: () => null,
-  PostRequestHomeSummaryLoading: () => null,
-  PostRequestListSummary: () => null,
+  PostRequestListSummary: MockPostRequestListSummary,
 });
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -193,6 +208,7 @@ afterEach(async () => {
   toastCleanupCount = 0;
   nativeHomeReselectionHandler = null;
   activeProfileId = 'profile-a';
+  postRequestSummaryMode = 'ready';
   platform.OS = 'ios';
   if (originalWindowDescriptor) {
     Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
@@ -202,6 +218,41 @@ afterEach(async () => {
 });
 
 describe('Timeline refresh', () => {
+  it('leaves the Home request area empty while its query is pending', async () => {
+    postRequestSummaryMode = 'pending';
+
+    await act(async () => {
+      renderer = create(homeWithWebPush('unsupported'));
+    });
+
+    assert.equal(renderer?.root.findAllByType('TimelineRows').length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 0);
+    assert.equal(renderer?.root.findByType('TimelineRows').children.length, 0);
+  });
+
+  it('hides a Home request query error and restores cards after Home refresh', async () => {
+    postRequestSummaryMode = 'error';
+
+    await act(async () => {
+      renderer = create(homeWithWebPush('unsupported'));
+    });
+
+    assert.equal(renderer?.root.findAllByType('TimelineRows').length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 0);
+    assert.equal(renderer?.root.findByType('TimelineRows').children.length, 0);
+
+    postRequestSummaryMode = 'ready';
+    await act(async () => {
+      renderer?.root.findByType('TimelineRows').props.onRefresh();
+    });
+
+    assert.equal(homeRequests.length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 1);
+
+    await act(async () => homeRequests[0]?.complete?.());
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary').length, 1);
+  });
+
   it('places the eligible Web permission banner before Home posts', async () => {
     platform.OS = 'web';
     await act(async () => {

@@ -35,6 +35,7 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { PostRequestPreviewProvider } from '@/components/post/PostRequestPreviewContext';
 import {
   PostSourcePresentationView,
   PostSourcePreview,
@@ -3196,13 +3197,15 @@ const meta = {
   decorators: [
     (Story) => (
       <SessionProvider>
-        <PostActionAuthenticationProvider>
-          <PostComposerCoordinatorProvider owner="list" profile={null}>
-            <PostMediaViewerHostProvider>
-              <Story />
-            </PostMediaViewerHostProvider>
-          </PostComposerCoordinatorProvider>
-        </PostActionAuthenticationProvider>
+        <PostRequestPreviewProvider>
+          <PostActionAuthenticationProvider>
+            <PostComposerCoordinatorProvider owner="list" profile={null}>
+              <PostMediaViewerHostProvider>
+                <Story />
+              </PostMediaViewerHostProvider>
+            </PostComposerCoordinatorProvider>
+          </PostActionAuthenticationProvider>
+        </PostRequestPreviewProvider>
       </SessionProvider>
     ),
   ],

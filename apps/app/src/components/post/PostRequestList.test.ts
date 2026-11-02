@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Fragment, Suspense } from 'react';
+import { createElement, Suspense } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -16,13 +16,9 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type {
-  PostRequestList as PostRequestListComponent,
-  PostRequestListSummary as PostRequestListSummaryComponent,
-} from './PostRequestList';
+import type { PostRequestListSummary as PostRequestListSummaryComponent } from './PostRequestList';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -36,20 +32,8 @@ type RequestRow = Readonly<{
   requestId: string;
   status: string;
 }>;
-type FlatListMockProps = Readonly<{
-  data: ReadonlyArray<{ id: string; requestId: string; status: string }>;
-  ListEmptyComponent?: ReactNode;
-  ListHeaderComponent?: ReactNode;
-  renderItem: (params: {
-    index: number;
-    item: { id: string; requestId: string; status: string };
-  }) => ReactNode;
-  [key: string]: unknown;
-}>;
 
 const require = createRequire(import.meta.url);
-const platform = { OS: 'ios' };
-let hasPaginationScrollParent = false;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const generated = (name: string) =>
@@ -61,50 +45,8 @@ const graphql = (parts: TemplateStringsArray) => {
 };
 
 mockModule('react-relay', { ...ReactRelay, graphql });
-mockModule('react-native', {
-  ActivityIndicator: 'ActivityIndicator',
-  FlatList: ({
-    data,
-    ListEmptyComponent,
-    ListHeaderComponent,
-    renderItem,
-    ...props
-  }: FlatListMockProps) =>
-    createElement(
-      'FlatList',
-      { ...props, data },
-      ListHeaderComponent,
-      ...(data.length === 0
-        ? [ListEmptyComponent]
-        : data.map((item, index) =>
-            createElement(Fragment, { key: item.id }, renderItem({ index, item })),
-          )),
-    ),
-  Platform: platform,
-  StyleSheet: { create: <T>(styles: T) => styles },
-  Text: 'Text',
-  View: 'View',
-});
-mockModule('@/components/pagination/PaginationScrollView', {
-  usePaginationScrollContext: () => hasPaginationScrollParent,
-});
-mockModule('@/components/ui/Button', {
-  Button: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('Button', props, children),
-});
-mockModule('@/components/ui/StateView', {
-  StateView: (props: object) => createElement('StateView', props),
-});
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId }),
-});
-mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ foregroundSecondary: '#555', danger: '#900' }),
-});
-mockModule('@/theme/tokens', {
-  fontFamilies: { ui: 'SUIT' },
-  spacing: { lg: 16, md: 12, sm: 8, xxxl: 48 },
-  typography: { sm: {} },
 });
 mockModule('./PostRequestCard', {
   PostRequestCard: ({
@@ -130,7 +72,6 @@ mockModule('./PostRequestCard', {
 });
 
 let renderer: ReactTestRenderer | null = null;
-let PostRequestList: typeof PostRequestListComponent;
 let PostRequestListSummary: typeof PostRequestListSummaryComponent;
 let selectedProfileId = 'profile-a';
 
@@ -139,7 +80,7 @@ const postRequestListQuery = generated('PostRequestListQuery');
 const postRequestCardRefetchQuery = generated('PostRequestCardRefetchQuery');
 
 before(async () => {
-  ({ PostRequestList, PostRequestListSummary } = await import('./PostRequestList'));
+  ({ PostRequestListSummary } = await import('./PostRequestList'));
 });
 
 afterEach(async () => {
@@ -148,8 +89,6 @@ afterEach(async () => {
     renderer = null;
   }
   selectedProfileId = 'profile-a';
-  hasPaginationScrollParent = false;
-  platform.OS = 'ios';
   mock.restoreAll();
 });
 
@@ -309,42 +248,6 @@ function connectionNodeIds(environment: Environment, connectionId: string) {
   });
 }
 
-async function renderList(
-  environment: Environment,
-  overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
-) {
-  await act(async () => {
-    renderer = create(listView(environment, overrides));
-  });
-  assert.ok(renderer);
-}
-
-function listView(
-  environment: Environment,
-  overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
-) {
-  return createElement(ReactRelay.RelayEnvironmentProvider, {
-    environment,
-    children: createElement(Suspense, {
-      fallback: null,
-      children: createElement(PostRequestList, {
-        profileId: PROFILE_ID,
-        ...overrides,
-      }),
-    }),
-  });
-}
-
-async function updateList(
-  environment: Environment,
-  overrides: Partial<Parameters<typeof PostRequestList>[0]> = {},
-) {
-  await act(async () => {
-    renderer?.update(listView(environment, overrides));
-  });
-  assert.ok(renderer);
-}
-
 async function renderSummary(environment: Environment, onCompose: () => void = () => undefined) {
   const view = createElement(ReactRelay.RelayEnvironmentProvider, {
     environment,
@@ -367,174 +270,8 @@ function all(type: string) {
   return renderer.root.findAll((node) => node.type === type);
 }
 
-describe('PostRequestList', () => {
-  it('refetches the full history when the route retry fetch key changes', async () => {
-    const request = makeRequest('request-a', 'FAILED');
-    const requestedVariables: Record<string, unknown>[] = [];
-    const environment = new Environment({
-      network: Network.create((_operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requestedVariables.push(variables);
-          sink.next({ data: makeListPayload([request]) });
-          sink.complete();
-        }),
-      ),
-      store: new Store(new RecordSource()),
-    });
-    environment.commitPayload(listOperation(), makeListPayload([request]));
-
-    await renderList(environment, { fetchKey: '0' });
-    assert.deepEqual(requestedVariables, []);
-
-    await updateList(environment, { fetchKey: '1' });
-
-    assert.deepEqual(requestedVariables, [{ profileId: PROFILE_ID }]);
-    assert.deepEqual(
-      (all('FlatList')[0]?.props.data as ReadonlyArray<{ requestId: string }>).map(
-        ({ requestId }) => requestId,
-      ),
-      ['request-a'],
-    );
-  });
-
-  it('renders the complete history response beyond twenty rows in one native list', async () => {
-    const requests = Array.from({ length: 25 }, (_, index) =>
-      makeRequest(`request-${index + 1}`, 'FAILED'),
-    );
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, requests);
-
-    await renderList(environment);
-
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      requests.map((request) => request.requestId),
-    );
-    assert.equal(all('FlatList')[0]?.props.data.length, requests.length);
-  });
-
-  it('renders request rows in document flow when a native parent scroll view exists', async () => {
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, [
-      makeRequest('request-a', 'FAILED'),
-      makeRequest('request-b', 'CANCELLED'),
-    ]);
-    hasPaginationScrollParent = true;
-
-    await renderList(environment);
-
-    assert.equal(all('FlatList').length, 0);
-    assert.equal(all('View').length, 1);
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a', 'request-b'],
-    );
-  });
-
-  it('renders its header and all request cards in web document flow', async () => {
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, [
-      makeRequest('request-a', 'FAILED'),
-      makeRequest('request-b', 'CANCELLED'),
-    ]);
-    platform.OS = 'web';
-
-    await renderList(environment, { header: createElement('ListHeader') });
-
-    assert.equal(all('FlatList').length, 0);
-    assert.equal(all('ListHeader').length, 1);
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a', 'request-b'],
-    );
-  });
-
-  it('shows the web empty state after its header when the history is empty', async () => {
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, []);
-    platform.OS = 'web';
-
-    await renderList(environment, { header: createElement('ListHeader') });
-
-    assert.equal(all('FlatList').length, 0);
-    assert.equal(all('ListHeader').length, 1);
-    assert.equal(all('StateView').length, 1);
-  });
-
-  it('shows the empty state under its header when the history is empty', async () => {
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, []);
-
-    await renderList(environment, { header: createElement('ListHeader') });
-
-    assert.equal(all('FlatList').length, 1);
-    assert.equal(all('ListHeader').length, 1);
-    assert.equal(all('StateView').length, 1);
-    assert.equal(all('PostRequestCard').length, 0);
-  });
-
-  it('keeps request history isolated by profile and Relay environment', async () => {
-    const firstEnvironment = createEnvironment();
-    seedPostRequestLists(firstEnvironment, [makeRequest('request-a', 'FAILED')]);
-
-    await renderList(firstEnvironment);
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a'],
-    );
-
-    seedPostRequestLists(firstEnvironment, [makeRequest('request-b', 'FAILED')], 'profile-b');
-    await updateList(firstEnvironment, { profileId: 'profile-b' });
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-b'],
-    );
-
-    const secondEnvironment = createEnvironment();
-    seedPostRequestLists(secondEnvironment, [makeRequest('request-c', 'FAILED')], 'profile-b');
-    await updateList(secondEnvironment, { profileId: 'profile-b' });
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-c'],
-    );
-  });
-
-  it('derives a focused request from the Profile list and de-duplicates it', async () => {
-    const environment = createEnvironment();
-    const requests = [makeRequest('request-a', 'FAILED'), makeRequest('request-b', 'CANCELLED')];
-    seedPostRequestLists(environment, requests);
-
-    await renderList(environment, { focusedRequestId: 'request-a' });
-
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a', 'request-b'],
-    );
-    assert.deepEqual(
-      (all('FlatList')[0]!.props.data as ReadonlyArray<{ requestId: string }>).map(
-        ({ requestId }) => requestId,
-      ),
-      ['request-b'],
-    );
-  });
-
-  it('keeps focused links ordinary when the request is absent from the retained Profile list', async () => {
-    const environment = createEnvironment();
-    seedPostRequestLists(environment, [
-      makeRequest('request-a', 'FAILED'),
-      makeRequest('request-b', 'CANCELLED'),
-    ]);
-
-    await renderList(environment, { focusedRequestId: 'request-published' });
-
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.requestId),
-      ['request-a', 'request-b'],
-    );
-    assert.equal(all('StateView').length, 0);
-  });
-
-  it('filters the retained Profile list locally for the Home summary', async () => {
+describe('Home post request cards', () => {
+  it('renders every eligible request and excludes cancelled requests', async () => {
     const environment = createEnvironment();
     const requests = [
       makeRequest('request-failed', 'FAILED'),
@@ -548,20 +285,44 @@ describe('PostRequestList', () => {
 
     await renderSummary(environment);
 
-    assert.equal(all('PostRequestCard')[0]?.props.requestId, 'request-failed');
     assert.deepEqual(
-      listRequestIds(environment),
-      requests.map((request) => request.id),
+      all('PostRequestCard').map((node) => node.props.requestId),
+      [
+        'request-failed',
+        'request-queued',
+        'request-processing',
+        'request-publishing',
+        'request-confirming',
+      ],
     );
   });
 
-  it('passes the shell compose action to the failed request in the Home summary', async () => {
+  it('renders nothing when the Profile has no requests', async () => {
+    const environment = createEnvironment();
+    seedPostRequestLists(environment, []);
+
+    await renderSummary(environment);
+
+    assert.equal(renderer?.toJSON(), null);
+  });
+
+  it('renders nothing when only cancelled requests remain', async () => {
+    const environment = createEnvironment();
+    seedPostRequestLists(environment, [makeRequest('request-cancelled', 'CANCELLED')]);
+
+    await renderSummary(environment);
+
+    assert.equal(renderer?.toJSON(), null);
+  });
+
+  it('passes the shell compose action to failed requests', async () => {
     const environment = createEnvironment();
     seedPostRequestLists(environment, [makeRequest('request-a', 'FAILED')]);
     const onCompose = mock.fn();
 
     await renderSummary(environment, onCompose);
 
+    assert.equal(all('PostRequestCard').length, 1);
     const card = all('PostRequestCard')[0];
     assert.ok(card);
     assert.equal(card.props.onCompose, onCompose);
@@ -622,6 +383,7 @@ describe('PostRequestList', () => {
       });
 
       assert.equal(all('PostRequestCard').length, 0);
+      assert.equal(renderer?.toJSON(), null);
       assert.deepEqual(listRequestIds(environment), [cancelledRequest.id]);
       const homeConnectionId = ConnectionHandler.getConnectionID(
         'client:root',
@@ -658,12 +420,6 @@ describe('PostRequestList', () => {
           startCursor: 'cursor-home-first-page',
         },
       );
-
-      await updateList(environment);
-      assert.deepEqual(
-        all('PostRequestCard').map((node) => node.props.status),
-        ['CANCELLED'],
-      );
     });
   }
 
@@ -695,7 +451,7 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('removes a published request without inserting another profile’s Post', async () => {
+  it('removes a published request without inserting another Profile’s Post', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
     seedPostRequestLists(environment, [request]);
@@ -735,7 +491,7 @@ describe('PostRequestList', () => {
     );
   });
 
-  it('retains a cancelled request in Profile history while filtering it from the Home summary', async () => {
+  it('hides a cancelled request from Home while retaining it in Profile history', async () => {
     const environment = createEnvironment();
     const request = makeRequest('request-a', 'PROCESSING');
     seedPostRequestLists(environment, [request]);
@@ -746,7 +502,7 @@ describe('PostRequestList', () => {
 
     await act(async () => updateRequestStatus(environment, request, 'CANCELLED'));
 
-    assert.equal(all('PostRequestCard').length, 0);
+    assert.equal(renderer?.toJSON(), null);
     assert.deepEqual(listRequestIds(environment), [request.id]);
     assert.deepEqual(
       connectionNodeIds(
@@ -754,12 +510,6 @@ describe('PostRequestList', () => {
         ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
       ),
       [],
-    );
-
-    await updateList(environment);
-    assert.deepEqual(
-      all('PostRequestCard').map((node) => node.props.status),
-      ['CANCELLED'],
     );
   });
 });
