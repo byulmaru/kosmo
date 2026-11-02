@@ -10,6 +10,9 @@
 - 새 local PostgreSQL volume은 `pnpm local:prepare`로만 role/database, immutable migration, Local Instance를 준비한다. 평상시 `pnpm dev`는 migration, bootstrap, reset, seed와 data deletion을 실행하지 않고 준비된 volume을 재사용한다.
 - 로컬 `pnpm dev`는 `127.0.0.1:54328`의 영속 PostgreSQL과 기존 `apps/worker/src/temporal-test-server.ts`의 ephemeral Temporal server를 사용해 API, Web, App, Worker, Fedify consumer를 실행한다. Coordinator는 고정된 local target과 필수 key만 검증하고 role/ACL invariant는 `pnpm local:prepare`와 통합 검증이 소유한다. Application DB는 canonical `PG*`와 `kosmo_runtime`, queue는 별도 URL/password와 `kosmo_fedify_queue`를 사용하며 `DATABASE_URL`이나 owner/bootstrap credential을 child process에 전달하지 않는다. DB를 사용하지 않는 Expo App과 Temporal helper에는 PG/queue credential도 전달하지 않는다.
 - 루트 `mise install`은 로컬 Temporal helper와 worker `createLocal` 테스트가 사용하는 Temporal CLI 1.8.2를 설치하며, SDK는 테스트 서버를 다운로드하지 않고 해당 고정 실행 파일을 사용한다.
+- CI의 Core, Fedify, API, Worker 패키지 테스트는 `pnpm test:temporal -- <command>`로 실행한다. 바깥 명령은 고정 Temporal CLI로 SDK 서버를 하나 시작하고 production Workflow bundle을 한 번 생성해 child command에 전달한다. 각 테스트 파일은 같은 서버에 고유 namespace와 실제 Worker를 사용하며, 파일 종료 전에 Worker와 helper를 기다려 정리한다. 이 wrapper를 상속한 nested command는 부모 서버와 bundle을 재사용한다. wrapper 밖에서 `test-client.ts`를 직접 사용하는 테스트는 기존 자체 서버 fallback을 유지한다.
+- Temporal 서버와 Workflow bundle을 만든 바깥 wrapper만 child command를 별도 process group에서 실행하고 signal 전달·종료 유예·descendant cleanup을 소유한다. 상속된 nested wrapper는 부모 process group에서 명령을 실행하고 이 정리를 바깥 owner에 맡긴다.
+- 전역 이름을 쓰는 legacy `media-upload` Nexus endpoint 테스트는 bundle 소유 lease를 endpoint 삭제까지 유지해 해당 자원만 직렬화하고, 다른 Workflow 테스트는 병렬 실행한다.
 - Local PostgreSQL data는 named volume에 보존하고 `pnpm local:down`도 volume을 제거하지 않는다. Local Temporal은 개발용 임시 저장소이며 persistent SQLite volume을 사용하지 않는다. Worker health는 `127.0.0.1:8081`, Fedify consumer health는 `127.0.0.1:8082`이다.
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.

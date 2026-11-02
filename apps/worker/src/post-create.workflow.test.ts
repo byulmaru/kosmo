@@ -12,9 +12,8 @@ import {
 } from '@kosmo/core/temporal/post-create';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { LocalPostInput } from '@kosmo/core/services';
 import type {
   ActivityPubPostCreateInput,
@@ -23,13 +22,12 @@ import type {
   PostCreateWorkflowArgs,
   PostCreateWorkflowResult,
 } from '@kosmo/core/temporal/post-create';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities/notification';
 import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
 type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
-
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
 const localPostInput = (bodyText: string): LocalPostInput => ({
   accountId: randomUUID(),
@@ -83,9 +81,7 @@ test(
   'Post Create Workflow returns created posts while its production effects child keeps running',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-workflow-' + process.pid;
@@ -145,7 +141,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -335,9 +331,7 @@ test(
   'Post Create Workflow preserves validation, duplicate, and domain error behavior',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-results-' + process.pid;
@@ -418,7 +412,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -520,9 +514,7 @@ test(
   'Post Create Workflow preserves its committed result when the stable effects child already completed',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-child-reuse-' + process.pid;
@@ -558,7 +550,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -600,9 +592,7 @@ test(
   'Post Create Workflow uses a supplied stable ID and forwards authorization revalidation',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-stable-id-' + process.pid;
@@ -645,7 +635,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {

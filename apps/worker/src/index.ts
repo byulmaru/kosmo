@@ -12,6 +12,7 @@ import { healthStatus, validateWorkerEnvironment } from './worker';
 if (import.meta.main) {
   try {
     const { address, namespace, port, host } = validateWorkerEnvironment(process.env);
+    const testWorkflowBundlePath = process.env.KOSMO_TEST_WORKFLOW_BUNDLE_PATH?.trim();
     await startFedifyMetrics();
 
     let worker: Worker | undefined;
@@ -41,7 +42,9 @@ if (import.meta.main) {
         nexusServices: [mediaUploadServiceHandler],
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
+        ...(testWorkflowBundlePath
+          ? { workflowBundle: { codePath: testWorkflowBundlePath } }
+          : { workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname }),
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);

@@ -31,10 +31,9 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { temporalTestExecutable } from '../temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from '../temporal-test-environment.js';
 import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
 import { createPostActivity, generatePostIdActivity } from './post-create';
 import { getPostRequestMediaStateActivity, reconcilePostRequestActivity } from './post-request';
@@ -255,9 +254,7 @@ test(
   'Local Post UWS retries a committed Activity response loss with the same allocated ID',
   { timeout: 120_000 },
   async () => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     process.env.TEMPORAL_ADDRESS = environment.address;
     process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
     let worker: Worker | undefined;
@@ -297,7 +294,7 @@ test(
         connection: environment.nativeConnection,
         namespace: environment.namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('../workflows/index.ts', import.meta.url).pathname,
+        ...testWorkflowSource,
       });
       workerRun = worker.run();
 
