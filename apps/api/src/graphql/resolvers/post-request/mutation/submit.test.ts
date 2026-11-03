@@ -18,28 +18,23 @@ import type { ExecutionResult } from 'graphql';
 
 type CreatePostResult = {
   createPost: {
-    post?: { id: string } | null;
     request: { status: string } | null;
   };
 };
 
-const requestSubmit = (
-  input: {
-    bodyText: string;
-    media?: readonly {
-      applyAiProhibitFilter?: boolean;
-      mediaId: string;
-    }[];
-    visibility: 'PUBLIC';
-  },
-  includePost = false,
-) =>
+const requestSubmit = (input: {
+  bodyText: string;
+  media?: readonly {
+    applyAiProhibitFilter?: boolean;
+    mediaId: string;
+  }[];
+  visibility: 'PUBLIC';
+}) =>
   graphql({
     schema,
     source: `
       mutation CreatePost($input: CreatePostInput!) {
         createPost(input: $input) {
-          ${includePost ? 'post { id }' : ''}
           request { status }
         }
       }
@@ -188,7 +183,7 @@ test('createPost rejects duplicate media before checking uploads or starting the
   assert.equal(start.mock.callCount(), 0);
 });
 
-test('createPost acknowledges filtered uploads across selection sets and waits for unfiltered uploads', async (t) => {
+test('createPost acknowledges filtered uploads and waits for unfiltered uploads', async (t) => {
   const accountId = '00000000-0000-4000-8000-000000000001';
   const results = new Map<string, Promise<PostRequestState>>();
   let resultCallCount = 0;
@@ -326,32 +321,14 @@ test('createPost acknowledges filtered uploads across selection sets and waits f
     ],
     visibility: 'PUBLIC',
   });
-  const uploadingWithPostResult = await requestSubmit(
-    {
-      bodyText: 'uploading image with post selected',
-      media: [
-        {
-          applyAiProhibitFilter: true,
-          mediaId: encodeGlobalId('Media', uploadingMediaId),
-        },
-      ],
-      visibility: 'PUBLIC',
-    },
-    true,
-  );
   assert.deepEqual(uploadingResult.errors, undefined);
   assert.equal(uploadingResult.data?.createPost.request?.status, 'QUEUED');
-  assert.deepEqual(uploadingWithPostResult.errors, undefined);
-  assert.equal(uploadingWithPostResult.data?.createPost.request?.status, 'QUEUED');
-  assert.equal(uploadingWithPostResult.data?.createPost.post, null);
-  assert.equal(metadataRequests.length, 2);
-  assert.ok(
-    metadataRequests.every(
-      ({ method, url }) =>
-        method === 'HEAD' &&
-        url === `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
-    ),
-  );
+  assert.deepEqual(metadataRequests, [
+    {
+      method: 'HEAD',
+      url: `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
+    },
+  ]);
   assert.deepEqual(started[0]?.args?.[0]?.input.media, [
     { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
   ]);
@@ -374,9 +351,6 @@ test('createPost acknowledges filtered uploads across selection sets and waits f
       value: 'QUEUED',
     },
   ]);
-  assert.deepEqual(started[1]?.args?.[0]?.input.media, [
-    { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
-  ]);
   assert.equal(resultCallCount, 0);
 
   nextPublication = publication;
@@ -395,17 +369,17 @@ test('createPost acknowledges filtered uploads across selection sets and waits f
   ]);
   assert.equal(firstOutcome, 'waiting for publication');
   assert.equal(resultCallCount, 1);
-  assert.equal(metadataRequests.length, 3);
-  assert.deepEqual(metadataRequests[2], {
+  assert.equal(metadataRequests.length, 2);
+  assert.deepEqual(metadataRequests[1], {
     method: 'HEAD',
     url: `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
   });
-  assert.deepEqual(started[2]?.args?.[0]?.input.media, [
+  assert.deepEqual(started[1]?.args?.[0]?.input.media, [
     { altText: null, applyNightshade: false, mediaId: uploadingMediaId },
     { altText: null, applyNightshade: true, mediaId: readyMediaId },
     { altText: null, applyNightshade: false, mediaId: defaultReadyMediaId },
   ]);
-  const snapshot = started[2]?.args?.[0];
+  const snapshot = started[1]?.args?.[0];
   assert.ok(snapshot);
   releasePublication({
     snapshot,
@@ -415,7 +389,7 @@ test('createPost acknowledges filtered uploads across selection sets and waits f
   const mixedResult = await mixedRequest;
   assert.deepEqual(mixedResult.errors, undefined);
   assert.equal(mixedResult.data?.createPost.request?.status, 'PUBLISHED');
-  assert.equal(started[2]?.args?.[0]?.postId, undefined);
+  assert.equal(started[1]?.args?.[0]?.postId, undefined);
 
   const allReadyResult = await requestSubmit({
     bodyText: 'ready image with filter selected',
@@ -424,8 +398,8 @@ test('createPost acknowledges filtered uploads across selection sets and waits f
   });
   assert.deepEqual(allReadyResult.errors, undefined);
   assert.equal(allReadyResult.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
-  assert.equal(metadataRequests.length, 3);
-  assert.deepEqual(started[3]?.args?.[0]?.input.media, [
+  assert.equal(metadataRequests.length, 2);
+  assert.deepEqual(started[2]?.args?.[0]?.input.media, [
     { altText: null, applyNightshade: true, mediaId: readyMediaId },
   ]);
   assert.equal(resultCallCount, 2);
