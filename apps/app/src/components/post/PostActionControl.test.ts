@@ -400,104 +400,90 @@ test('PostListItem uses the supplied list presentation', async () => {
   }
 });
 
-test('PostListItem keeps hover across nested pointer targets without adding a focus stop', async () => {
-  platform.OS = 'web';
-  const props = {
-    post: {} as never,
-    presentation: 'wide',
-    showDivider: false,
-  } as const;
-  let root = await renderListItem(props);
-  const card = findByTestID(root, 'post-list-item-card');
-  let feedback = findByTestID(root, 'post-list-item-feedback');
+for (const os of ['web', 'ios', 'android']) {
+  test(`${os} PostListItem keeps mouse/pen hover across nested targets without adding a focus stop`, async () => {
+    platform.OS = os;
+    const props = {
+      post: {} as never,
+      presentation: 'wide',
+      showDivider: false,
+    } as const;
+    let root = await renderListItem(props);
+    const card = findByTestID(root, 'post-list-item-card');
+    let feedback = findByTestID(root, 'post-list-item-feedback');
 
-  assert.equal(flattenStyle(card.props.style).backgroundColor, 'canvas');
-  assert.equal(card.props.role, 'article');
-  assert.equal(card.props.accessible, false);
-  assert.equal(card.props.focusable, false);
-  assert.equal(card.props.tabIndex, -1);
-  assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
-  assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
-  assert.equal(card.props.onPress, undefined);
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+    assert.equal(flattenStyle(card.props.style).backgroundColor, 'canvas');
+    assert.equal(card.props.role, 'article');
+    assert.equal(card.props.accessible, false);
+    assert.equal(card.props.focusable, false);
+    assert.equal(card.props.tabIndex, -1);
+    assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
+    assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
+    assert.equal(card.props.onPress, undefined);
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
-  const sendPress = async (pressed: boolean) => {
-    await act(async () => {
-      const host = root.findAll(
-        (node) => (node.type as unknown) === 'View' && node.props.testID === 'post-list-item-card',
-      )[0];
-      host.props[pressed ? 'onResponderGrant' : 'onResponderRelease']({
-        nativeEvent: { pageX: 0, pageY: 0, locationX: 0, locationY: 0 },
+    const sendPress = async (pressed: boolean) => {
+      await act(async () => {
+        const host = root.findAll(
+          (node) =>
+            (node.type as unknown) === 'View' && node.props.testID === 'post-list-item-card',
+        )[0];
+        host.props[pressed ? 'onResponderGrant' : 'onResponderRelease']({
+          nativeEvent: { pageX: 0, pageY: 0, locationX: 0, locationY: 0 },
+        });
       });
-    });
-    assert.ok(renderer);
-    return renderer.root;
-  };
+      assert.ok(renderer);
+      return renderer.root;
+    };
 
-  const sendPointer = async (
-    boundary: 'enter' | 'leave',
-    pointerType: 'mouse' | 'pen' | 'touch',
-  ) => {
-    const eventHandler = findByTestID(root, 'post-list-item-card').props[
-      boundary === 'enter' ? 'onPointerEnter' : 'onPointerLeave'
-    ];
-    assert.equal(typeof eventHandler, 'function');
-    await act(async () => {
-      (
-        eventHandler as (event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void
-      )({ nativeEvent: { pointerType } });
-    });
-    assert.ok(renderer);
-    root = renderer.root;
-    feedback = findByTestID(root, 'post-list-item-feedback');
-  };
+    const sendPointer = async (
+      boundary: 'enter' | 'leave',
+      pointerType: 'mouse' | 'pen' | 'touch',
+    ) => {
+      const eventHandler = findByTestID(root, 'post-list-item-card').props[
+        boundary === 'enter' ? 'onPointerEnter' : 'onPointerLeave'
+      ];
+      assert.equal(typeof eventHandler, 'function');
+      await act(async () => {
+        (
+          eventHandler as (event: {
+            nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' };
+          }) => void
+        )({ nativeEvent: { pointerType } });
+      });
+      assert.ok(renderer);
+      root = renderer.root;
+      feedback = findByTestID(root, 'post-list-item-feedback');
+    };
 
-  for (const pointerType of ['mouse', 'pen'] as const) {
-    await sendPointer('enter', pointerType);
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+    for (const pointerType of ['mouse', 'pen'] as const) {
+      await sendPointer('enter', pointerType);
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
-    root = await sendPress(true);
-    feedback = findByTestID(root, 'post-list-item-feedback');
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
+      root = await sendPress(true);
+      feedback = findByTestID(root, 'post-list-item-feedback');
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
 
-    root = await sendPress(false);
-    feedback = findByTestID(root, 'post-list-item-feedback');
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+      root = await sendPress(false);
+      feedback = findByTestID(root, 'post-list-item-feedback');
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+      await sendPointer('enter', 'touch');
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+      await sendPointer('leave', 'touch');
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+      await sendPointer('leave', pointerType);
+      assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+    }
 
     await sendPointer('enter', 'touch');
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
-
-    await sendPointer('leave', 'touch');
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
-
-    await sendPointer('leave', pointerType);
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-  }
-
-  await sendPointer('enter', 'touch');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-  await sendPointer('leave', 'touch');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
-  platform.OS = 'ios';
-  root = await renderListItem(props);
-  feedback = findByTestID(root, 'post-list-item-feedback');
-
-  await sendPointer('enter', 'mouse');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
-  root = await sendPress(false);
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
-  root = await sendPress(true);
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
-
-  root = await sendPress(false);
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-});
+    await sendPointer('leave', 'touch');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  });
+}
 
 test('PostThreadLayout uses the supplied list presentation', async () => {
   for (const [presentation, expectedInset, expectedConnectorLeft] of [
@@ -564,3 +550,52 @@ test('Native pending and disabled controls expose blocking state to the host', a
     disabled: true,
   });
 });
+
+for (const os of ['web', 'ios', 'android']) {
+  for (const count of [undefined, 12]) {
+    for (const processing of ['default', 'disabled', 'pending'] as const) {
+      test(`${os} count=${count} action hover follows Pressable and stays hidden when ${processing}`, async () => {
+        platform.OS = os;
+        const root = await renderControl({
+          accessibilityLabel: 'Action',
+          icon: StubIcon,
+          onPress: () => undefined,
+          processing,
+          testID: 'hover-contract',
+          count,
+        });
+        const button = findByType(root, 'Pressable');
+        const layers = () => root.findAllByProps({ testID: 'post-action-hover-contract-hover' });
+        assert.equal(layers().length, 0);
+        await act(async () => button.props.onHoverIn());
+        assert.equal(layers().length > 0, processing === 'default');
+        if (processing === 'default') {
+          const layer = findByType(layers()[0], 'View');
+          const style = flattenStyle(layer.props.style);
+          assert.equal(style.left, os === 'web' || count !== undefined ? -6 : 0);
+          assert.equal(style.top, os === 'web' || count !== undefined ? -6 : 0);
+          assert.equal(style.width, 28);
+          assert.equal(style.height, 28);
+        }
+        await act(async () => button.props.onHoverOut());
+        assert.equal(layers().length, 0);
+      });
+    }
+  }
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} touch press keeps opacity feedback without a hover layer`, async () => {
+    platform.OS = os;
+    mockPressableState = { hovered: false, pressed: true };
+    const root = await renderControl({
+      accessibilityLabel: 'Action',
+      icon: StubIcon,
+      onPress: () => undefined,
+      testID: 'touch-contract',
+    });
+    assert.equal(root.findAllByProps({ testID: 'post-action-touch-contract-hover' }).length, 0);
+    const button = findByType(root, 'Pressable');
+    assert.equal(flattenStyle(button.props.style({ pressed: true })).opacity, 0.72);
+  });
+}

@@ -20,6 +20,9 @@ export function PostDetailBackground({
   ...props
 }: ViewProps & { onBackgroundPress?: () => void }) {
   const setPressed = useContext(PostDetailBackgroundFeedbackContext);
+  // RN iOS cursor:pointer enables a host-wide OS hover effect, unlike the Web cursor.
+  // Native pointer target/currentTarget and cursor behavior still need device validation.
+  const tracksWebCursor = Platform.OS === 'web' && onBackgroundPress;
   const [cursor, setCursor] = useState<'auto' | 'pointer'>('pointer');
   const [size, setSize] = useState({ width: 0, height: 0 });
   // Keep host geometry across callback changes; keep the gesture across feedback renders.
@@ -34,9 +37,9 @@ export function PostDetailBackground({
     <View
       {...props}
       {...responder}
-      style={Platform.OS === 'web' && onBackgroundPress ? [style, { cursor }] : style}
+      style={tracksWebCursor ? [style, { cursor }] : style}
       onPointerEnter={
-        Platform.OS === 'web' && onBackgroundPress
+        tracksWebCursor
           ? (event) => {
               // Background presses only claim this host; children own their input and cursor.
               setCursor(event.target === event.currentTarget ? 'pointer' : 'auto');
@@ -45,7 +48,7 @@ export function PostDetailBackground({
           : onPointerEnter
       }
       onPointerMove={
-        Platform.OS === 'web' && onBackgroundPress
+        tracksWebCursor
           ? (event) => {
               setCursor(event.target === event.currentTarget ? 'pointer' : 'auto');
               onPointerMove?.(event);
@@ -53,7 +56,7 @@ export function PostDetailBackground({
           : onPointerMove
       }
       onPointerLeave={
-        Platform.OS === 'web' && onBackgroundPress
+        tracksWebCursor
           ? (event) => {
               setCursor('pointer');
               onPointerLeave?.(event);

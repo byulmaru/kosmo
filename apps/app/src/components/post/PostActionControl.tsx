@@ -114,8 +114,8 @@ export function PostActionControl({
         accessibilityRole="button"
         accessibilityState={stateful ? accessibilityState : undefined}
         disabled={blocked && !keepMenuFocus}
-        onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
-        onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
         onPress={blocked ? undefined : onPress}
         ref={(node) => {
           // RN Web turns disabled into a native disabled button, dropping menu
@@ -179,11 +179,12 @@ export function PostActionControl({
                   style={iconStyle}
                   testID={`post-action-${testID}-icon`}
                 >
-                  {Platform.OS === 'web' && !blocked && ((hovered && !hoverDisabled) || pressed) ? (
+                  {!blocked && ((hovered && !hoverDisabled) || (!native && pressed)) ? (
                     <View
                       aria-hidden
                       style={[
                         styles.hover,
+                        native && !formattedCount && styles.nativeHover,
                         { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
                       ]}
                       testID={`post-action-${testID}-hover`}
@@ -265,6 +266,7 @@ const styles = StyleSheet.create({
     width: 28,
     zIndex: 0,
   },
+  nativeHover: { left: 0, top: 0 },
   glyph: {
     alignItems: 'center',
     height: 16,
