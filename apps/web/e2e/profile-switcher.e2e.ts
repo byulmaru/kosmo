@@ -501,15 +501,15 @@ async function createPost(page: Page, body: string) {
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   const submitResponse = await submitResponsePromise;
   const responseBody = (await submitResponse.json()) as {
-    data?: { createPost?: { request?: { requestId?: string | null } | null } | null };
+    data?: { createPost?: { post?: { id?: string | null } | null } | null };
     errors?: unknown[];
   };
   const operation = readGraphQLOperation(submitResponse.request().postData());
-  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
+  const createdPostId = responseBody.data?.createPost?.post?.id;
 
   expect(submitResponse.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
-  expect(acceptedRequestId).toEqual(expect.any(String));
+  expect(createdPostId).toEqual(expect.any(String));
   expect(operation?.variables?.input).not.toHaveProperty('requestId');
   expect(operation?.variables).toMatchObject({
     input: { bodyText: body },
