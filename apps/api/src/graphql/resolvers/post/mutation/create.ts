@@ -1,10 +1,10 @@
 import { db, firstOrThrow, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
-import { PostRequestStatus } from '@kosmo/core/temporal/post-request';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { submitPostRequest } from '../../post-request/mutation/submit';
+import { submitLocalPost } from '../../post-request/mutation/submit';
+import type { LocalPostSubmission } from '../../post-request/mutation/submit';
 import { PostRequest } from '../../post-request/ref';
 import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
@@ -15,30 +15,21 @@ import {
   localPostMediaArraySchema,
 } from './prepare-local-input';
 import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
-import type { PostRequestState } from '@kosmo/core/temporal/post-request';
 
-type CreatePostPayloadSource = {
-  readonly request: PostRequestState;
-};
+const CreatePostPayload = builder.objectRef<LocalPostSubmission>('CreatePostPayload');
 
-const CreatePostPayload = builder.objectRef<CreatePostPayloadSource>('CreatePostPayload');
-
-const getPostForRequest = async (
-  request: PostRequestState,
-): Promise<typeof Posts.$inferSelect | null> => {
-  if (request.status !== PostRequestStatus.PUBLISHED) {
-    return null;
-  }
-
-  const postId = request.result?.postId;
+const getPostForSubmission = async ({
+  postId,
+  profileId,
+}: LocalPostSubmission): Promise<typeof Posts.$inferSelect | null> => {
   if (!postId) {
-    throw new Error('Published Post request has no Post ID');
+    return null;
   }
 
   return db
     .select()
     .from(Posts)
-    .where(and(eq(Posts.id, postId), eq(Posts.profileId, request.snapshot.input.profileId)))
+    .where(and(eq(Posts.id, postId), eq(Posts.profileId, profileId)))
     .limit(1)
     .then(firstOrThrow);
 };
@@ -48,7 +39,7 @@ CreatePostPayload.implement({
     post: t.field({
       type: Post,
       nullable: true,
-      resolve: ({ request }) => getPostForRequest(request),
+      resolve: (source) => getPostForSubmission(source),
     }),
     request: t.field({ type: PostRequest, nullable: true, resolve: ({ request }) => request }),
   }),
@@ -81,8 +72,7 @@ builder.mutationField('createPost', (t) =>
       const analyticsPlatform: PostAnalyticsPlatform | undefined =
         headerPlatform === 'web' || headerPlatform === 'native' ? headerPlatform : undefined;
 
-      const request = await submitPostRequest(input, ctx, analyticsPlatform);
-      return { request };
+      return await submitLocalPost(input, ctx, analyticsPlatform);
     },
   }),
 );

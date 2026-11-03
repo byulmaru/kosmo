@@ -12,8 +12,8 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type {
+  MediaUploadResult,
   MediaUploadWorkflowInput,
-  MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
 
 const resultSchema = z.strictObject({
@@ -65,7 +65,7 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
 
 type FinalizeMediaUploadInput = MediaUploadWorkflowInput & {
   readonly remoteUploadId: string;
-  readonly result: MediaUploadWorkflowResult;
+  readonly result: MediaUploadResult;
 };
 
 export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInput) {
