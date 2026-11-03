@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { after, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -38,34 +38,30 @@ if (testRedisUrl) {
 
 const createdProfileIds: string[] = [];
 const createdInstanceIds: string[] = [];
-let postId: string | undefined;
-let contentId: string | undefined;
+const createdPostIds: string[] = [];
+const createdContentIds: string[] = [];
 
 after(async () => {
-  const [viewerProfileId, authorProfileId] = createdProfileIds;
-  if (viewerProfileId) {
-    await invalidateHomeTimelines({ profileIds: [viewerProfileId] });
+  if (createdProfileIds.length > 0) {
+    await invalidateHomeTimelines({ profileIds: createdProfileIds });
   }
-  if (postId) {
+  for (const postId of createdPostIds) {
     await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
   }
-  if (contentId) {
+  for (const contentId of createdContentIds) {
     await db.update(PostContents).set({ postId: null }).where(eq(PostContents.id, contentId));
   }
-  if (postId) {
+  for (const postId of createdPostIds) {
     await db.delete(Posts).where(eq(Posts.id, postId));
   }
-  if (contentId) {
+  for (const contentId of createdContentIds) {
     await db.delete(PostContents).where(eq(PostContents.id, contentId));
   }
-  if (viewerProfileId && authorProfileId) {
-    await db.delete(ProfileFollows).where(eq(ProfileFollows.followerProfileId, viewerProfileId));
-  }
   if (createdProfileIds.length > 0) {
-    await db.delete(Profiles).where(eq(Profiles.id, createdProfileIds[0]!));
-    if (createdProfileIds[1]) {
-      await db.delete(Profiles).where(eq(Profiles.id, createdProfileIds[1]!));
-    }
+    await db
+      .delete(ProfileFollows)
+      .where(inArray(ProfileFollows.followerProfileId, createdProfileIds));
+    await db.delete(Profiles).where(inArray(Profiles.id, createdProfileIds));
   }
   if (createdInstanceIds.length > 0) {
     for (const instanceId of createdInstanceIds) {
@@ -104,6 +100,28 @@ const createProfile = async () => {
   return profile;
 };
 
+const createPost = async (profileId: string, text: string) => {
+  const postContent = await db
+    .insert(PostContents)
+    .values({ document: postContentDocumentFromText(text) })
+    .returning()
+    .then(firstOrThrow);
+  createdContentIds.push(postContent.id);
+  const post = await db
+    .insert(Posts)
+    .values({
+      currentContentId: postContent.id,
+      profileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  createdPostIds.push(post.id);
+  await db.update(PostContents).set({ postId: post.id }).where(eq(PostContents.id, postContent.id));
+  return post;
+};
+
 const waitForRedis = async () => {
   const deadline = performance.now() + 5_000;
   while (performance.now() < deadline) {
@@ -116,73 +134,69 @@ const waitForRedis = async () => {
   assert.fail('Redis test service did not become ready');
 };
 
-const waitForMissingHomeTimeline = async (profileId: string) => {
-  const deadline = performance.now() + 2_000;
-  while (performance.now() < deadline) {
-    const [ping, cache] = await Promise.all([
-      runRedisCommand((client) => client.ping()),
-      readHomeTimelineCache({ profileId, limit: 10 }),
-    ]);
-    if (ping?.value === 'PONG' && cache === null) {
-      return;
-    }
-    await delay(10);
-  }
-  assert.fail('Home timeline cache was not invalidated');
-};
-
 test(
-  'Profile disable invalidates affected Home lists and repeated disable preserves a rebuilt list',
+  'Profile disable retains related and unrelated Home timeline cache members',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const viewer = await createProfile();
     const author = await createProfile();
-    const postContent = await db
-      .insert(PostContents)
-      .values({ document: postContentDocumentFromText('profile disable home timeline test') })
-      .returning()
-      .then(firstOrThrow);
-    contentId = postContent.id;
-    const post = await db
-      .insert(Posts)
-      .values({
-        currentContentId: postContent.id,
-        profileId: author.id,
-        state: PostState.ACTIVE,
-        visibility: PostVisibility.PUBLIC,
-      })
-      .returning()
-      .then(firstOrThrow);
-    postId = post.id;
-    await db
-      .update(PostContents)
-      .set({ postId: post.id })
-      .where(eq(PostContents.id, postContent.id));
-    await db
-      .insert(ProfileFollows)
-      .values({ followerProfileId: viewer.id, followeeProfileId: author.id });
+    const unrelatedViewer = await createProfile();
+    const unrelatedAuthor = await createProfile();
+    const post = await createPost(author.id, 'profile disable home timeline test');
+    const unrelatedPost = await createPost(unrelatedAuthor.id, 'unrelated home timeline test');
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.id, followeeProfileId: author.id },
+      { followerProfileId: unrelatedViewer.id, followeeProfileId: unrelatedAuthor.id },
+    ]);
 
-    await rebuildHomeTimeline({ profileId: viewer.id });
+    await Promise.all([
+      rebuildHomeTimeline({ profileId: viewer.id }),
+      rebuildHomeTimeline({ profileId: unrelatedViewer.id }),
+    ]);
+    const [relatedCache, unrelatedCache] = await Promise.all([
+      readHomeTimelineCache({ profileId: viewer.id, limit: 10 }),
+      readHomeTimelineCache({ profileId: unrelatedViewer.id, limit: 10 }),
+    ]);
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries.map(
-        ({ postId: cachedPostId }) => cachedPostId,
-      ),
+      relatedCache?.entries.map(({ postId }) => postId),
       [post.id],
     );
-
-    await disableProfile(author.id);
-    await waitForMissingHomeTimeline(viewer.id);
-    await rebuildHomeTimeline({ profileId: viewer.id });
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries,
-      [],
+      unrelatedCache?.entries.map(({ postId }) => postId),
+      [unrelatedPost.id],
     );
 
     await disableProfile(author.id);
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, author.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.DISABLED,
+    );
+    assert.equal(
+      await db
+        .select({ state: Posts.state })
+        .from(Posts)
+        .where(eq(Posts.id, post.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      PostState.ACTIVE,
+    );
+    const [relatedCacheAfterDisable, unrelatedCacheAfterDisable] = await Promise.all([
+      readHomeTimelineCache({ profileId: viewer.id, limit: 10 }),
+      readHomeTimelineCache({ profileId: unrelatedViewer.id, limit: 10 }),
+    ]);
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries,
-      [],
+      relatedCacheAfterDisable?.entries.map(({ postId }) => postId),
+      [post.id],
+    );
+    assert.deepEqual(
+      unrelatedCacheAfterDisable?.entries.map(({ postId }) => postId),
+      [unrelatedPost.id],
     );
   },
 );

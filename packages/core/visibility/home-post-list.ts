@@ -1,6 +1,7 @@
 import { and, eq, exists, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Instances, PostMentions, Posts, ProfileFollows, ProfileMutes, Profiles } from '../db';
+import { ProfileState } from '../enums';
 import { visiblePostWhere } from './post';
 import { visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
@@ -13,6 +14,46 @@ const HomeReplyParentFollowPosts = alias(Posts, 'home_post_list_reply_parent_fol
 const HomeDirectRepostSources = alias(Posts, 'home_post_list_direct_repost_source');
 const HomeDirectRepostSourceProfiles = alias(Profiles, 'home_post_list_direct_repost_profile');
 const HomeDirectRepostSourceInstances = alias(Instances, 'home_post_list_direct_repost_instance');
+const HomePostAuthorProfiles = alias(Profiles, 'home_post_profile_state_author');
+
+/** Home read-time lifecycle checks for the outer and direct source authors. */
+export const homePostProfileStateWhere = ({
+  db,
+}: {
+  readonly db: DatabaseHandle;
+}): SQL<boolean> => {
+  const outerAuthorIsActive = exists(
+    db
+      .select({ id: HomePostAuthorProfiles.id })
+      .from(HomePostAuthorProfiles)
+      .where(
+        and(
+          eq(HomePostAuthorProfiles.id, Posts.profileId),
+          eq(HomePostAuthorProfiles.state, ProfileState.ACTIVE),
+        ),
+      ),
+  );
+  const directSourceAuthorIsActive = or(
+    isNull(Posts.repostSourceId),
+    exists(
+      db
+        .select({ id: HomeDirectRepostSources.id })
+        .from(HomeDirectRepostSources)
+        .innerJoin(
+          HomeDirectRepostSourceProfiles,
+          eq(HomeDirectRepostSourceProfiles.id, HomeDirectRepostSources.profileId),
+        )
+        .where(
+          and(
+            eq(HomeDirectRepostSources.id, Posts.repostSourceId),
+            eq(HomeDirectRepostSourceProfiles.state, ProfileState.ACTIVE),
+          ),
+        ),
+    ),
+  );
+
+  return sql<boolean>`${and(outerAuthorIsActive, directSourceAuthorIsActive)!}`;
+};
 
 /** Home timeline eligibility and access for one selected Profile. */
 export const homePostListWhere = ({
@@ -207,6 +248,7 @@ export const homePostListWhere = ({
     homeCandidateWhere,
     homeMentionTargetWhere,
     postVisibilityWhere,
+    homePostProfileStateWhere({ db }),
     profileBlockVisibilityWhere({
       database: db,
       ownerProfileId: viewerProfileId,

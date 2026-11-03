@@ -6,6 +6,7 @@ import {
   touchHomeTimeline,
 } from '@kosmo/core/home-timeline/cache';
 import { queryHomeTimeline } from '@kosmo/core/home-timeline/query';
+import { homePostProfileStateWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -61,6 +62,7 @@ const activeCachedPosts = async (
     .from(Posts)
     .where(
       and(
+        homePostProfileStateWhere({ db }),
         inArray(
           Posts.id,
           entries.map(({ postId }) => postId),

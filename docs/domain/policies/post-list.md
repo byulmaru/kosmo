@@ -30,7 +30,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 - Home Post List는 viewer Profile마다 계산되는 파생 목록이다. Post를 목록에 넣을 때 당시의 후보, Visibility,
   Eligibility, Follow, Block, Mute 규칙을 판정한다. Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에
-  몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부를 다시 확인한다.
+  몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부, 바깥 Post와 direct Source Post의 Author
+  Profile ACTIVE 상태를 다시 확인한다.
 - Home 파생 목록은 언제든 사라질 수 있는 임시 cache이며, 영구 Home projection을 저장하지 않는다. 인증된 Home 조회는
   기존 cache의 7일 만료 시간을 연장하고, Post 삽입을 위한 background 처리는 만료 시간을 연장하지 않는다. cache가
   없거나 오류가 나면 DB를 원본으로 현재 정책에 따라 결과를 조회하며, cache 오류 때문에 Home 조회가 실패하지 않는다.
