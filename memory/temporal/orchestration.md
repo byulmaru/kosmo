@@ -40,15 +40,21 @@
   Media publication 결과로 동기 PostCreate 또는 비동기 PostRequest를 선택한다. Media가 없거나 모든 publication이
   `completed`면 canonical `postCreateWorkflow`를 실행한다. 하나라도 `processing`이면 `postRequestWorkflow`가
   immutable request snapshot과 stable `postId`를 소유한다. 어느 경로도 모든 Media가 READY가 되기 전에는 Post row나
-  Post Content를 생성하지 않는다. READY Media는 다시 처리하지 않으며, 새 필터 요청은 retained completed upload result가
-  선택을 확인할 때만 받아들인다. 과거 결과에 선택이 없으면 새 필터 요청을 만족한다고 주장하지 않고 기존 Media 재첨부
-  ValidationError를 반환한다.
+  Post Content를 생성하지 않는다. READY Media는 다시 업로드하지 않는다. Active `mediaUploadWorkflow`가 있으면 기존
+  publication Update로 고정 필터 선택을 확인하고, READY+URL row가 publication 완료를 증명하므로 Update가 `processing`을
+  반환해도 upload `result()` cleanup을 기다리지 않고 재사용한다. Workflow가 닫혀 Update가 `WorkflowNotFoundError`를
+  반환하면 retained final result로 선택을 확인한다. 과거 결과에 선택이 없으면 기존 unknown-filter 규칙을 유지해 false 요청은
+  허용하고 true 요청은 Media 재첨부 `ValidationError`로 거부한다.
   UPLOADING Media의 새 admission은 stable `media-upload:${mediaId}` ID의 exported `mediaUploadWorkflow`를 generic
   `runWorkflow` Update-with-Start로 실행하며 `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse policy, 명시적인
   `applyAiProhibitFilter`를 사용한다. Workflow의 final result는 Kosmo Media row가 READY로 정산된 결과이며, Update는 Media
   `publishUploadV2` workflow-backed Nexus operation의 `completed | processing` 결과를 반환한다. Media가 `completed`를
   반환하면 Workflow가 Kosmo DB finalizer를 끝낸 뒤 완료 결과를 응답하고, `processing`은 즉시 응답한 뒤 Workflow가 기존
   `startUpload.result()`를 기다려 finalizer를 실행한다. Filter/Hope 처리 선택과 실행은 Media가 소유한다.
+  UPLOADING preflight 이후 Workflow가 먼저 닫혀 UWS `REJECT_DUPLICATE`로 거절될 때는 exact Workflow ID/type의
+  `WorkflowExecutionAlreadyStartedError`만 recovery 후보로 분류한다. Primary DB에서 같은 Account 소유의 Local Media를 다시
+  읽어 READY+URL과 retained filter 호환성이 모두 확인되면 completed로 이어가고, 그렇지 않으면 원래 오류 또는 filter
+  ValidationError를 보존한다.
   새 Workflow input은 `applyAiProhibitFilter`를 사용한다. 기존 history/input은 `applyNightshade`와 기존 `applyHope` 및
   `publishUpload({id})` acknowledgement sequence를 유지한다. Legacy Workflow에 새 Update가 합류하면 Media를 다시 호출하지
   않고 원래 flag와 요청 선택을 비교한다. 불일치는 거부하고, 같은 true 선택은 아직 끝나지 않았을 때 `processing`을 반환하며,
@@ -80,8 +86,9 @@
   뒤에 state 조회로 admission을 복구하지 않는다. 비동기 PostRequest 응답은 이후 Workflow를 기다리거나 Post를 조회하지
   않는다. Publication, authorization, Workflow 오류는 GraphQL error로 전달된다. API의 bounded wait는 caller 대기만 제한하며
   이미 시작된 Media나 Post Workflow를 취소하지 않는다.
-- 선택적인 내부 `PostAnalyticsPlatform`은 Post request snapshot에서 V2 create child와 stable effects child까지
-  전달한다. 각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
+- 선택적인 내부 `PostAnalyticsPlatform`은 호출자가 제공했을 때 동기 canonical `postCreateWorkflow` 인자 또는 비동기 PostRequest
+  snapshot에서 V2 create child와 stable effects child까지 전달한다. 값이 없으면 worker analytics를 기본 활성화하지 않는다.
+  각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
   순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만
   실행하므로 capture retry/failure가 publication 결과를 바꾸지 않는다.
 - inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.

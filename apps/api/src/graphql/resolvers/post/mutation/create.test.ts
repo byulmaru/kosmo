@@ -282,7 +282,7 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   assert.equal(execute.mock.callCount(), 1);
 });
 
-test('createPost runs PostCreate regardless of field selection and omits analytics platform', async (t) => {
+test('createPost passes supported analytics platform to PostCreate regardless of field selection', async (t) => {
   const accountId = requestOwnerAccountId;
   const profileId = requestProfileId;
   const postId = '00000000-0000-4000-8000-000000000014';
@@ -366,8 +366,12 @@ test('createPost runs PostCreate regardless of field selection and omits analyti
     assert.equal(args.revalidateAuthorization, true);
     assert.equal(args.input.profileId, profileId);
     assert.match(args.requestId, /^[0-9a-f-]{36}$/i);
-    assert.equal(args.analyticsPlatform, undefined);
-    assert.equal(Object.hasOwn(args, 'analyticsPlatform'), false);
+    if (header === 'web' || header === 'native') {
+      assert.equal(args.analyticsPlatform, header);
+    } else {
+      assert.equal(args.analyticsPlatform, undefined);
+      assert.equal(Object.hasOwn(args, 'analyticsPlatform'), false);
+    }
   }
 
   assert.equal(execute.mock.callCount(), 4);

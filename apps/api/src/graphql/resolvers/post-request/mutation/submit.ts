@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
+import { db, first, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
@@ -11,7 +11,11 @@ import {
   PostRequestStatus,
   postRequestWorkflow,
 } from '@kosmo/core/temporal/post-request';
-import { ApplicationFailure, WorkflowNotFoundError } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowNotFoundError,
+} from '@temporalio/client';
 import { and, eq, inArray } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
@@ -78,6 +82,17 @@ const getRetainedMediaUploadResult = async (
   }
 };
 
+const hasCompatibleMediaUploadFilter = (
+  result: MediaUploadWorkflowResult | null,
+  requestedFilter: boolean,
+): boolean => {
+  const appliedFilter = result?.applyAiProhibitFilter;
+  return (
+    (appliedFilter === undefined || appliedFilter === requestedFilter) &&
+    (!requestedFilter || appliedFilter === true)
+  );
+};
+
 const verifyAttachedMedia = async (
   accountId: string,
   submittedMedia: readonly SubmittedPostMedia[],
@@ -114,13 +129,27 @@ const verifyAttachedMedia = async (
     }
 
     if (media.state === MediaState.READY && media.url) {
-      const result = await getRetainedMediaUploadResult(media.id, accountId);
-      const appliedFilter = result?.applyAiProhibitFilter;
-      if (
-        (appliedFilter !== undefined && appliedFilter !== mediaInput.applyAiProhibitFilter) ||
-        (mediaInput.applyAiProhibitFilter && appliedFilter !== true)
-      ) {
-        throw unusableMedia(index);
+      const workflowArgs = { mediaId: media.id, accountId };
+      try {
+        await runWorkflow(mediaUploadWorkflow, {
+          args: [workflowArgs],
+          updateArgs: [{ applyAiProhibitFilter: mediaInput.applyAiProhibitFilter }],
+          mode: 'update',
+        });
+      } catch (error) {
+        if (error instanceof ApplicationFailure && error.type === 'MediaUploadSelectionConflict') {
+          throw unusableMedia(index);
+        }
+        if (
+          !(error instanceof WorkflowNotFoundError) ||
+          error.workflowId !== mediaUploadWorkflow.workflowIdFromArgs(workflowArgs)
+        ) {
+          throw error;
+        }
+        const result = await getRetainedMediaUploadResult(media.id, accountId);
+        if (!hasCompatibleMediaUploadFilter(result, mediaInput.applyAiProhibitFilter)) {
+          throw unusableMedia(index);
+        }
       }
       verified.push({
         ...mediaInput,
@@ -173,14 +202,46 @@ const publishUploadingMedia = async (
               mode: 'update-with-start',
               workflowIdConflictPolicy: 'USE_EXISTING',
               workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            }).catch((error: unknown) => {
+            }).catch(async (error: unknown) => {
               if (
                 error instanceof ApplicationFailure &&
                 error.type === 'MediaUploadSelectionConflict'
               ) {
                 throw unusableMedia(index);
               }
-              throw error;
+              const workflowArgs = { mediaId: item.mediaId, accountId };
+              if (
+                !(
+                  error instanceof WorkflowExecutionAlreadyStartedError &&
+                  error.workflowId === mediaUploadWorkflow.workflowIdFromArgs(workflowArgs) &&
+                  error.workflowType === mediaUploadWorkflow.workflow
+                )
+              ) {
+                throw error;
+              }
+
+              const readyMedia = await withPrimaryDatabase(async () =>
+                db
+                  .select({ state: MediaTable.state, url: MediaTable.url })
+                  .from(MediaTable)
+                  .where(
+                    and(
+                      eq(MediaTable.id, item.mediaId),
+                      eq(MediaTable.accountId, accountId),
+                      eq(MediaTable.source, MediaSource.LOCAL),
+                    ),
+                  )
+                  .then(first),
+              );
+              if (!readyMedia || readyMedia.state !== MediaState.READY || !readyMedia.url) {
+                throw error;
+              }
+
+              const result = await getRetainedMediaUploadResult(item.mediaId, accountId);
+              if (!hasCompatibleMediaUploadFilter(result, item.applyAiProhibitFilter)) {
+                throw unusableMedia(index);
+              }
+              return { status: 'completed' as const };
             }),
           ]
         : [],
@@ -276,6 +337,7 @@ export async function submitLocalPost(
     input: preparedInput,
     revalidateAuthorization: true,
     requestId: randomUUID(),
+    ...(analyticsPlatform ? { analyticsPlatform } : {}),
   };
   try {
     const result = await runWorkflow(postCreateWorkflow, {
