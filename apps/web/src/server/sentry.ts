@@ -18,7 +18,8 @@ if (enabled) {
       if (request.headers) {
         request.headers = Object.fromEntries(
           Object.entries(request.headers).filter(
-            ([name]) => !['authorization', 'proxy-authorization', 'cookie'].includes(name.toLowerCase()),
+            ([name]) =>
+              !['authorization', 'proxy-authorization', 'cookie'].includes(name.toLowerCase()),
           ),
         );
       }
@@ -29,7 +30,8 @@ if (enabled) {
     dsn,
     enableLogs: true,
     environment,
-    integrations: (integrations) => integrations.filter((integration) => integration.name !== 'Graphql'),
+    integrations: (integrations) =>
+      integrations.filter((integration) => integration.name !== 'Graphql'),
     initialScope: { tags: { runtime: 'web-bff' } },
     release,
     sendDefaultPii: false,

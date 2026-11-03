@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
+import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { once } from 'node:events';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import type { ChildProcess } from 'node:child_process';
 
 type FixtureMessage = {
   type: 'ready' | 'report';
