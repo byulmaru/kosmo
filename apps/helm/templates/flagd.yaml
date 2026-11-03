@@ -51,12 +51,7 @@ spec:
         variants:
           'on': true
           'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
+        defaultVariant: 'on'
     $evaluators:
       isDeveloper:
         in:

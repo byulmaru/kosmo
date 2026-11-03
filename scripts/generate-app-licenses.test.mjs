@@ -9,6 +9,7 @@ import {
   buildLicenseEntries,
   checkLicenseArtifact,
   normalizeRepositoryUrl,
+  packageKeysForLicenseCheck,
   sourceSha256,
   writeLicenseArtifact,
 } from './generate-app-licenses.mjs';
@@ -18,10 +19,12 @@ function fixture(t) {
   const notice = join(root, 'NOTICE.md');
   const supplemental = join(root, 'supplemental.json');
   const pendingFile = join(root, 'apps/app/licenses/pending-notices.json');
+  const hopeReLicense = join(root, 'apps/app/licenses/hope-re.LICENSE');
   writeFileSync(notice, 'Complete attribution notice\n');
   writeFileSync(supplemental, '[]\n');
   mkdirSync(dirname(pendingFile), { recursive: true });
   writeFileSync(pendingFile, '[]\n');
+  writeFileSync(hopeReLicense, 'Complete Hope:RE MIT license\n');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return { root, notice, supplemental, pendingFile };
 }
@@ -167,6 +170,7 @@ test('builds sorted package entries from local originals and exact supplements',
     [
       '@kosmo/published@1.0.0',
       '@scope/fallback@3.0.0',
+      'Hope:RE@',
       'plain@1.0.0',
       'plain@2.0.0',
       'supplemented@4.0.0',
@@ -201,6 +205,17 @@ test('builds sorted package entries from local originals and exact supplements',
       license: 'MIT',
       text: supplementalText,
       sourceUrl: 'https://github.com/example/supplemented/blob/0123456789abcdef/LICENSE',
+    },
+  );
+  assert.deepEqual(
+    entries.find((entry) => entry.name === 'Hope:RE'),
+    {
+      name: 'Hope:RE',
+      version: '',
+      license: 'MIT',
+      text: 'Complete Hope:RE MIT license\n',
+      sourceUrl:
+        'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
     },
   );
   assert.equal(entries.at(-1).text, 'Complete attribution notice\n');
@@ -377,7 +392,49 @@ test('checks the exact generated package set and notice records', (t) => {
   );
 });
 
-test('checks one checksum over lock, supplemental, pending, and emoji notice sources', (t) => {
+test('keeps static license notices out of the npm package check scope', () => {
+  const keys = packageKeysForLicenseCheck([
+    { name: '반응 이모지', version: '', license: 'MIT · Unicode' },
+    { name: 'Hope:RE', version: '', license: 'MIT' },
+    { name: 'runtime', version: '1.0.0', license: 'MIT' },
+  ]);
+
+  assert.deepEqual([...keys], ['runtime@1.0.0']);
+});
+
+test('allows blank versions only for the known static license notices', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-static-notices-'));
+  const outputPath = join(root, 'licenses.json');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const hopeReNotice = {
+    name: 'Hope:RE',
+    version: '',
+    license: 'MIT',
+    text: 'Complete Hope:RE MIT license\n',
+    sourceUrl:
+      'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
+  };
+  const current = { sourceSha256: 'a'.repeat(64), notices: [hopeReNotice] };
+  writeLicenseArtifact(current, outputPath);
+  assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
+
+  const unknownNotice = { ...hopeReNotice, name: 'Unknown' };
+  writeLicenseArtifact({ ...current, notices: [unknownNotice] }, outputPath);
+  assert.throws(
+    () => checkLicenseArtifact({ ...current, notices: [unknownNotice] }, outputPath),
+    /contains an invalid notice/,
+  );
+
+  const wrongLicense = { ...hopeReNotice, license: 'Apache-2.0' };
+  writeLicenseArtifact({ ...current, notices: [wrongLicense] }, outputPath);
+  assert.throws(
+    () => checkLicenseArtifact({ ...current, notices: [wrongLicense] }, outputPath),
+    /contains an invalid notice/,
+  );
+});
+
+test('checks one checksum over lock, supplemental, pending, and static license notice sources', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'kosmo-license-sources-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sources = [
@@ -386,6 +443,7 @@ test('checks one checksum over lock, supplemental, pending, and emoji notice sou
     'apps/app/licenses/supplemental-other.json',
     'apps/app/licenses/pending-notices.json',
     'apps/app/public/reaction-emoji/NOTICE.md',
+    'apps/app/licenses/hope-re.LICENSE',
   ];
   for (const path of sources) {
     const filePath = join(root, path);
@@ -394,12 +452,15 @@ test('checks one checksum over lock, supplemental, pending, and emoji notice sou
   }
 
   const initial = sourceSha256(root);
+  writeFileSync(join(root, 'apps/app/licenses/hope-re.LICENSE'), 'changed Hope:RE license\n');
+  const changedHopeReLicense = sourceSha256(root);
+  assert.notEqual(changedHopeReLicense, initial);
   writeFileSync(
     join(root, 'apps/app/licenses/supplemental-other.json'),
     'changed supplemental content\n',
   );
   const changedSupplement = sourceSha256(root);
-  assert.notEqual(changedSupplement, initial);
+  assert.notEqual(changedSupplement, changedHopeReLicense);
   writeFileSync(join(root, 'apps/app/licenses/pending-notices.json'), 'changed pending content\n');
   assert.notEqual(sourceSha256(root), changedSupplement);
 });
@@ -468,7 +529,7 @@ test('includes selected transitive packages and excludes unshipped build tools',
   );
   assert.deepEqual(
     entries.map(({ name, version }) => `${name}@${version}`),
-    ['runtime@1.0.0', 'runtime-transitive@2.0.0', '반응 이모지@'],
+    ['Hope:RE@', 'runtime@1.0.0', 'runtime-transitive@2.0.0', '반응 이모지@'],
   );
 
   assert.throws(

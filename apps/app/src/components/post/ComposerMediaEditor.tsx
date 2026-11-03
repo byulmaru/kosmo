@@ -678,7 +678,9 @@ function NightshadeToolContent({
             AI 학습 방지 필터 적용
           </Text>
           <Text style={[styles.helperCopy, { color: theme.foregroundSecondary }]}>
-            실험적인 기능입니다.
+            실험적인 기능이며 예고 없이 변경될 수 있습니다.
+            {'\n'}
+            이미지 처리는 10~30분이 소요되며 작업 대기열 상황에 따라 더 오래 지연될 수 있습니다.
           </Text>
         </View>
         <Switch

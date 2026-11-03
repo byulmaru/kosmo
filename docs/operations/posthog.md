@@ -12,20 +12,27 @@ Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`�
 
 ## 명시적 event allowlist
 
-| Event              | 허용 property                            | 발생 조건                                                                                                                           |
-| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `repost_succeeded` | `result`: `created` 또는 `removed`       | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |
-| `reaction_added`   | `reaction_type`: `default` 또는 `custom` | `addReaction` payload가 반환된 뒤                                                                                                   |
-| `reaction_removed` | `reaction_type`: `default` 또는 `custom` | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                         |
-| `bookmark_added`   | 없음                                     | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
-| `bookmark_removed` | 없음                                     | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
-| `post_created`     | `selected_profile_id`, `visibility`      | 유효한 `createPost` 응답의 `acceptedRequest.id`를 확인한 뒤 한 번                                                                   |
+| Event              | 허용 property                                                  | 발생 조건                                                                                                                           |
+| ------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `repost_succeeded` | `result`: `created` 또는 `removed`                             | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |
+| `reaction_added`   | `reaction_type`: `default` 또는 `custom`                       | `addReaction` payload가 반환된 뒤                                                                                                   |
+| `reaction_removed` | `reaction_type`: `default` 또는 `custom`                       | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                         |
+| `bookmark_added`   | 없음                                                           | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
+| `bookmark_removed` | 없음                                                           | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
+| `post_created`     | `selected_profile_id`, `visibility`, `ai_prohibit_image_count` | 유효한 `createPost` 응답의 Post ID 또는 PostRequest ID를 확인한 뒤 한 번                                                            |
 
-현재 Post Composer는 `acceptedRequest.id`가 있는 응답 분기에서 기존 `trackAnalytics` SDK 경로로 `post_created`를
-기록한다. `post`가 `null`인 pending 접수도 포함한다. 이 응답 분기는 부분 GraphQL 오류가 있어도 요청을 접수한
-것으로 처리하므로 함께 반환된 오류가 event를 억제하지 않는다. Network error, 접수 ID가 없는 응답에는 event를
-기록하지 않으며, 나중의 게시 처리 실패나 취소도 이미 기록한 event를 회수하지 않는다. 기존 Account identity와
-SDK privacy/configuration guard, best-effort 전송을 유지한다.
+현재 Post Composer는 유효한 `createPost.post.id` 또는 `acceptedRequest.id`가 있는 응답에서 기존
+`trackAnalytics` SDK 경로로 `post_created`를 기록한다. `ai_prohibit_image_count`는 실제 제출 snapshot에서
+AI 학습 방지 필터를 선택한 첨부 이미지 수이며, 해당 선택이 없으면 `0`이다. 이는 접수된 제출만 세므로 나중의
+게시 처리 실패나 취소도 이미 기록한 event를 회수하지 않는다. `post`가 `null`인 pending 접수도 포함한다. 이
+응답 분기는 부분 GraphQL 오류가 있어도 요청을 접수한 것으로 처리하므로 함께 반환된 오류가 event를 억제하지
+않는다. Network error, 접수 ID가 없는 응답에는 event를 기록하지 않는다. 기존 Account identity와 SDK
+privacy/configuration guard, best-effort 전송을 유지한다.
+
+PostHog에서 `ai_prohibit_image_count > 0`으로 필터링하면 보호 이미지가 포함된 제출 수를 볼 수 있다. 분모에는
+`ai_prohibit_image_count` 속성이 있는 `post_created` event만 포함해 Worker event를 제외한 클라이언트 접수 수를
+센다. 이 property를 합산하면 제출한 보호 이미지 수를 볼 수 있다. 이 property는 숫자만 전송하며 미디어 ID나
+콘텐츠를 포함하지 않는다.
 
 별도의 선택적 Worker capture 경로와 과거 server `post_created` event는 실제 DB commit 뒤 기록된 Post를 나타낸다.
 이 raw server capture에는 브라우저 URL·referrer가 없으며 client SDK의 event 시각·UUID와 다르다. 이 server event와

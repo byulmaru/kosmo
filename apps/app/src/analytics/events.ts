@@ -7,6 +7,7 @@ export type AnalyticsEventProperties = {
     previous_profile_id?: string;
   };
   post_created: {
+    ai_prohibit_image_count: number;
     selected_profile_id: string;
     visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';
   };
