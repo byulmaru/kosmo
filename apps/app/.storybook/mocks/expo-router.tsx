@@ -109,10 +109,6 @@ export function useSegments() {
   return useContext(RouterContext).segments;
 }
 
-export function useIsFocused() {
-  return true;
-}
-
 export function useLocalSearchParams<T extends Record<string, string | undefined>>() {
   return useContext(RouterContext).params as T;
 }
