@@ -261,8 +261,7 @@ builder.queryField('homeTimeline', (t) =>
             if (
               !inverted &&
               before === undefined &&
-              (after?.kind === 'db' ||
-                (databaseFallbackAfterCacheMiss && after === undefined))
+              (after?.kind === 'db' || (databaseFallbackAfterCacheMiss && after === undefined))
             ) {
               void cacheHomeTimelinePage({
                 profileId,

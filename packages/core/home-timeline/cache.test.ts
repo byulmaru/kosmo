@@ -636,10 +636,7 @@ test(
         .sort(),
       [newest.id, tail.id, next.id, final.id].sort(),
     );
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, disjoint.id)))?.value,
-      null,
-    );
+    assert.equal((await runRedisCommand((client) => client.zScore(key, disjoint.id)))?.value, null);
 
     await invalidateHomeTimelines({ profileIds: [viewer.id] });
     await cacheHomeTimelinePage({ profileId: viewer.id, after: tail.id, postIds: [disjoint.id] });
@@ -787,11 +784,8 @@ test(
     await runRedisCommand((client) => client.unlink(`kosmo:home-timeline:profile:${viewer.id}`));
     assert.equal(await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }), null);
     assert.equal(
-      (
-        await runRedisCommand((client) =>
-          client.exists(`kosmo:home-timeline:profile:${viewer.id}`),
-        )
-      )?.value,
+      (await runRedisCommand((client) => client.exists(`kosmo:home-timeline:profile:${viewer.id}`)))
+        ?.value,
       0,
     );
 

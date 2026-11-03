@@ -541,11 +541,7 @@ test(
     );
 
     const cachedAfterBoundary = await requestHome(viewer.token, { first: 10 });
-    assert.equal(
-      cachedAfterBoundary.errors,
-      undefined,
-      JSON.stringify(cachedAfterBoundary.errors),
-    );
+    assert.equal(cachedAfterBoundary.errors, undefined, JSON.stringify(cachedAfterBoundary.errors));
     assert.deepEqual(
       cachedAfterBoundary.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
       [cached.id, cachedOlder.id, missingFromCache.id]
@@ -678,7 +674,10 @@ test(
     assert.equal(cold.errors, undefined, JSON.stringify(cold.errors));
     assert.deepEqual(
       cold.data?.homeTimeline.edges.map(({ node }) => node.id),
-      expectedIds.slice(-2).reverse().map((id) => encodeGlobalId('Post', id)),
+      expectedIds
+        .slice(-2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
     );
     assert.ok(cold.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('db:')));
     assert.equal(cold.data?.homeTimeline.pageInfo.hasNextPage, true);
@@ -696,7 +695,10 @@ test(
     assert.equal(next.errors, undefined, JSON.stringify(next.errors));
     assert.deepEqual(
       next.data?.homeTimeline.edges.map(({ node }) => node.id),
-      expectedIds.slice(-4, -2).reverse().map((id) => encodeGlobalId('Post', id)),
+      expectedIds
+        .slice(-4, -2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
     );
     assert.ok(next.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('db:')));
     assert.equal(next.data?.homeTimeline.pageInfo.hasNextPage, true);
