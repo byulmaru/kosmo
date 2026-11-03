@@ -15,6 +15,7 @@ import {
 import { operation, service } from 'nexus-rpc';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
   MediaUploadPublishInput,
   MediaUploadPublishResult,
@@ -22,7 +23,6 @@ import type {
   MediaUploadWorkflowInput,
   MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
-import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type * as activities from '../activities';
 
 type ProcessUploadInput = {
@@ -65,9 +65,11 @@ const inputSchema = z.object({
 
 const publishInputSchema = z.object({ applyAiProhibitFilter: z.boolean() });
 
-const completedPublication = (
-  { id, mediaType, url }: MediaUploadResult,
-): MediaUploadPublishResult => ({
+const completedPublication = ({
+  id,
+  mediaType,
+  url,
+}: MediaUploadResult): MediaUploadPublishResult => ({
   id,
   mediaType,
   status: 'completed',
@@ -110,9 +112,6 @@ export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
         );
       }
 
-      if (failure) {
-        throw failure.error;
-      }
       await condition(() => failure !== undefined || publicationResult !== undefined);
       if (failure) {
         throw failure.error;

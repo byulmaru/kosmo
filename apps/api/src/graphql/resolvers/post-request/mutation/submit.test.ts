@@ -16,6 +16,7 @@ import {
 import { ApplicationFailure, WorkflowUpdateFailedError } from '@temporalio/client';
 import { graphql } from 'graphql';
 import { schema } from '@/graphql/schema';
+import type { TestContext } from 'node:test';
 import type {
   MediaUploadPublishInput,
   MediaUploadPublishResult,
@@ -23,7 +24,6 @@ import type {
 } from '@kosmo/core/temporal/media-upload';
 import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
-import type { TestContext } from 'node:test';
 import type { ExecutionResult } from 'graphql';
 
 type CreatePostResult = {
@@ -160,15 +160,12 @@ const setupPublishUpdate = (
       return result as never;
     },
   );
-  return { calls, mock };
+  return { calls, mock: mock.mock };
 };
 
 test('createPost executes identical no-media submissions as separate PostCreate workflows', async (t) => {
   const profileId = '00000000-0000-4000-8000-000000000002';
-  const postIds = [
-    '00000000-0000-4000-8000-000000000003',
-    '00000000-0000-4000-8000-000000000004',
-  ];
+  const postIds = ['00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004'];
   const workflowArgs: PostCreateWorkflowArgs[] = [];
   const postIdsForLookup = [...postIds];
   const execute = t.mock.method(
@@ -369,9 +366,7 @@ test('createPost creates a Post after a completed Media publication', async (t) 
   assert.deepEqual(result.errors, undefined);
   assert.equal(result.data?.createPost.post?.id, encodeGlobalId('Post', postId));
   assert.equal(result.data?.createPost.request, null);
-  assert.deepEqual(publish.calls, [
-    { input: { applyAiProhibitFilter: true }, mediaId },
-  ]);
+  assert.deepEqual(publish.calls, [{ input: { applyAiProhibitFilter: true }, mediaId }]);
   assert.equal(publish.mock.callCount(), 1);
   assert.equal(execute.mock.callCount(), 1);
   assert.equal(workflowArgs[0]?.revalidateAuthorization, true);
@@ -607,10 +602,7 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
     'MediaUploadSelectionConflict',
   );
   const unrelated = new Error('Media publication failed');
-  const failures: Error[] = [
-    new WorkflowUpdateFailedError('Update failed', conflict),
-    unrelated,
-  ];
+  const failures: Error[] = [new WorkflowUpdateFailedError('Update failed', conflict), unrelated];
   const publish = t.mock.method(
     temporalClient.workflow,
     'executeUpdateWithStart',
@@ -627,9 +619,7 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
 
   const conflictResult = await requestSubmit({
     bodyText: 'conflicting selection',
-    media: [
-      { applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', conflictMediaId) },
-    ],
+    media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', conflictMediaId) }],
     visibility: 'PUBLIC',
   });
   const conflictError = conflictResult.errors?.[0]?.originalError;
@@ -638,9 +628,7 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
 
   const unrelatedResult = await requestSubmit({
     bodyText: 'unrelated failure',
-    media: [
-      { applyAiProhibitFilter: false, mediaId: encodeGlobalId('Media', unrelatedMediaId) },
-    ],
+    media: [{ applyAiProhibitFilter: false, mediaId: encodeGlobalId('Media', unrelatedMediaId) }],
     visibility: 'PUBLIC',
   });
   assert.equal(unrelatedResult.errors?.[0]?.originalError, unrelated);
@@ -741,9 +729,14 @@ test('createPost reports unsupported uploads by their original media index', asy
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle', () => ({
-    result: async () => null as never,
-  }) as never);
+  const getHandle = t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    () =>
+      ({
+        result: async () => null as never,
+      }) as never,
+  );
   const execute = t.mock.method(temporalClient.workflow, 'execute');
   const start = t.mock.method(temporalClient.workflow, 'start');
   const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
@@ -815,9 +808,14 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle', () => ({
-    result: async () => null as never,
-  }) as never);
+  const getHandle = t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    () =>
+      ({
+        result: async () => null as never,
+      }) as never,
+  );
   const outage = new Error('Media Storage Service is unreachable');
   t.mock.method(globalThis, 'fetch', async () => {
     throw outage;

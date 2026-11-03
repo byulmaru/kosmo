@@ -4,7 +4,6 @@ import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { submitLocalPost } from '../../post-request/mutation/submit';
-import type { LocalPostSubmission } from '../../post-request/mutation/submit';
 import { PostRequest } from '../../post-request/ref';
 import { Profile } from '../../profile/ref';
 import { Post } from '../ref';
@@ -15,6 +14,7 @@ import {
   localPostMediaArraySchema,
 } from './prepare-local-input';
 import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
+import type { LocalPostSubmission } from '../../post-request/mutation/submit';
 
 const CreatePostPayload = builder.objectRef<LocalPostSubmission>('CreatePostPayload');
 

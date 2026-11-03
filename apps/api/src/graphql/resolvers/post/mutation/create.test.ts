@@ -8,11 +8,14 @@ import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/se
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { ApplicationFailure } from '@temporalio/client';
-import { graphql, GraphQLObjectType, GraphQLSchema, isObjectType } from 'graphql';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { graphql, GraphQLObjectType, GraphQLSchema, isObjectType } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { TestContext } from 'node:test';
-import type { PostCreateWorkflowArgs, PostCreateWorkflowResult } from '@kosmo/core/temporal/post-create';
+import type {
+  PostCreateWorkflowArgs,
+  PostCreateWorkflowResult,
+} from '@kosmo/core/temporal/post-create';
 import type { SQL } from 'drizzle-orm';
 
 const requestOwnerAccountId = '00000000-0000-4000-8000-000000000011';
@@ -30,16 +33,12 @@ const setupPostCreateWorkflow = (
   result: PostCreateWorkflowResult,
   onArgs: (args: PostCreateWorkflowArgs) => void = () => {},
 ) =>
-  t.mock.method(
-    temporalClient.workflow,
-    'execute',
-    async (workflow: unknown, options: unknown) => {
-      assert.equal(workflow, postCreateWorkflow.workflow);
-      const args = (options as { args: readonly [PostCreateWorkflowArgs] }).args[0];
-      onArgs(args);
-      return result as never;
-    },
-  );
+  t.mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    assert.equal(workflow, postCreateWorkflow.workflow);
+    const args = (options as { args: readonly [PostCreateWorkflowArgs] }).args[0];
+    onArgs(args);
+    return result as never;
+  });
 
 test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
   const postContent = schema.getType('PostContent');

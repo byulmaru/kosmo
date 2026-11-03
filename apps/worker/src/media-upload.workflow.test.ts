@@ -1,15 +1,12 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   MEDIA_UPLOAD_PUBLISH_UPDATE_NAME,
   mediaUploadWorkflow,
 } from '@kosmo/core/temporal/media-upload';
-import {
-  ApplicationFailure,
-  WorkflowFailedError,
-} from '@temporalio/client';
+import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporalio/nexus';
 import { Worker } from '@temporalio/worker';
 import { HandlerError, operation, service, serviceHandler } from 'nexus-rpc';
@@ -26,12 +23,12 @@ import type {
   MediaUploadWorkflowInput,
   MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type {
   finalizeMediaUploadActivity,
   prepareMediaUploadActivity,
 } from './activities/media-upload';
 import type { MockMediaUploadOperationInput } from './test-fixtures/media-upload-nexus-operation';
-import type { TestWorkflowEnvironment } from '@temporalio/testing';
 
 type PreparedUpload = Awaited<ReturnType<typeof prepareMediaUploadActivity>>;
 type FinalizeInput = Parameters<typeof finalizeMediaUploadActivity>[0];
@@ -195,9 +192,7 @@ const waitForAcceptedUpdate = async (
           };
         }
       ).workflowExecutionUpdateAcceptedEventAttributes;
-      return (
-        attributes?.acceptedRequest?.input?.name === MEDIA_UPLOAD_PUBLISH_UPDATE_NAME
-      );
+      return attributes?.acceptedRequest?.input?.name === MEDIA_UPLOAD_PUBLISH_UPDATE_NAME;
     }).length;
     if (accepted !== undefined && accepted >= acceptedCount) {
       return;
@@ -215,9 +210,7 @@ const completeSourceUpload = async (
   if (!scenario.sourceStarted || scenario.sourceCompleted) {
     return;
   }
-  const handle = environment.client.workflow.getHandle(
-    'mock-media-upload:' + scenario.prepared.id,
-  );
+  const handle = environment.client.workflow.getHandle('mock-media-upload:' + scenario.prepared.id);
   if (!scenario.sourcePublished) {
     await handle.signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
     scenario.sourcePublished = true;
@@ -273,8 +266,10 @@ test(
     const byUploadId = new Map(scenarios.map((scenario) => [scenario.prepared.id, scenario]));
     const events: string[] = [];
     const nexusCalls: NexusCall[] = [];
-    const activityCalls: Array<{ readonly name: 'prepare' | 'finalize'; readonly mediaId: string }> =
-      [];
+    const activityCalls: Array<{
+      readonly name: 'prepare' | 'finalize';
+      readonly mediaId: string;
+    }> = [];
     const finalizations: FinalizeInput[] = [];
 
     const scenarioForMediaId = (mediaId: string): Scenario => {
@@ -305,35 +300,31 @@ test(
       startUpload: new WorkflowRunOperationHandler<
         MediaUploadStartInput,
         MediaUploadWorkflowResult
-      >(
-        async (context, input) => {
-          const scenario = scenarioForUploadId(input.id);
-          nexusCalls.push({ name: 'startUpload', id: input.id });
-          events.push('nexus-start:' + input.id);
-          if (scenario.failurePoint === 'start') {
-            scenario.startEntered.resolve();
-            await scenario.allowStartFailure.promise;
-            throw new HandlerError(
-              'BAD_REQUEST',
-              'Mock Media Upload start failed',
-              { retryableOverride: false },
-            );
-          }
-          const operationInput: MockMediaUploadOperationInput = {
-            result: scenario.sourceResult,
-            shouldFail: false,
-          };
-          const handle = await startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
-            workflowId: 'mock-media-upload:' + input.id,
-            workflowExecutionTimeout: '25 hours',
-            args: [operationInput],
-          });
-          scenario.sourceStarted = true;
+      >(async (context, input) => {
+        const scenario = scenarioForUploadId(input.id);
+        nexusCalls.push({ name: 'startUpload', id: input.id });
+        events.push('nexus-start:' + input.id);
+        if (scenario.failurePoint === 'start') {
           scenario.startEntered.resolve();
-          events.push('nexus-start-ack:' + input.id);
-          return handle;
-        },
-      ),
+          await scenario.allowStartFailure.promise;
+          throw new HandlerError('BAD_REQUEST', 'Mock Media Upload start failed', {
+            retryableOverride: false,
+          });
+        }
+        const operationInput: MockMediaUploadOperationInput = {
+          result: scenario.sourceResult,
+          shouldFail: false,
+        };
+        const handle = await startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
+          workflowId: 'mock-media-upload:' + input.id,
+          workflowExecutionTimeout: '25 hours',
+          args: [operationInput],
+        });
+        scenario.sourceStarted = true;
+        scenario.startEntered.resolve();
+        events.push('nexus-start-ack:' + input.id);
+        return handle;
+      }),
       applyHope: async (_context, { id }) => {
         const scenario = scenarioForUploadId(id);
         nexusCalls.push({ name: 'applyHope', id });
@@ -362,11 +353,9 @@ test(
         scenario.publishEntered.resolve();
         if (scenario.failurePoint === 'publication') {
           await scenario.allowPublicationFailure.promise;
-          throw new HandlerError(
-            'BAD_REQUEST',
-            'Mock Media Upload publication failed',
-            { retryableOverride: false },
-          );
+          throw new HandlerError('BAD_REQUEST', 'Mock Media Upload publication failed', {
+            retryableOverride: false,
+          });
         }
         if (!scenario.publishResult) {
           throw new Error('Missing publication result for ' + id);
@@ -421,9 +410,7 @@ test(
     void nexusWorkerRun.catch(() => undefined);
 
     const operationNames = (scenario: Scenario) =>
-      nexusCalls
-        .filter(({ id }) => id === scenario.prepared.id)
-        .map(({ name }) => name);
+      nexusCalls.filter(({ id }) => id === scenario.prepared.id).map(({ name }) => name);
     const finalizationsFor = (scenario: Scenario) =>
       finalizations.filter(({ mediaId }) => mediaId === scenario.input.mediaId);
     const startMediaUpload = (scenario: Scenario) =>
@@ -442,6 +429,7 @@ test(
         updateId,
       });
 
+    let runUntilFailure: { readonly error: unknown } | undefined;
     try {
       await callerWorker.runUntil(async () => {
         const completedHandle = await startMediaUpload(completed);
@@ -461,10 +449,7 @@ test(
           events.indexOf('activity-finalize:' + completed.input.mediaId) <
             events.indexOf('update-complete:' + completed.prepared.id),
         );
-        assert.equal(
-          events.includes('source-complete:' + completed.prepared.id),
-          false,
-        );
+        assert.equal(events.includes('source-complete:' + completed.prepared.id), false);
         await completeSourceUpload(environment, completed, events);
         assert.deepEqual(await completedHandle.result(), {
           ...completedFinalization[0]?.result,
@@ -474,9 +459,8 @@ test(
 
         const processingHandle = await startMediaUpload(processing);
         await processing.publishEntered.promise;
-        await assert.rejects(
-          update(processingHandle, true),
-          (error) => hasFailureType(error, 'MediaUploadSelectionConflict'),
+        await assert.rejects(update(processingHandle, true), (error) =>
+          hasFailureType(error, 'MediaUploadSelectionConflict'),
         );
         const processingUpdate = await update(processingHandle, false);
         events.push('update-complete:' + processing.prepared.id);
@@ -526,9 +510,8 @@ test(
 
         const legacyFalseHandle = await startMediaUpload(legacyFalse);
         await legacyFalse.legacyPublishEntered.promise;
-        await assert.rejects(
-          update(legacyFalseHandle, true),
-          (error) => hasFailureType(error, 'MediaUploadSelectionConflict'),
+        await assert.rejects(update(legacyFalseHandle, true), (error) =>
+          hasFailureType(error, 'MediaUploadSelectionConflict'),
         );
         assert.equal(
           operationNames(legacyFalse).some(
@@ -538,11 +521,7 @@ test(
         );
         const legacyFalseUpdateId = randomUUID();
         let legacyFalseUpdateSettled = false;
-        const legacyFalseUpdate = update(
-          legacyFalseHandle,
-          false,
-          legacyFalseUpdateId,
-        ).then(
+        const legacyFalseUpdate = update(legacyFalseHandle, false, legacyFalseUpdateId).then(
           (result) => {
             legacyFalseUpdateSettled = true;
             return result;
@@ -571,10 +550,7 @@ test(
           id: legacyTrue.prepared.id,
           status: 'processing',
         });
-        assert.equal(
-          events.includes('nexus-publish-legacy:' + legacyTrue.prepared.id),
-          false,
-        );
+        assert.equal(events.includes('nexus-publish-legacy:' + legacyTrue.prepared.id), false);
         legacyTrue.allowHope.resolve();
         await legacyTrue.legacyPublishEntered.promise;
         await completeSourceUpload(environment, legacyTrue, events);
@@ -586,32 +562,21 @@ test(
         assert.deepEqual(operationNames(processing), ['startUpload', 'publishUploadV2']);
         assert.deepEqual(
           nexusCalls
-            .filter(
-              ({ id, name }) => id === completed.prepared.id && name === 'publishUploadV2',
-            )
+            .filter(({ id, name }) => id === completed.prepared.id && name === 'publishUploadV2')
             .map(({ applyAiProhibitFilter }) => applyAiProhibitFilter),
           [true],
         );
         assert.deepEqual(
           nexusCalls
-            .filter(
-              ({ id, name }) => id === processing.prepared.id && name === 'publishUploadV2',
-            )
+            .filter(({ id, name }) => id === processing.prepared.id && name === 'publishUploadV2')
             .map(({ applyAiProhibitFilter }) => applyAiProhibitFilter),
           [false],
         );
         assert.deepEqual(operationNames(prepareFailure), []);
         assert.deepEqual(operationNames(startFailure), ['startUpload']);
-        assert.deepEqual(operationNames(publicationFailure), [
-          'startUpload',
-          'publishUploadV2',
-        ]);
+        assert.deepEqual(operationNames(publicationFailure), ['startUpload', 'publishUploadV2']);
         assert.deepEqual(operationNames(legacyFalse), ['startUpload', 'publishUpload']);
-        assert.deepEqual(operationNames(legacyTrue), [
-          'startUpload',
-          'applyHope',
-          'publishUpload',
-        ]);
+        assert.deepEqual(operationNames(legacyTrue), ['startUpload', 'applyHope', 'publishUpload']);
         assert.deepEqual(
           activityCalls.filter(({ mediaId }) => mediaId === completed.input.mediaId),
           [
@@ -623,32 +588,51 @@ test(
           assert.equal(finalizationsFor(scenario).length, scenario.failurePoint ? 0 : 1);
         }
       });
-    } finally {
-      const cleanupFailures: unknown[] = [];
-      for (const scenario of scenarios) {
-        try {
-          await completeSourceUpload(environment, scenario, events);
-        } catch (error) {
-          cleanupFailures.push(error);
-        }
+    } catch (error) {
+      runUntilFailure = { error };
+    }
+
+    const cleanupFailures: unknown[] = [];
+    for (const scenario of scenarios) {
+      scenario.allowPrepareFailure.resolve();
+      scenario.allowStartFailure.resolve();
+      scenario.allowPublicationFailure.resolve();
+      scenario.allowHope.resolve();
+      try {
+        await completeSourceUpload(environment, scenario, events);
+      } catch (error) {
+        cleanupFailures.push(error);
       }
+    }
+    try {
       nexusWorker.shutdown();
-      try {
-        await nexusWorkerRun;
-      } catch (error) {
-        cleanupFailures.push(error);
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+    try {
+      await nexusWorkerRun;
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+    try {
+      await endpoint.dispose();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+    if (runUntilFailure) {
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          [runUntilFailure.error, ...cleanupFailures],
+          'Media Upload workflow test and cleanup failed.',
+        );
       }
-      try {
-        await endpoint.dispose();
-      } catch (error) {
-        cleanupFailures.push(error);
-      }
-      if (cleanupFailures.length === 1) {
-        throw cleanupFailures[0];
-      }
-      if (cleanupFailures.length > 1) {
-        throw new AggregateError(cleanupFailures, 'Media Upload workflow test cleanup failed.');
-      }
+      throw runUntilFailure.error;
+    }
+    if (cleanupFailures.length === 1) {
+      throw cleanupFailures[0];
+    }
+    if (cleanupFailures.length > 1) {
+      throw new AggregateError(cleanupFailures, 'Media Upload workflow test cleanup failed.');
     }
   },
 );

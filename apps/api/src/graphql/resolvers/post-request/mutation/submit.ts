@@ -11,19 +11,19 @@ import {
   PostRequestStatus,
   postRequestWorkflow,
 } from '@kosmo/core/temporal/post-request';
-import { and, eq, inArray } from 'drizzle-orm';
 import { ApplicationFailure, WorkflowNotFoundError } from '@temporalio/client';
+import { and, eq, inArray } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type {
   PostAnalyticsPlatform,
   PostCreateWorkflowArgs,
 } from '@kosmo/core/temporal/post-create';
 import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
-import type {
-  MediaUploadWorkflowInput,
-  MediaUploadWorkflowResult,
-} from '@kosmo/core/temporal/media-upload';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type { SessionContext } from '@/context';
 import type { LocalPostMutationInput } from '../../post/mutation/prepare-local-input';
@@ -122,7 +122,11 @@ const verifyAttachedMedia = async (
       ) {
         throw unusableMedia(index);
       }
-      verified.push({ ...mediaInput, state: media.state, storageReference: media.storageReference });
+      verified.push({
+        ...mediaInput,
+        state: media.state,
+        storageReference: media.storageReference,
+      });
       continue;
     }
 
@@ -242,7 +246,8 @@ export async function submitLocalPost(
 ): Promise<LocalPostSubmission> {
   const submittedInputMedia = input.media ?? [];
   if (
-    new Set(submittedInputMedia.map(({ mediaId }) => mediaId.id)).size !== submittedInputMedia.length
+    new Set(submittedInputMedia.map(({ mediaId }) => mediaId.id)).size !==
+    submittedInputMedia.length
   ) {
     throw new ValidationError('Post request media must be unique', { field: 'media' });
   }

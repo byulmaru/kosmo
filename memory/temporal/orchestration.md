@@ -56,8 +56,8 @@
   finalization과 completed 응답을 해소한 뒤 수행해 서로 기다리는 deadlock을 만들지 않는다.
   신규 history는 `patched('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
   `ABANDON` cancellation과 76시간 schedule-to-close 한도로 실행한다. Worker handler는 기존 `media-upload:${mediaId}` Workflow ID로
-  `USE_EXISTING` conflict와 `ALLOW_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은
-  독립 upload 실행에 붙는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다. 기존 history의 child start/execute
+  `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은
+  active upload에 붙고 닫힌 실행을 새 run으로 덮어쓰지 않는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다. 기존 history의 child start/execute
   command 순서는 그대로 유지하며, `post-request-media-retry-poll-v1` marker가 있는 history는 기존
   `checkPostRequestMediaUploadActivity` 5초 간격 retry, marker가 없는 history는 기존
   `waitForPostRequestMediaUploadActivity` 76시간 heartbeat 경로를 사용한다. 두 legacy Activity와 각 branch는 해당 history가
