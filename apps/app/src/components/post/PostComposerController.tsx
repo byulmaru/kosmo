@@ -530,7 +530,11 @@ function PostComposerContents({
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {
               if (acceptedRequest?.id) {
-                prependPostRequestToLoadedProfileRequests(store, actorProfileId, acceptedRequest.id);
+                prependPostRequestToLoadedProfileRequests(
+                  store,
+                  actorProfileId,
+                  acceptedRequest.id,
+                );
               }
 
               const request = acceptedRequest?.id ? store.get(acceptedRequest.id) : null;

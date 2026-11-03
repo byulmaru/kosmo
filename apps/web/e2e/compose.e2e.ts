@@ -431,11 +431,11 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      createPost?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: { post?: { id?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
-  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
+  const createdPostId = responseBody.data?.createPost?.post?.id;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
@@ -447,7 +447,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
       visibility: 'PUBLIC',
     },
   });
-  expect(acceptedRequestId).toEqual(expect.any(String));
+  expect(createdPostId).toEqual(expect.any(String));
   await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
   await expect(page).toHaveURL(/\/home$/);
   await expect
@@ -613,7 +613,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   const submitOperation = readGraphQLOperation(submitResponse.request().postData());
   const submitBody = (await submitResponse.json()) as {
     data?: {
-      createPost?: { request?: { requestId?: string | null } | null } | null;
+      createPost?: { post?: { id?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
@@ -627,7 +627,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
       visibility: 'PUBLIC',
     },
   });
-  expect(submitBody.data?.createPost?.request?.requestId).toEqual(expect.any(String));
+  expect(submitBody.data?.createPost?.post?.id).toEqual(expect.any(String));
   await expect
     .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
       timeout: 30_000,
@@ -804,22 +804,15 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   const operation = readGraphQLOperation(response.request().postData());
   const responseBody = (await response.json()) as {
     data?: {
-      createPost?: {
-        request?: {
-          requestId?: string | null;
-          status?: string | null;
-        } | null;
-      } | null;
+      createPost?: { post?: { id?: string | null } | null } | null;
     };
     errors?: unknown[];
   };
-  const acceptedRequestId = responseBody.data?.createPost?.request?.requestId;
-  const publishedRequestStatus = responseBody.data?.createPost?.request?.status;
+  const createdPostId = responseBody.data?.createPost?.post?.id;
 
   expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
   expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
-  expect(acceptedRequestId).toEqual(expect.any(String));
-  expect(publishedRequestStatus).toBe('PUBLISHED');
+  expect(createdPostId).toEqual(expect.any(String));
   expect(operation?.variables?.input).not.toHaveProperty('requestId');
   expect(operation?.variables).toMatchObject({
     input: {

@@ -993,9 +993,8 @@ describe('PostComposer request acknowledgement cache projection', () => {
     ]);
     assert.deepEqual(homeTimelinePostIds(environment), [createdPostId, 'post-home-existing']);
     for (const profileId of [profileA.id, profileB.id]) {
-      const data = environment.lookup(
-        createOperationDescriptor(query, { profileId }).fragment,
-      ).data as {
+      const data = environment.lookup(createOperationDescriptor(query, { profileId }).fragment)
+        .data as {
         node: { __typename: string; postRequests: ReadonlyArray<{ id: string }> } | null;
       };
       const requestIds =
@@ -1033,7 +1032,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
   });
 });
 
-it('requires a published Post ID and a completion handler before skipping the request acknowledgement', async () => {
+it('uses acknowledgement feedback without a published Post ID and published feedback with one', async () => {
   const createdPosts: Array<{ id: string }> = [];
   let acceptedCount = 0;
   const props = {
@@ -1095,7 +1094,10 @@ it('requires a published Post ID and a completion handler before skipping the re
 
   assert.deepEqual(createdPosts, []);
   assert.equal(acceptedCount, 2);
-  assert.equal(toastCalls.filter(([message]) => message === '게시 요청을 접수했어요').length, 2);
+  assert.deepEqual(toastCalls, [
+    ['게시 요청을 접수했어요', { tone: 'success' }],
+    ['게시했어요', { tone: 'success' }],
+  ]);
 });
 
 describe('PostComposer media submission', () => {
@@ -1943,10 +1945,9 @@ describe('PostComposer local author', () => {
     const call = mutationCalls[0];
     assert.ok(call);
     await act(async () =>
-      call.onCompleted(
-        { createPost: { post: null, request: null } },
-        [{ message: 'request was rejected' }],
-      ),
+      call.onCompleted({ createPost: { post: null, request: null } }, [
+        { message: 'request was rejected' },
+      ]),
     );
 
     assert.equal(targetProps?.body, '접수되지 않은 본문');
