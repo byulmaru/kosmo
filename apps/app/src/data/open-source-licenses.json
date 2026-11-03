@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "b23da916b995aff50f26f221bab468db306408e8d9b1af1f8a23f2b738363b1c",
+  "sourceSha256": "e7a52c471b1f68b18ceef8a2fb894a6359ef9e44c1e5b06d56c2bb0f5eea3336",
   "notices": [
     {
       "name": "@babel/runtime",
@@ -392,6 +392,13 @@
       "license": "ISC",
       "text": "ISC License\n\nCopyright (c) 2021, Andrea Giammarchi, @WebReflection\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted, provided that the above\ncopyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\nREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\nAND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,\nINDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM\nLOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE\nOR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\nPERFORMANCE OF THIS SOFTWARE.\n",
       "sourceUrl": "https://github.com/ungap/structured-clone"
+    },
+    {
+      "name": "Hope:RE",
+      "version": "",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE",
+      "text": "MIT License\n\nCopyright (c) 2025 HopeArtOrg\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
     },
     {
       "name": "abort-controller",

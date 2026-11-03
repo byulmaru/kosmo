@@ -4906,6 +4906,7 @@ export const QuoteComposerListIntegration: Story = {
     expect(within(success).queryByRole('button', { name: '보기' })).not.toBeInTheDocument();
     expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'UNLISTED',
     });
@@ -6260,6 +6261,7 @@ export const PostDetailReplyTargetedRefetch: Story = {
     expect(success).toHaveTextContent('게시 요청을 접수했어요');
     expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'UNLISTED',
     });
@@ -7848,6 +7850,7 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     expect(submittedInput).not.toHaveProperty('repostSourceId');
     expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'PUBLIC',
     });
@@ -8096,6 +8099,7 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
     expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'UNLISTED',
     });
@@ -9366,6 +9370,7 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
     expect(submittedInput).not.toHaveProperty('repostSourceId');
     expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'UNLISTED',
     });

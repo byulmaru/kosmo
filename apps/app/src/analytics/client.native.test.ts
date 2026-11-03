@@ -89,6 +89,11 @@ describe('PostHog Native client', () => {
     analytics.trackAnalytics('profile_view_succeeded', {});
     analytics.identifyAnalytics('account-a', 2);
     analytics.trackAnalytics('profile_created', properties);
+    analytics.trackAnalytics('post_created', {
+      ai_prohibit_image_count: 2,
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT',
+    });
     analytics.clearAnalytics();
 
     const instance = instances[0];
@@ -105,6 +110,15 @@ describe('PostHog Native client', () => {
       { kind: 'capture', event: 'profile_view_succeeded', properties: {} },
       { kind: 'identify', accountId: 'account-a', properties: { available_profile_count: 2 } },
       { kind: 'capture', event: 'profile_created', properties },
+      {
+        kind: 'capture',
+        event: 'post_created',
+        properties: {
+          ai_prohibit_image_count: 2,
+          selected_profile_id: 'profile-id',
+          visibility: 'DIRECT',
+        },
+      },
       { kind: 'reset' },
     ]);
   });

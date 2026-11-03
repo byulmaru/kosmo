@@ -63,11 +63,14 @@ const mediaValue = {
     if (mediaState !== 'ready') {
       throw new Error('Media is unavailable');
     }
-    return [{ altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' }];
+    return submittedMediaItems;
   },
   requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
+let submittedMediaItems = [
+  { altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' },
+];
 let reselectionMediaIds: string[] = [];
 let refreshMedia: (() => void) | undefined;
 let switcherProps:
@@ -538,6 +541,9 @@ before(async () => {
 
 beforeEach(() => {
   mentionSearchEnabled = true;
+  submittedMediaItems = [
+    { altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' },
+  ];
   appStateListeners.clear();
   keyboardDismissCount = 0;
   requests = [];
@@ -808,7 +814,11 @@ describe('PostComposer request acknowledgement cache projection', () => {
       assert.deepEqual(analyticsEvents, [
         {
           event: 'post_created',
-          properties: { selected_profile_id: profileA.id, visibility: 'UNLISTED' },
+          properties: {
+            ai_prohibit_image_count: 0,
+            selected_profile_id: profileA.id,
+            visibility: 'UNLISTED',
+          },
         },
       ]);
 
@@ -925,6 +935,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
           properties: {
             selected_profile_id: profileB.id,
             visibility: authorBCall.variables.input.visibility,
+            ai_prohibit_image_count: 0,
           },
         });
         assert.deepEqual(requestIds(profileA.id), []);
@@ -988,7 +999,11 @@ describe('PostComposer request acknowledgement cache projection', () => {
     assert.deepEqual(analyticsEvents, [
       {
         event: 'post_created',
-        properties: { selected_profile_id: profileA.id, visibility: 'UNLISTED' },
+        properties: {
+          ai_prohibit_image_count: 0,
+          selected_profile_id: profileA.id,
+          visibility: 'UNLISTED',
+        },
       },
     ]);
     assert.deepEqual(homeTimelinePostIds(environment), [createdPostId, 'post-home-existing']);
@@ -1003,6 +1018,43 @@ describe('PostComposer request acknowledgement cache projection', () => {
           : [];
       assert.deepEqual(requestIds, []);
     }
+  });
+
+  it('counts protected images from the submitted snapshot after a request is accepted', async () => {
+    submittedMediaItems = [
+      { altText: '첫 이미지', applyAiProhibitFilter: true, mediaId: 'media-1' },
+      { altText: '둘째 이미지', applyAiProhibitFilter: false, mediaId: 'media-2' },
+      { altText: '셋째 이미지', applyAiProhibitFilter: true, mediaId: 'media-3' },
+    ];
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('보호 이미지가 포함된 본문'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    assert.deepEqual(call.variables.input.media, [
+      { altText: '첫 이미지', applyAiProhibitFilter: true, mediaId: 'media-1' },
+      { altText: '둘째 이미지', applyAiProhibitFilter: false, mediaId: 'media-2' },
+      { altText: '셋째 이미지', applyAiProhibitFilter: true, mediaId: 'media-3' },
+    ]);
+
+    submittedMediaItems = [
+      { altText: '수정된 이미지', applyAiProhibitFilter: false, mediaId: 'media-4' },
+    ];
+    await act(async () => call.onCompleted(acceptedRequestResponse(0)));
+
+    assert.deepEqual(analyticsEvents, [
+      {
+        event: 'post_created',
+        properties: {
+          ai_prohibit_image_count: 2,
+          selected_profile_id: profileA.id,
+          visibility: 'UNLISTED',
+        },
+      },
+    ]);
   });
 
   it('shows completion feedback and closes after a direct Post when no Post callback is supplied', async () => {
@@ -1848,7 +1900,11 @@ describe('PostComposer local author', () => {
     assert.deepEqual(analyticsEvents, [
       {
         event: 'post_created',
-        properties: { selected_profile_id: profileA.id, visibility: 'DIRECT' },
+        properties: {
+          ai_prohibit_image_count: 0,
+          selected_profile_id: profileA.id,
+          visibility: 'DIRECT',
+        },
       },
     ]);
   });
@@ -1930,7 +1986,11 @@ describe('PostComposer local author', () => {
     assert.deepEqual(analyticsEvents, [
       {
         event: 'post_created',
-        properties: { selected_profile_id: profileA.id, visibility: 'FOLLOWERS' },
+        properties: {
+          ai_prohibit_image_count: 0,
+          selected_profile_id: profileA.id,
+          visibility: 'FOLLOWERS',
+        },
       },
     ]);
   });

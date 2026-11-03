@@ -8,15 +8,30 @@ import { collectDistributionPackageKeys } from './app-license-scope.mjs';
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifactPath = join(workspaceRoot, 'apps/app/src/data/open-source-licenses.json');
 const noticeRelativePath = 'apps/app/public/reaction-emoji/NOTICE.md';
+const hopeReLicenseRelativePath = 'apps/app/licenses/hope-re.LICENSE';
 const pendingRelativePath = 'apps/app/licenses/pending-notices.json';
 const noticePath = join(workspaceRoot, noticeRelativePath);
 const pendingPath = join(workspaceRoot, pendingRelativePath);
-const noticeEntry = {
-  name: '반응 이모지',
-  version: '',
-  license: 'MIT · Unicode',
-  sourceUrl: 'https://github.com/byulmaru/kosmo/blob/main/apps/app/public/reaction-emoji/NOTICE.md',
-};
+const staticLicenseNotices = [
+  {
+    name: '반응 이모지',
+    version: '',
+    license: 'MIT · Unicode',
+    sourceUrl: 'https://github.com/byulmaru/kosmo/blob/main/apps/app/public/reaction-emoji/NOTICE.md',
+    sourcePath: noticeRelativePath,
+  },
+  {
+    name: 'Hope:RE',
+    version: '',
+    license: 'MIT',
+    sourceUrl:
+      'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
+    sourcePath: hopeReLicenseRelativePath,
+  },
+];
+const staticLicenseNoticesByKey = new Map(
+  staticLicenseNotices.map((entry) => [`${entry.name}@${entry.version}`, entry]),
+);
 const supplementalPaths = [
   'apps/app/licenses/supplemental-families.json',
   'apps/app/licenses/supplemental-other.json',
@@ -406,8 +421,11 @@ export function buildLicenseEntries(
     );
   }
 
-  const noticeText = readFileSync(notice, 'utf8');
-  const allEntries = [...entries, { ...noticeEntry, text: noticeText }];
+  const staticEntries = staticLicenseNotices.map(({ sourcePath, ...entry }) => ({
+    ...entry,
+    text: readFileSync(sourcePath === noticeRelativePath ? notice : join(root, sourcePath), 'utf8'),
+  }));
+  const allEntries = [...entries, ...staticEntries];
   return allEntries.sort(
     (left, right) => compare(left.name, right.name) || compare(left.version, right.version),
   );
@@ -418,7 +436,7 @@ export function sourceSha256(root = workspaceRoot) {
     'pnpm-lock.yaml',
     ...supplementalPaths,
     pendingRelativePath,
-    noticeRelativePath,
+    ...staticLicenseNotices.map(({ sourcePath }) => sourcePath),
   ];
   const sources = sourcePaths.map((path) => {
     const contents = readFileSync(join(root, path), 'utf8');
@@ -437,6 +455,15 @@ export function buildLicenseData(report, options = {}) {
 
 function entryKey(entry) {
   return `${entry.name}@${entry.version}`;
+}
+
+function isStaticLicenseNotice(entry) {
+  const notice = staticLicenseNoticesByKey.get(entryKey(entry));
+  return notice?.license === entry.license;
+}
+
+export function packageKeysForLicenseCheck(notices) {
+  return new Set(notices.filter((entry) => !isStaticLicenseNotice(entry)).map(entryKey));
 }
 
 function sameNotice(left, right) {
@@ -506,8 +533,7 @@ function readLicenseArtifact(outputPath, pendingFile) {
       ) ||
       !entry.name ||
       !entry.license ||
-      (!entry.version &&
-        !(entry.name === noticeEntry.name && entry.license === noticeEntry.license)) ||
+      (!entry.version && !isStaticLicenseNotice(entry)) ||
       (entry.text.trim() === '' && pending.get(entryKey(entry))?.license !== entry.license) ||
       !isHttpsUrl(entry.sourceUrl)
     ) {
@@ -529,7 +555,7 @@ function readLicenseArtifact(outputPath, pendingFile) {
 function assertArtifactSourceSha(committed, currentSourceSha) {
   if (committed.sourceSha256 !== currentSourceSha) {
     throw new Error(
-      'Generated app license data is stale for pnpm-lock.yaml, supplemental license texts, pending notices, or the app notice. Run pnpm --filter @kosmo/app licenses:generate.',
+      'Generated app license data is stale for pnpm-lock.yaml, supplemental license texts, pending notices, or static license notices. Run pnpm --filter @kosmo/app licenses:generate.',
     );
   }
 }
@@ -566,11 +592,7 @@ export function run(args = process.argv.slice(2)) {
   if (check) {
     const { committed } = readLicenseArtifact(artifactPath, pendingPath);
     assertArtifactSourceSha(committed, sourceSha256(workspaceRoot));
-    packageKeys = new Set(
-      committed.notices
-        .filter((entry) => !(entry.name === noticeEntry.name && entry.version === ''))
-        .map(entryKey),
-    );
+    packageKeys = packageKeysForLicenseCheck(committed.notices);
   } else {
     if (verify) {
       const { committed } = readLicenseArtifact(artifactPath, pendingPath);

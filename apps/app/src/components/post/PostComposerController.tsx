@@ -488,8 +488,12 @@ function PostComposerContents({
       currentAccountIdRef.current === submissionOwnerAccountId;
 
     let input: PostComposerCreatePostMutation['variables']['input'];
+    let aiProhibitImageCount = 0;
     try {
       const submittedMedia = media.getPostRequestMedia();
+      aiProhibitImageCount = submittedMedia.filter(
+        (item) => item.applyAiProhibitFilter === true,
+      ).length;
       input = {
         ...createPostComposerMutationInput(
           bodyText,
@@ -523,6 +527,7 @@ function PostComposerContents({
         const publishedPostId = createdPost?.id ?? publishedRequestPostId;
         if (acceptedRequest?.id || createdPost?.id) {
           trackAnalytics('post_created', {
+            ai_prohibit_image_count: aiProhibitImageCount,
             selected_profile_id: profile.id,
             visibility,
           });
