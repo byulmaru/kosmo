@@ -490,7 +490,7 @@ test('createPost without media returns the actual published request state', asyn
   assert.equal(workflow.resultCallCount, 1);
 });
 
-test('createPost acknowledges pending media regardless of Post field selection', async (t) => {
+test('createPost acknowledges explicitly filtered pending media regardless of Post field selection', async (t) => {
   const postId = '00000000-0000-4000-8000-000000000016';
   const mediaId = '00000000-0000-4000-8000-000000000017';
   const uploadId = '00000000-0000-4000-8000-000000000018';
@@ -546,7 +546,7 @@ test('createPost acknowledges pending media regardless of Post field selection',
       }) as never,
   );
 
-  const media = [{ mediaId: encodeGlobalId('Media', mediaId) }];
+  const media = [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', mediaId) }];
   let requestOnlySettled = false;
   const requestOnlyPromise = createPostRequest('request { status }', media).then((result) => {
     requestOnlySettled = true;

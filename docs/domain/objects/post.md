@@ -113,9 +113,10 @@ Local Post·Reply·Quote 작성은 모두 같은 PostRequest 경로로 접수한
 접수된다. 응답을 받지 못해 다시 제출하면 새 요청이 만들어질 수 있으며, HTTP 요청이 정확히 한 번만 접수된다고 보장하지 않는다.
 작성 화면은 요청 실패나 응답 유실 뒤에도 작성 내용을 유지하며, 사용자의 다음 제출은 새 요청으로 처리한다.
 
-새 요청은 제출 Media 상태에 따라 응답한다. Media가 없거나 모든 참조 Media가 Ready면 publication 결과를 기다려
-`PUBLISHED` PostRequest를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 접수 확인을 즉시 반환하고, 모든
-참조 Media가 Ready가 된 뒤 publication을 진행한다. 어느 경우에도 Media 준비 전에 Post나 Post Content를 만들지 않는다.
+새 요청은 제출 시점의 Media 상태와 이미지별 `applyAiProhibitFilter` 선택에 따라 응답한다. 요청에 첨부된 유효한 Local
+Media 중 `State=Uploading`이고 `applyAiProhibitFilter=true`로 제출된 Media가 하나라도 있으면 접수 확인을 즉시
+반환하고 Media 준비가 끝난 뒤 publication을 진행한다. 그 외에는 publication 결과를 기다려 `PUBLISHED` PostRequest를
+반환한다. 어느 경우에도 Media 준비 전에 Post나 Post Content를 만들지 않는다.
 Media 처리 실패로 작성에 이르지 못하면 Post나 Post Content를 만들지 않는다. 실제 Post 생성 transaction은 당시 Account가
 Active이고 행동 주체 Profile의 Member 권한과 Profile 사용 조건이 유효한지 다시 확인한다. 확인할 수 없으면 Post를
 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만 확정할 수 있다. publication 시작 뒤 저장 결과가
@@ -130,9 +131,10 @@ ActivityPub Create를 전달하거나 게시 생성 분석 기록을 남기지 �
 nullable list item으로 반환한다. Profile의 PostRequest 목록은 현재 상태가 `PUBLISHED`인 요청을 제외한다.
 목록은 현재 선택한 Profile의 역할이 Member 이상인 세션에서 읽을 수 있으며, 조회한 Profile에 속하고 해당 세션 Account가 소유한 요청만 반환한다.
 `CreatePostPayload.post`는 nullable이며, 이 응답에서 반환된 request 상태가
-`PUBLISHED`일 때만 생성된 Post를 반환한다. 유효한 Local Media가 하나라도 Uploading이면 즉시 반환하는 접수 확인의
-`post`는 `null`이며, 이후 publication을 기다리지 않는다. `request`와 `post` 선택은 접수 대기를 바꾸지 않는다.
-Media가 없거나 모든 참조 Media가 Ready인 요청은 기존처럼 publication 결과를 기다려 `PUBLISHED` PostRequest를 반환한다.
+`PUBLISHED`일 때만 생성된 Post를 반환한다. 요청에 첨부된 유효한 Local Media 중 `State=Uploading`이고
+`applyAiProhibitFilter=true`로 제출된 Media가 하나라도 있어 즉시 반환하는 접수 확인의 `post`는 `null`이며, 이후
+publication을 기다리지 않는다. `request`와 `post` 선택은 접수 대기를 바꾸지 않는다. 그 외 요청은 publication 결과를
+기다려 `PUBLISHED` PostRequest를 반환한다.
 
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.

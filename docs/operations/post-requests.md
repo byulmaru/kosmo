@@ -20,9 +20,10 @@ The Worker is a rolling Deployment with no Temporal SDK version routing. API, We
 
 The GraphQL request projection follows the [Post domain contract](../domain/objects/post.md); it does not restore the
 rest of the immutable request snapshot or public error details. Unavailable Media items are nullable. `createPost`
-admission uses the same Media-state-dependent wait regardless of selected fields: no Media or all READY Media waits up
-to the existing 30-second API deadline for a `PUBLISHED` request, while valid Local UPLOADING Media returns an
-acknowledgement immediately. The nullable `post` field loads the published Post under the original author Profile only
+admission does not depend on GraphQL selected fields. It returns an acknowledgement immediately only when at least one
+attached valid Local Media is currently UPLOADING and its submitted `applyAiProhibitFilter` is true. Otherwise, it waits
+up to the existing 30-second API deadline for a `PUBLISHED` request; this includes requests with no Media, all READY
+Media, or UPLOADING Media without the filter selected. The nullable `post` field loads the published Post under the original author Profile only
 when the request state captured for this response is `PUBLISHED`; otherwise it returns `null` without another Workflow
 wait or Post lookup, even if processing later publishes. A result-wait deadline expiry or Workflow failure during
 admission remains a GraphQL error; expiry ends only this caller's wait and does not cancel the Workflow.

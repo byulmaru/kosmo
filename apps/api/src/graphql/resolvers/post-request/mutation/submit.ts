@@ -22,8 +22,11 @@ import type { LocalPostMutationInput } from '../../post/mutation/prepare-local-i
 const unusableMedia = (index: number, message = '이미지를 다시 첨부해 주세요') =>
   new ValidationError(message, { field: `media.${index}` });
 
-const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[]) => {
-  const uniqueMediaIds = [...new Set(mediaIds)];
+const verifyAttachedMedia = async (
+  accountId: string,
+  media: readonly { applyNightshade: boolean; mediaId: string }[],
+) => {
+  const uniqueMediaIds = [...new Set(media.map(({ mediaId }) => mediaId))];
   if (uniqueMediaIds.length === 0) {
     return false;
   }
@@ -46,9 +49,9 @@ const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[
       ),
   );
   const rowsById = new Map(rows.map((row) => [row.id, row]));
-  let hasUploadingMedia = false;
+  let hasUploadingMediaWithAiFilter = false;
 
-  for (const [index, mediaId] of mediaIds.entries()) {
+  for (const [index, { applyNightshade, mediaId }] of media.entries()) {
     const media = rowsById.get(mediaId);
     if (!media) {
       throw unusableMedia(index, '첨부한 이미지를 다시 선택해 주세요');
@@ -66,7 +69,6 @@ const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[
       throw unusableMedia(index);
     }
 
-    hasUploadingMedia = true;
     try {
       await headNexusMediaUploadSource(media.storageReference);
     } catch (error) {
@@ -75,9 +77,11 @@ const verifyAttachedMedia = async (accountId: string, mediaIds: readonly string[
       }
       throw unusableMedia(index, error.message);
     }
+
+    hasUploadingMediaWithAiFilter ||= applyNightshade;
   }
 
-  return hasUploadingMedia;
+  return hasUploadingMediaWithAiFilter;
 };
 
 type PostRequestWorkflow = (args: PostRequestSnapshot) => Promise<PostRequestState>;
@@ -143,10 +147,7 @@ export async function submitPostRequest(
   }));
 
   const preparedInput = await prepareLocalPostInput(input, ctx);
-  const hasUploadingMedia = await verifyAttachedMedia(
-    ctx.session.accountId,
-    media.map(({ mediaId }) => mediaId),
-  );
+  const hasUploadingMediaWithAiFilter = await verifyAttachedMedia(ctx.session.accountId, media);
 
   const snapshot: PostRequestSnapshot = {
     input: { ...preparedInput, media },
@@ -183,5 +184,7 @@ export async function submitPostRequest(
     return rethrowPostWorkflowFailure(error);
   }
 
-  return hasUploadingMedia ? state : waitForPostRequestResult(ctx.session.accountId, state);
+  return hasUploadingMediaWithAiFilter
+    ? state
+    : waitForPostRequestResult(ctx.session.accountId, state);
 }
