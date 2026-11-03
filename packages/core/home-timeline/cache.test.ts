@@ -619,11 +619,12 @@ test(
     });
     assert.equal((await runRedisCommand((client) => client.zScore(key, newest.id)))?.value, 200);
     assert.equal((await runRedisCommand((client) => client.zScore(key, tail.id)))?.value, 100);
-    assert.equal((await runRedisCommand((client) => client.zScore(key, next.id)))?.value, 100);
+    assert.equal((await runRedisCommand((client) => client.zScore(key, next.id)))?.value, 99);
     const currentTail = (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))
       ?.oldestPostId;
-    assert.ok(currentTail);
-    await cacheHomeTimelinePage({ profileId: viewer.id, after: currentTail, postIds: [final.id] });
+    assert.equal(currentTail, next.id);
+    await cacheHomeTimelinePage({ profileId: viewer.id, after: next.id, postIds: [final.id] });
+    assert.equal((await runRedisCommand((client) => client.zScore(key, final.id)))?.value, 98);
     await cacheHomeTimelinePage({
       profileId: viewer.id,
       after: '00000000-0000-7000-8000-000000000001',
@@ -631,10 +632,10 @@ test(
     });
 
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries
-        .map(({ postId }) => postId)
-        .sort(),
-      [newest.id, tail.id, next.id, final.id].sort(),
+      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries.map(
+        ({ postId }) => postId,
+      ),
+      [newest.id, tail.id, next.id, final.id],
     );
     assert.equal((await runRedisCommand((client) => client.zScore(key, disjoint.id)))?.value, null);
 
@@ -667,15 +668,23 @@ test(
       null,
     );
     const seeded = await readHomeTimelineCache({ profileId, limit: 1 });
-    assert.ok(seeded?.oldestPostId);
+    const tailId = seeded?.oldestPostId;
+    assert.ok(tailId);
+    const tailScore = (await runRedisCommand((client) => client.zScore(key, tailId)))?.value;
+    assert.ok(tailScore !== null && tailScore !== undefined);
     const appendedPostId = `${idPrefix}000000000000`;
     await runRedisCommand((client) => client.expire(key, 60));
     await cacheHomeTimelinePage({
       profileId,
-      after: seeded.oldestPostId,
+      after: tailId,
       postIds: [appendedPostId],
     });
     assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 1_001);
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, appendedPostId)))?.value,
+      null,
+    );
+    assert.equal((await runRedisCommand((client) => client.zScore(key, tailId)))?.value, tailScore);
     const ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
     assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
   },

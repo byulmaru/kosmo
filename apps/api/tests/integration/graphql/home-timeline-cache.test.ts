@@ -501,13 +501,24 @@ test(
     const redisCursor = first.data!.homeTimeline.edges[0]!.cursor;
     assert.match(redisCursor, /^redis:\d+$/);
 
-    const second = await requestHome(viewer.token, { first: 1, after: redisCursor });
+    const second = await requestHome(viewer.token, { first: 2, after: redisCursor });
     assert.equal(second.errors, undefined, JSON.stringify(second.errors));
     assert.deepEqual(
       second.data?.homeTimeline.edges.map(({ node }) => node.id),
-      [encodeGlobalId('Post', cachedOlder.id)],
+      [cachedOlder.id, missingFromCache.id].map((id) => encodeGlobalId('Post', id)),
     );
     assert.match(second.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+    assert.match(second.data!.homeTimeline.edges[1]!.cursor, /^db:[0-9a-f-]+$/i);
+
+    const filledCache = await waitForCachedPostIds(viewer.profile.id, [
+      cached.id,
+      cachedOlder.id,
+      missingFromCache.id,
+    ]);
+    assert.deepEqual(
+      filledCache.entries.map(({ postId }) => postId).sort(),
+      [cached.id, cachedOlder.id, missingFromCache.id].sort(),
+    );
 
     const backwards = await requestHome(viewer.token, {
       last: 1,
@@ -529,16 +540,7 @@ test(
       next.data?.homeTimeline.edges.map(({ node }) => node.id),
       [encodeGlobalId('Post', missingFromCache.id)],
     );
-    assert.match(next.data!.homeTimeline.edges[0]!.cursor, /^db:[0-9a-f-]+$/i);
-    const filledCache = await waitForCachedPostIds(viewer.profile.id, [
-      cached.id,
-      cachedOlder.id,
-      missingFromCache.id,
-    ]);
-    assert.deepEqual(
-      filledCache.entries.map(({ postId }) => postId).sort(),
-      [cached.id, cachedOlder.id, missingFromCache.id].sort(),
-    );
+    assert.match(next.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
 
     const cachedAfterBoundary = await requestHome(viewer.token, { first: 10 });
     assert.equal(cachedAfterBoundary.errors, undefined, JSON.stringify(cachedAfterBoundary.errors));
@@ -686,6 +688,41 @@ test(
     assert.deepEqual(
       firstSeed.entries.map(({ postId }) => postId).sort(),
       expectedIds.slice(-3).sort(),
+    );
+
+    const cachedFirstPage = await requestHome(viewer.token, { first: 2 });
+    assert.equal(cachedFirstPage.errors, undefined, JSON.stringify(cachedFirstPage.errors));
+    assert.deepEqual(
+      cachedFirstPage.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(
+      cachedFirstPage.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('redis:')),
+    );
+    assert.equal(cachedFirstPage.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const cachedContinuation = await requestHome(viewer.token, {
+      first: 2,
+      after: cachedFirstPage.data!.homeTimeline.edges.at(-1)!.cursor,
+    });
+    assert.equal(cachedContinuation.errors, undefined, JSON.stringify(cachedContinuation.errors));
+    assert.deepEqual(
+      cachedContinuation.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-4, -2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.match(cachedContinuation.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+    assert.match(cachedContinuation.data!.homeTimeline.edges[1]!.cursor, /^db:[0-9a-f-]+$/i);
+    assert.equal(cachedContinuation.data?.homeTimeline.pageInfo.hasNextPage, true);
+    const fullCache = await waitForCachedPostIds(viewer.profile.id, expectedIds);
+    assert.deepEqual(
+      fullCache.entries.map(({ postId }) => postId),
+      expectedIds.slice().reverse(),
     );
 
     const next = await requestHome(viewer.token, {

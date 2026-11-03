@@ -195,8 +195,12 @@ else
     return 0
   end
 end
+local suffixCount = pageCount - startIndex + 1
+if tailScore < suffixCount then
+  return 0
+end
 for index = startIndex, pageCount do
-  redis.call('ZADD', KEYS[1], 'NX', tailRows[2], ARGV[index + 3])
+  redis.call('ZADD', KEYS[1], 'NX', tailScore - (index - startIndex + 1), ARGV[index + 3])
 end
 redis.call('ZREMRANGEBYRANK', KEYS[1], 1, -1001)
 redis.call('EXPIRE', KEYS[1], ARGV[pageCount + 4])
@@ -259,8 +263,8 @@ export const cacheHomeTimelinePage = async ({
   const buildKey = `${seedKeyPrefix}${randomUUID()}`;
   await runRedisCommand((client) => {
     const transaction = client.multi();
-    const entries = postIds.slice(0, maximumEntries).map((postId) => ({
-      score: existingScores.get(postId) ?? insertionScore,
+    const entries = postIds.slice(0, maximumEntries).map((postId, index) => ({
+      score: existingScores.get(postId) ?? insertionScore - index,
       value: postId,
     }));
     if (entries.length > 0) {
