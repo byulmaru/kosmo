@@ -22,9 +22,9 @@ import {
   ProfileState,
 } from '../enums';
 import {
+  cacheHomeTimelinePage,
   invalidateHomeTimelines,
   readHomeTimelineCache,
-  rebuildHomeTimeline,
 } from '../home-timeline/cache';
 import { postContentDocumentFromText } from '../post-content/server';
 import { runRedisCommand } from '../redis/client';
@@ -148,7 +148,7 @@ test(
       .insert(ProfileFollows)
       .values({ followerProfileId: viewer.id, followeeProfileId: author.id });
 
-    await rebuildHomeTimeline({ profileId: viewer.id });
+    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [post.id] });
     const relatedCache = await readHomeTimelineCache({ profileId: viewer.id, limit: 10 });
     assert.deepEqual(
       relatedCache?.entries.map(({ postId }) => postId),

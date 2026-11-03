@@ -44,10 +44,11 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
+let cacheHomeTimelinePage: typeof HomeTimelineCache.cacheHomeTimelinePage;
 let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
 let invalidateHomeTimelines: typeof HomeTimelineCache.invalidateHomeTimelines;
+let removeHomeTimelinePost: typeof HomeTimelineCache.removeHomeTimelinePost;
 let readHomeTimelineCache: typeof HomeTimelineCache.readHomeTimelineCache;
-let rebuildHomeTimeline: typeof HomeTimelineCache.rebuildHomeTimeline;
 let runRedisCommand: typeof CoreRedis.runRedisCommand;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
@@ -115,9 +116,17 @@ before(async () => {
     Profiles,
     Sessions,
   } = await import('@kosmo/core/db'));
-  ({ fanoutHomeTimelinePost, invalidateHomeTimelines, readHomeTimelineCache, rebuildHomeTimeline } =
-    await import('@kosmo/core/home-timeline/cache'));
+  ({
+    cacheHomeTimelinePage,
+    fanoutHomeTimelinePost,
+    invalidateHomeTimelines,
+    removeHomeTimelinePost,
+    readHomeTimelineCache,
+  } = await import('@kosmo/core/home-timeline/cache'));
   ({ runRedisCommand } = await import('../../../../../packages/core/redis/client'));
+  if (testRedisUrl) {
+    await waitForRedis();
+  }
 
   const configuredLocalInstance = await db
     .insert(Instances)
@@ -201,7 +210,6 @@ test(
       followerProfileId: viewer.profile.id,
       followeeProfileId: author.id,
     });
-    await rebuildReadyCache(viewer.profile.id);
     const post = await createContentfulPost(
       author.id,
       'cached body after block',
@@ -256,7 +264,6 @@ test(
       followerProfileId: viewer.profile.id,
       followeeProfileId: author.id,
     });
-    await rebuildReadyCache(viewer.profile.id);
     const post = await createContentfulPost(author.id, 'cached body after mute');
     await fanoutHomeTimelinePost({ postId: post.id });
     await db.insert(ProfileMutes).values({
@@ -307,7 +314,6 @@ test(
         }),
       ),
     );
-    await rebuildReadyCache(viewer.profile.id);
     const validPost = await createContentfulPost(validAuthor.id, 'active Home Post remains');
     const deletedSource = await createContentfulPost(
       activeSourceAuthor.id,
@@ -422,7 +428,6 @@ test(
       { followerProfileId: viewer.profile.id, followeeProfileId: repostAuthor.id },
       { followerProfileId: viewer.profile.id, followeeProfileId: sourceAuthor.id },
     ]);
-    await rebuildReadyCache(viewer.profile.id);
     const source = await createContentfulPost(
       sourceAuthor.id,
       'cached repost source body',
@@ -474,7 +479,6 @@ test(
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
-    await rebuildReadyCache(viewer.profile.id);
     const cachedOlder = await createContentfulPost(viewer.profile.id, 'cached older post');
     await fanoutHomeTimelinePost({ postId: cachedOlder.id });
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -497,13 +501,24 @@ test(
     const redisCursor = first.data!.homeTimeline.edges[0]!.cursor;
     assert.match(redisCursor, /^redis:\d+$/);
 
-    const second = await requestHome(viewer.token, { first: 1, after: redisCursor });
+    const second = await requestHome(viewer.token, { first: 2, after: redisCursor });
     assert.equal(second.errors, undefined, JSON.stringify(second.errors));
     assert.deepEqual(
       second.data?.homeTimeline.edges.map(({ node }) => node.id),
-      [encodeGlobalId('Post', cachedOlder.id)],
+      [cachedOlder.id, missingFromCache.id].map((id) => encodeGlobalId('Post', id)),
     );
     assert.match(second.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+    assert.match(second.data!.homeTimeline.edges[1]!.cursor, /^db:[0-9a-f-]+$/i);
+
+    const filledCache = await waitForCachedPostIds(viewer.profile.id, [
+      cached.id,
+      cachedOlder.id,
+      missingFromCache.id,
+    ]);
+    assert.deepEqual(
+      filledCache.entries.map(({ postId }) => postId).sort(),
+      [cached.id, cachedOlder.id, missingFromCache.id].sort(),
+    );
 
     const backwards = await requestHome(viewer.token, {
       last: 1,
@@ -525,7 +540,21 @@ test(
       next.data?.homeTimeline.edges.map(({ node }) => node.id),
       [encodeGlobalId('Post', missingFromCache.id)],
     );
-    assert.match(next.data!.homeTimeline.edges[0]!.cursor, /^db:[0-9a-f-]+$/i);
+    assert.match(next.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+
+    const cachedAfterBoundary = await requestHome(viewer.token, { first: 10 });
+    assert.equal(cachedAfterBoundary.errors, undefined, JSON.stringify(cachedAfterBoundary.errors));
+    assert.deepEqual(
+      cachedAfterBoundary.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+      [cached.id, cachedOlder.id, missingFromCache.id]
+        .map((id) => encodeGlobalId('Post', id))
+        .sort(),
+    );
+    assert.ok(
+      cachedAfterBoundary.data?.homeTimeline.edges.every(({ cursor }) =>
+        /^redis:\d+$/.test(cursor),
+      ),
+    );
 
     const databaseCursor = await requestHome(viewer.token, {
       first: 1,
@@ -573,7 +602,7 @@ test(
   async () => {
     const viewer = await createAuth();
     const post = await createContentfulPost(viewer.profile.id, 'sliding Home cache expiry');
-    await rebuildReadyCache(viewer.profile.id);
+    await cacheHomeTimelinePage({ profileId: viewer.profile.id, postIds: [post.id] });
     const key = `kosmo:home-timeline:profile:${viewer.profile.id}`;
     const redisUrl = process.env.REDIS_URL;
     assert.ok(redisUrl);
@@ -623,38 +652,192 @@ test(
 );
 
 test(
-  'restarts with DB cursors after Home cache loss and returns to score cursors after background rebuild',
+  'seeds cold pages, appends forward DB pages, and skips continuation after invalidation',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
-    await createContentfulPost(viewer.profile.id, 'cached before Redis loss');
-    await rebuildReadyCache(viewer.profile.id);
+    const idPrefix = crypto.randomUUID().slice(0, 24);
+    const posts: { readonly id: string; readonly contentId: string }[] = [];
+    for (let index = 1; index <= 5; index += 1) {
+      posts.push(
+        await createContentfulPost(
+          viewer.profile.id,
+          `cold page post ${index}`,
+          `${idPrefix}${index.toString(16).padStart(12, '0')}`,
+        ),
+      );
+    }
+    const expectedIds = posts.map(({ id }) => id);
+    const lastPostId = expectedIds[0]!;
+    const afterSecondVisiblePostId = expectedIds.at(-2)!;
+    assert.equal(await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 10 }), null);
+
+    const cold = await requestHome(viewer.token, { first: 2 });
+    assert.equal(cold.errors, undefined, JSON.stringify(cold.errors));
+    assert.deepEqual(
+      cold.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(cold.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('db:')));
+    assert.equal(cold.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const firstSeed = await waitForCachedPostIds(viewer.profile.id, expectedIds.slice(-3));
+    assert.deepEqual(
+      firstSeed.entries.map(({ postId }) => postId).sort(),
+      expectedIds.slice(-3).sort(),
+    );
+
+    const cachedFirstPage = await requestHome(viewer.token, { first: 2 });
+    assert.equal(cachedFirstPage.errors, undefined, JSON.stringify(cachedFirstPage.errors));
+    assert.deepEqual(
+      cachedFirstPage.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(
+      cachedFirstPage.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('redis:')),
+    );
+    assert.equal(cachedFirstPage.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const cachedContinuation = await requestHome(viewer.token, {
+      first: 2,
+      after: cachedFirstPage.data!.homeTimeline.edges.at(-1)!.cursor,
+    });
+    assert.equal(cachedContinuation.errors, undefined, JSON.stringify(cachedContinuation.errors));
+    assert.deepEqual(
+      cachedContinuation.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-4, -2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.match(cachedContinuation.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+    assert.match(cachedContinuation.data!.homeTimeline.edges[1]!.cursor, /^db:[0-9a-f-]+$/i);
+    assert.equal(cachedContinuation.data?.homeTimeline.pageInfo.hasNextPage, true);
+    const fullCache = await waitForCachedPostIds(viewer.profile.id, expectedIds);
+    assert.deepEqual(
+      fullCache.entries.map(({ postId }) => postId),
+      expectedIds.slice().reverse(),
+    );
+
+    const next = await requestHome(viewer.token, {
+      first: 2,
+      after: cold.data!.homeTimeline.edges.at(-1)!.cursor,
+    });
+    assert.equal(next.errors, undefined, JSON.stringify(next.errors));
+    assert.deepEqual(
+      next.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedIds
+        .slice(-4, -2)
+        .reverse()
+        .map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.ok(next.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('db:')));
+    assert.equal(next.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const extendedSeed = await waitForCachedPostIds(viewer.profile.id, expectedIds);
+    assert.deepEqual(
+      extendedSeed.entries.map(({ postId }) => postId).sort(),
+      expectedIds.slice().sort(),
+    );
+
+    const lastPage = await requestHome(viewer.token, {
+      first: 2,
+      after: next.data!.homeTimeline.edges.at(-1)!.cursor,
+    });
+    assert.equal(lastPage.errors, undefined, JSON.stringify(lastPage.errors));
+    assert.deepEqual(
+      lastPage.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', lastPostId)],
+    );
+    assert.equal(lastPage.data?.homeTimeline.edges[0]?.cursor, `db:${lastPostId}`);
+    assert.equal(lastPage.data?.homeTimeline.pageInfo.hasNextPage, false);
 
     const cached = await requestHome(viewer.token, { first: 10 });
     assert.equal(cached.errors, undefined, JSON.stringify(cached.errors));
-    assert.ok(cached.data?.homeTimeline.edges.length);
-    const redisCursor = cached.data!.homeTimeline.edges[0]!.cursor;
-    assert.match(redisCursor, /^redis:\d+$/);
+    assert.deepEqual(
+      cached.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+      expectedIds.map((id) => encodeGlobalId('Post', id)).sort(),
+    );
+    assert.ok(cached.data!.homeTimeline.edges.every(({ cursor }) => cursor.startsWith('redis:')));
 
     await invalidateHomeTimelines({ profileIds: [viewer.profile.id] });
-    assert.equal(await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 1 }), null);
-
-    const afterLoss = await requestHome(viewer.token, { first: 10, after: redisCursor });
+    const afterLoss = await requestHome(viewer.token, {
+      first: 1,
+      after: `db:${afterSecondVisiblePostId}`,
+    });
     assert.equal(afterLoss.errors, undefined, JSON.stringify(afterLoss.errors));
-    assert.ok(afterLoss.data?.homeTimeline.edges.length);
-    assert.match(afterLoss.data!.homeTimeline.edges[0]!.cursor, /^db:[0-9a-f-]+$/i);
+    assert.equal(afterLoss.data?.homeTimeline.edges[0]?.cursor, `db:${expectedIds.at(-3)!}`);
+    assert.equal(await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 10 }), null);
+  },
+);
 
-    let rebuiltCache = await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 1 });
-    for (let attempt = 0; attempt < 20 && rebuiltCache === null; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
-      rebuiltCache = await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 1 });
+test(
+  'falls back to older Home posts after removing the last cached entries and rebuilds the cold cache',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const idPrefix = crypto.randomUUID().slice(0, 24);
+    const oldest = await createContentfulPost(
+      viewer.profile.id,
+      'oldest Home cache removal post',
+      `${idPrefix}000000000001`,
+    );
+    const middle = await createContentfulPost(
+      viewer.profile.id,
+      'middle Home cache removal post',
+      `${idPrefix}000000000002`,
+    );
+    const newest = await createContentfulPost(
+      viewer.profile.id,
+      'newest Home cache removal post',
+      `${idPrefix}000000000003`,
+    );
+
+    const cold = await requestHome(viewer.token, { first: 1 });
+    assert.equal(cold.errors, undefined, JSON.stringify(cold.errors));
+    assert.deepEqual(
+      cold.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', newest.id)],
+    );
+    assert.equal(cold.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.match(cold.data!.homeTimeline.edges[0]!.cursor, /^db:/);
+
+    const cachedPage = await waitForCachedPostIds(viewer.profile.id, [newest.id, middle.id]);
+    assert.deepEqual(
+      cachedPage.entries.map(({ postId }) => postId).sort(),
+      [newest.id, middle.id].sort(),
+    );
+
+    const cachedPostIds = [newest.id, middle.id];
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(inArray(Posts.id, cachedPostIds));
+    for (const postId of cachedPostIds) {
+      await removeHomeTimelinePost({ postId });
     }
-    assert.ok(rebuiltCache, 'Home cache was not rebuilt after the DB fallback');
+    assert.equal(await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 10 }), null);
 
-    const rebuilt = await requestHome(viewer.token, { first: 10 });
-    assert.equal(rebuilt.errors, undefined, JSON.stringify(rebuilt.errors));
-    assert.ok(rebuilt.data?.homeTimeline.edges.length);
-    assert.match(rebuilt.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
+    const fallback = await requestHome(viewer.token, { first: 1 });
+    assert.equal(fallback.errors, undefined, JSON.stringify(fallback.errors));
+    assert.deepEqual(
+      fallback.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', oldest.id)],
+    );
+    assert.equal(fallback.data?.homeTimeline.edges[0]?.cursor, `db:${oldest.id}`);
+    assert.equal(fallback.data?.homeTimeline.pageInfo.hasNextPage, false);
+
+    const rebuilt = await waitForCachedPostIds(viewer.profile.id, [oldest.id]);
+    assert.deepEqual(
+      rebuilt.entries.map(({ postId }) => postId),
+      [oldest.id],
+    );
   },
 );
 
@@ -663,7 +846,6 @@ test(
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
-    await rebuildReadyCache(viewer.profile.id);
     const posts: { readonly id: string; readonly contentId: string }[] = [];
     for (let index = 0; index < 4; index += 1) {
       if (index > 0) {
@@ -704,7 +886,6 @@ test(
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
-    await rebuildReadyCache(viewer.profile.id);
     const cached = await createContentfulPost(viewer.profile.id, 'cached own post');
     await fanoutHomeTimelinePost({ postId: cached.id });
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, cached.id));
@@ -714,7 +895,6 @@ test(
     assert.deepEqual(deleted.data?.homeTimeline.edges, []);
 
     const firstSelectedProfile = await createAuth();
-    await rebuildReadyCache(firstSelectedProfile.profile.id);
     const firstPost = await createContentfulPost(firstSelectedProfile.profile.id, 'first profile');
     await fanoutHomeTimelinePost({ postId: firstPost.id });
     const secondProfile = await createProfile('second-selected-profile');
@@ -861,12 +1041,26 @@ async function createContentlessRepost(profileId: string, sourcePostId: string) 
   return { id: repost.id };
 }
 
-async function rebuildReadyCache(profileId: string) {
+async function waitForCachedPostIds(profileId: string, postIds: readonly string[]) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    await rebuildHomeTimeline({ profileId });
-    const cache = await readHomeTimelineCache({ profileId, limit: 1 });
-    if (cache !== null) {
+    const cache = await readHomeTimelineCache({ profileId, limit: 1_000 });
+    if (
+      cache !== null &&
+      postIds.every((postId) => cache.entries.some((entry) => entry.postId === postId))
+    ) {
       return cache;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail(`Home cache did not contain ${postIds.length} expected posts`);
+}
+
+async function waitForRedis() {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const ping = await runRedisCommand((client) => client.ping());
+    if (ping?.value === 'PONG') {
+      return;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { and, asc, eq, exists, gt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Temporal } from 'temporal-polyfill';
@@ -8,13 +7,11 @@ import { homePostListWhere } from '../visibility/home-post-list';
 import { queryHomeTimeline } from './query';
 
 const feedKeyPrefix = 'kosmo:home-timeline:profile:';
-const rebuildKeyPrefix = 'kosmo:home-timeline:rebuild:';
-const readyMember = '__ready__';
+const legacyReadyMember = '__ready__';
 const maximumEntries = 1_000;
 const keyLifetimeSeconds = 604_800;
 const candidateBatchSize = 100;
 const postIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const inFlightRebuilds = new Map<string, Promise<void>>();
 
 const HomeFanoutViewers = alias(Profiles, 'home_timeline_fanout_viewer');
 const HomeFanoutViewerInstances = alias(Instances, 'home_timeline_fanout_viewer_instance');
@@ -62,12 +59,7 @@ const parseEntries = (
 ): HomeTimelineEntry[] | null => {
   const parsed: HomeTimelineEntry[] = [];
   for (const { value, score } of entries) {
-    if (
-      value === readyMember ||
-      !postIdPattern.test(value) ||
-      !Number.isFinite(score) ||
-      score < 0
-    ) {
+    if (!postIdPattern.test(value) || !Number.isFinite(score) || score < 0) {
       return null;
     }
     parsed.push({ postId: value, score });
@@ -107,7 +99,7 @@ export const readHomeTimelineCache = async ({
   const stop = inverted ? maximum : minimum;
   const result = await runRedisCommand(async (client) => {
     const transaction = client.multi();
-    transaction.zScore(feedKey(profileId), readyMember);
+    transaction.zRem(feedKey(profileId), legacyReadyMember);
     transaction.zRangeWithScores(feedKey(profileId), start, stop, {
       BY: 'SCORE',
       LIMIT: { offset: 0, count: limit },
@@ -132,8 +124,8 @@ export const readHomeTimelineCache = async ({
     return null;
   }
 
-  const [readyScore, cachedRows, oldestRows] = result.value as unknown as [
-    number | null,
+  const [, cachedRows, oldestRows] = result.value as unknown as [
+    number,
     { value: string; score: number }[],
     { value: string; score: number }[],
   ];
@@ -148,14 +140,16 @@ export const readHomeTimelineCache = async ({
           ]
         )[3]
       : undefined;
-  if (readyScore !== -1) {
-    return null;
-  }
 
   const entries = parseEntries(cachedRows);
   const oldestEntries = parseEntries(oldestRows);
   const cursorEntries = parseEntries(cursorRows ?? []);
-  if (entries === null || oldestEntries === null || cursorEntries === null) {
+  if (
+    entries === null ||
+    oldestEntries === null ||
+    oldestEntries.length === 0 ||
+    cursorEntries === null
+  ) {
     return null;
   }
 
@@ -166,75 +160,91 @@ export const readHomeTimelineCache = async ({
   };
 };
 
-const rebuildHomeTimelineFromDatabase = async ({
+const cacheHomeTimelinePageScript = `
+redis.call('ZREM', KEYS[1], ARGV[1])
+local afterId = ARGV[2]
+local pageCount = tonumber(ARGV[3])
+local ttl = ARGV[5]
+if afterId == '' then
+  local score = tonumber(ARGV[4])
+  for index = 1, pageCount do
+    redis.call('ZADD', KEYS[1], 'NX', score - (index - 1), ARGV[index + 5])
+  end
+else
+  local tailRows = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+  if #tailRows ~= 2 then
+    return 0
+  end
+  local tailId = tailRows[1]
+  local tailScore = tonumber(tailRows[2])
+  if not tailScore or tailScore < 0 then
+    return 0
+  end
+  local startIndex = 0
+  if afterId == tailId then
+    startIndex = 1
+  else
+    for index = 1, pageCount do
+      if ARGV[index + 5] == tailId then
+        startIndex = index + 1
+        break
+      end
+    end
+    if startIndex == 0 then
+      return 0
+    end
+  end
+  local suffixCount = pageCount - startIndex + 1
+  if tailScore < suffixCount then
+    return 0
+  end
+  for index = startIndex, pageCount do
+    redis.call('ZADD', KEYS[1], 'NX', tailScore - (index - startIndex + 1), ARGV[index + 5])
+  end
+end
+redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
+redis.call('EXPIRE', KEYS[1], ttl)
+return 1
+`;
+
+export const cacheHomeTimelinePage = async ({
   profileId,
+  postIds,
+  after,
 }: {
   readonly profileId: string;
+  readonly postIds: readonly string[];
+  readonly after?: string;
 }): Promise<void> => {
-  const existing = await runRedisCommand((client) =>
-    client.zRangeWithScores(feedKey(profileId), '0', '+inf', {
-      BY: 'SCORE',
-      LIMIT: { offset: 0, count: maximumEntries },
-    }),
-  );
-  if (existing === null) {
+  if (postIds.length === 0) {
     return;
   }
 
-  const posts = await queryHomeTimeline({ profileId, limit: maximumEntries });
-  const existingScores = new Map(
-    existing.value
-      .filter(
-        ({ value, score }) => value !== readyMember && postIdPattern.test(value) && score >= 0,
-      )
-      .map(({ value, score }) => [value, score]),
-  );
   const insertionScore = Temporal.Now.instant().epochMilliseconds;
-  const key = feedKey(profileId);
-  const buildKey = `${rebuildKeyPrefix}${randomUUID()}`;
+  const pageIds = after === undefined ? postIds.slice(0, maximumEntries) : postIds;
   await runRedisCommand((client) => {
-    const transaction = client.multi();
-    const entries = posts.map(({ id }) => ({
-      score: existingScores.get(id) ?? insertionScore,
-      value: id,
-    }));
-    if (entries.length > 0) {
-      transaction.zAdd(buildKey, entries);
-    }
-    transaction.zAdd(buildKey, { score: -1, value: readyMember });
-    transaction.expire(buildKey, keyLifetimeSeconds);
-    transaction.rename(buildKey, key);
-    transaction.expire(key, keyLifetimeSeconds);
-    return transaction.exec();
+    return client.eval(cacheHomeTimelinePageScript, {
+      keys: [feedKey(profileId)],
+      arguments: [
+        legacyReadyMember,
+        after ?? '',
+        String(pageIds.length),
+        String(insertionScore),
+        String(keyLifetimeSeconds),
+        ...pageIds,
+      ],
+    });
   });
-};
-
-export const rebuildHomeTimeline = ({
-  profileId,
-}: {
-  readonly profileId: string;
-}): Promise<void> => {
-  const inFlight = inFlightRebuilds.get(profileId);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const rebuilding = rebuildHomeTimelineFromDatabase({ profileId }).finally(() => {
-    if (inFlightRebuilds.get(profileId) === rebuilding) {
-      inFlightRebuilds.delete(profileId);
-    }
-  });
-  inFlightRebuilds.set(profileId, rebuilding);
-  return rebuilding;
 };
 
 const fanoutScript = `
-if redis.call('ZSCORE', KEYS[1], ARGV[3]) ~= '-1' then
-  return 0
-end
+redis.call('ZREM', KEYS[1], ARGV[3])
 local added = redis.call('ZADD', KEYS[1], 'NX', ARGV[1], ARGV[2])
 if added == 1 then
-  redis.call('ZREMRANGEBYRANK', KEYS[1], 1, -1001)
+  redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
+  if redis.call('TTL', KEYS[1]) == -1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[4])
+  end
 end
 return added
 `;
@@ -280,7 +290,7 @@ export const fanoutHomeTimelinePost = async ({
       for (const { profileId } of batch) {
         transaction.eval(fanoutScript, {
           keys: [feedKey(profileId)],
-          arguments: [String(score), postId, readyMember],
+          arguments: [String(score), postId, legacyReadyMember, String(keyLifetimeSeconds)],
         });
       }
       return transaction.exec();
@@ -343,27 +353,7 @@ export const listHomeTimelineRecipientPage = async ({
     return { profileIds: [], nextCursor: null };
   }
 
-  const candidatePage = await listHomeTimelineCandidatePage({ postId, afterProfileId });
-  if (candidatePage.profileIds.length === 0) {
-    return candidatePage;
-  }
-
-  const readyResult = await runRedisCommand((client) => {
-    const transaction = client.multi();
-    for (const profileId of candidatePage.profileIds) {
-      transaction.zScore(feedKey(profileId), readyMember);
-    }
-    return transaction.exec();
-  });
-  if (readyResult === null) {
-    throw new Error('Redis unavailable while listing Home timeline recipients');
-  }
-
-  const readyScores = readyResult.value as unknown as (number | null)[];
-  return {
-    profileIds: candidatePage.profileIds.filter((_, index) => readyScores[index] === -1),
-    nextCursor: candidatePage.nextCursor,
-  };
+  return listHomeTimelineCandidatePage({ postId, afterProfileId });
 };
 
 export const insertHomeTimelinePost = async ({
@@ -377,16 +367,6 @@ export const insertHomeTimelinePost = async ({
     return;
   }
 
-  const readyResult = await runRedisCommand((client) =>
-    client.zScore(feedKey(profileId), readyMember),
-  );
-  if (readyResult === null) {
-    throw new Error('Redis unavailable while inserting Home timeline post');
-  }
-  if (readyResult.value !== -1) {
-    return;
-  }
-
   const eligiblePosts = await queryHomeTimeline({ profileId, postIds: [postId], limit: 1 });
   if (eligiblePosts.length === 0) {
     return;
@@ -395,7 +375,12 @@ export const insertHomeTimelinePost = async ({
   const result = await runRedisCommand((client) =>
     client.eval(fanoutScript, {
       keys: [feedKey(profileId)],
-      arguments: [String(Temporal.Now.instant().epochMilliseconds), postId, readyMember],
+      arguments: [
+        String(Temporal.Now.instant().epochMilliseconds),
+        postId,
+        legacyReadyMember,
+        String(keyLifetimeSeconds),
+      ],
     }),
   );
   if (result === null) {
@@ -432,20 +417,28 @@ export const removeHomeTimelinePost = async ({
 };
 
 const reconcileScript = `
-if redis.call('ZSCORE', KEYS[1], ARGV[1]) ~= '-1' then
+if redis.call('EXISTS', KEYS[1]) == 0 then
   return 0
 end
-local removeCount = tonumber(ARGV[2])
+local previousTtl = redis.call('PTTL', KEYS[1])
+local removeCount = tonumber(ARGV[1])
 for index = 1, removeCount do
-  redis.call('ZREM', KEYS[1], ARGV[index + 2])
+  redis.call('ZREM', KEYS[1], ARGV[index + 1])
 end
-local scoreIndex = removeCount + 3
+local scoreIndex = removeCount + 2
 local score = ARGV[scoreIndex]
 local addCount = tonumber(ARGV[scoreIndex + 1])
 for index = 1, addCount do
   redis.call('ZADD', KEYS[1], 'NX', score, ARGV[scoreIndex + index + 1])
 end
-redis.call('ZREMRANGEBYRANK', KEYS[1], 1, -1001)
+redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
+if redis.call('PTTL', KEYS[1]) == -1 then
+  if previousTtl >= 0 then
+    redis.call('PEXPIRE', KEYS[1], previousTtl)
+  else
+    redis.call('EXPIRE', KEYS[1], ARGV[scoreIndex + addCount + 2])
+  end
+end
 return 1
 `;
 
@@ -461,7 +454,7 @@ export const reconcileHomeTimelineFollow = async ({
   const key = feedKey(profileId);
   const cacheResult = await runRedisCommand((client) => {
     const transaction = client.multi();
-    transaction.zScore(key, readyMember);
+    transaction.zRem(key, legacyReadyMember);
     transaction.zRangeWithScores(key, '0', '+inf', {
       BY: 'SCORE',
       LIMIT: { offset: 0, count: maximumEntries },
@@ -472,16 +465,13 @@ export const reconcileHomeTimelineFollow = async ({
     throw new Error('Redis unavailable while reconciling Home timeline');
   }
 
-  const [readyScore, cachedRows] = cacheResult.value as unknown as [
-    number | null,
+  const [, cachedRows] = cacheResult.value as unknown as [
+    number,
     { value: string; score: number }[],
   ];
-  if (readyScore !== -1) {
-    return;
-  }
 
   const cachedEntries = parseEntries(cachedRows);
-  if (cachedEntries === null) {
+  if (cachedEntries === null || cachedEntries.length === 0) {
     return;
   }
 
@@ -503,12 +493,12 @@ export const reconcileHomeTimelineFollow = async ({
     client.eval(reconcileScript, {
       keys: [key],
       arguments: [
-        readyMember,
         String(removePostIds.length),
         ...removePostIds,
         String(Temporal.Now.instant().epochMilliseconds),
         String(addPostIds.length),
         ...addPostIds,
+        String(keyLifetimeSeconds),
       ],
     }),
   );

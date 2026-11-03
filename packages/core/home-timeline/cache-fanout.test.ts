@@ -156,6 +156,7 @@ import * as tables from '../db/tables.ts';
 let redisCalls = 0;
 let failNextRedisCall = false;
 let candidateRows = [];
+let selectQueries = 0;
 
 const client = {
   async zScore() {
@@ -214,6 +215,7 @@ const db = {
       limit() { return this; },
       getSQL() { return sql.empty(); },
       then(onFulfilled, onRejected) {
+        selectQueries += 1;
         return Promise.resolve(candidateRows).then(onFulfilled, onRejected);
       },
     };
@@ -244,24 +246,32 @@ const retryAfterRedisFailure = async (operation) => {
   assert.ok(redisCalls > callsAfterFailure, 'the retry must attempt Redis again');
 };
 
+candidateRows = [{ id: '550e8400-e29b-41d4-a716-446655440000' }];
 await retryAfterRedisFailure(() => insertHomeTimelinePost({
   postId: '550e8400-e29b-41d4-a716-446655440000',
   profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f',
 }));
 
 candidateRows = [{ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' }];
-await retryAfterRedisFailure(() => listHomeTimelineRecipientPage({
+const callsBeforeRecipientPage = redisCalls;
+assert.deepEqual(await listHomeTimelineRecipientPage({
   postId: '550e8400-e29b-41d4-a716-446655440000',
-}));
+}), {
+  profileIds: ['a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f'],
+  nextCursor: null,
+});
+assert.equal(redisCalls, callsBeforeRecipientPage);
 
 await retryAfterRedisFailure(() => removeHomeTimelinePost({
   postId: '550e8400-e29b-41d4-a716-446655440000',
 }));
 
 candidateRows = [];
+const selectQueriesBeforeEmptyReconcile = selectQueries;
 await retryAfterRedisFailure(() => reconcileHomeTimelineFollow({
   profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f',
 }));
+assert.equal(selectQueries, selectQueriesBeforeEmptyReconcile);
 
 failNextRedisCall = true;
 await touchHomeTimeline({ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' });
