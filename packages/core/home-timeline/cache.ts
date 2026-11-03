@@ -8,13 +8,12 @@ import { homePostListWhere } from '../visibility/home-post-list';
 import { queryHomeTimeline } from './query';
 
 const feedKeyPrefix = 'kosmo:home-timeline:profile:';
-const rebuildKeyPrefix = 'kosmo:home-timeline:rebuild:';
+const seedKeyPrefix = 'kosmo:home-timeline:seed:';
 const readyMember = '__ready__';
 const maximumEntries = 1_000;
 const keyLifetimeSeconds = 604_800;
 const candidateBatchSize = 100;
 const postIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const inFlightRebuilds = new Map<string, Promise<void>>();
 
 const HomeFanoutViewers = alias(Profiles, 'home_timeline_fanout_viewer');
 const HomeFanoutViewerInstances = alias(Instances, 'home_timeline_fanout_viewer_instance');
@@ -166,13 +165,77 @@ export const readHomeTimelineCache = async ({
   };
 };
 
-const rebuildHomeTimelineFromDatabase = async ({
+const appendHomeTimelinePageScript = `
+local readyRows = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+if #readyRows ~= 2 or readyRows[1] ~= ARGV[1] or tonumber(readyRows[2]) ~= -1 then
+  return 0
+end
+local tailRows = redis.call('ZRANGE', KEYS[1], 1, 1, 'WITHSCORES')
+if #tailRows ~= 2 then
+  return 0
+end
+local tailId = tailRows[1]
+local tailScore = tonumber(tailRows[2])
+if not tailScore or tailScore < 0 then
+  return 0
+end
+local afterId = ARGV[2]
+local pageCount = tonumber(ARGV[3])
+local startIndex = 0
+if afterId == tailId then
+  startIndex = 1
+else
+  for index = 1, pageCount do
+    if ARGV[index + 3] == tailId then
+      startIndex = index + 1
+      break
+    end
+  end
+  if startIndex == 0 then
+    return 0
+  end
+end
+for index = startIndex, pageCount do
+  redis.call('ZADD', KEYS[1], 'NX', tailRows[2], ARGV[index + 3])
+end
+redis.call('ZREMRANGEBYRANK', KEYS[1], 1, -1001)
+redis.call('EXPIRE', KEYS[1], ARGV[pageCount + 4])
+return 1
+`;
+
+export const cacheHomeTimelinePage = async ({
   profileId,
+  postIds,
+  after,
 }: {
   readonly profileId: string;
+  readonly postIds: readonly string[];
+  readonly after?: string;
 }): Promise<void> => {
+  const key = feedKey(profileId);
+
+  if (after !== undefined) {
+    if (postIds.length === 0) {
+      return;
+    }
+
+    await runRedisCommand((client) =>
+      client.eval(appendHomeTimelinePageScript, {
+        keys: [key],
+        arguments: [
+          readyMember,
+          after,
+          String(postIds.length),
+          ...postIds,
+          String(keyLifetimeSeconds),
+        ],
+      }),
+    );
+    return;
+  }
+
   const existing = await runRedisCommand((client) =>
-    client.zRangeWithScores(feedKey(profileId), '0', '+inf', {
+    client.zRangeWithScores(key, '0', '+inf', {
       BY: 'SCORE',
       LIMIT: { offset: 0, count: maximumEntries },
     }),
@@ -181,22 +244,24 @@ const rebuildHomeTimelineFromDatabase = async ({
     return;
   }
 
-  const posts = await queryHomeTimeline({ profileId, limit: maximumEntries });
   const existingScores = new Map(
     existing.value
       .filter(
-        ({ value, score }) => value !== readyMember && postIdPattern.test(value) && score >= 0,
+        ({ value, score }) =>
+          value !== readyMember &&
+          postIdPattern.test(value) &&
+          Number.isFinite(score) &&
+          score >= 0,
       )
       .map(({ value, score }) => [value, score]),
   );
   const insertionScore = Temporal.Now.instant().epochMilliseconds;
-  const key = feedKey(profileId);
-  const buildKey = `${rebuildKeyPrefix}${randomUUID()}`;
+  const buildKey = `${seedKeyPrefix}${randomUUID()}`;
   await runRedisCommand((client) => {
     const transaction = client.multi();
-    const entries = posts.map(({ id }) => ({
-      score: existingScores.get(id) ?? insertionScore,
-      value: id,
+    const entries = postIds.slice(0, maximumEntries).map((postId) => ({
+      score: existingScores.get(postId) ?? insertionScore,
+      value: postId,
     }));
     if (entries.length > 0) {
       transaction.zAdd(buildKey, entries);
@@ -207,25 +272,6 @@ const rebuildHomeTimelineFromDatabase = async ({
     transaction.expire(key, keyLifetimeSeconds);
     return transaction.exec();
   });
-};
-
-export const rebuildHomeTimeline = ({
-  profileId,
-}: {
-  readonly profileId: string;
-}): Promise<void> => {
-  const inFlight = inFlightRebuilds.get(profileId);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const rebuilding = rebuildHomeTimelineFromDatabase({ profileId }).finally(() => {
-    if (inFlightRebuilds.get(profileId) === rebuilding) {
-      inFlightRebuilds.delete(profileId);
-    }
-  });
-  inFlightRebuilds.set(profileId, rebuilding);
-  return rebuilding;
 };
 
 const fanoutScript = `

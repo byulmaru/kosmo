@@ -1,8 +1,8 @@
 import { db, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostState } from '@kosmo/core/enums';
 import {
+  cacheHomeTimelinePage,
   readHomeTimelineCache,
-  rebuildHomeTimeline,
   touchHomeTimeline,
 } from '@kosmo/core/home-timeline/cache';
 import { queryHomeTimeline } from '@kosmo/core/home-timeline/query';
@@ -167,6 +167,13 @@ const readCachedHomeTimeline = async ({
       inverted,
     });
     rows.push(...boundaryRows);
+    if (!inverted) {
+      void cacheHomeTimelinePage({
+        profileId,
+        postIds: boundaryRows.map(({ id }) => id),
+        after: databaseBoundaryPostId,
+      }).catch(() => {});
+    }
   }
 
   return { rows, scoresByRow };
@@ -212,7 +219,7 @@ builder.queryField('homeTimeline', (t) =>
               (after === undefined || before === undefined || after.kind === before.kind);
             const cursorKind = after?.kind ?? before?.kind;
             const profileId = ctx.session.profile.id;
-            let rebuildAfterDatabaseFallback = false;
+            let databaseFallbackAfterCacheMiss = false;
 
             if (
               compatibleCursors &&
@@ -231,10 +238,10 @@ builder.queryField('homeTimeline', (t) =>
                 return cached.rows;
               }
 
-              rebuildAfterDatabaseFallback = true;
+              databaseFallbackAfterCacheMiss = true;
             }
 
-            if (!rebuildAfterDatabaseFallback) {
+            if (!databaseFallbackAfterCacheMiss) {
               await touchHomeTimeline({ profileId });
             }
 
@@ -251,8 +258,17 @@ builder.queryField('homeTimeline', (t) =>
               limit,
               inverted,
             });
-            if (rebuildAfterDatabaseFallback) {
-              void rebuildHomeTimeline({ profileId }).catch(() => {});
+            if (
+              !inverted &&
+              before === undefined &&
+              (after?.kind === 'db' ||
+                (databaseFallbackAfterCacheMiss && after === undefined))
+            ) {
+              void cacheHomeTimelinePage({
+                profileId,
+                postIds: rows.map(({ id }) => id),
+                after: after?.kind === 'db' ? after.postId : undefined,
+              }).catch(() => {});
             }
             return rows;
           },

@@ -36,6 +36,9 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   기존 cache의 7일 만료 시간을 연장하고, Post 삽입을 위한 background 처리는 만료 시간을 연장하지 않는다. cache가
   없거나 오류가 나면 DB를 원본으로 현재 정책에 따라 결과를 조회하며, cache 오류 때문에 Home 조회가 실패하지 않는다.
   cache는 7일이 지나기 전에도 사라질 수 있고, 사라진 cache는 다음 Home 조회에서 다시 구성한다.
+- Home cache는 요청에서 이미 DB로 조회한 항목으로 구성하며, cache miss 뒤 별도의 대량 조회를 하지 않는다. 이후 페이지를
+  조회하면서 더 과거 항목을 찾으면 가장 오래된 cache 항목에 이어 추가한다. 새 Post fanout은 기존처럼 cache에 추가된
+  시각을 사용하며, 같은 시각의 tie와 DB/cache 전환 경계의 중복·누락 가능성은 유지한다.
 - Follow·Unfollow의 Home 보정이 겹치면 이전 관계 기준의 항목이 늦게 추가되는 경합을 수용한다. 이 항목은 cache가
   다시 구성되거나 후속 보정으로 제거될 때까지 남을 수 있고, Home 조회에 따른 만료 연장도 계속 적용된다.
 - Home 항목은 viewer Profile의 목록에 처음 추가된 시각 순으로 정렬한다. 파생 목록 조회는 추가 시각 cursor를,

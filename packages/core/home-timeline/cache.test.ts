@@ -24,12 +24,12 @@ import {
 import { postContentDocumentFromText } from '../post-content/server';
 import { runRedisCommand } from '../redis/client';
 import {
+  cacheHomeTimelinePage,
   fanoutHomeTimelinePost,
   insertHomeTimelinePost,
   invalidateHomeTimelines,
   listHomeTimelineRecipientPage,
   readHomeTimelineCache,
-  rebuildHomeTimeline,
   reconcileHomeTimelineFollow,
   removeHomeTimelinePost,
   touchHomeTimeline,
@@ -180,7 +180,7 @@ test(
     assert.equal(await readHomeTimelineCache({ profileId, limit: 1 }), null);
     assert.equal((await runRedisCommand((client) => client.exists(key)))?.value, 0);
 
-    await rebuildHomeTimeline({ profileId });
+    await cacheHomeTimelinePage({ profileId, postIds: [] });
     let ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
     assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
     await runRedisCommand((client) => client.expire(key, 60));
@@ -207,7 +207,7 @@ test(
       left.id.localeCompare(right.id),
     );
     const onlyReadyCandidate = sortedCandidates.at(-1)!;
-    await rebuildHomeTimeline({ profileId: onlyReadyCandidate.id });
+    await cacheHomeTimelinePage({ profileId: onlyReadyCandidate.id, postIds: [] });
 
     const first = await listHomeTimelineRecipientPage({ postId: post.id });
     assert.deepEqual(first, {
@@ -236,7 +236,9 @@ test(
       { followerProfileId: recheckViewer.id, followeeProfileId: author.id },
     ]);
     await Promise.all(
-      [viewer, recheckViewer].map(({ id }) => rebuildHomeTimeline({ profileId: id })),
+      [viewer, recheckViewer].map(({ id }) =>
+        cacheHomeTimelinePage({ profileId: id, postIds: [] }),
+      ),
     );
     const post = await createPost({ profileId: author.id });
     const viewerKey = `kosmo:home-timeline:profile:${viewer.id}`;
@@ -403,7 +405,10 @@ test(
       .returning()
       .then(firstOrThrow);
     postIds.push(repost.id);
-    await rebuildHomeTimeline({ profileId: viewer.id });
+    await cacheHomeTimelinePage({
+      profileId: viewer.id,
+      postIds: [viewerPost.id, reply.id, repost.id],
+    });
     const key = `kosmo:home-timeline:profile:${viewer.id}`;
     const replyScoreBefore = (await runRedisCommand((client) => client.zScore(key, reply.id)))
       ?.value;
@@ -537,7 +542,7 @@ test(
       delete process.env.REDIS_URL;
       try {
         assert.equal(await readHomeTimelineCache({ profileId, limit: 10 }), null);
-        await rebuildHomeTimeline({ profileId });
+        await cacheHomeTimelinePage({ profileId, postIds: [] });
         await fanoutHomeTimelinePost({ postId: 'not-a-post-id' });
       } finally {
         if (unavailableUrl !== undefined) {
@@ -551,39 +556,136 @@ test(
 );
 
 test(
-  'Home rebuilds share concurrent work and release failed attempts',
+  'Home page seeding preserves scores, repairs malformed entries, and stores supplied posts',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createProfile();
+    const first = await createPost({ profileId: viewer.id });
+    const second = await createPost({ profileId: viewer.id });
+    const key = `kosmo:home-timeline:profile:${viewer.id}`;
+
+    const firstScore = 1_700_000_000_000;
+    await runRedisCommand((client) =>
+      client.zAdd(key, [
+        { score: -1, value: '__ready__' },
+        { score: firstScore, value: first.id },
+        { score: firstScore + 1, value: 'not-a-post-id' },
+      ]),
+    );
+
+    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [first.id, second.id] });
+
+    const cache = await readHomeTimelineCache({ profileId: viewer.id, limit: 10 });
+    assert.deepEqual(
+      cache?.entries.map(({ postId }) => postId).sort(),
+      [first.id, second.id].sort(),
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, first.id)))?.value,
+      firstScore,
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, 'not-a-post-id')))?.value,
+      null,
+    );
+  },
+);
+
+test(
+  'Home page append requires the current tail and cannot recreate an invalidated cache',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createProfile();
+    const [newest, tail, next, final, disjoint] = await Promise.all(
+      Array.from({ length: 5 }, () => createPost({ profileId: viewer.id })),
+    );
+    assert.ok(newest && tail && next && final && disjoint);
+    const key = `kosmo:home-timeline:profile:${viewer.id}`;
+
+    await runRedisCommand((client) =>
+      client.zAdd(key, [
+        { score: -1, value: '__ready__' },
+        { score: 200, value: newest.id },
+        { score: 100, value: tail.id },
+      ]),
+    );
+
+    await cacheHomeTimelinePage({
+      profileId: viewer.id,
+      after: newest.id,
+      postIds: [tail.id, next.id],
+    });
+    assert.equal((await runRedisCommand((client) => client.zScore(key, newest.id)))?.value, 200);
+    assert.equal((await runRedisCommand((client) => client.zScore(key, tail.id)))?.value, 100);
+    assert.equal((await runRedisCommand((client) => client.zScore(key, next.id)))?.value, 100);
+    const currentTail = (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))
+      ?.oldestPostId;
+    assert.ok(currentTail);
+    await cacheHomeTimelinePage({ profileId: viewer.id, after: currentTail, postIds: [final.id] });
+    await cacheHomeTimelinePage({
+      profileId: viewer.id,
+      after: '00000000-0000-7000-8000-000000000001',
+      postIds: [disjoint.id],
+    });
+
+    assert.deepEqual(
+      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries
+        .map(({ postId }) => postId)
+        .sort(),
+      [newest.id, tail.id, next.id, final.id].sort(),
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, disjoint.id)))?.value,
+      null,
+    );
+
+    await invalidateHomeTimelines({ profileIds: [viewer.id] });
+    await cacheHomeTimelinePage({ profileId: viewer.id, after: tail.id, postIds: [disjoint.id] });
+    assert.equal(await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }), null);
+  },
+);
+
+test(
+  'Home page seeding and append preserve the 1,000-post cap and renew the seven-day expiry',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const profileId = randomUUID();
     profileIds.push(profileId);
+    const key = `kosmo:home-timeline:profile:${profileId}`;
+    const idPrefix = randomUUID().slice(0, 24);
+    const postIds = Array.from(
+      { length: 1_001 },
+      (_, index) => `${idPrefix}${(index + 1).toString(16).padStart(12, '0')}`,
+    ).reverse();
 
-    const firstRebuild = rebuildHomeTimeline({ profileId });
-    const secondRebuild = rebuildHomeTimeline({ profileId });
-    assert.equal(firstRebuild, secondRebuild);
-    await Promise.all([firstRebuild, secondRebuild]);
-    assert.deepEqual(await readHomeTimelineCache({ profileId, limit: 10 }), {
-      entries: [],
-      oldestPostId: null,
-      anchorPostId: null,
+    await cacheHomeTimelinePage({ profileId, postIds });
+
+    assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 1_001);
+    assert.equal((await runRedisCommand((client) => client.zScore(key, '__ready__')))?.value, -1);
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, postIds.at(-1)!)))?.value,
+      null,
+    );
+    const seeded = await readHomeTimelineCache({ profileId, limit: 1 });
+    assert.ok(seeded?.oldestPostId);
+    const appendedPostId = `${idPrefix}000000000000`;
+    await runRedisCommand((client) => client.expire(key, 60));
+    await cacheHomeTimelinePage({
+      profileId,
+      after: seeded.oldestPostId,
+      postIds: [appendedPostId],
     });
-
-    const invalidProfileId = `not-a-profile-id:${randomUUID()}`;
-    try {
-      const failedRebuild = rebuildHomeTimeline({ profileId: invalidProfileId });
-      await assert.rejects(failedRebuild);
-      const retry = rebuildHomeTimeline({ profileId: invalidProfileId });
-      assert.notEqual(retry, failedRebuild);
-      await assert.rejects(retry);
-      assert.equal(await readHomeTimelineCache({ profileId: invalidProfileId, limit: 10 }), null);
-    } finally {
-      await invalidateHomeTimelines({ profileIds: [invalidProfileId] });
-    }
+    assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 1_001);
+    const ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+    assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
   },
 );
 
 test(
-  'Home cache distinguishes missing and built-empty feeds, retries without reordering, and rebuilds after eviction',
+  'Home cache distinguishes missing from empty, preserves fanout retries, and stays missing after eviction',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
@@ -592,7 +694,7 @@ test(
     const author = await createProfile();
 
     assert.equal(await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }), null);
-    await rebuildHomeTimeline({ profileId: viewer.id });
+    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [] });
     assert.deepEqual(await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }), {
       entries: [],
       oldestPostId: null,
@@ -664,12 +766,12 @@ test(
     );
 
     assert.equal(await readHomeTimelineCache({ profileId: secondViewer.id, limit: 10 }), null);
-    await rebuildHomeTimeline({ profileId: secondViewer.id });
+    await cacheHomeTimelinePage({ profileId: secondViewer.id, postIds: [secondPost.id, post.id] });
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: secondViewer.id, limit: 10 }))?.entries.map(
-        ({ postId }) => postId,
-      ),
-      [secondPost.id, post.id],
+      (await readHomeTimelineCache({ profileId: secondViewer.id, limit: 10 }))?.entries
+        .map(({ postId }) => postId)
+        .sort(),
+      [secondPost.id, post.id].sort(),
     );
 
     const unavailable = process.env.REDIS_URL;
@@ -684,12 +786,13 @@ test(
 
     await runRedisCommand((client) => client.unlink(`kosmo:home-timeline:profile:${viewer.id}`));
     assert.equal(await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }), null);
-    await rebuildHomeTimeline({ profileId: viewer.id });
-    assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries.map(
-        ({ postId }) => postId,
-      ),
-      [secondPost.id, post.id],
+    assert.equal(
+      (
+        await runRedisCommand((client) =>
+          client.exists(`kosmo:home-timeline:profile:${viewer.id}`),
+        )
+      )?.value,
+      0,
     );
 
     await invalidateHomeTimelines({ profileIds: [viewer.id] });
@@ -716,7 +819,7 @@ test(
     ]);
     await Promise.all(
       [parentOwner, followsBoth, followsReplyOnly].map(({ id }) =>
-        rebuildHomeTimeline({ profileId: id }),
+        cacheHomeTimelinePage({ profileId: id, postIds: [] }),
       ),
     );
     const reply = await createPost({ profileId: replyAuthor.id, replyParentId: parent.id });

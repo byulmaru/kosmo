@@ -34,9 +34,9 @@ import {
 } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 import {
+  cacheHomeTimelinePage,
   invalidateHomeTimelines,
   readHomeTimelineCache,
-  rebuildHomeTimeline,
 } from '../home-timeline/cache';
 import { postContentDocumentFromText } from '../post-content/server';
 import { runRedisCommand } from '../redis/client';
@@ -639,7 +639,7 @@ test(
     });
 
     try {
-      await rebuildHomeTimeline({ profileId: owner.profile.id });
+      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [post.id] });
       assert.deepEqual(
         (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries.map(
           ({ postId }) => postId,
@@ -652,7 +652,7 @@ test(
         targetProfileId: target.profile.id,
       });
       await waitForMissingHomeTimeline(owner.profile.id);
-      await rebuildHomeTimeline({ profileId: owner.profile.id });
+      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [] });
       assert.deepEqual(
         (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries,
         [],
@@ -663,7 +663,7 @@ test(
         mute.id,
       );
       await waitForMissingHomeTimeline(owner.profile.id);
-      await rebuildHomeTimeline({ profileId: owner.profile.id });
+      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [post.id] });
       assert.deepEqual(
         (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries.map(
           ({ postId }) => postId,
