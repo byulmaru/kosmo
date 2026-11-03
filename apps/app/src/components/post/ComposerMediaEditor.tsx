@@ -31,11 +31,11 @@ import { IconButton } from '@/components/ui/IconButton';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextArea } from '@/components/ui/TextField';
-import { getPublicWebOrigin } from '@/config/origin';
 import {
   useAnimatedColorTransition,
   useAnimatedOpacityTransition,
 } from '@/components/ui/useAnimatedColorTransition';
+import { getPublicWebOrigin } from '@/config/origin';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { MediaPublicationRights } from '@kosmo/core/media-metadata';

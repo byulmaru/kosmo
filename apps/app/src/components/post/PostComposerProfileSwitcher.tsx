@@ -3,9 +3,9 @@ import { Animated, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 
 import { graphql, useFragment } from 'react-relay';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { Dropdown } from '@/components/ui/Dropdown';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { ViewStyle } from 'react-native';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';

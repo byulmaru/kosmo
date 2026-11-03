@@ -10,11 +10,11 @@ import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileListItemRow } from '../profile/ProfileListItemRow';
 import type { ReactNode, Ref } from 'react';
+import type { ViewStyle } from 'react-native';
 import type {
   ProfileSettingsScreen_profile$data,
   ProfileSettingsScreen_profile$key,
 } from './__generated__/ProfileSettingsScreen_profile.graphql';
-import type { ViewStyle } from 'react-native';
 
 type ProfileSettingsDeletion = {
   phase: 'entry' | 'idle' | 'pending' | 'error';
