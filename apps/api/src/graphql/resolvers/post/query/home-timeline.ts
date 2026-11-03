@@ -1,6 +1,10 @@
 import { db, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostState } from '@kosmo/core/enums';
-import { readHomeTimelineCache, rebuildHomeTimeline } from '@kosmo/core/home-timeline/cache';
+import {
+  readHomeTimelineCache,
+  rebuildHomeTimeline,
+  touchHomeTimeline,
+} from '@kosmo/core/home-timeline/cache';
 import { queryHomeTimeline } from '@kosmo/core/home-timeline/query';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
@@ -226,6 +230,10 @@ builder.queryField('homeTimeline', (t) =>
               }
 
               rebuildAfterDatabaseFallback = true;
+            }
+
+            if (!rebuildAfterDatabaseFallback) {
+              await touchHomeTimeline({ profileId });
             }
 
             const rows = await queryHomeTimeline({

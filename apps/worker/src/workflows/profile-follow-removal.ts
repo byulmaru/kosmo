@@ -52,6 +52,7 @@ const {
   deleteFollowNotificationActivity,
   executeProfileFollowRemovalActivity,
   invalidateHomeTimelinesActivity,
+  reconcileHomeTimelineFollowActivity,
   sendProfileUnfollowActivity,
   verifyProfileFollowRemovalActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -159,10 +160,15 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
     return;
   }
   const homeTimelineInvalidationEnabled = patched('profile-follow-removal-home-invalidation-v1');
+  const homeTimelineReconciliationEnabled = patched(
+    'profile-follow-removal-home-timeline-reconcile-v1',
+  );
   await settleEffects([
-    ...(homeTimelineInvalidationEnabled
-      ? [invalidateHomeTimelinesActivity({ profileIds: [effect.input.followerProfileId] })]
-      : []),
+    ...(homeTimelineReconciliationEnabled
+      ? [reconcileHomeTimelineFollowActivity({ profileId: effect.input.followerProfileId })]
+      : homeTimelineInvalidationEnabled
+        ? [invalidateHomeTimelinesActivity({ profileIds: [effect.input.followerProfileId] })]
+        : []),
     deleteFollowNotificationActivity(effect.input.sourceId),
     ...match(effect.input)
       .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(effect.input)])

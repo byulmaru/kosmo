@@ -15,7 +15,7 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -42,7 +42,9 @@ let instanceId: string;
 let accountId: string;
 let profileId: string;
 let postId: string;
+let newerPostId: string;
 let contentId: string;
+let newerContentId: string;
 let sessionId: string;
 let token: string;
 
@@ -140,6 +142,28 @@ before(async () => {
   contentId = content.id;
   await db.update(Posts).set({ currentContentId: contentId }).where(eq(Posts.id, postId));
 
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const newerPost = await db
+    .insert(Posts)
+    .values({
+      profileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  newerPostId = newerPost.id;
+  const newerContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText('Second DB page while Redis is down'),
+      postId: newerPostId,
+    })
+    .returning()
+    .then(firstOrThrow);
+  newerContentId = newerContent.id;
+  await db.update(Posts).set({ currentContentId: newerContentId }).where(eq(Posts.id, newerPostId));
+
   app = new Hono<Env>();
   app.use('*', async (context, next) => {
     context.set('context', await deriveContext(context));
@@ -149,10 +173,12 @@ before(async () => {
 });
 
 after(async () => {
-  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+  const postIds = [postId, newerPostId];
+  const contentIds = [contentId, newerContentId];
+  await db.update(Posts).set({ currentContentId: null }).where(inArray(Posts.id, postIds));
   await db.delete(Sessions).where(eq(Sessions.id, sessionId));
-  await db.delete(PostContents).where(eq(PostContents.id, contentId));
-  await db.delete(Posts).where(eq(Posts.id, postId));
+  await db.delete(PostContents).where(inArray(PostContents.id, contentIds));
+  await db.delete(Posts).where(inArray(Posts.id, postIds));
   await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, accountId));
   await db.delete(Accounts).where(eq(Accounts.id, accountId));
   await db.delete(Profiles).where(eq(Profiles.id, profileId));
@@ -160,24 +186,26 @@ after(async () => {
   await pg.end();
 });
 
-test('returns DB Home rows without GraphQL errors when the configured Redis endpoint is unavailable', async () => {
-  const response = await app.request('/graphql', {
-    body: JSON.stringify({
-      query: `query HomeDuringRedisDowntime {
-          homeTimeline(first: 10) {
-            edges { cursor node { id content { bodyText } } }
-            pageInfo { endCursor hasNextPage hasPreviousPage }
-          }
-        }`,
-    }),
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    },
-    method: 'POST',
-  });
-  assert.equal(response.status, 200);
-  const result = (await response.json()) as {
+test('returns DB Home pages and follows DB cursors when the configured Redis endpoint is unavailable', async () => {
+  const query = `query HomeDuringRedisDowntime($first: Int!, $after: String) {
+    homeTimeline(first: $first, after: $after) {
+      edges { cursor node { id content { bodyText } } }
+      pageInfo { endCursor hasNextPage hasPreviousPage }
+    }
+  }`;
+  const requestHome = async (first: number, after?: string) =>
+    app.request('/graphql', {
+      body: JSON.stringify({
+        query,
+        variables: { first, ...(after === undefined ? {} : { after }) },
+      }),
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+  type HomeResult = {
     readonly data?: {
       readonly homeTimeline: {
         readonly edges: readonly {
@@ -187,17 +215,45 @@ test('returns DB Home rows without GraphQL errors when the configured Redis endp
             readonly content: { readonly bodyText: string } | null;
           };
         }[];
+        readonly pageInfo: { readonly endCursor: string | null; readonly hasNextPage: boolean };
       };
     } | null;
     readonly errors?: readonly { readonly message: string }[];
   };
-  assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+
+  const firstResponse = await requestHome(1);
+  assert.equal(firstResponse.status, 200);
+  const firstPage = (await firstResponse.json()) as HomeResult;
+  assert.equal(firstPage.errors, undefined, JSON.stringify(firstPage.errors));
   assert.deepEqual(
-    result.data?.homeTimeline.edges.map(({ cursor, node }) => [
+    firstPage.data?.homeTimeline.edges.map(({ cursor, node }) => [
+      cursor,
+      node.id,
+      node.content?.bodyText,
+    ]),
+    [
+      [
+        `db:${newerPostId}`,
+        encodeGlobalId('Post', newerPostId),
+        'Second DB page while Redis is down',
+      ],
+    ],
+  );
+  assert.equal(firstPage.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+  const databaseCursor = firstPage.data!.homeTimeline.edges[0]!.cursor;
+  assert.equal(databaseCursor, `db:${newerPostId}`);
+  const secondResponse = await requestHome(1, databaseCursor);
+  assert.equal(secondResponse.status, 200);
+  const secondPage = (await secondResponse.json()) as HomeResult;
+  assert.equal(secondPage.errors, undefined, JSON.stringify(secondPage.errors));
+  assert.deepEqual(
+    secondPage.data?.homeTimeline.edges.map(({ cursor, node }) => [
       cursor,
       node.id,
       node.content?.bodyText,
     ]),
     [[`db:${postId}`, encodeGlobalId('Post', postId), 'Home DB fallback while Redis is down']],
   );
+  assert.equal(secondPage.data?.homeTimeline.pageInfo.hasNextPage, false);
 });

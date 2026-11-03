@@ -501,6 +501,8 @@ const postCreateEffectsActivities = {
   createNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => [],
   fanoutHomeTimelinePostActivity: async () => {},
+  loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+  insertHomeTimelinePostActivity: async () => undefined,
   sendLocalPostCreateActivity: async () => {},
 };
 
@@ -1846,6 +1848,8 @@ test(
       createNotificationActivity: async () => {},
       createReplyNotificationActivity: async () => [],
       fanoutHomeTimelinePostActivity: async () => {},
+      loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+      insertHomeTimelinePostActivity: async () => undefined,
       sendLocalPostCreateActivity: async () => {
         effectsStarted.resolve();
         await releaseEffects.promise;

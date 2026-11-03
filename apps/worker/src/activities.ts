@@ -69,7 +69,11 @@ export {
 } from './profile-migration-activities';
 export {
   fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
+  insertHomeTimelinePost as insertHomeTimelinePostActivity,
   invalidateHomeTimelines as invalidateHomeTimelinesActivity,
+  listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
+  reconcileHomeTimelineFollow as reconcileHomeTimelineFollowActivity,
+  removeHomeTimelinePost as removeHomeTimelinePostActivity,
 } from '@kosmo/core/home-timeline/cache';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,

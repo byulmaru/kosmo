@@ -279,6 +279,8 @@ test(
         },
         createNotificationActivity: async () => undefined,
         fanoutHomeTimelinePostActivity: async () => undefined,
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
         replaceRemoteFeaturedActivity: async (input: {
           profileId: string;
           postIds: readonly string[];
@@ -634,10 +636,8 @@ test(
     const failedRepostUndoIds = new Set<string>();
     const worker = await Worker.create({
       activities: {
-        invalidateHomeTimelinesActivity: async ({
-          profileIds,
-        }: { readonly profileIds?: readonly string[] } = {}) =>
-          calls.push(`invalidate:${profileIds?.join(',') ?? 'all'}`),
+        removeHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) =>
+          calls.push(`remove:${postId}`),
         deletePostRelatedNotificationsActivity: async (postId: string) => {
           calls.push(`cleanup:${postId}`);
           const attempt = (cleanupAttempts.get(postId) ?? 0) + 1;
@@ -689,7 +689,7 @@ test(
           assert.deepEqual(
             calls.toSorted(),
             [
-              `invalidate:all`,
+              `remove:${postId}`,
               `cleanup:${postId}`,
               ...(origin === 'LOCAL'
                 ? [
@@ -713,7 +713,7 @@ test(
         calls.toSorted(),
         [
           `cleanup:${cleanupFailureId}`,
-          `invalidate:all`,
+          `remove:${cleanupFailureId}`,
           `post-delete:${cleanupFailureId}`,
         ].toSorted(),
       );
@@ -727,7 +727,7 @@ test(
         calls.toSorted(),
         [
           `cleanup:${protocolFailureId}`,
-          `invalidate:all`,
+          `remove:${protocolFailureId}`,
           `post-delete:${protocolFailureId}`,
         ].toSorted(),
       );
@@ -745,7 +745,7 @@ test(
         calls.toSorted(),
         [
           `cleanup:${repostCleanupFailureId}`,
-          `invalidate:all`,
+          `remove:${repostCleanupFailureId}`,
           `repost-undo:${repostCleanupFailureId}`,
         ].toSorted(),
       );
@@ -763,7 +763,7 @@ test(
         calls.toSorted(),
         [
           `cleanup:${repostProtocolFailureId}`,
-          `invalidate:all`,
+          `remove:${repostProtocolFailureId}`,
           `repost-undo:${repostProtocolFailureId}`,
         ].toSorted(),
       );
@@ -775,7 +775,7 @@ test(
       await retriedCleanup.result();
       assert.equal(cleanupAttempts.get(retryId), 2);
       assert.equal(calls.filter((call) => call === `cleanup:${retryId}`).length, 2);
-      assert.equal(calls.filter((call) => call === 'invalidate:all').length, 1);
+      assert.equal(calls.filter((call) => call === `remove:${retryId}`).length, 1);
       assert.equal(calls.filter((call) => call === `post-delete:${retryId}`).length, 1);
       await replay(retriedCleanup);
 
@@ -786,7 +786,7 @@ test(
       await retriedRepostCleanup.result();
       assert.equal(cleanupAttempts.get(repostRetryId), 2);
       assert.equal(calls.filter((call) => call === `cleanup:${repostRetryId}`).length, 2);
-      assert.equal(calls.filter((call) => call === 'invalidate:all').length, 1);
+      assert.equal(calls.filter((call) => call === `remove:${repostRetryId}`).length, 1);
       assert.equal(calls.filter((call) => call === `repost-undo:${repostRetryId}`).length, 1);
       await replay(retriedRepostCleanup);
     });
@@ -898,7 +898,12 @@ test(
           readonly postId: string;
         }) => calls.push(`capture:${analyticsPlatform}:${postId}`),
         fanoutHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) =>
-          calls.push(`fanout:${postId}`),
+          calls.push(`legacy-fanout:${postId}`),
+        loadHomeTimelineRecipientPageActivity: async ({ postId }: { readonly postId: string }) => {
+          calls.push(`fanout:${postId}`);
+          return { profileIds: [], nextCursor: null };
+        },
+        insertHomeTimelinePostActivity: async () => undefined,
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -925,6 +930,7 @@ test(
           workflowId: `post-create-effects-test:${origin}:${postId}`,
         });
         await handle.result();
+        await environment.client.workflow.getHandle(`home-timeline-fanout:${postId}`).result();
         assert.deepEqual(
           calls.toSorted(),
           (origin === 'LOCAL'
@@ -962,6 +968,9 @@ test(
         workflowId: `post-create-effects-test:LOCAL:captured:${capturedPostId}`,
       });
       await capturedHandle.result();
+      await environment.client.workflow
+        .getHandle(`home-timeline-fanout:${capturedPostId}`)
+        .result();
       assert.deepEqual(
         calls.toSorted(),
         [
@@ -989,6 +998,7 @@ test(
         workflowId: `post-create-effects-test:ACTIVITYPUB:failed-mention:${failingPostId}`,
       });
       await assert.rejects(failingHandle.result());
+      await environment.client.workflow.getHandle(`home-timeline-fanout:${failingPostId}`).result();
       failMention = false;
       assert.deepEqual(
         calls.toSorted(),
@@ -1053,7 +1063,12 @@ test(
         createNotificationActivity: async (input: CreateNotificationInput) =>
           calls.push(`${input.kind}:${input.sourceId}`),
         fanoutHomeTimelinePostActivity: async ({ postId }: { readonly postId: string }) =>
-          calls.push(`fanout:${postId}`),
+          calls.push(`legacy-fanout:${postId}`),
+        loadHomeTimelineRecipientPageActivity: async ({ postId }: { readonly postId: string }) => {
+          calls.push(`fanout:${postId}`);
+          return { profileIds: [], nextCursor: null };
+        },
+        insertHomeTimelinePostActivity: async () => undefined,
         sendRepostAnnounceActivity: async (id: string) => calls.push(`announce:${id}`),
       },
       connection: environment.nativeConnection,
@@ -1069,6 +1084,7 @@ test(
         workflowId: `post-repost-effects:${postId}`,
       });
       await handle.result();
+      await environment.client.workflow.getHandle(`home-timeline-fanout:${postId}`).result();
       assert.deepEqual(
         calls.toSorted(),
         [
@@ -1464,11 +1480,9 @@ test(
           assert.equal('followCandidateId' in input, false);
           return execution;
         },
-        invalidateHomeTimelinesActivity: async (input: {
-          readonly profileIds?: readonly string[];
-        }) => {
-          assert.deepEqual(input.profileIds, [pair.followerProfileId]);
-          calls.push('invalidate:' + pair.followerProfileId);
+        reconcileHomeTimelineFollowActivity: async (input: { readonly profileId: string }) => {
+          assert.equal(input.profileId, pair.followerProfileId);
+          calls.push('reconcile:' + input.profileId);
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
@@ -1524,7 +1538,7 @@ test(
         assert.deepEqual(
           new Set(calls),
           new Set([
-            'invalidate:' + pair.followerProfileId,
+            'reconcile:' + pair.followerProfileId,
             'delete:' + requestId,
             'notification:' + followId,
             'follow:' + JSON.stringify({ sourceId: followId, sourceKind: 'FOLLOW' }),
@@ -1578,10 +1592,8 @@ test(
             effectPlan: [],
           };
         },
-        invalidateHomeTimelinesActivity: async (input: {
-          readonly profileIds?: readonly string[];
-        }) => {
-          assert.deepEqual(input.profileIds, [pair.followerProfileId]);
+        reconcileHomeTimelineFollowActivity: async (input: { readonly profileId: string }) => {
+          assert.equal(input.profileId, pair.followerProfileId);
           effectCallCount += 1;
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
@@ -1634,6 +1646,7 @@ test(
       assert.equal(effectCallCount, 0);
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
+      assert.equal(effectCallCount, 1);
     });
   },
 );
@@ -1667,6 +1680,7 @@ test(
     ] as const;
     const followCounts = new Map<string, number>();
     const acceptInputs: ProfileFollowAcceptEffectInput[] = [];
+    let reconcileCalls = 0;
 
     const worker = await Worker.create({
       activities: {
@@ -1722,7 +1736,9 @@ test(
           };
         },
         loadPendingFollowRequestIdActivity: async () => undefined,
-        invalidateHomeTimelinesActivity: async () => undefined,
+        reconcileHomeTimelineFollowActivity: async () => {
+          reconcileCalls += 1;
+        },
         sendProfileFollowAcceptActivity: async (input: ProfileFollowAcceptEffectInput) => {
           acceptInputs.push(input);
         },
@@ -1769,6 +1785,7 @@ test(
         throw new Error('Unexpected first Follow result');
       }
       assert.equal(firstResult.result.kind, 'PENDING');
+      assert.equal(reconcileCalls, 0);
       const firstHandle = await firstStartHandle;
       await firstHandle.executeUpdate('profileFollowPairUpdate', {
         args: [
@@ -1807,6 +1824,7 @@ test(
         },
       );
       await firstHandle.result();
+      assert.equal(reconcileCalls, 1);
       assert.equal(
         acceptInputs[0]?.inboundFollow?.activityUri,
         'https://remote.example/activities/latest',
@@ -1840,6 +1858,7 @@ test(
       await secondHandle.executeUpdate('profileFollowPairUpdate', {
         args: [{ kind: 'FOLLOW', origin: 'ACTIVITYPUB' }],
       });
+      assert.equal(reconcileCalls, 1);
       assert.deepEqual(
         await secondHandle.executeUpdate('profileFollowPairUpdate', {
           args: [
@@ -1863,6 +1882,7 @@ test(
         },
       );
       await secondHandle.result();
+      assert.equal(reconcileCalls, 2);
       assert.equal(acceptInputs[1]?.pendingRequestId, requestIds[2]);
       assert.equal(acceptInputs[1]?.inboundFollow, undefined);
     });
@@ -2683,11 +2703,9 @@ test(
           effectStarted();
           await effectReleased;
         },
-        invalidateHomeTimelinesActivity: async (value: {
-          readonly profileIds?: readonly string[];
-        }) => {
-          assert.deepEqual(value.profileIds, [pair.followerProfileId]);
-          calls.push('invalidate:' + pair.followerProfileId);
+        reconcileHomeTimelineFollowActivity: async (value: { readonly profileId: string }) => {
+          assert.equal(value.profileId, pair.followerProfileId);
+          calls.push('reconcile:' + value.profileId);
         },
         sendProfileUnfollowActivity: async (input: unknown) => {
           calls.push('undo:' + JSON.stringify(input));
@@ -2753,7 +2771,7 @@ test(
         assert.deepEqual(
           new Set(calls.slice(3)),
           new Set([
-            'invalidate:' + pair.followerProfileId,
+            'reconcile:' + pair.followerProfileId,
             'delete:' + followId,
             'undo:' +
               JSON.stringify({

@@ -328,6 +328,8 @@ test(
           return createNotificationActivity(input);
         },
         fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -860,6 +862,8 @@ test(
         },
         createNotificationActivity: async () => {},
         fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
         sendLocalPostCreateActivity: async () => {},
       },
       connection: environment.nativeConnection,

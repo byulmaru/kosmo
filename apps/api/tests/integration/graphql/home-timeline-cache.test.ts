@@ -19,11 +19,13 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
+import type * as CoreRedis from '../../../../../packages/core/redis/client';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
+const previousPublicOrigin = process.env.PUBLIC_ORIGIN;
 if (testRedisUrl) {
   process.env.REDIS_URL = testRedisUrl;
 }
@@ -46,10 +48,12 @@ let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
 let invalidateHomeTimelines: typeof HomeTimelineCache.invalidateHomeTimelines;
 let readHomeTimelineCache: typeof HomeTimelineCache.readHomeTimelineCache;
 let rebuildHomeTimeline: typeof HomeTimelineCache.rebuildHomeTimeline;
+let runRedisCommand: typeof CoreRedis.runRedisCommand;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let app: Hono<Env>;
 let localInstanceId: string;
+let configuredLocalInstanceId: string;
 const fixtureProfileIds: string[] = [];
 const fixtureAccountIds: string[] = [];
 const fixturePostIds: string[] = [];
@@ -91,7 +95,9 @@ before(async () => {
     process.env.REDIS_URL = testRedisUrl;
   }
   process.env.NODE_ENV = 'production';
-  process.env.PUBLIC_ORIGIN = 'http://127.0.0.1:4173';
+  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
+  const configuredOrigin = `https://home-config-${suffix}.example`;
+  process.env.PUBLIC_ORIGIN = configuredOrigin;
   process.env.ENVIRONMENT = 'test';
 
   ({
@@ -111,10 +117,23 @@ before(async () => {
   } = await import('@kosmo/core/db'));
   ({ fanoutHomeTimelinePost, invalidateHomeTimelines, readHomeTimelineCache, rebuildHomeTimeline } =
     await import('@kosmo/core/home-timeline/cache'));
+  ({ runRedisCommand } = await import('../../../../../packages/core/redis/client'));
+
+  const configuredLocalInstance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: configuredOrigin,
+      domain: new URL(configuredOrigin).host,
+      kind: InstanceKind.LOCAL,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  configuredLocalInstanceId = configuredLocalInstance.id;
+
   ({ deriveContext } = await import('../../../src/context'));
   ({ yoga } = await import('../../../src/graphql'));
 
-  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
   const localInstance = await db
     .insert(Instances)
     .values({
@@ -161,7 +180,15 @@ after(async () => {
   if (localInstanceId) {
     await db.delete(Instances).where(eq(Instances.id, localInstanceId));
   }
+  if (configuredLocalInstanceId) {
+    await db.delete(Instances).where(eq(Instances.id, configuredLocalInstanceId));
+  }
   await pg.end();
+  if (previousPublicOrigin === undefined) {
+    delete process.env.PUBLIC_ORIGIN;
+  } else {
+    process.env.PUBLIC_ORIGIN = previousPublicOrigin;
+  }
 });
 
 test(
@@ -524,6 +551,61 @@ test(
       crossKindCursor.data?.homeTimeline.edges.map(({ node }) => node.id),
       [encodeGlobalId('Post', cached.id)],
     );
+  },
+);
+
+test(
+  'authenticated Home reads renew cache expiry on Redis, DB cursor, and incompatible cursor paths',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const post = await createContentfulPost(viewer.profile.id, 'sliding Home cache expiry');
+    await rebuildReadyCache(viewer.profile.id);
+    const key = `kosmo:home-timeline:profile:${viewer.profile.id}`;
+    const redisUrl = process.env.REDIS_URL;
+    assert.ok(redisUrl);
+
+    try {
+      await runRedisCommand((client) => client.expire(key, 60));
+      const redisPage = await requestHome(viewer.token, { first: 1 });
+      assert.equal(redisPage.errors, undefined, JSON.stringify(redisPage.errors));
+      const redisCursor = redisPage.data!.homeTimeline.edges[0]!.cursor;
+      assert.match(redisCursor, /^redis:\d+$/);
+      let ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+
+      delete process.env.REDIS_URL;
+      const databasePage = await requestHome(viewer.token, { first: 1 });
+      assert.equal(databasePage.errors, undefined, JSON.stringify(databasePage.errors));
+      const databaseCursor = databasePage.data!.homeTimeline.edges[0]!.cursor;
+      assert.equal(databaseCursor, `db:${post.id}`);
+      process.env.REDIS_URL = redisUrl;
+
+      await runRedisCommand((client) => client.expire(key, 60));
+      const afterDatabaseCursor = await requestHome(viewer.token, {
+        first: 1,
+        after: databaseCursor,
+      });
+      assert.equal(
+        afterDatabaseCursor.errors,
+        undefined,
+        JSON.stringify(afterDatabaseCursor.errors),
+      );
+      ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+
+      await runRedisCommand((client) => client.expire(key, 60));
+      const incompatible = await requestHome(viewer.token, {
+        first: 1,
+        after: redisCursor,
+        before: databaseCursor,
+      });
+      assert.equal(incompatible.errors, undefined, JSON.stringify(incompatible.errors));
+      ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+    } finally {
+      process.env.REDIS_URL = redisUrl;
+    }
   },
 );
 

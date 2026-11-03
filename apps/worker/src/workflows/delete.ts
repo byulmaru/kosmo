@@ -12,13 +12,19 @@ type PostDeleteInput = {
 const {
   deletePostRelatedNotificationsActivity,
   invalidateHomeTimelinesActivity,
+  removeHomeTimelinePostActivity,
   sendLocalPostDeleteActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postDeleteWorkflow({ postId, origin }: PostDeleteInput): Promise<void> {
   const homeTimelineInvalidationEnabled = patched('post-delete-home-timeline-invalidation-v1');
+  const homeTimelinePostRemovalEnabled = patched('post-delete-home-timeline-post-removal-v1');
   await settleEffects([
-    ...(homeTimelineInvalidationEnabled ? [invalidateHomeTimelinesActivity()] : []),
+    ...(homeTimelinePostRemovalEnabled
+      ? [removeHomeTimelinePostActivity({ postId })]
+      : homeTimelineInvalidationEnabled
+        ? [invalidateHomeTimelinesActivity()]
+        : []),
     ...(patched('post-delete-related-notifications-v1')
       ? [deletePostRelatedNotificationsActivity(postId)]
       : []),
