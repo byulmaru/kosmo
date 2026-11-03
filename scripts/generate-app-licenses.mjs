@@ -17,7 +17,8 @@ const staticLicenseNotices = [
     name: '반응 이모지',
     version: '',
     license: 'MIT · Unicode',
-    sourceUrl: 'https://github.com/byulmaru/kosmo/blob/main/apps/app/public/reaction-emoji/NOTICE.md',
+    sourceUrl:
+      'https://github.com/byulmaru/kosmo/blob/main/apps/app/public/reaction-emoji/NOTICE.md',
     sourcePath: noticeRelativePath,
   },
   {

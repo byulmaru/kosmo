@@ -207,14 +207,17 @@ test('builds sorted package entries from local originals and exact supplements',
       sourceUrl: 'https://github.com/example/supplemented/blob/0123456789abcdef/LICENSE',
     },
   );
-  assert.deepEqual(entries.find((entry) => entry.name === 'Hope:RE'), {
-    name: 'Hope:RE',
-    version: '',
-    license: 'MIT',
-    text: 'Complete Hope:RE MIT license\n',
-    sourceUrl:
-      'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
-  });
+  assert.deepEqual(
+    entries.find((entry) => entry.name === 'Hope:RE'),
+    {
+      name: 'Hope:RE',
+      version: '',
+      license: 'MIT',
+      text: 'Complete Hope:RE MIT license\n',
+      sourceUrl:
+        'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
+    },
+  );
   assert.equal(entries.at(-1).text, 'Complete attribution notice\n');
   assert.ok(
     entries.every((entry) => Object.values(entry).every((value) => typeof value === 'string')),

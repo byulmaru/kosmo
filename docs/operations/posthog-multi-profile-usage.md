@@ -25,17 +25,17 @@ PostHog 증거를 확인한 뒤에만 시작한다.
 사용하며 custom property로 `account_id`를 복제하지 않는다. 화면 pathname, Profile 목록·이름·handle,
 Post Content, 검색 원문, Follow 대상 Profile ID도 수집하지 않는다.
 
-| 이벤트                   | 허용 custom property                                                                     | WAA              | 사용 Profile                             |
-| ------------------------ | ---------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------- |
-| SDK `$pageview`          | 인증 화면이면 `selected_profile_id`                                                      | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
-| SDK `$identify` / `$set` | Person `available_profile_count` 갱신. event property가 아님                             | 단독으로 제외    | 단독으로 제외                            |
-| `profile_created`        | `selected_profile_id`                                                                    | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
-| `profile_selected`       | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id`                 | 포함             | 선택한 Profile 포함                      |
+| 이벤트                   | 허용 custom property                                                                                                                 | WAA              | 사용 Profile                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------- | ---------------------------------------- |
+| SDK `$pageview`          | 인증 화면이면 `selected_profile_id`                                                                                                  | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
+| SDK `$identify` / `$set` | Person `available_profile_count` 갱신. event property가 아님                                                                         | 단독으로 제외    | 단독으로 제외                            |
+| `profile_created`        | `selected_profile_id`                                                                                                                | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
+| `profile_selected`       | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id`                                                             | 포함             | 선택한 Profile 포함                      |
 | `post_created`           | `selected_profile_id`, `visibility`; Client event에만 `ai_prohibit_image_count`; Worker event에만 `client_platform` (`web`/`native`) | Web만 포함       | 행동 주체 Profile 포함                   |
-| `follow_succeeded`       | `selected_profile_id`, `result` (`follow`/`request`)                                     | 포함             | 행동 주체 Profile 포함                   |
-| `search_submitted`       | `tab`, `source`                                                                          | 포함             | 해당 없음                                |
-| `search_results_loaded`  | `tab`, `has_results`                                                                     | 포함             | 해당 없음                                |
-| `search_result_selected` | `tab`                                                                                    | 포함             | 해당 없음                                |
+| `follow_succeeded`       | `selected_profile_id`, `result` (`follow`/`request`)                                                                                 | 포함             | 행동 주체 Profile 포함                   |
+| `search_submitted`       | `tab`, `source`                                                                                                                      | 포함             | 해당 없음                                |
+| `search_results_loaded`  | `tab`, `has_results`                                                                                                                 | 포함             | 해당 없음                                |
+| `search_result_selected` | `tab`                                                                                                                                | 포함             | 해당 없음                                |
 
 `available_profile_count`는 해당 Account가 관측 당시 **동시에 선택할 수 있는** Profile의 수를 나타내는
 Person 속성이다. 기존

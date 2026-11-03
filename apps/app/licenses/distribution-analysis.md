@@ -4,12 +4,12 @@
 
 The inventory was captured from repository base `bbb7820dc57693f23d4eb30e0064abacc3c7476c`.
 
-| Production target                                 | npm package versions |
-| ------------------------------------------------- | -------------------: |
-| Web                                               |                   98 |
-| Android                                           |                  129 |
-| iOS                                               |                  128 |
-| Union                                             |                  162 |
+| Production target                                              | npm package versions |
+| -------------------------------------------------------------- | -------------------: |
+| Web                                                            |                   98 |
+| Android                                                        |                  129 |
+| iOS                                                            |                  128 |
+| Union                                                          |                  162 |
 | App artifact, including the emoji and Hope:RE attribution rows |                  166 |
 
 The collector uses production Expo exports and their source and asset maps for all three targets, Expo and React Native native autolinking for Android and iOS, and font resources from evaluated Expo public config. It selects those package identities from pnpm's production license report before reading license text. The 13 pending-notice rows remain unchanged; only `standard-navigation@0.0.5` is in this distribution set. Its artifact text remains blank.

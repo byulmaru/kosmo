@@ -12,14 +12,14 @@ Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`�
 
 ## 명시적 event allowlist
 
-| Event              | 허용 property                            | 발생 조건                                                                                                                           |
-| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `repost_succeeded` | `result`: `created` 또는 `removed`       | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |
-| `reaction_added`   | `reaction_type`: `default` 또는 `custom` | `addReaction` payload가 반환된 뒤                                                                                                   |
-| `reaction_removed` | `reaction_type`: `default` 또는 `custom` | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                         |
-| `bookmark_added`   | 없음                                     | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
-| `bookmark_removed` | 없음                                     | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
-| `post_created`     | `selected_profile_id`, `visibility`, `ai_prohibit_image_count` | 유효한 `createPost` 응답의 Post ID 또는 PostRequest ID를 확인한 뒤 한 번 |
+| Event              | 허용 property                                                  | 발생 조건                                                                                                                           |
+| ------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `repost_succeeded` | `result`: `created` 또는 `removed`                             | 재게시 생성 payload의 `repost.id`, 취소 payload의 요청 재게시 `postId`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지 |
+| `reaction_added`   | `reaction_type`: `default` 또는 `custom`                       | `addReaction` payload가 반환된 뒤                                                                                                   |
+| `reaction_removed` | `reaction_type`: `default` 또는 `custom`                       | `deleteReaction` payload가 반환된 뒤. `reactionId: null`인 멱등 성공도 포함                                                         |
+| `bookmark_added`   | 없음                                                           | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
+| `bookmark_removed` | 없음                                                           | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
+| `post_created`     | `selected_profile_id`, `visibility`, `ai_prohibit_image_count` | 유효한 `createPost` 응답의 Post ID 또는 PostRequest ID를 확인한 뒤 한 번                                                            |
 
 현재 Post Composer는 유효한 `createPost.post.id` 또는 `acceptedRequest.id`가 있는 응답에서 기존
 `trackAnalytics` SDK 경로로 `post_created`를 기록한다. `ai_prohibit_image_count`는 실제 제출 snapshot에서
