@@ -140,7 +140,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 기존 `post-composer-nightshade` feature flag는 모든 사용자에게 기본 활성화한다. flag가 켜진 경우 Web에서
   `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button과 tool content를 제공하며, flag가 꺼져 있거나
   평가되지 않았으면 이를 숨긴다. 선택한 이미지마다 `AI 학습 방지 필터 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는
-  `실험적인 기능이며 예고 없이 변경될 수 있습니다. 이미지 처리는 10~30분이 소요되며 작업 대기열 상황에 따라 더 오래 지연될 수 있습니다.`를 표시한다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
+  `실험적인 기능이며 예고 없이 변경될 수 있습니다. 이미지 처리는 10~30분이 소요되며 작업 대기열 상황에 따라 더 오래 지연될 수 있습니다.`를 표시하고 첫 문장 뒤에 줄바꿈을 둔다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
   Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N AI 학습 방지 필터 적용`이다.
   처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
   [Media 객체](../domain/objects/media.md)를 따른다.
