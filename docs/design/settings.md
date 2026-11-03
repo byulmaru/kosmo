@@ -114,20 +114,27 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
 - `/settings/profile-migration`은 shell의 selected Local Profile을 대상으로 하며 기존
   `ProfileMigrationSourceControl`을 그대로 재사용한다. 입력 label과 accessible name은 `기존 계정 주소`, 등록
-  action은 `기존 계정 등록`이다. 선택된 Kosmo Profile의 이름과 qualified handle을 보여 주며, 주소를 확인할 수
-  없으면 주소 부재를 표시하고 global origin으로 대체하지 않는다. 먼저 기존 계정 주소를 등록한 뒤 기존 서비스의
-  계정에서 현재 Kosmo Profile로 Move를 시작해야 하며, 팔로워는 옮길 수 있지만 게시물은 복사되지 않는다고 알린다.
+  action은 `기존 계정 등록`이다. source 등록 전에는 `먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.`를
+  표시하며 선택된 프로필의 신원을 별도 영역이나 등록 전 보조 문구로 표시하지 않는다. source가 등록되면
+  등록된 원본 계정과 다음 안내, 현재 선택된 프로필의 전체 주소를 표시한다. 주소를 확인할 수
+  없으면 주소 부재를 안전하게 표시하고 global origin으로 대체하지 않는다. migration은 팔로워 이전을 지원하며
+  게시물은 복사하지 않는 기존 동작을 유지하되, 이를 화면의 설명 문구로 표시하지 않는다.
   Owner에게는 `migrationSource`가 표시되는지와 무관하게 `기존 계정 등록 해제` action을 제공하고, source가
   표시되지 않으면 기존 빈 등록 form과 함께 보인다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을
-  사용한다. action에는 해제 후 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는 안내를
-  함께 제공한다. 성공 후 source가 null이면 기존 빈 등록 form을 표시한다.
-  control은 기존 Settings card·field·button과 accessible error·busy·success 표현을 재사용한다.
-- `/settings/following-import`은 shell의 selected Local Profile을 대상으로 한다. 선택한 Profile의 표시 이름과
-  `relativeHandle`을 확인하고 현재 Profile 멤버십이 있을 때만 CSV 선택·가져오기 control을 제공한다. 화면은
-  Mastodon 팔로잉 CSV의 `Account address`만 가져오며 기존 팔로잉을 유지하고 CSV preference는 적용하지 않는다는 점,
-  앱을 닫은 뒤에도 이어지는 백그라운드 처리를 설명하고, 선택한 Profile을 명시하는 시작 action을 제공한다.
-  512 KiB보다 큰 파일은 읽거나 제출하지 않고
-  한국어 오류를 표시한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를, accepted 응답에는 시작 확인만 알린다.
+  사용한다. 해제 action의 기존 결과 안내는 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는
+  내용을 보존한다.
+  성공 후 source가 null이면 기존 빈 등록 form을 표시한다. control은 flat field·button layout과 기존 accessible
+  error·busy·success 표현을 사용한다.
+- `/settings/following-import`은 shell의 selected Local Profile을 대상으로 하며 현재 Profile 멤버십이 있을 때만
+  CSV 선택·가져오기 control을 제공한다. CSV 처리는 Mastodon following CSV의 `Account address` 값만 사용하고,
+  기존 팔로잉을 유지하며 CSV preferences는 적용하지 않는다. 512 KiB보다 큰 파일은 읽거나 제출하지 않고 한국어
+  오류를 표시한다. 화면에는 flat CSV control을 두며 초기 선택 action은 `팔로잉 CSV 파일 선택`, 파일 선택 후에는
+  `파일 바꾸기`로 표시하고 선택한 파일명을 유지한다. `Mastodon`, CSV 열 이름, 최대 크기 설명이나 선택된 프로필의
+  신원을 사전 안내로 표시하지 않는다. 두 안내 문구 `기존 팔로잉은
+삭제되지 않아요.`와 `가져오기를 시작하면 앱을 닫아도 계속 진행돼요.`는 같은 group 안에서 8px 간격으로 묶고,
+  이 group과 시작 action 사이에는 기존 spacing token의 24px 간격을 둔다. 시작 action label은 `팔로잉 가져오기`이며,
+  접수 후에도 이 label을 유지한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를 제공한다. accepted 응답은
+  작업이 시작됐다는 뜻으로만 처리하고 `팔로잉 가져오기를 시작했어요.`를 polite live region에서 한 번 알린다.
   작업 진행·결과 조회나 polling은 표시하지 않는다.
 - `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
   action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
@@ -335,9 +342,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
-- Following import detail은 선택한 Profile identity group 다음에 CSV 선택·현재 Profile로 시작 action을 읽는다.
-  파일 선택과 시작 action은 각각 accessible name과 disabled·busy 상태를 제공하고, file·mutation 오류는 alert,
-  accepted 시작 확인은 polite live region으로 한 번 알린다.
+- Following import detail은 파일 선택 control과 선택한 파일명, 같은 group의 안내 문구, 시작 action 순으로 읽는다.
+  선택된 프로필 신원 영역을 읽기 순서에 포함할 필요는 없다. 파일 선택과 시작 action은 각각 accessible name과 disabled·busy
+  상태를 제공하고, file·mutation 오류는 alert, accepted 시작 확인은 polite live region으로 한 번 알린다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
   announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 세 policy link 다음에 `오픈소스 라이선스`,

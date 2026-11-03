@@ -309,18 +309,18 @@ export const OwnerPreparationAndSuccess: Story = {
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
     await expect(
-      canvas.findByText('이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.'),
+      canvas.findByText('이제 기존 서비스에서 아래 주소로 이전을 시작하세요.'),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
-        name: '이전받을 Kosmo 프로필 현재 Profile @target@selected-profile.example',
+        name: '이전할 Kosmo 프로필 @target@selected-profile.example',
       }),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+        name: '등록한 계정 @source@remote.example',
       }),
     ).resolves.toBeVisible();
   },
@@ -334,7 +334,7 @@ export const OwnerNullSourceUnregisterThenRegister: Story = {
     const input = canvas.getByRole('textbox', { name: '기존 계정 주소' });
     await expect(
       canvas.findByText(
-        '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
     await userEvent.type(input, '@old@remote.example');
@@ -361,10 +361,10 @@ export const OwnerNullSourceUnregisterThenRegister: Story = {
     });
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @new@remote.example',
+        name: '등록한 계정 @new@remote.example',
       }),
     ).resolves.toBeVisible();
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
@@ -373,7 +373,7 @@ export const OwnerUnregistersPreparedSource: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const source = canvas.getByRole('group', {
-      name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+      name: '등록한 계정 @source@remote.example',
     });
     expect(source).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
@@ -381,10 +381,10 @@ export const OwnerUnregistersPreparedSource: Story = {
     await expect(canvas.findByRole('button', { name: '기존 계정 등록' })).resolves.toBeDisabled();
     await expect(
       canvas.findByText(
-        '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
-    expect(canvas.queryByRole('group', { name: /현재 등록된 원본/ })).toBeNull();
+    expect(canvas.queryByRole('group', { name: /등록한 계정/ })).toBeNull();
   },
   render: (args) => (
     <ProfileMigrationSourceStory {...args} editable initialSource={preparedSource} />
@@ -405,7 +405,7 @@ export const FailureAndRetry: Story = {
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="error-once" />,
 };
@@ -423,7 +423,7 @@ export const LateCompletionIgnoredAfterActorLifecycleReset: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '현재 Profile 환경 재설정' }));
     await expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toHaveValue('');
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
-    expect(canvas.queryByText('이전 원본을 등록했어요')).toBeNull();
+    expect(canvas.queryByText('기존 계정을 등록했어요.')).toBeNull();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
@@ -432,13 +432,20 @@ export const DestinationAddressUnavailable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.findByRole('group', { name: '이전받을 Kosmo 프로필 현재 Profile' }),
+      canvas.findByRole('group', { name: '이전할 Kosmo 프로필 주소를 확인할 수 없어요.' }),
     ).resolves.toBeVisible();
     await expect(canvas.findByText('주소를 확인할 수 없어요.')).resolves.toBeVisible();
-    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
-    await expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
   },
-  render: (args) => <ProfileMigrationSourceStory {...args} editable targetCanonicalOrigin={null} />,
+  render: (args) => (
+    <ProfileMigrationSourceStory
+      {...args}
+      editable
+      initialSource={preparedSource}
+      targetCanonicalOrigin={null}
+    />
+  ),
 };
 
 export const MemberCannotUnregisterPreparedSource: Story = {
@@ -446,7 +453,7 @@ export const MemberCannotUnregisterPreparedSource: Story = {
     const canvas = within(canvasElement);
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+        name: '등록한 계정 @source@remote.example',
       }),
     ).resolves.toBeVisible();
     expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
@@ -472,9 +479,8 @@ const longSourceReflowPlay = async ({ canvasElement }: { canvasElement: HTMLElem
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);
 
   await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
-  const source = await canvas.findByRole('group', { name: /현재 등록된 원본/ });
+  const source = await canvas.findByRole('group', { name: /등록한 계정/ });
   expect(source).toBeVisible();
-  expect(within(source).getByText(longPreparedSource.displayName)).toBeVisible();
   expect(within(source).getByText(longHandle)).toBeVisible();
   expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth + 1);
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);

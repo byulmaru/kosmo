@@ -89,8 +89,8 @@ function setVisualViewportWidth(width: number, storyName: string) {
 }
 
 function expectProfileMigrationContentGutter(canvasElement: HTMLElement) {
-  const card = within(canvasElement).getByTestId('profile-migration-source-control');
-  const content = card.parentElement;
+  const control = within(canvasElement).getByTestId('profile-migration-source-control');
+  const content = control.parentElement;
   if (!content) {
     throw new Error('Profile migration content wrapper is missing.');
   }
@@ -100,13 +100,13 @@ function expectProfileMigrationContentGutter(canvasElement: HTMLElement) {
     throw new Error('Profile migration route content or Settings pane is missing.');
   }
 
-  const cardBounds = card.getBoundingClientRect();
+  const controlBounds = control.getBoundingClientRect();
   const contentBounds = content.getBoundingClientRect();
   const paneBounds = pane.getBoundingClientRect();
 
-  expect(Math.abs(cardBounds.left - paneBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
-  expect(Math.abs(paneBounds.right - cardBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cardBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(controlBounds.left - paneBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(paneBounds.right - controlBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(controlBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
 }
 
 const meta = {
@@ -230,16 +230,7 @@ export const ProfileMigrationFullWeb: Story = {
     );
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
-    expect(
-      canvas.getByRole('group', {
-        name: '이전받을 Kosmo 프로필 현재 Profile @settings-owner@selected-profile.example',
-      }),
-    ).toBeVisible();
-    expect(
-      canvas.getByText(
-        '기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요. 팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.',
-      ),
-    ).toBeVisible();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
     expectProfileMigrationContentGutter(canvasElement);
   },
   render: () => (

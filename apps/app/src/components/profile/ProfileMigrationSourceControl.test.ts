@@ -84,17 +84,16 @@ mockModule(new URL('../ui/TextField.tsx', import.meta.url), {
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
-    card: '#fff',
-    border: '#ddd',
     danger: '#a00',
+    divider: '#ddd',
     text: '#111',
     textSecondary: '#666',
   }),
 });
 mockModule('@/theme/tokens', {
-  radii: { md: 8 },
-  spacing: { lg: 16, md: 12 },
-  typography: { lg: { fontSize: 20 }, md: { fontSize: 16 }, sm: { fontSize: 14 } },
+  borderWidths: { 1: 1 },
+  space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24 },
+  textStyles: { uiCopyM: { fontSize: 14 }, uiLabelM: { fontSize: 14 } },
 });
 
 let ProfileMigrationSourceControl: typeof ProfileMigrationSourceControlExport;
@@ -129,22 +128,6 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(input.props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
     assert.equal(rendered('Button')[0].props.disabled, true);
-    assert.equal(
-      rendered('Text').some(
-        (node) =>
-          node.children.join('') ===
-          '기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요. 팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.',
-      ),
-      true,
-    );
-    assert.equal(
-      rendered('View').some(
-        (node) =>
-          node.props.accessibilityLabel ===
-          '이전받을 Kosmo 프로필 현재 Profile @target@target-origin.example',
-      ),
-      true,
-    );
 
     await act(async () => input.props.onChangeText('  @source@remote.example  '));
     assert.equal(rendered('TextField')[0].props.value, '  @source@remote.example  ');
@@ -175,24 +158,31 @@ describe('ProfileMigrationSourceControl', () => {
       }),
     );
 
-    assert.equal(rendered('Text')[0].children.join(''), '프로필 이전 원본');
     assert.equal(rendered('TextField').length, 0);
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
-      true,
+      rendered('Text').filter((node) => node.children.join('') === '기존 계정을 등록했어요.')
+        .length,
+      1,
     );
     assert.equal(
-      rendered('Text').some(
-        (node) =>
-          node.children.join('') ===
-          '이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.',
+      rendered('View').some(
+        (node) => node.props.role === 'status' && node.props.accessibilityLiveRegion === 'polite',
       ),
       true,
     );
     assert.equal(
+      rendered('Text').some(
+        (node) => node.children.join('') === '이제 기존 서비스에서 아래 주소로 이전을 시작하세요.',
+      ),
+      true,
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.children.join('') === '@target@target-origin.example'),
+      true,
+    );
+    assert.equal(
       rendered('View').some(
-        (node) =>
-          node.props.accessibilityLabel === '현재 등록된 원본 원격 원본 @source@remote.example',
+        (node) => node.props.accessibilityLabel === '등록한 계정 @source@remote.example',
       ),
       true,
     );
@@ -200,11 +190,16 @@ describe('ProfileMigrationSourceControl', () => {
 
   it('selected Instance 주소가 없으면 global origin 없이 주소 부재를 표시한다', async () => {
     profile.instance.canonicalOrigin = null;
+    profile.migrationSource = {
+      displayName: '원격 원본',
+      id: 'profile-source',
+      relativeHandle: '@source@remote.example',
+    };
     await render(true);
 
     assert.equal(
       rendered('View').some(
-        (node) => node.props.accessibilityLabel === '이전받을 Kosmo 프로필 현재 Profile',
+        (node) => node.props.accessibilityLabel === '이전할 Kosmo 프로필 주소를 확인할 수 없어요.',
       ),
       true,
     );
@@ -212,7 +207,8 @@ describe('ProfileMigrationSourceControl', () => {
       rendered('Text').some((node) => node.children.join('') === '주소를 확인할 수 없어요.'),
       true,
     );
-    assert.equal(rendered('TextField')[0].props.accessibilityLabel, '기존 계정 주소');
+    assert.equal(rendered('TextField').length, 0);
+    assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록 해제');
   });
 
   it('부분 GraphQL errors가 있어도 같은 Profile ID의 등록 및 해제 payload를 성공으로 처리한다', async () => {
@@ -232,7 +228,7 @@ describe('ProfileMigrationSourceControl', () => {
     );
 
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
+      rendered('Text').some((node) => node.children.join('') === '기존 계정을 등록했어요.'),
       true,
     );
 
@@ -410,7 +406,7 @@ describe('ProfileMigrationSourceControl', () => {
       rendered('Text').some(
         (node) =>
           node.children.join('') ===
-          '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
       true,
     );
@@ -446,7 +442,7 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '현재 등록된 원본'),
+      rendered('Text').some((node) => node.children.join('') === '등록한 계정'),
       false,
     );
   });
@@ -531,7 +527,7 @@ describe('ProfileMigrationSourceControl', () => {
 
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(
-      rendered('Text').some((node) => node.children.join('') === '이전 원본을 등록했어요'),
+      rendered('Text').some((node) => node.children.join('') === '기존 계정을 등록했어요.'),
       false,
     );
   });
