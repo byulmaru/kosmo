@@ -8,17 +8,28 @@ const require = createRequire(import.meta.url);
 const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url));
 const storybookAllowedHost = process.env.STORYBOOK_ALLOWED_HOST;
 
+// Dependency optimization runs outside the build plugin pipeline, so the same exact-path removal is registered there.
 // expo-modules-core's ambient declarations have no runtime behavior; revisit this SDK-internal path after Expo upgrades.
+const stripExpoModulesCoreGlobalTypes = (_source: string, id: string) => {
+  const normalizedId = id.replaceAll('\\', '/').split('?', 1)[0] ?? '';
+  if (normalizedId.endsWith('/expo-modules-core/src/ts-declarations/global.ts')) {
+    return { code: '', map: null };
+  }
+  return undefined;
+};
+
 const expoModulesCoreGlobalTypesPlugin: Plugin = {
   name: 'storybook-expo-modules-core-global-types',
   apply: 'build',
   enforce: 'pre',
-  transform(_source, id) {
-    const normalizedId = id.replaceAll('\\', '/').split('?', 1)[0] ?? '';
-    if (normalizedId.endsWith('/expo-modules-core/src/ts-declarations/global.ts')) {
-      return { code: '', map: null };
-    }
-    return undefined;
+  transform: stripExpoModulesCoreGlobalTypes,
+};
+
+const expoModulesCoreGlobalTypesOptimizerPlugin = {
+  name: 'storybook-expo-modules-core-global-types-optimizer',
+  transform: {
+    order: 'pre' as const,
+    handler: stripExpoModulesCoreGlobalTypes,
   },
 };
 
@@ -38,6 +49,18 @@ const config: StorybookConfig = {
     },
     publicDir: false,
     plugins: [relayVitePlugin(), expoModulesCoreGlobalTypesPlugin, ...(viteConfig.plugins ?? [])],
+    optimizeDeps: {
+      ...viteConfig.optimizeDeps,
+      rolldownOptions: {
+        ...viteConfig.optimizeDeps?.rolldownOptions,
+        plugins: [
+          expoModulesCoreGlobalTypesOptimizerPlugin,
+          ...(viteConfig.optimizeDeps?.rolldownOptions?.plugins
+            ? [viteConfig.optimizeDeps.rolldownOptions.plugins]
+            : []),
+        ],
+      },
+    },
     resolve: {
       ...viteConfig.resolve,
       alias: [
