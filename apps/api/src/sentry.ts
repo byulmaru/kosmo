@@ -8,11 +8,30 @@ const enabled = Boolean(dsn && environment && release);
 if (enabled) {
   Sentry.init({
     beforeBreadcrumb: () => null,
+    beforeSendTransaction: (event) => {
+      if (!event.request) {
+        return event;
+      }
+
+      const request = { ...event.request };
+      if (request.headers) {
+        request.headers = Object.fromEntries(
+          Object.entries(request.headers).filter(
+            ([name]) => !['authorization', 'proxy-authorization', 'cookie'].includes(name.toLowerCase()),
+          ),
+        );
+      }
+      delete request.cookies;
+
+      return { ...event, request };
+    },
     dsn,
     environment,
+    integrations: (integrations) => integrations.filter((integration) => integration.name !== 'Graphql'),
     initialScope: { tags: { runtime: 'api' } },
     release,
     sendDefaultPii: false,
+    ...(environment === 'prod' ? { tracesSampleRate: 0.1 } : {}),
   });
 }
 

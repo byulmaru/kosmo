@@ -38,6 +38,48 @@ describe('API Sentry configuration', () => {
     assert.deepEqual(options?.initialScope, { tags: { runtime: 'api' } });
     assert.equal(options?.beforeSend, undefined);
     assert.equal(options?.beforeBreadcrumb?.({ category: 'test' }, {}), null);
+
+    const beforeSendTransaction = options?.beforeSendTransaction;
+    assert.ok(beforeSendTransaction);
+    const transactionEvent: Parameters<typeof beforeSendTransaction>[0] = {
+      type: 'transaction',
+      event_id: 'transaction-event',
+      transaction: 'POST /graphql',
+      request: {
+        url: 'https://kosmo.invalid/graphql?request-id=url-query-value',
+        method: 'POST',
+        headers: {
+          aUtHoRiZaTiOn: 'Bearer authorization-value',
+          'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
+          cOoKiE: 'kosmo_session=cookie-header-value',
+          Accept: 'application/json',
+          'X-Request-Id': 'request-id',
+        },
+        cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
+        data: { retainedBodyMarker: 'request-data-value' },
+      },
+    };
+    const originalRequest = transactionEvent.request;
+    const originalHeaders = transactionEvent.request?.headers;
+    const originalEvent = structuredClone(transactionEvent);
+    const filteredEvent = await beforeSendTransaction(transactionEvent, {});
+
+    assert.ok(filteredEvent);
+    assert.notStrictEqual(filteredEvent, transactionEvent);
+    assert.notStrictEqual(filteredEvent.request, transactionEvent.request);
+    assert.notStrictEqual(filteredEvent.request?.headers, transactionEvent.request?.headers);
+    assert.deepEqual(filteredEvent.request?.headers, {
+      Accept: 'application/json',
+      'X-Request-Id': 'request-id',
+    });
+    assert.equal(filteredEvent.request?.cookies, undefined);
+    assert.equal(filteredEvent.request?.url, transactionEvent.request?.url);
+    assert.deepEqual(filteredEvent.request?.data, transactionEvent.request?.data);
+    assert.equal(filteredEvent.transaction, transactionEvent.transaction);
+    assert.strictEqual(transactionEvent.request, originalRequest);
+    assert.strictEqual(transactionEvent.request?.headers, originalHeaders);
+    assert.deepEqual(transactionEvent, originalEvent);
+
     await Sentry.close(0);
   });
 

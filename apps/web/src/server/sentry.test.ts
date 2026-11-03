@@ -57,6 +57,50 @@ describe('Web BFF Sentry configuration', () => {
       }),
     );
     expect(sentry.init.mock.calls[0]?.[0].beforeSend).toBeUndefined();
+
+    const beforeSendTransaction = sentry.init.mock.calls[0]?.[0].beforeSendTransaction;
+    expect(beforeSendTransaction).toEqual(expect.any(Function));
+    if (typeof beforeSendTransaction !== 'function') {
+      throw new Error('Sentry did not configure a transaction filter');
+    }
+    const transactionEvent = {
+      type: 'transaction' as const,
+      event_id: 'transaction-event',
+      transaction: 'POST /graphql',
+      request: {
+        url: 'https://kosmo.invalid/graphql?request-id=url-query-value',
+        method: 'POST',
+        headers: {
+          aUtHoRiZaTiOn: 'Bearer authorization-value',
+          'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
+          cOoKiE: 'kosmo_session=cookie-header-value',
+          Accept: 'application/json',
+          'X-Request-Id': 'request-id',
+        },
+        cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
+        data: { retainedBodyMarker: 'request-data-value' },
+      },
+    };
+    const originalRequest = transactionEvent.request;
+    const originalHeaders = transactionEvent.request.headers;
+    const originalEvent = structuredClone(transactionEvent);
+    const filteredEvent = beforeSendTransaction(transactionEvent, {});
+
+    expect(filteredEvent).not.toBeNull();
+    expect(filteredEvent).not.toBe(transactionEvent);
+    expect(filteredEvent?.request).not.toBe(transactionEvent.request);
+    expect(filteredEvent?.request?.headers).not.toBe(transactionEvent.request.headers);
+    expect(filteredEvent?.request?.headers).toEqual({
+      Accept: 'application/json',
+      'X-Request-Id': 'request-id',
+    });
+    expect(filteredEvent?.request?.cookies).toBeUndefined();
+    expect(filteredEvent?.request?.url).toBe(transactionEvent.request.url);
+    expect(filteredEvent?.request?.data).toEqual(transactionEvent.request.data);
+    expect(filteredEvent?.transaction).toBe(transactionEvent.transaction);
+    expect(transactionEvent.request).toBe(originalRequest);
+    expect(transactionEvent.request.headers).toBe(originalHeaders);
+    expect(transactionEvent).toEqual(originalEvent);
   });
 
   it('adds bounded inbound grouping metadata to internal captures', async () => {
