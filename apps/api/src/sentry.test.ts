@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import * as Sentry from '@sentry/node';
+import type { Event } from '@sentry/node';
 
 const metadataKeys = ['ENVIRONMENT', 'EXPO_PUBLIC_SENTRY_DSN', 'SENTRY_RELEASE'] as const;
 const originalMetadata = Object.fromEntries(metadataKeys.map((key) => [key, process.env[key]]));
@@ -33,10 +34,6 @@ describe('API Sentry configuration', () => {
     await import(`${sentryModule}?enabled`);
 
     const options = Sentry.getClient()?.getOptions();
-    assert.equal(options?.environment, 'production');
-    assert.equal(options?.release, 'kosmo@abc123');
-    assert.deepEqual(options?.initialScope, { tags: { runtime: 'api' } });
-    assert.equal(options?.beforeSend, undefined);
     assert.equal(options?.beforeBreadcrumb?.({ category: 'test' }, {}), null);
 
     const beforeSendTransaction = options?.beforeSendTransaction;
@@ -95,20 +92,46 @@ describe('API Sentry configuration', () => {
     assert.ok(transport);
     const send = mock.method(transport, 'send', async () => ({ statusCode: 200 }));
     const originalError = new Error('remote profile lookup failed');
+    const syntheticRequest = {
+      url: 'https://kosmo.invalid/error?request-id=url-query-value',
+      method: 'POST',
+      headers: {
+        aUtHoRiZaTiOn: 'Bearer authorization-value',
+        'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
+        cOoKiE: 'kosmo_session=cookie-header-value',
+        Accept: 'application/json',
+        'X-Request-Id': 'request-id',
+      },
+      cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
+      data: { retainedBodyMarker: 'request-data-value' },
+    };
     let observedError: unknown;
 
     try {
       Sentry.withScope((scope) => {
         scope.addEventProcessor((event, hint) => {
           observedError = hint.originalException;
-          return event;
+          return { ...event, request: syntheticRequest };
         });
         assert.equal(reportError(originalError), null);
       });
 
       assert.equal(await Sentry.flush(1_000), true);
       assert.strictEqual(observedError, originalError);
-      assert.ok(send.mock.calls.length > 0);
+      const errorEvent = send.mock.calls
+        .flatMap((call) => {
+          const [envelope] = call.arguments as [Parameters<typeof transport.send>[0]];
+          return envelope[1]
+            .filter(([headers]) => headers.type === 'event')
+            .map(([, payload]) => payload as Event);
+        })
+        .at(-1);
+      assert.ok(errorEvent, 'the SDK transport must receive an ERROR event');
+      assert.deepEqual(errorEvent.request, syntheticRequest);
+      assert.ok(
+        errorEvent.exception?.values?.some(({ value }) => value === originalError.message),
+        'the ERROR event must preserve the original exception value',
+      );
     } finally {
       await Sentry.close(0);
       send.mock.restore();

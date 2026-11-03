@@ -424,8 +424,6 @@ test(
 
       const bffSpans = findTraceSpans(webEnvelopes, traceId);
       const apiSpans = findTraceSpans(apiEnvelopes, traceId);
-      const envelopeTypes = (envelopes: CapturedEnvelope[]) =>
-        envelopes.map(([, items]) => items.map(([headers]) => headers.type));
       const traceSummary = (envelopes: CapturedEnvelope[]) => ({
         transactions: findEnvelopePayloads(envelopes, 'transaction').map((event) => {
           const trace = (event.contexts as { trace?: Record<string, unknown> } | undefined)?.trace;
@@ -453,18 +451,27 @@ test(
           };
         }),
       });
-      assert.ok(
-        bffSpans.length > 0,
-        `the sampled BFF request must record a trace (items: ${JSON.stringify(envelopeTypes(webEnvelopes))}; trace: ${JSON.stringify(traceSummary(webEnvelopes))})`,
-      );
-      assert.ok(
-        apiSpans.length > 0,
-        `the sampled API request must record a trace (envelope item types: ${JSON.stringify(envelopeTypes(apiEnvelopes))})`,
-      );
       assert.equal(findTraceSpans(webEnvelopes, unsampledTraceId).length, 0);
       assert.equal(findTraceSpans(apiEnvelopes, unsampledTraceId).length, 0);
 
-      const assertBodyCollection = (service: string, events: Record<string, unknown>[]) => {
+      const assertCapturedTransaction = (
+        service: string,
+        runtime: 'api' | 'web-bff',
+        events: Record<string, unknown>[],
+      ) => {
+        for (const event of events) {
+          assert.equal(event.environment, 'prod', `${service} transaction environment`);
+          assert.equal(
+            event.release,
+            'kosmo-sentry-tracing-test',
+            `${service} transaction release`,
+          );
+          assert.equal(
+            (event.tags as Record<string, unknown> | undefined)?.runtime,
+            runtime,
+            `${service} transaction runtime tag`,
+          );
+        }
         assert.ok(
           hasGraphqlRequestBody(events, query, variableMarker),
           `${service} SDK request.data must retain the GraphQL query and variable values`,
@@ -481,8 +488,8 @@ test(
           );
         }
       };
-      assertBodyCollection('BFF', transactionsForTrace(webEnvelopes, traceId));
-      assertBodyCollection('API', transactionsForTrace(apiEnvelopes, traceId));
+      assertCapturedTransaction('BFF', 'web-bff', transactionsForTrace(webEnvelopes, traceId));
+      assertCapturedTransaction('API', 'api', transactionsForTrace(apiEnvelopes, traceId));
 
       const bffHttp = spansFor(bffSpans, /http\.server/u).find(
         (span) => span.parent_span_id === incomingSpanId,

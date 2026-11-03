@@ -48,18 +48,7 @@ describe('Web BFF Sentry configuration', () => {
 
     await import('./sentry');
 
-    expect(sentry.init).toHaveBeenCalledWith(
-      expect.objectContaining({
-        enableLogs: true,
-        environment: 'production',
-        initialScope: { tags: { runtime: 'web-bff' } },
-        release: 'kosmo@abc123',
-      }),
-    );
-    expect(sentry.init.mock.calls[0]?.[0].beforeSend).toBeUndefined();
-
     const beforeSendTransaction = sentry.init.mock.calls[0]?.[0].beforeSendTransaction;
-    expect(beforeSendTransaction).toEqual(expect.any(Function));
     if (typeof beforeSendTransaction !== 'function') {
       throw new Error('Sentry did not configure a transaction filter');
     }
