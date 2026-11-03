@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { getNativeNotificationPermissionStatus } from '@/components/native-push/nativePushClient';
 import { useRequestNativePushPermissionAndSync } from '@/components/native-push/nativePushPermissionContext';
 import { useWebPushPermission } from '@/components/native-push/webPushPermissionContext';
@@ -17,7 +16,6 @@ import { SettingsLinkRow } from './SettingsLinkRow';
 type SettingsDestination =
   | 'profile'
   | 'profile-migration'
-  | 'following-import'
   | 'mute-and-block'
   | 'theme'
   | 'info'
@@ -31,7 +29,6 @@ export function SettingsNavigationList({
   selected?: SettingsDestination;
 }) {
   const themePreference = useThemePreference();
-  const migrationEnabled = useFeatureFlag('profile-migration');
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -54,26 +51,16 @@ export function SettingsNavigationList({
         currentPage={pathname === '/settings/profile'}
         selected={selected === 'profile'}
       />
-      {migrationEnabled ? (
-        <>
-          <SettingsLinkRow
-            accessibilityLabel="다른 서비스에서 이전 설정 열기"
-            href="/settings/profile-migration"
-            label="다른 서비스에서 이전"
-            primary
-            currentPage={pathname === '/settings/profile-migration'}
-            selected={selected === 'profile-migration'}
-          />
-          <SettingsLinkRow
-            accessibilityLabel="팔로잉 가져오기 설정 열기"
-            href="/settings/following-import"
-            label="팔로잉 가져오기"
-            primary
-            currentPage={pathname === '/settings/following-import'}
-            selected={selected === 'following-import'}
-          />
-        </>
-      ) : null}
+      <SettingsLinkRow
+        accessibilityLabel="다른 서비스에서 이전 설정 열기"
+        href="/settings/profile-migration"
+        label="다른 서비스에서 이전"
+        primary
+        currentPage={
+          pathname === '/settings/profile-migration' || pathname === '/settings/following-import'
+        }
+        selected={selected === 'profile-migration'}
+      />
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
         href="/settings/mute-and-block"

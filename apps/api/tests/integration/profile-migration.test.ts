@@ -58,6 +58,7 @@ const registerSourceMutation = `mutation RegisterProfileMigrationSource($input: 
   registerProfileMigrationSource(input: $input) {
     profile {
       id
+      hasMigrationSource
       displayName
       relativeHandle
       migrationSource {
@@ -73,11 +74,16 @@ const unregisterSourceMutation = `mutation UnregisterProfileMigrationSource {
   unregisterProfileMigrationSource {
     profile {
       id
+      hasMigrationSource
       displayName
       relativeHandle
       migrationSource { id }
     }
   }
+}`;
+
+const hasMigrationSourceQuery = `query HasMigrationSource($id: ID!) {
+  node(id: $id) { ... on Profile { id hasMigrationSource } }
 }`;
 
 describe('GraphQL profile migration', () => {
@@ -123,6 +129,78 @@ describe('GraphQL profile migration', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('hasMigrationSource is false without a registered relation', async () => {
+    const target = await createProfile({ handle: 'migration-target' });
+    const auth = await createAuthenticatedSession({ profileId: target.id });
+
+    const result = await requestGraphQL<{
+      node: { hasMigrationSource: boolean; id: string } | null;
+    }>(hasMigrationSourceQuery, { id: globalId('Profile', target.id) }, auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      hasMigrationSource: false,
+      id: globalId('Profile', target.id),
+    });
+  });
+
+  test('hasMigrationSource is available only to the owner of the selected profile', async () => {
+    const selectedTarget = await createProfile({ handle: 'selected-target' });
+    const otherTarget = await createProfile({ handle: 'other-target' });
+    const selectedSource = await createRemoteSource({
+      domain: 'selected-source.example',
+      handle: 'selected',
+    });
+    const otherSource = await createRemoteSource({
+      domain: 'other-source.example',
+      handle: 'other',
+    });
+    const owner = await createAuthenticatedSession({ profileId: selectedTarget.id });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: otherTarget.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db.insert(ProfileMigrations).values([
+      { sourceProfileId: selectedSource.id, targetProfileId: selectedTarget.id },
+      { sourceProfileId: otherSource.id, targetProfileId: otherTarget.id },
+    ]);
+    const member = await createAuthenticatedSession({
+      profileId: selectedTarget.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const ownerResult = await requestGraphQL<{
+      node: { hasMigrationSource: boolean | null; id: string } | null;
+    }>(hasMigrationSourceQuery, { id: globalId('Profile', selectedTarget.id) }, owner.token);
+    const otherProfileResult = await requestGraphQL<{
+      node: { hasMigrationSource: boolean | null; id: string } | null;
+    }>(hasMigrationSourceQuery, { id: globalId('Profile', otherTarget.id) }, owner.token);
+
+    for (const token of [member.token, undefined]) {
+      const unauthorizedResult = await requestGraphQL<{
+        node: { hasMigrationSource: boolean | null; id: string } | null;
+      }>(hasMigrationSourceQuery, { id: globalId('Profile', selectedTarget.id) }, token);
+
+      assertNoGraphQLErrors(unauthorizedResult);
+      assert.deepEqual(unauthorizedResult.data?.node, {
+        hasMigrationSource: null,
+        id: globalId('Profile', selectedTarget.id),
+      });
+    }
+
+    assertNoGraphQLErrors(ownerResult);
+    assert.deepEqual(ownerResult.data?.node, {
+      hasMigrationSource: true,
+      id: globalId('Profile', selectedTarget.id),
+    });
+    assertNoGraphQLErrors(otherProfileResult);
+    assert.deepEqual(otherProfileResult.data?.node, {
+      hasMigrationSource: null,
+      id: globalId('Profile', otherTarget.id),
+    });
   });
 
   test('active owner authentication is required before remote lookup, even when the feature flag is off', async (t) => {
@@ -251,6 +329,7 @@ describe('GraphQL profile migration', () => {
       registerProfileMigrationSource: {
         profile: {
           displayName: string;
+          hasMigrationSource: boolean;
           id: string;
           migrationSource: { displayName: string; id: string; relativeHandle: string };
           relativeHandle: string;
@@ -291,6 +370,7 @@ describe('GraphQL profile migration', () => {
 
     assert.deepEqual(result.data?.registerProfileMigrationSource.profile, {
       displayName: 'Migration Target',
+      hasMigrationSource: true,
       id: globalId('Profile', auth.profile.id),
       migrationSource: {
         displayName: 'Alice Remote',
@@ -302,11 +382,13 @@ describe('GraphQL profile migration', () => {
 
     const read = await requestGraphQL<{
       source: {
+        hasMigrationSource: boolean | null;
         id: string;
         instance: { canonicalOrigin: string | null };
         migrationSource: null;
       } | null;
       target: {
+        hasMigrationSource: boolean | null;
         id: string;
         instance: { canonicalOrigin: string | null };
         migrationSource: { id: string } | null;
@@ -314,10 +396,10 @@ describe('GraphQL profile migration', () => {
     }>(
       `query ReadMigrationSource($sourceId: ID!, $targetId: ID!) {
         target: node(id: $targetId) {
-          ... on Profile { id migrationSource { id } instance { canonicalOrigin } }
+          ... on Profile { id hasMigrationSource migrationSource { id } instance { canonicalOrigin } }
         }
         source: node(id: $sourceId) {
-          ... on Profile { id migrationSource { id } instance { canonicalOrigin } }
+          ... on Profile { id hasMigrationSource migrationSource { id } instance { canonicalOrigin } }
         }
       }`,
       {
@@ -330,11 +412,13 @@ describe('GraphQL profile migration', () => {
     assertNoGraphQLErrors(read);
     assert.deepEqual(read.data, {
       source: {
+        hasMigrationSource: null,
         id: globalId('Profile', persistedSource.id),
         instance: { canonicalOrigin: null },
         migrationSource: null,
       },
       target: {
+        hasMigrationSource: true,
         id: globalId('Profile', auth.profile.id),
         instance: { canonicalOrigin: publicOrigin },
         migrationSource: { id: globalId('Profile', persistedSource.id) },
@@ -433,6 +517,7 @@ describe('GraphQL profile migration', () => {
       unregisterProfileMigrationSource: {
         profile: {
           displayName: string;
+          hasMigrationSource: boolean;
           id: string;
           migrationSource: null;
           relativeHandle: string;
@@ -443,6 +528,7 @@ describe('GraphQL profile migration', () => {
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.unregisterProfileMigrationSource.profile, {
       displayName: 'Migration Target',
+      hasMigrationSource: false,
       id: globalId('Profile', target.id),
       migrationSource: null,
       relativeHandle: '@migration-target',
@@ -490,7 +576,9 @@ describe('GraphQL profile migration', () => {
     });
     t.mock.method(temporalClient.workflow, 'execute', async () => replacement.id as never);
     const registered = await requestGraphQL<{
-      registerProfileMigrationSource: { profile: { migrationSource: { id: string } } };
+      registerProfileMigrationSource: {
+        profile: { hasMigrationSource: boolean; migrationSource: { id: string } };
+      };
     }>(
       registerSourceMutation,
       { input: { sourceHandle: '@carol@replacement.example' } },
@@ -498,6 +586,7 @@ describe('GraphQL profile migration', () => {
     );
 
     assertNoGraphQLErrors(registered);
+    assert.equal(registered.data?.registerProfileMigrationSource.profile.hasMigrationSource, true);
     assert.equal(
       registered.data?.registerProfileMigrationSource.profile.migrationSource.id,
       globalId('Profile', replacement.id),
@@ -530,10 +619,14 @@ describe('GraphQL profile migration', () => {
       }
 
       const readHiddenSource = await requestGraphQL<{
-        node: { id: string; migrationSource: { id: string } | null } | null;
+        node: {
+          hasMigrationSource: boolean | null;
+          id: string;
+          migrationSource: { id: string } | null;
+        } | null;
       }>(
         `query ReadMigrationSource($id: ID!) {
-          node(id: $id) { ... on Profile { id migrationSource { id } } }
+          node(id: $id) { ... on Profile { id hasMigrationSource migrationSource { id } } }
         }`,
         { id: globalId('Profile', target.id) },
         auth.token,
@@ -541,6 +634,7 @@ describe('GraphQL profile migration', () => {
 
       assertNoGraphQLErrors(readHiddenSource);
       assert.deepEqual(readHiddenSource.data?.node, {
+        hasMigrationSource: true,
         id: globalId('Profile', target.id),
         migrationSource: null,
       });
@@ -554,7 +648,7 @@ describe('GraphQL profile migration', () => {
 
       const unregistered = await requestGraphQL<{
         unregisterProfileMigrationSource: {
-          profile: { id: string; migrationSource: null };
+          profile: { hasMigrationSource: boolean; id: string; migrationSource: null };
         };
       }>(unregisterSourceMutation, {}, auth.token);
 
@@ -566,6 +660,10 @@ describe('GraphQL profile migration', () => {
       assert.equal(
         unregistered.data?.unregisterProfileMigrationSource.profile.migrationSource,
         null,
+      );
+      assert.equal(
+        unregistered.data?.unregisterProfileMigrationSource.profile.hasMigrationSource,
+        false,
       );
       assert.deepEqual(
         await db
@@ -585,7 +683,9 @@ describe('GraphQL profile migration', () => {
       });
       t.mock.method(temporalClient.workflow, 'execute', async () => replacement.id as never);
       const registered = await requestGraphQL<{
-        registerProfileMigrationSource: { profile: { migrationSource: { id: string } } };
+        registerProfileMigrationSource: {
+          profile: { hasMigrationSource: boolean; migrationSource: { id: string } };
+        };
       }>(
         registerSourceMutation,
         { input: { sourceHandle: '@carol@replacement.example' } },
@@ -593,6 +693,10 @@ describe('GraphQL profile migration', () => {
       );
 
       assertNoGraphQLErrors(registered);
+      assert.equal(
+        registered.data?.registerProfileMigrationSource.profile.hasMigrationSource,
+        true,
+      );
       assert.equal(
         registered.data?.registerProfileMigrationSource.profile.migrationSource.id,
         globalId('Profile', replacement.id),

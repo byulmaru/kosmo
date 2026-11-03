@@ -16,7 +16,6 @@ type Profile = {
 
 type QueryData = { currentSession: { selectedProfile: Profile | null } | null };
 
-let migrationEnabled = false;
 let queryCalls = 0;
 let openProfileSwitcherCalls = 0;
 let queryData: QueryData = { currentSession: { selectedProfile: null } };
@@ -35,9 +34,6 @@ mock.module('react-relay', {
       return queryData;
     },
   },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../profile/ProfileMigrationSourceControl.tsx', import.meta.url), {
   exports: {
@@ -72,7 +68,6 @@ before(async () => {
 });
 
 afterEach(async () => {
-  migrationEnabled = false;
   queryCalls = 0;
   openProfileSwitcherCalls = 0;
   queryData = { currentSession: { selectedProfile: null } };
@@ -83,16 +78,19 @@ afterEach(async () => {
 });
 
 describe('SettingsProfileMigrationDetail', () => {
-  it('feature flag가 꺼져 있거나 평가되지 않으면 query 없이 사용할 수 없는 설정을 표시한다', async () => {
+  it('선택된 Profile이 없으면 Profile 선택 action을 제공한다', async () => {
     await render();
 
-    assert.equal(queryCalls, 0);
-    assert.equal(rendered('StateView')[0].props.title, '현재 이용할 수 없는 설정이에요');
+    assert.equal(queryCalls, 1);
+    const state = rendered('StateView')[0];
+    assert.ok(state);
+    assert.equal(typeof state.props.onAction, 'function');
     assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
+    await act(async () => state.props.onAction());
+    assert.equal(openProfileSwitcherCalls, 1);
   });
 
-  it('flag가 켜지면 선택된 Local Owner Profile을 기존 control에 연결한다', async () => {
-    migrationEnabled = true;
+  it('선택된 Local Owner Profile을 기존 control에 연결한다', async () => {
     const profile: Profile = {
       id: 'profile:owner',
       instance: { kind: 'LOCAL' },
@@ -110,7 +108,6 @@ describe('SettingsProfileMigrationDetail', () => {
   });
 
   it('Member는 기존 control을 읽기 전용으로 사용한다', async () => {
-    migrationEnabled = true;
     const profile: Profile = {
       id: 'profile:member',
       instance: { kind: 'LOCAL' },
@@ -123,8 +120,7 @@ describe('SettingsProfileMigrationDetail', () => {
     assert.equal(rendered('ProfileMigrationSourceControl')[0].props.editable, false);
   });
 
-  it('selected Profile이 없거나 Local이 아니면 기존 Profile 선택 state를 사용한다', async () => {
-    migrationEnabled = true;
+  it('ActivityPub Profile이면 기존 Profile 선택 state를 사용한다', async () => {
     queryData = {
       currentSession: {
         selectedProfile: {

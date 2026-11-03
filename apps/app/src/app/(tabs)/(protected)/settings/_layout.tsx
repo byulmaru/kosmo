@@ -30,23 +30,21 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const selected =
     root || pathname === '/settings/profile' || pathname === '/settings/default-post-visibility'
       ? 'profile'
-      : pathname === '/settings/profile-migration'
+      : pathname === '/settings/profile-migration' || pathname === '/settings/following-import'
         ? 'profile-migration'
-        : pathname === '/settings/following-import'
-          ? 'following-import'
-          : pathname === '/settings/info' ||
-              pathname === '/settings/developer' ||
-              pathname === '/settings/licenses'
-            ? 'info'
-            : pathname === '/settings/mute-and-block' ||
-                pathname === '/settings/muted-profiles' ||
-                pathname === '/settings/blocked-profiles'
-              ? 'mute-and-block'
-              : pathname === '/settings/theme'
-                ? 'theme'
-                : pathname === '/settings/account-deletion'
-                  ? 'account-deletion'
-                  : undefined;
+        : pathname === '/settings/info' ||
+            pathname === '/settings/developer' ||
+            pathname === '/settings/licenses'
+          ? 'info'
+          : pathname === '/settings/mute-and-block' ||
+              pathname === '/settings/muted-profiles' ||
+              pathname === '/settings/blocked-profiles'
+            ? 'mute-and-block'
+            : pathname === '/settings/theme'
+              ? 'theme'
+              : pathname === '/settings/account-deletion'
+                ? 'account-deletion'
+                : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     web && layout === 'mobile' ? 'hidden' : root ? 'plain' : 'back';
 

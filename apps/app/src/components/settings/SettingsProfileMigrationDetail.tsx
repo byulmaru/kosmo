@@ -1,6 +1,5 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -27,11 +26,6 @@ const SettingsProfileMigrationQuery = graphql`
 `;
 
 export function SettingsProfileMigrationDetail() {
-  const migrationEnabled = useFeatureFlag('profile-migration');
-  if (!migrationEnabled) {
-    return <StateView title="현재 이용할 수 없는 설정이에요" />;
-  }
-
   return (
     <RouteBoundary
       loading={<StateView loading title="이전 설정을 불러오는 중입니다." />}

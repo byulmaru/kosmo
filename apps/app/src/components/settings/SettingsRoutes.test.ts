@@ -372,7 +372,7 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web migration detail은 공통 master의 migration item과 Settings parent back을 사용한다', async () => {
+  it('full Web migration destination은 한 페이지에서 두 section과 Settings parent back을 제공한다', async () => {
     await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
 
     assert.ok(byTestId('settings-workspace'));
@@ -381,27 +381,28 @@ describe('Settings routes', () => {
       ['설정', '다른 서비스에서 이전'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
     const back = rendered('PageHeader')[1].props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
     assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
-  it('full Web following import detail은 같은 master와 Settings parent back을 사용한다', async () => {
+  it('legacy following-import route는 canonical migration destination으로 redirect한다', async () => {
     await renderRoute('/settings/following-import', SettingsFollowingImportRoute);
 
-    assert.ok(byTestId('settings-workspace'));
-    assert.deepEqual(
-      rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '팔로잉 가져오기'],
-    );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'following-import');
-    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
-    const back = rendered('PageHeader')[1].props.leading;
-    assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
-    await act(async () => back.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings']);
+    assert.equal(rendered('Redirect').length, 1);
+    assert.equal(rendered('Redirect')[0].props.href, '/settings/profile-migration');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
+    assert.equal(rendered('SettingsProfileMigrationDetail').length, 0);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 0);
   });
 
   it('legacy default-post-visibility route redirects to the canonical profile settings route', async () => {
@@ -580,6 +581,13 @@ describe('Settings routes', () => {
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
   });
 
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
@@ -625,7 +633,7 @@ describe('Settings routes', () => {
     assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
-  it('iOS migration destination도 header와 content를 같은 ScrollView에 두고 Settings로 돌아간다', async () => {
+  it('iOS migration destination은 두 section과 header를 하나의 ScrollView에 두고 Settings로 돌아간다', async () => {
     platform = 'ios';
     width = 390;
     await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
@@ -640,6 +648,18 @@ describe('Settings routes', () => {
         .length,
       1,
     );
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsFollowingImportDetail')
+        .length,
+      1,
+    );
+    assert.deepEqual(
+      scrollView
+        .findAll((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
+    assert.equal(rendered('ScrollView').length, 1);
 
     await act(async () => header.props.leading.props.onPress());
     assert.deepEqual(dismissedToPaths, ['/settings']);

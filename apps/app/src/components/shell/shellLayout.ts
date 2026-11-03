@@ -38,7 +38,6 @@ export type WebMobileShellHeader = Readonly<{
     | '게시글'
     | '프로필 설정'
     | '다른 서비스에서 이전'
-    | '팔로잉 가져오기'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '차단한 프로필'
@@ -98,11 +97,8 @@ export function getWebMobileShellHeader(
   if (pathname === '/settings/profile' || pathname === '/settings/default-post-visibility') {
     return { leading: 'back', title: '프로필 설정' };
   }
-  if (pathname === '/settings/profile-migration') {
+  if (pathname === '/settings/profile-migration' || pathname === '/settings/following-import') {
     return { leading: 'back', title: '다른 서비스에서 이전' };
-  }
-  if (pathname === '/settings/following-import') {
-    return { leading: 'back', title: '팔로잉 가져오기' };
   }
   if (pathname === '/settings/mute-and-block') {
     return { leading: 'back', title: '뮤트 및 차단' };
