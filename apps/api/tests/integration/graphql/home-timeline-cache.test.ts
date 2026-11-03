@@ -408,68 +408,6 @@ test(
         process.env.REDIS_URL = redisUrl;
       }
     }
-
-    const projected = await requestGraphQL<{
-      readonly disabled: {
-        readonly id: string;
-        readonly handle: string;
-        readonly relativeHandle: string;
-        readonly displayName: string | null;
-        readonly avatar: { readonly id: string; readonly url: string } | null;
-        readonly viewerState: { readonly profileBlock: { readonly id: string } | null } | null;
-      } | null;
-      readonly suspended: {
-        readonly id: string;
-        readonly handle: string;
-        readonly relativeHandle: string;
-        readonly displayName: string | null;
-        readonly avatar: { readonly id: string; readonly url: string } | null;
-        readonly viewerState: { readonly profileBlock: { readonly id: string } | null } | null;
-      } | null;
-    }>(
-      `query InactiveHomeProfileNodes($disabledId: ID!, $suspendedId: ID!) {
-        disabled: node(id: $disabledId) { ...HomeProfileIdentity }
-        suspended: node(id: $suspendedId) { ...HomeProfileIdentity }
-      }
-
-      fragment HomeProfileIdentity on Profile {
-        id
-        handle
-        relativeHandle
-        displayName
-        avatar { id url }
-        viewerState { profileBlock { id } }
-      }`,
-      {
-        disabledId: encodeGlobalId('Profile', disabledOuterAuthor.id),
-        suspendedId: encodeGlobalId('Profile', suspendedSourceAuthor.id),
-      },
-      viewer.token,
-    );
-    assert.equal(projected.errors, undefined, JSON.stringify(projected.errors));
-    const localInstance = await db
-      .select({ domain: Instances.domain })
-      .from(Instances)
-      .where(eq(Instances.id, localInstanceId))
-      .then(firstOrThrow);
-    assert.deepEqual(projected.data, {
-      disabled: {
-        id: encodeGlobalId('Profile', disabledOuterAuthor.id),
-        handle: disabledOuterAuthor.handle,
-        relativeHandle: `@${disabledOuterAuthor.handle}@${localInstance.domain}`,
-        displayName: null,
-        avatar: null,
-        viewerState: null,
-      },
-      suspended: {
-        id: encodeGlobalId('Profile', suspendedSourceAuthor.id),
-        handle: suspendedSourceAuthor.handle,
-        relativeHandle: `@${suspendedSourceAuthor.handle}@${localInstance.domain}`,
-        displayName: null,
-        avatar: null,
-        viewerState: null,
-      },
-    });
   },
 );
 

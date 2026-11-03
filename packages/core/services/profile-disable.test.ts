@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { after, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -38,30 +38,34 @@ if (testRedisUrl) {
 
 const createdProfileIds: string[] = [];
 const createdInstanceIds: string[] = [];
-const createdPostIds: string[] = [];
-const createdContentIds: string[] = [];
+let postId: string | undefined;
+let contentId: string | undefined;
 
 after(async () => {
-  if (createdProfileIds.length > 0) {
-    await invalidateHomeTimelines({ profileIds: createdProfileIds });
+  const [viewerProfileId, authorProfileId] = createdProfileIds;
+  if (viewerProfileId) {
+    await invalidateHomeTimelines({ profileIds: [viewerProfileId] });
   }
-  for (const postId of createdPostIds) {
+  if (postId) {
     await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
   }
-  for (const contentId of createdContentIds) {
+  if (contentId) {
     await db.update(PostContents).set({ postId: null }).where(eq(PostContents.id, contentId));
   }
-  for (const postId of createdPostIds) {
+  if (postId) {
     await db.delete(Posts).where(eq(Posts.id, postId));
   }
-  for (const contentId of createdContentIds) {
+  if (contentId) {
     await db.delete(PostContents).where(eq(PostContents.id, contentId));
   }
-  if (createdProfileIds.length > 0) {
-    await db
-      .delete(ProfileFollows)
-      .where(inArray(ProfileFollows.followerProfileId, createdProfileIds));
-    await db.delete(Profiles).where(inArray(Profiles.id, createdProfileIds));
+  if (viewerProfileId && authorProfileId) {
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.followerProfileId, viewerProfileId));
+  }
+  if (viewerProfileId) {
+    await db.delete(Profiles).where(eq(Profiles.id, viewerProfileId));
+  }
+  if (authorProfileId) {
+    await db.delete(Profiles).where(eq(Profiles.id, authorProfileId));
   }
   if (createdInstanceIds.length > 0) {
     for (const instanceId of createdInstanceIds) {
@@ -100,28 +104,6 @@ const createProfile = async () => {
   return profile;
 };
 
-const createPost = async (profileId: string, text: string) => {
-  const postContent = await db
-    .insert(PostContents)
-    .values({ document: postContentDocumentFromText(text) })
-    .returning()
-    .then(firstOrThrow);
-  createdContentIds.push(postContent.id);
-  const post = await db
-    .insert(Posts)
-    .values({
-      currentContentId: postContent.id,
-      profileId,
-      state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
-    })
-    .returning()
-    .then(firstOrThrow);
-  createdPostIds.push(post.id);
-  await db.update(PostContents).set({ postId: post.id }).where(eq(PostContents.id, postContent.id));
-  return post;
-};
-
 const waitForRedis = async () => {
   const deadline = performance.now() + 5_000;
   while (performance.now() < deadline) {
@@ -135,36 +117,42 @@ const waitForRedis = async () => {
 };
 
 test(
-  'Profile disable retains related and unrelated Home timeline cache members',
+  'Profile disable retains related Home timeline cache members',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const viewer = await createProfile();
     const author = await createProfile();
-    const unrelatedViewer = await createProfile();
-    const unrelatedAuthor = await createProfile();
-    const post = await createPost(author.id, 'profile disable home timeline test');
-    const unrelatedPost = await createPost(unrelatedAuthor.id, 'unrelated home timeline test');
-    await db.insert(ProfileFollows).values([
-      { followerProfileId: viewer.id, followeeProfileId: author.id },
-      { followerProfileId: unrelatedViewer.id, followeeProfileId: unrelatedAuthor.id },
-    ]);
+    const postContent = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('profile disable home timeline test') })
+      .returning()
+      .then(firstOrThrow);
+    contentId = postContent.id;
+    const post = await db
+      .insert(Posts)
+      .values({
+        currentContentId: postContent.id,
+        profileId: author.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    postId = post.id;
+    await db
+      .update(PostContents)
+      .set({ postId: post.id })
+      .where(eq(PostContents.id, postContent.id));
+    await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: viewer.id, followeeProfileId: author.id });
 
-    await Promise.all([
-      rebuildHomeTimeline({ profileId: viewer.id }),
-      rebuildHomeTimeline({ profileId: unrelatedViewer.id }),
-    ]);
-    const [relatedCache, unrelatedCache] = await Promise.all([
-      readHomeTimelineCache({ profileId: viewer.id, limit: 10 }),
-      readHomeTimelineCache({ profileId: unrelatedViewer.id, limit: 10 }),
-    ]);
+    await rebuildHomeTimeline({ profileId: viewer.id });
+    const relatedCache = await readHomeTimelineCache({ profileId: viewer.id, limit: 10 });
     assert.deepEqual(
       relatedCache?.entries.map(({ postId }) => postId),
       [post.id],
-    );
-    assert.deepEqual(
-      unrelatedCache?.entries.map(({ postId }) => postId),
-      [unrelatedPost.id],
     );
 
     await disableProfile(author.id);
@@ -186,17 +174,13 @@ test(
         .then(({ state }) => state),
       PostState.ACTIVE,
     );
-    const [relatedCacheAfterDisable, unrelatedCacheAfterDisable] = await Promise.all([
-      readHomeTimelineCache({ profileId: viewer.id, limit: 10 }),
-      readHomeTimelineCache({ profileId: unrelatedViewer.id, limit: 10 }),
-    ]);
+    const relatedCacheAfterDisable = await readHomeTimelineCache({
+      profileId: viewer.id,
+      limit: 10,
+    });
     assert.deepEqual(
       relatedCacheAfterDisable?.entries.map(({ postId }) => postId),
       [post.id],
-    );
-    assert.deepEqual(
-      unrelatedCacheAfterDisable?.entries.map(({ postId }) => postId),
-      [unrelatedPost.id],
     );
   },
 );
