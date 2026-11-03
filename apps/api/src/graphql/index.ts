@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { applySelectedProfileExtension } from '../context';
 import { useError } from './plugins/error';
 import { useMutationPrimaryDatabase } from './plugins/primary-database';
+import { useSentryTracing } from './plugins/sentry-tracing';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
@@ -33,7 +34,12 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   },
   maskedErrors: false,
   landingPage: false,
-  plugins: [useExecutionCancellation(), useMutationPrimaryDatabase(), useError()],
+  plugins: [
+    useExecutionCancellation(),
+    useMutationPrimaryDatabase(),
+    useSentryTracing(),
+    useError(),
+  ],
 });
 
 yoga.on(['GET', 'POST', 'OPTIONS'], '/', async (c) => {

@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 이 설정의 범위가 아니다. API와 Web BFF HTTP 요청 trace의 별도 범위와 운영 조건은 아래 Request tracing 정책을 따른다.
 
 피드백 본문·선택적 이미지도 기존 SDK를 통해 User Feedback으로 접수한다. 제출 결과와 Slack 알림의 운영 조건은 [피드백 Sentry 접수 운영](./feedback-sentry.md)을 따른다.
 
@@ -32,9 +32,19 @@ Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernet
 4. Production browser에서 `/channel.js`, 채널별 origin·OIDC·Sentry 동작을 확인하고, Android/iOS release binary가 기본 `prod` 설정과 native login을 사용하는지 확인한다. 각 Native binary에서 검증 오류를 발생시켜 full `GITHUB_SHA` release와 원본 JavaScript/native 위치가 연결되는지 확인한다.
 5. 위 증거가 모두 있은 뒤 별도 검토된 cleanup에서 더 이상 사용하지 않는 GitHub `EXPO_PUBLIC_*` variables를 제거한다. API/Web BFF server runtime이 사용하는 기존 `env` Secret의 Sentry DSN은 이 client 설정 정리의 대상이 아니다.
 
+## Request tracing
+
+API와 Web BFF의 HTTP 요청은 Sentry Performance에서 trace로 관측한다. Production에서는 새로운 root trace를 10% 확률로 샘플링하며, SDK의 parent sampling decision을 따르는 자식 span은 같은 trace에 속한다. 샘플링된 요청 안에서 SDK가 관측하는 DB span도 함께 전송한다. 이는 서비스에서 관측한 DB round-trip 시간이며 PostgreSQL 서버의 순수 실행 시간으로 해석하지 않는다. Web BFF HTTP 요청 안에서 실행된 queue producer의 SQL도 해당 요청에 연결된 span으로 포함될 수 있다. 별도 DB query filter는 추가하지 않으며, SQL 값의 placeholder 처리는 기존 SDK SQL sanitizer에 따른다. 이는 모든 SQL 문법을 해석하는 별도 완전 정제 보장이 아니다.
+
+측정 결과를 해석할 때는 요청·환경·release, 관측 기간과 sampled trace 수를 함께 기록한다. Trace 수를 전체 요청 수로, DB round-trip 시간을 PostgreSQL 서버 실행 시간으로 표현하지 않는다. Trace에는 인증 정보나 불필요한 사용자 콘텐츠를 별도 custom attribute로 추가하지 않는다. GraphQL 문서·변수는 별도 custom attribute로 추가하지 않으며, SDK의 HTTP 요청 본문(`request.data`) 기본 수집은 유지한다. 따라서 SDK가 수집한 요청 본문에는 GraphQL 문서·변수가 포함될 수 있다. Local·test 실행은 기존 runtime metadata gate를 따르며 기본적으로 외부 trace를 전송하지 않는다.
+
+API와 Web BFF의 Performance trace는 Sentry로 전송하기 전에 대소문자를 구분하지 않고 `Authorization`, `Proxy-Authorization`, `Cookie` 요청 헤더와 파싱된 `request.cookies`를 제거한다. 이 제거는 trace transaction에만 적용하며 URL, 그 밖의 요청 헤더, span 등 나머지 trace 정보를 유지한다. 기존 error event는 이 제거 대상이 아니며 기존 event 전달 정책을 따른다.
+
+Background Worker와 별도 queue consumer의 DB 작업, Fedify consumer runtime, Web·Native client tracing, profiling과 query optimization은 이 범위에 포함하지 않는다.
+
 ## Event 전달 정책
 
-Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지 않고 그대로 전송한다. 따라서 다음 진단 정보를 유지한다.
+Sentry SDK가 만든 error event는 `beforeSend`에서 재구성하거나 제거하지 않고 그대로 전송한다. Request tracing에 명시한 trace 전용 인증 정보 제거는 error event에 적용하지 않는다. 따라서 다음 진단 정보를 유지한다.
 
 - Sentry SDK가 만든 exception 전체(values, type, message, mechanism, stack frame과 frame metadata)
 - Web event의 source map debug ID
