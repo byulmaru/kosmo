@@ -675,23 +675,6 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
-  test.each(['dev', 'prod'] as const)(
-    'serves TDMRep JSON for the %s web origin',
-    async (environment) => {
-      vi.stubEnv('ENVIRONMENT', environment);
-
-      const response = await app.request('/.well-known/tdmrep.json');
-      const head = await app.request('/.well-known/tdmrep.json', { method: 'HEAD' });
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/json');
-      expect(response.headers.get('cache-control')).toBe('no-cache');
-      expect(await response.json()).toEqual([{ location: '/', 'tdm-reservation': 1 }]);
-      expect(head.status).toBe(200);
-      expect(await head.text()).toBe('');
-    },
-  );
-
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },

@@ -93,7 +93,9 @@ app.get('/channel.js', (c) => {
 app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.get('/.well-known/tdmrep.json', (c) =>
-  c.json([{ location: '/', 'tdm-reservation': 1 }], 200, { 'Cache-Control': 'no-cache' }),
+  c.json([{ location: '/', 'tdm-reservation': 1 }], 200, {
+    'Cache-Control': 'public, max-age=86400',
+  }),
 );
 
 app.on(['GET', 'HEAD'], '/robots.txt', (c, next) =>

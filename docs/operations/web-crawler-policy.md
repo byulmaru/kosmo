@@ -55,7 +55,7 @@ Sitemap: https://kos.moe/sitemap.xml
 
 ## TDM Reservation Protocol
 
-저장소의 TDM 권리 유보는 [TDM Reservation Protocol (TDMRep)](https://w3c-cg.github.io/tdm-reservation-protocol/spec/)의 origin 파일 방식으로 `/.well-known/tdmrep.json`에서 제공한다. 응답은 `apps/web/src/server/app.ts`의 BFF endpoint에서 생성하며 `GET`과 `HEAD`를 지원하고 `Cache-Control: no-cache`를 사용한다.
+저장소의 TDM 권리 유보는 [TDM Reservation Protocol (TDMRep)](https://w3c-cg.github.io/tdm-reservation-protocol/spec/)의 origin 파일 방식으로 `/.well-known/tdmrep.json`에서 제공한다. 응답은 `apps/web/src/server/app.ts`의 BFF endpoint에서 생성하며 `GET`과 `HEAD`를 지원하고 `Cache-Control: public, max-age=86400`으로 24시간 캐시할 수 있다.
 
 ```json
 [{ "location": "/", "tdm-reservation": 1 }]
