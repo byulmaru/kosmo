@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, inArray, lt } from 'drizzle-orm';
 import { db, Instances, Posts, Profiles } from '../db';
 import { homePostListWhere } from '../visibility/home-post-list';
 
@@ -10,14 +10,20 @@ export const queryHomeTimeline = async ({
   before,
   limit,
   inverted = false,
+  postIds,
 }: {
   readonly profileId: string;
   readonly after?: string;
   readonly before?: string;
   readonly limit: number;
   readonly inverted?: boolean;
-}): Promise<PostRow[]> =>
-  db
+  readonly postIds?: readonly string[];
+}): Promise<PostRow[]> => {
+  if (postIds?.length === 0) {
+    return [];
+  }
+
+  return db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
@@ -25,9 +31,11 @@ export const queryHomeTimeline = async ({
     .where(
       and(
         homePostListWhere({ db, viewerProfileId: profileId }),
+        postIds === undefined ? undefined : inArray(Posts.id, postIds),
         before ? gt(Posts.id, before) : undefined,
         after ? lt(Posts.id, after) : undefined,
       ),
     )
     .orderBy(inverted ? asc(Posts.id) : desc(Posts.id))
     .limit(limit);
+};

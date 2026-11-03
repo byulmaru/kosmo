@@ -61,11 +61,11 @@ after(async () => {
   if (viewerProfileId && authorProfileId) {
     await db.delete(ProfileFollows).where(eq(ProfileFollows.followerProfileId, viewerProfileId));
   }
-  if (createdProfileIds.length > 0) {
-    await db.delete(Profiles).where(eq(Profiles.id, createdProfileIds[0]!));
-    if (createdProfileIds[1]) {
-      await db.delete(Profiles).where(eq(Profiles.id, createdProfileIds[1]!));
-    }
+  if (viewerProfileId) {
+    await db.delete(Profiles).where(eq(Profiles.id, viewerProfileId));
+  }
+  if (authorProfileId) {
+    await db.delete(Profiles).where(eq(Profiles.id, authorProfileId));
   }
   if (createdInstanceIds.length > 0) {
     for (const instanceId of createdInstanceIds) {
@@ -116,23 +116,8 @@ const waitForRedis = async () => {
   assert.fail('Redis test service did not become ready');
 };
 
-const waitForMissingHomeTimeline = async (profileId: string) => {
-  const deadline = performance.now() + 2_000;
-  while (performance.now() < deadline) {
-    const [ping, cache] = await Promise.all([
-      runRedisCommand((client) => client.ping()),
-      readHomeTimelineCache({ profileId, limit: 10 }),
-    ]);
-    if (ping?.value === 'PONG' && cache === null) {
-      return;
-    }
-    await delay(10);
-  }
-  assert.fail('Home timeline cache was not invalidated');
-};
-
 test(
-  'Profile disable invalidates affected Home lists and repeated disable preserves a rebuilt list',
+  'Profile disable retains related Home timeline cache members',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
@@ -164,25 +149,38 @@ test(
       .values({ followerProfileId: viewer.id, followeeProfileId: author.id });
 
     await rebuildHomeTimeline({ profileId: viewer.id });
+    const relatedCache = await readHomeTimelineCache({ profileId: viewer.id, limit: 10 });
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries.map(
-        ({ postId: cachedPostId }) => cachedPostId,
-      ),
+      relatedCache?.entries.map(({ postId }) => postId),
       [post.id],
     );
 
     await disableProfile(author.id);
-    await waitForMissingHomeTimeline(viewer.id);
-    await rebuildHomeTimeline({ profileId: viewer.id });
-    assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries,
-      [],
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, author.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.DISABLED,
     );
-
-    await disableProfile(author.id);
+    assert.equal(
+      await db
+        .select({ state: Posts.state })
+        .from(Posts)
+        .where(eq(Posts.id, post.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      PostState.ACTIVE,
+    );
+    const relatedCacheAfterDisable = await readHomeTimelineCache({
+      profileId: viewer.id,
+      limit: 10,
+    });
     assert.deepEqual(
-      (await readHomeTimelineCache({ profileId: viewer.id, limit: 10 }))?.entries,
-      [],
+      relatedCacheAfterDisable?.entries.map(({ postId }) => postId),
+      [post.id],
     );
   },
 );

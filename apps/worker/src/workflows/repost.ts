@@ -2,6 +2,7 @@ import { NotificationKind } from '@kosmo/core/enums';
 import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
+import { startHomeTimelineFanout } from './home-timeline-fanout';
 import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
@@ -20,9 +21,14 @@ const {
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
   const pushNotificationDispatchEnabled = patched('post-repost-push-notification-v1');
   const homeTimelineFanoutEnabled = patched('post-repost-home-timeline-fanout-v1');
+  const homeTimelineFanoutChildEnabled = patched('post-repost-home-timeline-child-fanout-v1');
 
   await settleEffects([
-    ...(homeTimelineFanoutEnabled ? [fanoutHomeTimelinePostActivity({ postId })] : []),
+    ...(homeTimelineFanoutChildEnabled
+      ? [startHomeTimelineFanout(postId)]
+      : homeTimelineFanoutEnabled
+        ? [fanoutHomeTimelinePostActivity({ postId })]
+        : []),
     pushNotificationDispatchEnabled
       ? createNotificationActivity({ kind: NotificationKind.REPOST, sourceId: postId })
       : createRepostNotificationActivity(postId),

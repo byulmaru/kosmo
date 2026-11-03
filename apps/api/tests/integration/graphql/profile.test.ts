@@ -5820,9 +5820,7 @@ describe('GraphQL remote profile boundary', () => {
     });
 
     assertNoGraphQLErrors(disabledSourceHome);
-    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), [
-      globalId('Post', homeRetainedQuote.id),
-    ]);
+    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), []);
     assert.deepEqual(
       disabledSourceHome.data?.nodes.map((node) => node?.id ?? null),
       [null, globalId('Post', homeRetainedQuote.id)],

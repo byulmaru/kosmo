@@ -77,6 +77,8 @@ const workerActivities = (
   createQuoteNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => {},
   fanoutHomeTimelinePostActivity: async () => {},
+  loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+  insertHomeTimelinePostActivity: async () => undefined,
   generatePostIdActivity: async () => postId,
   sendLocalPostCreateActivity,
 });

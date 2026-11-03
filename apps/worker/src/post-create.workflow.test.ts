@@ -29,6 +29,11 @@ import type { capturePostCreatedActivity as CapturePostCreatedActivity } from '.
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
 type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 
+const homeTimelineTestActivities = {
+  loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+  insertHomeTimelinePostActivity: async () => undefined,
+};
+
 const localPostInput = (bodyText: string): LocalPostInput => ({
   accountId: randomUUID(),
   bodyText,
@@ -132,6 +137,7 @@ test(
           }
         },
         fanoutHomeTimelinePostActivity: async () => {},
+        ...homeTimelineTestActivities,
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
         },
@@ -407,6 +413,7 @@ test(
           effectCalls.push('notification:' + sourceId);
         },
         fanoutHomeTimelinePostActivity: async () => {},
+        ...homeTimelineTestActivities,
         sendLocalPostCreateActivity: async (postId: string) => {
           effectCalls.push('send:' + postId);
         },
@@ -546,6 +553,7 @@ test(
           }
         },
         fanoutHomeTimelinePostActivity: async () => {},
+        ...homeTimelineTestActivities,
         sendLocalPostCreateActivity: async (createdPostId: string) => {
           effectCalls.push('send:' + createdPostId);
         },

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, exists, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Temporal } from 'temporal-polyfill';
 import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
@@ -11,7 +11,7 @@ const feedKeyPrefix = 'kosmo:home-timeline:profile:';
 const rebuildKeyPrefix = 'kosmo:home-timeline:rebuild:';
 const readyMember = '__ready__';
 const maximumEntries = 1_000;
-const keyLifetimeSeconds = 300;
+const keyLifetimeSeconds = 604_800;
 const candidateBatchSize = 100;
 const postIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const inFlightRebuilds = new Map<string, Promise<void>>();
@@ -19,6 +19,36 @@ const inFlightRebuilds = new Map<string, Promise<void>>();
 const HomeFanoutViewers = alias(Profiles, 'home_timeline_fanout_viewer');
 const HomeFanoutViewerInstances = alias(Instances, 'home_timeline_fanout_viewer_instance');
 const HomeFanoutReplyParents = alias(Posts, 'home_timeline_fanout_reply_parent');
+
+const homeTimelineCandidateWhere = () => {
+  const viewerFollowsAuthor = exists(
+    db
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, HomeFanoutViewers.id),
+          eq(ProfileFollows.followeeProfileId, Posts.profileId),
+        ),
+      ),
+  );
+  const replyParentIsViewerPost = exists(
+    db
+      .select({ id: HomeFanoutReplyParents.id })
+      .from(HomeFanoutReplyParents)
+      .where(
+        and(
+          eq(HomeFanoutReplyParents.id, Posts.replyParentId),
+          eq(HomeFanoutReplyParents.profileId, HomeFanoutViewers.id),
+        ),
+      ),
+  );
+  return or(
+    eq(HomeFanoutViewers.id, Posts.profileId),
+    viewerFollowsAuthor,
+    replyParentIsViewerPost,
+  );
+};
 
 export type HomeTimelineEntry = {
   readonly postId: string;
@@ -94,6 +124,7 @@ export const readHomeTimelineCache = async ({
         LIMIT: { offset: 0, count: 1 },
       });
     }
+    transaction.expire(feedKey(profileId), keyLifetimeSeconds);
     return transaction.exec();
   });
 
@@ -101,12 +132,22 @@ export const readHomeTimelineCache = async ({
     return null;
   }
 
-  const [readyScore, cachedRows, oldestRows, cursorRows] = result.value as unknown as [
+  const [readyScore, cachedRows, oldestRows] = result.value as unknown as [
     number | null,
     { value: string; score: number }[],
     { value: string; score: number }[],
-    { value: string; score: number }[] | undefined,
   ];
+  const cursorRows =
+    after !== undefined || before !== undefined
+      ? (
+          result.value as unknown as [
+            unknown,
+            unknown,
+            unknown,
+            { value: string; score: number }[] | undefined,
+          ]
+        )[3]
+      : undefined;
   if (readyScore !== -1) {
     return null;
   }
@@ -211,33 +252,6 @@ export const fanoutHomeTimelinePost = async ({
     throw new Error('Redis unavailable while fanning out Home timeline post');
   }
 
-  const viewerFollowsAuthor = exists(
-    db
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, HomeFanoutViewers.id),
-          eq(ProfileFollows.followeeProfileId, Posts.profileId),
-        ),
-      ),
-  );
-  const replyParentIsViewerPost = exists(
-    db
-      .select({ id: HomeFanoutReplyParents.id })
-      .from(HomeFanoutReplyParents)
-      .where(
-        and(
-          eq(HomeFanoutReplyParents.id, Posts.replyParentId),
-          eq(HomeFanoutReplyParents.profileId, HomeFanoutViewers.id),
-        ),
-      ),
-  );
-  const candidateWhere = or(
-    eq(HomeFanoutViewers.id, Posts.profileId),
-    viewerFollowsAuthor,
-    replyParentIsViewerPost,
-  );
   const viewers = await db
     .select({ profileId: HomeFanoutViewers.id })
     .from(HomeFanoutViewers)
@@ -248,7 +262,12 @@ export const fanoutHomeTimelinePost = async ({
     .innerJoin(Posts, eq(Posts.id, postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(candidateWhere, homePostListWhere({ db, viewerProfileId: HomeFanoutViewers.id })));
+    .where(
+      and(
+        homeTimelineCandidateWhere(),
+        homePostListWhere({ db, viewerProfileId: HomeFanoutViewers.id }),
+      ),
+    );
   if (viewers.length === 0) {
     return;
   }
@@ -269,6 +288,232 @@ export const fanoutHomeTimelinePost = async ({
     if (result === null) {
       throw new Error('Redis unavailable while fanning out Home timeline post');
     }
+  }
+};
+
+export const touchHomeTimeline = async ({
+  profileId,
+}: {
+  readonly profileId: string;
+}): Promise<void> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return;
+  }
+
+  try {
+    await runRedisCommand((client) => client.expire(feedKey(profileId), keyLifetimeSeconds));
+  } catch {
+    // Redis is disposable; a touch must not fail a Home query.
+  }
+};
+
+const listHomeTimelineCandidatePage = async ({
+  postId,
+  afterProfileId,
+}: {
+  readonly postId: string;
+  readonly afterProfileId?: string;
+}): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
+  const candidateRows = await db
+    .select({ profileId: HomeFanoutViewers.id })
+    .from(HomeFanoutViewers)
+    .innerJoin(Posts, eq(Posts.id, postId))
+    .where(
+      and(
+        afterProfileId === undefined ? undefined : gt(HomeFanoutViewers.id, afterProfileId),
+        homeTimelineCandidateWhere(),
+      ),
+    )
+    .orderBy(asc(HomeFanoutViewers.id))
+    .limit(candidateBatchSize + 1);
+  const candidates = candidateRows.slice(0, candidateBatchSize);
+  const nextCursor =
+    candidateRows.length > candidateBatchSize ? (candidates.at(-1)?.profileId ?? null) : null;
+  return { profileIds: candidates.map(({ profileId }) => profileId), nextCursor };
+};
+
+export const listHomeTimelineRecipientPage = async ({
+  postId,
+  afterProfileId,
+}: {
+  readonly postId: string;
+  readonly afterProfileId?: string;
+}): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return { profileIds: [], nextCursor: null };
+  }
+
+  const candidatePage = await listHomeTimelineCandidatePage({ postId, afterProfileId });
+  if (candidatePage.profileIds.length === 0) {
+    return candidatePage;
+  }
+
+  const readyResult = await runRedisCommand((client) => {
+    const transaction = client.multi();
+    for (const profileId of candidatePage.profileIds) {
+      transaction.zScore(feedKey(profileId), readyMember);
+    }
+    return transaction.exec();
+  });
+  if (readyResult === null) {
+    throw new Error('Redis unavailable while listing Home timeline recipients');
+  }
+
+  const readyScores = readyResult.value as unknown as (number | null)[];
+  return {
+    profileIds: candidatePage.profileIds.filter((_, index) => readyScores[index] === -1),
+    nextCursor: candidatePage.nextCursor,
+  };
+};
+
+export const insertHomeTimelinePost = async ({
+  postId,
+  profileId,
+}: {
+  readonly postId: string;
+  readonly profileId: string;
+}): Promise<void> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return;
+  }
+
+  const readyResult = await runRedisCommand((client) =>
+    client.zScore(feedKey(profileId), readyMember),
+  );
+  if (readyResult === null) {
+    throw new Error('Redis unavailable while inserting Home timeline post');
+  }
+  if (readyResult.value !== -1) {
+    return;
+  }
+
+  const eligiblePosts = await queryHomeTimeline({ profileId, postIds: [postId], limit: 1 });
+  if (eligiblePosts.length === 0) {
+    return;
+  }
+
+  const result = await runRedisCommand((client) =>
+    client.eval(fanoutScript, {
+      keys: [feedKey(profileId)],
+      arguments: [String(Temporal.Now.instant().epochMilliseconds), postId, readyMember],
+    }),
+  );
+  if (result === null) {
+    throw new Error('Redis unavailable while inserting Home timeline post');
+  }
+};
+
+export const removeHomeTimelinePost = async ({
+  postId,
+}: {
+  readonly postId: string;
+}): Promise<void> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return;
+  }
+
+  let afterProfileId: string | undefined;
+  do {
+    const candidatePage = await listHomeTimelineCandidatePage({ postId, afterProfileId });
+    if (candidatePage.profileIds.length > 0) {
+      const removalResult = await runRedisCommand((client) => {
+        const transaction = client.multi();
+        for (const profileId of candidatePage.profileIds) {
+          transaction.zRem(feedKey(profileId), postId);
+        }
+        return transaction.exec();
+      });
+      if (removalResult === null) {
+        throw new Error('Redis unavailable while removing Home timeline post');
+      }
+    }
+    afterProfileId = candidatePage.nextCursor ?? undefined;
+  } while (afterProfileId !== undefined);
+};
+
+const reconcileScript = `
+if redis.call('ZSCORE', KEYS[1], ARGV[1]) ~= '-1' then
+  return 0
+end
+local removeCount = tonumber(ARGV[2])
+for index = 1, removeCount do
+  redis.call('ZREM', KEYS[1], ARGV[index + 2])
+end
+local scoreIndex = removeCount + 3
+local score = ARGV[scoreIndex]
+local addCount = tonumber(ARGV[scoreIndex + 1])
+for index = 1, addCount do
+  redis.call('ZADD', KEYS[1], 'NX', score, ARGV[scoreIndex + index + 1])
+end
+redis.call('ZREMRANGEBYRANK', KEYS[1], 1, -1001)
+return 1
+`;
+
+export const reconcileHomeTimelineFollow = async ({
+  profileId,
+}: {
+  readonly profileId: string;
+}): Promise<void> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return;
+  }
+
+  const key = feedKey(profileId);
+  const cacheResult = await runRedisCommand((client) => {
+    const transaction = client.multi();
+    transaction.zScore(key, readyMember);
+    transaction.zRangeWithScores(key, '0', '+inf', {
+      BY: 'SCORE',
+      LIMIT: { offset: 0, count: maximumEntries },
+    });
+    return transaction.exec();
+  });
+  if (cacheResult === null) {
+    throw new Error('Redis unavailable while reconciling Home timeline');
+  }
+
+  const [readyScore, cachedRows] = cacheResult.value as unknown as [
+    number | null,
+    { value: string; score: number }[],
+  ];
+  if (readyScore !== -1) {
+    return;
+  }
+
+  const cachedEntries = parseEntries(cachedRows);
+  if (cachedEntries === null) {
+    return;
+  }
+
+  const cachedPostIds = cachedEntries.map(({ postId }) => postId);
+  const cachedPostIdSet = new Set(cachedPostIds);
+  const currentlyEligiblePosts = await queryHomeTimeline({
+    profileId,
+    postIds: cachedPostIds,
+    limit: maximumEntries,
+  });
+  const currentlyEligiblePostIds = new Set(currentlyEligiblePosts.map(({ id }) => id));
+  const removePostIds = cachedPostIds.filter((postId) => !currentlyEligiblePostIds.has(postId));
+  const latestEligiblePosts = await queryHomeTimeline({ profileId, limit: maximumEntries });
+  const addPostIds = latestEligiblePosts
+    .map(({ id }) => id)
+    .filter((postId) => !cachedPostIdSet.has(postId));
+
+  const result = await runRedisCommand((client) =>
+    client.eval(reconcileScript, {
+      keys: [key],
+      arguments: [
+        readyMember,
+        String(removePostIds.length),
+        ...removePostIds,
+        String(Temporal.Now.instant().epochMilliseconds),
+        String(addPostIds.length),
+        ...addPostIds,
+      ],
+    }),
+  );
+  if (result === null) {
+    throw new Error('Redis unavailable while reconciling Home timeline');
   }
 };
 

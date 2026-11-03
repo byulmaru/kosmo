@@ -127,6 +127,7 @@ const {
   executeProfileFollowPairTransitionActivity,
   invalidateHomeTimelinesActivity,
   loadPendingFollowRequestIdActivity,
+  reconcileHomeTimelineFollowActivity,
   sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
@@ -180,7 +181,8 @@ type EffectFailure = {
 
 type PendingProfileFollowEffect =
   | ProfileFollowPairEffect
-  | { readonly kind: 'INVALIDATE_HOME_TIMELINE'; readonly profileId: string };
+  | { readonly kind: 'INVALIDATE_HOME_TIMELINE'; readonly profileId: string }
+  | { readonly kind: 'RECONCILE_HOME_TIMELINE'; readonly profileId: string };
 
 const shouldInvalidateHomeTimeline = (
   command: ProfileFollowPairCommand,
@@ -206,6 +208,9 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   }
   const pair = parsedPair.data;
   const homeTimelineInvalidationEnabled = patched('profile-follow-pair-home-invalidation-v1');
+  const homeTimelineReconciliationEnabled = patched(
+    'profile-follow-pair-home-timeline-reconcile-v1',
+  );
   let lifecycleState: ProfileFollowPairLifecycleState = 'INITIAL';
   let updateReceived = false;
   let inFlight = false;
@@ -304,9 +309,22 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
             }
           }
           effectQueue.push(
-            ...(homeTimelineInvalidationEnabled &&
-            shouldInvalidateHomeTimeline(parsedCommand, execution.result)
-              ? [{ kind: 'INVALIDATE_HOME_TIMELINE' as const, profileId: pair.followerProfileId }]
+            ...(shouldInvalidateHomeTimeline(parsedCommand, execution.result)
+              ? homeTimelineReconciliationEnabled
+                ? [
+                    {
+                      kind: 'RECONCILE_HOME_TIMELINE' as const,
+                      profileId: pair.followerProfileId,
+                    },
+                  ]
+                : homeTimelineInvalidationEnabled
+                  ? [
+                      {
+                        kind: 'INVALIDATE_HOME_TIMELINE' as const,
+                        profileId: pair.followerProfileId,
+                      },
+                    ]
+                  : []
               : []),
             ...execution.effectPlan.map((effect) => {
               if (effect.kind !== 'ACCEPT_INBOUND_FOLLOW') {
@@ -398,6 +416,9 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           .with({ kind: 'INVALIDATE_HOME_TIMELINE' }, ({ profileId }) => [
             invalidateHomeTimelinesActivity({ profileIds: [profileId] }),
           ])
+          .with({ kind: 'RECONCILE_HOME_TIMELINE' }, ({ profileId }) => [
+            reconcileHomeTimelineFollowActivity({ profileId }),
+          ])
           .with({ kind: 'ACCEPT_INBOUND_FOLLOW' }, ({ input }) => {
             return [sendProfileFollowAcceptActivity(input)];
           })
@@ -447,7 +468,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       const sourceId =
         effect.kind === 'ACCEPT_INBOUND_FOLLOW'
           ? effect.input.pendingRequestId
-          : effect.kind === 'INVALIDATE_HOME_TIMELINE'
+          : effect.kind === 'INVALIDATE_HOME_TIMELINE' || effect.kind === 'RECONCILE_HOME_TIMELINE'
             ? effect.profileId
             : effect.input.sourceId;
       effectFailures.push({

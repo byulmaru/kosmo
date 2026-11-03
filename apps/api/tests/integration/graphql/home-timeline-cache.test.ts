@@ -19,11 +19,13 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
+import type * as CoreRedis from '../../../../../packages/core/redis/client';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
+const previousPublicOrigin = process.env.PUBLIC_ORIGIN;
 if (testRedisUrl) {
   process.env.REDIS_URL = testRedisUrl;
 }
@@ -46,10 +48,12 @@ let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
 let invalidateHomeTimelines: typeof HomeTimelineCache.invalidateHomeTimelines;
 let readHomeTimelineCache: typeof HomeTimelineCache.readHomeTimelineCache;
 let rebuildHomeTimeline: typeof HomeTimelineCache.rebuildHomeTimeline;
+let runRedisCommand: typeof CoreRedis.runRedisCommand;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let app: Hono<Env>;
 let localInstanceId: string;
+let configuredLocalInstanceId: string;
 const fixtureProfileIds: string[] = [];
 const fixtureAccountIds: string[] = [];
 const fixturePostIds: string[] = [];
@@ -91,7 +95,9 @@ before(async () => {
     process.env.REDIS_URL = testRedisUrl;
   }
   process.env.NODE_ENV = 'production';
-  process.env.PUBLIC_ORIGIN = 'http://127.0.0.1:4173';
+  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
+  const configuredOrigin = `https://home-config-${suffix}.example`;
+  process.env.PUBLIC_ORIGIN = configuredOrigin;
   process.env.ENVIRONMENT = 'test';
 
   ({
@@ -111,10 +117,23 @@ before(async () => {
   } = await import('@kosmo/core/db'));
   ({ fanoutHomeTimelinePost, invalidateHomeTimelines, readHomeTimelineCache, rebuildHomeTimeline } =
     await import('@kosmo/core/home-timeline/cache'));
+  ({ runRedisCommand } = await import('../../../../../packages/core/redis/client'));
+
+  const configuredLocalInstance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: configuredOrigin,
+      domain: new URL(configuredOrigin).host,
+      kind: InstanceKind.LOCAL,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  configuredLocalInstanceId = configuredLocalInstance.id;
+
   ({ deriveContext } = await import('../../../src/context'));
   ({ yoga } = await import('../../../src/graphql'));
 
-  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
   const localInstance = await db
     .insert(Instances)
     .values({
@@ -161,7 +180,15 @@ after(async () => {
   if (localInstanceId) {
     await db.delete(Instances).where(eq(Instances.id, localInstanceId));
   }
+  if (configuredLocalInstanceId) {
+    await db.delete(Instances).where(eq(Instances.id, configuredLocalInstanceId));
+  }
   await pg.end();
+  if (previousPublicOrigin === undefined) {
+    delete process.env.PUBLIC_ORIGIN;
+  } else {
+    process.env.PUBLIC_ORIGIN = previousPublicOrigin;
+  }
 });
 
 test(
@@ -260,20 +287,141 @@ test(
 );
 
 test(
-  'projects inactive Profile identities for a cached contentless repost before dropping a deleted source',
+  'filters inactive Home authors and direct source authors from Redis and DB results',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const disabledOuterAuthor = await createProfile('home-disabled-outer-author');
+    const suspendedOuterAuthor = await createProfile('home-suspended-outer-author');
+    const disabledSourceAuthor = await createProfile('home-disabled-source-author');
+    const suspendedSourceAuthor = await createProfile('home-suspended-source-author');
+    const repostAuthor = await createProfile('home-active-repost-author');
+    const quoteAuthor = await createProfile('home-active-quote-author');
+    const activeSourceAuthor = await createProfile('home-active-source-author');
+    const validAuthor = await createProfile('home-valid-author');
+    await db.insert(ProfileFollows).values(
+      [disabledOuterAuthor, suspendedOuterAuthor, repostAuthor, quoteAuthor, validAuthor].map(
+        (profile) => ({
+          followerProfileId: viewer.profile.id,
+          followeeProfileId: profile.id,
+        }),
+      ),
+    );
+    await rebuildReadyCache(viewer.profile.id);
+    const validPost = await createContentfulPost(validAuthor.id, 'active Home Post remains');
+    const deletedSource = await createContentfulPost(
+      activeSourceAuthor.id,
+      'deleted source of active-author Quote',
+    );
+    const disabledSource = await createContentfulPost(
+      disabledSourceAuthor.id,
+      'disabled source author',
+    );
+    const suspendedSource = await createContentfulPost(
+      suspendedSourceAuthor.id,
+      'suspended source author',
+    );
+    const validQuote = await createQuote(
+      quoteAuthor.id,
+      deletedSource.id,
+      'active-author Quote keeps deleted source behavior',
+    );
+    const suspendedSourceQuote = await createQuote(
+      quoteAuthor.id,
+      suspendedSource.id,
+      'Quote with suspended source author',
+    );
+    const disabledSourceRepost = await createContentlessRepost(repostAuthor.id, disabledSource.id);
+    const disabledOuterRepost = await createContentlessRepost(
+      disabledOuterAuthor.id,
+      deletedSource.id,
+    );
+    const disabledOrdinaryPost = await createContentfulPost(
+      disabledOuterAuthor.id,
+      'ordinary Post by disabled outer author',
+    );
+    const suspendedOrdinaryPost = await createContentfulPost(
+      suspendedOuterAuthor.id,
+      'ordinary Post by suspended outer author',
+    );
+    const suspendedOuterQuote = await createQuote(
+      suspendedOuterAuthor.id,
+      deletedSource.id,
+      'Quote by suspended outer author',
+    );
+
+    await fanoutHomeTimelinePost({ postId: validPost.id });
+    await fanoutHomeTimelinePost({ postId: validQuote.id });
+    const cachedPostIds = [
+      validPost.id,
+      validQuote.id,
+      disabledSourceRepost.id,
+      suspendedSourceQuote.id,
+      disabledOuterRepost.id,
+      disabledOrdinaryPost.id,
+      suspendedOrdinaryPost.id,
+      suspendedOuterQuote.id,
+    ];
+    for (const postId of cachedPostIds.slice(2)) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await fanoutHomeTimelinePost({ postId });
+    }
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(inArray(Profiles.id, [disabledOuterAuthor.id, disabledSourceAuthor.id]));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(inArray(Profiles.id, [suspendedOuterAuthor.id, suspendedSourceAuthor.id]));
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, deletedSource.id));
+
+    const redisEntries = await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 20 });
+    assert.ok(redisEntries);
+    assert.deepEqual(redisEntries.entries.map(({ postId }) => postId).sort(), cachedPostIds.sort());
+
+    const expectedVisibleIds = [validPost.id, validQuote.id]
+      .map((id) => encodeGlobalId('Post', id))
+      .sort();
+    const cached = await requestHome(viewer.token, { first: 2 });
+    assert.equal(cached.errors, undefined, JSON.stringify(cached.errors));
+    assert.deepEqual(
+      cached.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+      expectedVisibleIds,
+    );
+    assert.ok(cached.data?.homeTimeline.edges.every(({ cursor }) => /^redis:\d+$/.test(cursor)));
+
+    const redisUrl = process.env.REDIS_URL;
+    delete process.env.REDIS_URL;
+    try {
+      const fallback = await requestHome(viewer.token, { first: 2 });
+      assert.equal(fallback.errors, undefined, JSON.stringify(fallback.errors));
+      assert.deepEqual(
+        fallback.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+        expectedVisibleIds,
+      );
+    } finally {
+      if (redisUrl === undefined) {
+        delete process.env.REDIS_URL;
+      } else {
+        process.env.REDIS_URL = redisUrl;
+      }
+    }
+  },
+);
+
+test(
+  'keeps a cached Repost after a source Block but drops it after source Post deletion',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
     const repostAuthor = await createProfile('cached-repost-author');
     const sourceAuthor = await createProfile('cached-repost-source');
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.profile.id,
-      followeeProfileId: repostAuthor.id,
-    });
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.profile.id,
-      followeeProfileId: sourceAuthor.id,
-    });
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.profile.id, followeeProfileId: repostAuthor.id },
+      { followerProfileId: viewer.profile.id, followeeProfileId: sourceAuthor.id },
+    ]);
     await rebuildReadyCache(viewer.profile.id);
     const source = await createContentfulPost(
       sourceAuthor.id,
@@ -281,30 +429,20 @@ test(
       undefined,
       PostVisibility.FOLLOWERS,
     );
-    const repost = await db
-      .insert(Posts)
-      .values({
-        profileId: repostAuthor.id,
-        repostSourceId: source.id,
-        state: PostState.ACTIVE,
-        visibility: PostVisibility.PUBLIC,
-      })
-      .returning()
-      .then(firstOrThrow);
-    fixturePostIds.push(repost.id);
+    const repost = await createContentlessRepost(repostAuthor.id, source.id);
     await fanoutHomeTimelinePost({ postId: repost.id });
     await db.insert(ProfileBlocks).values({
       ownerProfileId: viewer.profile.id,
       targetProfileId: sourceAuthor.id,
     });
 
-    const stale = await requestGraphQL<{
-      homeTimeline: HomeConnection;
-      directSource: { id: string } | null;
+    const blockedSource = await requestGraphQL<{
+      readonly homeTimeline: HomeConnection;
+      readonly directSource: { readonly id: string } | null;
     }>(
-      `query CachedRepostSource($sourceId: ID!) {
+      `query CachedHomeRepostAndDirectSource($sourceId: ID!) {
         homeTimeline(first: 10) {
-          edges { node { id content { bodyText } repostSource { id content { bodyText } } } }
+          edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } } }
           pageInfo { endCursor hasNextPage hasPreviousPage }
         }
         directSource: node(id: $sourceId) { ... on Post { id } }
@@ -312,115 +450,17 @@ test(
       { sourceId: encodeGlobalId('Post', source.id) },
       viewer.token,
     );
-    assert.equal(stale.errors, undefined, JSON.stringify(stale.errors));
+    assert.equal(blockedSource.errors, undefined, JSON.stringify(blockedSource.errors));
     assert.deepEqual(
-      stale.data?.homeTimeline.edges.map(({ node }) => [
+      blockedSource.data?.homeTimeline.edges.map(({ node }) => [
         node.id,
         node.content?.bodyText ?? null,
         node.repostSource?.content?.bodyText ?? null,
       ]),
       [[encodeGlobalId('Post', repost.id), null, 'cached repost source body']],
     );
-    assert.equal(stale.data?.directSource, null);
-
-    await db
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(inArray(Profiles.id, [repostAuthor.id, sourceAuthor.id]));
-
-    const projected = await requestGraphQL<{
-      homeTimeline: {
-        edges: readonly {
-          readonly node: {
-            readonly id: string;
-            readonly content: { readonly bodyText: string } | null;
-            readonly profile: {
-              readonly id: string;
-              readonly handle: string;
-              readonly relativeHandle: string;
-              readonly displayName: string | null;
-              readonly avatar: { readonly id: string; readonly url: string } | null;
-              readonly viewerState: {
-                readonly profileBlock: { readonly id: string } | null;
-              } | null;
-            };
-            readonly repostSource: {
-              readonly id: string;
-              readonly content: { readonly bodyText: string } | null;
-              readonly profile: {
-                readonly id: string;
-                readonly handle: string;
-                readonly relativeHandle: string;
-                readonly displayName: string | null;
-                readonly avatar: { readonly id: string; readonly url: string } | null;
-                readonly viewerState: {
-                  readonly profileBlock: { readonly id: string } | null;
-                } | null;
-              };
-            } | null;
-          };
-        }[];
-      } | null;
-    }>(
-      `query CachedInactiveRepostProfiles {
-        homeTimeline(first: 10) {
-          edges {
-            node {
-              id
-              content { bodyText }
-              profile { ...HomePostProfile }
-              repostSource {
-                id
-                content { bodyText }
-                profile { ...HomePostProfile }
-              }
-            }
-          }
-        }
-      }
-
-      fragment HomePostProfile on Profile {
-        id
-        handle
-        relativeHandle
-        displayName
-        avatar { id url }
-        viewerState { profileBlock { id } }
-      }`,
-      {},
-      viewer.token,
-    );
-
-    assert.equal(projected.errors, undefined, JSON.stringify(projected.errors));
-    const cachedRepost = projected.data?.homeTimeline?.edges
-      .map(({ node }) => node)
-      .find(({ id }) => id === encodeGlobalId('Post', repost.id));
-    assert.ok(cachedRepost);
-    const localInstance = await db
-      .select({ domain: Instances.domain })
-      .from(Instances)
-      .where(eq(Instances.id, localInstanceId))
-      .then(firstOrThrow);
-
-    const expectedInactiveProfile = (profile: typeof repostAuthor) => ({
-      id: encodeGlobalId('Profile', profile.id),
-      handle: profile.handle,
-      relativeHandle: `@${profile.handle}@${localInstance.domain}`,
-      displayName: null,
-      avatar: null,
-      viewerState: null,
-    });
-
-    assert.deepEqual(cachedRepost, {
-      id: encodeGlobalId('Post', repost.id),
-      content: null,
-      profile: expectedInactiveProfile(repostAuthor),
-      repostSource: {
-        id: encodeGlobalId('Post', source.id),
-        content: { bodyText: 'cached repost source body' },
-        profile: expectedInactiveProfile(sourceAuthor),
-      },
-    });
+    assert.equal(blockedSource.data?.directSource, null);
+    assert.match(blockedSource.data!.homeTimeline.edges[0]!.cursor, /^redis:\d+$/);
 
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
     const deletedSource = await requestHome(viewer.token, { first: 10 });
@@ -524,6 +564,61 @@ test(
       crossKindCursor.data?.homeTimeline.edges.map(({ node }) => node.id),
       [encodeGlobalId('Post', cached.id)],
     );
+  },
+);
+
+test(
+  'authenticated Home reads renew cache expiry on Redis, DB cursor, and incompatible cursor paths',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const post = await createContentfulPost(viewer.profile.id, 'sliding Home cache expiry');
+    await rebuildReadyCache(viewer.profile.id);
+    const key = `kosmo:home-timeline:profile:${viewer.profile.id}`;
+    const redisUrl = process.env.REDIS_URL;
+    assert.ok(redisUrl);
+
+    try {
+      await runRedisCommand((client) => client.expire(key, 60));
+      const redisPage = await requestHome(viewer.token, { first: 1 });
+      assert.equal(redisPage.errors, undefined, JSON.stringify(redisPage.errors));
+      const redisCursor = redisPage.data!.homeTimeline.edges[0]!.cursor;
+      assert.match(redisCursor, /^redis:\d+$/);
+      let ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+
+      delete process.env.REDIS_URL;
+      const databasePage = await requestHome(viewer.token, { first: 1 });
+      assert.equal(databasePage.errors, undefined, JSON.stringify(databasePage.errors));
+      const databaseCursor = databasePage.data!.homeTimeline.edges[0]!.cursor;
+      assert.equal(databaseCursor, `db:${post.id}`);
+      process.env.REDIS_URL = redisUrl;
+
+      await runRedisCommand((client) => client.expire(key, 60));
+      const afterDatabaseCursor = await requestHome(viewer.token, {
+        first: 1,
+        after: databaseCursor,
+      });
+      assert.equal(
+        afterDatabaseCursor.errors,
+        undefined,
+        JSON.stringify(afterDatabaseCursor.errors),
+      );
+      ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+
+      await runRedisCommand((client) => client.expire(key, 60));
+      const incompatible = await requestHome(viewer.token, {
+        first: 1,
+        after: redisCursor,
+        before: databaseCursor,
+      });
+      assert.equal(incompatible.errors, undefined, JSON.stringify(incompatible.errors));
+      ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+      assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+    } finally {
+      process.env.REDIS_URL = redisUrl;
+    }
   },
 );
 
@@ -743,6 +838,27 @@ async function createContentfulPost(
   fixtureContentIds.push(content.id);
   await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, post.id));
   return { id: post.id, contentId: content.id };
+}
+
+async function createQuote(profileId: string, sourcePostId: string, bodyText: string) {
+  const quote = await createContentfulPost(profileId, bodyText);
+  await db.update(Posts).set({ repostSourceId: sourcePostId }).where(eq(Posts.id, quote.id));
+  return quote;
+}
+
+async function createContentlessRepost(profileId: string, sourcePostId: string) {
+  const repost = await db
+    .insert(Posts)
+    .values({
+      profileId,
+      repostSourceId: sourcePostId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  fixturePostIds.push(repost.id);
+  return { id: repost.id };
 }
 
 async function rebuildReadyCache(profileId: string) {
