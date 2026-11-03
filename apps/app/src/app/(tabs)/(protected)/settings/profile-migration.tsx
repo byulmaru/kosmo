@@ -9,7 +9,7 @@ import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRoute
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, textStyles } from '@/theme/tokens';
+import { borderWidths, spacing, textStyles } from '@/theme/tokens';
 
 export default function SettingsProfileMigrationRoute() {
   const router = useRouter();
@@ -39,7 +39,7 @@ export default function SettingsProfileMigrationRoute() {
         <PageHeader leading={backButton} title="다른 서비스에서 이전" />
       ) : null}
       <View style={styles.sections}>
-        <View style={styles.section}>
+        <View style={[styles.section, styles.accountSection, { borderColor: theme.divider }]}>
           <Text accessibilityRole="header" style={[styles.sectionHeading, { color: theme.text }]}>
             계정 이전
           </Text>
@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
   },
   nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
   nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
+  accountSection: { borderBottomWidth: borderWidths[1] },
   section: { minWidth: 0, width: '100%' },
   sectionHeading: { ...textStyles.uiHeadingS, paddingHorizontal: spacing.lg },
   sections: { gap: spacing.xl, minWidth: 0, paddingTop: spacing.lg, width: '100%' },

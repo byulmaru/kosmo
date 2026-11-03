@@ -115,19 +115,21 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
 - `/settings/profile-migration`의 본문은 `계정 이전`과 `팔로잉 가져오기` section을 이 순서로 제공한다.
+  두 section은 `계정 이전` section 하단의 1px divider로 구분한다. section 내부에는 divider를 추가하지 않고
+  기존 24px 간격과 root inset을 유지한다.
   `계정 이전`은 shell의 selected Local Profile을 대상으로 하며 기존 source control의 동작을 유지한다. 이 control은
   기존 `Account.Active`와 `Profile.Owner` 권한이 허용하는 Owner control을 제공한다. Profile
   Member에게는 migration 편집 control을 제공하지 않는다. 입력 label과 accessible name은 `기존 계정 주소`, 등록
-  action은 `기존 계정 등록`이다. source 등록 전에는 `먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.`를
-  표시하며 선택된 프로필의 신원을 별도 영역이나 등록 전 보조 문구로 표시하지 않는다. source가 등록되면
-  등록된 원본 계정과 다음 안내, 현재 선택된 프로필의 전체 주소를 표시한다. 주소를 확인할 수
-  없으면 주소 부재를 안전하게 표시하고 global origin으로 대체하지 않는다. migration은 팔로워 이전을 지원하며
+  action은 `기존 계정 등록`이다. 준비 관계가 있고 source가 기존 조회 정책에 따라 표시 가능한 경우에는 등록된
+  원본 계정과 다음 안내, 현재 선택된 프로필의 전체 주소를 표시한다. 주소를 확인할 수 없으면 주소 부재를 안전하게 표시하고 global origin으로 대체하지 않는다. migration은 팔로워 이전을 지원하며
   게시물은 복사하지 않는 기존 동작을 유지하되, 이를 화면의 설명 문구로 표시하지 않는다.
-  Owner에게는 `migrationSource`가 표시되는지와 무관하게 `기존 계정 등록 해제` action을 제공하고, source가
-  표시되지 않으면 기존 빈 등록 form과 함께 보인다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을
-  사용한다. 해제 action의 기존 결과 안내는 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는
-  내용을 보존한다.
-  성공 후 source가 null이면 기존 빈 등록 form을 표시한다. control은 flat field·button layout과 기존 accessible
+  Owner에게는 준비 관계가 없음을 확인한 경우에만 기존 빈 등록 form과 `기존 계정 등록` action, 다음 안내를 제공한다. 안내 문구는
+  `먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.`다. 이 상태에서는 선택된 프로필의 신원을
+  별도 영역이나 보조 문구로 표시하지 않으며 등록 해제 action과 결과 안내도 표시하지 않는다. 준비 관계가 있으면 Owner의 등록 form과 등록 action을 숨기고, source가 표시되지 않아도 Owner에게만
+  `기존 계정 등록 해제` action과 결과 안내를 제공한다. 결과 안내는 남은 팔로워 이전이 중단될 수 있지만 이미 이전된
+  팔로워는 유지된다는 내용을 보존한다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을 사용한다.
+  등록에 성공해 관계가 생기면 등록된 상태를 표시하고, 해제에 성공해 관계가 없어지면 기존 빈 등록 form으로 돌아간다.
+  control은 flat field·button layout과 기존 accessible
   error·busy·success 표현을 사용한다. Web에서 `breakpoints.compact`(`768px`) 이상은 주소 입력과 등록 action을
   한 줄에 배치하고, 그보다 좁은 Web과 Native는 세로·가용 폭으로 배치한다.
 - `팔로잉 가져오기` section은 shell의 selected Local Profile을 대상으로 하며 현재 Profile 멤버십이 있을 때만

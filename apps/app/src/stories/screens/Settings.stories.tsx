@@ -26,7 +26,7 @@ const selectedProfile = profile({
     membership: { role: 'OWNER' },
   },
 });
-const ownerProfile = { ...selectedProfile, migrationSource: null };
+const ownerProfile = { ...selectedProfile, hasMigrationSource: false, migrationSource: null };
 const ownerData = {
   currentSession: {
     id: 'settings-session',
@@ -258,8 +258,20 @@ export const ProfileMigrationFullWeb: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '다른 서비스에서 이전' })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: '계정 이전' })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: '팔로잉 가져오기' })).toBeVisible();
+    const accountHeading = canvas.getByRole('heading', { name: '계정 이전' });
+    const followingHeading = canvas.getByRole('heading', { name: '팔로잉 가져오기' });
+    expect(accountHeading).toBeVisible();
+    expect(followingHeading).toBeVisible();
+    const accountSection = accountHeading.parentElement;
+    if (!accountSection) {
+      throw new Error('Profile migration account section is missing.');
+    }
+    expect(Number.parseFloat(getComputedStyle(accountSection).borderBottomWidth)).toBeGreaterThan(
+      0,
+    );
+    expect(accountSection.getBoundingClientRect().bottom).toBeLessThan(
+      followingHeading.getBoundingClientRect().top,
+    );
     const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
     expect(
       within(navigation).getAllByRole('link', { name: '다른 서비스에서 이전 설정 열기' }),
@@ -273,7 +285,7 @@ export const ProfileMigrationFullWeb: Story = {
     );
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
-    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
     expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);

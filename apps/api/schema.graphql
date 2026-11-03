@@ -543,6 +543,7 @@ type Profile implements Node {
   following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection
   followingCount: Int
   handle: String!
+  hasMigrationSource: Boolean
   hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection
   header: Media
   id: ID!

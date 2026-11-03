@@ -4,7 +4,7 @@ import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, breakpoints, space, textStyles } from '@/theme/tokens';
+import { breakpoints, space, textStyles } from '@/theme/tokens';
 import type {
   ProfileMigrationSourceControl_profile$data,
   ProfileMigrationSourceControl_profile$key,
@@ -15,6 +15,7 @@ import type { ProfileMigrationSourceControlUnregisterMutation } from './__genera
 const ProfileFragment = graphql`
   fragment ProfileMigrationSourceControl_profile on Profile {
     id
+    hasMigrationSource
     displayName
     handle
     relativeHandle
@@ -81,10 +82,32 @@ export function ProfileMigrationSourceControl({
   }
 
   const displayName = profile.displayName;
+  const controlLabel = `Kosmo 프로필 이전 원본 ${displayName} ${profile.relativeHandle}`;
+  if (editable && typeof profile.hasMigrationSource !== 'boolean') {
+    return (
+      <View
+        accessibilityLabel={controlLabel}
+        style={styles.root}
+        testID="profile-migration-source-control"
+      >
+        <Text accessibilityRole="alert" style={[styles.copy, { color: theme.danger }]}>
+          이전 설정을 확인하지 못했어요.
+        </Text>
+      </View>
+    );
+  }
+
   const destinationHandle = getQualifiedDestinationHandle(profile);
+  const hasRegisteredSource = editable
+    ? profile.hasMigrationSource === true
+    : profile.migrationSource != null;
+  const canRegister = editable && profile.hasMigrationSource === false;
+  const canUnregister = editable && profile.hasMigrationSource === true;
+  const preparedSource =
+    hasRegisteredSource && profile.migrationSource != null ? profile.migrationSource : null;
 
   const register = () => {
-    if (!editable || busy) {
+    if (!canRegister || busy) {
       return;
     }
 
@@ -112,7 +135,7 @@ export function ProfileMigrationSourceControl({
   };
 
   const unregister = () => {
-    if (!editable || busy) {
+    if (!canUnregister || busy) {
       return;
     }
 
@@ -134,8 +157,6 @@ export function ProfileMigrationSourceControl({
     });
   };
 
-  const preparedSource = profile.migrationSource;
-  const controlLabel = `Kosmo 프로필 이전 원본 ${displayName} ${profile.relativeHandle}`;
   const registerButtonLabel = '기존 계정 등록';
   const unregisterButtonLabel = '기존 계정 등록 해제';
 
@@ -145,7 +166,7 @@ export function ProfileMigrationSourceControl({
       style={styles.root}
       testID="profile-migration-source-control"
     >
-      {!preparedSource ? (
+      {canRegister || (!editable && !hasRegisteredSource) ? (
         <>
           <Text style={[styles.copy, { color: theme.textSecondary }]}>
             먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.
@@ -156,7 +177,7 @@ export function ProfileMigrationSourceControl({
                 accessibilityLabel="기존 계정 주소"
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={editable && !busy}
+                editable={canRegister && !busy}
                 error={validationError}
                 label="기존 계정 주소"
                 onChangeText={(value) => {
@@ -168,7 +189,7 @@ export function ProfileMigrationSourceControl({
                 value={sourceHandle}
               />
             </View>
-            {editable ? (
+            {canRegister ? (
               <Button
                 accessibilityLabel={registerButtonLabel}
                 accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
@@ -183,7 +204,7 @@ export function ProfileMigrationSourceControl({
             ) : null}
           </View>
         </>
-      ) : (
+      ) : preparedSource ? (
         <>
           <View
             accessibilityLabel={`등록한 계정 ${preparedSource.relativeHandle}`}
@@ -208,9 +229,9 @@ export function ProfileMigrationSourceControl({
             </Text>
           </View>
         </>
-      )}
-      {editable ? (
-        <View style={[styles.footer, { borderColor: theme.divider }]}>
+      ) : null}
+      {canUnregister ? (
+        <View style={styles.footer}>
           <Text style={[styles.copy, { color: theme.textSecondary }]}>
             등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.
           </Text>
@@ -227,17 +248,17 @@ export function ProfileMigrationSourceControl({
             {unregisterButtonLabel}
           </Button>
         </View>
-      ) : (
+      ) : !editable ? (
         <Text style={[styles.copy, { color: theme.textSecondary }]}>
           프로필 소유자만 원본을 변경할 수 있어요.
         </Text>
-      )}
-      {registerState === 'error' ? (
+      ) : null}
+      {registerState === 'error' && canRegister ? (
         <Text accessibilityRole="alert" style={[styles.copy, { color: theme.danger }]}>
           이전 원본을 등록하지 못했어요.
         </Text>
       ) : null}
-      {registerState === 'success' ? (
+      {registerState === 'success' && preparedSource ? (
         <View accessibilityLiveRegion="polite" role="status">
           <Text style={[styles.copy, { color: theme.textSecondary }]}>기존 계정을 등록했어요.</Text>
         </View>
@@ -268,7 +289,6 @@ const styles = StyleSheet.create({
   accountGroup: { gap: space[4] },
   copy: textStyles.uiCopyM,
   footer: {
-    borderTopWidth: borderWidths[1],
     gap: space[12],
     paddingTop: space[16],
   },

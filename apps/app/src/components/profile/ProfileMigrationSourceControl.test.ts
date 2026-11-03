@@ -15,6 +15,7 @@ type Source = {
 
 type Profile = {
   displayName: string;
+  hasMigrationSource: boolean | null | undefined;
   handle: string;
   id: string;
   instance: { canonicalOrigin: string | null };
@@ -31,6 +32,7 @@ type MutationConfig = {
 
 let profile: Profile = {
   displayName: '현재 Profile',
+  hasMigrationSource: false,
   handle: 'target',
   id: 'profile-target',
   instance: { canonicalOrigin: 'https://target-origin.example' },
@@ -110,6 +112,7 @@ afterEach(async () => {
   mutationConfigs = [];
   profile = {
     displayName: '현재 Profile',
+    hasMigrationSource: false,
     handle: 'target',
     id: 'profile-target',
     instance: { canonicalOrigin: 'https://target-origin.example' },
@@ -130,7 +133,16 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(input.props.accessibilityLabel, '기존 계정 주소');
     assert.equal(input.props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
+    assert.equal(rendered('Button').length, 1);
     assert.equal(rendered('Button')[0].props.disabled, true);
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') ===
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+      false,
+    );
 
     await act(async () => input.props.onChangeText('  @source@remote.example  '));
     assert.equal(rendered('TextField')[0].props.value, '  @source@remote.example  ');
@@ -139,8 +151,10 @@ describe('ProfileMigrationSourceControl', () => {
     await act(async () => rendered('Button')[0].props.onPress());
     assert.equal(rendered('Button')[0].props.loading, true);
     assert.equal(rendered('Button')[0].props.accessibilityState.busy, true);
-    assert.equal(rendered('Button')[1].props.disabled, true);
-    assert.equal(rendered('Button')[1].props.loading, false);
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록'],
+    );
     assert.equal(mutationConfigs[0].operationName, 'ProfileMigrationSourceControlMutation');
     assert.deepEqual(mutationConfigs[0].variables, {
       input: { sourceHandle: '@source@remote.example' },
@@ -153,6 +167,7 @@ describe('ProfileMigrationSourceControl', () => {
       id: 'profile-source',
       relativeHandle: '@source@remote.example',
     };
+    profile.hasMigrationSource = true;
     await act(async () =>
       mutationConfigs[0].onCompleted({
         registerProfileMigrationSource: {
@@ -162,6 +177,18 @@ describe('ProfileMigrationSourceControl', () => {
     );
 
     assert.equal(rendered('TextField').length, 0);
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록 해제'],
+    );
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') ===
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+      true,
+    );
     assert.equal(
       rendered('Text').filter((node) => node.children.join('') === '기존 계정을 등록했어요.')
         .length,
@@ -193,6 +220,7 @@ describe('ProfileMigrationSourceControl', () => {
 
   it('selected Instance 주소가 없으면 global origin 없이 주소 부재를 표시한다', async () => {
     profile.instance.canonicalOrigin = null;
+    profile.hasMigrationSource = true;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -223,6 +251,7 @@ describe('ProfileMigrationSourceControl', () => {
       id: 'profile-source',
       relativeHandle: '@source@remote.example',
     };
+    profile.hasMigrationSource = true;
     await act(async () =>
       mutationConfigs[0].onCompleted(
         { registerProfileMigrationSource: { profile: { id: profile.id } } },
@@ -236,7 +265,12 @@ describe('ProfileMigrationSourceControl', () => {
     );
 
     await act(async () => rendered('Button')[0].props.onPress());
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록 해제'],
+    );
     profile.migrationSource = null;
+    profile.hasMigrationSource = false;
     await act(async () =>
       mutationConfigs[1].onCompleted(
         { unregisterProfileMigrationSource: { profile: { id: profile.id } } },
@@ -246,6 +280,15 @@ describe('ProfileMigrationSourceControl', () => {
 
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
+    assert.equal(rendered('Button').length, 1);
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') ===
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+      false,
+    );
   });
 
   it('빈 입력은 mutation 없이 검증 오류를 표시한다', async () => {
@@ -257,76 +300,6 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField')[0].props.error, '기존 계정 주소를 입력해주세요.');
   });
 
-  it('원본이 null이어도 Owner가 해제하고 응답 후 입력을 비울 수 있다', async () => {
-    await render(true);
-    await act(async () => rendered('TextField')[0].props.onChangeText('@old@remote.example'));
-
-    const [register, unregister] = rendered('Button');
-    assert.equal(register.props.accessibilityLabel, '기존 계정 등록');
-    assert.equal(unregister.props.accessibilityLabel, '기존 계정 등록 해제');
-    await act(async () => unregister.props.onPress());
-
-    assert.equal(
-      mutationConfigs[0].operationName,
-      'ProfileMigrationSourceControlUnregisterMutation',
-    );
-    assert.deepEqual(mutationConfigs[0].variables, {});
-    assert.equal(rendered('Button')[0].props.disabled, true);
-    assert.equal(rendered('Button')[1].props.disabled, true);
-    assert.equal(rendered('Button')[1].props.loading, true);
-
-    await act(async () =>
-      mutationConfigs[0].onCompleted({
-        unregisterProfileMigrationSource: { profile: { id: profile.id } },
-      }),
-    );
-
-    assert.equal(rendered('TextField')[0].props.value, '');
-    assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
-    assert.equal(rendered('Button')[1].props.accessibilityLabel, '기존 계정 등록 해제');
-    assert.equal(rendered('Button')[0].props.disabled, true);
-    assert.equal(rendered('Button')[1].props.disabled, false);
-  });
-
-  it('각 mutation 오류 뒤 Owner action 이름은 구별되고 오류 안내를 유지한다', async () => {
-    await render(true);
-    await act(async () => rendered('TextField')[0].props.onChangeText('@new@remote.example'));
-    await act(async () => rendered('Button')[0].props.onPress());
-    await act(async () => mutationConfigs[0].onError(new Error('server detail')));
-
-    assert.deepEqual(
-      rendered('Button').map((button) => button.props.accessibilityLabel),
-      ['기존 계정 등록', '기존 계정 등록 해제'],
-    );
-    await act(async () => rendered('Button')[1].props.onPress());
-    await act(async () => mutationConfigs[1].onError(new Error('server detail')));
-
-    assert.deepEqual(
-      rendered('Button').map((button) => button.props.accessibilityLabel),
-      ['기존 계정 등록', '기존 계정 등록 해제'],
-    );
-    assert.equal(
-      rendered('Text').filter((node) => node.props.accessibilityRole === 'alert').length,
-      2,
-    );
-    assert.equal(
-      rendered('Text').some(
-        (node) =>
-          node.props.accessibilityRole === 'alert' &&
-          node.children.join('') === '이전 원본을 등록하지 못했어요.',
-      ),
-      true,
-    );
-    assert.equal(
-      rendered('Text').some(
-        (node) =>
-          node.props.accessibilityRole === 'alert' &&
-          node.children.join('') === '기존 계정 등록을 해제하지 못했어요.',
-      ),
-      true,
-    );
-  });
-
   it('실패해도 입력을 보존하고 같은 값으로 재시도한다', async () => {
     await render(true);
     await act(async () => rendered('TextField')[0].props.onChangeText('@source@remote.example'));
@@ -334,6 +307,10 @@ describe('ProfileMigrationSourceControl', () => {
     await act(async () => mutationConfigs[0].onError(new Error('server detail')));
 
     assert.equal(rendered('TextField')[0].props.value, '@source@remote.example');
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록'],
+    );
     assert.equal(
       rendered('Text').some((node) => node.props.accessibilityRole === 'alert'),
       true,
@@ -359,6 +336,7 @@ describe('ProfileMigrationSourceControl', () => {
   });
 
   it('Member는 입력과 원본 등록 action을 사용할 수 없다', async () => {
+    profile.hasMigrationSource = null;
     await render(false);
 
     assert.equal(rendered('TextField')[0].props.editable, false);
@@ -375,9 +353,14 @@ describe('ProfileMigrationSourceControl', () => {
       ).length,
       1,
     );
+    assert.equal(
+      rendered('Text').some((node) => node.props.accessibilityRole === 'alert'),
+      false,
+    );
   });
 
   it('Member는 준비된 원본도 해제할 수 없다', async () => {
+    profile.hasMigrationSource = null;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -396,6 +379,7 @@ describe('ProfileMigrationSourceControl', () => {
   });
 
   it('이미 연결된 원본은 교체 입력 대신 등록 해제 action과 follower 안내를 제공한다', async () => {
+    profile.hasMigrationSource = true;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -405,6 +389,7 @@ describe('ProfileMigrationSourceControl', () => {
 
     assert.equal(rendered('TextField').length, 0);
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록 해제');
+    assert.equal(rendered('Button').length, 1);
     assert.equal(
       rendered('Text').some(
         (node) =>
@@ -416,6 +401,7 @@ describe('ProfileMigrationSourceControl', () => {
   });
 
   it('Owner가 등록을 해제하면 null Profile 응답에서 빈 등록 form으로 돌아간다', async () => {
+    profile.hasMigrationSource = true;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -431,8 +417,13 @@ describe('ProfileMigrationSourceControl', () => {
     );
     assert.deepEqual(mutationConfigs[0].variables, {});
     assert.equal(rendered('Button')[0].props.loading, true);
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록 해제'],
+    );
 
     profile.migrationSource = null;
+    profile.hasMigrationSource = false;
     await act(async () =>
       mutationConfigs[0].onCompleted({
         unregisterProfileMigrationSource: {
@@ -444,6 +435,7 @@ describe('ProfileMigrationSourceControl', () => {
     assert.equal(rendered('TextField')[0].props.accessibilityLabel, '기존 계정 주소');
     assert.equal(rendered('TextField')[0].props.value, '');
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
+    assert.equal(rendered('Button').length, 1);
     assert.equal(
       rendered('Text').some((node) => node.children.join('') === '등록한 계정'),
       false,
@@ -451,6 +443,7 @@ describe('ProfileMigrationSourceControl', () => {
   });
 
   it('등록 해제 실패는 원본을 유지하고 같은 작업을 재시도할 수 있다', async () => {
+    profile.hasMigrationSource = true;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -462,6 +455,15 @@ describe('ProfileMigrationSourceControl', () => {
     await act(async () => mutationConfigs[0].onError(new Error('server detail')));
 
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록 해제');
+    assert.equal(rendered('Button').length, 1);
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') ===
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+      true,
+    );
     assert.equal(
       rendered('Text').some(
         (node) =>
@@ -476,6 +478,7 @@ describe('ProfileMigrationSourceControl', () => {
   });
 
   it('unregister 성공 응답에 다른 Profile ID가 오면 원본 등록 해제 완료로 처리하지 않는다', async () => {
+    profile.hasMigrationSource = true;
     profile.migrationSource = {
       displayName: '원격 원본',
       id: 'profile-source',
@@ -533,6 +536,61 @@ describe('ProfileMigrationSourceControl', () => {
       rendered('Text').some((node) => node.children.join('') === '기존 계정을 등록했어요.'),
       false,
     );
+  });
+
+  it('원본 관계를 볼 수 없는 Owner도 등록을 해제하고 미등록 form으로 돌아간다', async () => {
+    profile.hasMigrationSource = true;
+    await render(true);
+
+    assert.equal(rendered('TextField').length, 0);
+    assert.deepEqual(
+      rendered('Button').map((button) => button.props.accessibilityLabel),
+      ['기존 계정 등록 해제'],
+    );
+    assert.equal(
+      rendered('Text').some(
+        (node) =>
+          node.children.join('') ===
+          '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+      true,
+    );
+    assert.equal(
+      rendered('Text').some(
+        (node) => node.children.join('') === '이제 기존 서비스에서 아래 주소로 이전을 시작하세요.',
+      ),
+      false,
+    );
+
+    await act(async () => rendered('Button')[0].props.onPress());
+    profile.hasMigrationSource = false;
+    await act(async () =>
+      mutationConfigs[0].onCompleted({
+        unregisterProfileMigrationSource: { profile: { id: profile.id } },
+      }),
+    );
+
+    assert.equal(rendered('TextField')[0].props.value, '');
+    assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록');
+    assert.equal(rendered('Button').length, 1);
+  });
+
+  it('Owner 등록 상태를 알 수 없으면 안내 오류만 표시하고 mutation action을 숨긴다', async () => {
+    for (const [index, hasMigrationSource] of [null, undefined].entries()) {
+      profile.hasMigrationSource = hasMigrationSource;
+      await render(true, `owner-unknown-${index}`);
+
+      const alert = rendered('Text').find((node) => node.props.accessibilityRole === 'alert');
+      assert.equal(alert?.children.join(''), '이전 설정을 확인하지 못했어요.');
+      assert.equal(rendered('Text').length, 1);
+      assert.equal(rendered('TextField').length, 0);
+      assert.equal(rendered('Button').length, 0);
+      assert.equal(mutationConfigs.length, 0);
+
+      assert.ok(renderer);
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
   });
 });
 

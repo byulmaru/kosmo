@@ -177,6 +177,10 @@ source를 하나만 가질 수 있고, 같은 Remote source는 하나의 target 
 검증된 원격 actor를 Remote Profile로 먼저 materialize한다. Local Actor의 ActivityPub `alsoKnownAs` aliases는 이
 관계의 Remote source canonical Actor URI에서 파생하며 별도 Profile 속성이나 사용자 입력으로 저장하지 않는다.
 
+현재 context에서 `Account.Active`를 만족하며 현재 선택된 target Profile의 `Profile.Owner`인 Account는 준비 관계의 존재 여부를
+source Profile identity의 조회 가능성과 분리해 확인할 수 있다. 이 확인 권한은 `Profile.Member`나 비로그인 요청자에게
+추가하지 않으며, source Profile identity에는 기존 조회 정책을 그대로 적용한다.
+
 Settings의 `다른 서비스에서 이전` entry는 기능 공개 플래그와 관계없이 항상 표시한다. `계정 이전`의 source 준비
 control은 현재 선택된 Profile을 target으로 사용하고 기존 `Account.Active`와 `Profile.Owner` 권한에 따라 제공한다.
 별도 target Profile ID를 입력받지 않으며 Settings 노출 여부는 권한 증거가 아니다. Profile Owner에는 별도 target

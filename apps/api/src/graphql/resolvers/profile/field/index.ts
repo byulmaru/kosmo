@@ -3,6 +3,7 @@ import './block';
 import './follow';
 import './follow-request';
 import './instance';
+import './migration';
 import './mute';
 import './pinned-posts';
 import './private';
