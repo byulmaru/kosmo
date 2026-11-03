@@ -32,9 +32,11 @@ const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
 const openProfileSwitcher = mock.fn();
 const browserListeners = new Map<string, () => void>();
+const browserScrollCalls: unknown[] = [];
 const browserWindow = {
   scrollY: 0,
   innerHeight: 600,
+  scrollTo: (options: unknown) => browserScrollCalls.push(options),
   addEventListener: (type: string, listener: () => void) => browserListeners.set(type, listener),
   removeEventListener: (type: string) => browserListeners.delete(type),
   requestAnimationFrame: (callback: () => void) => {
@@ -65,11 +67,21 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 };
 const navigations: unknown[] = [];
 const tabRegistry = createTabReselectionRegistry();
+let homeReselectionHandler: (() => void) | null = null;
+const registerHomeReselection = (handler: () => void) => {
+  homeReselectionHandler = handler;
+  return () => {
+    if (homeReselectionHandler === handler) {
+      homeReselectionHandler = null;
+    }
+  };
+};
 const shellChrome = {
   openProfileSwitcher,
-  registerHomeReselection: () => () => undefined,
+  registerHomeReselection,
   registerTabReselection: tabRegistry.register,
   reselectTab: tabRegistry.reselect,
+  reselectHome: () => homeReselectionHandler?.(),
 };
 
 function timelineScreenWithPushContext(timeline: 'Home' | 'Local') {
@@ -245,7 +257,9 @@ afterEach(async () => {
   platform.OS = 'ios';
   sessionStatus = 'valid';
   browserWindow.scrollY = 0;
+  browserScrollCalls.length = 0;
   browserListeners.clear();
+  homeReselectionHandler = null;
   openProfileSwitcher.mock.resetCalls();
   for (const [key, descriptor] of [
     ['window', originalWindow],
@@ -612,9 +626,9 @@ describe('Guest Local with real Relay', () => {
   });
 });
 
-for (const os of ['ios', 'android']) {
+for (const os of ['web', 'ios', 'android']) {
   for (const timeline of ['Home', 'Local'] as const) {
-    it(`${os} ${timeline}: 실제 상단 탭 재선택은 새로고침 중에도 스크롤만 한다`, async () => {
+    it(`${os} ${timeline}: 상단 탭 재선택은 목록을 유지하며 refresh하고 pending 입력은 합친다`, async () => {
       platform.OS = os;
       const environment = new Environment({
         network: Network.create((operation, variables) =>
@@ -653,35 +667,61 @@ for (const os of ['ios', 'android']) {
             node.props.accessibilityLabel === (timeline === 'Home' ? '홈' : '로컬'),
         );
       const initialRequests = requests.length;
-      for (let repeat = 0; repeat < 2; repeat += 1) {
-        offset = 480;
-        await act(async () => tab().props.onPress());
-        assert.equal(offset, 0);
-        assert.equal(requests.length, initialRequests);
-        assert.deepEqual(navigations, []);
-        assert.equal(tab().props.accessibilityState.selected, true);
-      }
-      assertConnection(environment, field, ['a', 'b']);
 
-      await act(async () => list().props.onRefresh());
-      const refresh = latest(timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery');
-      assert.equal(requests.length, initialRequests + 1);
-      for (let repeat = 0; repeat < 2; repeat += 1) {
+      const reselect = async () => {
+        const scrollCallsBefore = browserScrollCalls.length;
         offset = 640;
         await act(async () => tab().props.onPress());
-        assert.equal(offset, 0);
-        assert.equal(requests.length, initialRequests + 1);
-        assert.equal(list().props.refreshing, true);
+        if (os === 'web') {
+          assert.ok(browserScrollCalls.length > scrollCallsBefore);
+        } else {
+          assert.equal(offset, 0);
+        }
         assert.deepEqual(navigations, []);
+        assert.equal(tab().props.accessibilityState.selected, true);
+      };
+      await reselect();
+      const firstRefresh = latest(
+        timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery',
+      );
+      assert.equal(requests.length, initialRequests + 1);
+      assertConnection(environment, field, ['a', 'b']);
+      assert.equal(
+        renderer!.root.findAllByType('StateView' as never).some((node) => node.props.loading),
+        false,
+      );
+
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        await reselect();
+        assert.equal(requests.length, initialRequests + 1);
+        if (os !== 'web') {
+          assert.equal(list().props.refreshing, true);
+        }
+        assertConnection(environment, field, ['a', 'b']);
       }
-      await respond(refresh, payload(field, ['new', 'a']));
-      assert.equal(list().props.refreshing, false);
+      await respond(firstRefresh, payload(field, ['new', 'a']));
+      if (os !== 'web') {
+        assert.equal(list().props.refreshing, false);
+      }
       assertConnection(environment, field, ['new', 'a']);
-      await act(async () => list().props.onEndReached());
-      const next = latest(`PostList${timeline}NextPageQuery`);
-      assert.equal(next.variables.cursor, 'cursor-a');
-      await respond(next, payload(field, ['b'], false));
-      assertConnection(environment, field, ['new', 'a', 'b'], false);
+
+      await reselect();
+      const secondRefresh = latest(
+        timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery',
+      );
+      assert.notEqual(secondRefresh, firstRefresh);
+      assert.equal(requests.length, initialRequests + 2);
+      assertConnection(environment, field, ['new', 'a']);
+      await respond(secondRefresh, payload(field, ['latest', 'new']));
+      assertConnection(environment, field, ['latest', 'new']);
+
+      if (os !== 'web') {
+        await act(async () => list().props.onEndReached());
+        const next = latest(`PostList${timeline}NextPageQuery`);
+        assert.equal(next.variables.cursor, 'cursor-new');
+        await respond(next, payload(field, ['b'], false));
+        assertConnection(environment, field, ['latest', 'new', 'b'], false);
+      }
     });
   }
 }
