@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createRedisPubSub } from '@kosmo/core/redis/pubsub';
+import { disposeRedisPubSub, redisEventTarget } from '@kosmo/core/redis/pubsub';
 import { createClient } from '@redis/client';
 import { GraphQLNonNull, GraphQLObjectType, GraphQLSchema, GraphQLString } from 'graphql';
-import { createYoga, useExecutionCancellation } from 'graphql-yoga';
+import { createPubSub, createYoga, useExecutionCancellation } from 'graphql-yoga';
 
 type Events = {
   'test:api:sse': [id: string, payload: { value: string }];
@@ -78,15 +78,27 @@ test(
   'streams Redis Pub/Sub events over Yoga SSE and unsubscribes when the response body is cancelled',
   { skip: !testRedisUrl },
   async (t) => {
-    const publisher = createRedisPubSub<Events>(testRedisUrl!);
-    const subscription = createRedisPubSub<Events>(testRedisUrl!);
+    const previousRedisUrl = process.env.REDIS_URL;
+    process.env.REDIS_URL = testRedisUrl!;
+    const publisher = createPubSub<Events>({ eventTarget: redisEventTarget });
+    const subscription = createPubSub<Events>({ eventTarget: redisEventTarget });
     const redis = createClient({ url: testRedisUrl! });
     const resources: { reader?: ReadableStreamDefaultReader<Uint8Array> } = {};
     t.after(async () => {
       await resources.reader?.cancel().catch(() => undefined);
-      publisher.dispose();
-      subscription.dispose();
-      await redis.close();
+      try {
+        await disposeRedisPubSub();
+      } finally {
+        try {
+          await redis.close();
+        } finally {
+          if (previousRedisUrl === undefined) {
+            delete process.env.REDIS_URL;
+          } else {
+            process.env.REDIS_URL = previousRedisUrl;
+          }
+        }
+      }
     });
     redis.on('error', () => undefined);
     await redis.connect();
@@ -104,7 +116,7 @@ test(
             type: GraphQLString,
             args: { id: { type: new GraphQLNonNull(GraphQLString) } },
             subscribe: (_source, args: { id: string }) =>
-              subscription.pubSub.subscribe('test:api:sse', args.id),
+              subscription.subscribe('test:api:sse', args.id),
             resolve: (payload: { value: string }) => payload.value,
           },
         },
@@ -137,7 +149,7 @@ test(
     await waitForSubscriberCount(readSubscriberCount, 1);
     const deadline = performance.now() + 5_000;
     while (performance.now() < deadline) {
-      publisher.pubSub.publish('test:api:sse', id, expectedMessage);
+      publisher.publish('test:api:sse', id, expectedMessage);
       const event = await Promise.race([pendingEvent, delay(25).then(() => null)]);
       if (event !== null) {
         assert.match(event, /event: next/);
