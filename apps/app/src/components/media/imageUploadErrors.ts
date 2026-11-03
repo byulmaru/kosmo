@@ -12,6 +12,17 @@ const imageUploadCodeSchema = z.enum([
   'dimension_limit_exceeded',
   'invalid_image',
 ]);
+const imageUploadThumbhashSchema = z
+  .string()
+  .min(8)
+  .max(128)
+  .refine((value) => {
+    try {
+      return btoa(atob(value)) === value;
+    } catch {
+      return false;
+    }
+  });
 
 export type ImageUploadCode = z.infer<typeof imageUploadCodeSchema>;
 
@@ -69,9 +80,17 @@ function getTransferReason(status: number, code: ImageUploadCode | undefined): I
   return 'transient';
 }
 
-export async function assertImageUploadResponse(response: Response): Promise<void> {
+export async function assertImageUploadResponse(response: Response): Promise<string | undefined> {
   if (response.ok) {
-    return;
+    try {
+      const body: unknown = await response.json();
+      const thumbhash = imageUploadThumbhashSchema.safeParse(
+        isRecord(body) ? body.thumbhash : undefined,
+      );
+      return thumbhash.success ? thumbhash.data : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   let code: ImageUploadCode | undefined;

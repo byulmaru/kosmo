@@ -154,6 +154,7 @@ input CreatePostMediaInput {
   altText: String
   applyAiProhibitFilter: Boolean = false
   mediaId: ID!
+  thumbhash: String
 }
 
 input CreatePostMentionInput {
@@ -339,6 +340,7 @@ type Media implements Node {
   mediaType: String
   readyAt: DateTime
   state: MediaState!
+  thumbhash: String
   url: String
 }
 

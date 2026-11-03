@@ -34,6 +34,7 @@ type RequestData = {
   media: Array<{
     altText: string | null;
     id: string;
+    thumbhash?: string | null;
     url: string | null;
   } | null>;
   id: string;
@@ -237,9 +238,19 @@ describe('PostRequestCard', () => {
   it('shows the body and normal media with a content warning while independently hiding sensitive media', async () => {
     const media = [
       null,
-      { altText: '사용하지 않는 이미지', id: 'missing-url', url: null },
-      { altText: '산', id: 'first-image', url: 'https://example.test/first.jpg' },
-      { altText: '두 번째 이미지', id: 'second-image', url: 'https://example.test/second.jpg' },
+      { altText: '사용하지 않는 이미지', id: 'missing-url', thumbhash: null, url: null },
+      {
+        altText: '산',
+        id: 'first-image',
+        thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        url: 'https://example.test/first.jpg',
+      },
+      {
+        altText: '두 번째 이미지',
+        id: 'second-image',
+        thumbhash: null,
+        url: 'https://example.test/second.jpg',
+      },
     ];
     await renderCard(
       makeRequest('QUEUED', {
@@ -291,6 +302,37 @@ describe('PostRequestCard', () => {
       }),
     );
     assert.equal(findAllByType('Image')[0]?.props.accessibilityLabel, '첨부 이미지');
+  });
+
+  it('uses a valid ThumbHash only when a Media URL is unavailable', async () => {
+    await renderCard(
+      makeRequest('PROCESSING', {
+        bodyText: '',
+        media: [
+          {
+            altText: '보라색 하늘',
+            id: 'hash-only-image',
+            thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
+            url: null,
+          },
+        ],
+      }),
+    );
+
+    const [image] = findAllByType('Image');
+    assert.ok(image);
+    assert.equal(image.props.source.uri.startsWith('data:image/png;base64,'), true);
+    assert.equal(image.props.accessibilityLabel, '보라색 하늘');
+
+    for (const thumbhash of [null, 'not-base64!', 'AQIDBAU']) {
+      await updateCard(
+        makeRequest('PROCESSING', {
+          bodyText: '',
+          media: [{ altText: null, id: 'invalid-hash', thumbhash, url: null }],
+        }),
+      );
+      assert.equal(findAllByType('Image').length, 0);
+    }
   });
 
   for (const [label, post, expected] of [

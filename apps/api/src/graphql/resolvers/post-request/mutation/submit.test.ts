@@ -37,25 +37,33 @@ import type { ExecutionResult } from 'graphql';
 type CreatePostResult = {
   createPost: {
     post: { id: string } | null;
-    request: { status: string } | null;
+    request: {
+      media?: ({ id: string; thumbhash: string | null } | null)[];
+      status: string;
+    } | null;
   };
 };
 
-const requestSubmit = (input: {
-  bodyText: string;
-  media?: readonly {
-    applyAiProhibitFilter?: boolean;
-    mediaId: string;
-  }[];
-  visibility: 'PUBLIC';
-}) =>
-  graphql({
+const requestSubmit = (
+  input: {
+    bodyText: string;
+    media?: readonly {
+      applyAiProhibitFilter?: boolean;
+      mediaId: string;
+      thumbhash?: string | null;
+    }[];
+    visibility: 'PUBLIC';
+  },
+  includeMediaThumbhash = false,
+) => {
+  const requestFields = includeMediaThumbhash ? 'status media { id thumbhash }' : 'status';
+  return graphql({
     schema,
     source: `
       mutation CreatePost($input: CreatePostInput!) {
         createPost(input: $input) {
           post { id }
-          request { status }
+          request { ${requestFields} }
         }
       }
     `,
@@ -70,6 +78,7 @@ const requestSubmit = (input: {
       },
     },
   }) as Promise<ExecutionResult<CreatePostResult>>;
+};
 
 const mockTemporalDeadline = (t: TestContext) =>
   t.mock.method(
@@ -113,10 +122,12 @@ const setupMediaStorageHead = (t: TestContext) => {
 const setupMediaRows = (
   t: TestContext,
   rows: readonly {
+    accountId?: string;
     id: string;
     source: MediaSource;
     state: MediaState;
     storageReference: string | null;
+    thumbhash?: string | null;
     url: string | null;
   }[],
   post?: { id: string; profileId: string },
@@ -537,23 +548,53 @@ test('createPost queues a request for mixed Media when one publication is proces
   const processingMediaId = '00000000-0000-4000-8000-000000000004';
   const completedUploadId = '00000000-0000-4000-8000-000000000005';
   const processingUploadId = '00000000-0000-4000-8000-000000000006';
+  const thumbhash = 'AQIDBAUGBwg=';
+  const existingThumbhash = 'AgMEBQYHCAk=';
+  const updateEvents: string[] = [];
   setupMediaStorageHead(t);
-  const select = setupMediaRows(t, [
+  const mediaRows: {
+    accountId: string;
+    id: string;
+    source: MediaSource;
+    state: MediaState;
+    storageReference: string;
+    thumbhash: string | null;
+    url: string | null;
+  }[] = [
     {
+      accountId,
       id: completedMediaId,
       source: MediaSource.LOCAL,
       state: MediaState.UPLOADING,
       storageReference: 'nexus:v1:' + completedUploadId,
+      thumbhash: existingThumbhash,
       url: null,
     },
     {
+      accountId,
       id: processingMediaId,
       source: MediaSource.LOCAL,
       state: MediaState.UPLOADING,
       storageReference: 'nexus:v1:' + processingUploadId,
+      thumbhash: null,
       url: null,
     },
-  ]);
+  ];
+  const select = setupMediaRows(t, mediaRows);
+  const update = t.mock.method(db, 'update', (table) => {
+    assert.equal(table, Media);
+    return {
+      set: (values: { thumbhash: string }) => ({
+        where: async () => {
+          const row = mediaRows.find(({ id }) => id === processingMediaId);
+          assert.ok(row);
+          assert.equal(row.thumbhash, null);
+          row.thumbhash = values.thumbhash;
+          updateEvents.push('thumbhash');
+        },
+      }),
+    } as never;
+  });
   const publish = setupPublishUpdate(
     t,
     new Map<string, MediaUploadPublishResult>([
@@ -589,19 +630,27 @@ test('createPost queues a request for mixed Media when one publication is proces
       assert.equal(workflow, postRequestWorkflow.workflow);
       const workflowOptions = options as (typeof started)[number];
       started.push(workflowOptions);
+      updateEvents.push('request-start');
       return { workflowId: workflowOptions.workflowId } as never;
     },
   );
   mockTemporalDeadline(t);
 
-  const result = await requestSubmit({
-    bodyText: 'mixed uploads',
-    media: [
-      { applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', completedMediaId) },
-      { mediaId: encodeGlobalId('Media', processingMediaId) },
-    ],
-    visibility: 'PUBLIC',
-  });
+  const result = await requestSubmit(
+    {
+      bodyText: 'mixed uploads',
+      media: [
+        {
+          applyAiProhibitFilter: true,
+          mediaId: encodeGlobalId('Media', completedMediaId),
+          thumbhash: null,
+        },
+        { mediaId: encodeGlobalId('Media', processingMediaId), thumbhash },
+      ],
+      visibility: 'PUBLIC',
+    },
+    true,
+  );
 
   assert.deepEqual(result.errors, undefined);
   assert.equal(result.data?.createPost.post, null);
@@ -614,7 +663,13 @@ test('createPost queues a request for mixed Media when one publication is proces
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(start.mock.callCount(), 1);
   assert.equal(getHandle.mock.callCount(), 0);
-  assert.equal(select.mock.callCount(), 1);
+  assert.equal(update.mock.callCount(), 1);
+  assert.equal(select.mock.callCount(), 2);
+  assert.deepEqual(updateEvents, ['thumbhash', 'request-start']);
+  assert.deepEqual(result.data?.createPost.request?.media, [
+    { id: encodeGlobalId('Media', completedMediaId), thumbhash: existingThumbhash },
+    { id: encodeGlobalId('Media', processingMediaId), thumbhash },
+  ]);
 
   const snapshot = started[0]?.args?.[0];
   assert.ok(snapshot);
@@ -640,6 +695,26 @@ test('createPost queues a request for mixed Media when one publication is proces
       value: 'QUEUED',
     },
   ]);
+});
+
+test('createPost rejects a noncanonical ThumbHash before querying Media', async (t) => {
+  const select = t.mock.method(db, 'select', () => {
+    throw new Error('Invalid ThumbHash must not reach Media validation');
+  });
+
+  const result = await requestSubmit({
+    bodyText: 'invalid ThumbHash',
+    media: [
+      {
+        mediaId: encodeGlobalId('Media', '00000000-0000-4000-8000-000000000003'),
+        thumbhash: 'AQIDBAUGBwh=',
+      },
+    ],
+    visibility: 'PUBLIC',
+  });
+
+  assert.ok(result.errors?.length);
+  assert.equal(select.mock.callCount(), 0);
 });
 
 test('createPost trusts retained READY Media results and rejects unknown or mismatched filter state', async (t) => {

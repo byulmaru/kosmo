@@ -16,7 +16,7 @@ import {
   WorkflowExecutionAlreadyStartedError,
   WorkflowNotFoundError,
 } from '@temporalio/client';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
 import type {
@@ -39,6 +39,7 @@ type SubmittedPostMedia = {
   readonly altText: string | null;
   readonly applyAiProhibitFilter: boolean;
   readonly mediaId: string;
+  readonly thumbhash?: string | null;
 };
 
 type VerifiedAttachedMedia = SubmittedPostMedia & {
@@ -314,15 +315,36 @@ export async function submitLocalPost(
   }
 
   const submittedMedia = submittedInputMedia.map(
-    ({ altText, applyAiProhibitFilter, mediaId }): SubmittedPostMedia => ({
+    ({ altText, applyAiProhibitFilter, mediaId, thumbhash }): SubmittedPostMedia => ({
       altText: altText ?? null,
       applyAiProhibitFilter: applyAiProhibitFilter ?? false,
       mediaId: mediaId.id,
+      thumbhash,
     }),
   );
 
   const preparedInput = await prepareLocalPostInput(input, ctx);
   const media = await verifyAttachedMedia(ctx.session.accountId, submittedMedia);
+  const mediaWithThumbhash = media.flatMap(({ mediaId, thumbhash }) =>
+    thumbhash == null ? [] : [{ mediaId, thumbhash }],
+  );
+  if (mediaWithThumbhash.length > 0) {
+    await withPrimaryDatabase(async () => {
+      for (const { mediaId, thumbhash } of mediaWithThumbhash) {
+        await db
+          .update(MediaTable)
+          .set({ thumbhash })
+          .where(
+            and(
+              eq(MediaTable.id, mediaId),
+              eq(MediaTable.accountId, ctx.session.accountId),
+              eq(MediaTable.source, MediaSource.LOCAL),
+              isNull(MediaTable.thumbhash),
+            ),
+          );
+      }
+    });
+  }
   const publications = await publishUploadingMedia(ctx.session.accountId, media);
 
   if (publications.some(({ status }) => status === 'processing')) {

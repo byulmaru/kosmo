@@ -27,6 +27,10 @@ Media.implement({
     }),
     readyAt: t.expose('readyAt', { type: 'DateTime', nullable: true }),
     state: t.expose('state', { type: MediaState }),
+    thumbhash: t.exposeString('thumbhash', {
+      authScopes: { $granted: 'readMedia' },
+      nullable: true,
+    }),
     url: t.exposeString('url', {
       authScopes: { $granted: 'readMedia' },
       nullable: true,

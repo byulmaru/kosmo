@@ -181,7 +181,10 @@ function assertSupportedImageAsset(asset: ImagePickerAsset): void {
 }
 
 /** Transfers an already issued image; GraphQL actions retain their own lifecycle. */
-export async function transferImage(asset: ImagePickerAsset, uploadUrl: string): Promise<void> {
+export async function transferImage(
+  asset: ImagePickerAsset,
+  uploadUrl: string,
+): Promise<string | undefined> {
   let operation: ImageUploadOperation = 'normalize';
   try {
     assertSupportedImageAsset(asset);
@@ -192,7 +195,7 @@ export async function transferImage(asset: ImagePickerAsset, uploadUrl: string):
       headers: { 'content-type': normalizedImage.contentType },
       method: 'PUT',
     });
-    await assertImageUploadResponse(response);
+    return await assertImageUploadResponse(response);
   } catch (error) {
     throw asImageUploadError(error, 'transfer', operation);
   }
@@ -234,13 +237,14 @@ export async function uploadImage({
   readonly complete?: (mediaId: string) => Promise<void>;
   readonly isActive: () => boolean;
   readonly issue: () => Promise<IssuedImageUpload>;
-}): Promise<string | null> {
+}): Promise<{ readonly mediaId: string; readonly thumbhash?: string } | null> {
   if (!isActive()) {
     return null;
   }
 
   let operation: ImageUploadOperation = 'issue';
   let issued: IssuedImageUpload;
+  let thumbhash: string | undefined;
   try {
     assertSupportedImageAsset(asset);
     issued = await issue();
@@ -248,7 +252,7 @@ export async function uploadImage({
     if (!isActive()) {
       return null;
     }
-    await transferImage(asset, issued.uploadUrl);
+    thumbhash = await transferImage(asset, issued.uploadUrl);
     if (!isActive()) {
       return null;
     }
@@ -270,5 +274,5 @@ export async function uploadImage({
     }
     throw uploadError;
   }
-  return isActive() ? issued.mediaId : null;
+  return isActive() ? { mediaId: issued.mediaId, ...(thumbhash ? { thumbhash } : {}) } : null;
 }

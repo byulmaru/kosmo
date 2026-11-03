@@ -86,6 +86,7 @@
     "react-relay": "^21.0.1",
     "relay-runtime": "^21.0.1",
     "temporal-polyfill": "^0.3.2",
+    "thumbhash": "0.1.1",
     "ts-pattern": "^5.9.0",
     "zod": "^4.6.7"
   },
