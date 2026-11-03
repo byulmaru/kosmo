@@ -28,16 +28,16 @@ Remote Media는 등록 시 Ready다.
 
 ## 속성
 
-| 속성              | 타입/nullability        | 검증 정책                          | 존재 조건                              | 조회 조건                    | 조회 권한             |
-| ----------------- | ----------------------- | ---------------------------------- | -------------------------------------- | ---------------------------- | --------------------- |
-| Upload Expires At | 시각, 필수              | 제한된 업로드 권한의 만료 시각     | Source가 Local                         | Upload Account 조회          | `Media.UploadAccount` |
-| Ready At          | 시각, 필수              | 저장 성공을 확인한 시각            | State가 Ready인 Local                  | Media 조회 정책 통과         | 없음                  |
-| URL               | URL, 필수               | 저장 서비스가 확정한 공개 표현     | State가 Ready인 Local                  | Media 조회 정책 통과         | 없음                  |
-| Media Type        | 문자열, 필수            | 저장 서비스가 확정한 표현 형식     | State가 Ready인 Local                  | Media 조회 정책 통과         | 없음                  |
-| Alt Text          | 문자열, nullable        | 사람이 읽을 수 있는 이미지 이름    | 항상                                   | Media 조회 정책 통과         | 없음                  |
-| ThumbHash         | Base64 문자열, nullable | 압축된 이미지 placeholder metadata | Local Media, Post 요청에서 제출한 경우 | 권한이 있는 Media projection | 없음                  |
-| Remote URL        | URL, 필수               | 원격 Media 원본 위치               | Source가 Remote                        | Media 조회 정책 통과         | 없음                  |
-| Remote Fetched At | 시각, nullable          | 마지막 성공 fetch 결과로 갱신      | Source가 Remote                        | 운영 조회                    | `Account.Operator`    |
+| 속성              | 타입/nullability        | 검증 정책                       | 존재 조건                                  | 조회 조건                    | 조회 권한             |
+| ----------------- | ----------------------- | ------------------------------- | ------------------------------------------ | ---------------------------- | --------------------- |
+| Upload Expires At | 시각, 필수              | 제한된 업로드 권한의 만료 시각  | Source가 Local                             | Upload Account 조회          | `Media.UploadAccount` |
+| Ready At          | 시각, 필수              | 저장 성공을 확인한 시각         | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| URL               | URL, 필수               | 저장 서비스가 확정한 공개 표현  | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Media Type        | 문자열, 필수            | 저장 서비스가 확정한 표현 형식  | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Alt Text          | 문자열, nullable        | 사람이 읽을 수 있는 이미지 이름 | 항상                                       | Media 조회 정책 통과         | 없음                  |
+| ThumbHash         | Base64 문자열, nullable | 이미지 placeholder metadata     | Media Storage Service가 생성한 Local Media | 권한이 있는 Media projection | 없음                  |
+| Remote URL        | URL, 필수               | 원격 Media 원본 위치            | Source가 Remote                            | Media 조회 정책 통과         | 없음                  |
+| Remote Fetched At | 시각, nullable          | 마지막 성공 fetch 결과로 갱신   | Source가 Remote                            | 운영 조회                    | `Account.Operator`    |
 
 Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 결과와 연결하는 persistence 정보다. 저장
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
@@ -49,8 +49,10 @@ Kosmo는 저장 서비스에 전달할 staged source의 존재와 입력 metadat
 Media Storage Service의 완료 응답은 공개 URL과 최종 Media Type의 권위다. Kosmo는 응답 필드의 존재와 transport type만
 확인하고, 반환된 Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시 검증하지 않는다.
 저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
-ThumbHash는 작은 placeholder metadata이며 이미지 byte와 일치하는지 확인하지 않는다. 표준 canonical Base64 문자열로
-8–128자여야 한다.
+Media Storage Service는 private staging `PUT`에서 받은 이미지로 ThumbHash를 생성한다. 기존 인증 staging `HEAD`가 이를
+제공하며, Kosmo는 이미지 처리 준비 단계에서 이를 읽어 같은 Local Media 행에 저장한다. 값은 Media의
+metadata로 유지하고 `createPost` 입력이나 PostRequest snapshot에는 넣지 않는다. 기존 Media나 ThumbHash가 생성되지 않은
+upload에는 값이 없을 수 있다.
 
 ## 관계
 
@@ -86,9 +88,6 @@ Post Composer 첨부는 파일 선택 시 `issueMediaUploadUrl`로 제한된 권
 진행한다. 제출 시 클라이언트는 현재 첨부 Media를 포함해 `createPost`로 요청을 접수한다. 서버의 PostRequest 흐름은
 참조 Media의 저장과 처리를 완료하고 모든 Media가 Ready가 된 뒤 Post를 저장한다. 제거했거나 제출하지 않은
 첨부는 처리하지 않으며, Profile avatar/header 업로드의 기존 명시적 `completeMediaUpload` 시점은 유지한다.
-Post 요청 제출에서 제공된 ThumbHash는 모든 첨부 Local Media의 소유권을 확인한 뒤, Media 공개 처리 전에 값이 없는
-Media에만 저장한다. 기존 값은 유지하며 ThumbHash는 Media의 metadata로 소유하고 Post 요청이나 Post Content에 복제하지
-않는다. 제출하지 않은 upload에는 ThumbHash를 저장하지 않아 기존 Media에 값이 없을 수 있다.
 
 Post Composer에서 새 Local Media마다 AI 학습 방지 필터 적용 여부를 선택할 수 있으며 기본값은 off다. 선택한 이미지는
 Media Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다.

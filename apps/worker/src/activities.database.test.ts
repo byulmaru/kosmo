@@ -32,7 +32,7 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
@@ -2495,6 +2495,8 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
   const mediaIds: string[] = [];
   const requests: { authorization: string | undefined; method: string; url: string }[] = [];
   let headResponseStatus = 200;
+  let headResponseContentType = 'image/jpeg';
+  let thumbhashHeader: string | undefined = 'dGh1bWJoYXNo';
   const server = createServer((request, response) => {
     requests.push({
       authorization: request.headers.authorization,
@@ -2523,8 +2525,9 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     response
       .writeHead(200, {
         'Content-Length': '128',
-        'Content-Type': 'image/jpeg',
+        'Content-Type': headResponseContentType,
         'Last-Modified': new Date().toUTCString(),
+        ...(thumbhashHeader === undefined ? {} : { 'X-Thumbhash': thumbhashHeader }),
       })
       .end();
   });
@@ -2565,6 +2568,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         source: Media.source,
         state: Media.state,
         storageReference: Media.storageReference,
+        thumbhash: Media.thumbhash,
         url: Media.url,
       })
       .from(Media)
@@ -2573,6 +2577,13 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .then(firstOrThrow);
     return { ...media, readyAt: media.readyAt?.toString() ?? null };
   };
+  const readMediaRowVersion = async (mediaId: string) =>
+    db
+      .select({ rowVersion: sql<string>`xmin::text` })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
   const hasFailureType = (type: string) => (error: unknown) =>
     error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
 
@@ -2593,13 +2604,69 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         url: `/v1/uploads/${uploadId}?staging=true`,
       },
     ]);
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    const preparedState = await readMediaState(uploading.mediaId);
+    assert.deepEqual(preparedState, { ...uploadingState, thumbhash: thumbhashHeader });
 
     await assert.rejects(
       prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    assert.deepEqual(await readMediaState(uploading.mediaId), preparedState);
+
+    const absentThumbhash = await createUploadingMedia();
+    const absentThumbhashState = await readMediaState(absentThumbhash.mediaId);
+    const absentThumbhashVersion = await readMediaRowVersion(absentThumbhash.mediaId);
+    thumbhashHeader = undefined;
+    const absentUuid = absentThumbhash.storageReference.slice('nexus:v1:'.length);
+    const absentUploadId = `u_${absentUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(absentThumbhash), {
+      id: absentUploadId,
+      sourceKey: `uploads/${absentUploadId}/${absentUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(absentThumbhash.mediaId), absentThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(absentThumbhash.mediaId), absentThumbhashVersion);
+
+    const invalidThumbhash = await createUploadingMedia();
+    const invalidThumbhashState = await readMediaState(invalidThumbhash.mediaId);
+    thumbhashHeader = 'YWJjZGU===';
+    const invalidUuid = invalidThumbhash.storageReference.slice('nexus:v1:'.length);
+    const invalidUploadId = `u_${invalidUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(invalidThumbhash), {
+      id: invalidUploadId,
+      sourceKey: `uploads/${invalidUploadId}/${invalidUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(invalidThumbhash.mediaId), invalidThumbhashState);
+
+    const invalidMetadata = await createUploadingMedia();
+    const invalidMetadataState = await readMediaState(invalidMetadata.mediaId);
+    thumbhashHeader = 'dGh1bWJoYXNo';
+    headResponseContentType = 'image/gif';
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidMetadata),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidMetadata.mediaId), invalidMetadataState);
+    headResponseContentType = 'image/jpeg';
+
+    const storedThumbhash = await createUploadingMedia();
+    const existingThumbhash = 'ZXhpc3Rpbmc=';
+    await db
+      .update(Media)
+      .set({ thumbhash: existingThumbhash })
+      .where(eq(Media.id, storedThumbhash.mediaId));
+    const storedThumbhashState = await readMediaState(storedThumbhash.mediaId);
+    const storedThumbhashVersion = await readMediaRowVersion(storedThumbhash.mediaId);
+    const storedUuid = storedThumbhash.storageReference.slice('nexus:v1:'.length);
+    const storedUploadId = `u_${storedUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(storedThumbhash), {
+      id: storedUploadId,
+      sourceKey: `uploads/${storedUploadId}/${storedUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(storedThumbhash.mediaId), storedThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(storedThumbhash.mediaId), storedThumbhashVersion);
 
     const ready = await createUploadingMedia();
     await db
@@ -2620,15 +2687,17 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
 
     const invalidSource = await createUploadingMedia('nexus:v1:invalid');
     const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    const requestsBeforeInvalidSource = requests.length;
     await assert.rejects(
       prepareMediaUploadActivity(invalidSource),
       hasFailureType('NexusMediaUploadSourceError'),
     );
     assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, requestsBeforeInvalidSource);
 
     const transientFailure = await createUploadingMedia();
     const transientFailureState = await readMediaState(transientFailure.mediaId);
+    const transientRequestIndex = requests.length;
     headResponseStatus = 503;
     await assert.rejects(
       prepareMediaUploadActivity(transientFailure),
@@ -2638,7 +2707,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         error.message === 'Media Storage Service rejected upload metadata (503)',
     );
     const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
-    assert.deepEqual(requests[1], {
+    assert.deepEqual(requests[transientRequestIndex], {
       authorization: 'Bearer test-api-key',
       method: 'HEAD',
       url: `/v1/uploads/u_${transientUuid}?staging=true`,

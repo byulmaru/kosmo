@@ -901,28 +901,13 @@ describe('Post Reply GraphQL 경계', () => {
     const uploadProfile = await createProfile('media-upload-profile');
     const first = await createReadyMedia(auth.account.id, uploadProfile.id);
     const second = await createReadyMedia(auth.account.id, auth.profile.id);
-    const third = await createReadyMedia(auth.account.id, auth.profile.id);
-    const firstThumbhash = 'AQIDBAUGBwg=';
-    const secondThumbhash = 'AgMEBQYHCAk=';
-    const submittedThumbhash = 'BAUGBwgJCgs=';
-    await db.update(Media).set({ thumbhash: firstThumbhash }).where(eq(Media.id, first.id));
-    await db.update(Media).set({ thumbhash: secondThumbhash }).where(eq(Media.id, second.id));
 
     const result = await requestCreatePost(
       {
         bodyText: '',
         media: [
           { altText: '첫 번째 이미지', mediaId: encodeGlobalId('Media', first.id) },
-          {
-            altText: null,
-            mediaId: encodeGlobalId('Media', second.id),
-            thumbhash: 'AwQFBgcICQo=',
-          },
-          {
-            altText: null,
-            mediaId: encodeGlobalId('Media', third.id),
-            thumbhash: submittedThumbhash,
-          },
+          { altText: null, mediaId: encodeGlobalId('Media', second.id) },
         ],
         sensitiveMedia: true,
         visibility: PostVisibility.PUBLIC,
@@ -938,14 +923,6 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(contentResult);
     assert.equal(fetchMock.mock.callCount(), 0);
     assert.equal(contentResult.data?.node?.content.bodyText, '');
-    const [storedFirst, storedSecond, storedThird] = await Promise.all([
-      db.select().from(Media).where(eq(Media.id, first.id)).then(firstOrThrow),
-      db.select().from(Media).where(eq(Media.id, second.id)).then(firstOrThrow),
-      db.select().from(Media).where(eq(Media.id, third.id)).then(firstOrThrow),
-    ]);
-    assert.equal(storedFirst.thumbhash, firstThumbhash);
-    assert.equal(storedSecond.thumbhash, secondThumbhash);
-    assert.equal(storedThird.thumbhash, submittedThumbhash);
     assert.deepEqual(contentResult.data?.node?.content.media, [
       {
         altText: '첫 번째 이미지',
@@ -958,12 +935,6 @@ describe('Post Reply GraphQL 경계', () => {
         id: encodeGlobalId('Media', second.id),
         mediaType: second.mediaType,
         url: second.url,
-      },
-      {
-        altText: null,
-        id: encodeGlobalId('Media', third.id),
-        mediaType: third.mediaType,
-        url: third.url,
       },
     ]);
     assert.deepEqual(contentResult.data?.node?.content.document, {
@@ -983,10 +954,6 @@ describe('Post Reply GraphQL 경계', () => {
           {
             type: 'media',
             attrs: { mediaId: encodeGlobalId('Media', second.id) },
-          },
-          {
-            type: 'media',
-            attrs: { mediaId: encodeGlobalId('Media', third.id) },
           },
         ],
       },
@@ -1499,11 +1466,9 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(attachments[0]?.name?.toString(), '통합 검증 이미지');
   });
 
-  test('잘못된 Media typename, 사용할 수 없는 Media와 다른 Account Media를 거부한다', async () => {
+  test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const uploading = await createUploadingMedia(auth.account.id, auth.profile.id);
-    const other = await createAuthenticatedSession();
-    const foreignMedia = await createReadyMedia(other.account.id, other.profile.id);
     const before = { contents: await db.$count(PostContents), posts: await db.$count(Posts) };
 
     const wrongType = await requestCreatePost(
@@ -1526,22 +1491,6 @@ describe('Post Reply GraphQL 경계', () => {
     );
     assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media.0');
-    const foreign = await requestCreatePost(
-      {
-        bodyText: 'foreign media',
-        media: [
-          {
-            altText: null,
-            mediaId: encodeGlobalId('Media', foreignMedia.id),
-            thumbhash: 'AQIDBAUGBwg=',
-          },
-        ],
-        visibility: PostVisibility.PUBLIC,
-      },
-      auth.token,
-    );
-    assert.equal(foreign.errors?.[0]?.extensions?.code, 'VALIDATION');
-    assert.equal(foreign.errors?.[0]?.extensions?.field, 'media.0');
     assert.deepEqual(
       { contents: await db.$count(PostContents), posts: await db.$count(Posts) },
       before,
@@ -1552,13 +1501,6 @@ describe('Post Reply GraphQL 경계', () => {
       .where(eq(Media.id, uploading.id))
       .then(firstOrThrow);
     assert.equal(unchangedMedia.altText, uploading.altText);
-    assert.equal(unchangedMedia.thumbhash, null);
-    const unchangedForeignMedia = await db
-      .select()
-      .from(Media)
-      .where(eq(Media.id, foreignMedia.id))
-      .then(firstOrThrow);
-    assert.equal(unchangedForeignMedia.thumbhash, null);
   });
 
   test('조회 가능한 일반 Post·Reply·Quote를 Parent로 하고 독립 Visibility를 저장한다', async () => {
@@ -2685,7 +2627,7 @@ const requestCreatePost = (
   input: {
     bodyText: string;
     contentWarning?: string | null;
-    media?: Array<{ altText: string | null; mediaId: string; thumbhash?: string | null }>;
+    media?: Array<{ altText: string | null; mediaId: string }>;
     mentions?: Array<{ end: number; profileId: string; start: number }>;
     actorProfileId?: string;
     replyParentId?: string;

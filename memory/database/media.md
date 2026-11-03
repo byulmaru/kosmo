@@ -8,6 +8,8 @@ Current media direction:
   public URL and media type on the Local Media row. It does not mirror image bytes, storage keys, generated image
   variants or dimensions in a separate `file` table. A nullable ThumbHash may be stored directly on the `media` row
   as compact placeholder metadata; it is not a stored image variant or a separate representation.
+- Media Storage Service generates ThumbHash during the private-staging `PUT`. Kosmo reads it from the existing authenticated
+  staging `HEAD` and stores it on the same Local Media during preparation; `createPost` and the PostRequest snapshot do not carry it.
 - A Local Media row is created when an authenticated Account/Profile starts an upload. It keeps its Kosmo identity,
   upload Account, actor Profile, `UPLOADING` state, opaque external storage reference and upload expiry.
 - After Kosmo confirms storage through Media Storage Service, the same row stores its URL and media type and transitions

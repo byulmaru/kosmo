@@ -254,7 +254,7 @@ function EditableProfileRoute({ profile }: { profile: EditableProfile }) {
       const fieldRef = field === 'avatar' ? avatarRef : headerRef;
 
       try {
-        const uploadResult = await uploadImageAsset({
+        const mediaId = await uploadImageAsset({
           asset,
           complete: (id) =>
             new Promise<void>((resolve, reject) => {
@@ -292,9 +292,9 @@ function EditableProfileRoute({ profile }: { profile: EditableProfile }) {
               });
             }),
         });
-        if (uploadResult?.mediaId) {
+        if (mediaId) {
           updateImage(field, (current) =>
-            completeProfileEditImageUpload(current, generation, uploadResult.mediaId),
+            completeProfileEditImageUpload(current, generation, mediaId),
           );
         }
       } catch (error) {

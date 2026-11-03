@@ -32,7 +32,6 @@ type UploadOptions = {
   readonly isActive: () => boolean;
   readonly issue: () => Promise<{ readonly mediaId: string; readonly uploadUrl: string }>;
 };
-type UploadResult = { readonly mediaId: string; readonly thumbhash?: string } | null;
 const platform = { OS: 'web' };
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -43,7 +42,7 @@ let pickerResult: { readonly assets: readonly ImagePickerAsset[]; readonly cance
   assets: [],
   canceled: false,
 };
-let uploadImageImpl: (options: UploadOptions) => Promise<UploadResult>;
+let uploadImageImpl: (options: UploadOptions) => Promise<string | null>;
 let mediaValues: PostComposerMediaValue[] = [];
 let captureMediaValues = true;
 let mediaRenderProps: PostComposerMediaControlsRenderProps | undefined;
@@ -146,7 +145,7 @@ beforeEach(() => {
     if (!options.isActive()) {
       return null;
     }
-    return { mediaId: issued.mediaId, thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA' };
+    return issued.mediaId;
   };
   mediaValues = [];
   captureMediaValues = true;
@@ -209,18 +208,8 @@ describe('PostComposerMediaControls post request media', () => {
     await flush();
 
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      {
-        altText: 'First image',
-        applyAiProhibitFilter: false,
-        mediaId: 'media-1',
-        thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      },
-      {
-        altText: 'Second image',
-        applyAiProhibitFilter: true,
-        mediaId: 'media-2',
-        thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      },
+      { altText: 'First image', applyAiProhibitFilter: false, mediaId: 'media-1' },
+      { altText: 'Second image', applyAiProhibitFilter: true, mediaId: 'media-2' },
     ]);
     assert.equal(issueCalls.length, initialIssueCount);
     assert.equal(uploadCalls, initialUploadCount);
@@ -229,7 +218,7 @@ describe('PostComposerMediaControls post request media', () => {
 
   it('blocks post request media while a selected image is still uploading', async () => {
     uploadImageImpl = () =>
-      new Promise<UploadResult>((resolve) => {
+      new Promise<string | null>((resolve) => {
         releasePendingUpload = () => resolve(null);
       });
     await renderControls();
@@ -269,18 +258,8 @@ describe('PostComposerMediaControls post request media', () => {
     assert.equal(uploadCalls, 3);
     assert.equal(issueCalls.length, 3);
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      {
-        altText: 'Replace this ALT',
-        applyAiProhibitFilter: true,
-        mediaId: 'media-3',
-        thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      },
-      {
-        altText: 'Keep sibling ALT',
-        applyAiProhibitFilter: false,
-        mediaId: 'media-2',
-        thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      },
+      { altText: 'Replace this ALT', applyAiProhibitFilter: true, mediaId: 'media-3' },
+      { altText: 'Keep sibling ALT', applyAiProhibitFilter: false, mediaId: 'media-2' },
     ]);
     assert.equal(mediaRenderProps?.items[0]?.asset?.uri, 'file:///local/image.jpg');
     assert.equal(mediaRenderProps?.items[1]?.mediaId, 'media-2');

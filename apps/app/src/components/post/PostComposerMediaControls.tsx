@@ -33,7 +33,6 @@ import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/Po
 type ComposerMediaItemFields = {
   readonly key: string;
   readonly mediaId?: string;
-  readonly thumbhash?: string;
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
@@ -60,7 +59,6 @@ export type PostRequestMediaItem = Readonly<{
   readonly altText: string | null;
   readonly applyAiProhibitFilter: boolean;
   readonly mediaId: string;
-  readonly thumbhash?: string;
 }>;
 
 const releaseMediaPreview = (item: ComposerMediaItem) => {
@@ -148,7 +146,6 @@ export function PostComposerMediaControls({
               asset,
               failure: undefined,
               mediaId: undefined,
-              thumbhash: undefined,
               requiresReselection: undefined,
               state: 'uploading',
             }
@@ -157,7 +154,7 @@ export function PostComposerMediaControls({
     );
 
     try {
-      const result = await uploadImage({
+      const mediaId = await uploadImage({
         asset,
         isActive: () => mounted.current && !removedMediaKeys.current.has(key),
         issue: () =>
@@ -178,15 +175,11 @@ export function PostComposerMediaControls({
             });
           }),
       });
-      if (result === null) {
+      if (mediaId === null) {
         return;
       }
       updateMedia((items) =>
-        items.map((item) =>
-          item.key === key
-            ? { ...item, mediaId: result.mediaId, thumbhash: result.thumbhash, state: 'ready' }
-            : item,
-        ),
+        items.map((item) => (item.key === key ? { ...item, mediaId, state: 'ready' } : item)),
       );
     } catch (error) {
       if (!mounted.current || removedMediaKeys.current.has(key)) {
@@ -362,7 +355,6 @@ export function PostComposerMediaControls({
             altText: item.altText.trim() || null,
             applyAiProhibitFilter: item.applyAiProhibitFilter ?? false,
             mediaId: item.mediaId!,
-            ...(item.thumbhash ? { thumbhash: item.thumbhash } : {}),
           }),
         ),
       );

@@ -154,7 +154,6 @@ input CreatePostMediaInput {
   altText: String
   applyAiProhibitFilter: Boolean = false
   mediaId: ID!
-  thumbhash: String
 }
 
 input CreatePostMentionInput {

@@ -28,7 +28,6 @@ export type LocalPostMutationInput = {
         readonly altText?: string | null;
         readonly applyAiProhibitFilter?: boolean | null;
         readonly mediaId: { readonly id: string };
-        readonly thumbhash?: string | null;
       }[]
     | null;
   mentions?:
@@ -44,20 +43,11 @@ export type LocalPostMutationInput = {
   visibility: PostVisibility;
 };
 
-const thumbhashSchema = z
-  .string()
-  .min(8)
-  .max(128)
-  .base64()
-  .refine((value) => Buffer.from(value, 'base64').toString('base64') === value)
-  .nullish();
-
 export const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
     applyAiProhibitFilter: t.boolean({ required: false, defaultValue: false }),
     mediaId: t.globalID({ for: Media }),
-    thumbhash: t.string({ required: false, validate: thumbhashSchema }),
   }),
 });
 

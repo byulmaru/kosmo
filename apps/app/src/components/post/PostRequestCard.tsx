@@ -216,7 +216,7 @@ export function PostRequestCard({
       }
       const uri = item.url?.trim() || getThumbhashPreviewUri(item.thumbhash);
       if (uri) {
-        thumbnail = { altText: item.altText, uri };
+        thumbnail = { altText: item.altText ?? null, uri };
         break;
       }
     }

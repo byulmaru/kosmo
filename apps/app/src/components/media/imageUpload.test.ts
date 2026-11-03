@@ -29,7 +29,6 @@ type CaptureCall = { readonly context?: CaptureContext; readonly error: Error };
 
 const manipulationUris: string[] = [];
 const captureCalls: CaptureCall[] = [];
-const thumbhashBase64 = '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA';
 let captureHandledErrorImpl: (error: Error, context?: CaptureContext) => void;
 let createManipulatorContext: (uri: string) => FakeContext;
 
@@ -192,7 +191,7 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
     },
   );
 
-  const uploadResult = await uploadImage({
+  const mediaId = await uploadImage({
     asset: createAsset({
       file: new File(['original'], 'image.jpg', { type: 'image/jpeg' }),
       height: 2000,
@@ -209,7 +208,7 @@ test('issues, uploads normalized WebP bytes, and completes in order', async (t) 
     },
   });
 
-  assert.deepEqual(uploadResult, { mediaId: 'media-1' });
+  assert.equal(mediaId, 'media-1');
   assert.deepEqual(calls, [
     'issue',
     'read-normalized',
@@ -235,7 +234,7 @@ test('returns the uploaded Media ID without completing it when no completion han
     return new Response(null, { status: 204 });
   });
 
-  const uploadResult = await uploadImage({
+  const mediaId = await uploadImage({
     asset: createAsset(),
     isActive: () => true,
     issue: async () => {
@@ -244,55 +243,9 @@ test('returns the uploaded Media ID without completing it when no completion han
     },
   });
 
-  assert.deepEqual(uploadResult, { mediaId: 'media-deferred' });
+  assert.equal(mediaId, 'media-deferred');
   assert.deepEqual(calls, ['issue', 'read-normalized', 'PUT:https://upload.example/deferred']);
 });
-
-test('returns a valid ThumbHash from a successful signed PUT response', async (t) => {
-  installManipulator({ height: 100, width: 100 });
-  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) =>
-    String(input) === 'file:///cache/normalized.webp'
-      ? new Response(new Blob(['webp']), { status: 200 })
-      : new Response(JSON.stringify({ id: 'media-response-id', thumbhash: thumbhashBase64 }), {
-          status: 201,
-        }),
-  );
-
-  const uploadResult = await uploadImage({
-    asset: createAsset(),
-    isActive: () => true,
-    issue: async () => ({ mediaId: 'media-issued-id', uploadUrl: 'https://upload.example/1' }),
-  });
-
-  assert.deepEqual(uploadResult, {
-    mediaId: 'media-issued-id',
-    thumbhash: thumbhashBase64,
-  });
-});
-
-for (const [label, status, body] of [
-  ['an empty legacy response', 204, null],
-  ['a non-JSON response', 201, 'not json'],
-  ['a response without ThumbHash', 201, JSON.stringify({ id: 'media-response-id' })],
-  ['a malformed ThumbHash', 201, JSON.stringify({ thumbhash: '***' })],
-] as const) {
-  test(`keeps upload success for ${label}`, async (t) => {
-    installManipulator({ height: 100, width: 100 });
-    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) =>
-      String(input) === 'file:///cache/normalized.webp'
-        ? new Response(new Blob(['webp']), { status: 200 })
-        : new Response(body, { status }),
-    );
-
-    const uploadResult = await uploadImage({
-      asset: createAsset(),
-      isActive: () => true,
-      issue: async () => ({ mediaId: 'media-legacy', uploadUrl: 'https://upload.example/1' }),
-    });
-
-    assert.deepEqual(uploadResult, { mediaId: 'media-legacy' });
-  });
-}
 
 test('falls back to PNG when the browser rejects WebP encoding and propagates its content type', async (t) => {
   const unsupportedWebpError = new Error(
@@ -318,7 +271,7 @@ test('falls back to PNG when the browser rejects WebP encoding and propagates it
     return new Response(null, { status: 204 });
   });
 
-  const uploadResult = await uploadImage({
+  const mediaId = await uploadImage({
     asset: createAsset({ height: 3200, width: 4800 }),
     complete: async (id) => {
       calls.push(`complete:${id}`);
@@ -327,7 +280,7 @@ test('falls back to PNG when the browser rejects WebP encoding and propagates it
     issue: async () => ({ mediaId: 'media-png', uploadUrl: 'https://upload.example/png' }),
   });
 
-  assert.deepEqual(uploadResult, { mediaId: 'media-png' });
+  assert.equal(mediaId, 'media-png');
   assert.deepEqual(calls, ['read-png', 'PUT:https://upload.example/png', 'complete:media-png']);
   assert.deepEqual(manipulator.resizeCalls, [{ height: 1365, width: 2048 }]);
   assert.deepEqual(manipulator.saveOptions, [{ compress: 0.8, format: 'webp' }, { format: 'png' }]);
@@ -833,7 +786,7 @@ test('every retry issues a fresh Media and upload URL', async (t) => {
     issue,
   });
 
-  assert.deepEqual(result, { mediaId: 'media-2' });
+  assert.equal(result, 'media-2');
   assert.deepEqual(requestedUrls, [
     'file:///cache/normalized.webp',
     'https://upload.example/1',
