@@ -118,6 +118,9 @@ mockModule('@/components/RouteBoundary', {
     createElement(Suspense, { fallback: loading }, children),
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
+mockModule('@/components/shell/MobileWebRouteChrome', {
+  MobileWebRouteChrome: ({ children }: { children?: React.ReactNode }) => children,
+});
 mockModule('@/components/PageHeader', { PageHeader: () => createElement('PageHeader') });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({

@@ -29,6 +29,7 @@ let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
 let muteHeadingFocusCalls = 0;
 let blockedHeadingFocusCalls = 0;
+const openNavigationDrawer = mock.fn();
 
 mock.module('expo-router', {
   exports: {
@@ -59,6 +60,9 @@ mock.module('expo-updates', {
       isUpdatePending: otaIsUpdatePending,
     }),
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-relay', {
   exports: { graphql: () => ({}) },
@@ -91,6 +95,7 @@ mock.module(require.resolve('lucide-react-native'), {
     ChevronDownIcon: 'ChevronDownIcon',
     ChevronLeftIcon: 'ChevronLeftIcon',
     ChevronRightIcon: 'ChevronRightIcon',
+    Menu: 'Menu',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
@@ -126,7 +131,12 @@ mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
 mock.module(new URL('../PageHeader.tsx', import.meta.url), {
   exports: {
     PageHeader: (props: Record<string, unknown>) =>
-      createElement('PageHeader', props, props.leading as ReactNode),
+      createElement(
+        'PageHeader',
+        props,
+        props.leading as ReactNode,
+        createElement('Text', { ref: props.titleRef }, props.title as ReactNode),
+      ),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsNavigationList.tsx', import.meta.url), {
@@ -212,7 +222,7 @@ mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
-  exports: { useShellChrome: () => ({}) },
+  exports: { useShellChrome: () => ({ openNavigationDrawer }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
@@ -302,6 +312,7 @@ afterEach(async () => {
   publicChannel = 'prod';
   muteHeadingFocusCalls = 0;
   blockedHeadingFocusCalls = 0;
+  openNavigationDrawer.mock.resetCalls();
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -478,11 +489,11 @@ describe('Settings routes', () => {
     assert.deepEqual(dismissedToPaths, ['/settings/mute-and-block']);
   });
 
-  it('mobile Web 뮤트 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
+  it('mobile Web 뮤트 해제 성공은 보이는 detail 제목으로 focus를 옮긴다', async () => {
     width = 390;
     await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
 
-    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
     const list = rendered('SettingsMutedProfiles')[0];
     assert.ok(list);
     await act(async () => list.props.onUnmuteSuccess());
@@ -532,15 +543,16 @@ describe('Settings routes', () => {
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
-  it('mobile Web blocked profile 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
+  it('mobile Web blocked profile 해제 성공은 보이는 detail 제목으로 focus를 옮긴다', async () => {
     width = 390;
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
-    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
     const list = rendered('SettingsBlockedProfiles')[0];
     assert.ok(list);
     await act(async () => list.props.onUnblockSuccess());
     assert.equal(blockedHeadingFocusCalls, 1);
+    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
@@ -564,21 +576,29 @@ describe('Settings routes', () => {
     assert.equal(flattenStyle(rootContainer.props.style).width, '100%');
   });
 
-  it('mobile Web은 shell header를 중복하지 않고 root와 detail을 한 화면씩 표시한다', async () => {
+  it('mobile Web route는 메뉴와 parent back을 소유하고 root와 detail을 한 화면씩 표시한다', async () => {
     width = 390;
     await renderRoute('/settings', SettingsRoute);
-    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
+    const menu = rendered('Pressable').find(
+      (node) => node.props.accessibilityLabel === '메뉴 열기',
+    );
+    assert.ok(menu);
+    await act(async () => menu.props.onPress());
+    assert.equal(openNavigationDrawer.mock.callCount(), 1);
     assert.equal(rendered('SettingsNavigationList').length, 1);
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
 
     await rerenderRoute('/settings/profile', SettingsProfileRoute);
-    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
     assert.equal(rendered('ScrollView').length, 0);
+    await act(async () => rendered('PageHeader')[0].props.leading.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
 
     await rerenderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
-    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('PageHeader').length, 1);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
     assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
@@ -992,9 +1012,9 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
   await act(async () => {
     renderer = create(createElement(SettingsLayout), {
       createNodeMock: ({ props }) =>
-        (props as { testID?: string }).testID === 'mute-heading-focus'
+        (props as { children?: unknown }).children === '뮤트한 프로필'
           ? { focus: () => (muteHeadingFocusCalls += 1) }
-          : (props as { testID?: string }).testID === 'blocked-heading-focus'
+          : (props as { children?: unknown }).children === '차단한 프로필'
             ? { focus: () => (blockedHeadingFocusCalls += 1) }
             : null,
     });

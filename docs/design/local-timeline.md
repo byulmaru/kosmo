@@ -8,7 +8,7 @@
 
 PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 콘텐츠에 Local 목록을 표시한다. 로그인과 선택 Profile 없이 첫 조회·다음 페이지 조회와 공개 Profile·Post 탐색을 제공한다. 방문자 메뉴·긴 로고·하단 CTA는 [public-content-onboarding.md](./public-content-onboarding.md)를 따른다.
 
-비로그인 첫 화면의 헤더는 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다.
+비로그인 첫 화면의 헤더는 route가 소유하며 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다. 모바일 Web에서는 같은 헤더에 메뉴 진입점을 유지한다.
 
 공개 첫 화면에는 인증용 Home·Local 탭을 추가하지 않는다. 모바일 메뉴 헤더와 기존 목록의 로딩·빈 결과·오류·재시도 표현을 재사용하며, Profile이 없다는 이유로 공개 읽기를 Profile 준비 화면으로 바꾸지 않는다. 인증 `/local`과 Native의 Profile 준비·로그인 흐름은 그대로 유지한다.
 
@@ -21,7 +21,7 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
   border가 아니라 `Tab/Underline`이 소유하는 별도 요소다.
 - TabList 하단 전체에는 탭과 타임라인 콘텐츠를 구분하는 1px `border/subtle` boundary를 표시한다. 64×4px
   인디케이터는 이 하단 boundary 위에 놓이며 Home과 Local 사이의 세로 border나 바깥 좌우 border는 추가하지 않는다.
-- 탭은 상단에 고정하고 목록만 스크롤한다.
+- 탭은 상단에 고정하고 목록만 스크롤한다. 모바일 Web에서는 route의 브랜드 헤더와 탭을 하나의 sticky 영역으로 유지한다.
 - Home과 Local은 기존 `PostListItem`을 사용하며 Local 전용 게시글 카드나 목록 primitive를 만들지 않는다.
 - Home은 선택한 Profile의 실제 게시 요청 가운데 처리 중이거나 실패한 항목만 카드로 게시글 목록 위에 표시하며, 카드 배치는 목록의 header로 조합한다. 표시 상태는 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED`다. 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청은 Home 카드에서 사라지고, 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역을 생략하고 빈 상태·로딩·오류 안내, 제목, 테두리, 이력·전체 보기 링크를 표시하지 않는다. 전용 게시 요청 화면이나 사이드바 메뉴·대체 경로를 두지 않는다. Native에서는 하나의 `FlatList`가 스크롤을 소유하고 Web에서는 기존 문서 흐름을 유지한다.
 - 목록의 색상, 간격과 typography는 기존 semantic token을 사용한다. 현재 앱 설정과 전역 Provider가 Light로

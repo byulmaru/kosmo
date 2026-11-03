@@ -365,11 +365,8 @@ mockModule(new URL('./shell/shellLayout.ts', import.meta.url), {
     settingsWorkspace: false,
     showRightRail: false,
   }),
-  getWebMobileShellHeader: () => null,
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
-  isWebMobileRouteOwnedHeader: () => false,
-  webMobileShellHeaderHeight: 0,
 });
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   RelayActorBoundary: MockRelayActorBoundary,

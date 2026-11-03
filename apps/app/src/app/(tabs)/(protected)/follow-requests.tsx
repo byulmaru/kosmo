@@ -5,6 +5,7 @@ import {
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { FollowRequestsPageQuery } from './__generated__/FollowRequestsPageQuery.graphql';
 
@@ -21,7 +22,12 @@ const FollowRequestsQuery = graphql`
 `;
 
 export default function FollowRequestsScreen() {
-  return <FollowRequestsRoute />;
+  return (
+    <>
+      <MobileWebRouteMenu />
+      <FollowRequestsRoute />
+    </>
+  );
 }
 
 function FollowRequestsRoute() {

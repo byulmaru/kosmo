@@ -5,6 +5,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -33,6 +34,15 @@ const HashtagPostsPageQuery = graphql`
 `;
 
 export default function HashtagPostsScreen() {
+  return (
+    <>
+      <MobileWebRouteMenu />
+      <HashtagPostsScreenContent />
+    </>
+  );
+}
+
+function HashtagPostsScreenContent() {
   const { hashtagId: rawHashtagId } = useLocalSearchParams<{
     hashtagId?: string | string[];
   }>();

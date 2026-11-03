@@ -1,20 +1,22 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { Text } from 'react-native';
 
 export default function SettingsBlockedProfilesRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
-  const headingRef = useRef<View>(null);
+  const headingRef = useRef<Text>(null);
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -35,25 +37,15 @@ export default function SettingsBlockedProfilesRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      <View
-        accessibilityLabel={detailHeaderMode === 'hidden' ? '차단한 프로필' : undefined}
-        accessibilityRole={detailHeaderMode === 'hidden' ? 'header' : undefined}
-        ref={headingRef}
-        style={detailHeaderMode === 'hidden' ? styles.hiddenHeading : undefined}
-        tabIndex={-1}
-        testID="blocked-heading-focus"
-      >
-        {detailHeaderMode !== 'hidden' ? (
-          <PageHeader leading={backButton} title="차단한 프로필" />
-        ) : null}
-      </View>
+      <MobileWebRouteChrome>
+        <PageHeader leading={backButton} title="차단한 프로필" titleRef={headingRef} />
+      </MobileWebRouteChrome>
       <SettingsBlockedProfiles onUnblockSuccess={() => headingRef.current?.focus()} />
     </PaginationScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  hiddenHeading: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', width: 1 },
   backButton: {
     alignItems: 'center',
     height: 44,

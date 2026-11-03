@@ -50,9 +50,16 @@ mock.module('expo-router', {
     useRouter: () => ({ replace: () => undefined }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('react-native', {
   exports: {
     ScrollView: 'ScrollView',
+    Platform: { OS: 'web' },
+    View: 'View',
+    useWindowDimensions: () => ({ width: 390 }),
     StyleSheet: { create: <T>(styles: T) => styles },
   },
 } as unknown as Parameters<typeof mock.module>[1]);

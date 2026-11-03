@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
@@ -7,9 +8,8 @@ import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerC
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
+import { getShellLayout } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode, RefObject } from 'react';
 import type {
@@ -77,7 +77,7 @@ export function PostDetailFrame({
   onHeaderLayout,
 }: PostDetailFrameProps) {
   const { width } = useWindowDimensions();
-  const shellChrome = useShellChrome();
+  const insets = useSafeAreaInsets();
 
   return Platform.OS === 'web' ? (
     <View style={styles.frame} testID="post-detail-scroll">
@@ -86,7 +86,7 @@ export function PostDetailFrame({
         ref={headerRef}
         style={[
           styles.header,
-          webStickyHeader(shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0),
+          webStickyHeader(getShellLayout(true, width) === 'mobile' ? insets.top : 0),
         ]}
       >
         {header}
@@ -182,7 +182,7 @@ function PostDetailThreadContent({
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { height, width } = useWindowDimensions();
-  const shellChrome = useShellChrome();
+  const insets = useSafeAreaInsets();
   const [headerHeight, setHeaderHeight] = useState(0);
   const [nativeViewportHeight, setNativeViewportHeight] = useState(0);
   const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
@@ -405,7 +405,7 @@ function PostDetailThreadContent({
 
   const viewportHeight =
     Platform.OS === 'web'
-      ? height - (shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0)
+      ? height - (getShellLayout(true, width) === 'mobile' ? insets.top : 0)
       : nativeViewportHeight;
 
   const thread = (

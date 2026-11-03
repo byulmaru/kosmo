@@ -9,6 +9,7 @@ import {
   NotificationListState,
 } from '@/components/notification/NotificationList';
 import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
+import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -345,19 +346,29 @@ function NotificationCatalog() {
   return (
     <Catalog>
       <Section title="Loading">
-        <NotificationListState state="loading" />
+        <NotificationRouteFrame>
+          <NotificationListState state="loading" />
+        </NotificationRouteFrame>
       </Section>
       <Section title="Error and retry">
-        <NotificationListState onRetry={() => undefined} state="error" />
+        <NotificationRouteFrame>
+          <NotificationListState onRetry={() => undefined} state="error" />
+        </NotificationRouteFrame>
       </Section>
       <Section title="Profile required">
-        <NotificationListState state="profileRequired" />
+        <NotificationRouteFrame>
+          <NotificationListState state="profileRequired" />
+        </NotificationRouteFrame>
       </Section>
       <Section title="Empty">
-        <NotificationList profile={requireProfile(profiles, 0).notificationList!} />
+        <NotificationRouteFrame>
+          <NotificationList profile={requireProfile(profiles, 0).notificationList!} />
+        </NotificationRouteFrame>
       </Section>
       <Section title="Unread / read / long content">
-        <NotificationList profile={requireProfile(profiles, 1).notificationList!} />
+        <NotificationRouteFrame>
+          <NotificationList profile={requireProfile(profiles, 1).notificationList!} />
+        </NotificationRouteFrame>
       </Section>
     </Catalog>
   );
@@ -365,12 +376,20 @@ function NotificationCatalog() {
 
 function PaginationList() {
   const profileNode = requireProfile(useStoryProfiles(), 2);
-  return <NotificationList profile={profileNode.notificationList!} />;
+  return (
+    <NotificationRouteFrame>
+      <NotificationList profile={profileNode.notificationList!} />
+    </NotificationRouteFrame>
+  );
 }
 
 function RefreshList() {
   const profileNode = requireProfile(useStoryProfiles(), 1);
-  return <NotificationList profile={profileNode.notificationList!} />;
+  return (
+    <NotificationRouteFrame>
+      <NotificationList profile={profileNode.notificationList!} />
+    </NotificationRouteFrame>
+  );
 }
 
 function ReadNavigationList() {
@@ -391,14 +410,20 @@ function QuoteReadNavigationList() {
   return (
     <SessionProvider>
       <Text>{pathname}</Text>
-      <NotificationList profile={profileNode.notificationList!} />
+      <NotificationRouteFrame>
+        <NotificationList profile={profileNode.notificationList!} />
+      </NotificationRouteFrame>
     </SessionProvider>
   );
 }
 
 function SourceUnavailableList() {
   const profileNode = requireProfile(useStoryProfiles(), 7);
-  return <NotificationList profile={profileNode.notificationList!} />;
+  return (
+    <NotificationRouteFrame>
+      <NotificationList profile={profileNode.notificationList!} />
+    </NotificationRouteFrame>
+  );
 }
 
 function AuthenticatedReadNavigationList() {
@@ -596,7 +621,9 @@ function ProfileSwitchList() {
   return (
     <SessionProvider>
       <Button onPress={() => setSelected((current) => (current === 3 ? 4 : 3))}>프로필 전환</Button>
-      <NotificationList key={profileNode.id} profile={profileNode.notificationList!} />
+      <NotificationRouteFrame>
+        <NotificationList key={profileNode.id} profile={profileNode.notificationList!} />
+      </NotificationRouteFrame>
     </SessionProvider>
   );
 }
@@ -740,10 +767,10 @@ export const HeaderAndWebRefreshPolicy: Story = {
   render: () => <RefreshList />,
 };
 
-export const MobileHeaderOwnedByShell: Story = {
+export const MobileHeaderOwnedByRoute: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
+    expect(within(canvasElement).getAllByRole('heading', { name: '알림' })).toHaveLength(1);
   },
   render: () => <RefreshList />,
 };
@@ -850,7 +877,11 @@ export const ReadAllLoadedZero: Story = {
   },
   render: () => {
     const profiles = useStoryProfiles();
-    return <NotificationList profile={requireProfile(profiles, 0).notificationList!} />;
+    return (
+      <NotificationRouteFrame>
+        <NotificationList profile={requireProfile(profiles, 0).notificationList!} />
+      </NotificationRouteFrame>
+    );
   },
 };
 
@@ -1523,7 +1554,7 @@ export const MobileNoSelectedProfileScreen: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    expect(canvas.queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
+    expect(canvas.getAllByRole('heading', { name: '알림' })).toHaveLength(1);
     expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
   },
   render: () => <NotificationsScreen />,
