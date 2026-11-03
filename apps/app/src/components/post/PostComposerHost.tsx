@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -63,12 +63,20 @@ export function PostComposerHost({
       : mode === 'mobile'
         ? theme.backgroundCanvas
         : theme.backgroundElevated;
-  const overlayVisible = mode !== 'rail' && open;
-  const overlayMotion = useOverlayMotion(overlayVisible);
-  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
-  const overlayExitStartedRef = useRef(false);
+  const overlayVisible = mode !== 'rail' && open;
+  const handleOverlayExitComplete = useCallback(() => {
+    if (mode === 'rail') {
+      return;
+    }
+    onDismiss?.();
+    if (web && typeof document !== 'undefined') {
+      requestAnimationFrame(() => expandControlRef.current?.focus());
+    }
+  }, [mode, onDismiss, web]);
+  const overlayMotion = useOverlayMotion(overlayVisible, handleOverlayExitComplete);
+  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const requestClose = useCallback(
     (reason: PostComposerRequestCloseReason = 'dismiss') => {
       if (reason !== 'created' && submitting) {
@@ -94,23 +102,6 @@ export function PostComposerHost({
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
-  useEffect(() => {
-    if (mode === 'rail' || overlayVisible) {
-      overlayExitStartedRef.current = false;
-      return;
-    }
-    if (overlayMotion.mounted) {
-      overlayExitStartedRef.current = true;
-      return;
-    }
-    if (overlayExitStartedRef.current) {
-      overlayExitStartedRef.current = false;
-      onDismiss?.();
-      if (web && typeof document !== 'undefined') {
-        requestAnimationFrame(() => expandControlRef.current?.focus());
-      }
-    }
-  }, [mode, onDismiss, overlayMotion.mounted, overlayVisible, web]);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
     onRequestClose: requestClose,

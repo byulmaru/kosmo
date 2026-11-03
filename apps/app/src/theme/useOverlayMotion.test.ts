@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
+import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as OverlayMotionModule from './useOverlayMotion';
 
 const timingCalls: Array<Record<string, unknown>> = [];
+type PendingAnimation = {
+  callback?: (result: { finished: boolean }) => void;
+  completed: boolean;
+  config: Record<string, unknown>;
+  stopped: boolean;
+  value: AnimatedValue;
+};
+
+const pendingAnimations: PendingAnimation[] = [];
+let autoCompleteAnimations = true;
 let reducedMotion = false;
 
 class AnimatedValue {
@@ -20,6 +30,23 @@ class AnimatedValue {
   }
 }
 
+function completeAnimation(animation: PendingAnimation, finished = true) {
+  if (animation.completed || animation.stopped) {
+    return;
+  }
+  animation.completed = true;
+  animation.value.setValue(animation.config.toValue as number);
+  animation.callback?.({ finished });
+}
+
+function completeLatestAnimation() {
+  const animation = [...pendingAnimations]
+    .reverse()
+    .find((candidate) => !candidate.completed && !candidate.stopped);
+  assert.ok(animation);
+  completeAnimation(animation);
+}
+
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
@@ -32,12 +59,23 @@ mockModule('react-native', {
     Value: AnimatedValue,
     timing: (value: AnimatedValue, config: Record<string, unknown>) => {
       timingCalls.push(config);
+      const animation: PendingAnimation = {
+        config,
+        completed: false,
+        stopped: false,
+        value,
+      };
+      pendingAnimations.push(animation);
       return {
         start: (callback?: (result: { finished: boolean }) => void) => {
-          value.setValue(config.toValue as number);
-          callback?.({ finished: true });
+          animation.callback = callback;
+          if (autoCompleteAnimations) {
+            completeAnimation(animation);
+          }
         },
-        stop: () => undefined,
+        stop: () => {
+          animation.stopped = true;
+        },
       };
     },
   },
@@ -55,6 +93,12 @@ let overlayMotionModule: typeof OverlayMotionModule | undefined;
 
 before(async () => {
   overlayMotionModule = await import('./useOverlayMotion');
+});
+
+afterEach(() => {
+  autoCompleteAnimations = true;
+  pendingAnimations.length = 0;
+  reducedMotion = false;
 });
 
 test('overlay motion uses approved enter and exit timing', async () => {
@@ -117,6 +161,65 @@ test('reduced motion presents and dismisses overlays without timing', async () =
   assert.equal(timingCalls.length, 0);
   await act(async () => renderer?.unmount());
   reducedMotion = false;
+});
+
+test('overlay exit callback는 실제 exit 완료에서만 호출되고 reopen으로 취소된다', async () => {
+  assert.ok(overlayMotionModule);
+  autoCompleteAnimations = false;
+  let exitCount = 0;
+  let result: ReturnType<typeof overlayMotionModule.useOverlayMotion> | undefined;
+
+  function Harness({ visible }: { visible: boolean }) {
+    result = overlayMotionModule?.useOverlayMotion(visible, () => exitCount++);
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(Harness, { visible: false }));
+  });
+  assert.equal(exitCount, 0);
+
+  await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+  await act(async () => renderer?.update(createElement(Harness, { visible: false })));
+  await act(async () => completeLatestAnimation());
+  assert.equal(exitCount, 1);
+
+  await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+  await act(async () => completeLatestAnimation());
+  assert.equal(result?.mounted, true);
+
+  await act(async () => renderer?.update(createElement(Harness, { visible: false })));
+  assert.equal(exitCount, 1);
+  await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+  await act(async () => completeLatestAnimation());
+  assert.equal(exitCount, 1);
+
+  await act(async () => renderer?.update(createElement(Harness, { visible: false })));
+  await act(async () => completeLatestAnimation());
+  assert.equal(exitCount, 2);
+  await act(async () => renderer?.unmount());
+});
+
+test('reduced motion exit callback도 초기 closed에서는 호출하지 않는다', async () => {
+  assert.ok(overlayMotionModule);
+  reducedMotion = true;
+  let exitCount = 0;
+  let renderer: ReactTestRenderer | undefined;
+
+  function Harness({ visible }: { visible: boolean }) {
+    overlayMotionModule?.useOverlayMotion(visible, () => exitCount++);
+    return null;
+  }
+
+  await act(async () => {
+    renderer = create(createElement(Harness, { visible: false }));
+  });
+  assert.equal(exitCount, 0);
+  await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+  await act(async () => renderer?.update(createElement(Harness, { visible: false })));
+  assert.equal(exitCount, 1);
+  await act(async () => renderer?.unmount());
 });
 
 test('toast motion uses standard enter and fast exit timing', async () => {

@@ -12,6 +12,7 @@ import type { PostComposerHost as PostComposerHostComponent } from './PostCompos
 const platform = { OS: 'web' };
 const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let exitMounted = false;
+let overlayExitComplete: (() => void) | undefined;
 let composerProps:
   | {
       body: string;
@@ -74,11 +75,14 @@ mockModule('@/theme/ThemeProvider', {
   }),
 });
 mockModule('@/theme/useOverlayMotion', {
-  useOverlayMotion: (visible: boolean) => ({
-    entered: visible,
-    mounted: visible || exitMounted,
-    progress: { interpolate: () => 1 },
-  }),
+  useOverlayMotion: (visible: boolean, onExitComplete?: () => void) => {
+    overlayExitComplete = onExitComplete;
+    return {
+      entered: visible,
+      mounted: visible || exitMounted,
+      progress: { interpolate: () => 1 },
+    };
+  },
 });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
@@ -102,6 +106,7 @@ afterEach(async () => {
   composerProps = undefined;
   platform.OS = 'web';
   exitMounted = false;
+  overlayExitComplete = undefined;
   safeAreaInsets.top = 0;
   mock.restoreAll();
 });
@@ -220,6 +225,23 @@ describe('PostComposerHost', () => {
     assert.equal(renderer?.root.findByType('div' as ElementType).props.inert, true);
   });
 
+  it('처음 닫힌 Overlay는 exit 완료 dismiss를 호출하지 않는다', async () => {
+    let dismissCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => undefined,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    assert.equal(dismissCount, 0);
+  });
+
   it('Overlay exit 완료는 semantic close와 분리된 dismiss 경계를 알린다', async () => {
     let closeCount = 0;
     let dismissCount = 0;
@@ -296,6 +318,7 @@ describe('PostComposerHost', () => {
         }),
       );
     });
+    await act(async () => overlayExitComplete?.());
     assert.equal(closeCount, 0);
     assert.equal(dismissCount, 1);
   });
