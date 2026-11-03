@@ -18,23 +18,28 @@ import type { ExecutionResult } from 'graphql';
 
 type CreatePostResult = {
   createPost: {
+    post?: { id: string } | null;
     request: { status: string } | null;
   };
 };
 
-const requestSubmit = (input: {
-  bodyText: string;
-  media?: readonly {
-    applyAiProhibitFilter?: boolean;
-    mediaId: string;
-  }[];
-  visibility: 'PUBLIC';
-}) =>
+const requestSubmit = (
+  input: {
+    bodyText: string;
+    media?: readonly {
+      applyAiProhibitFilter?: boolean;
+      mediaId: string;
+    }[];
+    visibility: 'PUBLIC';
+  },
+  includePost = false,
+) =>
   graphql({
     schema,
     source: `
       mutation CreatePost($input: CreatePostInput!) {
         createPost(input: $input) {
+          ${includePost ? 'post { id }' : ''}
           request { status }
         }
       }
@@ -183,10 +188,19 @@ test('createPost rejects duplicate media before checking uploads or starting the
   assert.equal(start.mock.callCount(), 0);
 });
 
-test('createPost checks raw uploads, acknowledges pending media, and waits for READY media', async (t) => {
+test('createPost acknowledges filtered uploads across selection sets and waits for unfiltered uploads', async (t) => {
   const accountId = '00000000-0000-4000-8000-000000000001';
-  const results = new Map<string, PostRequestState>();
+  const results = new Map<string, Promise<PostRequestState>>();
   let resultCallCount = 0;
+  let markResultWaitStarted!: () => void;
+  const resultWaitStarted = new Promise<void>((resolve) => {
+    markResultWaitStarted = resolve;
+  });
+  let releasePublication!: (state: PostRequestState) => void;
+  const publication = new Promise<PostRequestState>((resolve) => {
+    releasePublication = resolve;
+  });
+  let nextPublication: Promise<PostRequestState> | undefined;
   t.mock.method(
     temporalClient.workflow,
     'getHandle',
@@ -196,12 +210,14 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
           resultCallCount += 1;
           const result = results.get(workflowId);
           assert.ok(result);
+          markResultWaitStarted();
           return result;
         },
       }) as never,
   );
   const uploadingMediaId = '00000000-0000-4000-8000-000000000003';
   const readyMediaId = '00000000-0000-4000-8000-000000000004';
+  const defaultReadyMediaId = '00000000-0000-4000-8000-000000000006';
   const uploadId = '00000000-0000-4000-8000-000000000005';
   const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
   const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
@@ -234,6 +250,13 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
       state: MediaState.READY,
       storageReference: null,
       url: 'https://media.example/ready.webp',
+    },
+    {
+      id: defaultReadyMediaId,
+      source: MediaSource.LOCAL,
+      state: MediaState.READY,
+      storageReference: null,
+      url: 'https://media.example/default.webp',
     },
   ];
   t.mock.method(
@@ -278,11 +301,13 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     const snapshot = workflowOptions.args?.[0];
     assert.ok(snapshot);
     const workflowId = postRequestWorkflowId(accountId, snapshot.requestId);
-    results.set(workflowId, {
+    const result: PostRequestState = {
       snapshot,
       status: PostRequestStatus.PUBLISHED,
       result: { postId: crypto.randomUUID() },
-    });
+    };
+    results.set(workflowId, nextPublication ?? Promise.resolve(result));
+    nextPublication = undefined;
     return { workflowId, firstExecutionRunId: 'run-1' } as never;
   });
   t.mock.method(
@@ -301,14 +326,32 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
     ],
     visibility: 'PUBLIC',
   });
+  const uploadingWithPostResult = await requestSubmit(
+    {
+      bodyText: 'uploading image with post selected',
+      media: [
+        {
+          applyAiProhibitFilter: true,
+          mediaId: encodeGlobalId('Media', uploadingMediaId),
+        },
+      ],
+      visibility: 'PUBLIC',
+    },
+    true,
+  );
   assert.deepEqual(uploadingResult.errors, undefined);
   assert.equal(uploadingResult.data?.createPost.request?.status, 'QUEUED');
-  assert.deepEqual(metadataRequests, [
-    {
-      method: 'HEAD',
-      url: `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
-    },
-  ]);
+  assert.deepEqual(uploadingWithPostResult.errors, undefined);
+  assert.equal(uploadingWithPostResult.data?.createPost.request?.status, 'QUEUED');
+  assert.equal(uploadingWithPostResult.data?.createPost.post, null);
+  assert.equal(metadataRequests.length, 2);
+  assert.ok(
+    metadataRequests.every(
+      ({ method, url }) =>
+        method === 'HEAD' &&
+        url === `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
+    ),
+  );
   assert.deepEqual(started[0]?.args?.[0]?.input.media, [
     { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
   ]);
@@ -331,20 +374,61 @@ test('createPost checks raw uploads, acknowledges pending media, and waits for R
       value: 'QUEUED',
     },
   ]);
+  assert.deepEqual(started[1]?.args?.[0]?.input.media, [
+    { altText: null, applyNightshade: true, mediaId: uploadingMediaId },
+  ]);
+  assert.equal(resultCallCount, 0);
 
-  const readyResult = await requestSubmit({
-    bodyText: 'ready image',
-    media: [{ mediaId: encodeGlobalId('Media', readyMediaId) }],
+  nextPublication = publication;
+  const mixedRequest = requestSubmit({
+    bodyText: 'unfiltered upload with READY images',
+    media: [
+      { applyAiProhibitFilter: false, mediaId: encodeGlobalId('Media', uploadingMediaId) },
+      { applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', readyMediaId) },
+      { mediaId: encodeGlobalId('Media', defaultReadyMediaId) },
+    ],
     visibility: 'PUBLIC',
   });
-  assert.deepEqual(readyResult.errors, undefined);
-  assert.equal(readyResult.data?.createPost.request?.status, 'PUBLISHED');
-  assert.equal(metadataRequests.length, 1);
-  assert.deepEqual(started[1]?.args?.[0]?.input.media, [
-    { altText: null, applyNightshade: false, mediaId: readyMediaId },
+  const firstOutcome = await Promise.race([
+    resultWaitStarted.then(() => 'waiting for publication'),
+    mixedRequest.then(() => 'returned before publication'),
   ]);
-  assert.equal(started[1]?.args?.[0]?.postId, undefined);
+  assert.equal(firstOutcome, 'waiting for publication');
   assert.equal(resultCallCount, 1);
+  assert.equal(metadataRequests.length, 3);
+  assert.deepEqual(metadataRequests[2], {
+    method: 'HEAD',
+    url: `https://storage.example/v1/uploads/u_${uploadId}?staging=true`,
+  });
+  assert.deepEqual(started[2]?.args?.[0]?.input.media, [
+    { altText: null, applyNightshade: false, mediaId: uploadingMediaId },
+    { altText: null, applyNightshade: true, mediaId: readyMediaId },
+    { altText: null, applyNightshade: false, mediaId: defaultReadyMediaId },
+  ]);
+  const snapshot = started[2]?.args?.[0];
+  assert.ok(snapshot);
+  releasePublication({
+    snapshot,
+    status: PostRequestStatus.PUBLISHED,
+    result: { postId: crypto.randomUUID() },
+  });
+  const mixedResult = await mixedRequest;
+  assert.deepEqual(mixedResult.errors, undefined);
+  assert.equal(mixedResult.data?.createPost.request?.status, 'PUBLISHED');
+  assert.equal(started[2]?.args?.[0]?.postId, undefined);
+
+  const allReadyResult = await requestSubmit({
+    bodyText: 'ready image with filter selected',
+    media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', readyMediaId) }],
+    visibility: 'PUBLIC',
+  });
+  assert.deepEqual(allReadyResult.errors, undefined);
+  assert.equal(allReadyResult.data?.createPost.request?.status, PostRequestStatus.PUBLISHED);
+  assert.equal(metadataRequests.length, 3);
+  assert.deepEqual(started[3]?.args?.[0]?.input.media, [
+    { altText: null, applyNightshade: true, mediaId: readyMediaId },
+  ]);
+  assert.equal(resultCallCount, 2);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(executeWorkflow.mock.callCount(), 0);
 });
