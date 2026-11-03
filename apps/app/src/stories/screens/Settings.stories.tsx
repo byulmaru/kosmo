@@ -103,6 +103,46 @@ function expectProfileMigrationContentGutter(canvasElement: HTMLElement) {
   expect(Math.abs(controlBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
 }
 
+function expectProfileMigrationControlLayout(
+  canvasElement: HTMLElement,
+  direction: 'horizontal' | 'vertical',
+) {
+  const canvas = within(canvasElement);
+  const control = canvas.getByTestId('profile-migration-source-control');
+  const contentBounds = control.parentElement?.getBoundingClientRect();
+  if (!contentBounds) {
+    throw new Error('Profile migration content wrapper is missing.');
+  }
+
+  const pairs = [
+    [
+      canvas.getByRole('textbox', { name: '기존 계정 주소' }),
+      canvas.getByRole('button', { name: '기존 계정 등록' }),
+    ],
+    [
+      canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' }),
+      canvas.getByRole('button', { name: '팔로잉 가져오기' }),
+    ],
+  ];
+
+  for (const [field, action] of pairs) {
+    const fieldBounds = field.getBoundingClientRect();
+    const actionBounds = action.getBoundingClientRect();
+    expect(fieldBounds.width).toBeGreaterThan(0);
+    expect(actionBounds.width).toBeGreaterThan(0);
+    expect(fieldBounds.right).toBeLessThanOrEqual(contentBounds.right + 1);
+    expect(actionBounds.right).toBeLessThanOrEqual(contentBounds.right + 1);
+
+    if (direction === 'horizontal') {
+      expect(Math.abs(fieldBounds.top - actionBounds.top)).toBeLessThanOrEqual(1);
+      expect(actionBounds.left).toBeGreaterThanOrEqual(fieldBounds.right);
+    } else {
+      expect(actionBounds.top).toBeGreaterThanOrEqual(fieldBounds.bottom);
+      expect(Math.abs(fieldBounds.left - actionBounds.left)).toBeLessThanOrEqual(1);
+    }
+  }
+}
+
 const meta = {
   component: SettingsRouteLayout,
   decorators: [
@@ -237,6 +277,7 @@ export const ProfileMigrationFullWeb: Story = {
     expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
+    expectProfileMigrationControlLayout(canvasElement, 'horizontal');
   },
   render: () => (
     <SettingsRouteLayout>
@@ -262,6 +303,7 @@ export const ProfileMigrationMobileWeb: Story = {
     expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
+    expectProfileMigrationControlLayout(canvasElement, 'vertical');
   },
   render: () => (
     <SettingsRouteLayout>

@@ -128,18 +128,22 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   사용한다. 해제 action의 기존 결과 안내는 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는
   내용을 보존한다.
   성공 후 source가 null이면 기존 빈 등록 form을 표시한다. control은 flat field·button layout과 기존 accessible
-  error·busy·success 표현을 사용한다.
+  error·busy·success 표현을 사용한다. Web에서 `breakpoints.compact`(`768px`) 이상은 주소 입력과 등록 action을
+  한 줄에 배치하고, 그보다 좁은 Web과 Native는 세로·가용 폭으로 배치한다.
 - `팔로잉 가져오기` section은 shell의 selected Local Profile을 대상으로 하며 현재 Profile 멤버십이 있을 때만
   CSV 선택·가져오기 control을 제공한다. CSV 처리는 Mastodon following CSV의 `Account address` 값만 사용하고,
   기존 팔로잉을 유지하며 CSV preferences는 적용하지 않는다. 512 KiB보다 큰 파일은 읽거나 제출하지 않고 한국어
   오류를 표시한다. 화면에는 flat CSV control을 두며 초기 선택 action은 `팔로잉 CSV 파일 선택`, 파일 선택 후에는
   `파일 바꾸기`로 표시하고 선택한 파일명을 유지한다. `Mastodon`, CSV 열 이름, 최대 크기 설명이나 선택된 프로필의
-  신원을 사전 안내로 표시하지 않는다. 두 안내 문구 `기존 팔로잉은
-삭제되지 않아요.`와 `가져오기를 시작하면 앱을 닫아도 계속 진행돼요.`는 같은 group 안에서 8px 간격으로 묶고,
-  이 group과 시작 action 사이에는 기존 spacing token의 24px 간격을 둔다. 시작 action label은 `팔로잉 가져오기`이며,
+  신원을 사전 안내로 표시하지 않는다. 파일 선택 control·선택한 파일명과 시작 action은 한 배치 단위로 제공하고,
+  두 안내 문구 `기존 팔로잉은 삭제되지 않아요.`와 `가져오기를 시작하면 앱을 닫아도 계속 진행돼요.`는 그 아래
+  같은 group 안에서 8px 간격으로 묶으며, 두 배치 단위 사이에는 기존 spacing token의 24px 간격을 둔다.
+  시작 action label은 `팔로잉 가져오기`이며,
   접수 후에도 이 label을 유지한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를 제공한다. accepted 응답은
   작업이 시작됐다는 뜻으로만 처리하고 `팔로잉 가져오기를 시작했어요.`를 polite live region에서 한 번 알린다.
   작업 진행·결과 조회나 polling은 표시하지 않는다.
+  Web에서 `breakpoints.compact`(`768px`) 이상은 파일 영역과 시작 action을 한 줄에 배치하고, 그보다 좁은 Web과
+  Native는 두 action을 세로·가용 폭으로 배치한다.
 - `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
   action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
 - Profile target selector의 Figma lifecycle source는
@@ -347,7 +351,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
 - `다른 서비스에서 이전` destination에서는 `계정 이전` 다음 `팔로잉 가져오기` heading을 읽는다. Following import
-  section은 파일 선택 control과 선택한 파일명, 같은 group의 안내 문구, 시작 action 순으로 읽는다.
+  section은 파일 선택 control과 선택한 파일명, 시작 action, 같은 group의 안내 문구 순으로 읽는다.
   선택된 프로필 신원 영역을 읽기 순서에 포함할 필요는 없다. 파일 선택과 시작 action은 각각 accessible name과 disabled·busy
   상태를 제공하고, file·mutation 오류는 alert, accepted 시작 확인은 polite live region으로 한 번 알린다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에

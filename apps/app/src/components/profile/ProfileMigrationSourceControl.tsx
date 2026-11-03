@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, space, textStyles } from '@/theme/tokens';
 import type {
   ProfileMigrationSourceControl_profile$data,
   ProfileMigrationSourceControl_profile$key,
@@ -65,6 +65,8 @@ export function ProfileMigrationSourceControl({
 }: ProfileMigrationSourceControlProps) {
   const profile = useFragment(ProfileFragment, profileKey);
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const wideWeb = Platform.OS === 'web' && width >= breakpoints.compact;
   const [sourceHandle, setSourceHandle] = useState('');
   const [registerState, setRegisterState] = useState<RegisterState>('idle');
   const [unregisterState, setUnregisterState] = useState<UnregisterState>('idle');
@@ -148,22 +150,24 @@ export function ProfileMigrationSourceControl({
           <Text style={[styles.copy, { color: theme.textSecondary }]}>
             먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.
           </Text>
-          <View style={styles.form}>
-            <TextField
-              accessibilityLabel="기존 계정 주소"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={editable && !busy}
-              error={validationError}
-              label="기존 계정 주소"
-              onChangeText={(value) => {
-                setSourceHandle(value);
-                setValidationError(undefined);
-                setRegisterState('idle');
-              }}
-              placeholder="@handle@example.com"
-              value={sourceHandle}
-            />
+          <View style={[styles.form, wideWeb ? styles.wideForm : undefined]}>
+            <View style={wideWeb ? styles.field : undefined}>
+              <TextField
+                accessibilityLabel="기존 계정 주소"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={editable && !busy}
+                error={validationError}
+                label="기존 계정 주소"
+                onChangeText={(value) => {
+                  setSourceHandle(value);
+                  setValidationError(undefined);
+                  setRegisterState('idle');
+                }}
+                placeholder="@handle@example.com"
+                value={sourceHandle}
+              />
+            </View>
             {editable ? (
               <Button
                 accessibilityLabel={registerButtonLabel}
@@ -172,7 +176,7 @@ export function ProfileMigrationSourceControl({
                 loading={registering}
                 loadingText="등록 중"
                 onPress={register}
-                style={styles.register}
+                style={wideWeb ? styles.wideRegister : styles.register}
               >
                 {registerButtonLabel}
               </Button>
@@ -268,8 +272,11 @@ const styles = StyleSheet.create({
     gap: space[12],
     paddingTop: space[16],
   },
+  field: { flex: 1, minWidth: 0 },
   form: { gap: space[16] },
+  wideForm: { flexDirection: 'row', alignItems: 'flex-start', gap: space[12] },
   nextTask: { gap: space[8] },
   register: { width: '100%' },
+  wideRegister: { marginTop: space[24] },
   unregister: { alignSelf: 'flex-start' },
 });

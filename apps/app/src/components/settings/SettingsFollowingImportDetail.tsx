@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, spacing, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, radius, spacing, textStyles } from '@/theme/tokens';
 import type { PayloadError } from 'relay-runtime';
 import type { SettingsFollowingImportDetailMutation } from './__generated__/SettingsFollowingImportDetailMutation.graphql';
 import type { SettingsFollowingImportDetailQuery } from './__generated__/SettingsFollowingImportDetailQuery.graphql';
@@ -73,6 +73,8 @@ function SettingsFollowingImportDetailContents() {
   const { fetchKey } = useRouteBoundary();
   const shellChrome = useShellChrome();
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const wideWeb = Platform.OS === 'web' && width >= breakpoints.compact;
   const data = useLazyLoadQuery<SettingsFollowingImportDetailQuery>(
     SettingsFollowingImportQuery,
     {},
@@ -185,32 +187,54 @@ function SettingsFollowingImportDetailContents() {
 
   return (
     <View style={styles.root}>
-      {fileName ? (
-        <View style={[styles.selectedFile, { borderColor: theme.border }]}>
-          <Text style={[styles.fileName, { color: theme.text }]}>{fileName}</Text>
+      <View style={wideWeb ? [styles.actionRow, styles.wideActionRow] : styles.actionRow}>
+        {fileName ? (
+          <View style={wideWeb ? styles.flexibleControl : undefined}>
+            <View style={[styles.selectedFile, { borderColor: theme.border }]}>
+              <Text style={[styles.fileName, { color: theme.text }]}>{fileName}</Text>
+              <Button
+                accessibilityLabel="파일 바꾸기"
+                accessibilityState={{ disabled: submitting }}
+                disabled={submitting}
+                onPress={chooseCsv}
+                size="compact"
+                tone="secondary"
+              >
+                파일 바꾸기
+              </Button>
+            </View>
+          </View>
+        ) : (
+          <View style={wideWeb ? styles.flexibleControl : undefined}>
+            <Button
+              accessibilityLabel="팔로잉 CSV 파일 선택"
+              accessibilityState={{ disabled: submitting }}
+              disabled={submitting}
+              onPress={chooseCsv}
+              style={styles.fullWidthButton}
+              tone="secondary"
+            >
+              팔로잉 CSV 파일 선택
+            </Button>
+          </View>
+        )}
+        <View>
           <Button
-            accessibilityLabel="파일 바꾸기"
-            accessibilityState={{ disabled: submitting }}
-            disabled={submitting}
-            onPress={chooseCsv}
-            size="compact"
-            tone="secondary"
+            accessibilityLabel="팔로잉 가져오기"
+            accessibilityState={{
+              busy: submitting,
+              disabled: !csv || submitting || feedback === 'accepted',
+            }}
+            disabled={!csv || submitting || feedback === 'accepted'}
+            loading={submitting}
+            loadingText="시작하는 중"
+            onPress={startImport}
+            style={wideWeb ? undefined : styles.fullWidthButton}
           >
-            파일 바꾸기
+            팔로잉 가져오기
           </Button>
         </View>
-      ) : (
-        <Button
-          accessibilityLabel="팔로잉 CSV 파일 선택"
-          accessibilityState={{ disabled: submitting }}
-          disabled={submitting}
-          onPress={chooseCsv}
-          style={styles.fullWidthButton}
-          tone="secondary"
-        >
-          팔로잉 CSV 파일 선택
-        </Button>
-      )}
+      </View>
       <View style={styles.notices}>
         <Text style={[styles.notice, { color: theme.textSecondary }]}>
           기존 팔로잉은 삭제되지 않아요.
@@ -219,45 +243,32 @@ function SettingsFollowingImportDetailContents() {
           가져오기를 시작하면 앱을 닫아도 계속 진행돼요.
         </Text>
       </View>
-      <View style={styles.mainAction}>
-        <Button
-          accessibilityLabel="팔로잉 가져오기"
-          accessibilityState={{
-            busy: submitting,
-            disabled: !csv || submitting || feedback === 'accepted',
-          }}
-          disabled={!csv || submitting || feedback === 'accepted'}
-          loading={submitting}
-          loadingText="시작하는 중"
-          onPress={startImport}
-          style={styles.fullWidthButton}
-        >
-          팔로잉 가져오기
-        </Button>
-        {feedback === 'accepted' ? (
-          <View accessibilityLiveRegion="polite">
-            <Text style={[styles.success, { color: theme.textSecondary }]}>
-              팔로잉 가져오기를 시작했어요.
-            </Text>
-          </View>
-        ) : feedback ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {feedback === 'file-too-large'
-              ? 'CSV 파일은 512 KiB 이하여야 해요.'
-              : feedback === 'submit-error'
-                ? '가져오기를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
-                : typeof feedback === 'object'
-                  ? feedback.message
-                  : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
+      {feedback === 'accepted' ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={[styles.success, { color: theme.textSecondary }]}>
+            팔로잉 가져오기를 시작했어요.
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : feedback ? (
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+          {feedback === 'file-too-large'
+            ? 'CSV 파일은 512 KiB 이하여야 해요.'
+            : feedback === 'submit-error'
+              ? '가져오기를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
+              : typeof feedback === 'object'
+                ? feedback.message
+                : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { gap: spacing.xl, padding: spacing.lg },
+  actionRow: { gap: spacing.sm },
+  wideActionRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  flexibleControl: { flex: 1, minWidth: 0 },
   selectedFile: {
     alignItems: 'center',
     borderRadius: radius[8],
@@ -271,7 +282,6 @@ const styles = StyleSheet.create({
   fileName: { ...textStyles.uiCopyM, flex: 1, minWidth: 0 },
   notices: { gap: spacing.sm },
   notice: textStyles.uiCopyM,
-  mainAction: { gap: spacing.sm },
   fullWidthButton: { minWidth: 0, width: '100%' },
   error: textStyles.uiCopyM,
   success: textStyles.uiCopyM,

@@ -45,8 +45,10 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
+  useWindowDimensions: () => ({ width: 390 }),
   View: 'View',
 });
 mockModule('react-relay', {
@@ -92,6 +94,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
+  breakpoints: { compact: 768 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24 },
   textStyles: { uiCopyM: { fontSize: 14 }, uiLabelM: { fontSize: 14 } },
 });
