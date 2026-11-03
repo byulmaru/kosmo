@@ -11,7 +11,7 @@
 - 로그인한 활성 Account는 Post 또는 Profile에서 신고를 시작한다. Selected Profile을 선택하지 않았다는
   이유만으로 신고 제출을 막지 않는다.
 - 2026-09-14 사용자 정정: 신고는 현재 Post/Profile 화면의 신고 진입점에서 시작한다. 일반 직접 조회 권한과 신고 eligibility를 동일시하지 않으며 Profile Block 방향별 정책을 신고 조건으로 적용하지 않는다. 차단으로 UI에서 접근할 수 없는 대상을 과거 ID로 신고하는 흐름은 지원·방어 요구사항으로 두지 않는다. 서버는 인증·입력·대상 존재/유효성과 기존 비-Block visibility를 계속 검증한다. 선택된 유효 Profile만 viewer로 사용하고, PUBLIC/UNLISTED·FOLLOWERS·작성자 DIRECT 및 Active Profile·Instance 제한은 [ADR 0030](../domain/decisions/0030-content-report-submission.md)에 따른다.
-- 신고 사유는 유해·부적절한 콘텐츠, 괴롭힘·혐오·위협, 스팸·사기, 아동 안전 우려, 기타의 5개 카테고리로 받는다. 상세 설명은 선택적으로 입력하며 최대 2,000자다. `기타`만 공백이 아닌 설명을 필수로 한다.
+- 신고 사유는 유해·부적절한 콘텐츠, 괴롭힘·혐오·위협, 스팸·사기, 아동 안전 우려, 기타의 5개 카테고리로 받는다. 상세 설명은 선택적으로 입력하며 앞뒤 공백을 제거한 뒤 Unicode code point 기준 최대 2,000자다. `기타`만 공백이 아닌 설명을 필수로 한다.
 - 신고 화면은 선택한 대상과 입력한 사유를 확인할 수 있어야 한다. 대상 종류와 신고 action을 accessible
   name으로 구분한다.
 - Web·Android·iOS는 공통 API의 전달 결과에 따라 제출 중·성공·실패·전달 여부 확인 불가를 구분한다.

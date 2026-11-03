@@ -1,0 +1,33 @@
+## Current Constraints
+
+2026-10-23 사용자 선택에 따라 미병합 PROD-1146 PR #1254의 `c86e12995c8a872590955187a7847b9d041bfee0` 위에 PROD-1147을 쌓는다. 부모 commit과 Ready 상태는 유지한다. 아래 접근은 현재 코드에 맞춘 제안이며 함수·경로를 영구 계약으로 만들지 않는다.
+
+- `FirstProfileOnboardingRoute.tsx`는 첫 단계에서 Profile을 생성·선택하고 선택 단계마다 `saveStep`으로 저장한다. 완료는 추가 저장 없이 성공 상태를 만든다.
+- `app/first-profile/[step].tsx`에서 입력을 마치면 `/first-profile/discover`로 이동한다. 사람 찾기의 `계속하기`로 `/home`에 진입한다. 태그가 없으면 사람 찾기를 생략하고 홈으로 이동하며 별도 완료 화면은 표시하지 않는다. 진행 중인 첫 Profile의 완료 상태만 이 화면에 진입할 수 있다. 확인 요약의 태그는 표시 이름만 있으므로 조회에는 저장된 `Profile.tags`의 Hashtag `id`와 `name`을 함께 사용한다.
+- 기존 `HashtagRelatedProfileList`·`ProfileListItem`·`FollowButton`과 `Hashtag.relatedProfiles`를 재사용할 수 있다. 새 서버 API나 별도 팔로우 저장 모델은 현재 근거상 필요하지 않다.
+
+## Practical Approach
+
+1. 선행 PR의 최신 완료 연결부를 확인하고 첫 Profile 흐름의 마지막 진입에 저장 Profile ID와 태그 조회를 연결한다. 온보딩 초안이나 `tagInput`을 조회 조건으로 넘기지 않는다. 태그가 없으면 기존 후속 이동을 유지한다.
+2. 선택 태그의 관련 Profile 목록은 on-demand로 조회하고 기존 Hashtag Node pagination과 Relay의 표준 `store-or-network` 캐시 동작을 사용한다. 방문한 태그의 목록을 숨겨 둔 채 계속 마운트하지 않는다. 태그 맥락과 실패한 조회의 retry 상태는 목록과 함께 표시한다.
+3. 같은 Relay actor Environment의 normalized Profile 상태와 공용 FollowButton을 사용한다. 태그를 바꿔도 같은 Profile의 결과를 읽고, 개별 버튼의 중복 실행 방지·실패 rollback·늦은 응답을 실제 조합에서 검증한다. 태그 선택·목록 조회·pagination과 관계 변경은 전역으로 순차 처리하지 않는다.
+4. 진행 action은 팔로우 여부와 무관하게 홈의 후속 흐름으로 연결한다. PROD-1148이 없으면 기존 홈 이동을 유지하면서 그 이슈가 연결할 경계를 남긴다. Coachmark·앱 알림 구현을 포함하지 않는다.
+
+## Alternatives and Traps
+
+- 이름을 새로 정규화해 검색하거나 태그별 Profile을 수동 복제하면 identity와 상태가 갈라질 수 있다. 저장된 Hashtag ID와 normalized Profile을 그대로 사용한다.
+- API에 본인 제외 조건이 없고 기존 행은 본인의 팔로우 버튼만 숨긴다. 새로 본인을 제외하거나 본인뿐인 목록을 빈 목록으로 바꾸지 않는다.
+- 현재 뮤트 여부로 관련 Profile 후보를 숨기지 않는다. 기존 정책을 따른다는 문구를 새 뮤트 필터를 추가하라는 뜻으로 해석하지 않는다.
+- 첫 Profile의 선택 정보 오류는 생성된 Profile 사용을 막지 않는다. 사람 찾기의 조회 오류도 첫 Profile 저장·생성을 다시 실행하는 복구 경로로 연결하지 않는다.
+- 기존 FollowButton Relay 테스트의 일부 pending·actor 교체 사례는 차단 해제다. 이를 다중 태그 팔로우의 실행 증거로 사용하지 않는다.
+
+## Risks / Limits
+
+- 소스 조사는 API 재사용 가능성을 보여 주지만 다중 태그 UI의 상태 일치를 실행으로 증명하지 않는다.
+- 최신 사용자 선택에 따라 태그 선택·목록 조회·pagination과 관계 변경은 전역으로 직렬화하지 않는다. 조회 오류의 targeted retry, 페이지 오류 뒤 기존 행 유지, 개별 관계 action의 pending·rollback, 요청 중 `계속하기`를 검증한다.
+- 새 DB·서버 정책·migration은 계획하지 않는다. 구현 중 실제 필요가 발견되면 근거와 범위를 다시 확인한다.
+- Web CI·E2E 결과와 iOS·Android runtime·접근성 증거는 별도로 판정한다.
+
+## Open Questions
+
+없음. 선행 PR과 후속 안내의 최신 구현 상태는 구현 세션에서 재조회한다.

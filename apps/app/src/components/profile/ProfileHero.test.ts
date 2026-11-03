@@ -11,13 +11,13 @@ import type { ProfileHero as ProfileHeroExport } from './ProfileHero';
 type ProfileData = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
-  displayName: string;
-  followersCount: number;
-  followingCount: number;
+  displayName: string | null;
+  followersCount: number | null;
+  followingCount: number | null;
   handle: string;
   header: { id: string; url: string | null } | null;
   relativeHandle: string;
-  tags: ReadonlyArray<{ id: string; name: string }>;
+  tags: ReadonlyArray<{ id: string; name: string }> | null;
   viewerState?: {
     blockedBy: boolean;
     isSelf: boolean;

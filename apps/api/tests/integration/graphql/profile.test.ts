@@ -11,6 +11,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -19,7 +20,10 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -41,7 +45,9 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
+const configuredLocalTimelineInstanceId = crypto.randomUUID();
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const originalRedisUrl = process.env.REDIS_URL;
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -61,11 +67,13 @@ let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
 let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
+let PostMentions: typeof CoreDb.PostMentions;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let createPost: typeof CoreServices.createPost;
+let generateProfilePinKey: typeof CoreServices.generateProfilePinKey;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let handleInboundCreate: typeof HandleInboundCreate;
@@ -74,10 +82,21 @@ let app: Hono<Env>;
 let localInstanceId: string;
 let restoreSentryTransport: (() => void) | undefined;
 
+const profilePinOrderKeys = (count: number) => {
+  const keys: CoreDb.ProfilePinOrderKey[] = [];
+  while (keys.length < count) {
+    keys.push(generateProfilePinKey(keys.at(-1) ?? null, null));
+  }
+  return keys;
+};
+
 describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    // These assertions cover live DB policy; cache behavior is covered separately.
+    process.env.REDIS_URL = '';
     process.env.NODE_ENV = 'production';
+    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
     process.env.ENVIRONMENT = 'test';
@@ -102,12 +121,13 @@ describe('GraphQL remote profile boundary', () => {
       ProfileMutes,
       ProfilePinnedPosts,
       Profiles,
+      PostMentions,
       PostContents,
       Posts,
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-    ({ createPost } = await import('@kosmo/core/services'));
+    ({ createPost, generateProfilePinKey } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
     ({ handleInboundDelete } = await import('../../../../../packages/fedify/src/inbound-delete'));
 
@@ -139,6 +159,11 @@ describe('GraphQL remote profile boundary', () => {
     await pg.end();
     await Sentry.close(0);
     restoreSentryTransport?.();
+    if (originalRedisUrl === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = originalRedisUrl;
+    }
   });
 
   test('does not treat a malformed profile without an instance as local', () => {
@@ -1038,6 +1063,190 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('returns identity-only fields for inactive Profile Nodes without checking Instance state', async () => {
+    const owner = await createAuthenticatedSession();
+    const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
+    const disabled = await createProfile({
+      handle: `disabled-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspended = await createProfile({
+      handle: `suspended-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    const suspendedInstance = await createLocalInstance({
+      domain: `node-suspended-${suffix}.example`,
+      state: InstanceState.SUSPENDED,
+    });
+    const activeOnSuspendedInstance = await createProfile({
+      handle: `active-${suffix}`,
+      instanceId: suspendedInstance.id,
+    });
+
+    await db.insert(AccountProfiles).values([
+      { accountId: owner.account.id, profileId: disabled.id, role: AccountProfileRole.OWNER },
+      { accountId: owner.account.id, profileId: suspended.id, role: AccountProfileRole.OWNER },
+    ]);
+
+    const result = await requestGraphQL<{
+      disabled: Record<string, unknown> | null;
+      suspended: Record<string, unknown> | null;
+    }>(
+      `query InactiveProfileNodes($disabledId: ID!, $suspendedId: ID!) {
+        disabled: node(id: $disabledId) { ...InactiveProfileProjection }
+        suspended: node(id: $suspendedId) { ...InactiveProfileProjection }
+      }
+
+      fragment InactiveProfileProjection on Node {
+        __typename
+        ... on Profile {
+          id
+          handle
+          relativeHandle
+          displayName
+          bio
+          bookmarks(first: 1) { __typename }
+          createdAt
+          followPolicy
+          followers(first: 1) { __typename }
+          followersCount
+          following(first: 1) { __typename }
+          followingCount
+          hashtagMuteRules(first: 1) { __typename }
+          avatar { __typename }
+          header { __typename }
+          incomingProfileFollowRequests(first: 1) { __typename }
+          instance { __typename }
+          migrationSource { __typename }
+          notifications(first: 1) { __typename }
+          outgoingProfileFollowRequests(first: 1) { __typename }
+          pinnedPosts { __typename }
+          posts(first: 1) { __typename }
+          postRequests { __typename }
+          private { __typename }
+          profileBlocks(first: 1) { __typename }
+          profileMutes(first: 1) { __typename }
+          tags { __typename }
+          unreadNotificationCount
+          viewerState { __typename }
+        }
+      }`,
+      {
+        disabledId: globalId('Profile', disabled.id),
+        suspendedId: globalId('Profile', suspended.id),
+      },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const expectedProjection = (profile: typeof disabled) => ({
+      __typename: 'Profile',
+      id: globalId('Profile', profile.id),
+      handle: profile.handle,
+      relativeHandle: `@${profile.handle}`,
+      displayName: null,
+      bio: null,
+      bookmarks: null,
+      createdAt: null,
+      followPolicy: null,
+      followers: null,
+      followersCount: null,
+      following: null,
+      followingCount: null,
+      hashtagMuteRules: null,
+      avatar: null,
+      header: null,
+      incomingProfileFollowRequests: null,
+      instance: null,
+      migrationSource: null,
+      notifications: null,
+      outgoingProfileFollowRequests: null,
+      pinnedPosts: null,
+      posts: null,
+      postRequests: null,
+      private: null,
+      profileBlocks: null,
+      profileMutes: null,
+      tags: null,
+      unreadNotificationCount: null,
+      viewerState: null,
+    });
+
+    assert.deepEqual(result.data?.disabled, expectedProjection(disabled));
+    assert.deepEqual(result.data?.suspended, expectedProjection(suspended));
+
+    const controls = await requestGraphQL<{
+      active: {
+        id: string;
+        displayName: string;
+        private: { __typename: string } | null;
+        profileBlocks: { __typename: string } | null;
+      } | null;
+      activeOnSuspendedInstance: {
+        id: string;
+        handle: string;
+        relativeHandle: string;
+        displayName: string;
+        instance: { kind: string } | null;
+      } | null;
+      missing: { id: string } | null;
+    }>(
+      `query ProfileNodeControls($activeId: ID!, $suspendedInstanceId: ID!, $missingId: ID!) {
+        active: node(id: $activeId) {
+          ... on Profile {
+            id
+            displayName
+            private { __typename }
+            profileBlocks(first: 1) { __typename }
+          }
+        }
+        activeOnSuspendedInstance: node(id: $suspendedInstanceId) {
+          ... on Profile {
+            id
+            handle
+            relativeHandle
+            displayName
+            instance { kind }
+          }
+        }
+        missing: node(id: $missingId) { id }
+      }`,
+      {
+        activeId: globalId('Profile', owner.profile.id),
+        suspendedInstanceId: globalId('Profile', activeOnSuspendedInstance.id),
+        missingId: globalId('Profile', crypto.randomUUID()),
+      },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(controls);
+    assert.equal(controls.data?.active?.id, globalId('Profile', owner.profile.id));
+    assert.ok(controls.data?.active?.displayName);
+    assert.deepEqual(controls.data?.active?.private, { __typename: 'ProfilePrivate' });
+    assert.deepEqual(controls.data?.active?.profileBlocks, {
+      __typename: 'ProfileBlockConnection',
+    });
+    assert.deepEqual(controls.data?.activeOnSuspendedInstance, {
+      id: globalId('Profile', activeOnSuspendedInstance.id),
+      handle: activeOnSuspendedInstance.handle,
+      relativeHandle: `@${activeOnSuspendedInstance.handle}@${suspendedInstance.domain}`,
+      displayName: activeOnSuspendedInstance.displayName,
+      instance: { kind: InstanceKind.LOCAL },
+    });
+    assert.equal(controls.data?.missing, null);
+
+    const deniedMemberField = await requestGraphQL(
+      `query ActiveProfilePermission($id: ID!) {
+        node(id: $id) { ... on Profile { postRequests { __typename } } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+    );
+    assert.equal(deniedMemberField.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.deepEqual(deniedMemberField.data, { node: { postRequests: null } });
+  });
+
   test('keeps mixed Node batch order and does not retry a mismatched typename', async () => {
     const remoteInstance = await createRemoteInstance();
     const firstProfile = await createProfile({
@@ -1142,6 +1351,83 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('reorder uses selected Member authority and returns persisted ordered Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const posts = await Promise.all(
+      Array.from({ length: 3 }, () => createContentfulPost({ profileId: auth.profile.id })),
+    );
+    const orderKeys = profilePinOrderKeys(posts.length);
+    await db.insert(ProfilePinnedPosts).values(
+      posts.map((post, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: auth.profile.id,
+        postId: post.id,
+      })),
+    );
+    const rows = await db
+      .select()
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
+      .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
+    const operation = `mutation Reorder($input: ReorderProfilePostInput!) { reorderProfilePost(input: $input) { changed profile { id pinnedPosts { id } } } }`;
+    const input = {
+      postId: globalId('Post', rows[2].postId),
+      beforePostId: globalId('Post', rows[0].postId),
+    };
+    const owner = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(owner);
+    assert.equal(owner.data?.reorderProfilePost.changed, true);
+    const restore = await requestGraphQL(
+      operation,
+      { input: { postId: input.postId } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(restore);
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+    const result = await requestGraphQL<{
+      reorderProfilePost: {
+        changed: boolean;
+        profile: { id: string; pinnedPosts: { id: string }[] };
+      };
+    }>(operation, { input }, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.reorderProfilePost.changed, true);
+    assert.deepEqual(
+      result.data?.reorderProfilePost.profile.pinnedPosts.map((post) => post.id),
+      [rows[2], rows[0], rows[1]].map((row) => globalId('Post', row.postId)),
+    );
+    const again = await requestGraphQL<{ reorderProfilePost: { changed: boolean } }>(
+      operation,
+      { input },
+      auth.token,
+    );
+    assertNoGraphQLErrors(again);
+    assert.equal(again.data?.reorderProfilePost.changed, false);
+    const anonymous = await requestGraphQL(operation, { input });
+    assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
+    const wrongType = await requestGraphQL(
+      operation,
+      { input: { ...input, beforePostId: globalId('Profile', auth.profile.id) } },
+      auth.token,
+    );
+    assert.ok(wrongType.errors?.length);
+    const foreign = await createAuthenticatedSession();
+    const forbidden = await requestGraphQL(operation, { input }, foreign.token);
+    assertGraphQLErrorCode(forbidden, 'NOT_FOUND');
+  });
+
   test('profile pin mutations use the selected profile and concrete Post Relay IDs', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createContentfulPost({ profileId: auth.profile.id });
@@ -1200,6 +1486,7 @@ describe('GraphQL remote profile boundary', () => {
     });
     const otherPost = await createContentfulPost({ profileId: otherProfile.id });
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: generateProfilePinKey(null, null),
       profileId: otherProfile.id,
       postId: otherPost.id,
     });
@@ -1259,17 +1546,20 @@ describe('GraphQL remote profile boundary', () => {
     );
     const hidden = await createContentfulPost({ profileId: auth.profile.id });
     const visiblePosts = [first, reply, quote, ...additionalVisiblePosts];
-    await db
-      .insert(ProfilePinnedPosts)
-      .values(
-        [...visiblePosts, hidden].map(({ id }) => ({ profileId: auth.profile.id, postId: id })),
-      );
+    const orderKeys = profilePinOrderKeys(visiblePosts.length + 1);
+    await db.insert(ProfilePinnedPosts).values(
+      [...visiblePosts, hidden].map(({ id: postId }, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: auth.profile.id,
+        postId,
+      })),
+    );
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hidden.id));
     const orderedPinnedPostIds = await db
       .select({ postId: ProfilePinnedPosts.postId })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
-      .orderBy(asc(ProfilePinnedPosts.id));
+      .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
     const visiblePinnedPostIds = orderedPinnedPostIds
       .map(({ postId }) => postId)
       .filter((postId) => postId !== hidden.id);
@@ -1357,9 +1647,20 @@ describe('GraphQL remote profile boundary', () => {
       })
       .returning()
       .then(firstOrThrow);
+    const orderKeys = profilePinOrderKeys(2);
     await db.insert(ProfilePinnedPosts).values([
-      { position: 0, postId: first.id, profileId: remote.id },
-      { position: 1, postId: second.id, profileId: remote.id },
+      {
+        orderKey: orderKeys[0]!,
+        position: 0,
+        postId: first.id,
+        profileId: remote.id,
+      },
+      {
+        orderKey: orderKeys[1]!,
+        position: 1,
+        postId: second.id,
+        profileId: remote.id,
+      },
     ]);
 
     const query = `query RemotePinnedPosts($profileId: ID!) {
@@ -1390,6 +1691,7 @@ describe('GraphQL remote profile boundary', () => {
       targetProfileId: viewer.profile.id,
     });
     await db.insert(ProfilePinnedPosts).values({
+      orderKey: generateProfilePinKey(null, null),
       postId: pinned.id,
       profileId: visited.profile.id,
     });
@@ -1437,10 +1739,14 @@ describe('GraphQL remote profile boundary', () => {
     });
     const visiblePinnedPost = await createContentfulPost({ profileId: author.id });
     const unpinnedPost = await createContentfulPost({ profileId: author.id });
-    await db.insert(ProfilePinnedPosts).values([
-      { profileId: author.id, postId: hiddenPinnedPost.id },
-      { profileId: author.id, postId: visiblePinnedPost.id },
-    ]);
+    const orderKeys = profilePinOrderKeys(2);
+    await db.insert(ProfilePinnedPosts).values(
+      [hiddenPinnedPost, visiblePinnedPost].map(({ id: postId }, index) => ({
+        orderKey: orderKeys[index]!,
+        profileId: author.id,
+        postId,
+      })),
+    );
     await db.insert(ProfileMutes).values({
       ownerProfileId: viewer.profile.id,
       targetProfileId: sourceAuthor.profile.id,
@@ -3732,6 +4038,52 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(followee.followersCount, 3);
   });
 
+  test('starts first and additional profiles as Public while preserving saved defaults', async () => {
+    const auth = await createAuthenticatedSession({ selectedProfile: false });
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
+    assert.equal(await countAccountProfileMemberships(auth.account.id), 0);
+    let firstProfileId: string | undefined;
+
+    for (const handle of ['first_public', 'additional_public']) {
+      const result = await requestGraphQL<{
+        createProfile: {
+          profile: { id: string; private: { defaultPostVisibility: string } | null };
+        } | null;
+      }>(
+        `mutation CreatePublicDefaultProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) {
+            profile { id private { defaultPostVisibility } }
+          }
+        }`,
+        { handle },
+        auth.token,
+      );
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'PUBLIC');
+      const created = await db
+        .select()
+        .from(Profiles)
+        .where(and(eq(Profiles.instanceId, localInstanceId), eq(Profiles.handle, handle)))
+        .then(firstOrThrow);
+      assert.equal(created.defaultPostVisibility, PostVisibility.PUBLIC);
+      assert.equal(created.followPolicy, ProfileFollowPolicy.OPEN);
+      if (!firstProfileId) {
+        firstProfileId = created.id;
+        await db
+          .update(Profiles)
+          .set({ defaultPostVisibility: PostVisibility.FOLLOWERS })
+          .where(eq(Profiles.id, firstProfileId));
+      }
+    }
+    assert.equal(await countAccountProfileMemberships(auth.account.id), 2);
+    const preserved = await db
+      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .from(Profiles)
+      .where(eq(Profiles.id, firstProfileId!))
+      .then(firstOrThrow);
+    assert.equal(preserved.defaultPostVisibility, PostVisibility.FOLLOWERS);
+  });
+
   test('allows creating a local profile when only a remote profile has the same handle', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
@@ -3757,7 +4109,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
-    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'UNLISTED');
+    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'PUBLIC');
 
     const created = await db
       .select({
@@ -3770,7 +4122,7 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
     assert.equal(created.instanceId, localInstanceId);
-    assert.equal(created.defaultPostVisibility, PostVisibility.UNLISTED);
+    assert.equal(created.defaultPostVisibility, PostVisibility.PUBLIC);
 
     const ownership = await db
       .select()
@@ -3806,7 +4158,7 @@ describe('GraphQL remote profile boundary', () => {
       assertNoGraphQLErrors(result);
       const profile = result.data?.createProfile?.profile;
       assert.equal(profile?.instance.kind, 'LOCAL', handle);
-      assert.equal(profile?.private?.defaultPostVisibility, 'UNLISTED', handle);
+      assert.equal(profile?.private?.defaultPostVisibility, 'PUBLIC', handle);
 
       const created = await db
         .select({
@@ -4356,7 +4708,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Instances)
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, author.instance.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'empty');
 
     await db
       .update(Instances)
@@ -4366,7 +4718,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, author.profile.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'null');
 
     await db
       .update(Profiles)
@@ -4376,7 +4728,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Posts)
       .set({ state: PostState.DELETED })
       .where(eq(Posts.profileId, author.profile.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, true);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'empty');
   });
 
   test('enforces Followers Only access for Node, Profile posts, and Home timeline', async () => {
@@ -4490,7 +4842,7 @@ describe('GraphQL remote profile boundary', () => {
       suspended.data?.nodes.map((node) => node?.id ?? null),
       [null, null],
     );
-    assert.equal(suspended.data?.profile, null);
+    assert.deepEqual(suspended.data?.profile, { posts: null });
     assert.deepEqual(connectionIds(suspended.data?.homeTimeline), []);
   });
 
@@ -4537,16 +4889,12 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(connectionIds(firstPage.data?.profile?.posts), expectedIds.slice(0, 2));
     assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), expectedIds.slice(0, 2));
-    assert.equal(firstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(firstPage.data?.profile?.posts!.pageInfo.hasNextPage, true);
     assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
-    assert.ok(firstPage.data?.profile?.posts.pageInfo.endCursor);
-    assert.equal(
-      firstPage.data?.profile?.posts.pageInfo.endCursor,
-      firstPage.data?.homeTimeline?.pageInfo.endCursor,
-    );
+    assert.ok(firstPage.data?.profile?.posts!.pageInfo.endCursor);
 
     const secondPage = await requestRemotePostRead({
-      after: firstPage.data?.profile?.posts.pageInfo.endCursor,
+      after: firstPage.data?.profile?.posts!.pageInfo.endCursor,
       first: 2,
       nodeIds: [],
       profileId: globalId('Profile', followee.profile.id),
@@ -4555,7 +4903,7 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(connectionIds(secondPage.data?.profile?.posts), expectedIds.slice(2));
     assert.deepEqual(connectionIds(secondPage.data?.homeTimeline), expectedIds.slice(2));
-    assert.equal(secondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(secondPage.data?.profile?.posts!.pageInfo.hasNextPage, false);
     assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
     assert.equal(
       [
@@ -4566,24 +4914,51 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
-  test('returns null Local timeline without an authenticated selected Profile', async () => {
-    const query = `query LocalTimelineWithoutProfile {
-      localTimeline(first: 1) {
-        edges { node { id } }
-      }
-    }`;
+  test('returns empty public Local pages while Home and Post creation remain protected', async () => {
     const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
 
     for (const token of [undefined, withoutProfile.token]) {
-      const result = await requestGraphQL<{ localTimeline: null }>(query, {}, token);
+      const result = await requestGraphQL<{
+        homeTimeline: null;
+        localTimeline: RemotePostConnection;
+      }>(
+        `query EmptyPublicLocalTimeline {
+          homeTimeline(first: 1) { edges { node { id } } }
+          localTimeline(first: 1) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
+          }
+        }`,
+        {},
+        token,
+      );
 
       assertNoGraphQLErrors(result);
-      assert.equal(result.data?.localTimeline, null);
+      assert.equal(result.data?.homeTimeline, null);
+      assert.deepEqual(result.data?.localTimeline, {
+        edges: [],
+        pageInfo: { endCursor: '', hasNextPage: false, hasPreviousPage: false },
+      });
+
+      const denied = await requestGraphQL(
+        `mutation PublicLocalCannotCreatePost {
+          createPost(input: { bodyText: "unauthorized post", visibility: PUBLIC }) {
+            post { id }
+          }
+        }`,
+        {},
+        token,
+      );
+
+      assertGraphQLErrorCode(denied, 'PERMISSION_DENIED');
+      assert.equal(await db.$count(Posts), 0);
+      assert.equal(await db.$count(PostContents), 0);
     }
   });
 
-  test('filters Local timeline candidates before cursor pagination', async () => {
+  test('filters public Local candidates before forward and backward pagination for every viewer', async () => {
     const auth = await createAuthenticatedSession();
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const localAuthor = await createProfile({
       handle: 'local-author',
       instanceId: localInstanceId,
@@ -4592,6 +4967,11 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'suspended-local-author',
       instanceId: localInstanceId,
       state: ProfileState.SUSPENDED,
+    });
+    const disabledLocalAuthor = await createProfile({
+      handle: 'disabled-local-author',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
     });
     const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
     const otherLocalAuthor = await createProfile({
@@ -4629,6 +5009,20 @@ describe('GraphQL remote profile boundary', () => {
       visibility: PostVisibility.UNLISTED,
     });
     await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000975',
+      profileId: auth.profile.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000965',
+      profileId: auth.profile.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000945',
+      profileId: disabledLocalAuthor.id,
+    });
+    await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000960',
       profileId: localAuthor.id,
       replyParentId: parent.id,
@@ -4662,34 +5056,204 @@ describe('GraphQL remote profile boundary', () => {
       profileId: auth.profile.id,
     });
 
-    const read = (after: string | null = null) =>
-      requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
-        `query LocalTimeline($after: String) {
-          localTimeline(first: 2, after: $after) {
-            edges { cursor node { id } }
-            pageInfo { endCursor hasNextPage }
-          }
-        }`,
-        { after },
-        auth.token,
-      );
+    for (const token of [undefined, withoutProfile.token, auth.token]) {
+      const read = (variables: {
+        first?: number;
+        after?: string | null;
+        last?: number;
+        before?: string | null;
+      }) =>
+        requestGraphQL<{ localTimeline: RemotePostConnection }>(
+          `query PublicLocalTimeline($first: Int, $after: String, $last: Int, $before: String) {
+            localTimeline(first: $first, after: $after, last: $last, before: $before) {
+              edges { cursor node { id } }
+              pageInfo { endCursor hasNextPage hasPreviousPage }
+            }
+          }`,
+          variables,
+          token,
+        );
 
-    const firstPage = await read();
-    assertNoGraphQLErrors(firstPage);
-    assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
-      globalId('Post', ordinary.id),
-      globalId('Post', quote.id),
-    ]);
-    assert.equal(firstPage.data?.localTimeline?.pageInfo.hasNextPage, true);
+      const firstPage = await read({ first: 2 });
+      assertNoGraphQLErrors(firstPage);
+      assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
+        globalId('Post', ordinary.id),
+        globalId('Post', quote.id),
+      ]);
+      assert.equal(firstPage.data?.localTimeline.pageInfo.hasNextPage, true);
 
-    const secondPage = await read(firstPage.data?.localTimeline?.pageInfo.endCursor ?? null);
-    assertNoGraphQLErrors(secondPage);
-    assert.deepEqual(connectionIds(secondPage.data?.localTimeline), [globalId('Post', older.id)]);
-    assert.equal(secondPage.data?.localTimeline?.pageInfo.hasNextPage, false);
+      const secondPage = await read({
+        first: 2,
+        after: firstPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(secondPage);
+      assert.deepEqual(connectionIds(secondPage.data?.localTimeline), [globalId('Post', older.id)]);
+      assert.equal(secondPage.data?.localTimeline.pageInfo.hasNextPage, false);
+
+      const exhausted = await read({
+        first: 2,
+        after: secondPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(exhausted);
+      assert.deepEqual(connectionIds(exhausted.data?.localTimeline), []);
+      assert.equal(exhausted.data?.localTimeline.pageInfo.hasNextPage, false);
+
+      const backward = await read({
+        last: 2,
+        before: secondPage.data?.localTimeline.pageInfo.endCursor,
+      });
+      assertNoGraphQLErrors(backward);
+      assert.deepEqual(connectionIds(backward.data?.localTimeline), [
+        globalId('Post', ordinary.id),
+        globalId('Post', quote.id),
+      ]);
+      assert.equal(backward.data?.localTimeline.pageInfo.hasPreviousPage, false);
+    }
   });
 
-  test('caps each Local timeline page at 20 Posts', async () => {
+  test('uses configured Local sources from the initialized environment after raw environment changes', async () => {
+    const localAuthor = await createProfile({
+      handle: 'configured-local-author',
+      instanceId: localInstanceId,
+    });
+    const localPost = await createContentfulPost({ profileId: localAuthor.id });
+    const configuredAuthor = await createStoredActivityPubAuthor({
+      domain: 'configured-remote.example',
+      handle: 'configured-remote-author',
+      instanceId: configuredLocalTimelineInstanceId,
+    });
+    const configuredPost = await createContentfulPost({ profileId: configuredAuthor.profile.id });
+    const unconfiguredAuthor = await createStoredActivityPubAuthor({
+      domain: 'unconfigured-remote.example',
+      handle: 'unconfigured-author',
+    });
+    await createContentfulPost({ profileId: unconfiguredAuthor.profile.id });
+
+    try {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = 'not-a-uuid';
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query ConfiguredLocalTimeline {
+          localTimeline(first: 10) { edges { node { id } } }
+        }`,
+        {},
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        new Set(connectionIds(result.data?.localTimeline)),
+        new Set([localPost, configuredPost].map(({ id }) => globalId('Post', id))),
+      );
+    } finally {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
+    }
+  });
+
+  test('keeps public Local Quote bodies while applying Source visibility and consent', async () => {
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
+    const author = await createProfile({
+      handle: 'public-local-quotes',
+      instanceId: localInstanceId,
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'public-local-quote-source.example',
+      handle: 'source',
+    });
+    const hiddenSourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'hidden-local-quote-source.example',
+      handle: 'hidden-source',
+    });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenSourceAuthor.profile.id));
+
+    const cases = [
+      { visibility: PostVisibility.PUBLIC, visible: true },
+      { visibility: PostVisibility.UNLISTED, visible: true },
+      { visibility: PostVisibility.FOLLOWERS, visible: false },
+      { visibility: PostVisibility.DIRECT, visible: false },
+      { visibility: PostVisibility.PUBLIC, state: PostState.DELETED, visible: false },
+      { visibility: PostVisibility.PUBLIC, hiddenAuthor: true, visible: false },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.APPROVED,
+        visible: true,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.PENDING,
+        visible: false,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.REJECTED,
+        visible: false,
+      },
+      {
+        visibility: PostVisibility.PUBLIC,
+        consent: PostQuoteConsentStatus.REVOKED,
+        visible: false,
+      },
+    ];
+    const expected = [];
+    for (const [index, scenario] of cases.entries()) {
+      const source = await createContentfulPost({
+        profileId: scenario.hiddenAuthor ? hiddenSourceAuthor.profile.id : sourceAuthor.profile.id,
+        visibility: scenario.visibility,
+      });
+      if (scenario.state) {
+        await db.update(Posts).set({ state: scenario.state }).where(eq(Posts.id, source.id));
+      }
+      const quote = await createContentfulPost({
+        id: `019f8ed3-0000-7000-8000-${String(index + 1).padStart(12, '0')}`,
+        profileId: author.id,
+        repostSourceId: source.id,
+      });
+      if (scenario.consent) {
+        await db
+          .update(Posts)
+          .set({ quoteConsentStatus: scenario.consent })
+          .where(eq(Posts.id, quote.id));
+      }
+      expected.unshift({
+        id: globalId('Post', quote.id),
+        content: { id: globalId('PostContent', quote.currentContentId!) },
+        repostSource: scenario.visible ? { id: globalId('Post', source.id) } : null,
+      });
+    }
+
+    for (const token of [undefined, withoutProfile.token]) {
+      const result = await requestGraphQL<{
+        localTimeline: {
+          edges: Array<{
+            node: {
+              id: string;
+              content: { id: string } | null;
+              repostSource: { id: string } | null;
+            };
+          }>;
+        };
+      }>(
+        `query PublicLocalQuoteSources {
+          localTimeline(first: 20) {
+            edges { node { id content { id } repostSource { id } } }
+          }
+        }`,
+        {},
+        token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        result.data?.localTimeline.edges.map(({ node }) => node),
+        expected,
+      );
+    }
+  });
+
+  test('caps each public Local timeline page at 20 Posts for every viewer', async () => {
     const auth = await createAuthenticatedSession();
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const author = await createProfile({
       handle: 'local-page-author',
       instanceId: localInstanceId,
@@ -4699,20 +5263,22 @@ describe('GraphQL remote profile boundary', () => {
       await createContentfulPost({ profileId: author.id });
     }
 
-    const result = await requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
-      `query OversizedLocalTimeline {
-        localTimeline(first: 100) {
-          edges { node { id } }
-          pageInfo { hasNextPage }
-        }
-      }`,
-      {},
-      auth.token,
-    );
+    for (const token of [undefined, withoutProfile.token, auth.token]) {
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query OversizedPublicLocalTimeline {
+          localTimeline(first: 100) {
+            edges { node { id } }
+            pageInfo { hasNextPage }
+          }
+        }`,
+        {},
+        token,
+      );
 
-    assertNoGraphQLErrors(result);
-    assert.equal(result.data?.localTimeline?.edges.length, 20);
-    assert.equal(result.data?.localTimeline?.pageInfo.hasNextPage, true);
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.localTimeline.edges.length, 20);
+      assert.equal(result.data?.localTimeline.pageInfo.hasNextPage, true);
+    }
   });
 
   test('applies Reply candidate policy before paginating Home and excludes Replies from Profile', async () => {
@@ -4750,7 +5316,7 @@ describe('GraphQL remote profile boundary', () => {
       visibility?: typeof PostVisibility.PUBLIC | typeof PostVisibility.FOLLOWERS;
     }) =>
       createPost({
-        document: postContentDocumentFromText('Reply policy fixture'),
+        bodyText: 'Reply policy fixture',
         origin: 'LOCAL',
         profileId,
         replyParentId,
@@ -4897,6 +5463,187 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(allPosts.data?.profile?.posts), includedProfileIds);
   });
 
+  test('filters Reply Home candidates by current-content mentions before pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile({
+      handle: 'home-mention-author',
+      instanceId: localInstanceId,
+    });
+    const followedMention = await createProfile({
+      handle: 'home-followed-mention',
+      instanceId: localInstanceId,
+    });
+    const unrelatedMention = await createProfile({
+      handle: 'home-unrelated-mention',
+      instanceId: localInstanceId,
+    });
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: auth.profile.id, followeeProfileId: author.id },
+      { followerProfileId: auth.profile.id, followeeProfileId: followedMention.id },
+    ]);
+
+    const addMentionRevision = async (
+      postId: string,
+      targets: readonly { handle: string; id: string }[],
+    ) => {
+      let start = 0;
+      const mentions = targets.map(({ handle, id }) => {
+        const relativeHandle = `@${handle}`;
+        const reference = {
+          end: start + relativeHandle.length,
+          handle,
+          profileId: id,
+          relativeHandle,
+          start,
+        };
+        start = reference.end + 1;
+        return reference;
+      });
+      const bodyText = targets.map(({ handle }) => `@${handle}`).join(' ');
+      const content = await db
+        .insert(PostContents)
+        .values({
+          document: postContentDocumentFromTextAndMedia(bodyText, [], false, null, mentions),
+          postId,
+        })
+        .returning()
+        .then(firstOrThrow);
+      await db
+        .insert(PostMentions)
+        .values(mentions.map(({ profileId }) => ({ postContentId: content.id, profileId })));
+      await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, postId));
+    };
+    const createMentionedPost = async (
+      profileId: string,
+      targets: readonly { handle: string; id: string }[],
+      { id, replyParentId }: { id?: string; replyParentId?: string } = {},
+    ) => {
+      const post = await createContentfulPost({ id, profileId, replyParentId });
+      await addMentionRevision(post.id, targets);
+      return post;
+    };
+
+    const noMention = await createContentfulPost({ profileId: author.id });
+    const viewerParent = await createContentfulPost({ profileId: auth.profile.id });
+    const standaloneUnrelatedMention = await createMentionedPost(author.id, [unrelatedMention]);
+    const viewerMention = await createMentionedPost(author.id, [auth.profile], {
+      replyParentId: viewerParent.id,
+    });
+    const followedMentionPost = await createMentionedPost(author.id, [followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const mixedMention = await createMentionedPost(author.id, [unrelatedMention, followedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const historicalMention = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
+    await addMentionRevision(historicalMention.id, [auth.profile]);
+    await addMentionRevision(historicalMention.id, [unrelatedMention]);
+    const noMentionReply = await createContentfulPost({
+      profileId: author.id,
+      replyParentId: viewerParent.id,
+    });
+    const ownUnrelatedReply = await createMentionedPost(auth.profile.id, [unrelatedMention], {
+      replyParentId: viewerParent.id,
+    });
+    const pageBoundaryExcluded = await createMentionedPost(author.id, [unrelatedMention], {
+      id: 'ffffffff-ffff-7fff-bfff-ffffffffffff',
+      replyParentId: viewerParent.id,
+    });
+    const quote = await createContentfulPost({
+      profileId: author.id,
+      repostSourceId: pageBoundaryExcluded.id,
+    });
+    await addMentionRevision(quote.id, [unrelatedMention]);
+    const contentlessRepost = await db
+      .insert(Posts)
+      .values({
+        profileId: author.id,
+        repostSourceId: pageBoundaryExcluded.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const firstEligible = await createContentfulPost({
+      id: 'eeeeeeee-eeee-7eee-beee-eeeeeeeeeeee',
+      profileId: author.id,
+    });
+
+    const expectedHomeIds = (posts: readonly { id: string }[]) =>
+      posts
+        .map(({ id }) => id)
+        .toSorted((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+        .map((id) => globalId('Post', id));
+    const firstPage = await requestRemotePostRead({
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), [
+      globalId('Post', firstEligible.id),
+    ]);
+    assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+
+    const allPosts = await requestRemotePostRead({
+      first: 100,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(allPosts);
+    assert.deepEqual(
+      connectionIds(allPosts.data?.homeTimeline),
+      expectedHomeIds([
+        noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
+        viewerMention,
+        followedMentionPost,
+        mixedMention,
+        noMentionReply,
+        ownUnrelatedReply,
+        quote,
+        contentlessRepost,
+        firstEligible,
+      ]),
+    );
+
+    await db
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, auth.profile.id),
+          eq(ProfileFollows.followeeProfileId, followedMention.id),
+        ),
+      );
+    const afterUnfollow = await requestRemotePostRead({
+      first: 100,
+      nodeIds: [],
+      profileId: globalId('Profile', author.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(afterUnfollow);
+    assert.deepEqual(
+      connectionIds(afterUnfollow.data?.homeTimeline),
+      expectedHomeIds([
+        noMention,
+        viewerParent,
+        standaloneUnrelatedMention,
+        viewerMention,
+        noMentionReply,
+        ownUnrelatedReply,
+        quote,
+        contentlessRepost,
+        firstEligible,
+      ]),
+    );
+  });
+
   test('applies Repost candidate eligibility before Profile and Home pagination', async () => {
     const auth = await createAuthenticatedSession();
     const profileAuthor = await createStoredActivityPubAuthor({
@@ -4996,10 +5743,10 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(profileFirstPage.data?.profile?.posts),
       profileExpectedIds.slice(0, 2),
     );
-    assert.equal(profileFirstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(profileFirstPage.data?.profile?.posts!.pageInfo.hasNextPage, true);
 
     const profileSecondPage = await requestRemotePostRead({
-      after: profileFirstPage.data?.profile?.posts.pageInfo.endCursor,
+      after: profileFirstPage.data?.profile?.posts!.pageInfo.endCursor,
       first: 2,
       nodeIds: [],
       profileId: globalId('Profile', profileAuthor.profile.id),
@@ -5011,7 +5758,7 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(profileSecondPage.data?.profile?.posts),
       profileExpectedIds.slice(2),
     );
-    assert.equal(profileSecondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(profileSecondPage.data?.profile?.posts!.pageInfo.hasNextPage, false);
     assert.equal(
       connectionIds(profileSecondPage.data?.profile?.posts).includes(
         globalId('Post', unavailableRepost.id),
@@ -5040,7 +5787,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.ok(homeFirstPage.data?.homeTimeline?.pageInfo.endCursor);
 
     const homeSecondPage = await requestRemotePostRead({
-      after: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5073,9 +5820,7 @@ describe('GraphQL remote profile boundary', () => {
     });
 
     assertNoGraphQLErrors(disabledSourceHome);
-    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), [
-      globalId('Post', homeRetainedQuote.id),
-    ]);
+    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), []);
     assert.deepEqual(
       disabledSourceHome.data?.nodes.map((node) => node?.id ?? null),
       [null, globalId('Post', homeRetainedQuote.id)],
@@ -5252,13 +5997,13 @@ describe('GraphQL remote profile boundary', () => {
       globalId('Post', visiblePost.id),
     ]);
 
-    assert.equal(sourceMutedProfile.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(sourceMutedProfile.data?.profile?.posts!.pageInfo.hasNextPage, true);
     assert.deepEqual(
       sourceMutedProfile.data?.nodes.map((node) => node?.id),
       [globalId('Post', sourceMutedQuote.id), globalId('Post', sourceMutedRepost.id)],
     );
     const profileTail = await requestRemotePostRead({
-      after: sourceMutedProfile.data?.profile?.posts.pageInfo.endCursor,
+      after: sourceMutedProfile.data?.profile?.posts!.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5268,9 +6013,9 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(profileTail.data?.profile?.posts), [
       globalId('Post', olderPost.id),
     ]);
-    assert.equal(profileTail.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(profileTail.data?.profile?.posts!.pageInfo.hasNextPage, false);
     const profileBackward = await requestRemotePostRead({
-      before: profileTail.data?.profile?.posts.pageInfo.endCursor,
+      before: profileTail.data?.profile?.posts!.pageInfo.endCursor,
       last: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5280,7 +6025,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(profileBackward.data?.profile?.posts), [
       globalId('Post', visiblePost.id),
     ]);
-    assert.equal(profileBackward.data?.profile?.posts.pageInfo.hasPreviousPage, false);
+    assert.equal(profileBackward.data?.profile?.posts!.pageInfo.hasPreviousPage, false);
     const visitedMutedProfile = await requestRemotePostRead({
       first: 10,
       nodeIds: [],
@@ -5310,7 +6055,7 @@ describe('GraphQL remote profile boundary', () => {
     ]);
 
     const secondPage = await requestRemotePostRead({
-      after: firstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: firstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5324,7 +6069,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
 
     const thirdPage = await requestRemotePostRead({
-      after: secondPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: secondPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5336,7 +6081,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(thirdPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
 
     const homeBackward = await requestRemotePostRead({
-      before: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeBefore: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
       last: 2,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5653,7 +6398,7 @@ type RemotePostConnection = {
 
 type RemotePostReadData = {
   nodes: RemotePostNode[];
-  profile: { posts: RemotePostConnection } | null;
+  profile: { posts: RemotePostConnection | null } | null;
   homeTimeline: RemotePostConnection | null;
 };
 
@@ -5681,6 +6426,8 @@ const requestRemotePostRead = ({
   after,
   before,
   first,
+  homeAfter,
+  homeBefore,
   last,
   nodeIds,
   profileId,
@@ -5689,6 +6436,8 @@ const requestRemotePostRead = ({
   after?: string | null;
   before?: string | null;
   first?: number;
+  homeAfter?: string | null;
+  homeBefore?: string | null;
   last?: number;
   nodeIds: string[];
   profileId: string;
@@ -5700,6 +6449,8 @@ const requestRemotePostRead = ({
       $before: String
       $first: Int
       $last: Int
+      $homeAfter: String
+      $homeBefore: String
       $nodeIds: [ID!]!
       $profileId: ID!
     ) {
@@ -5733,12 +6484,21 @@ const requestRemotePostRead = ({
           }
         }
       }
-      homeTimeline(first: $first, after: $after, last: $last, before: $before) {
+      homeTimeline(first: $first, after: $homeAfter, last: $last, before: $homeBefore) {
         edges { cursor node { id } }
         pageInfo { endCursor hasNextPage hasPreviousPage }
       }
     }`,
-    { after: after ?? null, before: before ?? null, first, last, nodeIds, profileId },
+    {
+      after: after ?? null,
+      before: before ?? null,
+      first,
+      homeAfter: homeAfter === undefined ? (after ?? null) : homeAfter,
+      homeBefore: homeBefore === undefined ? (before ?? null) : homeBefore,
+      last,
+      nodeIds,
+      profileId,
+    },
     token,
   );
 
@@ -5757,27 +6517,29 @@ const connectionIds = (connection: RemotePostConnection | null | undefined) =>
 const assertRemotePostReadDenied = (
   result: GraphQLResult<RemotePostReadData>,
   nodeCount: number,
-  profileVisible: boolean,
+  profilePosts: 'empty' | 'null',
 ) => {
   assertNoGraphQLErrors(result);
   assert.deepEqual(
     result.data?.nodes,
     Array.from({ length: nodeCount }, () => null),
   );
-  if (profileVisible) {
+  if (profilePosts === 'empty') {
     assert.ok(result.data?.profile);
     assert.deepEqual(connectionIds(result.data.profile.posts), []);
   } else {
-    assert.equal(result.data?.profile, null);
+    assert.deepEqual(result.data?.profile, { posts: null });
   }
   assert.deepEqual(connectionIds(result.data?.homeTimeline), []);
 };
 
 const createRemoteInstance = async ({
   domain = remoteDomain,
+  id,
   state = InstanceState.ACTIVE,
 }: {
   domain?: string;
+  id?: string;
   state?: InstanceState;
 } = {}) =>
   db
@@ -5787,6 +6549,7 @@ const createRemoteInstance = async ({
       domain,
       kind: InstanceKind.ACTIVITYPUB,
       state,
+      ...(id === undefined ? {} : { id }),
     })
     .returning()
     .then(firstOrThrow);
@@ -5845,11 +6608,16 @@ const createProfile = async ({
 const createStoredActivityPubAuthor = async ({
   domain,
   handle,
+  instanceId,
 }: {
   domain: string;
   handle: string;
+  instanceId?: string;
 }) => {
-  const instance = await createRemoteInstance({ domain });
+  const instance = await createRemoteInstance({
+    domain,
+    ...(instanceId === undefined ? {} : { id: instanceId }),
+  });
   const profile = await createProfile({ handle, instanceId: instance.id });
   const actorUri = `https://${domain}/users/${handle}`;
   await db.insert(ActivityPubActors).values({

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { MultiSelectCombobox } from '@/components/ui/MultiSelectCombobox';
 import { space } from '@/theme/tokens';
@@ -17,8 +18,11 @@ const catalogOptions: MultiSelectOption[] = [
 ];
 
 type StoryArgs = MultiSelectComboboxProps;
+type MultiSelectStoryProps = StoryArgs & {
+  updateArgs?: (update: Partial<Pick<StoryArgs, 'query' | 'selectedOptions'>>) => void;
+};
 
-function MultiSelectStory(args: StoryArgs) {
+function MultiSelectStory({ updateArgs, ...args }: MultiSelectStoryProps) {
   const [query, setQuery] = useState(args.query);
   const [selectedOptions, setSelectedOptions] = useState(args.selectedOptions);
   useEffect(() => setQuery(args.query), [args.query]);
@@ -38,10 +42,12 @@ function MultiSelectStory(args: StoryArgs) {
         onQueryChange={(nextQuery) => {
           setQuery(nextQuery);
           args.onQueryChange(nextQuery);
+          updateArgs?.({ query: nextQuery });
         }}
         onSelectedOptionsChange={(nextOptions) => {
           setSelectedOptions(nextOptions);
           args.onSelectedOptionsChange(nextOptions);
+          updateArgs?.({ selectedOptions: nextOptions });
         }}
         options={options}
         query={query}
@@ -76,6 +82,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<StoryArgs>();
+    return <MultiSelectStory {...args} updateArgs={updateArgs} />;
+  },
   args: {
     disabled: false,
     query: '',

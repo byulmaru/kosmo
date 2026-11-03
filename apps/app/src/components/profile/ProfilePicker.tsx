@@ -11,7 +11,7 @@ export type ProfilePickerSurface = 'compact' | 'drawer' | 'full';
 
 export type ProfilePickerProfile = Readonly<{
   avatar?: Readonly<{ url: string | null | undefined }> | null;
-  displayName: string;
+  displayName: string | null | undefined;
   id: string;
   relativeHandle: string;
   unreadNotificationCount?: number | null;
@@ -21,6 +21,7 @@ type Props = Readonly<{
   busy?: boolean;
   footer?: ReactNode;
   menuFooter?: ReactNode;
+  maxHeight?: number;
   onSelect: (id: string) => void;
   pickerRef?: Ref<View>;
   profiles: readonly ProfilePickerProfile[];
@@ -38,12 +39,14 @@ const webFullPickerBounds = {
 const webDrawerPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 206px))',
 } as unknown as ViewStyle;
+const webScrollContainment = { overscrollBehavior: 'contain' } as unknown as ViewStyle;
 const nativePickerBounds: ViewStyle = { maxHeight: '100%' };
 
 export function ProfilePicker({
   busy = false,
   footer,
   menuFooter,
+  maxHeight,
   onSelect,
   pickerRef,
   profiles,
@@ -66,12 +69,13 @@ export function ProfilePicker({
   const profileOptions = profiles.map((profile) => {
     const selected = selectedProfileId === profile.id;
     const hasUnread = (profile.unreadNotificationCount ?? 0) > 0;
+    const displayName = profile.displayName ?? profile.relativeHandle;
 
     return (
       <Pressable
         aria-current={drawerWeb && selected ? true : undefined}
         aria-pressed={desktopWebSurface ? selected : undefined}
-        accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
+        accessibilityLabel={`${displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
         accessibilityRole={Platform.OS === 'web' ? 'button' : 'radio'}
         accessibilityState={
           Platform.OS === 'web' ? { disabled: busy } : { checked: selected, disabled: busy }
@@ -88,14 +92,10 @@ export function ProfilePicker({
           },
         ]}
       >
-        <Avatar
-          imageUri={profile.avatar?.url}
-          label={profile.displayName}
-          size={selected ? 48 : 32}
-        />
+        <Avatar imageUri={profile.avatar?.url} label={displayName} size={selected ? 48 : 32} />
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
-            {profile.displayName}
+            {displayName}
           </Text>
           <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
             {profile.relativeHandle}
@@ -116,7 +116,7 @@ export function ProfilePicker({
       style={[
         styles.menu,
         scrollableWebPicker ? styles.redesignedMenu : undefined,
-        surfaceBounds,
+        maxHeight === undefined ? surfaceBounds : { maxHeight },
         Platform.OS === 'web' ? elevation.floating : elevation.overlay,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -129,8 +129,13 @@ export function ProfilePicker({
         <ScrollView
           accessibilityLabel={scrollableWebPicker ? '전환할 프로필 목록' : undefined}
           contentContainerStyle={styles.profileListContent}
+          keyboardShouldPersistTaps={maxHeight === undefined ? undefined : 'handled'}
+          nestedScrollEnabled={maxHeight !== undefined}
           role={scrollableWebPicker ? 'group' : undefined}
-          style={styles.profileList}
+          style={[
+            styles.profileList,
+            Platform.OS === 'web' && maxHeight !== undefined ? webScrollContainment : undefined,
+          ]}
         >
           {profileOptions}
         </ScrollView>

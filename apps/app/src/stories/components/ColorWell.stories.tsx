@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ColorPickerPanel, hexToHsb, hsbToHex } from '@/components/ui/ColorPickerPanel';
 import { ColorWell } from '@/components/ui/ColorWell';
@@ -9,11 +10,27 @@ import type { ColorWellProps } from '@/components/ui/ColorWell';
 
 const fallbackValue = { brightness: 76, hue: 210, saturation: 64 };
 
-function ColorWellCatalog({ color = '#4684C2', ...args }: ColorWellProps) {
+type ColorWellStoryArgs = ColorWellProps & { pickerTitle: string };
+type ColorWellCatalogProps = ColorWellStoryArgs & {
+  updateArgs?: (update: Partial<Pick<ColorWellStoryArgs, 'color'>>) => void;
+};
+
+function ColorWellCatalog({
+  color = '#4684C2',
+  pickerTitle,
+  updateArgs,
+  ...args
+}: ColorWellCatalogProps) {
   const initialValue = hexToHsb(color) ?? fallbackValue;
   const [committedValue, setCommittedValue] = useState(initialValue);
   const [draftValue, setDraftValue] = useState(initialValue);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const nextValue = hexToHsb(color) ?? fallbackValue;
+    setCommittedValue(nextValue);
+    setDraftValue(nextValue);
+  }, [color]);
 
   return (
     <View style={{ gap: 12, width: 360 }}>
@@ -36,8 +53,9 @@ function ColorWellCatalog({ color = '#4684C2', ...args }: ColorWellProps) {
           onCommit={(value) => {
             setCommittedValue(value);
             setOpen(false);
+            updateArgs?.({ color: hsbToHex(value) });
           }}
-          title="강조 색상 선택"
+          title={pickerTitle}
           value={draftValue}
         />
       ) : null}
@@ -48,23 +66,37 @@ function ColorWellCatalog({ color = '#4684C2', ...args }: ColorWellProps) {
 const meta = {
   title: 'KOSMO/Components/Color Well',
   component: ColorWellCatalog,
-  args: { accessibilityLabel: '강조 색상', color: '#4684C2', disabled: false, onPress: fn() },
+  args: {
+    accessibilityLabel: '강조 색상',
+    color: '#4684C2',
+    disabled: false,
+    onPress: fn(),
+    pickerTitle: '강조 색상 선택',
+  },
   argTypes: {
     accessibilityLabel: { control: 'text' },
     color: { control: 'color' },
     disabled: { control: 'boolean' },
     onPress: { control: false },
+    pickerTitle: { control: 'text' },
   },
   excludeStories: ['InteractionContract'],
-} satisfies Meta<typeof ColorWell>;
+} satisfies Meta<typeof ColorWellCatalog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  render: (args) => (
-    <ColorWellCatalog key={`${args.accessibilityLabel}:${args.color}:${args.disabled}`} {...args} />
-  ),
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['accessibilityLabel', 'color', 'disabled', 'pickerTitle'],
+    },
+  },
+  render: (args) => {
+    const [, updateArgs] = useArgs<ColorWellStoryArgs>();
+    return <ColorWellCatalog {...args} updateArgs={updateArgs} />;
+  },
 };
 
 export const RepresentativeStates: Story = {

@@ -35,10 +35,21 @@ export interface PostContentMentionNode {
   };
 }
 
+export interface PostContentHashtagNode {
+  readonly type: 'hashtag';
+  readonly attrs: {
+    /** The stable Hashtag identity verified at the local authoring boundary. */
+    readonly hashtagId: string;
+    /** The exact authored hashtag token, including its leading #. */
+    readonly token: string;
+  };
+}
+
 export type PostContentInlineNode =
   | PostContentTextNode
   | PostContentHardBreakNode
-  | PostContentMentionNode;
+  | PostContentMentionNode
+  | PostContentHashtagNode;
 
 export interface PostContentParagraphNode {
   readonly type: 'paragraph';
@@ -126,7 +137,7 @@ function postContentCodePointAt(value: string, offset: number): string | undefin
   return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
 }
 
-function postContentCodePointBefore(value: string, offset: number): string | undefined {
+export function postContentCodePointBefore(value: string, offset: number): string | undefined {
   if (offset === 0) {
     return undefined;
   }
@@ -152,6 +163,8 @@ function splitsPostContentSurrogatePair(value: string, offset: number): boolean 
 
 const postContentProfileIdSchema = z.uuid();
 const postContentMentionHandleSchema = z.string().min(1);
+const postContentHashtagIdSchema = z.uuid();
+const postContentHashtagTokenSchema = z.string().min(1);
 
 export function isPostContentMentionHandleUsernameWithinLimit(handle: string): boolean {
   const usernameStart = handle.startsWith('@') ? 1 : 0;
@@ -186,6 +199,22 @@ export function readPostContentDocumentV1(value: unknown): PostContentDocumentV1
 
   const body = readPostContentBodyDocumentV1(value.body);
   return body === null ? null : ({ ...value, body } as PostContentDocumentV1);
+}
+
+export function normalizePostContentHashtagId(value: unknown): string {
+  const result = postContentHashtagIdSchema.safeParse(value);
+  if (!result.success) {
+    throw new TypeError('Hashtag ID must be a UUID');
+  }
+  return result.data;
+}
+
+export function normalizePostContentHashtagToken(value: unknown): string {
+  const result = postContentHashtagTokenSchema.safeParse(value);
+  if (!result.success) {
+    throw new TypeError('Hashtag token must be a non-empty string');
+  }
+  return result.data;
 }
 
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
@@ -304,6 +333,7 @@ function isPostContentNodeType(type: string): boolean {
     type === 'text' ||
     type === 'hard_break' ||
     type === 'mention' ||
+    type === 'hashtag' ||
     type === 'media'
   );
 }
@@ -340,6 +370,9 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
   if (value.type === 'mention') {
     return isRecordWithKeys(value, ['type', 'attrs']) && isMentionAttrs(value.attrs);
   }
+  if (value.type === 'hashtag') {
+    return isRecordWithKeys(value, ['type', 'attrs']) && isHashtagAttrs(value.attrs);
+  }
   if (value.type !== 'text') {
     return false;
   }
@@ -365,6 +398,16 @@ function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'
     (!('handle' in value) ||
       value.handle === undefined ||
       postContentMentionHandleSchema.safeParse(value.handle).success)
+  );
+}
+
+function isHashtagAttrs(value: unknown): value is PostContentHashtagNode['attrs'] {
+  return (
+    isRecordWithKeys(value, ['hashtagId', 'token']) &&
+    typeof value.hashtagId === 'string' &&
+    value.hashtagId.length > 0 &&
+    typeof value.token === 'string' &&
+    value.token.length > 0
   );
 }
 

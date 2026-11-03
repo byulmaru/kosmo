@@ -244,6 +244,7 @@ mockModule('react-relay', {
       profileByHandle: profileAvailable
         ? {
             displayName: profileDisplayName ?? `Display ${variables.handle}`,
+            followPolicy: 'OPEN',
             handle: variables.handle,
             id: `profile:${variables.handle}`,
             instance: { kind: profileInstanceKind },
@@ -601,6 +602,53 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(routerBackCount, 1);
   });
 
+  it('Web Slot remount after app-header Back uses the scoped profile handle for posts', async () => {
+    await renderRoute('@owner', '/@owner');
+
+    currentRouteInfo = { params: { profileHandle: '@owner' }, pathname: '/@owner' };
+    globalParams = {};
+    screenLocalParams = {};
+    await act(async () =>
+      renderer!.update(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      ),
+    );
+
+    const latestPostQuery = queryHistory.findLast(
+      ({ query }) => query === 'ProfilePostListPageQuery',
+    );
+    assert.equal(latestPostQuery?.handle, 'owner');
+    assert.deepEqual(identities('PostList'), ['owner']);
+  });
+
+  it('background profile posts stay scoped to their route when another profile is global', async () => {
+    await renderRoute('@owner', '/@owner');
+
+    currentRouteInfo = { params: { profileHandle: '@owner' }, pathname: '/@owner' };
+    globalParams = { profileHandle: '@other' };
+    screenLocalParams = {};
+    pathname = '/@other/post-id';
+    await act(async () =>
+      renderer!.update(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      ),
+    );
+
+    const latestPostQuery = queryHistory.findLast(
+      ({ query }) => query === 'ProfilePostListPageQuery',
+    );
+    assert.equal(latestPostQuery?.handle, 'owner');
+    assert.deepEqual(identities('PostList'), ['owner']);
+  });
+
   it('directly opened Profile Home returns to Home instead of dispatching an unhandled back action', async () => {
     routerCanGoBack = false;
     await renderRoute('@local', '/@local');
@@ -788,10 +836,10 @@ describe('profile route parameter lifecycle', () => {
     profileDisplayName = '';
 
     await renderRoute('@local', '/@local/followers');
-    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로워');
+    assert.equal(requireRendered('PageHeader').props.title, '@local님의 팔로워');
 
     await renderRoute('@local', '/@local/following');
-    assert.equal(requireRendered('PageHeader').props.title, 'local님의 팔로잉');
+    assert.equal(requireRendered('PageHeader').props.title, '@local님의 팔로잉');
   });
 
   it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {

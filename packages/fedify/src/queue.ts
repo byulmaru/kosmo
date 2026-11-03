@@ -1,4 +1,4 @@
-import { PostgresMessageQueue } from '@fedify/postgres';
+import { PostgresKvStore, PostgresMessageQueue } from '@fedify/postgres';
 import postgres from 'postgres';
 import type { Sql } from 'postgres';
 
@@ -10,6 +10,7 @@ const queueSql: Sql | undefined = queueDatabaseUrl
   : undefined;
 
 export const fedifyQueue = queueSql ? new PostgresMessageQueue(queueSql) : undefined;
+export const fedifyKv = queueSql ? new PostgresKvStore(queueSql) : undefined;
 
 export const closeFedifyQueue = async (): Promise<void> => {
   await queueSql?.end({ timeout: 5 });

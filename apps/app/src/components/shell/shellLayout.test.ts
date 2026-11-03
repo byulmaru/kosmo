@@ -84,7 +84,7 @@ describe('getShellLayout', () => {
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/following-import', []), {
       leading: 'back',
-      title: '팔로잉 가져오기',
+      title: '다른 서비스에서 이전',
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
       leading: 'back',
@@ -110,6 +110,10 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '개발 정보',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/licenses', []), {
+      leading: 'back',
+      title: '오픈소스 라이선스',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/compose', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
@@ -119,6 +123,16 @@ describe('getShellLayout', () => {
     assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
+  });
+
+  it('gives only confirmed mobile Web guests the public Local menu header', () => {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/', [], true), {
+      leading: 'menu',
+      title: '타임라인 둘러보기',
+    });
+    assert.equal(getWebMobileShellHeader(true, 390, '/', [], false), null);
+    assert.equal(getWebMobileShellHeader(false, 390, '/', [], true), null);
+    assert.equal(getWebMobileShellHeader(true, 1024, '/', [], true), null);
   });
 
   it('treats only the canonical Settings route family as Settings', () => {

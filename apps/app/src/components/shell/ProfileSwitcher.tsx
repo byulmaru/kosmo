@@ -52,7 +52,6 @@ const ProfileSwitcherFragment = graphql`
     currentSession {
       selectedProfile {
         id
-        handle
         relativeHandle
         displayName
         followingCount
@@ -79,7 +78,6 @@ const ProfileSwitcherFragment = graphql`
       id
       profiles {
         id
-        handle
         relativeHandle
         displayName
         unreadNotificationCount
@@ -488,7 +486,29 @@ export function ProfileSwitcher({
         </>
       }
       menuFooter={
-        !creating ? (
+        !creating && profiles.length === 0 ? (
+          <NavigationLink
+            href="/first-profile/handle"
+            onNavigate={() => {
+              dismissPicker();
+              onNavigate?.();
+            }}
+          >
+            <Pressable
+              accessibilityLabel="첫 프로필 만들기"
+              accessibilityRole="link"
+              disabled={busy}
+              style={styles.addProfile}
+            >
+              <View style={styles.addIcon}>
+                <PlusIcon color={theme.foregroundPrimary} size={18} strokeWidth={2.25} />
+              </View>
+              <Text style={[styles.addLabel, { color: theme.foregroundPrimary }]}>
+                프로필 만들기
+              </Text>
+            </Pressable>
+          </NavigationLink>
+        ) : !creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
             accessibilityRole="button"
@@ -526,7 +546,9 @@ export function ProfileSwitcher({
   const triggerCopy = !compact ? (
     <>
       <Text numberOfLines={1} style={[styles.triggerName, { color: theme.foregroundPrimary }]}>
-        {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+        {active?.displayName ??
+          active?.relativeHandle ??
+          (profiles.length ? '프로필 선택' : '프로필')}
       </Text>
       <View style={styles.chevron}>
         <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
@@ -557,7 +579,11 @@ export function ProfileSwitcher({
     >
       {compact ? (
         <View style={styles.compactAvatar}>
-          <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+          <Avatar
+            imageUri={active?.avatar?.url}
+            label={active?.displayName ?? active?.relativeHandle ?? '?'}
+            size={40}
+          />
           <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
         </View>
       ) : null}
@@ -579,38 +605,40 @@ export function ProfileSwitcher({
       >
         {active.relativeHandle}
       </Text>
-      <View style={styles.counts}>
-        <NavigationLink
-          href={`/${active.relativeHandle}/following`}
-          onNavigate={profileSummaryOnNavigate}
-        >
-          <Pressable
-            accessibilityRole="link"
-            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
-            style={styles.countLink}
+      {active.followingCount != null && active.followersCount != null ? (
+        <View style={styles.counts}>
+          <NavigationLink
+            href={`/${active.relativeHandle}/following`}
+            onNavigate={profileSummaryOnNavigate}
           >
-            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-              {countFormatter.format(active.followingCount).toLowerCase()}
-            </Text>
-            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로잉</Text>
-          </Pressable>
-        </NavigationLink>
-        <NavigationLink
-          href={`/${active.relativeHandle}/followers`}
-          onNavigate={profileSummaryOnNavigate}
-        >
-          <Pressable
-            accessibilityRole="link"
-            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
-            style={styles.countLink}
+            <Pressable
+              accessibilityRole="link"
+              onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
+              style={styles.countLink}
+            >
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                {countFormatter.format(active.followingCount).toLowerCase()}
+              </Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로잉</Text>
+            </Pressable>
+          </NavigationLink>
+          <NavigationLink
+            href={`/${active.relativeHandle}/followers`}
+            onNavigate={profileSummaryOnNavigate}
           >
-            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-              {countFormatter.format(active.followersCount).toLowerCase()}
-            </Text>
-            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로워</Text>
-          </Pressable>
-        </NavigationLink>
-      </View>
+            <Pressable
+              accessibilityRole="link"
+              onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
+              style={styles.countLink}
+            >
+              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                {countFormatter.format(active.followersCount).toLowerCase()}
+              </Text>
+              <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로워</Text>
+            </Pressable>
+          </NavigationLink>
+        </View>
+      ) : null}
     </>
   ) : (
     <Text style={[styles.emptyProfile, { color: theme.foregroundSecondary }]}>
@@ -665,6 +693,7 @@ export function ProfileSwitcher({
         {active?.header?.url ? (
           <Image
             accessible={false}
+            fadeDuration={0}
             resizeMode="cover"
             source={{ uri: active.header.url }}
             style={styles.coverImage}
@@ -674,7 +703,7 @@ export function ProfileSwitcher({
       <View style={styles.largeAvatar}>
         <Avatar
           imageUri={active?.avatar?.url}
-          label={active?.displayName || active?.handle || '?'}
+          label={active?.displayName || active?.relativeHandle || '?'}
           size={96}
           style={avatarShadow}
         />

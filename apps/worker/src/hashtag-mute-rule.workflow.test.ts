@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HashtagMuteDecision, HashtagMuteScope } from '@kosmo/core/enums';
 import { hashtagMuteRuleWorkflow } from '@kosmo/core/temporal/hashtag-mute';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type {
   HashtagMuteCommand,
   HashtagMuteRuleSnapshot,
@@ -33,15 +33,14 @@ test(
   'production Workflow의 확정 결과·retry·wire 검증·도메인 실패를 확인한다',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `hashtag-mute-test-${process.pid}`;
     const calls: HashtagMuteCommand[] = [];
     const worker = await Worker.create({
-      workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
+      ...testWorkflowSource,
       connection: environment.nativeConnection,
+      namespace: environment.namespace,
       taskQueue,
       activities: {
         executeHashtagMuteRuleActivity: async (input: HashtagMuteCommand) => {

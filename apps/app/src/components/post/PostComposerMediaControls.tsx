@@ -1,16 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlusIcon, RefreshCwIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { releaseImagePreview, uploadImage } from '@/components/media/imageUpload';
 import {
@@ -23,6 +14,7 @@ import {
   getIconButtonOverlayGeometry,
   IconButton,
 } from '@/components/ui/IconButton';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -36,30 +28,49 @@ import {
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
-import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
 import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/PostComposerIssueMediaUploadUrlMutation.graphql';
 
-export type ComposerMediaItem = {
-  readonly asset: ImagePicker.ImagePickerAsset;
+type ComposerMediaItemFields = {
   readonly key: string;
   readonly mediaId?: string;
   readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
+  readonly applyAiProhibitFilter?: boolean;
+  readonly requiresReselection?: boolean;
+};
+
+export type ComposerMediaItem = ComposerMediaItemFields & {
+  readonly asset: ImagePicker.ImagePickerAsset;
 };
 
 export type PostComposerMediaValue = {
+  readonly getPostRequestMedia: () => readonly PostRequestMediaItem[];
   readonly hasPendingMedia: boolean;
   readonly items: readonly {
     readonly altText: string | null;
     readonly mediaId: string;
   }[];
+  readonly requirePostRequestMediaReselection: (mediaId: string) => void;
   readonly sensitiveMedia: boolean;
+};
+
+export type PostRequestMediaItem = Readonly<{
+  readonly altText: string | null;
+  readonly applyAiProhibitFilter: boolean;
+  readonly mediaId: string;
+}>;
+
+const releaseMediaPreview = (item: ComposerMediaItem) => {
+  if (Platform.OS === 'web') {
+    releaseImagePreview(item.asset.uri);
+  }
 };
 
 export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
+  readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -68,8 +79,10 @@ export type PostComposerMediaControlsRenderProps = {
 };
 
 export const emptyPostComposerMediaValue: PostComposerMediaValue = {
+  getPostRequestMedia: () => [],
   hasPendingMedia: false,
   items: [],
+  requirePostRequestMediaReselection: () => undefined,
   sensitiveMedia: false,
 };
 
@@ -116,17 +129,6 @@ export function PostComposerMediaControls({
       }
     }
   `);
-  const [commitCompleteMediaUpload] = useMutation<PostComposerCompleteMediaUploadMutation>(graphql`
-    mutation PostComposerCompleteMediaUploadMutation($input: CompleteMediaUploadInput!) {
-      completeMediaUpload(input: $input) {
-        media {
-          id
-          state
-        }
-      }
-    }
-  `);
-
   const updateMedia = (
     update: (items: readonly ComposerMediaItem[]) => readonly ComposerMediaItem[],
   ) => {
@@ -138,27 +140,22 @@ export function PostComposerMediaControls({
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
     updateMedia((items) =>
       items.map((item) =>
-        item.key === key ? { ...item, failure: undefined, state: 'uploading' } : item,
+        item.key === key
+          ? {
+              ...item,
+              asset,
+              failure: undefined,
+              mediaId: undefined,
+              requiresReselection: undefined,
+              state: 'uploading',
+            }
+          : item,
       ),
     );
 
     try {
       const mediaId = await uploadImage({
         asset,
-        complete: (id) =>
-          new Promise<void>((resolve, reject) => {
-            commitCompleteMediaUpload({
-              variables: { input: { id } },
-              onCompleted: (response, errors) => {
-                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                  return;
-                }
-                resolve();
-              },
-              onError: reject,
-            });
-          }),
         isActive: () => mounted.current && !removedMediaKeys.current.has(key),
         issue: () =>
           new Promise((resolve, reject) => {
@@ -205,6 +202,7 @@ export function PostComposerMediaControls({
     }
 
     const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
+      applyAiProhibitFilter: false,
       altText: '',
       asset,
       key: `composer-media-${++nextMediaKey.current}`,
@@ -289,11 +287,45 @@ export function PostComposerMediaControls({
     }
   };
 
+  const reselectMedia = async (key: string) => {
+    const item = mediaRef.current.find((current) => current.key === key);
+    if (!item?.requiresReselection || disabled || selectingMedia.current) {
+      return;
+    }
+
+    selectingMedia.current = true;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: false,
+        mediaTypes: ['images'],
+        orderedSelection: true,
+        selectionLimit: 1,
+      });
+      if (!mounted.current || result.canceled) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset) {
+        return;
+      }
+
+      releaseMediaPreview(item);
+      void uploadMedia(key, asset);
+    } catch {
+      if (mounted.current) {
+        showToast('이미지를 선택하지 못했습니다.', { tone: 'danger' });
+      }
+    } finally {
+      selectingMedia.current = false;
+    }
+  };
+
   const removeMedia = (key: string) => {
     removedMediaKeys.current.add(key);
     const removed = mediaRef.current.find((item) => item.key === key);
-    if (Platform.OS === 'web' && removed) {
-      releaseImagePreview(removed.asset.uri);
+    if (removed) {
+      releaseMediaPreview(removed);
     }
     updateMedia((items) => items.filter((item) => item.key !== key));
     if (mediaRef.current.length === 0) {
@@ -302,13 +334,49 @@ export function PostComposerMediaControls({
   };
 
   useEffect(() => {
+    const items = media.flatMap((item) =>
+      item.state === 'ready' && item.mediaId
+        ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
+        : [],
+    );
+
+    const getPostRequestMedia = (): readonly PostRequestMediaItem[] => {
+      if (
+        !mounted.current ||
+        mediaRef.current !== media ||
+        media.some((item) => item.state !== 'ready' || !item.mediaId || item.requiresReselection)
+      ) {
+        throw new Error('Composer media is not ready for submission');
+      }
+
+      return Object.freeze(
+        media.map((item) =>
+          Object.freeze({
+            altText: item.altText.trim() || null,
+            applyAiProhibitFilter: item.applyAiProhibitFilter ?? false,
+            mediaId: item.mediaId!,
+          }),
+        ),
+      );
+    };
+
+    const requirePostRequestMediaReselection = (mediaId: string) => {
+      if (!mounted.current) {
+        return;
+      }
+
+      updateMedia((items) =>
+        items.map((item) =>
+          item.mediaId === mediaId ? { ...item, requiresReselection: true, state: 'failed' } : item,
+        ),
+      );
+    };
+
     onValueChange({
+      getPostRequestMedia,
       hasPendingMedia: media.some((item) => item.state !== 'ready'),
-      items: media.flatMap((item) =>
-        item.state === 'ready' && item.mediaId
-          ? [{ altText: item.altText.trim() || null, mediaId: item.mediaId }]
-          : [],
-      ),
+      items,
+      requirePostRequestMediaReselection,
       sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
     });
   }, [media, onValueChange, sensitiveMedia]);
@@ -320,9 +388,7 @@ export function PostComposerMediaControls({
       mounted.current = false;
       for (const item of mediaRef.current) {
         removedMediaKeys.current.add(item.key);
-        if (Platform.OS === 'web') {
-          releaseImagePreview(item.asset.uri);
-        }
+        releaseMediaPreview(item);
       }
     };
   }, []);
@@ -334,9 +400,24 @@ export function PostComposerMediaControls({
         updateMedia((items) =>
           items.map((item) => (item.key === key ? { ...item, altText } : item)),
         ),
+      onApplyAiProhibitFilterChange: (key, value) => {
+        const item = mediaRef.current.find((current) => current.key === key);
+        if (!item || (item.applyAiProhibitFilter ?? false) === value) {
+          return;
+        }
+
+        updateMedia((items) =>
+          items.map((current) =>
+            current.key === key ? { ...current, applyAiProhibitFilter: value } : current,
+          ),
+        );
+      },
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,
-      onMediaRetry: (item) => void uploadMedia(item.key, item.asset),
+      onMediaRetry: (item) =>
+        item.requiresReselection
+          ? void reselectMedia(item.key)
+          : void uploadMedia(item.key, item.asset),
       onSensitiveMediaChange: setSensitiveMedia,
       sensitiveMedia,
     });
@@ -353,7 +434,11 @@ export function PostComposerMediaControls({
           )
         }
         onRemove={removeMedia}
-        onRetry={(item) => void uploadMedia(item.key, item.asset)}
+        onRetry={(item) =>
+          item.requiresReselection
+            ? void reselectMedia(item.key)
+            : void uploadMedia(item.key, item.asset)
+        }
         onSensitiveMediaChange={setSensitiveMedia}
         sensitiveMedia={sensitiveMedia}
       />
@@ -396,75 +481,83 @@ export function PostComposerMediaItems({
 
   return (
     <View style={styles.mediaSection}>
-      {media.map((item, index) => (
-        <View
-          accessibilityLabel={`첨부 이미지 ${index + 1}, ${
-            item.state === 'uploading'
-              ? '업로드 중'
-              : item.state === 'ready'
-                ? '업로드 완료'
-                : '업로드 실패'
-          }`}
-          accessibilityLiveRegion={item.state === 'failed' ? undefined : 'polite'}
-          key={item.key}
-          style={styles.mediaItem}
-        >
-          <View style={styles.mediaPreviewContainer}>
-            <Image
-              accessibilityIgnoresInvertColors
-              accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
-              accessibilityRole="image"
-              source={{ uri: item.asset.uri }}
-              style={styles.mediaPreview}
-            />
-            {item.state !== 'ready' ? (
-              <>
-                <View style={[StyleSheet.absoluteFill, styles.mediaOverlayBackdrop]} />
-                {item.state === 'uploading' ? (
-                  <View style={[StyleSheet.absoluteFill, styles.mediaOverlay]}>
-                    <ActivityIndicator
-                      accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
-                      color={colors.light.fixedWhite}
-                    />
-                  </View>
-                ) : (
-                  <Pressable
-                    accessibilityLabel={formatImageUploadRetryLabel(`${index + 1}번째 이미지`)}
-                    accessibilityRole="button"
-                    onPress={() => onRetry(item)}
-                    style={[StyleSheet.absoluteFill, styles.mediaOverlay]}
-                  >
-                    <RefreshCwIcon color={colors.light.fixedWhite} size={24} />
-                  </Pressable>
-                )}
-              </>
-            ) : null}
-            <IconButton
-              accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
-              disabled={disabled}
-              feedbackTone="inverse"
-              onPress={() => onRemove(item.key)}
-              style={styles.mediaRemoveTarget}
-              targetSize={mediaRemoveGeometry.targetSize}
-              visualSize={mediaRemoveVisualSize}
-              visualStyle={styles.mediaRemoveVisual}
-            >
-              <XIcon color={colors.light.fixedWhite} size={18} />
-            </IconButton>
-          </View>
-          {item.state === 'ready' ? (
-            <View style={styles.mediaItemBody}>
-              <TextField
-                accessibilityLabel={`첨부 이미지 ${index + 1} 대체 텍스트`}
-                editable={!disabled}
-                label="대체 텍스트 (선택)"
-                onChangeText={(altText) => onAltTextChange(item.key, altText)}
-                value={item.altText}
+      {media.map((item, index) => {
+        const status = item.requiresReselection
+          ? '원본 다시 선택 필요'
+          : item.state === 'uploading'
+            ? '업로드 중'
+            : item.state === 'ready'
+              ? '업로드 완료'
+              : '업로드 실패';
+        return (
+          <View
+            accessibilityLabel={`첨부 이미지 ${index + 1}, ${status}`}
+            accessibilityLiveRegion={item.state === 'failed' ? undefined : 'polite'}
+            key={item.key}
+            style={styles.mediaItem}
+          >
+            <View style={styles.mediaPreviewContainer}>
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
+                accessibilityRole="image"
+                fadeDuration={0}
+                source={{ uri: item.asset.uri }}
+                style={styles.mediaPreview}
               />
+              {item.state !== 'ready' ? (
+                <>
+                  <View style={[StyleSheet.absoluteFill, styles.mediaOverlayBackdrop]} />
+                  {item.state === 'uploading' ? (
+                    <View style={[StyleSheet.absoluteFill, styles.mediaOverlay]}>
+                      <LoadingIndicator
+                        accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
+                        color={colors.light.fixedWhite}
+                      />
+                    </View>
+                  ) : (
+                    <Pressable
+                      accessibilityLabel={
+                        item.requiresReselection
+                          ? `첨부 이미지 ${index + 1} 다시 선택`
+                          : formatImageUploadRetryLabel(`${index + 1}번째 이미지`)
+                      }
+                      accessibilityRole="button"
+                      onPress={() => onRetry(item)}
+                      style={[StyleSheet.absoluteFill, styles.mediaOverlay]}
+                    >
+                      <RefreshCwIcon color={colors.light.fixedWhite} size={24} />
+                    </Pressable>
+                  )}
+                </>
+              ) : null}
+              <IconButton
+                accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
+                disabled={disabled}
+                feedbackTone="inverse"
+                onPress={() => onRemove(item.key)}
+                style={styles.mediaRemoveTarget}
+                targetSize={mediaRemoveGeometry.targetSize}
+                visualSize={mediaRemoveVisualSize}
+                visualStyle={styles.mediaRemoveVisual}
+              >
+                <XIcon color={colors.light.fixedWhite} size={18} />
+              </IconButton>
             </View>
-          ) : null}
-        </View>
-      ))}
+            {item.state === 'ready' || item.requiresReselection ? (
+              <View style={styles.mediaItemBody}>
+                <TextField
+                  accessibilityLabel={`첨부 이미지 ${index + 1} 대체 텍스트`}
+                  editable={!disabled}
+                  label="대체 텍스트 (선택)"
+                  onChangeText={(altText) => onAltTextChange(item.key, altText)}
+                  value={item.altText}
+                />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
       {media.length > 0 ? (
         <View style={styles.sensitiveMedia}>
           <View style={styles.sensitiveMediaCopy}>

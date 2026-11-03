@@ -123,7 +123,7 @@ export function ProfileSwitcherTarget({
           <View style={styles.compactAvatar}>
             <Avatar
               imageUri={selectedProfile?.avatar?.url}
-              label={selectedProfile?.displayName ?? '프로필'}
+              label={selectedProfile?.displayName ?? selectedProfile?.relativeHandle ?? '프로필'}
               size={40}
             />
             <ProfileSwitcherUnreadIndicator compact visible={!open && otherHasUnread} />
@@ -137,7 +137,9 @@ export function ProfileSwitcherTarget({
                 { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
               ]}
             >
-              {selectedProfile?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+              {selectedProfile?.displayName ??
+                selectedProfile?.relativeHandle ??
+                (profiles.length ? '프로필 선택' : '프로필')}
             </Text>
             <View style={styles.chevron}>
               <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
@@ -176,11 +178,12 @@ export function ProfileSwitcherTarget({
               profiles.map((profile) => {
                 const selected = profile.id === selectedProfileId;
                 const hasUnread = (profile.unreadNotificationCount ?? 0) > 0;
+                const displayName = profile.displayName ?? profile.relativeHandle;
 
                 return (
                   <Pressable
                     aria-pressed={selected}
-                    accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
+                    accessibilityLabel={`${displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
                     accessibilityRole="button"
                     accessibilityState={
                       Platform.OS === 'web' ? { disabled } : { disabled, selected }
@@ -206,18 +209,14 @@ export function ProfileSwitcherTarget({
                       aria-hidden
                       importantForAccessibility="no-hide-descendants"
                     >
-                      <Avatar
-                        imageUri={profile.avatar?.url}
-                        label={profile.displayName}
-                        size={40}
-                      />
+                      <Avatar imageUri={profile.avatar?.url} label={displayName} size={40} />
                     </View>
                     <View style={styles.optionCopy}>
                       <Text
                         numberOfLines={1}
                         style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}
                       >
-                        {profile.displayName}
+                        {displayName}
                       </Text>
                       <Text
                         numberOfLines={1}

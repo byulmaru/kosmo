@@ -609,10 +609,8 @@ function controlVisualStyle(showDecoration = true) {
     return [
       styles.controlVisual,
       {
-        ...(showDecoration
-          ? Platform.OS === 'web'
-            ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
-            : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }
+        ...(showDecoration && Platform.OS === 'web'
+          ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
           : undefined),
         ...(Platform.OS === 'web' && webState.focused
           ? ({

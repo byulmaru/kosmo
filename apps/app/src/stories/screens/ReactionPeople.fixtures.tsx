@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import {
   ReactionPeopleRouteFrame,
@@ -58,22 +58,39 @@ export function peopleQueryData(profiles = peopleProfiles, hasNextPage = false) 
   };
 }
 
-export type ReactionPeopleExampleProps = ReactionPeopleScreenProps & { onBack: () => void };
+export type ReactionPeopleExampleProps = ReactionPeopleScreenProps & {
+  onBack: () => void;
+  updateArgs?: (update: Partial<Pick<ReactionPeopleScreenProps, 'reactionType'>>) => void;
+};
 
-export function ReactionPeopleExample(props: ReactionPeopleExampleProps) {
+export function ReactionPeopleExample({
+  onBack,
+  onTypeChange,
+  postId,
+  reactionCounts,
+  reactionType: initialReactionType,
+  updateArgs,
+}: ReactionPeopleExampleProps) {
   const { height } = useWindowDimensions();
-  const [reactionType, setReactionType] = useState(props.reactionType);
+  const [localReactionType, setLocalReactionType] = useState(initialReactionType);
+  useEffect(() => setLocalReactionType(initialReactionType), [initialReactionType]);
+  const reactionType = updateArgs ? initialReactionType : localReactionType;
 
   return (
     <View style={{ alignSelf: 'center', maxWidth: 600, minHeight: height, width: '100%' }}>
-      <ReactionPeopleRouteFrame onBack={props.onBack} scrollKey={props.postId}>
+      <ReactionPeopleRouteFrame onBack={onBack} scrollKey={postId}>
         <ReactionPeopleScreen
-          {...props}
-          onTypeChange={(type) => {
-            props.onTypeChange(type);
-            setReactionType(type);
-          }}
+          postId={postId}
+          reactionCounts={reactionCounts}
           reactionType={reactionType}
+          onTypeChange={(type) => {
+            onTypeChange(type);
+            if (updateArgs) {
+              updateArgs({ reactionType: type });
+            } else {
+              setLocalReactionType(type);
+            }
+          }}
         />
       </ReactionPeopleRouteFrame>
     </View>

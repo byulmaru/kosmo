@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, usePaginationFragment } from 'react-relay';
+import { graphql, useMutation, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -19,6 +19,7 @@ import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHo
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
@@ -33,6 +34,7 @@ import {
 } from './NotificationListItem';
 import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
+import type { NotificationListMarkReadMutation } from './__generated__/NotificationListMarkReadMutation.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
@@ -82,6 +84,21 @@ const notificationListFragment = graphql`
   }
 `;
 
+const notificationListMarkReadMutation = graphql`
+  mutation NotificationListMarkReadMutation($ids: [ID!]!) {
+    markNotificationRead(input: { ids: $ids }) {
+      notifications {
+        id
+        readAt
+      }
+      recipientProfiles {
+        id
+        unreadNotificationCount
+      }
+    }
+  }
+`;
+
 export function NotificationList({ profile }: NotificationListProps) {
   const theme = useTheme();
   const scrollRef = useRef<ScrollView>(null);
@@ -100,14 +117,20 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationListNextPageQuery,
     NotificationList_profile$key
   >(notificationListFragment, profile);
-  const { publishUnreadIds } = useNotificationReadAll();
+  const { getCurrentTarget, publishUnreadIds } = useNotificationReadAll();
+  const { showToast } = useToast();
+  const [commitMarkRead, isMarkReadInFlight] = useMutation<NotificationListMarkReadMutation>(
+    notificationListMarkReadMutation,
+  );
   const [refreshing, startTransition] = useTransition();
-  const { edges } = pagination.data.notifications;
+  const notificationConnection = pagination.data.notifications;
+  const edges = notificationConnection?.edges;
+  const visibleEdges = edges ?? [];
   const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
     {
-      hasNext: pagination.hasNext,
-      isLoadingNext: pagination.isLoadingNext,
-      itemCount: edges.length,
+      hasNext: notificationConnection != null && pagination.hasNext,
+      isLoadingNext: notificationConnection != null && pagination.isLoadingNext,
+      itemCount: visibleEdges.length,
       loadNext: pagination.loadNext,
       pageSize: 20,
       webScrollTarget: 'container',
@@ -115,10 +138,11 @@ export function NotificationList({ profile }: NotificationListProps) {
   );
 
   useEffect(
-    () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
+    () =>
+      publishUnreadIds(edges?.flatMap(({ node }) => (node.readAt === null ? [node.id] : [])) ?? []),
     [edges, publishUnreadIds],
   );
-  const notifications = edges.flatMap(({ node }) => {
+  const notifications = visibleEdges.flatMap(({ node }) => {
     if (node.__typename === 'FollowNotification' && node.follow) {
       return <NotificationListItem key={node.id} notification={node.follow} />;
     }
@@ -147,22 +171,51 @@ export function NotificationList({ profile }: NotificationListProps) {
   });
 
   const refresh = () => {
-    if (refreshing) {
+    if (refreshing || isMarkReadInFlight) {
       return;
     }
 
-    startTransition(() => {
-      pagination.refetch(
-        { count: 20 },
-        {
-          fetchPolicy: 'network-only',
-          onComplete: (error) => {
-            if (!error) {
-              resetError();
-            }
+    const unreadIds = getCurrentTarget();
+    if (unreadIds === null) {
+      return;
+    }
+    const refetch = () => {
+      startTransition(() => {
+        pagination.refetch(
+          { count: 20 },
+          {
+            fetchPolicy: 'network-only',
+            onComplete: (error) => {
+              if (!error) {
+                resetError();
+              }
+            },
           },
-        },
-      );
+        );
+      });
+    };
+    const handleReadFailure = () => {
+      showToast('알림을 읽지 못했어요.', {
+        action: { label: '다시 시도', onPress: refresh },
+        tone: 'danger',
+      });
+    };
+
+    if (!unreadIds.length) {
+      refetch();
+      return;
+    }
+
+    commitMarkRead({
+      onCompleted: (response) => {
+        if (response.markNotificationRead == null) {
+          handleReadFailure();
+          return;
+        }
+        refetch();
+      },
+      onError: handleReadFailure,
+      variables: { ids: [...unreadIds] },
     });
   };
 
@@ -183,7 +236,7 @@ export function NotificationList({ profile }: NotificationListProps) {
               Platform.OS === 'web' ? undefined : (
                 <RefreshControl
                   onRefresh={refresh}
-                  refreshing={refreshing}
+                  refreshing={refreshing || isMarkReadInFlight}
                   tintColor={theme.text}
                 />
               )
@@ -203,8 +256,8 @@ export function NotificationList({ profile }: NotificationListProps) {
               endRef={endRef}
               error={loadError}
               errorMessage="알림을 더 불러오지 못했어요"
-              hasNext={pagination.hasNext}
-              isLoading={pagination.isLoadingNext}
+              hasNext={notificationConnection != null && pagination.hasNext}
+              isLoading={notificationConnection != null && pagination.isLoadingNext}
               loadingLabel="알림을 더 불러오는 중"
               onRetry={loadNextPage}
               style={[styles.pagination, { borderColor: theme.border }]}

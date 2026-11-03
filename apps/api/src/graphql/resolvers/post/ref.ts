@@ -10,13 +10,26 @@ import { Media } from '../media/ref';
 import { directPostAccessWhere } from './access';
 import { directPostVisibilityAccessWhere } from './access/visibility';
 
-export const Post = createObjectRef('Post', (ids, ctx) =>
-  db
-    .select(getColumns(Posts))
-    .from(Posts)
-    .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), directPostAccessWhere({ ctx, profileMute: 'ignore' }))),
+type PostRow = typeof Posts.$inferSelect;
+
+const cachedHomeTimelinePosts = new WeakSet<PostRow>();
+
+export const markCachedHomeTimelinePost = (post: PostRow) => {
+  cachedHomeTimelinePosts.add(post);
+};
+
+export const isCachedHomeTimelinePost = (post: PostRow) => cachedHomeTimelinePosts.has(post);
+
+export const Post = createObjectRef(
+  'Post',
+  (ids, ctx) =>
+    db
+      .select(getColumns(Posts))
+      .from(Posts)
+      .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(inArray(Posts.id, ids), directPostAccessWhere({ ctx, profileMute: 'ignore' }))),
+  { cacheResolved: false },
 );
 
 Post.implement({
@@ -37,14 +50,17 @@ export const PostConnection = builder.connectionObject(
   },
 );
 
-export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
-  db
-    .select(getColumns(PostContents))
-    .from(PostContents)
-    .innerJoin(Posts, eq(Posts.id, PostContents.postId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(PostContents.id, ids), directPostVisibilityAccessWhere({ ctx }))),
+export const PostContent = createObjectRef(
+  'PostContent',
+  (ids, ctx) =>
+    db
+      .select(getColumns(PostContents))
+      .from(PostContents)
+      .innerJoin(Posts, eq(Posts.id, PostContents.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(inArray(PostContents.id, ids), directPostVisibilityAccessWhere({ ctx }))),
+  { cacheResolved: false },
 );
 
 PostContent.implement({
@@ -110,17 +126,27 @@ function projectPostContentDocument(
 
         return {
           ...block,
-          content: block.content?.map((node) =>
-            node.type === 'mention'
-              ? {
-                  ...node,
-                  attrs: {
-                    ...node.attrs,
-                    profileId: encodeGlobalId('Profile', node.attrs.profileId),
-                  },
-                }
-              : node,
-          ),
+          content: block.content?.map((node) => {
+            if (node.type === 'mention') {
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  profileId: encodeGlobalId('Profile', node.attrs.profileId),
+                },
+              };
+            }
+            if (node.type === 'hashtag') {
+              return {
+                ...node,
+                attrs: {
+                  ...node.attrs,
+                  hashtagId: encodeGlobalId('Hashtag', node.attrs.hashtagId),
+                },
+              };
+            }
+            return node;
+          }),
         };
       }),
     },

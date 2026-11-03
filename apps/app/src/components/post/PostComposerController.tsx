@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
-import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
+import { commitLocalUpdate } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
+import { useSession } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
@@ -31,12 +32,17 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
+import {
+  prependPostRequestToLoadedProfileRequests,
+  reconcilePublishedPostInHome,
+} from './postRequestCache';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { ComposerMediaEditorTool } from './ComposerMediaEditor';
 import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -52,7 +58,23 @@ import type {
 type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
-const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const submitFailureMessage = '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.';
+
+function postRequestSubmissionError(error: unknown): { code: string; field?: string } | null {
+  if (typeof error !== 'object' || error === null || !('extensions' in error)) {
+    return null;
+  }
+  const extensions = error.extensions;
+  if (typeof extensions !== 'object' || extensions === null || !('code' in extensions)) {
+    return null;
+  }
+  return {
+    code: String(extensions.code),
+    ...('field' in extensions && typeof extensions.field === 'string'
+      ? { field: extensions.field }
+      : {}),
+  };
+}
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -61,7 +83,7 @@ const PostComposerFragment = graphql`
       defaultPostVisibility
     }
     displayName
-    handle
+    relativeHandle
     avatar {
       id
       url
@@ -71,19 +93,20 @@ const PostComposerFragment = graphql`
 `;
 
 const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation(
-    $input: CreatePostInput!
-    $connections: [ID!]!
-    $prependToHome: Boolean!
-  ) {
+  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
     createPost(input: $input) {
-      post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
+      post {
         id
-        replyParent {
+        ...PostListItem_post
+      }
+      request {
+        id
+        post {
           id
-          replyCount
         }
-        ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
+        requestId
+        status
+        ...PostRequestCard_request
       }
     }
   }
@@ -124,6 +147,7 @@ type PostComposerBaseProps = {
   initialContentWarning?: string | null;
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
+  onPostRequestAccepted?: () => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
@@ -174,6 +198,9 @@ export function PostComposerController({
 }: PostComposerControllerProps) {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
+  const { accountId } = useSession();
+  const currentAccountIdRef = useRef<string | null>(accountId);
+  currentAccountIdRef.current = accountId;
   const environmentRef = useRef(environment);
   const contextGenerationRef = useRef(0);
   if (!environmentGenerationRef && environmentRef.current !== environment) {
@@ -188,46 +215,55 @@ export function PostComposerController({
     contextKeyRef.current = contextKey;
     contextGenerationRef.current += 1;
   }
-  const relationshipProps: PostComposerRelationshipProps = replyParentId
-    ? { replyParentId, replyParentVisibility }
-    : repostSourceId
-      ? { repostSourceId }
-      : {};
-
-  return (
-    <PostComposerContents
-      {...props}
-      {...relationshipProps}
-      contextGenerationRef={contextGenerationRef}
-      environmentGenerationRef={environmentGenerationRef}
-      key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
-      globalProfileId={profile.id}
-      mentionCandidates={props.mentionCandidates}
-      profileKey={profileKey}
-      profiles={profiles}
-    />
+  const contentsKey = [contextGenerationRef.current, environmentGenerationRef?.current ?? 0].join(
+    ':',
   );
+  const contentsCommonProps: PostComposerContentsCommonProps = {
+    ...props,
+    contextGenerationRef,
+    currentAccountIdRef,
+    environmentGenerationRef,
+    mentionCandidates: props.mentionCandidates,
+    profileKey,
+    profiles,
+  };
+  const contentsProps: PostComposerContentsInputProps = replyParentId
+    ? { ...contentsCommonProps, replyParentId, replyParentVisibility }
+    : repostSourceId
+      ? { ...contentsCommonProps, repostSourceId }
+      : contentsCommonProps;
+
+  return <PostComposerContents key={contentsKey} {...contentsProps} accountId={accountId} />;
 }
 
-type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
-  PostComposerRelationshipProps & {
-    contextGenerationRef: RefObject<number>;
-    environmentGenerationRef: RefObject<number> | null;
-    onExpand?: () => void;
-    onRequestClose?: () => void;
-    presentation?: 'mobile' | 'overlay' | 'rail';
-    globalProfileId: string;
-    mentionCandidates?: PostComposerMentionCandidateResults;
-    profileKey: PostComposer_profile$key;
-    profiles: readonly PostComposerProfileRef[];
-    replyContext?: ReactNode;
-  };
+type CurrentAccountIdRef = { current: string | null };
+
+type PostComposerContentsCommonProps = Omit<PostComposerBaseProps, 'profile' | 'profiles'> & {
+  contextGenerationRef: RefObject<number>;
+  currentAccountIdRef: CurrentAccountIdRef;
+  environmentGenerationRef: RefObject<number> | null;
+  onExpand?: () => void;
+  onRequestClose?: () => void;
+  presentation?: 'mobile' | 'overlay' | 'rail';
+  profileKey: PostComposer_profile$key;
+  profiles: readonly PostComposerProfileRef[];
+  replyContext?: ReactNode;
+};
+
+type PostComposerContentsRelationshipProps =
+  | Extract<PostComposerRelationshipProps, { replyParentId: string }>
+  | Extract<PostComposerRelationshipProps, { repostSourceId: string }>
+  | Extract<PostComposerRelationshipProps, { replyParentId?: never; repostSourceId?: never }>;
+type PostComposerContentsInputProps = PostComposerContentsCommonProps &
+  PostComposerContentsRelationshipProps;
+type PostComposerContentsProps = PostComposerContentsInputProps & { accountId: string | null };
 
 function PostComposerContents({
   beforeEditor,
   children,
   contextGuard,
   contextGenerationRef,
+  currentAccountIdRef,
   editorRef,
   expanded = true,
   expandControlRef,
@@ -236,11 +272,12 @@ function PostComposerContents({
   initialBodyText,
   initialContentWarning,
   onPostCreated,
+  onPostRequestAccepted,
+  accountId,
   onRequestClose,
   onSubmittingChange,
   onExpand,
   presentation,
-  globalProfileId,
   mentionCandidates,
   profileKey,
   profiles,
@@ -253,6 +290,7 @@ function PostComposerContents({
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
+  const { selectedProfileId } = useSession();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
@@ -263,9 +301,10 @@ function PostComposerContents({
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
   const [draft, setDraft] = useState<PostComposerDraft>(() => {
-    const end = initialBodyText?.length ?? 0;
+    const initialBody = initialBodyText ?? '';
+    const end = initialBody.length;
     return {
-      body: initialBodyText ?? '',
+      body: initialBody,
       mentionRanges: [],
       previousSelection: { start: end, end },
       selection: { start: end, end },
@@ -349,7 +388,7 @@ function PostComposerContents({
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
-    tool: 'alt' | 'sensitive';
+    tool: ComposerMediaEditorTool;
   } | null>(null);
   if (!expanded && mediaEditor !== null) {
     setMediaEditor(null);
@@ -361,8 +400,7 @@ function PostComposerContents({
     setProfilePickerOpen(dismiss !== null);
   }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
@@ -375,13 +413,13 @@ function PostComposerContents({
     media.items.length > 0 ||
     media.hasPendingMedia;
   const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
-  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
+  const remaining = postBodyMaxLength - [...bodyText].length - [...contentWarningText].length;
   const disabled =
+    accountId === null ||
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
     media.hasPendingMedia ||
     remaining < 0;
-
   useEffect(() => {
     if (visibilityProfileIdRef.current !== profile.id) {
       visibilityProfileIdRef.current = profile.id;
@@ -436,80 +474,155 @@ function PostComposerContents({
     if (disabled) {
       return;
     }
-    setSubmitting(true);
+    const submissionOwnerAccountId = accountId;
     const submissionGeneration = contextGenerationRef.current;
-    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
+    const submissionEnvironmentGeneration = environmentGenerationRef?.current ?? null;
     const submissionGuardGeneration = contextGuard?.current;
-    const submittedCallback = onPostCreated;
-    const submissionReplyMode = replyMode;
+    const submittedCreatedCallback = onPostCreated;
+    const submittedCallback = onPostRequestAccepted;
+    const isCurrentSubmission = () =>
+      mountedRef.current &&
+      contextGenerationRef.current === submissionGeneration &&
+      (environmentGenerationRef?.current ?? null) === submissionEnvironmentGeneration &&
+      contextGuard?.current === submissionGuardGeneration &&
+      currentAccountIdRef.current === submissionOwnerAccountId;
+
+    let input: PostComposerCreatePostMutation['variables']['input'];
+    let aiProhibitImageCount = 0;
+    try {
+      const submittedMedia = media.getPostRequestMedia();
+      aiProhibitImageCount = submittedMedia.filter(
+        (item) => item.applyAiProhibitFilter === true,
+      ).length;
+      input = {
+        ...createPostComposerMutationInput(
+          bodyText,
+          visibility,
+          replyParentId,
+          contentWarningText,
+          repostSourceId,
+          mentions,
+        ),
+        actorProfileId: profile.id,
+        media: submittedMedia,
+        sensitiveMedia: media.sensitiveMedia,
+      };
+    } catch {
+      if (isCurrentSubmission()) {
+        showToast(submitFailureMessage, { tone: 'danger' });
+      }
+      return;
+    }
+
     commit({
-      variables: {
-        prependToHome: profile.id === globalProfileId,
-        connections:
-          profile.id === globalProfileId
-            ? [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')]
-            : [],
-        input: {
-          ...createPostComposerMutationInput(
-            bodyText,
-            visibility,
-            replyParentId,
-            contentWarningText,
-            repostSourceId,
-            mentions,
-          ),
-          media: media.items,
-          ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
-          sensitiveMedia: media.sensitiveMedia,
-        },
-      },
-      onCompleted: (response) => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+      variables: { input },
+      onCompleted: (response, errors) => {
+        if (!isCurrentSubmission()) {
           return;
         }
-        setSubmitting(false);
         const createdPost = response?.createPost?.post;
-        if (!createdPost) {
-          showToast(submitFailureMessage, { tone: 'danger' });
+        const acceptedRequest = response?.createPost?.request;
+        const publishedRequestPostId =
+          acceptedRequest?.status === 'PUBLISHED' ? acceptedRequest.post?.id : undefined;
+        const publishedPostId = createdPost?.id ?? publishedRequestPostId;
+        if (acceptedRequest?.id || createdPost?.id) {
+          trackAnalytics('post_created', {
+            ai_prohibit_image_count: aiProhibitImageCount,
+            selected_profile_id: profile.id,
+            visibility,
+          });
+          const actorProfileId = input.actorProfileId;
+          if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
+            commitLocalUpdate(environment, (store) => {
+              if (acceptedRequest?.id) {
+                prependPostRequestToLoadedProfileRequests(
+                  store,
+                  actorProfileId,
+                  acceptedRequest.id,
+                );
+              }
+
+              const request = acceptedRequest?.id ? store.get(acceptedRequest.id) : null;
+              const requestStatus = request?.getValue('status');
+              const post = createdPost?.id
+                ? store.get(createdPost.id)
+                : requestStatus === 'PUBLISHED'
+                  ? request?.getLinkedRecord('post')
+                  : null;
+              if (createdPost?.id || requestStatus === 'PUBLISHED') {
+                const authorProfile = post?.getLinkedRecord('profile');
+                reconcilePublishedPostInHome(store, {
+                  authorProfileId: authorProfile?.getDataID() ?? null,
+                  currentProfileId: selectedProfileId,
+                  postId: post?.getDataID() ?? null,
+                  profileId: actorProfileId,
+                  ...(acceptedRequest?.id ? { requestNodeId: acceptedRequest.id } : {}),
+                });
+              }
+            });
+          }
+          onBodyReset();
+          setContentWarning('');
+          setContentWarningExpanded(false);
+          setMedia(emptyPostComposerMediaValue);
+          setMediaGeneration((generation) => generation + 1);
+          setSelectedProfileKey(null);
+          setVisibility(
+            resolvePostComposerVisibility(
+              globalProfile.private?.defaultPostVisibility,
+              replyParentVisibility,
+            ),
+          );
+          if (publishedPostId && submittedCreatedCallback) {
+            submittedCreatedCallback({ id: publishedPostId });
+          } else if (publishedPostId) {
+            showToast('게시했어요', { tone: 'success' });
+            submittedCallback?.();
+          } else {
+            showToast('게시 요청을 접수했어요', { tone: 'success' });
+            submittedCallback?.();
+          }
           return;
         }
 
-        trackAnalytics('post_created', {
-          selected_profile_id: profile.id,
-          visibility,
-        });
-        onBodyReset();
-        if (!submissionReplyMode) {
-          setContentWarning('');
-          setContentWarningExpanded(false);
-        }
-        setMedia(emptyPostComposerMediaValue);
-        setMediaGeneration((generation) => generation + 1);
-        setSelectedProfileKey(null);
-        setVisibility(
-          resolvePostComposerVisibility(
-            globalProfile.private?.defaultPostVisibility,
-            replyParentVisibility,
-          ),
+        const submissionErrors =
+          errors?.flatMap((error) => {
+            const submissionError = postRequestSubmissionError(error);
+            return submissionError ? [submissionError] : [];
+          }) ?? [];
+        const definiteDenial = submissionErrors.some(({ code }) =>
+          [
+            'CONFLICT',
+            'NOT_FOUND',
+            'PERMISSION_DENIED',
+            'PROFILE_LIMIT_EXCEEDED',
+            'VALIDATION',
+          ].includes(code),
         );
-        editor.current?.focus();
-        submittedCallback?.(createdPost);
+        if (definiteDenial) {
+          const unavailableMediaIndex = submissionErrors
+            .filter(
+              (error) =>
+                (error.code === 'NOT_FOUND' || error.code === 'VALIDATION') &&
+                /^media\.\d+$/.test(error.field ?? ''),
+            )
+            .map((error) => Number(error.field?.match(/^media\.(\d+)$/)?.[1]))
+            .find((index) => Number.isInteger(index) && index >= 0);
+          const unavailableMediaId =
+            unavailableMediaIndex === undefined
+              ? undefined
+              : input.media?.[unavailableMediaIndex]?.mediaId;
+          if (unavailableMediaId) {
+            media.requirePostRequestMediaReselection(unavailableMediaId);
+          }
+        }
+
+        showToast(submitFailureMessage, { tone: 'danger' });
       },
       onError: () => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
+        if (!isCurrentSubmission()) {
           return;
         }
-        setSubmitting(false);
         showToast(submitFailureMessage, { tone: 'danger' });
       },
     });
@@ -554,195 +667,197 @@ function PostComposerContents({
       ? [...profiles, selectedProfileKey]
       : profiles;
 
-  const form = (
-    <Form
-      accessibilityLabel={
-        composerMode === 'reply'
-          ? '답글 작성'
-          : composerMode === 'quote'
-            ? '인용 게시글 작성'
-            : '게시글 작성'
-      }
-      onSubmit={submit}
-      style={[
-        presentation !== undefined ? styles.productionForm : styles.standaloneForm,
-        (resolvedPresentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
-      ]}
-      submitOnModEnter
-    >
-      <QueryRenderer<PostComposerMentionSuggestionsQuery>
-        environment={environment}
-        query={shouldSearchMentions ? PostComposerMentionSuggestionsQuery : null}
-        variables={{
-          actorProfileId: profile.id,
-          query: mentionQuery,
-        }}
-        render={({ error, props: searchData, retry }) => {
-          const searchedProfiles = searchData?.searchProfiles?.edges.flatMap((edge) => {
-            const candidate = edge?.node;
-            return candidate
-              ? [
-                  {
-                    avatar: candidate.avatar ? { url: candidate.avatar.url } : candidate.avatar,
-                    displayName: candidate.displayName,
-                    id: candidate.id,
-                    relativeHandle: candidate.relativeHandle,
-                  },
-                ]
-              : [];
-          });
-          const currentMentionCandidates =
-            mentionCandidates ??
-            (shouldSearchMentions && activeMentionQuery
-              ? {
-                  authorProfileId: profile.id,
-                  profiles: searchedProfiles ?? [],
-                  query: activeMentionQuery.query,
-                }
-              : undefined);
-          const mentionSearchState: PostComposerMentionSearchState | undefined =
-            shouldSearchMentions
-              ? error
-                ? 'error'
-                : searchData === null
-                  ? 'loading'
-                  : 'ready'
-              : undefined;
+  return (
+    <QueryRenderer<PostComposerMentionSuggestionsQuery>
+      environment={environment}
+      query={shouldSearchMentions ? PostComposerMentionSuggestionsQuery : null}
+      variables={{
+        actorProfileId: profile.id,
+        query: mentionQuery,
+      }}
+      render={({ error, props: searchData, retry }) => {
+        const searchedProfiles = searchData?.searchProfiles?.edges.flatMap((edge) => {
+          const candidate = edge?.node;
+          return candidate
+            ? [
+                {
+                  avatar: candidate.avatar ? { url: candidate.avatar.url } : candidate.avatar,
+                  displayName: candidate.displayName ?? candidate.relativeHandle,
+                  id: candidate.id,
+                  relativeHandle: candidate.relativeHandle,
+                },
+              ]
+            : [];
+        });
+        const currentMentionCandidates =
+          mentionCandidates ??
+          (shouldSearchMentions && activeMentionQuery
+            ? {
+                authorProfileId: profile.id,
+                profiles: searchedProfiles ?? [],
+                query: activeMentionQuery.query,
+              }
+            : undefined);
+        const mentionSearchState: PostComposerMentionSearchState | undefined = shouldSearchMentions
+          ? error
+            ? 'error'
+            : searchData === null
+              ? 'loading'
+              : 'ready'
+          : undefined;
 
-          return (
-            <PostComposerMediaControls
-              actions={null}
-              disabled={submitting}
-              editorRef={editor}
-              key={mediaGeneration}
-              profileId={profile.id}
-              onValueChange={setMedia}
-              render={({
-                items,
-                onAltTextChange,
-                onMediaAction,
-                onMediaRemove,
-                onMediaRetry,
-                onSensitiveMediaChange,
-                sensitiveMedia,
-              }) => {
-                const productionAuthor = (
-                  <View style={styles.productionAuthor}>
-                    {pickerProfiles.length > 1 ? (
-                      <PostComposerProfileSwitcher
-                        disabled={submitting || items.some((item) => item.state === 'uploading')}
-                        onDismissChange={onProfilePickerDismissChange}
-                        onSelectionSuccess={() => editor.current?.focus()}
-                        onSelectProfile={onSelectProfile}
-                        profiles={pickerProfiles}
-                        selectedProfileId={profile.id}
-                        surface={presentation === 'rail' ? 'rail' : 'overlay'}
-                      />
-                    ) : (
-                      <>
-                        <Avatar
-                          imageUri={profile.avatar?.url}
-                          label={profile.displayName}
-                          size={40}
-                        />
-                        <ProfileNameBlock profile={profile} />
-                      </>
-                    )}
-                  </View>
-                );
-                const mediaEditorContent = mediaEditor ? (
-                  <ComposerMediaEditor
-                    media={items}
-                    mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
-                    onAltTextChange={onAltTextChange}
-                    onBack={closeMediaEditor}
-                    onClose={() => {
-                      setMediaEditor(null);
-                      onRequestClose?.();
-                    }}
-                    onDone={closeMediaEditor}
-                    onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
-                    onSensitiveMediaChange={onSensitiveMediaChange}
-                    onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
-                    presentation={resolvedPresentation === 'mobile' ? 'mobile' : 'web'}
-                    selectedKey={mediaEditor.key}
-                    sensitiveMedia={sensitiveMedia}
-                    tool={mediaEditor.tool}
-                  />
-                ) : null;
-
-                const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
-                  editor.current?.blur();
-                  setMediaEditor({ key, tool });
-                  if (resolvedPresentation === 'rail') {
-                    onExpand?.();
-                  }
-                };
-                const sharedProductionProps = {
-                  author: productionAuthor,
-                  authorProfileId: profile.id,
-                  body,
-                  bodyRef: editor,
-                  children,
-                  contentWarning,
-                  contentWarningExpanded,
-                  expandControlRef,
-                  items,
-                  mentionCandidates: currentMentionCandidates,
-                  mentionSearchState,
-                  selectionToApply: draft.selectionToApply,
-                  onRetryMentionSearch:
-                    mentionSearchState === 'error' && retry ? () => retry() : undefined,
-                  onSelectMention: (
-                    candidate: PostComposerMentionCandidate,
-                    query: PostComposerMentionQuery,
-                  ) => selectMention(candidate, query, currentMentionCandidates),
-                  onBodyChange,
-                  onSelectionChange,
-                  selection,
-                  onContentWarningChange: setContentWarning,
-                  onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
-                  onEmojiAction: () => undefined,
-                  beforeEditor,
-                  mode: composerMode,
-                  replyContext,
-                  onMediaAction,
-                  onMediaEdit: openMediaEditor,
-                  onMediaRemove,
-                  onMediaRetry: (key: string) => {
-                    const item = items.find((candidate) => candidate.key === key);
-                    if (item) {
-                      onMediaRetry(item);
-                    }
-                  },
-                  onPollAction: () => undefined,
-                  onSubmit: submit,
-                  onVisibilityChange: setVisibility,
-                  remaining,
-                  sensitiveMedia,
-                  showEmojiAction: false,
-                  showMediaAction: items.length < 4,
-                  showPollAction: false,
-                  submitting,
-                  visibility: productionSurface,
-                };
-
-                const composerContent =
-                  resolvedPresentation === 'mobile' ? (
-                    <MobileFullscreenComposerShellCandidate
-                      {...sharedProductionProps}
-                      fillContainer
-                      onOverlayClose={onRequestClose!}
+        return (
+          <PostComposerMediaControls
+            actions={null}
+            disabled={submitting}
+            editorRef={editor}
+            key={mediaGeneration}
+            profileId={profile.id}
+            onValueChange={setMedia}
+            render={({
+              items,
+              onAltTextChange,
+              onApplyAiProhibitFilterChange,
+              onMediaAction,
+              onMediaRemove,
+              onMediaRetry,
+              onSensitiveMediaChange,
+              sensitiveMedia,
+            }) => {
+              const productionAuthor = (
+                <View style={styles.productionAuthor}>
+                  {pickerProfiles.length > 1 ? (
+                    <PostComposerProfileSwitcher
+                      disabled={submitting || items.some((item) => item.state === 'uploading')}
+                      onDismissChange={onProfilePickerDismissChange}
+                      onSelectionSuccess={() => editor.current?.focus()}
+                      onSelectProfile={onSelectProfile}
+                      profiles={pickerProfiles}
+                      selectedProfileId={profile.id}
+                      surface={presentation === 'rail' ? 'rail' : 'overlay'}
                     />
                   ) : (
-                    <PostComposer
-                      {...sharedProductionProps}
-                      onExpand={resolvedPresentation === 'rail' ? onExpand! : () => undefined}
-                      surface={resolvedPresentation === 'rail' ? 'rail' : 'overlay'}
-                    />
-                  );
+                    <>
+                      <Avatar
+                        imageUri={profile.avatar?.url}
+                        label={profile.displayName ?? profile.relativeHandle}
+                        size={40}
+                      />
+                      <ProfileNameBlock profile={profile} />
+                    </>
+                  )}
+                </View>
+              );
+              const mediaEditorContent = mediaEditor ? (
+                <ComposerMediaEditor
+                  media={items}
+                  mobileState={mediaEditor.tool}
+                  onAltTextChange={onAltTextChange}
+                  onApplyAiProhibitFilterChange={onApplyAiProhibitFilterChange}
+                  onBack={closeMediaEditor}
+                  onClose={() => {
+                    setMediaEditor(null);
+                    onRequestClose?.();
+                  }}
+                  onDone={closeMediaEditor}
+                  onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
+                  onSensitiveMediaChange={onSensitiveMediaChange}
+                  onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
+                  presentation={resolvedPresentation === 'mobile' ? 'mobile' : 'web'}
+                  selectedKey={mediaEditor.key}
+                  sensitiveMedia={sensitiveMedia}
+                  tool={mediaEditor.tool}
+                />
+              ) : null;
 
-                return (
+              const openMediaEditor = (key: string, tool: ComposerMediaEditorTool) => {
+                editor.current?.blur();
+                setMediaEditor({ key, tool });
+                if (resolvedPresentation === 'rail') {
+                  onExpand?.();
+                }
+              };
+              const sharedProductionProps = {
+                author: productionAuthor,
+                authorProfileId: profile.id,
+                body,
+                bodyRef: editor,
+                children,
+                contentWarning,
+                contentWarningExpanded,
+                expandControlRef,
+                items,
+                mentionCandidates: currentMentionCandidates,
+                mentionSearchState,
+                selectionToApply: draft.selectionToApply,
+                onRetryMentionSearch:
+                  mentionSearchState === 'error' && retry ? () => retry() : undefined,
+                onSelectMention: (
+                  candidate: PostComposerMentionCandidate,
+                  query: PostComposerMentionQuery,
+                ) => selectMention(candidate, query, currentMentionCandidates),
+                onBodyChange,
+                onSelectionChange,
+                selection,
+                onContentWarningChange: setContentWarning,
+                onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
+                onEmojiAction: () => undefined,
+                beforeEditor,
+                mode: composerMode,
+                replyContext,
+                onMediaAction,
+                onMediaEdit: openMediaEditor,
+                onMediaRemove,
+                onMediaRetry: (key: string) => {
+                  const item = items.find((candidate) => candidate.key === key);
+                  if (item) {
+                    onMediaRetry(item);
+                  }
+                },
+                onPollAction: () => undefined,
+                onSubmit: () => submit(),
+                onVisibilityChange: setVisibility,
+                remaining,
+                sensitiveMedia,
+                showEmojiAction: false,
+                showMediaAction: items.length < 4,
+                showPollAction: false,
+                submitting,
+                visibility: productionSurface,
+              };
+
+              const composerContent =
+                resolvedPresentation === 'mobile' ? (
+                  <MobileFullscreenComposerShellCandidate
+                    {...sharedProductionProps}
+                    fillContainer
+                    onOverlayClose={onRequestClose!}
+                  />
+                ) : (
+                  <PostComposer
+                    {...sharedProductionProps}
+                    onExpand={resolvedPresentation === 'rail' ? onExpand! : () => undefined}
+                    surface={resolvedPresentation === 'rail' ? 'rail' : 'overlay'}
+                  />
+                );
+
+              const form = (
+                <Form
+                  accessibilityLabel={
+                    composerMode === 'reply'
+                      ? '답글 작성'
+                      : composerMode === 'quote'
+                        ? '인용 게시글 작성'
+                        : '게시글 작성'
+                  }
+                  onSubmit={() => submit()}
+                  style={[
+                    presentation !== undefined ? styles.productionForm : styles.standaloneForm,
+                    (resolvedPresentation === 'mobile' || mediaEditor !== null) &&
+                      styles.surfaceRoot,
+                  ]}
+                  submitOnModEnter
+                >
                   <>
                     <View
                       accessibilityElementsHidden={mediaEditor !== null}
@@ -757,16 +872,18 @@ function PostComposerContents({
                     </View>
                     {mediaEditorContent}
                   </>
-                );
-              }}
-            />
-          );
-        }}
-      />
-    </Form>
-  );
+                </Form>
+              );
 
-  return renderSurface ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null }) : form;
+              return renderSurface
+                ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null })
+                : form;
+            }}
+          />
+        );
+      }}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

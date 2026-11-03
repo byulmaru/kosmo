@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { Badge } from '#lib/components/ui/badge/index.js';
+  import { Button } from '#lib/components/ui/button/index.js';
+  import * as Table from '#lib/components/ui/table/index.js';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import * as Table from '$lib/components/ui/table';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -38,7 +38,8 @@
           {#each data.accounts as account (account.id)}
             <Table.Row>
               <Table.Cell class="font-medium">
-                <a class="hover:underline" href={resolve(`/accounts/${account.id}`)}>{account.id}</a
+                <a class="hover:underline" href={resolve('/accounts/[id]', { id: account.id })}
+                  >{account.id}</a
                 >
               </Table.Cell>
               <Table.Cell>{account.displayName}</Table.Cell>

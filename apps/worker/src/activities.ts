@@ -12,12 +12,26 @@ export {
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
+export {
+  createLocalPostActivity,
+  generateLocalPostIdActivity,
+} from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { createNotificationActivity } from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
+export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
+export { createPostActivity, generatePostIdActivity } from './activities/post-create';
+export { createPostActivity as createPostActivityV2 } from './activities/post-create';
+export { capturePostCreatedActivity } from './activities/post-created';
+export {
+  checkPostRequestMediaUploadActivity,
+  getPostRequestMediaStateActivity,
+  reconcilePostRequestActivity,
+  waitForPostRequestMediaUploadActivity,
+} from './activities/post-request';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
@@ -26,7 +40,10 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
-export { lookupRemotePostActivity } from './activities/remote-post-lookup';
+export {
+  lookupRemotePostActivity,
+  prepareRemotePostActivity,
+} from './activities/remote-post-lookup';
 export {
   collectRemoteFeaturedActivity,
   collectRemoteFeaturedItemsActivity,
@@ -41,6 +58,7 @@ export {
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
+  sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
 } from './profile-follow-activities';
@@ -49,6 +67,14 @@ export {
   loadProfileMigrationMoveFollowerBatchActivity,
   prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
+export {
+  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
+  insertHomeTimelinePost as insertHomeTimelinePostActivity,
+  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
+  listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
+  reconcileHomeTimelineFollow as reconcileHomeTimelineFollowActivity,
+  removeHomeTimelinePost as removeHomeTimelinePostActivity,
+} from '@kosmo/core/home-timeline/cache';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,

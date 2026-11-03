@@ -15,7 +15,7 @@ test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다'
 
   await page.goto('/');
 
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'KOSMO에서 계속하기' })).toBeVisible();
   await page.waitForTimeout(200);
   expect(analyticsRequests).toEqual([]);
 });

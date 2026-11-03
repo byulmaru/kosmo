@@ -18,6 +18,13 @@ setInboundObservabilityReporter({
 const app = new Hono();
 
 app.use('*', async (c, next) => {
+  await next();
+  if (process.env.ENVIRONMENT === 'dev') {
+    c.header('X-Robots-Tag', 'noindex');
+  }
+});
+
+app.use('*', async (c, next) => {
   if (
     c.req.path === '/graphql' &&
     c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data')
@@ -84,6 +91,18 @@ app.get('/channel.js', (c) => {
   });
 });
 app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
+
+app.get('/.well-known/tdmrep.json', (c) =>
+  c.json([{ location: '/', 'tdm-reservation': 1 }], 200, {
+    'Cache-Control': 'public, max-age=86400',
+  }),
+);
+
+app.on(['GET', 'HEAD'], '/robots.txt', (c, next) =>
+  process.env.ENVIRONMENT === 'dev'
+    ? c.text('User-agent: *\nAllow: /\n', 200, { 'Cache-Control': 'no-cache' })
+    : next(),
+);
 
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);

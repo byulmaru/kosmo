@@ -8,11 +8,11 @@ case "${1:-web}" in
     ;;
   web)
     cd /app/apps/web
-    exec node --import tsx src/server/index.ts
+    exec node --import tsx --import ./src/server/sentry.ts src/server/index.ts
     ;;
   api)
     cd /app/apps/api
-    exec node --import tsx src/index.ts
+    exec node --import tsx --import ./src/sentry.ts src/index.ts
     ;;
   worker)
     cd /app/apps/worker

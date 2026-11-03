@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, waitFor, within } from 'storybook/test';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
@@ -844,26 +844,25 @@ export const LongTextAndLongTags: Story = {
   },
 };
 
-export const BioCounterMatchesServerUtf16Boundary: Story = {
+export const BioValidationUsesCodePointBoundary: Story = {
   render: () => (
     <ProfileEditScreenHarness
       initialValue={{
         ...initialDraft,
-        bio: `  ${'😀'.repeat(250)}  `,
+        bio: `  ${'😀'.repeat(500)}  `,
       }}
     />
   ),
-  play: async ({ canvasElement, userEvent }) => {
+  play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bio = canvas.getByRole('textbox', { name: '소개' });
 
     expect(canvas.getByText('500/500')).toBeVisible();
     expect(canvas.queryByText('한 줄 소개는 500자 이하로 입력해 주세요.')).not.toBeInTheDocument();
 
-    await userEvent.clear(bio);
-    await userEvent.type(bio, '😀'.repeat(251));
+    fireEvent.change(bio, { target: { value: '😀'.repeat(501) } });
 
-    expect(canvas.getByText('502/500')).toBeVisible();
+    expect(canvas.getByText('501/500')).toBeVisible();
     expect(canvas.getByText('한 줄 소개는 500자 이하로 입력해 주세요.')).toBeVisible();
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
   },

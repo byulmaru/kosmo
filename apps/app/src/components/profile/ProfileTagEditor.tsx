@@ -9,13 +9,27 @@ import { ProfileTagChip } from './ProfileTagChip';
 
 export type ProfileTagEditorProps = {
   disabled?: boolean;
+  description?: string;
+  addLabel?: string;
+  placeholder?: string;
+  draftInput?: { value: string; onChange: (value: string) => void; onAdd: (tag: string) => void };
   onChange: (next: ReadonlyArray<string>) => void;
   tags: ReadonlyArray<string>;
 };
 
-export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTagEditorProps) {
+export function ProfileTagEditor({
+  disabled = false,
+  description,
+  addLabel = '태그 추가',
+  placeholder = '태그 입력',
+  draftInput,
+  onChange,
+  tags,
+}: ProfileTagEditorProps) {
   const theme = useTheme();
-  const [input, setInput] = useState('');
+  const [localInput, setLocalInput] = useState('');
+  const input = draftInput?.value ?? localInput;
+  const setInput = draftInput?.onChange ?? setLocalInput;
   const [error, setError] = useState<string>();
 
   const addTag = () => {
@@ -26,14 +40,24 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
       return;
     }
 
-    onChange([...tags, result.value]);
-    setInput('');
+    if (draftInput) {
+      draftInput.onAdd(result.value);
+    } else {
+      onChange([...tags, result.value]);
+      setInput('');
+    }
     setError(undefined);
   };
 
   return (
     <View style={styles.root}>
       <Text style={[styles.label, { color: theme.foregroundPrimary }]}>프로필 태그</Text>
+
+      {description ? (
+        <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+          {description}
+        </Text>
+      ) : null}
 
       {tags.length > 0 ? (
         <View style={styles.chips}>
@@ -62,7 +86,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
               setError(undefined);
             }}
             onSubmitEditing={addTag}
-            placeholder="태그 입력"
+            placeholder={placeholder}
             value={input}
           />
         </View>
@@ -73,7 +97,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
           style={styles.addButton}
           tone="secondary"
         >
-          태그 추가
+          {addLabel}
         </Button>
       </View>
     </View>

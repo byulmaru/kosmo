@@ -7,12 +7,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## Post List Type
 
-| 값      | 의미                                       |
-| ------- | ------------------------------------------ |
-| Home    | viewer Profile의 기본 Post List            |
-| Local   | configured Local Instance의 공개 Post List |
-| Profile | Target Profile이 작성한 Post List          |
-| Hashtag | Target Hashtag가 포함된 공개 Post List     |
+| 값      | 의미                                                                       |
+| ------- | -------------------------------------------------------------------------- |
+| Home    | viewer Profile의 기본 Post List                                            |
+| Local   | configured Local Instance와 운영자가 추가 설정한 Instance의 공개 Post List |
+| Profile | Target Profile이 작성한 Post List                                          |
+| Hashtag | Target Hashtag가 포함된 공개 Post List                                     |
 
 ## Control Decision
 
@@ -28,12 +28,33 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Home Post List
 
+- Home Post List는 viewer Profile마다 계산되는 파생 목록이다. Post를 목록에 넣을 때 당시의 후보, Visibility,
+  Eligibility, Follow, Block, Mute 규칙을 판정한다. Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에
+  몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부, 바깥 Post와 direct Source Post의 Author
+  Profile ACTIVE 상태를 다시 확인한다.
+- Home 파생 목록은 언제든 사라질 수 있는 임시 cache이며, 영구 Home projection이나 별도 초기화 상태를 저장하지 않는다.
+  인증된 Home 조회는 기존 cache의 7일 만료 시간을 연장하고, Post 삽입을 위한 background 처리는 기존 만료 시간을
+  연장하지 않는다. cache가 없거나 요청한 범위에 유효한 항목이 없으면 그 페이지를 DB에서 현재 정책에 따라 조회하며,
+  cache 오류 때문에 Home 조회가 실패하지 않는다. DB 결과가 비어 있으면 cache key를 만들지 않는다.
+- Home cache는 요청에서 이미 DB로 조회한 항목으로 구성하며, cache miss 뒤 별도의 대량 조회를 하지 않는다. 이후 페이지를
+  조회하면서 더 과거 항목을 찾으면 가장 오래된 cache 항목에 이어 추가한다. 적격 Post fanout은 cache가 없는 Profile의
+  key도 생성하며 새 key에는 7일 만료를 설정한다. 새 Post fanout은 기존처럼 cache에 추가된 시각을 사용하며, 같은 시각의
+  tie와 DB/cache 전환 경계의 중복·누락 가능성은 유지한다.
+- Follow·Unfollow의 Home 보정이 겹치면 이전 관계 기준의 항목이 늦게 추가되는 경합을 수용한다. 이 항목은 cache가
+  다시 구성되거나 후속 보정으로 제거될 때까지 남을 수 있고, Home 조회에 따른 만료 연장도 계속 적용된다.
+- Home 항목은 viewer Profile의 목록에 처음 추가된 시각 순으로 정렬한다. 파생 목록 조회는 추가 시각 cursor를,
+  DB fallback은 Post ID cursor를 사용한다. 같은 시각이나 파생 목록과 DB 조회 사이의 전환 경계에서는 중복 또는
+  누락이 생길 수 있다.
 - viewer Profile이 작성한 eligible Content Post 중 Reply Parent가 없는 Post를 포함한다.
 - viewer Profile이 팔로우한 Active/Normal Profile의 eligible Content Post 중 Reply Parent가 없는 Post를
   포함한다.
 - viewer Profile의 Post에 달린 Reply, viewer Profile이 작성한 Reply, viewer Profile이 팔로우한 Profile의
   Post에 viewer Profile이 팔로우한 Profile이 작성한 Reply를 포함한다.
 - viewer Profile 또는 viewer Profile이 팔로우한 Active/Normal Profile이 작성한 Repost를 포함한다.
+- viewer Profile이 작성한 Home 후보와 Reply Parent가 없는 Content Post는 기존 정책을 유지한다. 다른 Profile이
+  작성한 Reply 후보의 Current Content에 Mentioned Profile 관계가 하나 이상 있으면, 그중 하나 이상이 viewer
+  Profile이거나 viewer가 현재 팔로우하는 Profile일 때만 포함한다. Mentioned Profile 관계가 없는 Reply와 Content
+  없는 Repost는 기존 후보 정책을 유지한다.
 - Author 또는 Mentioned Profile이 아닌 viewer Profile은 Author Profile과 현재 Follow Relationship이 없을 때
   Followee가 작성한 Followers Only Post의 후보가 될 수 없다. 기존 Post Visibility가 Author 또는 Mentioned
   Profile에 부여한 접근은 유지한다.
@@ -43,7 +64,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - 저장·API projection은 조회 가능한 pinned Post의 server-authoritative ordered 0..N collection이다. Local first-party UI는
   조회 가능한 고정 Post 전체를 이 순서대로 별도 pinned segment에 표시하고 개별 관리한다. Remote inbound UI도 검증된
   Featured collection 전체를 원격 순서의 pinned segment로 표시한다.
-- pin 관계가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. visibility filtering은 남은 visible pin의 상대 순서를
+- 고정 관계와 저장 순서가 바뀌지 않으면 서버는 같은 authoritative order를 유지한다. Local 순서 변경 성공 후에는 현재 고정 목록과
+  이후 조회에 저장된 순서를 반영한다. 고정 관계의 구성과 기존 chronology에는 영향을 주지 않는다. visibility filtering은 남은 visible pin의 상대 순서를
   바꾸지 않는다.
 - Local pin/unpin 성공 뒤에도 이미 표시 중인 pinned segment는 이전 목록 구성과 순서를 유지할 수 있다. 이후 Profile 목록을 다시
   조회할 때 서버에 저장된 목록과 순서를 반영한다. 고정 목록은 페이지네이션 없이 조회 가능한 전체를 반환하며, 기존 chronology의
@@ -54,8 +76,10 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Local Post List
 
-- configured Local Instance에 속한 Active/Normal Local Profile이 작성한 Public Post 중 Content가 있고 Reply
-  Parent가 없는 eligible Post를 포함한다.
+- Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
+- 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
+- configured Local Instance 또는 운영자가 추가 설정한 Instance에 속한 Active/Normal Profile이 작성한 Public Post 중 Content가 있고 Reply Parent가 없는 eligible Post를 포함한다.
+- 이미 기존 수신 경로를 통해 Kosmo에 수신·저장된 Post만 조회한다. Instance 설정은 새 Post를 수집하지 않으며, 선택한 Instance의 모든 Post가 노출됨을 보장하지 않는다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
 - Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
 
@@ -80,14 +104,17 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | pinned segment이면 Include, 기존 chronology에서는 Exclude | Exclude                    |
 | Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include                                    | Exclude                    |
 
-- 모든 후보는 먼저 Post Visibility와 Post Eligibility를 통과해야 한다.
+- Home Post Visibility와 Post Eligibility는 항목을 파생 목록에 넣을 때 적용한다. Local, Profile, Hashtag Post List는
+  기존 조회 시점의 Visibility와 Eligibility 정책을 적용한다.
+- Home의 Visibility와 Eligibility는 항목을 목록에 넣거나 DB fallback으로 다시 구성할 때의 상태를 반영한다.
+  이전 Home 항목이 몇 초 동안 남더라도 direct Post·Node 조회와 다른 Post List의 현재 권한 판정은 바뀌지 않는다.
 - Local Post List는 Local Scope가 선택된 Hashtag Mute Rule의 Collapse도 Exclude로 소비한다.
 - Followers Only 후보는 Author/Mentioned Profile이 아닌 viewer에게 viewer Profile과 Author Profile 사이의
   현재 established Follow Relationship을 추가로 요구하며, pending·rejected Follow Request 또는 unfollow로
   removed된 관계와 guest에는 접근 범위를 넓히지 않는다.
 - Repost에는 Repost Author와 Source Post Author에 대한 Profile Block을 모두 적용한다.
-- Home·Local·Hashtag Post List의 상대 콘텐츠는 Profile Block 관계의 양쪽 viewer 방향에서 Exclude한다. 이 필터는
-  cursor와 page limit 전에 적용한다.
+- Home 항목은 Profile Block 양쪽 방향을 파생 목록에 넣을 때 적용하며, 관계 변경 반영에는 몇 초가 걸릴 수 있다.
+  Local·Hashtag Post List는 기존처럼 양쪽 viewer 방향의 Block 필터를 cursor와 page limit 전에 적용한다.
 - Profile Post List는 직접 방문한 Profile이 Profile Block의 Target이고 viewer가 Owner이며 역방향 Block이 없는
   경우 해당 Profile의 eligible Post와 첨부 Media를 기존 Post Visibility·Post Eligibility에 따라 Include한다.
   viewer가 Profile Block의 Target인 경우 상대 Owner의 Post와 첨부 Media를 Exclude하며, 양방향 Block이면 양쪽
@@ -97,8 +124,9 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   Quote도 direct Source Author를 판정한다.
 - Profile Post List에서는 방문한 Profile ID만 Mute 예외로 허용한다. 해당 Profile의 Post는 표시하지만,
   다른 Mute Target이 direct Source Author인 Repost·Quote는 Exclude한다.
-- Profile Mute에 따른 제외는 cursor와 page limit 전에 끝낸다. Bookmark 목록과 Post 직접
-  조회·상호작용에는 Mute를 적용하지 않으며 기존 Visibility·Eligibility를 유지한다.
+- Home은 Profile Mute에 따른 제외를 파생 목록에 넣을 때 적용하며, 관계 변경 반영에는 몇 초가 걸릴 수 있다.
+  Local·Hashtag Post List는 Mute 제외를 cursor와 page limit 전에 적용한다. Bookmark 목록과 Post 직접 조회·상호작용에는
+  Mute를 적용하지 않으며 기존 Visibility·Eligibility를 유지한다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 - pinned segment에도 기존 Post Visibility, Post Eligibility, Profile lifecycle, Post lifecycle, block·domain 정책을
   적용한다. 조회할 수 없거나 unavailable인 pinned Post는 목록과 pinned count에 포함하지 않는다.

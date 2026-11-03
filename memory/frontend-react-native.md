@@ -7,6 +7,7 @@ The guidance is split by route/platform boundaries, Relay operations and actor c
 - [Route and platform boundaries](frontend/route-platform.md)
 - [Relay operation, environment, and cache](frontend/relay-operation-env-cache.md)
 - [UI composition and styles](frontend/ui-composition.md)
+- [UI contract enforcement](frontend/ui-contract-enforcement.md)
 - [Storybook](frontend/storybook.md)
 
 ## Purpose

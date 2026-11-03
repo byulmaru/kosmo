@@ -185,6 +185,7 @@ describe('PostHog Web client', () => {
     const instance = instances[0];
     assert.ok(instance);
     const properties = {
+      ai_prohibit_image_count: 2,
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT' as const,
     };

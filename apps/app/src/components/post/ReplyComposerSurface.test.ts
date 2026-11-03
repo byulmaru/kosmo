@@ -18,6 +18,7 @@ let composerProps:
   | {
       initialBodyText?: string;
       onRequestClose?: (event?: unknown) => void;
+      onPostRequestAccepted?: () => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
       contextGuard?: { current: number };
@@ -510,6 +511,26 @@ test('닫기 버튼 이벤트는 작성 취소 후 실행할 콜백으로 취급
   await act(async () => discard.props.onPress());
 
   assert.equal(closeCount, 1);
+});
+
+test('게시 요청 접수는 작성 취소 확인 없이 답글/인용 surface를 닫는다', async () => {
+  let closeCount = 0;
+  await act(async () => {
+    renderer = create(
+      createElement(ReplyComposerSurface, {
+        mode: 'quote',
+        onRequestClose: () => closeCount++,
+        open: true,
+        parent: { id: 'post-1' } as never,
+        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+      }),
+    );
+  });
+
+  await act(async () => composerProps?.onPostRequestAccepted?.());
+
+  assert.equal(closeCount, 1);
+  assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
 });
 
 test('iOS VoiceOver Escape는 확인창을 먼저 닫고 부모 Quote를 유지한다', async () => {

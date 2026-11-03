@@ -15,8 +15,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   [`Parent revealed on upward scroll 7392:27994`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-27994)이다.
   Dark inheritance는 같은 reveal 조립을 재사용한 [`5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)로 확인한다.
 - 일반 Post Composer가 지원하는 Plain Text 본문, Content Warning, Visibility, 글자 수, Media
-  선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로
-  재사용한다.
+  선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 선택, validation,
+  pending과 오류 상태를 그대로 재사용한다.
+- Local Post·Reply·Quote의 Hashtag는 기존 본문에 직접 입력한다. 별도 Hashtag 입력·선택·자동완성 UI를 두지 않는다.
+  Hashtag marker와 이름은 기존 본문 글자 수에 포함하며, 인식되지 않는 긴 text도 잘라내거나 게시를 막지 않는다.
 - 일반 Post, Reply와 Quote는 같은 Plain Text editor에서 token boundary의 `@` 뒤에 한 글자 이상 입력했을
   때 Profile 제안을 표시한다. `@`만 입력하면 검색어를 입력하라는 짧은 안내를 표시하고 Profile 전체 목록은 열지
   않는다. 제안은 현재 작성 Profile을 기준으로 검색하며, 제안 조회 중에는 원격 Profile을 새로 resolve/fetch하지
@@ -31,7 +33,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   편집된 token이 다른 적격 Profile과 일치하면 Mention으로 저장한다. 앞뒤 문장만 편집하면 해당 선택 연결은
   유지한다. 같은 Profile을 여러 번 선택한 경우 각 occurrence를 독립적으로 편집할 수 있다. 선택한 Profile을
   게시 시 이용할 수 없거나 본문 handle과 선택한 Profile이 일치하지 않으면 게시 전체가 실패한다. Mention은
-  본문에 실제 작성한 문자열로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
+  본문에 실제 작성한 문자열을 Unicode code point 기준으로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
 - 새 Reply 본문에는 direct Parent 작성자와 원글에서 멘션한 사람들을 미리 적는다. 현재 작성 Profile은
   제외하고 같은 Profile은 한 번만 넣는다. 사용자는 문구를 수정하거나 지울 수 있고, 이 기본 문구는 Mention 검색 UI가
   꺼져 있어도 제공하며 Profile을 새로 조회하지 않는다. 일반 Post와 Quote 본문은 기존처럼 비어 있다.
@@ -66,6 +68,16 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   keyboard 전환, safe area와 focus 이동은 각 플랫폼 runtime에서 검증하며 Figma 정적 consumer나 Web
   자동화만으로 Native 검증 완료를 주장하지 않는다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
+
+## Local Post 제출과 요청 상태
+
+- 모든 Local Post·Reply·Quote 제출은 같은 `createPost` mutation을 사용하며 `CreatePostInput`은 요청 ID를 받지 않는다. 일반 완료 응답은 서버가 만든 실제 top-level Post와 `request: null`이고, Media 처리가 계속 필요한 경우에는 `post: null`과 실제 PostRequest를 반환한다. 결과는 서버가 정하며 Relay field 선택이나 클라이언트의 Media 상태 판단으로 바꾸지 않는다. 실제 Post 결과와 실제 request 접수 중 하나가 확인되면 Composer를 닫고 초안을 비운다. 둘 다 없으면 draft를 보존하고 일반 오류를 표시한다. 오류 뒤 수동 재제출은 이전 요청을 재생하지 않는 새 제출이며, 응답 손실 뒤 기존 요청을 확인하거나 재생하지 않는다. direct Post 결과를 위한 합성 `PUBLISHED` request는 만들지 않는다. 실제 Post 구조와 권한은 [Post 객체](../domain/objects/post.md)를 따른다.
+- 접수된 요청의 전체 제출 snapshot은 Temporal Workflow 안에 보존해 게시와 workflow 내부 멱등 처리를 완료하며, UI에는 공개하지 않고 Composer에 복구하지 않는다. 서버 요청 상태는 `QUEUED`, `PROCESSING`, `PUBLISHING`, `CONFIRMING`, `FAILED`, `CANCELLED`, `PUBLISHED` 중 하나이며, 상태 백분율이나 남은 시간은 계산하지 않는다.
+- 제출 초안을 로컬에 영구 저장하거나 새 전역 게시글 이력을 만들지 않는다.
+- Home에는 현재 선택한 작성 Profile의 실제 표시 조건을 충족하는 게시 요청 중 처리 중이거나 실패한 카드만 표시하며, 카드 배치는 [Local Timeline](./local-timeline.md)을 따른다. `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED`를 표시한다. 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청은 Home 카드에서 사라지고, 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역을 표시하지 않는다. 빈 상태·로딩·오류 안내, 영역 제목, 테두리, 이력·전체 보기 링크, 전용 게시 요청 화면·사이드바 메뉴·대체 경로는 두지 않는다. 요청 카드는 실제 Post나 Post Action Bar처럼 보이거나 동작하지 않는다. 요청 카드는 작성자 본인 전용 요약이므로 Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일을 표시한다. Sensitive Media 썸네일은 생략한다. 게시된 Post의 Content Warning 가림과 공용 reveal 동작은 그대로 유지한다.
+- 처리 중 Media에 사용할 URL이 없으면 해당 Media metadata의 ThumbHash를 작은 미리보기로 사용한다. URL이 있으면 이를 우선하며, Sensitive Media 썸네일은 생략한다.
+- `QUEUED`·`PROCESSING` 요청은 취소를 요청할 수 있으며, 서버가 `CANCELLED`로 확인한 뒤 취소 완료로 처리한다. `PUBLISHING`과 `CONFIRMING`은 취소할 수 없다. `CANCELLED` 요청은 Account 소유 데이터에 기존 보존 정책으로 남지만 Home에는 표시하지 않는다. `FAILED`는 Post나 Tombstone이 아닌 종료된 요청 상태로 workflow 보존 기간에만 남는다. `FAILED` 카드의 `새 글 작성`은 현재 선택한 Profile의 일반 Post Composer를 연다. 요청의 본문·Content Warning·Media·Mention·Reply·Quote 관계·작성 Profile·기본값은 복사하지 않는다. 기존 일반 Composer draft는 기존 정책을 따르며, 로컬 draft가 없을 때만 새 입력이 비어 있다.
+- `PUBLISHED`는 Post 저장 transaction이 commit됐음을 뜻한다. 후속 게시 작업의 완료를 뜻하지 않으며, 이 상태가 되어도 Post 상세로 자동 이동하지 않는다. 실제 publish 시점에 작성 Profile 권한을 다시 확인한다.
 
 ## Web 관계형 Composer modal
 
@@ -123,25 +135,32 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   modal 전용 raw font size나 font family를 만들지 않는다.
 - 기존 Composer의 본문 아래 content 위치를 Quote Source preview와 Media가 공유한다. 순서는
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
-  제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
-  함께 스크롤하고 고정 footer를 밀어내지 않는다.
+  제거·재시도, nullable Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control이 늘어나면 Parent와 editor가
+  공유하는 중앙 영역에서 함께 스크롤하고 고정 footer를 밀어내지 않는다.
+- 기존 `post-composer-nightshade` feature flag는 모든 사용자에게 기본 활성화한다. flag가 켜진 경우 Web에서
+  `AI 학습 방지 필터(베타)` tool tab, 모바일에서 같은 이름의 tool button과 tool content를 제공하며, flag가 꺼져 있거나
+  평가되지 않았으면 이를 숨긴다. 선택한 이미지마다 `AI 학습 방지 필터 적용` Switch를 따로 두고 기본값은 off다. Switch label 아래에는
+  `실험적인 기능이며 예고 없이 변경될 수 있습니다. 이미지 처리는 10~30분이 소요되며 작업 대기열 상황에 따라 더 오래 지연될 수 있습니다.`를 표시하고 첫 문장 뒤에 줄바꿈을 둔다. 선택 상태는 이미지 선택, editor 닫기와 Composer-local 작성
+  Profile 전환을 거쳐 draft에 유지한다. Switch의 accessible name은 `첨부 이미지 N AI 학습 방지 필터 적용`이다.
+  처리 결과 미리보기는 제공하지 않는다. 처리 동작과 결과 보장은
+  [Media 객체](../domain/objects/media.md)를 따른다.
 - Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
   `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
 - footer는 modal 바닥에 고정한다. 좌측에는 기존 작성 도구를, 우측에는 남은 글자 수와 공용 `게시` primary
   button을 이 순서로 둔다.
-- 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 합계를 500에서 차감해 항상 표시하며
+- 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 Unicode code point 수 합계를 500에서 차감해 항상 표시하며
   초과 시 semantic danger 상태로 표시한다.
-- trim한 본문과 업로드를 완료한 Media가 모두 없거나, Content Warning과 본문 Plain Text의 합계가 500자를
+- trim한 본문과 업로드를 완료한 Media가 모두 없거나, Content Warning과 본문 Plain Text의 Unicode code point 합계가 500자를
   초과하거나, Media가 업로드 중·실패 상태이거나, Reply 제출 중이면 `게시`를 disabled로 표시한다.
   Content Warning만으로는 contentful Reply가 되지 않지만, 본문이 없어도 Ready Media가 하나 이상 있으면
   Media-only Reply를 제출할 수 있다.
-- Media 업로드 실패는 공용 Danger Toast로 상세 원인을 한 번 알리고, 현재 preview와 Parent 맥락을 유지한 채
+- 접수 전 raw Media 업로드 실패는 공용 Danger Toast로 상세 원인을 한 번 알리고, 현재 preview와 Parent 맥락을 유지한 채
   같은 위치에 `업로드 실패` 상태와 재시도·제거 action을 남긴다. 상세 문구를 inline으로 중복하지 않는다.
-- 제출 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Content Warning·Visibility의 중복 변경과
-  닫기를 막는다.
-- 게시 mutation의 network·GraphQL·미생성 실패는 공용 Danger Toast로 표시하고 작성 내용과 재시도 가능한
-  `게시` action을 유지한다. Media 업로드는 상세 원인을 공용 Danger Toast로 알리되 실패한 항목의 상태와
-  복구 action을 해당 위치에 유지한다.
+- Media의 AI 학습 방지 선택은 raw-byte 업로드가 끝난 뒤에도 접수 전까지 바꿀 수 있으며, 최종 선택을 제출 snapshot에
+  포함한다. 접수 뒤 snapshot은 immutable하다. 처리 상태와 오류는 게시 요청 상태로 표시하며, 이를 Composer 안의 업로드
+  재시도나 제거 상태로 되돌리지 않는다. 처리 정책은 [Media 객체](../domain/objects/media.md)를 따른다.
+- 접수 대기 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Content Warning·Visibility와 닫기를 잠근다.
+- 서버 오류·GraphQL 오류·network 오류는 기존 일반 오류 표현을 사용하고, 작성 내용을 보존한 채 Composer 입력을 다시 활성화한다. 사용자가 수동 재제출하면 서버가 새 `requestId`를 발급하는 별도 요청이 된다. 접수 뒤 실패한 요청은 `Local Post 제출과 요청 상태`의 `새 글 작성` 정책을 따른다.
 
 ## 공통 Visibility
 
@@ -199,7 +218,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   판정을 사용하되 header close, Web `Escape`, Native platform back 또는 iOS VoiceOver Escape에서 확인한다.
 - Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. modal·fullscreen surface는 입력별 dirty를
   다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
-  전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
+  전달받아 접수 대기 중 close 차단에 사용한다. 오류 뒤에는 이 surface의 일반 draft 폐기 확인만 적용한다.
+  따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
   `답글 작성을 취소할까요?` 확인에서 사용자가 `계속 작성` 또는 `작성 취소`를 선택하게 한다.
 - Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는 닫힌 surface를 다시 열거나 상태를 변경하지
   않는다.
@@ -208,29 +228,21 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 열린 modal surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
-- 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
+- 접수 전 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
   Content Warning, Visibility, Media, error와 pending을 초기 상태로 시작한다. Content
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
   문맥의 늦은 upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다.
 - 새 Post Rail·Overlay Composer에 한해 Composer-local 작성 Profile을 전환할 수 있다. 이 전환은 전역
-  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·현재
-  Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
+  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·이미지별
+  AI 학습 방지 선택·현재 Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
   Reply·Quote Composer에는 이 local 전환을 제공하지 않는다.
 - local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
   picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
-- 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
-- 전역 Profile과 다른 작성 Profile로 게시하면 성공 ID만 확인하고 현재 화면의 목록과 캐시에는 작성자 관점의
-  Post 내용을 넣지 않는다. 작성자가 전역 Profile과 같으면 기존 목록 갱신을 유지한다.
-- 제출 성공 뒤 같은 Composer가 초기화되면 작성 Profile을 전역 선택 Profile로 되돌린다. Visibility는 성공
-  callback을 만든 render가 캡처한 전역 선택 Profile Fragment 값을 best-effort seed로 사용한다. 제출 중 별도
-  render에서 갱신된 최신 Profile 기본값까지 보장하지 않는다.
-- 제출 성공 시 modal을 닫고 `답글을 게시했어요` 성공 snackbar와 `보기` action을 표시한다. Web modal은
-  닫힌 뒤 원래 Reply action으로 포커스를 복원한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
-  `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
-- 성공 payload 반영은 Reply surface가 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
-  제공한 현재 actor의 connection/callback 경계만 사용한다. 상세 surface는 현재 detail query만 targeted
-  refetch하며, 새 Reply가 현재 query 범위에 포함될 때만 기존 thread 정렬에 따라 자연스럽게 표시한다.
+- 접수 전 Media raw-byte 업로드와 게시 요청 접수 중에는 작성 Profile 전환을 잠근다. 접수 전 Media 업로드 실패는 첨부와 draft를 유지하며, 접수 뒤 `FAILED` 요청은 `Local Post 제출과 요청 상태`의 `새 글 작성`을 따른다.
+- 선택한 작성 Profile은 접수된 요청 snapshot에 유지되며, 접수만으로 Post 목록이나 Post 상세를 갱신하지 않는다.
+  actual Post가 저장된 뒤의 현재 actor Home 목록 반영은 Relay 연결 계약을 따른다. 접수 완료 후 Composer는 닫히며,
+  다음 Composer는 기존 기본 작성 Profile을 사용한다.
 
 ## 접근성·입력
 
@@ -244,8 +256,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Native에서는 닫은 뒤 접근성 포커스를 수동으로 옮기거나 특정 요소로의 포커스 복귀는 요구하지 않는다.
 - 오류는 alert semantics, Content Warning 입력·reveal control·Visibility와 Reply action은 name/state, 남은
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
-- Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은
-  accessible name·state·live feedback을 제공한다.
+- Media 추가·제거·재시도, 업로드 상태, Alt Text, Sensitive Media와 이미지별 AI 학습 방지 control은 기존 일반
+  Composer와 같은 accessible name·state·live feedback을 제공한다. AI 학습 방지 Switch의 이름은
+  `첨부 이미지 N AI 학습 방지 필터 적용`이다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
   관찰을 source of truth로 삼고, 이전 target-size 수치를 자동으로 이식하지 않는다.
 - 중앙 scroll은 keyboard focus가 Parent 또는 editor의 현재 위치를 가리지 않게 유지한다. Parent 전용 nested
@@ -261,6 +274,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - ActivityPub Reply와 Notification inbox
 - modal 안의 전체 조상 thread, Parent Action Bar와 Post menu
 - 일반 Post Composer 전체를 재설계하거나 mode별 Composer state를 만드는 작업
+- 게시 요청의 신규 App notification·Native Push, Profile 기본값 재구성, workflow 보존·cleanup 정책 변경
 
 ## 구현 정렬 gate
 
@@ -291,29 +305,33 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   사용자가 고른 Visibility와 열린 draft가 자동 변경되지 않는지 확인한다. `DIRECT` Post의 현재 Content canonical
   Mentioned Profile 조회 범위(Author/Mentioned Profile Origin 무관), 멘션이 없는 작성자의 조회 권한, 미확인·malformed
   handle text가 `DIRECT` 수신자로 계산되지 않는지 확인한다.
-  `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는 유지되는지 확인한다. 500자 count와
+  `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는 유지되는지 확인한다. Unicode code point 기준 합산 500자 count와
   disabled/pending/error 상태도 확인한다.
 - Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
-- 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
+- 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, Unicode code point 기준 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.
-- 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
-  Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
-  다시 계산해야 한다.
+- 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, 이미지별 AI
+  학습 방지 선택과 Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤
+  유효성을 다시 계산해야 한다. AI 학습 방지 선택은 다른 이미지·editor close·local Profile 전환에 걸쳐 보존한다.
 - Web modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, editor focus open·Reply action focus
-  restore, 성공 snackbar의
-  `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
+  restore, 접수 뒤 draft reset과 자동 route 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
   close, Web `Escape`, Native platform back과 iOS VoiceOver Escape에서 같은 dirty·pending 보호를 제공하는지
   확인한다.
   Web 390px에서는 지원 브라우저의 Back·Forward, 계속 작성의 초안·URL 유지, 폐기 후 원래 목적지 이동과
   history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
+- Post·Reply·Quote 제출은 실제 mutation 결과를 따른다. 직접 완료 응답은 실제 top-level Post와 `request: null`을 반환하고, Media 처리가 계속되면 `post: null`과 실제 PostRequest를 반환하는지 확인한다. 결과 필드 선택이나 클라이언트의 Media 상태가 결과를 바꾸지 않는지 확인한다. 실제 Post ID나 실제 request ID가 있으면 Composer가 성공으로 처리되어 draft를 한 번 비우고, 둘 다 없으면 draft와 오류 상태를 유지하는지 확인한다. 직접 Post는 현재 actor의 Home connection에 실제 Post 하나로 반영하고, request 접수는 합성 Post 없이 기존 request card/cache 경로를 따르는지 확인한다. 이전 서버의 `PUBLISHED` request 응답도 실제 Post를 계속 반영하는지 확인한다. 처리 중이거나 실패한 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED` 카드만 보이는지, 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청이 카드에서 사라지는지 확인한다. 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역과 빈 상태·로딩·오류 안내, 제목, 테두리, 이력·전체 보기 링크가 나타나지 않고 전용 게시 요청 화면이나 사이드바 메뉴가 없는지 확인한다. Content Warning이 있어도 본문 발췌와 민감하지 않은 Media 썸네일이 표시되고, Sensitive Media 썸네일은 생략되는지 확인한다. 접수 실패 시 Composer draft를 유지하는지 확인한다. 백분율·ETA 부재, `PROCESSING` 취소 확인, `PUBLISHING`·`CONFIRMING` 취소 불가도 확인한다. `PROCESSING` 취소는 서버가
+  `CANCELLED`를 확인하기 전에 Composer를 열지 않고, `FAILED` 카드의 `새 글 작성`은 현재 Profile의 일반 Post Composer를
+  열면서 요청 snapshot을 복사하지 않는지 확인한다. 기존 일반 draft는 일반 Composer 정책을 유지하고,
+  로컬 draft가 없을 때만 새 입력이 비어 있는지 확인한다. 오류 뒤 draft가 편집 가능하고 수동 재제출에
+  client request ID가 포함되지 않으며 성공 응답에서 Composer가 닫히고 draft가 비워지는지 확인한다.
+  `PUBLISHED`가 저장 성공만 나타내고 자동 이동하지 않는지도 확인한다.
 - Web `≥ compact` 목록·상세 modal과 Web `< compact` 전체 화면의 Parent·Composer 계약을 Storybook에서
   확인한다. 일반 Post Composer의 Full Web right rail은 유지하되 Reply/Quote에는 inline Composer wrapper가
-  남지 않아야 한다. 실제 API의
-  targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
+  남지 않아야 한다. Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,
   platform back과 접근성 runtime은 이번 Web 우선 PR의 Ready 근거로 사용하지 않고 Native 출시 gate에서 별도로
   확인한다.

@@ -108,6 +108,7 @@ mockModule('../../theme/tokens', {
 });
 type BlockedProfile = {
   key: string;
+  connectionId: string;
   profileBlock: never;
 };
 let BlockedProfilesView: typeof BlockedProfilesViewExport;
@@ -133,16 +134,20 @@ afterEach(async () => {
   };
 });
 
-const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
+const profile = (id: string, displayName: string | null = '별마루'): BlockedProfile => ({
   key: `cursor-${id}`,
+  connectionId: 'blocked-profile-connection',
   profileBlock: {
     id: `block-${id}`,
     targetProfile: {
       displayName,
       id: `profile-${id}`,
       relativeHandle: `@${id}`,
-      avatar: { id: `avatar-${id}`, url: `https://media.example/${id}.png` },
-      viewerState: { profileBlock: { id: `block-${id}` } },
+      avatar:
+        displayName === null
+          ? null
+          : { id: `avatar-${id}`, url: `https://media.example/${id}.png` },
+      ...(displayName === null ? {} : { viewerState: { profileBlock: { id: `block-${id}` } } }),
     },
   } as never,
 });
@@ -287,33 +292,22 @@ describe('차단한 프로필 목록', () => {
     assert.equal(retries, 1);
   });
 
-  it('해제 뒤 같은 행에서 차단 action으로 전환한다', async () => {
-    const blockedProfile = profile('star');
-    const unblocked = {
-      ...blockedProfile,
-      profileBlock: {
-        ...(blockedProfile.profileBlock as object),
-        targetProfile: {
-          displayName: '별마루',
-          id: 'profile-star',
-          relativeHandle: '@star',
-          viewerState: { profileBlock: null },
-        },
-      } as never,
-    };
+  it('비활성 Profile 행은 identity만 표시하고 실제 차단 관계의 해제 action을 유지한다', async () => {
     await act(async () => {
       renderer = create(
         createElement(BlockedProfilesView, {
           state: {
             pagination: { status: 'end' },
-            profiles: [unblocked],
+            profiles: [profile('inactive', null)],
             status: 'loaded',
           },
         }),
       );
     });
     assert.equal(findAll('ProfileListItemContent').length, 1);
-    assert.equal(find('Button')?.props.children, '차단');
-    assert.equal(find('Button')?.props.profileId, 'profile-star');
+    assert.equal(find('ProfileListItemContent')?.props.displayName, '@inactive');
+    assert.equal(find('ProfileListItemContent')?.props.avatarUri, undefined);
+    assert.equal(find('Button')?.props.children, '차단 해제');
+    assert.equal(find('Button')?.props.profileBlockId, 'block-inactive');
   });
 });

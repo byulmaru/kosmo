@@ -2,9 +2,9 @@
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
   import UsersIcon from '@lucide/svelte/icons/users';
+  import * as Sidebar from '#lib/components/ui/sidebar/index.js';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import * as Sidebar from '$lib/components/ui/sidebar';
 
   let {
     viewer,

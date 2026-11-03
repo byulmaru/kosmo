@@ -6,6 +6,15 @@ output "firebase_ios_app_id" {
   value = google_firebase_apple_app.kosmo.app_id
 }
 
+output "firebase_web_app_config" {
+  value = {
+    apiKey            = data.google_firebase_web_app_config.kosmo.api_key
+    appId             = google_firebase_web_app.kosmo.app_id
+    messagingSenderId = data.google_firebase_web_app_config.kosmo.messaging_sender_id
+    projectId         = local.firebase_project_id
+  }
+}
+
 output "firebase_project_number" {
   value = data.google_project.firebase.number
 }

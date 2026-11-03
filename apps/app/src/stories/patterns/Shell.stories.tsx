@@ -93,9 +93,9 @@ const profileEditSafeAreaMetrics = {
   insets: { bottom: 16, left: 0, right: 0, top: 24 },
 };
 const publicQuery = { ...query, currentSession: null, me: null };
-const firstProfileQuery = {
+const unselectedProfileQuery = {
   ...query,
-  ...shellQuery({ profiles: [], selectedProfile: null }),
+  ...shellQuery({ profiles: [selectedProfile], selectedProfile: null }),
 };
 const ineligibleSelectedProfile = {
   ...selectedProfile,
@@ -414,6 +414,7 @@ const meta = {
   excludeStories: [
     'UniversalCompactComposerLifecycle',
     'UniversalCompactComposerMediaEditorGeometry',
+    'UniversalCompactComposerMediaEditorViewportFocusRace',
     'UniversalFullComposerLifecycle',
     'UniversalFullComposerMediaEditorLifecycle',
     'UniversalMobileComposerLifecycle',
@@ -449,7 +450,7 @@ export const SharedNavigation: Story = {
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
-    const searchVisual = within(search).getByTestId('sidebar-control-visual');
+    const searchVisual = within(search).getByTestId('sidebar-control-feedback');
     const utility = canvas.getByRole('button', { name: '설정 및 기타' });
     const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
     const utilityIcons = utilityVisual.querySelectorAll('svg');
@@ -703,7 +704,7 @@ export const FeedbackNavigationCurrentState: Story = {
     const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
@@ -758,7 +759,7 @@ export const FollowRequestsNavigationCurrentState: Story = {
     const link = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(link).toHaveAttribute('href', '/follow-requests');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
   },
@@ -778,7 +779,7 @@ export const FeedbackNavigationCompactCurrentState: Story = {
     expect(within(menu).getByRole('menuitem', { name: '로그아웃' })).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
@@ -809,7 +810,7 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(within(link).getByTestId('sidebar-control-visual')).toHaveStyle({
+    expect(within(link).getByTestId('sidebar-control-feedback')).toHaveStyle({
       backgroundColor: 'rgb(255, 249, 230)',
     });
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
@@ -1566,12 +1567,12 @@ export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
 export const ProfileSwitcherCreateTracksAnalytics: Story = {
   parameters: {
     relay: {
-      data: firstProfileQuery,
+      data: unselectedProfileQuery,
       operationResponses: {
         ProfileSwitcherCreateProfileMutation: {
           data: {
             createProfile: {
-              account: { ...firstProfileQuery.me, profiles: [secondProfile] },
+              account: { ...unselectedProfileQuery.me, profiles: [selectedProfile, secondProfile] },
               profile: secondProfile,
             },
           },
@@ -2648,7 +2649,9 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
 
       const editor = within(dialog).getByTestId('web-composer-media-editor');
       expect(page.getAllByRole('dialog')).toHaveLength(1);
-      const dialogBounds = dialog.getBoundingClientRect();
+      const dialogBounds = within(dialog)
+        .getByTestId('post-composer-dialog')
+        .getBoundingClientRect();
       const closeButton = within(editor).getByRole('button', { name: '미디어 편집 닫기' });
       const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
       const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
@@ -2669,6 +2672,112 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
       const reopenedDialog = await page.findByRole('dialog', { name: '글쓰기' });
       expect(within(reopenedDialog).queryByTestId('web-composer-media-editor')).toBeNull();
     } finally {
+      restoreFetch();
+      resetImagePickerMock();
+    }
+  },
+};
+
+export const UniversalCompactComposerMediaEditorViewportFocusRace: Story = {
+  ...UniversalCompactComposerMediaEditorGeometry,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Media editor focus story requires a browser visual viewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const restoreFetch = installComposerMediaUploadFetch();
+    let intersectionObserver: IntersectionObserver | null = null;
+
+    try {
+      expect(storyWindow.innerWidth).toBe(390);
+      expect(storyWindow.innerHeight).toBe(844);
+      expect(visualViewport.height).toBe(844);
+      setNextImagePickerResult({
+        assets: [createComposerPickerAsset('focus-resize-race.svg')],
+        canceled: false,
+      });
+
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+
+      const editor = within(dialog).getByTestId('mobile-composer-media-editor');
+      const mediaDialog = within(dialog).getByTestId('post-composer-dialog');
+      const altTextInput = within(editor).getByRole('textbox', {
+        name: '이미지 설명',
+      }) as HTMLTextAreaElement;
+      const doneButton = within(editor).getByRole('button', { name: '완료' });
+      const backButton = within(editor).getByRole('button', { name: '미디어 편집에서 뒤로' });
+      await userEvent.type(altTextInput, '보존할 이미지 설명');
+      altTextInput.blur();
+      expect(altTextInput).not.toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 320 });
+      altTextInput.focus();
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(320, 0));
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+      const mediaDialogBounds = mediaDialog.getBoundingClientRect();
+      expect(mediaDialogBounds.top).toBeGreaterThanOrEqual(0);
+      expect(mediaDialogBounds.bottom).toBeLessThanOrEqual(320);
+      expectElementInsideBounds(doneButton, mediaDialogBounds);
+      expectElementInsideBounds(backButton, mediaDialogBounds);
+
+      let intersectionRatio = 0;
+      intersectionObserver = new storyWindow.IntersectionObserver(([entry]) => {
+        intersectionRatio = entry?.intersectionRatio ?? 0;
+      });
+      intersectionObserver.observe(altTextInput);
+      await waitFor(() => expect(intersectionRatio).toBeGreaterThan(0));
+
+      let scrollView = altTextInput.parentElement;
+      while (scrollView) {
+        const overflowY = storyWindow.getComputedStyle(scrollView).overflowY;
+        if (
+          scrollView.scrollHeight > scrollView.clientHeight &&
+          (overflowY === 'auto' || overflowY === 'scroll')
+        ) {
+          break;
+        }
+        scrollView = scrollView.parentElement;
+      }
+      if (!scrollView) {
+        throw new Error('Media editor did not render a scrollable viewport.');
+      }
+
+      scrollView.scrollTop = 0;
+      scrollView.dispatchEvent(new storyWindow.Event('scroll'));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 400 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(400, 0));
+      await new Promise<void>((resolve) => storyWindow.requestAnimationFrame(() => resolve()));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+    } finally {
+      intersectionObserver?.disconnect();
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       restoreFetch();
       resetImagePickerMock();
     }
@@ -2698,7 +2807,8 @@ function universalMediaEditorResponsiveStory(
       try {
         await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
         const dialog = await page.findByRole('dialog', { name: '글쓰기' });
-        expect(dialog.getBoundingClientRect().width).toBe(640);
+        const surface = within(dialog).getByTestId('post-composer-dialog');
+        expect(surface.getBoundingClientRect().width).toBe(640);
         await userEvent.click(
           within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
         );
@@ -2706,22 +2816,26 @@ function universalMediaEditorResponsiveStory(
           within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
         ).resolves.toBeVisible();
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         const editor = within(dialog).getByTestId('web-composer-media-editor');
         const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
         const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
         const doneButton = within(editor).getByRole('button', { name: '완료' });
-        const dialogBounds = dialog.getBoundingClientRect();
+        const dialogBounds = surface.getBoundingClientRect();
         expect(toolPanel.getBoundingClientRect().width).toBe(280);
         expectElementInsideBounds(altTextInput, dialogBounds);
         expectElementInsideBounds(doneButton, dialogBounds);
 
         await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
       } finally {
         restoreFetch();
         resetImagePickerMock();
@@ -2841,7 +2955,7 @@ export const UniversalCompactFeedbackOverlay: Story = {
     expect(home).not.toHaveAttribute('aria-current');
     await waitFor(() =>
       expect(
-        getComputedStyle(within(feedbackButton).getByTestId('sidebar-control-visual'))
+        getComputedStyle(within(feedbackButton).getByTestId('sidebar-control-feedback'))
           .backgroundColor,
       ).toBe('rgb(255, 249, 230)'),
     );
@@ -3088,8 +3202,8 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
       const body = canvas.getByRole('textbox', { name: '게시글 본문' });
       await userEvent.type(body, 'overlay rail reopen draft');
       await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
-      await expect(canvas.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
-      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await expect(page.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
+      await userEvent.click(page.getByRole('button', { name: '첨부 이미지 1 편집' }));
 
       let dialog = await page.findByRole('dialog', { name: '글쓰기' });
       await userEvent.type(
@@ -3101,11 +3215,11 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
 
       await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
       await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
-      expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
+      expect(page.queryByTestId('web-composer-media-editor')).toBeNull();
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
         'overlay rail reopen draft',
       );
-      expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      expect(page.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
 
       await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
       dialog = await page.findByRole('dialog', { name: '글쓰기' });
@@ -3148,5 +3262,19 @@ export const UniversalFullComposerHeightTransition: Story = {
     await waitFor(() =>
       expect(overlayBody.getBoundingClientRect().height).toBeLessThan(railHeight),
     );
+  },
+};
+
+export const ProfileSwitcherFirstProfileEntry: Story = {
+  parameters: {
+    relay: { data: { ...query, ...shellQuery({ profiles: [], selectedProfile: null }) } },
+  },
+  render: () => <FirstProfileSwitcherStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const entry = await canvas.findByRole('link', { name: '첫 프로필 만들기' });
+    expect(entry).toHaveAttribute('href', '/first-profile/handle');
+    expect(canvas.queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
   },
 };

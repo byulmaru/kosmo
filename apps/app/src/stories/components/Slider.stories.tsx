@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { Slider } from '@/components/ui/Slider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -14,10 +15,13 @@ function SliderCatalog({
   onValueCommit,
   step = 10,
   value = 40,
+  updateArgs,
 }: Omit<SliderProps, 'onValueChange'> & {
   onValueChange?: SliderProps['onValueChange'];
+  updateArgs?: (update: Pick<SliderProps, 'value'>) => void;
 }) {
   const [currentValue, setCurrentValue] = useState(value);
+  useEffect(() => setCurrentValue(value), [value]);
 
   return (
     <View style={{ gap: 8, maxWidth: 480, padding: 16, width: '100%' }}>
@@ -29,6 +33,7 @@ function SliderCatalog({
         onValueChange={(nextValue) => {
           setCurrentValue(nextValue);
           onValueChange?.(nextValue);
+          updateArgs?.({ value: nextValue });
         }}
         onValueCommit={onValueCommit}
         step={step}
@@ -55,7 +60,7 @@ const meta = {
     max: { control: { max: 1000, min: 1, step: 1, type: 'number' } },
     min: { control: { max: 999, min: 0, step: 1, type: 'number' } },
     step: { control: { max: 100, min: 1, step: 1, type: 'number' } },
-    value: { control: { max: 100, min: 0, step: 1, type: 'number' } },
+    value: { control: { max: 1000, min: 0, step: 1, type: 'number' } },
   },
   component: Slider,
   excludeStories: ['InteractionContract', 'ReducedMotionContract'],
@@ -74,12 +79,10 @@ export const Playground: Story = {
       include: ['accessibilityLabel', 'disabled', 'max', 'min', 'step', 'value'],
     },
   },
-  render: (args) => (
-    <SliderCatalog
-      key={`${args.accessibilityLabel}:${args.disabled}:${args.max}:${args.min}:${args.step}:${args.value}`}
-      {...args}
-    />
-  ),
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+    return <SliderCatalog {...args} updateArgs={updateArgs} />;
+  },
 };
 
 export const InteractionContract: Story = {

@@ -96,8 +96,8 @@ test('selectProfile response identifies the selected profile and recreates the a
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
-  await expect(page).toHaveURL(/\/home$/);
+  await page.waitForURL('**/first-profile/handle');
+  await expect(page).toHaveURL(/\/first-profile\/handle$/);
 
   const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
@@ -128,7 +128,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   const gammaProfileId = await createProfileFromSwitcher(page, 'gamma');
   await createProfileFromSwitcher(page, 'delta');
@@ -152,11 +152,12 @@ test('profile route action follows Profile.viewerState after switching', async (
 });
 
 test('home route active profile query refetches after switching profiles', async ({ page }) => {
+  test.setTimeout(60_000);
   const graphQLRequests = collectGraphQLRequests(page);
   const betaPostBody = 'beta profile timeline post';
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   const alphaHomeProfileId = await createProfileFromSwitcher(page, 'alphahome');
   await createProfileFromSwitcher(page, 'betahome');
@@ -271,9 +272,10 @@ test('Profile 전환 후 Local query가 새 selected Profile 응답에 수렴한
 test('Home no-data 오류는 actor revision 변경으로 새 actor query와 timeline을 복구한다', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const betaPostBody = 'actor revision recovery timeline post';
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'revisionalpha');
   const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
@@ -346,7 +348,7 @@ test('home onboarding stays hidden while the home active profile query errors', 
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/first-profile/handle');
 
   await createProfileFromSwitcher(page, 'errorhome');
   await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
@@ -386,6 +388,21 @@ function collectGraphQLRequests(page: Page) {
 }
 
 async function createProfileFromSwitcher(page: Page, handle: string) {
+  if (new URL(page.url()).pathname === '/first-profile/handle') {
+    await page.getByRole('textbox', { name: '핸들', exact: true }).fill(handle);
+    const created = waitForGraphQLOperation(page, 'FirstProfileOnboardingCreateMutation');
+    await page.getByRole('button', { name: '바로 시작' }).click();
+    const body = (await (await created).json()) as {
+      data?: { createProfile?: { profile?: { id?: string } } };
+      errors?: unknown[];
+    };
+    expect(body.errors).toBeUndefined();
+    const id = body.data?.createProfile?.profile?.id;
+    expect(id).toEqual(expect.any(String));
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(sidebarProfileHandle(page, handle)).toBeVisible();
+    return id as string;
+  }
   let createProfilePostData: string | null = null;
   const createProfileResponse = page.waitForResponse(async (response) => {
     if (!isGraphQLResponse(response.url())) {
@@ -466,8 +483,6 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function createPost(page: Page, body: string) {
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
-
   await page.goto('/home');
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   const expand = page.getByRole('button', { name: 'Composer 확장' });
@@ -482,8 +497,28 @@ async function createPost(page: Page, body: string) {
   await expect(composer).toBeVisible();
 
   await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
+  const submitResponsePromise = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
   await composer.getByRole('button', { name: '게시', exact: true }).click();
-  await createPostResponse;
+  const submitResponse = await submitResponsePromise;
+  const responseBody = (await submitResponse.json()) as {
+    data?: { createPost?: { post?: { id?: string | null } | null } | null };
+    errors?: unknown[];
+  };
+  const operation = readGraphQLOperation(submitResponse.request().postData());
+  const createdPostId = responseBody.data?.createPost?.post?.id;
+
+  expect(submitResponse.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
+  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
+  expect(createdPostId).toEqual(expect.any(String));
+  expect(operation?.variables?.input).not.toHaveProperty('requestId');
+  expect(operation?.variables).toMatchObject({
+    input: { bodyText: body },
+  });
+  await expect
+    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
 }
 
 async function failGraphQLOperation(page: Page, operationName: string) {

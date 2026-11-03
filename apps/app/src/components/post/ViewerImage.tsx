@@ -96,6 +96,7 @@ export function ViewerImage({
         accessibilityLabel={hasZoomAccessibility ? undefined : accessibilityLabel}
         accessibilityRole={hasZoomAccessibility ? undefined : 'image'}
         accessibilityState={{ busy: status === 'loading' }}
+        fadeDuration={0}
         importantForAccessibility={hasZoomAccessibility ? 'no' : undefined}
         onError={handleError}
         onLoad={handleLoad}

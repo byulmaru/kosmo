@@ -53,6 +53,8 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | Remote URL           | URL, 필수                         | 원격 원본 Profile URL                                                                                           | Origin이 Remote | Profile 조회 정책 통과     | 없음             |
 | Profile Link         | URL 목록, nullable                | 각 항목은 유효한 URL이다                                                                                        | Origin이 Local  | Profile 조회 정책 통과     | 없음             |
 
+표시 이름과 bio의 길이 제한은 Unicode code point 기준으로 센다.
+
 ### Local handle 생성 정책
 
 Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예약 식별자 정책을 통과해야 한다. 이 정책은
@@ -138,6 +140,7 @@ rename·disable·delete하지 않는다.
 | 기본 Post Visibility 변경         | Account        | Local Profile       | Public, Unlisted 또는 Followers Only                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                                                                                                                                                                                                                                                 | 이후 새 Post·Reply·Quote Composer가 사용할 Profile 기본값이 바뀐다. 이미 작성된 Post와 열려 있는 Composer의 개별 Visibility는 바뀌지 않는다                                                                                                                                                                                                                                                                                                                                 |
 | Local Profile Post 고정           | Account        | Local Profile       | Post ID                                                                       | `Account.Active`, `Profile.Member`   | Profile Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다. 대상은 현재 Profile이 작성한 Active이며 Content가 있는 Post·Reply·Quote이고 Visibility가 Public, Unlisted 또는 Followers Only다. Mentioned Profiles, Content 없는 pure Repost와 타인 작성 Post는 제외한다                              | 대상 Post를 server-authoritative ordered pin set의 한 위치에 추가하고 기존 pin의 상대 순서를 보존한다. 이미 같은 Post가 있으면 다른 관계와 순서를 바꾸지 않는 idempotent success를 반환한다                                                                                                                                                                                                                                                                                 |
 | Local Profile Post 고정 해제      | Account        | Local Profile       | Post ID                                                                       | `Account.Active`, `Profile.Member`   | Profile이 Local이고 Active/Normal이다. 대상 Post가 ordered pin set에 있으면 해당 관계만 제거한다. 이미 없으면 다른 pin 관계를 바꾸지 않는 idempotent no-op으로 처리한다                                                                                                                                                       | 지정한 Post 관계만 제거하고 다른 ordered pin 관계는 보존한다. 이미 없으면 idempotent success를 반환한다                                                                                                                                                                                                                                                                                                                                                                     |
+| Local Profile 고정 Post 순서 변경 | Account        | Local Profile       | 이미 고정한 Post의 새 표시 순서                                               | `Account.Active`, `Profile.Member`   | Profile이 Local이고 Active/Normal이다. 기존 조회·고정 자격을 통과한 고정 Post 사이에서 순서를 변경한다                                                                                                                                                                                                                        | 고정 관계를 추가하거나 해제하지 않고 순서만 원자적으로 저장한다. Owner와 Member 모두 변경할 수 있으며 이후 조회에서도 저장된 순서를 유지한다                                                                                                                                                                                                                                                                                                                                |
 | Remote Featured collection 동기화 | 시스템         | Remote Profile      | 광고된 `featured` URI, 원격 ActivityPub Profile 표현                          | `System.RemoteProfileSource`         | Remote Profile 등록, stale refresh 또는 검증된 inbound Profile Update에서 URI를 처리한다. Public/Unlisted는 공개 조회를 지원하고, Followers Only Note는 원격 서버가 요구하는 인증으로 가져온다. 각 Note의 canonical `attributedTo`는 광고하는 Actor의 canonical URI와 일치해야 하고 audience는 기존 Note 검증을 통과해야 한다 | 전체 ordered list를 가져와 검증한 성공 결과만 원자적으로 교체한다. 실패한 retrieval은 새 목록을 쓰지 않으며 빈 collection의 근거가 아니다. 검증된 Remote Profile 표현에 `featured` URI가 없으면 목록을 비운다                                                                                                                                                                                                                                                               |
 | Profile 삭제                      | Account        | Profile             | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Suspension State가 Normal이며 Lifecycle State가 Active이거나 이미 Deactivated다                                                                                                                                                                                                                            | Active Profile은 내부적으로 소프트 딜리트되어 Lifecycle State가 Deactivated가 된다. 이미 Deactivated인 Profile에 대한 권한 있는 재시도는 성공하며 상태 변경 효과를 반복하지 않는다. 현재 Session에서 이 Profile이 선택되어 있었다면, 요청 결과를 받은 클라이언트는 로그인 상태를 유지하고 사용 가능한 다른 Profile이 남아 있을 때 그중 하나를 자동 선택한다. 다른 Profile이 없으면 선택을 해제한다. 이 요청의 늦은 결과는 이후 선택된 Profile이나 Account를 덮어쓰지 않는다 |
 | Profile 재활성화                  | Account        | Profile             | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deactivated이며 Suspension State가 Normal이다                                                                                                                                                                                                                                            | Lifecycle State가 Active가 된다                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -174,12 +177,15 @@ source를 하나만 가질 수 있고, 같은 Remote source는 하나의 target 
 검증된 원격 actor를 Remote Profile로 먼저 materialize한다. Local Actor의 ActivityPub `alsoKnownAs` aliases는 이
 관계의 Remote source canonical Actor URI에서 파생하며 별도 Profile 속성이나 사용자 입력으로 저장하지 않는다.
 
-Profile Migration source 지정은 Settings의 `다른 서비스에서 이전`에서 feature flag가 켜져 있을 때만 노출한다. 현재
-선택된 Profile을 target으로 사용하며 별도 target Profile ID를 입력받지 않는다. 현재 context의 `Account.Active`와
-`Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가
-아니며, Profile Owner 검증은 기존 `Account.Active`와 `Profile.Owner`를 사용한다. flag가
-꺼져 있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. 이미 준비된 관계와 그로부터
-파생된 alias, inbound Move 처리는 flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
+현재 context에서 `Account.Active`를 만족하며 현재 선택된 target Profile의 `Profile.Owner`인 Account는 준비 관계의 존재 여부를
+source Profile identity의 조회 가능성과 분리해 확인할 수 있다. 이 확인 권한은 `Profile.Member`나 비로그인 요청자에게
+추가하지 않으며, source Profile identity에는 기존 조회 정책을 그대로 적용한다.
+
+Settings의 `다른 서비스에서 이전` entry는 기능 공개 플래그와 관계없이 항상 표시한다. `계정 이전`의 source 준비
+control은 현재 선택된 Profile을 target으로 사용하고 기존 `Account.Active`와 `Profile.Owner` 권한에 따라 제공한다.
+별도 target Profile ID를 입력받지 않으며 Settings 노출 여부는 권한 증거가 아니다. Profile Owner에는 별도 target
+eligibility를 적용하지 않는다. 이미 준비된 관계와 그로부터
+파생된 alias, inbound Move 처리는 feature flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
 Profile과 source 관계를 검증하고, 해당 target Profile의 기존 Follow Approval Policy에 따라 Follow Relationship 또는 Follow
 Request를 선택한다. remote-to-remote Move는 준비 관계 없이 canonical target identity와 해당 target Profile의 기존 Follow
 Approval Policy를 검증한다. Kosmo가 source가 되어 Move를 발행하는 동작은
@@ -192,10 +198,15 @@ follower 처리는 끝날 수 있지만, 관계가 없거나 다른 source로 �
 Move는 계속되지 않는다. 준비 관계와 독립적인 remote-to-remote Move는 이 해제의 영향을 받지 않는다. 새 source 지정에는
 기존 Remote Profile 검증과 source·target 1:1 제약이 그대로 적용된다.
 
-기본 Post Visibility는 Account 공통 설정이 아니라 Local Profile 설정이다. 기존 Local Profile과 저장값이 없는
-Local Profile은 Unlisted로 동작한다. Profile Member는 새 Post·Reply·Quote Composer의 초기값으로 서버가 반환한
-값을 사용하지만, Owner가 아니라면 이 설정을 변경할 수 없다. Composer에서 개별 Post Visibility를 바꾸는 동작은
-기본값을 자동으로 갱신하지 않는다. Remote Profile에는 Kosmo Local 기본값을 만들거나 변경하지 않는다.
+기본 Post Visibility는 Account 공통 설정이 아니라 Local Profile 설정이다.
+[PROD-1226](https://linear.app/byulmaru/issue/PROD-1226)에 따라 별도 설정 없이도 공개로 글을 시작할 수 있도록
+새 Local Profile의 기본값은 Public으로 정한다. 첫 Profile 온보딩과 기존 Account의 추가 Profile 생성에 같은
+기본값을 적용한다. 기존 Local Profile의 저장된 기본값과 이미 작성한 Post는 일괄 변경하지 않는다.
+저장값이 없는 Local Profile과 기본값을 조회하지 못한 경우의 Unlisted 대체 동작은 유지한다.
+Profile Member는 새 Post·Reply·Quote Composer의 초기값으로 서버가 반환한 값을 사용하지만, Owner가 아니라면
+이 설정을 변경할 수 없다. Reply의 초기 공개 범위는 기존처럼 직접 Parent보다 넓게 시작하지 않는다.
+Composer에서 개별 Post Visibility를 바꾸는 동작은 기본값을 자동으로 갱신하지 않으며, 이미 열린 Composer의
+선택도 덮어쓰지 않는다. Remote Profile에는 Kosmo Local 기본값을 만들거나 변경하지 않는다.
 
 ActivityPub Remote Profile 등록·갱신에서 actor의 embedded `icon`은 avatar Media, embedded `image`는 header
 Media 관계로 투영한다. 최초 actor lookup, stale refresh와 검증된 inbound `Update(Actor)`는 같은 표현 동기화
@@ -234,17 +245,24 @@ Hashtag에는 영향을 주지 않는다.
 
 ## 조회 정책
 
-- 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
-- GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 위 공개 조회 정책과 기존 lifecycle·membership 정책을 적용해
-  기본 Profile 정보 범위를 제공한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를
-  유지하며 Block 전용 identity payload를 만들지 않는다.
+- 일반 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
+- 이미 알려진 Profile ID에 대한 GraphQL `node(id:)` 참조와 게시물 등에서 참조하는 Profile 객체는 현재 Profile 상태와
+  관계없이 저장된 Profile을 반환한다.
+  Active/Normal Profile은 각 필드의 기존 조회 권한을 적용하고, 그 외 상태의 Profile은 `id`, `handle`, `relativeHandle`
+  만 제공한다. 나머지 GraphQL Profile 필드는 요청자가 Owner여도 `null`로 반환하며, 이 제한 응답으로 GraphQL 오류를
+  발생시키지 않는다. 이 제한은 Profile 상태만으로 결정하며, 알려진 ID의 참조를 위해 연결된 Instance 상태를 별도로
+  검사하지 않는다.
+- `profileByHandle` 직접 조회, Profile 검색 후보와 Profile collection은 기존 Active/lifecycle·membership·moderation
+  조회 조건을 유지한다. 이 경로는 비활성 Profile을 새로 찾거나 검색하는 기능이 아니다. Profile이 기존 직접 조회
+  조건을 통과하지 못하면 기존 null/unavailable 결과를 유지하며 Block 전용 identity payload를 만들지 않는다.
 - 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용한다. GraphQL `searchProfiles`가
   exact-match 또는 partial-match 후보를 반환할 때는 위 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Profile
   Block 관계인 Profile을 pagination·cursor·limit 전에 제외한다.
 - selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
   selected Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
   재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
-- Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
+- Local Profile Owner와 운영자 Account의 운영상 비공개 상태 조회는 기존 별도 운영 조회 경계에 따른다. 이는 public
+  GraphQL Profile projection과 구분되며, 비활성 Profile의 나머지 GraphQL Profile 필드를 허용하지 않는다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
@@ -286,9 +304,10 @@ materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 l
 검증된 actor document apply가 성공한 경우에만 조회 관측 시각으로 7일 기준을 갱신한다. 검증된 inbound Update의
 document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unresponsive Instance를 복구할 수 있다.
 
-- Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
+- 새 Remote Profile lookup 요청은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
   Reachability State가 Reachable이면 새 원격 요청을 보낼 수 있다. Unreachable이면 Remote Profile materialization·갱신에
-  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다.
+  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다. 이 원격 요청 조건은 이미 저장된 Profile ID의
+  `node(id:)` 참조에는 별도로 적용하지 않는다.
 
 ### Profile 고정 Post
 
@@ -298,6 +317,7 @@ document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unr
   교체 규칙과 그에 따른 부분 실패 처리가 필요하다. 이 별도 pinned segment는 기존 Profile chronology의 후보·순서·pagination을
   바꾸지 않으며, chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다. Home·Local·Hashtag
   목록에는 pinned ordering을 적용하지 않는다.
+- Local 고정 Post 순서 변경은 기존 고정 관계와 조회 권한을 유지한다. 성공하면 요청한 Profile의 현재 고정 목록에 저장된 순서를 반영하고 이후 조회에서도 같은 순서를 사용한다. 서버가 순서 변경을 거부하면 기존 고정 관계와 순서를 유지한다.
 - 성공한 Local pin/unpin은 저장된 ordered relation을 바꾸지만, 이미 표시 중인 Profile pinned segment가 즉시 바뀔 필요는 없다.
   현재 목록은 이전 목록 구성과 순서를 유지할 수 있고, 이후 Profile 목록을 다시 조회할 때 서버에 저장된 목록과 순서를 확인한다.
 - 기존 Profile/Post visibility, lifecycle, block/domain 정책으로 조회할 수 없는 Profile 또는 Post는 pinned segment와

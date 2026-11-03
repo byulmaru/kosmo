@@ -71,7 +71,7 @@ mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
   Platform: platform,
   Pressable: MockPressable,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
   Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: windowWidth }),
@@ -92,7 +92,7 @@ mockModule(require.resolve('lucide-react-native'), {
   MoreHorizontal: StubIcon,
   Pin: StubIcon,
 });
-mockModule('@/theme/ThemeProvider', { useTheme: () => theme });
+mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   breakpoints: { compact: 768, full: 1_280 },

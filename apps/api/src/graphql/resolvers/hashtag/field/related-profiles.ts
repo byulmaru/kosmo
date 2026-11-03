@@ -2,7 +2,7 @@ import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, eq, getColumns, gt } from 'drizzle-orm';
+import { and, asc, eq, getColumns, gt, ne } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
 import { ProfileConnection } from '@/graphql/resolvers/profile';
@@ -70,6 +70,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
               and(
                 eq(ProfileHashtags.hashtagId, hashtag.id),
                 visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                selectedProfileId ? ne(Profiles.id, selectedProfileId) : undefined,
                 selectedProfileBlockWhere,
                 after !== null && after !== undefined
                   ? gt(Profiles.id, decodeRelatedProfileCursor(after))

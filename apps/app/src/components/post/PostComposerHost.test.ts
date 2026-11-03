@@ -17,7 +17,9 @@ let composerProps:
   | {
       body: string;
       onBodyChange: (body: string) => void;
+      onRequestClose?: () => void;
       onPostCreated?: (post: PostComposerCreatedPost) => void;
+      onPostRequestAccepted?: () => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
       renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
@@ -38,7 +40,11 @@ mockModule('react-native', {
   Platform: platform,
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    create: <T>(styles: T) => styles,
+  },
   Text: 'Text',
   View: 'View',
 });
@@ -59,6 +65,10 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('Pressable', props, children as never),
 });
+mockModule('@/components/ui/Button', {
+  Button: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
+    createElement('Pressable', props, children as never),
+});
 mockModule('@/components/ui/ToastProvider', {
   ToastProvider: ({ children }: { children?: unknown }) => children,
 });
@@ -70,7 +80,9 @@ mockModule('@/theme/ThemeProvider', {
     backgroundElevated: '#elevated',
     backgroundSurface: '#surface',
     borderSubtle: '#subtle',
+    borderDefault: '#border',
     foregroundPrimary: '#primary',
+    foregroundSecondary: '#secondary',
     overlayScrim: '#scrim',
   }),
 });
@@ -87,8 +99,8 @@ mockModule('@/theme/useOverlayMotion', {
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { lg: 16 },
-  spacing: { lg: 24, sm: 8 },
-  textStyles: { uiHeadingS: {} },
+  spacing: { lg: 24, md: 12, sm: 8, xl: 32 },
+  textStyles: { uiCopyM: {}, uiHeadingS: {} },
   typography: { lg: {} },
 });
 
@@ -157,7 +169,7 @@ describe('PostComposerHost', () => {
     assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
   });
 
-  it('모바일 Web surface는 safe-area host의 dynamic viewport 높이를 사용한다', async () => {
+  it('모바일 Web surface는 공용 dialog modal host를 사용한다', async () => {
     platform.OS = 'web';
     await act(async () => {
       renderer = create(
@@ -170,15 +182,13 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const host = renderer?.root.findAllByType('AnimatedView' as ElementType).find((view) => {
-      const styles = (
-        Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
-      ) as Array<{ position?: unknown }>;
-      return styles.some((style) => style?.position === 'fixed');
-    });
-    assert.ok(host);
-    const hostStyles = (host?.props.style.flat(Infinity) ?? []) as Array<{ height?: unknown }>;
-    assert.ok(hostStyles.some((style) => style?.height === '100dvh'));
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    assert.equal(modal?.props.accessibilityLabel, '글쓰기');
+    assert.equal(modal?.props.animationType, 'none');
+    assert.equal(modal?.props.role, 'dialog');
+    assert.equal(modal?.props.transparent, true);
+    assert.equal(modal?.props.visible, true);
+    assert.ok(renderer?.root.findByProps({ testID: 'post-composer-backdrop' }));
   });
 
   it('닫힌 Overlay를 modal로 노출하지 않는다', async () => {
@@ -194,8 +204,10 @@ describe('PostComposerHost', () => {
     });
 
     const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
+    const modal = renderer?.root.findByType('Modal' as ElementType);
     assert.equal(dialog?.props['aria-modal'], undefined);
     assert.equal(dialog?.props.role, undefined);
+    assert.equal(modal?.props.visible, false);
   });
 
   it('닫힌 Web Overlay는 exit 동안 mounted 상태를 유지하되 입력과 접근성을 차단한다', async () => {
@@ -211,18 +223,17 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const host = renderer?.root.findAllByType('AnimatedView' as ElementType).find((view) => {
-      const styles = (
-        Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
-      ) as Array<{ position?: unknown }>;
-      return styles.some((style) => style?.position === 'fixed');
-    });
+    const host = renderer?.root
+      .findAllByType('AnimatedView' as ElementType)
+      .find((view) => view.props.pointerEvents !== undefined);
     assert.ok(host);
     assert.equal(host?.props.pointerEvents, 'none');
     assert.equal(host?.props.accessibilityElementsHidden, false);
     assert.equal(host?.props['aria-hidden'], true);
     assert.ok(host?.props.style.at(-1).opacity);
-    assert.equal(renderer?.root.findByType('div' as ElementType).props.inert, true);
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    assert.equal(modal?.props.visible, true);
+    assert.ok(renderer?.root.findByProps({ interactionDisabled: true }));
   });
 
   it('처음 닫힌 Overlay는 exit 완료 dismiss를 호출하지 않는다', async () => {
@@ -285,12 +296,7 @@ describe('PostComposerHost', () => {
     });
     const reopenedHost = renderer?.root
       .findAllByType('AnimatedView' as ElementType)
-      .find((view) => {
-        const styles = (
-          Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
-        ) as Array<{ position?: unknown }>;
-        return styles.some((style) => style?.position === 'fixed');
-      });
+      .find((view) => view.props.pointerEvents !== undefined);
     assert.equal(reopenedHost?.props.pointerEvents, 'auto');
     assert.equal(dismissCount, 0);
 
@@ -323,7 +329,7 @@ describe('PostComposerHost', () => {
     assert.equal(dismissCount, 1);
   });
 
-  it('Rail에서 Overlay로 바꿔도 같은 Composer draft owner를 유지한다', async () => {
+  it('Rail, Overlay, Mobile 전환에서도 같은 Composer draft owner를 유지한다', async () => {
     const props = {
       mode: 'rail' as const,
       onExpand: () => undefined,
@@ -352,6 +358,27 @@ describe('PostComposerHost', () => {
 
     const overlay = renderer.root.findByProps({ testID: 'post-composer-dialog' });
     assert.equal(overlay.props.style.at(-1).backgroundColor, '#elevated');
+    assert.equal(composerProps?.body, '유지할 draft');
+
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: props.onRequestClose,
+          open: props.open,
+          profile: props.profile,
+        }),
+      );
+    });
+    const mobile = renderer.root.findByProps({ testID: 'post-composer-dialog' });
+    assert.equal(mobile.props.style.at(-1).backgroundColor, '#canvas');
+    assert.equal(composerProps?.body, '유지할 draft');
+
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, props));
+    });
+    const railAfterOverlay = renderer.root.findByProps({ testID: 'post-composer-rail' });
+    assert.equal(railAfterOverlay.props.style.at(-1).backgroundColor, '#surface');
 
     assert.equal(composerProps?.body, '유지할 draft');
   });
@@ -423,7 +450,7 @@ describe('PostComposerHost', () => {
         }),
       );
     });
-    await act(async () => composerProps?.onPostCreated?.({ id: 'post-1' }));
+    await act(async () => composerProps?.onPostRequestAccepted?.());
 
     assert.deepEqual(events, ['created']);
   });
@@ -487,7 +514,9 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
-    const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
+    const dialog = renderer?.root
+      .findAllByType('AnimatedView' as ElementType)
+      .find((view) => view.props.role === 'dialog' && view.props.accessibilityLabel === '글쓰기');
     assert.ok(dialog);
     await act(async () => dialog.props.onAccessibilityEscape());
     assert.equal(editorBackCount, 1);
@@ -558,22 +587,19 @@ describe('PostComposerHost', () => {
       assert.equal(closeCount, 0);
 
       const backdrop = renderer?.root
-        .findAllByType('Pressable' as ElementType)
-        .find((pressable) => {
-          const styles = Array.isArray(pressable.props.style)
-            ? pressable.props.style
-            : [pressable.props.style];
-          return styles.some(
-            (style: { position?: string } | null) => style?.position === 'absolute',
-          );
-        });
+        .findAllByProps({ testID: 'post-composer-backdrop' })
+        .find((element) => typeof element.props.onPress === 'function');
       assert.ok(backdrop);
       await act(async () => backdrop?.props.onPress());
+      assert.equal(closeCount, 0);
 
       const closeButton = renderer?.root.findByProps({ accessibilityLabel: '글쓰기 닫기' });
       await act(async () => closeButton?.props.onPress());
 
       assert.equal(closeCount, 0);
+      await act(async () => composerProps?.onSubmittingChange?.(false));
+      await act(async () => backdrop?.props.onPress());
+      assert.equal(closeCount, 1);
     } finally {
       if (renderer) {
         await act(async () => renderer?.unmount());

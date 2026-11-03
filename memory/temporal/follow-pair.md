@@ -53,7 +53,11 @@
   해당 결과가 History에 기록된 뒤 정리할 수 있다. 이를 범용 command ledger나 lifecycle exactly-once 보장으로
   일반화하지 않는다.
 - Unfollow는 이미 성립된 Follow Relationship의 별도 짧은 Workflow다. Follow pair Workflow는 Unfollow까지 살아
-  있지 않고, inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery 경계도 기존 Fedify handler에
-  남긴다. Follow effect의 origin guard는 ActivityPub outbound echo를 계속 막는다. Removal transaction Activity가
-  retry를 소진하면 Update와 Workflow 실행을 함께 실패로 닫고, 성공한 DB commit 결과만 effects 완료와 분리해
-  Update 성공으로 반환한다.
+  있지 않다. Inbound Follow의 actor/object/recipient 검증은 기존 Fedify handler에 남고, 바로 성립하는 Follow의
+  직접 Accept도 그 handler가 보낸다. Approval Required Follow는 검증된 inbound Follow identity를 같은 request
+  generation의 Workflow state로 보존하며, exact local `APPROVE`는 commit 뒤 해당 Follow를 object로 하는 별도 Accept
+  effect를 보낸다. Commit 완료 응답을 잃은 exact-row APPROVE retry도 history의 inbound identity가 있으면 이를
+  보존해 Accept를 재구성한다. 기존 Pending history처럼 envelope가 없으면 exact approved pair의 현재 remote actor URI와
+  local actor URI로 ID와 published가 없는 Follow를 만들어 Accept를 보낸다. 이때 ID나 시각을 임의로 만들지 않는다.
+  Follow effect의 origin guard는 ActivityPub outbound echo를 계속 막는다. Removal transaction Activity가 retry를 소진하면 Update와 Workflow 실행을
+  함께 실패로 닫고, 성공한 DB commit 결과만 effects 완료와 분리해 Update 성공으로 반환한다.

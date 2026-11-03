@@ -3,6 +3,7 @@ import { InstanceState, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
 import {
   createE2EFollow,
+  createE2EPost,
   createE2EProfile,
   createE2ERemoteProfile,
   createE2ESession,
@@ -56,6 +57,137 @@ const gotoHome = async (page: Page) => {
   expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
   expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
 };
+
+for (const scenario of [
+  { kind: 'following', label: '팔로잉' },
+  { kind: 'followers', label: '팔로워' },
+] as const) {
+  test(`프로필 헤더에서 연 ${scenario.label} 목록의 프로필 탐색은 대상 글을 표시하고 뒤로 가기로 목록을 복원한다`, async ({
+    context,
+    page,
+  }) => {
+    const owner = await createE2ESession({
+      displayName: `E2E 관계 원본 ${scenario.kind}`,
+      handle: `e2e-connection-origin-${scenario.kind}`,
+    });
+    const ownerProfile = owner.profile!;
+    const target = await createE2EProfile({
+      displayName: `E2E 관계 이동 대상 ${scenario.kind}`,
+      handle: `e2e-connection-target-${scenario.kind}`,
+    });
+    const relationOnly = await createE2EProfile({
+      displayName: `E2E 관계 원본 행 ${scenario.kind}`,
+      handle: `e2e-connection-retained-${scenario.kind}`,
+    });
+    const targetPostBody = `E2E 이동 대상 게시글 ${scenario.kind}`;
+    const ownerPostBody = `E2E 이동 원본 게시글 ${scenario.kind}`;
+    await createE2EPost({ body: ownerPostBody, profileId: ownerProfile.id });
+    await createE2EPost({ body: targetPostBody, profileId: target.id });
+    for (const profile of [target, relationOnly]) {
+      await createE2EFollow(
+        scenario.kind === 'following'
+          ? { followeeProfileId: profile.id, followerProfileId: ownerProfile.id }
+          : { followeeProfileId: ownerProfile.id, followerProfileId: profile.id },
+      );
+    }
+    await setE2ESessionCookie(context, owner.token);
+    await page.setViewportSize({ height: 900, width: 1440 });
+
+    const ownerPath = `/@${ownerProfile.handle}`;
+    const connectionPath = `${ownerPath}/${scenario.kind}`;
+    const targetPath = `/@${target.handle}`;
+    const connectionHeading = page.getByRole('heading', {
+      name: `${ownerProfile.displayName}님의 ${scenario.label}`,
+      exact: true,
+    });
+    const targetHeading = page.getByRole('heading', { name: target.displayName, exact: true });
+    const targetPost = page.getByRole('article').filter({ hasText: targetPostBody }).first();
+    const ownerHeading = page.getByRole('heading', {
+      name: ownerProfile.displayName,
+      exact: true,
+    });
+    const ownerPost = page.getByRole('article').filter({ hasText: ownerPostBody }).first();
+    const targetProfileLinks = page
+      .locator(`a[href="${targetPath}"]`)
+      .filter({ hasText: target.displayName });
+    const relationOnlyRow = page
+      .locator(`a[href="/@${relationOnly.handle}"]`)
+      .filter({ hasText: relationOnly.displayName });
+
+    await page.goto(ownerPath);
+    await expect(
+      page.getByRole('heading', { name: ownerProfile.displayName, exact: true }),
+    ).toBeVisible();
+
+    const connectionCountLink = page
+      .getByTestId('universal-shell-content')
+      .locator(`a[href="${connectionPath}"]`);
+    await expect(connectionCountLink).toBeVisible();
+    await connectionCountLink.click();
+    await expect(page).toHaveURL(connectionPath);
+    await expect(connectionHeading).toBeVisible();
+    const targetRow = page
+      .locator(`a[href="${targetPath}"]`)
+      .filter({ hasText: target.displayName });
+    await expect(targetRow).toBeVisible();
+    await targetRow.click();
+
+    await expect(page).toHaveURL(targetPath);
+    await expect(targetHeading).toBeVisible();
+    await expect(targetPost).toBeVisible();
+    await expect(
+      targetPost.locator(`a[href="${targetPath}"]`).filter({ hasText: target.displayName }),
+    ).toBeVisible();
+    // The one matching link is the destination post owner; a stale relation row would add another.
+    await expect(targetProfileLinks).toHaveCount(1);
+    await expect(relationOnlyRow).toHaveCount(0);
+    await expect(connectionHeading).toHaveCount(0);
+
+    await page.goBack();
+    await expect(page).toHaveURL(connectionPath);
+    await expect(connectionHeading).toBeVisible();
+    await expect(targetRow).toBeVisible();
+    await expect(relationOnlyRow).toBeVisible();
+    await expect(targetHeading).toHaveCount(0);
+
+    await page.goForward();
+    await expect(page).toHaveURL(targetPath);
+    await expect(targetHeading).toBeVisible();
+    await expect(targetPost).toBeVisible();
+    await expect(targetProfileLinks).toHaveCount(1);
+    await expect(relationOnlyRow).toHaveCount(0);
+    await expect(connectionHeading).toHaveCount(0);
+
+    await page.goto(targetPath);
+    await expect(targetHeading).toBeVisible();
+    await expect(targetPost).toBeVisible();
+    await page.reload();
+    await expect(page).toHaveURL(targetPath);
+    await expect(targetHeading).toBeVisible();
+    await expect(targetPost).toBeVisible();
+    await expect(targetProfileLinks).toHaveCount(1);
+    await expect(relationOnlyRow).toHaveCount(0);
+    await expect(connectionHeading).toHaveCount(0);
+
+    await page.goto(ownerPath);
+    await expect(ownerHeading).toBeVisible();
+    await expect(ownerPost).toBeVisible();
+    await connectionCountLink.click();
+    await expect(page).toHaveURL(connectionPath);
+    await expect(connectionHeading).toBeVisible();
+    await targetRow.click();
+    await expect(page).toHaveURL(targetPath);
+    await expect(targetHeading).toBeVisible();
+    await expect(targetPost).toBeVisible();
+
+    await page.getByRole('button', { name: '뒤로 가기' }).click();
+
+    await expect(page).toHaveURL(ownerPath);
+    await expect(ownerHeading).toBeVisible();
+    await expect(ownerPost).toBeVisible();
+    await expect(targetPost).toHaveCount(0);
+  });
+}
 
 test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다', async ({
   context,

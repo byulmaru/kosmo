@@ -1,8 +1,8 @@
-# Expo Router Web URL patch
+# Expo Router Web URL and nested-route state patch
 
 This is maintenance context for the temporary `expo-router@56.2.13` patch in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml) and
-[`expo-router@56.2.13.patch`](expo-router@56.2.13.patch). The app-level issue is
+[`expo-router@56.2.13.patch`](expo-router@56.2.13.patch). The Web URL issue is
 tracked by [PROD-1103](https://linear.app/byulmaru/issue/PROD-1103) and
 [PR #1132](https://github.com/byulmaru/kosmo/pull/1132). The upstream fix is
 tracked in [Expo issue #48439](https://github.com/expo/expo/issues/48439) and
@@ -39,6 +39,32 @@ actor-selection, and loading gates in place; they own visible routing and data,
 while this patch owns deferring an unsafe URL write.
 A compatible upstream release may use a different helper or source layout;
 removal depends on equivalent Web URL behavior, not an identical implementation path.
+
+## Dynamic route state boundary
+
+On Web, a profile layout renders a `Slot` containing its index, followers, and
+following routes. Navigating from a nested profile route such as
+`/@betas/following` to another value of the same `[profileHandle]` route, such as
+`/@sasha`, reaches Expo Router's `StackClient` `NAVIGATE` handler. This screen
+has no configured `getId`, so the handler first matches the current route by
+name. When the dynamic path identity differs, it creates a new route key but
+clones the matched route, including its child `state`. The new route's params
+can identify Sasha's `index` screen while that child state still points to
+Beta's `following` route. The parent profile query then renders Sasha's hero
+above Beta's following rows.
+
+The patch drops child `state` only when that clone receives a new key. The old
+route keeps its state, and same-key or preloaded route reuse keeps its state.
+The new child navigator can then initialize from the destination's nested
+route params. This fixes the route-identity boundary for links that reach this
+dynamic profile screen without changing link mode or app route behavior.
+
+On 2026-11-02, an isolated Playwright response override changed only this
+`StackClient` clone behavior in the deployed bundle. The baseline reproduced
+Sasha's heading with Beta's eight following rows; the override showed Sasha's
+index content, browser Back restored Beta's following rows, and Forward restored
+Sasha's index. The override was a diagnostic and did not change the deployed
+application.
 
 ## Invariants and current caveat
 
@@ -81,6 +107,10 @@ Before removal is considered complete, verify:
   shell/profile Relay responses, and include routes with query and hash values.
 - Internal `push` and `replace`, query/hash-only changes, and browser
   back/forward still produce the expected URL and route state.
+- From a nested following or followers route, navigate to a different profile
+  through a linked row. The destination must show its own profile content, and
+  browser Back/Forward must restore each route's own child state. Cover links
+  from profile post lists that target the same dynamic profile route as well.
 - Authentication redirects, blocked-profile behavior, actor selection/loading,
   and not-found routes retain their existing behavior.
 - The incomplete initial state does not skip listener registration or cleanup,
@@ -89,12 +119,15 @@ Before removal is considered complete, verify:
 
 Relevant existing suites include
 [`route-refresh.e2e.ts`](../apps/web/e2e/route-refresh.e2e.ts),
+[`profile-connections.e2e.ts`](../apps/web/e2e/profile-connections.e2e.ts),
 [`reaction-people.e2e.ts`](../apps/web/e2e/reaction-people.e2e.ts),
 [`search.e2e.ts`](../apps/web/e2e/search.e2e.ts),
 [`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts), and
-[`auth-routes.e2e.ts`](../apps/web/e2e/auth-routes.e2e.ts). Review their exact
-assertions and run the cases that cover each removal check; their presence
-alone does not prove that every invariant above is tested.
+[`auth-routes.e2e.ts`](../apps/web/e2e/auth-routes.e2e.ts). Keep the focused
+[`ProfileStackClientRouter.test.ts`](../apps/app/src/components/profile/ProfileStackClientRouter.test.ts)
+reducer test with the patch. Review the exact assertions and run the cases that
+cover each removal check; their presence alone does not prove that every
+invariant above is tested.
 
 From the repository root, this focused command uses the same disposable
 database wrapper as `pnpm test:e2e` while selecting the relevant Playwright
@@ -102,7 +135,13 @@ files:
 
 ```sh
 node scripts/test-db.mjs run -- sh -c 'pnpm db:test:push &&
-  pnpm --dir apps/web exec playwright test e2e/route-refresh.e2e.ts e2e/reaction-people.e2e.ts e2e/search.e2e.ts e2e/navigation-scroll.e2e.ts e2e/auth-routes.e2e.ts'
+  pnpm --dir apps/web exec playwright test e2e/route-refresh.e2e.ts e2e/profile-connections.e2e.ts e2e/reaction-people.e2e.ts e2e/search.e2e.ts e2e/navigation-scroll.e2e.ts e2e/auth-routes.e2e.ts'
+```
+
+Run the router reducer regression directly with:
+
+```sh
+pnpm --dir apps/app exec node --experimental-test-module-mocks --import tsx --test src/components/profile/ProfileStackClientRouter.test.ts
 ```
 
 The wrapper starts the `postgres` service from `docker-compose.test.yml`,
@@ -117,7 +156,8 @@ documentation change.
 
 1. Confirm a compatible Expo Router release is published and inspect its
    implementation and regression evidence for equivalent Web linking/history
-   behavior. An upstream refactor may use a different helper or source path.
+   and new-key nested-state behavior. An upstream refactor may use different
+   helpers or source paths.
 2. Before changing the dependency, run `pnpm patch-remove expo-router@56.2.13`.
    The current workspace pnpm CLI supports this command; it removes the
    `patchedDependencies` entry, patch file, and lockfile patch metadata. Remove

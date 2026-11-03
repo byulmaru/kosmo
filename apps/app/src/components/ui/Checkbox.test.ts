@@ -13,11 +13,68 @@ const mockModule = (specifier: string | URL, exports: object) =>
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let platformOS: 'android' | 'ios' | 'web' = 'web';
+let reducedMotion = false;
+let pressableState = { hovered: false, pressed: false };
+class AnimatedColorMock {
+  constructor(public value: string) {}
+
+  setValue(value: string) {
+    this.value = value;
+  }
+
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
+
+const timingCalls: Array<{
+  duration: number;
+  handle: AnimatedColorMock;
+  target: AnimatedColorMock;
+  stopped: boolean;
+}> = [];
 const PressableHost = 'Pressable' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
 mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), { Check: 'Check' });
 mockModule('react-native', {
+  Animated: {
+    Color: AnimatedColorMock,
+    View: ViewHost,
+    Value: class {
+      value: number;
+      constructor(value: number) {
+        this.value = value;
+      }
+      interpolate() {
+        return this.value;
+      }
+      setValue(value: number) {
+        this.value = value;
+      }
+      stopAnimation() {}
+    },
+    timing: (
+      handle: AnimatedColorMock,
+      config: { duration: number; toValue: AnimatedColorMock },
+    ) => {
+      const call = {
+        duration: config.duration,
+        handle,
+        target: config.toValue,
+        stopped: false,
+      };
+      timingCalls.push(call);
+      return {
+        start: (callback?: () => void) => callback?.(),
+        stop: () => {
+          call.stopped = true;
+        },
+      };
+    },
+  },
+  Easing: { bezier: () => () => 0 },
+  processColor: () => undefined,
   Platform: {
     get OS() {
       return platformOS;
@@ -27,34 +84,44 @@ mockModule('react-native', {
     createElement(
       PressableHost,
       props,
-      typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+      typeof children === 'function' ? children(pressableState) : children,
     ),
   StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
   },
   View: ViewHost,
 });
+const theme = {
+  actionPrimaryBase: 'primary',
+  actionPrimaryDisabled: 'primary-disabled',
+  actionPrimaryHover: 'primary-hover',
+  actionPrimaryOnBase: 'on-primary',
+  actionPrimaryOnDisabled: 'on-disabled',
+  actionPrimaryPressed: 'primary-pressed',
+  backgroundSurface: 'surface',
+  borderDisabled: 'border-disabled',
+  borderStrong: 'border-strong',
+  stateDisabledSurface: 'disabled-surface',
+  stateFocusRing: 'focus-ring',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+};
+
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({
-    actionPrimaryBase: 'primary',
-    actionPrimaryDisabled: 'primary-disabled',
-    actionPrimaryHover: 'primary-hover',
-    actionPrimaryOnBase: 'on-primary',
-    actionPrimaryOnDisabled: 'on-disabled',
-    actionPrimaryPressed: 'primary-pressed',
-    backgroundSurface: 'surface',
-    borderDisabled: 'border-disabled',
-    borderStrong: 'border-strong',
-    stateDisabledSurface: 'disabled-surface',
-    stateFocusRing: 'focus-ring',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-  }),
+  useReducedMotion: () => reducedMotion,
+  useThemeMode: () => 'light',
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1, 2: 2 },
   iconSizes: { 20: 20 },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { 4: 4, 8: 8, full: 999 },
 });
 
@@ -66,27 +133,54 @@ before(async () => {
 
 beforeEach(() => {
   platformOS = 'web';
+  reducedMotion = false;
+  pressableState = { hovered: false, pressed: false };
+  timingCalls.length = 0;
 });
+
+function checkboxElement(
+  checked: CheckboxModule.CheckboxValue,
+  onCheckedChange: (next: boolean) => void = () => undefined,
+  disabled = false,
+) {
+  assert.ok(Checkbox);
+  return createElement(Checkbox!, {
+    accessibilityLabel: '모두 선택',
+    checked,
+    disabled,
+    onCheckedChange,
+  });
+}
+
+function renderCheckboxRenderer(
+  checked: CheckboxModule.CheckboxValue,
+  onCheckedChange: (next: boolean) => void = () => undefined,
+  disabled = false,
+): ReactTestRenderer {
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = create(checkboxElement(checked, onCheckedChange, disabled));
+  });
+  assert.ok(renderer);
+  return renderer;
+}
 
 function renderCheckbox(
   checked: CheckboxModule.CheckboxValue,
   onCheckedChange: (next: boolean) => void = () => undefined,
   disabled = false,
 ) {
-  assert.ok(Checkbox);
-  let renderer: ReactTestRenderer | undefined;
-  act(() => {
-    renderer = create(
-      createElement(Checkbox!, {
-        accessibilityLabel: '모두 선택',
-        checked,
-        disabled,
-        onCheckedChange,
-      }),
-    );
-  });
-  assert.ok(renderer);
-  return renderer.root.findByType(PressableHost);
+  return renderCheckboxRenderer(checked, onCheckedChange, disabled).root.findByType(PressableHost);
+}
+
+function updateCheckbox(
+  renderer: ReactTestRenderer,
+  checked: CheckboxModule.CheckboxValue,
+  disabled = false,
+  state = pressableState,
+) {
+  pressableState = state;
+  act(() => renderer.update(checkboxElement(checked, undefined, disabled)));
 }
 
 test('Checkbox exposes false, true, and mixed checked states and emits the next boolean', () => {
@@ -121,7 +215,13 @@ test('Checkbox preserves its visual box inside the platform target size', () => 
       },
       { height: targetSize, width: targetSize },
     ]);
-    const [visual, indicator] = checkbox.findAllByType(ViewHost);
+    const views = checkbox.findAllByType(ViewHost);
+    const visual = views.find((node) => node.props.style?.height === 32);
+    const indicator = views.find(
+      (node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20,
+    );
+    assert.ok(visual);
+    assert.ok(indicator);
     assert.deepEqual(visual.props.style, {
       alignItems: 'center',
       height: 32,
@@ -131,6 +231,119 @@ test('Checkbox preserves its visual box inside the platform target size', () => 
     assert.equal(indicator.props.style[0].height, 20);
     assert.equal(indicator.props.style[0].width, 20);
   }
+});
+
+test('Checkbox checked fill uses selected timing and reduced motion is immediate', () => {
+  const renderer = renderCheckboxRenderer(false);
+
+  updateCheckbox(renderer, true);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, false);
+  const uncheckTransition = timingCalls.find(({ target }) => target.value === 'surface');
+  assert.ok(uncheckTransition);
+  assert.equal(uncheckTransition.duration, 200);
+  const uncheckedIndicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(uncheckedIndicator);
+  assert.equal(uncheckedIndicator.props.style[1].backgroundColor, uncheckTransition.handle);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, true);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  const selectedIndicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(selectedIndicator);
+  assert.equal(selectedIndicator.props.style[1].backgroundColor, fillTransition.handle);
+  fillTransition.handle.value = 'midpoint';
+  const activeCallCount = timingCalls.length;
+
+  reducedMotion = true;
+  updateCheckbox(renderer, true);
+
+  assert.equal(timingCalls.length, activeCallCount);
+  assert.equal(fillTransition.stopped, true);
+  assert.equal(fillTransition.handle.value, 'primary');
+  const reducedIndicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(reducedIndicator);
+  assert.equal(reducedIndicator.props.style[1].backgroundColor, 'primary');
+});
+
+test('Checkbox checked fill uses selected timing while hover stays active', () => {
+  const renderer = renderCheckboxRenderer(false);
+  const hovered = { hovered: true, pressed: false };
+
+  updateCheckbox(renderer, false, false, hovered);
+  timingCalls.length = 0;
+
+  updateCheckbox(renderer, true, false, hovered);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  let indicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(indicator);
+  assert.equal(indicator.props.style[1].backgroundColor, fillTransition.handle);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, false, false, hovered);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'surface');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  indicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(indicator);
+  assert.equal(indicator.props.style[1].backgroundColor, fillTransition.handle);
+});
+
+test('Checkbox hover, pressed, and overlapping changes use interaction timing', () => {
+  const renderer = renderCheckboxRenderer(true);
+  const hovered = { hovered: true, pressed: false };
+  const pressed = { hovered: true, pressed: true };
+
+  updateCheckbox(renderer, true, false, hovered);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, true, false, pressed);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary-pressed');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+
+  const overlapping = renderCheckboxRenderer(false);
+  timingCalls.length = 0;
+  updateCheckbox(overlapping, true, false, hovered);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+});
+
+test('Checkbox becoming disabled commits its current color immediately', () => {
+  const renderer = renderCheckboxRenderer(false);
+  updateCheckbox(renderer, true);
+  const fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  fillTransition.handle.value = 'midpoint';
+  const callCount = timingCalls.length;
+
+  updateCheckbox(renderer, true, true);
+
+  assert.equal(timingCalls.length, callCount);
+  assert.equal(fillTransition.stopped, true);
+  assert.equal(fillTransition.handle.value, 'primary-disabled');
 });
 
 test('Web keyboard toggles Checkbox once and ignores repeated Space', () => {

@@ -63,6 +63,9 @@ spec:
             - name: http
               containerPort: {{ .Values.fedify.consumer.health.port }}
               protocol: TCP
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
           args:
             - fedify-queue
           env:
@@ -74,6 +77,8 @@ spec:
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
             - name: PORT
               value: {{ .Values.fedify.consumer.health.port | quote }}
+            - name: METRICS_PORT
+              value: "9464"
             - name: HOST
               value: "0.0.0.0"
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD

@@ -1,10 +1,11 @@
 import { Bell, House, Search, SquarePen } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import type { BottomTabDestination } from './navigationChrome';
+import type { AnimatedColorValue } from './useAnimatedColorTransition';
 
 type BottomTabBarIconProps = {
-  color: string;
+  color: AnimatedColorValue;
   destination: Exclude<BottomTabDestination, 'profile'>;
   selected: boolean;
 };
@@ -55,11 +56,12 @@ const filledPaths: Record<Exclude<BottomTabDestination, 'profile'>, readonly Fil
   ],
 };
 
-const outlineIcons = {
-  compose: SquarePen,
-  home: House,
-  notifications: Bell,
-  search: Search,
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const animatedOutlineIcons = {
+  compose: Animated.createAnimatedComponent(SquarePen),
+  home: Animated.createAnimatedComponent(House),
+  notifications: Animated.createAnimatedComponent(Bell),
+  search: Animated.createAnimatedComponent(Search),
 } as const;
 
 export function BottomTabBarIcon({ color, destination, selected }: BottomTabBarIconProps) {
@@ -75,11 +77,11 @@ export function BottomTabBarIcon({ color, destination, selected }: BottomTabBarI
       >
         <Svg height={24} viewBox="0 0 24 24" width={24}>
           {filledPaths[destination].map((path, index) => (
-            <Path
+            <AnimatedPath
               d={path.d}
-              fill={path.fill ? color : 'none'}
+              fill={path.fill ? (color as unknown as string) : 'none'}
               key={index}
-              stroke={path.stroke ? color : 'none'}
+              stroke={path.stroke ? (color as unknown as string) : 'none'}
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
@@ -90,7 +92,7 @@ export function BottomTabBarIcon({ color, destination, selected }: BottomTabBarI
     );
   }
 
-  const OutlineIcon = outlineIcons[destination];
+  const OutlineIcon = animatedOutlineIcons[destination];
   return (
     <View
       accessible={false}
@@ -100,7 +102,7 @@ export function BottomTabBarIcon({ color, destination, selected }: BottomTabBarI
       style={styles.icon}
       testID={`bottom-tab-${destination}-outline-icon`}
     >
-      <OutlineIcon color={color} size={24} strokeWidth={2} />
+      <OutlineIcon color={color as unknown as string} size={24} strokeWidth={2} />
     </View>
   );
 }

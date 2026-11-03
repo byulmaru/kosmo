@@ -4,7 +4,14 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  ConnectionHandler,
+  Environment,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import type { ReactNode, Ref } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
@@ -25,6 +32,7 @@ type Request = {
 const require = createRequire(import.meta.url);
 const generation = { current: 0 };
 const triggerFocus = mock.fn();
+const onUnblockSuccess = mock.fn();
 const toastCalls: Array<{
   message: string;
   tone: string;
@@ -75,6 +83,7 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useReducedMotion: () => false,
   useTheme: () => ({ foregroundPrimary: 'primary', foregroundSecondary: 'secondary' }),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
@@ -140,6 +149,7 @@ afterEach(async () => {
   selectedProfileId = 'owner-a';
   generation.current = 0;
   triggerFocus.mock.resetCalls();
+  onUnblockSuccess.mock.resetCalls();
   toastCalls.length = 0;
   scrollProps = null;
 });
@@ -160,7 +170,7 @@ async function render(environment: Environment) {
     const tree = createElement(ReactRelay.RelayEnvironmentProvider, {
       key: selectedProfileId,
       environment,
-      children: createElement(SettingsBlockedProfiles),
+      children: createElement(SettingsBlockedProfiles, { onUnblockSuccess }),
     });
     if (renderer) {
       renderer.update(tree);
@@ -370,13 +380,20 @@ describe('Settings Block consumer with real Relay', () => {
         target.setValue('', 'displayName');
       });
     });
-    assert.equal(all('ProfileRow')[0]?.props.avatarLabel, 'one');
+    assert.equal(all('ProfileRow')[0]?.props.avatarLabel, '@updated');
   });
 
-  it('실제 해제 action은 취소·pending·실패 후 재시도를 거쳐 같은 행을 차단 action으로 전환한다', async () => {
+  it('실제 해제 action은 실패 후 재시도하며 비활성 Profile 행을 성공 응답에서 제거한다', async () => {
     await render(createEnvironment());
-    await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one', 'two']));
+    const page = firstPage(['one', 'two']);
+    const inactiveTarget =
+      page.currentSession.selectedProfile.profileBlocks.edges[0]!.node.targetProfile;
+    Object.assign(inactiveTarget, { avatar: null, displayName: null, viewerState: null });
+    await respond(latestRequest('SettingsBlockedProfilesQuery'), page);
     const row = all('ProfileRow')[0]!;
+    assert.equal(row.props.displayName, '@one');
+    assert.equal(row.props.relativeHandle, undefined);
+    assert.equal(one('Button', row).props.accessibilityLabel, '@one 차단 해제');
     await act(async () => one('Button', row).props.onPress());
     assert.equal(one('ModalSheet', row).props.title, '이 프로필의 차단을 해제할까요?');
     assert.equal(
@@ -386,7 +403,7 @@ describe('Settings Block consumer with real Relay', () => {
     await act(async () => one('ConfirmationContent', row).props.onCancel());
     await act(async () => one('ModalSheet', row).props.onDismiss());
     assert.equal(requests.length, 1);
-    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
+    assert.deepEqual(avatars(), [undefined, 'https://media.example/two.png']);
     assert.equal(triggerFocus.mock.callCount(), 1);
 
     await act(async () => one('Button', row).props.onPress());
@@ -397,14 +414,20 @@ describe('Settings Block consumer with real Relay', () => {
     });
     assert.equal(requests.length, 2);
     const failed = latestRequest('ProfileBlockActionUnblockMutation');
-    assert.deepEqual(failed.variables, { id: 'block-one' });
+    assert.deepEqual(failed.variables, {
+      connections: [
+        ConnectionHandler.getConnectionID('owner-a', 'SettingsBlockedProfiles_profileBlocks'),
+      ],
+      id: 'block-one',
+    });
     assert.equal(one('ModalSheet', row).props.visible, true);
     assert.equal(one('ModalSheet', row).props.dismissDisabled, true);
     assert.equal(one('Button', row).props.accessibilityState.busy, true);
     await act(async () => failed.sink.error(new Error('offline')));
     await act(async () => one('ModalSheet', row).props.onDismiss());
-    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
+    assert.deepEqual(avatars(), [undefined, 'https://media.example/two.png']);
     assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    assert.equal(onUnblockSuccess.mock.callCount(), 0);
 
     await act(async () => one('Button', row).props.onPress());
     await act(async () => one('ConfirmationContent', row).props.onConfirm());
@@ -416,11 +439,10 @@ describe('Settings Block consumer with real Relay', () => {
       },
     });
     await act(async () => Promise.resolve());
-    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
-    const updatedRow = all('ProfileRow')[0]!;
-    assert.equal(one('Button', updatedRow).props.children, '차단');
-    await act(async () => one('ModalSheet', updatedRow).props.onDismiss());
-    assert.equal(triggerFocus.mock.callCount(), 3);
+    assert.deepEqual(avatars(), ['https://media.example/two.png']);
+    assert.equal(all('ProfileRow').length, 1);
+    assert.equal(triggerFocus.mock.callCount(), 2);
+    assert.equal(onUnblockSuccess.mock.callCount(), 1);
     assert.equal(toastCalls.at(-1)?.tone, 'success');
     assert.equal(requests.length, 3);
   });

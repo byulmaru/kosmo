@@ -14,10 +14,11 @@ Accepted — 2026-09-10 사용자 “Gate 승인. Spec 작성 시작”으로 Do
 - 2026-09-08 PROD-915 Spec 사용자 결정: 로그인한 활성 Account만 신고를 제출한다. Selected Profile 선택은 요구하지 않는다.
 - 2026-09-10 PROD-915 Spec 사용자 결정: 선택형 사유와 선택적 상세 설명으로 받으며, `기타`만 설명을 필수로 한다. PROD-907의 범위는 PROD-915에 통합한다.
 - 2026-09-10 후속 사용자 결정: 최소 payload·5개 사유·2,000자 상한·ACK 및 불확실 결과/수동 재시도를 확정한다. 공유 Account rate limit 제안은 채택하지 않고 분산 남용 제한을 후속 이슈 책임으로 분리한다. 후속 이슈 생성은 승인하지 않았다.
+- 2026-10-25 사용자 결정: 글자 수 제한과 카운터를 Unicode code point 기준으로 통일한다.
 
 ## 확정한 범위
 
-- 신고 사유는 유해·부적절한 콘텐츠, 괴롭힘·혐오·위협, 스팸·사기, 아동 안전 우려, 기타의 5개 카테고리로 받는다. 상세 설명은 최대 2,000자이며 선택 사항이다. `기타`를 선택한 경우에만 공백이 아닌 설명을 필수로 한다.
+- 신고 사유는 유해·부적절한 콘텐츠, 괴롭힘·혐오·위협, 스팸·사기, 아동 안전 우려, 기타의 5개 카테고리로 받는다. 상세 설명은 선택 사항이며 앞뒤 공백을 제거한 뒤 Unicode code point 기준 최대 2,000자다. `기타`를 선택한 경우에만 공백이 아닌 설명을 필수로 한다.
 - 신고 제출 주체는 인증된 `Account.Active`다. Selected Profile 선택은 신고 제출의 필수 조건이 아니다.
 - 2026-09-14 사용자 정정과 2026-10-12 후속 정정: 신고는 현재 Post/Profile 화면의 신고 진입점에서 시작한다. Post 신고는 현재 Post Visibility와 Current Content의 canonical Mention 관계([Post Content Mention Identity](./0030-post-content-mention-identity.md))를 확인하며, DIRECT Post는 실제 선택된 viewer Profile이 작성자이거나 현재 Mentioned Profile 관계에 포함되어 읽을 수 있을 때 제출할 수 있다. Profile Block의 방향별 Post authorization은 여전히 신고 조건이 아니며, 차단으로 UI에서 접근할 수 없는 대상을 과거 ID로 신고하는 흐름의 지원·방어는 PROD-915의 요구사항이 아니다. 이는 client를 신뢰한다는 일반 원칙이 아니며 서버 인증·입력·대상 존재/유효성·payload·credential 검증은 유지한다.
 - 신고의 기존 비-Block visibility는 유지한다. 실제 선택된 유효 Profile만 viewer로 사용하며 미선택이면 PUBLIC/UNLISTED 범위다. FOLLOWERS는 작성자 또는 저장된 Follow 관계를 가진 viewer, DIRECT는 실제 선택된 viewer Profile이 작성자 또는 현재 Content의 canonical Mentioned Profile 관계에 포함된 경우를 허용한다. Post는 Active이고 Current Content가 있어야 하며 작성자·대상 Profile은 Active, Instance는 Suspended가 아니어야 한다. Quote·Reply는 자체 조건을 적용하고 본문 없는 Repost는 기존과 같이 신고 대상이 아니다. 제출·재시도 시 서버가 이 조건을 다시 확인한다.

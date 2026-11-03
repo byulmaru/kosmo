@@ -26,6 +26,14 @@ export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
 export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
+/** Minimal JSON-safe identity needed to respond to an inbound ActivityPub Follow. */
+export type ProfileFollowInboundFollow = {
+  readonly actorUri: string;
+  readonly objectUri: string;
+  readonly activityUri?: string;
+  readonly published?: string;
+};
+
 export type ProfileFollowPairCommand =
   | {
       readonly kind: 'FOLLOW';
@@ -67,6 +75,8 @@ export type ProfileFollowPairLifecycleState =
 export type ProfileFollowPairTransitionInput = {
   readonly pair: ProfileFollowPair;
   readonly command: ProfileFollowPairCommand;
+  /** Opts a compatible Workflow revision into planning inbound Accept effects. */
+  readonly acceptInboundFollow?: true;
   /** Only the pending request identity is retained across Activity retries. */
   readonly pendingRequestId?: string;
 };
@@ -91,9 +101,19 @@ export type ProfileFollowDeleteEffectInput = {
   readonly sendActivityPub?: boolean;
 };
 
+/** Accept response owed for one exact inbound Follow request generation. */
+export type ProfileFollowAcceptEffectInput = {
+  readonly followerProfileId: string;
+  readonly followeeProfileId: string;
+  readonly pendingRequestId: string;
+  readonly profileFollowId: string;
+  readonly inboundFollow?: ProfileFollowInboundFollow;
+};
+
 export type ProfileFollowPairEffect =
   | { readonly kind: 'CREATE'; readonly input: ProfileFollowCreateEffectInput }
-  | { readonly kind: 'DELETE'; readonly input: ProfileFollowDeleteEffectInput };
+  | { readonly kind: 'DELETE'; readonly input: ProfileFollowDeleteEffectInput }
+  | { readonly kind: 'ACCEPT_INBOUND_FOLLOW'; readonly input: ProfileFollowAcceptEffectInput };
 export type ProfileFollowPairEffectPlan = readonly ProfileFollowPairEffect[];
 
 export type ProfileFollowPairTransitionResult =
@@ -258,6 +278,22 @@ const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) =
   );
 };
 
+const shouldAcceptInboundActivityPubFollow = async (
+  tx: Transaction,
+  pair: ProfileFollowPair,
+): Promise<boolean> => {
+  const participants = await tx
+    .select({ id: Profiles.id, kind: Instances.kind })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(inArray(Profiles.id, [pair.followerProfileId, pair.followeeProfileId]));
+  return (
+    participants.find(({ id }) => id === pair.followerProfileId)?.kind ===
+      InstanceKind.ACTIVITYPUB &&
+    participants.find(({ id }) => id === pair.followeeProfileId)?.kind === InstanceKind.LOCAL
+  );
+};
+
 /** Read only the pending request identity before a mutating Update. */
 export const loadPendingFollowRequestId = async (input: {
   readonly pair: ProfileFollowPair;
@@ -411,6 +447,22 @@ const executeApproveOrAccept = async (
       };
     }
 
+    const effectPlan: ProfileFollowPairEffect[] = [];
+    if (
+      command.kind === 'APPROVE' &&
+      input.acceptInboundFollow === true &&
+      (await shouldAcceptInboundActivityPubFollow(tx, input.pair))
+    ) {
+      effectPlan.push({
+        kind: 'ACCEPT_INBOUND_FOLLOW',
+        input: {
+          ...input.pair,
+          pendingRequestId: expectedRowId,
+          profileFollowId: existingFollow.id,
+        },
+      });
+    }
+
     return {
       ok: true,
       result: {
@@ -422,7 +474,7 @@ const executeApproveOrAccept = async (
         profileFollowRequestId: expectedRowId,
       },
       nextState: 'ESTABLISHED',
-      effectPlan: [],
+      effectPlan,
     };
   }
 
@@ -467,6 +519,19 @@ const executeApproveOrAccept = async (
       effectPlan.push({
         kind: 'CREATE',
         input: { sourceId: committedFollowId, sourceKind: 'FOLLOW' },
+      });
+    }
+    if (
+      input.acceptInboundFollow === true &&
+      (await shouldAcceptInboundActivityPubFollow(tx, input.pair))
+    ) {
+      effectPlan.push({
+        kind: 'ACCEPT_INBOUND_FOLLOW',
+        input: {
+          ...input.pair,
+          pendingRequestId: expectedRowId,
+          profileFollowId: committedFollowId,
+        },
       });
     }
   } else {

@@ -1,16 +1,28 @@
+import { Redirect } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
+import { PostRequestListSummary } from '@/components/post/PostRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   getShellLayout,
   getWebMobileShellHeaderStickyOffset,
 } from '@/components/shell/shellLayout';
+import { HomePushPermissionBanner } from '@/components/timeline/HomePushPermissionBanner';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
@@ -47,11 +59,6 @@ export default function HomeScreen() {
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const [revalidateCachedHome] = useState(
-    () =>
-      environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
-      'available',
-  );
   const homeRefreshRef = useRef<(() => void) | null>(null);
   const registerHomeRefresh = useCallback((refresh: (() => void) | null) => {
     homeRefreshRef.current = refresh;
@@ -92,7 +99,6 @@ export default function HomeScreen() {
         <HomeRouteContent
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
-          revalidateCachedHome={revalidateCachedHome}
         />
       </RouteBoundary>
     </HomeFrame>
@@ -134,11 +140,9 @@ function HomeFrame({
 function HomeRouteContent({
   onRefresh,
   registerHomeRefresh,
-  revalidateCachedHome,
 }: {
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
-  revalidateCachedHome: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -147,7 +151,6 @@ function HomeRouteContent({
       fetchKey={fetchKey}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
-      revalidateCachedHome={revalidateCachedHome}
     />
   );
 }
@@ -156,12 +159,10 @@ function HomeContent({
   fetchKey,
   onRefresh,
   registerHomeRefresh,
-  revalidateCachedHome,
 }: {
   fetchKey: string;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
-  revalidateCachedHome: boolean;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -171,6 +172,7 @@ function HomeContent({
     { fetchKey, fetchPolicy: 'store-or-network' },
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [postRequestRefreshKey, setPostRequestRefreshKey] = useState(0);
 
   useEffect(() => {
     let refreshInFlight = false;
@@ -182,6 +184,7 @@ function HomeContent({
       }
 
       refreshInFlight = true;
+      setPostRequestRefreshKey((key) => key + 1);
       setRefreshing(true);
       subscription = fetchQuery(
         environment,
@@ -208,32 +211,71 @@ function HomeContent({
     };
 
     registerHomeRefresh(refresh);
-    if (revalidateCachedHome) {
-      refresh();
-    }
     return () => {
       registerHomeRefresh(null);
       subscription?.unsubscribe();
       refreshToastCleanup?.();
     };
-  }, [environment, registerHomeRefresh, revalidateCachedHome, showToast]);
+  }, [environment, registerHomeRefresh, showToast]);
 
-  return <HomeContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />;
+  return (
+    <HomeContentView
+      data={data}
+      fetchKey={fetchKey}
+      onRefresh={onRefresh}
+      postRequestRefreshKey={postRequestRefreshKey}
+      refreshing={refreshing}
+    />
+  );
 }
 
 function HomeContentView({
   data,
+  fetchKey,
   onRefresh,
+  postRequestRefreshKey,
   refreshing,
 }: {
   data: HomePageQuery$data;
+  fetchKey: string;
   onRefresh: () => void;
+  postRequestRefreshKey: number;
   refreshing: boolean;
 }) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
+  const accountId = data.me?.id ?? null;
+  const selectedProfileId = selectedProfile?.id ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+  const postRequestFetchKey = `${fetchKey}:${postRequestRefreshKey}`;
+  const postRequestFetchPolicy =
+    postRequestRefreshKey === 0 ? 'store-or-network' : 'store-and-network';
+  const openComposer = shellChrome?.openComposer;
+  const postRequestCards = useMemo(
+    () =>
+      accountId !== null && selectedProfileId !== null ? (
+        <ErrorBoundary
+          key={`${accountId}:${selectedProfileId}`}
+          fallback={null}
+          resetKeys={[postRequestFetchKey]}
+        >
+          <Suspense fallback={null}>
+            <PostRequestListSummary
+              fetchKey={postRequestFetchKey}
+              fetchPolicy={postRequestFetchPolicy}
+              onCompose={openComposer}
+              profileId={selectedProfileId}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      ) : null,
+    [accountId, openComposer, postRequestFetchKey, postRequestFetchPolicy, selectedProfileId],
+  );
+
+  if (data.currentSession && data.me && data.me.profiles.length === 0) {
+    return <Redirect href="/first-profile/handle" />;
+  }
 
   if (!selectedProfile) {
     return (
@@ -258,7 +300,9 @@ function HomeContentView({
 
   return (
     <View style={styles.timeline}>
+      <HomePushPermissionBanner />
       <PostList
+        header={postRequestCards}
         home={data}
         identityKey={`home:${selectedProfile.id}`}
         onRefresh={onRefresh}

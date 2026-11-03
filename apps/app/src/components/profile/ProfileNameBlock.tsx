@@ -47,14 +47,16 @@ export function ProfileNameBlock({
         numberOfLines={hero ? undefined : 1}
         style={[displayNameStyle, { color: theme.foregroundPrimary }, inline && styles.inlineName]}
       >
-        {data.displayName}
+        {data.displayName ?? data.relativeHandle}
       </Text>
-      <Text
-        numberOfLines={hero ? undefined : 1}
-        style={[handleStyle, { color: theme.foregroundSecondary }, inline && styles.inlineHandle]}
-      >
-        {data.relativeHandle}
-      </Text>
+      {data.displayName != null ? (
+        <Text
+          numberOfLines={hero ? undefined : 1}
+          style={[handleStyle, { color: theme.foregroundSecondary }, inline && styles.inlineHandle]}
+        >
+          {data.relativeHandle}
+        </Text>
+      ) : null}
     </>
   );
 

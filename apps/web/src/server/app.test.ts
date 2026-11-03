@@ -1,18 +1,25 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { serve } from '@hono/node-server';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import graphqlRoutes from './routes/graphql';
+import type { ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
   authorizationCodeGrant as oidcAuthorizationCodeGrant,
   discovery as oidcDiscovery,
 } from 'openid-client';
+
+const nativeFetch = globalThis.fetch.bind(globalThis);
 
 const {
   authorizationCodeGrant,
@@ -62,14 +69,22 @@ let fetch = vi.fn<typeof globalThis.fetch>();
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
+const SERVICE_WORKER_NAME = 'firebase-messaging-sw.js';
+let serviceWorkerSource: string;
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
+  serviceWorkerSource = await readFile(
+    new URL('../../../app/public/firebase-messaging-sw.js', import.meta.url),
+    'utf8',
+  );
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
+  await writeFile(join(staticRoot, SERVICE_WORKER_NAME), serviceWorkerSource);
   await writeFile(join(staticRoot, 'channel.js'), 'static fallback');
+  await writeFile(join(staticRoot, 'robots.txt'), 'User-agent: *\nDisallow: /private\n');
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -159,6 +174,58 @@ describe('Web channel bootstrap', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(await response.text()).toBe('ENVIRONMENT must be dev or prod');
+  });
+});
+
+describe('Dev search exclusion', () => {
+  test.each([
+    ['dev', 'noindex'],
+    ['prod', null],
+    [undefined, null],
+  ] as const)('%s environment applies the expected search header', async (environment, value) => {
+    vi.stubEnv('ENVIRONMENT', environment);
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe(value);
+  });
+
+  test('dev robots permits crawling while production serves the exported policy', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+
+    const devResponse = await app.request('/robots.txt');
+    const devHead = await app.request('/robots.txt', { method: 'HEAD' });
+
+    expect(devResponse.status).toBe(200);
+    expect(devResponse.headers.get('content-type')).toContain('text/plain');
+    expect(devResponse.headers.get('cache-control')).toBe('no-cache');
+    expect(devResponse.headers.get('x-robots-tag')).toBe('noindex');
+    expect(await devResponse.text()).toBe('User-agent: *\nAllow: /\n');
+    expect(devHead.status).toBe(200);
+    expect(devHead.headers.get('x-robots-tag')).toBe('noindex');
+
+    vi.stubEnv('ENVIRONMENT', 'prod');
+    const prodResponse = await app.request('/robots.txt');
+
+    expect(prodResponse.status).toBe(200);
+    expect(prodResponse.headers.get('x-robots-tag')).toBeNull();
+    expect(await prodResponse.text()).toBe('User-agent: *\nDisallow: /private\n');
+  });
+
+  test('adds noindex to direct federation responses', async () => {
+    vi.stubEnv('ENVIRONMENT', 'dev');
+    federationFetch.mockResolvedValueOnce(
+      new Response('federation response', {
+        headers: { 'Content-Type': 'application/activity+json' },
+      }),
+    );
+
+    const federation = await app.request('/ap/actor/alice');
+
+    expect(federation.status).toBe(200);
+    expect(federation.headers.get('content-type')).toContain('application/activity+json');
+    expect(federation.headers.get('x-robots-tag')).toBe('noindex');
   });
 });
 
@@ -412,6 +479,7 @@ describe('GraphQL proxy', () => {
       name: 'anonymous request',
     },
   ])('forwards a $name', async ({ expectedAuthorization, headers: requestHeaders }) => {
+    const queryBody = '{"query":"{ __typename }"}';
     let body = '';
     fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
       body = await new Response(init?.body).text();
@@ -431,7 +499,7 @@ describe('GraphQL proxy', () => {
       }
     }
     const response = await app.request('/graphql', {
-      body: '{"query":"{ __typename }"}',
+      body: queryBody,
       headers,
       method: 'POST',
     });
@@ -444,11 +512,134 @@ describe('GraphQL proxy', () => {
     expect(forwardedHeaders.get('content-type')).toBe('application/json');
     expect(forwardedHeaders.get('accept')).toBe('application/graphql-response+json');
     expect(forwardedHeaders.get('authorization') ?? undefined).toBe(expectedAuthorization);
-    expect(body).toBe('{"query":"{ __typename }"}');
+    expect(body).toBe(queryBody);
     expect(response.status).toBe(202);
     expect(response.headers.get('x-upstream')).toBe('yes');
     expect(await response.text()).toBe('upstream-body');
   });
+
+  test('cancels an upstream SSE request when a loopback client cancels its response reader', async () => {
+    const event = 'event: next\ndata: {"payload":{"data":{"__typename":"Query"}}}\n\n';
+    const requestBody = '{"query":"subscription { __typename }"}';
+    let upstreamBody = '';
+    let upstreamSignal: AbortSignal | undefined;
+    let upstreamResponse: ServerResponse | undefined;
+    let upstreamResponseClosed = false;
+    let resolveUpstreamResponseClosed!: () => void;
+    const upstreamClosed = new Promise<void>((resolve) => {
+      resolveUpstreamResponseClosed = resolve;
+    });
+    const upstreamServer = createServer((request, response) => {
+      upstreamResponse = response;
+      response.on('close', () => {
+        if (!response.writableEnded) {
+          upstreamResponseClosed = true;
+          resolveUpstreamResponseClosed();
+        }
+      });
+      request.setEncoding('utf8');
+      request.on('data', (chunk: string) => {
+        upstreamBody += chunk;
+      });
+      request.on('end', () => {
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.write(event);
+      });
+    });
+    let bffServer: ReturnType<typeof serve> | undefined;
+    let clientReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let closeDeadline: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        upstreamServer.once('error', reject);
+        upstreamServer.listen(0, '127.0.0.1', resolve);
+      });
+      const upstreamAddress = upstreamServer.address();
+      if (!upstreamAddress || typeof upstreamAddress === 'string') {
+        throw new Error('Could not read the upstream test server address.');
+      }
+      const upstreamOrigin = `http://127.0.0.1:${upstreamAddress.port}`;
+      vi.stubEnv('INTERNAL_API_ORIGIN', upstreamOrigin);
+      fetch = vi.fn((input, init) => {
+        upstreamSignal = init?.signal ?? undefined;
+        return nativeFetch(input, init);
+      });
+      vi.stubGlobal('fetch', fetch);
+
+      let resolveBffAddress!: (address: AddressInfo) => void;
+      let rejectBffAddress!: (cause: Error) => void;
+      const bffAddressPromise = new Promise<AddressInfo>((resolve, reject) => {
+        resolveBffAddress = resolve;
+        rejectBffAddress = reject;
+      });
+      bffServer = serve(
+        {
+          fetch: graphqlRoutes.fetch.bind(graphqlRoutes),
+          hostname: '127.0.0.1',
+          overrideGlobalObjects: false,
+          port: 0,
+        },
+        resolveBffAddress,
+      );
+      bffServer.once('error', rejectBffAddress);
+      const bffAddress = await bffAddressPromise;
+      const response = await nativeFetch(`http://127.0.0.1:${bffAddress.port}/graphql`, {
+        body: requestBody,
+        headers: {
+          accept: 'text/event-stream',
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('The loopback GraphQL response did not have a body.');
+      }
+      clientReader = reader;
+
+      let eventData = '';
+      const decoder = new TextDecoder();
+      while (!eventData.includes('\n\n')) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          break;
+        }
+        eventData += decoder.decode(chunk.value, { stream: true });
+      }
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('text/event-stream');
+      expect(eventData).toContain(event);
+      expect(upstreamBody).toBe(requestBody);
+      expect(upstreamSignal).toBeInstanceOf(AbortSignal);
+      expect(upstreamSignal?.aborted).toBe(false);
+
+      await reader.cancel();
+      const upstreamClosedBeforeDeadline = await Promise.race([
+        upstreamClosed.then(() => true),
+        new Promise<boolean>((resolve) => {
+          closeDeadline = setTimeout(() => resolve(false), 1500);
+        }),
+      ]);
+
+      expect(upstreamClosedBeforeDeadline).toBe(true);
+      expect(upstreamResponseClosed).toBe(true);
+      expect(upstreamSignal?.aborted).toBe(true);
+    } finally {
+      if (closeDeadline) {
+        clearTimeout(closeDeadline);
+      }
+      await clientReader?.cancel().catch(() => {});
+      upstreamResponse?.destroy();
+      if (bffServer?.listening) {
+        await new Promise<void>((resolve) => bffServer?.close(() => resolve()));
+      }
+      if (upstreamServer.listening) {
+        await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
+      }
+    }
+  }, 5000);
 
   test('rejects unsupported methods without calling the API', async () => {
     const response = await app.request('/graphql', {
@@ -633,6 +824,18 @@ describe('runtime routing', () => {
     expect(await unknownPath.text()).toBe('404 Not Found');
     expect(missingAsset.status).toBe(404);
     expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
+  test('serves the Firebase worker as an uncached JavaScript asset and keeps missing workers as 404', async () => {
+    const worker = await app.request(`/${SERVICE_WORKER_NAME}?firebase=%7B%7D`);
+    const missingWorker = await app.request('/missing-firebase-messaging-sw.js');
+
+    expect(worker.status).toBe(200);
+    expect(worker.headers.get('content-type')).toContain('text/javascript');
+    expect(worker.headers.get('cache-control')).toBe('no-cache');
+    expect(await worker.text()).toBe(serviceWorkerSource);
+    expect(missingWorker.status).toBe(404);
+    expect(await missingWorker.text()).toBe('404 Not Found');
   });
 
   test('preserves public document cache variation for revalidation and compression', async () => {

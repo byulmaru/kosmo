@@ -1,5 +1,6 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 
@@ -9,7 +10,7 @@ export function Splash({ label = 'Kosmo를 불러오는 중입니다.' }: { labe
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <BrandLogo width={56} />
-      <ActivityIndicator accessibilityLabel={label} color={theme.text} />
+      <LoadingIndicator accessibilityLabel={label} color={theme.text} />
       <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
     </View>
   );

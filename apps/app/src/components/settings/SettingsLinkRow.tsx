@@ -1,12 +1,14 @@
 import { Link } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
+import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, motion } from '@/theme/tokens';
+import { borderWidths } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
-import type { Href } from 'expo-router';
+import type { Href, WebAnchorProps } from 'expo-router';
+import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 
 export type SettingsLinkRowProps = {
@@ -19,8 +21,55 @@ export type SettingsLinkRowProps = {
   onNavigate?: () => void;
   primary?: boolean;
   selected?: boolean;
+  target?: WebAnchorProps['target'];
   testID?: string;
 };
+
+type SettingsLinkFeedbackProps = {
+  children: ReactNode;
+  hovered: boolean;
+  pressed: boolean;
+  selected: boolean;
+};
+
+function SettingsLinkFeedback({ children, hovered, pressed, selected }: SettingsLinkFeedbackProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || hovered;
+  const backgroundColor = pressed
+    ? theme.statePressed
+    : hovered
+      ? theme.stateHover
+      : selected
+        ? theme.stateSelectedSurface
+        : 'transparent';
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    reducedMotion,
+    role: interaction ? 'interaction' : 'selection',
+  });
+  const animatedBorder = useAnimatedColorTransition({
+    color: selected ? theme.stateSelectedBorder : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: 'selection',
+  });
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.feedback,
+          { backgroundColor: animatedBackground, borderColor: animatedBorder } as ViewStyle,
+        ]}
+      />
+      {children}
+    </>
+  );
+}
 
 export function SettingsLinkRow({
   accessibilityLabel,
@@ -32,15 +81,17 @@ export function SettingsLinkRow({
   onNavigate,
   primary = false,
   selected = false,
+  target,
   testID,
 }: SettingsLinkRowProps) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
+  const externalRel = target === '_blank' ? 'noopener noreferrer' : undefined;
 
   const row = (
     <Pressable
+      {...(web && external && target ? { hrefAttrs: { rel: externalRel, target } } : {})}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       accessibilityState={{ selected }}
@@ -57,35 +108,11 @@ export function SettingsLinkRow({
       }}
       onPress={external ? onNavigate : undefined}
       onPointerDown={() => setFocusVisible(false)}
-      style={(state) => {
-        const webState = state as { hovered?: boolean; pressed?: boolean };
-        const hovered = web && Boolean(webState.hovered);
-        const pressed = Boolean(webState.pressed);
-        const transitionDuration =
-          pressed || hovered
-            ? motion.duration.fast
-            : selected
-              ? motion.duration.standard
-              : motion.duration.fast;
-
+      style={() => {
         return [
           styles.entry,
-          web
-            ? ({
-                transitionDuration: `${reducedMotion ? motion.duration.instant : transitionDuration}ms`,
-                transitionProperty: 'background-color, border-color',
-                transitionTimingFunction: motion.easing.standard,
-              } as unknown as ViewStyle)
-            : undefined,
           {
-            backgroundColor: pressed
-              ? theme.statePressed
-              : hovered
-                ? theme.stateHover
-                : selected
-                  ? theme.stateSelectedSurface
-                  : 'transparent',
-            borderColor: selected ? theme.stateSelectedBorder : 'transparent',
+            borderColor: 'transparent',
             borderWidth: borderWidths[1],
             outlineColor: focusVisible ? theme.stateFocusRing : undefined,
             outlineOffset: 2,
@@ -96,21 +123,29 @@ export function SettingsLinkRow({
       }}
       testID={testID}
     >
-      <SettingsItem
-        description={description}
-        label={label}
-        trailing={
-          <View accessibilityElementsHidden pointerEvents="none">
-            <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
-          </View>
-        }
-      />
+      {(state) => {
+        const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
+        const pressed = Boolean(state.pressed);
+        return (
+          <SettingsLinkFeedback hovered={hovered} pressed={pressed} selected={selected}>
+            <SettingsItem
+              description={description}
+              label={label}
+              trailing={
+                <View accessibilityElementsHidden pointerEvents="none">
+                  <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+                </View>
+              }
+            />
+          </SettingsLinkFeedback>
+        );
+      }}
     </Pressable>
   );
 
   if (external) {
     return (
-      <Link asChild href={href}>
+      <Link asChild href={href} rel={externalRel} target={target}>
         {row}
       </Link>
     );
@@ -124,6 +159,7 @@ export function SettingsLinkRow({
 }
 
 const styles = StyleSheet.create({
+  feedback: { borderWidth: borderWidths[1], width: '100%' },
   entry: {
     minHeight: 64,
     width: '100%',

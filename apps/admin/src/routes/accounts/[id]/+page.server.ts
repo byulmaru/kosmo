@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { accountIdSchema, getAccount } from '$lib/server/accounts';
+import { accountIdSchema, getAccount } from '#lib/server/accounts.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {

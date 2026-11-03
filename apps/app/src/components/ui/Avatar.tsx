@@ -31,6 +31,7 @@ export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps
     >
       <Image
         accessible={false}
+        fadeDuration={0}
         resizeMode="cover"
         source={resolveAvatarSource(imageUri)}
         style={styles.image}

@@ -20,7 +20,11 @@ import {
 } from '@kosmo/core/media-upload';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createStagingR2Fixture } from './staging-r2.fixture';
@@ -154,9 +158,18 @@ describe('Local Media upload GraphQL 경계', () => {
     );
     assert.ok(storedFirst);
     assert.equal(firstMediaId, encodeGlobalId('Media', storedFirst.id));
+    assert.equal(storedFirst.thumbhash, null);
     assert.deepEqual(await requestMediaNode(firstMediaId, first.token), {
       id: firstMediaId,
       state: 'UPLOADING',
+      thumbhash: null,
+    });
+    const thumbhash = 'AQIDBAUGBwg=';
+    await db.update(Media).set({ thumbhash }).where(eq(Media.id, storedFirst.id));
+    assert.deepEqual(await requestMediaNode(firstMediaId, first.token), {
+      id: firstMediaId,
+      state: 'UPLOADING',
+      thumbhash,
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
   });
@@ -293,6 +306,186 @@ describe('Local Media upload GraphQL 경계', () => {
     const stored = await db.select().from(Media).then(firstOrThrow);
     assert.equal(stored.url, 'https://media.example/media.webp');
     assert.equal(stored.mediaType, 'image/webp');
+  });
+
+  test('선택한 AI 필터를 workflow에 전달하고 Ready Media를 선택과 무관하게 재사용한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const media = await db.select().from(Media).then(firstOrThrow);
+    const session = parseNexusMediaUploadReference(media.storageReference!);
+    assert.ok(session);
+    const execution = mockCompletingWorkflow(t, async ({ mediaId, applyNightshade }) => {
+      assert.equal(applyNightshade, true);
+      await markMediaReady(mediaId);
+      return workflowResult(session.id);
+    });
+
+    const completed = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+
+    assertNoGraphQLErrors(completed);
+    assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+    assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, media.id, auth.account.id, true);
+
+    const repeated = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+    assertNoGraphQLErrors(repeated);
+    assert.deepEqual(repeated.data, completed.data);
+    assert.equal(execution.mock.callCount(), 1);
+
+    const differentChoice = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+    );
+    assertNoGraphQLErrors(differentChoice);
+    assert.deepEqual(differentChoice.data, completed.data);
+    assert.equal(execution.mock.callCount(), 1);
+  });
+
+  test('canonical AI filter input maps to the existing workflow option', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const first = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(first);
+    const firstMedia = await db.select().from(Media).then(firstOrThrow);
+    const firstSession = parseNexusMediaUploadReference(firstMedia.storageReference!);
+    assert.ok(firstSession);
+
+    const second = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(second);
+    const secondMedia = (
+      await db.select().from(Media).where(eq(Media.accountId, auth.account.id))
+    ).find(({ id }) => id !== firstMedia.id);
+    assert.ok(secondMedia);
+
+    const choices: boolean[] = [];
+    const execution = mockCompletingWorkflow(t, async ({ mediaId, applyNightshade }) => {
+      choices.push(applyNightshade);
+      await markMediaReady(mediaId);
+      return workflowResult(firstSession.id);
+    });
+    const filtered = await requestCompleteMediaUpload(
+      first.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+    assertNoGraphQLErrors(filtered);
+    assertMediaUploadWorkflowOptions(
+      execution.mock.calls[0]!,
+      firstMedia.id,
+      auth.account.id,
+      true,
+    );
+
+    const unfiltered = await requestCompleteMediaUpload(
+      second.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      false,
+    );
+    assertNoGraphQLErrors(unfiltered);
+    assertMediaUploadWorkflowOptions(
+      execution.mock.calls[1]!,
+      secondMedia.id,
+      auth.account.id,
+      false,
+    );
+    assert.deepEqual(choices, [true, false]);
+  });
+
+  test('workflow 오류 뒤 발견한 READY row를 요청 선택과 무관하게 반환한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const media = await db.select().from(Media).then(firstOrThrow);
+    const execution = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      await markMediaReady(media.id);
+      throw new Error('workflow response was lost');
+    });
+
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(
+      result.data?.completeMediaUpload.media.id,
+      issued.data!.issueMediaUploadUrl.media.id,
+    );
+    assert.equal(result.data?.completeMediaUpload.media.state, MediaState.READY);
+    assert.equal(execution.mock.callCount(), 1);
+  });
+
+  test('terminal Nightshade processing failure stays on the normal error path and leaves Media uploading', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const failure = ApplicationFailure.nonRetryable(
+      'Nightshade processing failed',
+      'HopeProcessingError',
+    );
+    const execution = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw failure;
+    });
+
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+    assert.notEqual(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
+    assert.equal(result.data, null);
+    assert.equal(execution.mock.callCount(), 1);
+    const stored = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(stored.state, MediaState.UPLOADING);
+  });
+
+  test('caller wait errors do not claim Nightshade processing failed', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const execution = t.mock.method(temporalClient.workflow, 'execute', async () => {
+      throw new Error('Temporal caller deadline expired');
+    });
+
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+      true,
+    );
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+    assert.notEqual(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
+    assert.equal(result.data, null);
+    assert.equal(execution.mock.callCount(), 1);
+  });
+
+  test('AI filter opt-in is rejected for a legacy upload instead of silently skipping processing', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const media = await createUploadingMedia(
+      auth.account.id,
+      auth.profile.id,
+      'opaque/legacy-reference',
+    );
+    const fetch = t.mock.method(globalThis, 'fetch');
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
+
+    const result = await requestCompleteMediaUpload(media.id, auth.token, true);
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'CONFLICT');
+    assert.equal(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
+    assert.equal(result.data, null);
+    assert.equal(fetch.mock.callCount(), 0);
+    assert.equal(execute.mock.callCount(), 0);
   });
 
   test('workflow 성공 응답만으로 Ready Media를 반환하지 않는다', async (t) => {
@@ -805,21 +998,26 @@ const requestIssueMediaUploadUrl = (
   );
 };
 
-const requestCompleteMediaUpload = (id: string, token?: string) =>
+const requestCompleteMediaUpload = (id: string, token?: string, applyAiProhibitFilter?: boolean) =>
   requestGraphQL<CompleteMediaUploadData>(
     `mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) {
       completeMediaUpload(input: $input) { media { id readyAt state } }
     }`,
-    { input: { id } },
+    {
+      input: {
+        id,
+        ...(applyAiProhibitFilter === undefined ? {} : { applyAiProhibitFilter }),
+      },
+    },
     token,
   );
 
 const requestMediaNode = async (id: string, token: string) => {
   const result = await requestGraphQL<{
-    node: { id: string; state: string } | null;
+    node: { id: string; state: string; thumbhash: string | null } | null;
   }>(
     `query MediaNode($id: ID!) {
-      node(id: $id) { ... on Media { id state } }
+      node(id: $id) { ... on Media { id state thumbhash } }
     }`,
     { id },
     token,
@@ -876,7 +1074,11 @@ const assertStoredMedia = (media: typeof Media.$inferSelect | undefined) => {
 
 const mockCompletingWorkflow = (
   t: TestContext,
-  complete: (input: { mediaId: string; accountId: string }) => Promise<unknown>,
+  complete: (input: {
+    mediaId: string;
+    accountId: string;
+    applyNightshade: boolean;
+  }) => Promise<unknown>,
   onDispatch?: (dispatchCount: number) => void,
 ) => {
   const executions = new Map<string, Promise<unknown>>();
@@ -896,7 +1098,11 @@ const mockCompletingWorkflow = (
         return (await existing) as never;
       }
 
-      const input = options.args?.[0] as { mediaId: string; accountId: string };
+      const input = options.args?.[0] as {
+        mediaId: string;
+        accountId: string;
+        applyNightshade: boolean;
+      };
       const execution = complete(input);
       executions.set(workflowId, execution);
       return (await execution) as never;
@@ -908,6 +1114,7 @@ const assertMediaUploadWorkflowOptions = (
   call: { arguments: readonly unknown[] },
   mediaId: string,
   accountId: string,
+  applyNightshade = false,
 ) => {
   const [workflow, rawOptions] = call.arguments;
   assert.equal(workflow, 'mediaUploadWorkflow');
@@ -918,7 +1125,7 @@ const assertMediaUploadWorkflowOptions = (
     workflowIdConflictPolicy?: WorkflowIdConflictPolicy;
     workflowIdReusePolicy?: WorkflowIdReusePolicy;
   };
-  assert.deepEqual(options.args, [{ mediaId, accountId }]);
+  assert.deepEqual(options.args, [{ mediaId, accountId, applyNightshade }]);
   assert.equal(options.workflowId, `media-upload:${mediaId}`);
   assert.equal(options.workflowIdConflictPolicy, WorkflowIdConflictPolicy.USE_EXISTING);
   assert.equal(options.workflowIdReusePolicy, WorkflowIdReusePolicy.REJECT_DUPLICATE);

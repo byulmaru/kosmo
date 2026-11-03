@@ -1,6 +1,13 @@
+import { createClient } from 'graphql-sse';
+import { Observable } from 'relay-runtime';
 import { getApiOrigin, getPublicWebOrigin } from '@/config/origin';
 import { RelayTransportError } from './transportError';
-import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type {
+  GraphQLResponse,
+  RequestParameters,
+  SubscribeFunction,
+  Variables,
+} from 'relay-runtime';
 
 export class GraphQLHttpError extends Error {
   readonly operationName: string;
@@ -77,6 +84,45 @@ export async function executeGraphQLRequest(
   }
 
   return body;
+}
+
+export function createGraphQLSubscription(
+  token: string | null,
+  selectedProfileId: string | null = null,
+): SubscribeFunction {
+  let client: ReturnType<typeof createClient> | undefined;
+
+  return (request, variables) =>
+    Observable.create<GraphQLResponse>((sink) => {
+      if (!request.text) {
+        sink.error(new Error(`Relay operation ${request.name} has no query text.`));
+        return;
+      }
+
+      if (!client) {
+        const native = isNativeRuntime();
+        const origin = native ? getApiOrigin() : getPublicWebOrigin();
+        client = createClient({
+          url: `${origin}/graphql`,
+          credentials: native ? 'omit' : 'include',
+          headers: native && token ? { authorization: `Bearer ${token}` } : {},
+        });
+      }
+
+      return client.subscribe(
+        {
+          operationName: request.name,
+          query: request.text,
+          variables,
+          ...(selectedProfileId ? { extensions: { selectedProfileId } } : {}),
+        },
+        {
+          next: (response) => sink.next(response as GraphQLResponse),
+          error: (cause) => sink.error(new RelayTransportError(cause)),
+          complete: () => sink.complete(),
+        },
+      );
+    });
 }
 
 export function formatGraphQLError(error: unknown): string {

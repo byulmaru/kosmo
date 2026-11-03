@@ -30,6 +30,7 @@ const canonicalFixture = {
     ],
   },
 } as const;
+const hashtagId = '019f6678-86fa-709b-984e-1520766b8443';
 
 test('serializes the PROD-341 canonical fixture to deterministic safe HTML', () => {
   const expected =
@@ -86,6 +87,28 @@ test('serializes Mention identities with the unavailable Profile fallback', () =
       },
     }),
     '<p>Hello <span>@알 수 없는 사용자</span></p>',
+  );
+});
+
+test('serializes Hashtag tokens as escaped, non-link inline text', () => {
+  assert.equal(
+    postContentDocumentToHtml({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Topic ' },
+              { type: 'hashtag', attrs: { hashtagId, token: '#topic<&>' } },
+            ],
+          },
+        ],
+      },
+    }),
+    '<p>Topic <span>#topic&lt;&amp;&gt;</span></p>',
   );
 });
 

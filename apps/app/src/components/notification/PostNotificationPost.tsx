@@ -31,7 +31,6 @@ const PostNotificationPostFragment = graphql`
       avatar {
         url
       }
-      handle
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
@@ -118,7 +117,7 @@ export function PostNotificationPost({
                 >
                   <Avatar
                     imageUri={post.profile.avatar?.url}
-                    label={post.profile.displayName || post.profile.handle}
+                    label={post.profile.displayName || post.profile.relativeHandle}
                     size={24}
                   />
                 </View>

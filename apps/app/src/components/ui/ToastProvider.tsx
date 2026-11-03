@@ -18,6 +18,9 @@ type ToastContextValue = Readonly<{
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 type ToastOptions = Omit<ToastProps, 'message'> & Readonly<{ persistent?: boolean }>;
+type ToastProviderProps = PropsWithChildren<{
+  renderToast?: (toast: ReactNode) => ReactNode;
+}>;
 
 type ToastState = Readonly<{
   persistent?: boolean;
@@ -27,7 +30,7 @@ type ToastState = Readonly<{
   tone: ToastOptions['tone'];
 }>;
 
-export function ToastProvider({ children }: PropsWithChildren): ReactNode {
+export function ToastProvider({ children, renderToast }: ToastProviderProps): ReactNode {
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastRef = useRef<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -68,15 +71,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
 
   const showToast = useCallback(
     (nextMessage: string, options: ToastOptions) => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
       const id = nextToastId.current++;
-      if (options.persistent) {
-        suspendedPersistentToast.current = null;
-      } else if (toastRef.current?.persistent) {
-        suspendedPersistentToast.current = toastRef.current;
-      }
       const nextToast = {
         action: options.action,
         id,
@@ -84,6 +79,18 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
         persistent: options.persistent,
         tone: options.tone,
       };
+      if (options.persistent && toastRef.current && !toastRef.current.persistent) {
+        suspendedPersistentToast.current = nextToast;
+        return () => dismissToast(id);
+      }
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+      if (options.persistent) {
+        suspendedPersistentToast.current = null;
+      } else if (toastRef.current?.persistent) {
+        suspendedPersistentToast.current = toastRef.current;
+      }
       toastRef.current = nextToast;
       setToast(nextToast);
       setToastVisible(true);
@@ -113,50 +120,54 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
     }
   }, [toastMotion.mounted, toastVisible]);
 
+  const toastNode =
+    toast && toastMotion.mounted ? (
+      <Animated.View
+        key={toast.id}
+        accessibilityLiveRegion="assertive"
+        accessibilityRole="alert"
+        style={[
+          Platform.OS === 'web' ? webHost : styles.nativeHost,
+          {
+            opacity: toastMotion.progress,
+            paddingBottom: bottom,
+            transform: [
+              {
+                translateY: toastMotion.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [space[8], 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Toast
+          message={toast.message}
+          tone={toast.tone}
+          action={
+            toast.action
+              ? {
+                  label: toast.action.label,
+                  onPress: () => {
+                    if (toastRef.current?.id !== toast.id) {
+                      return;
+                    }
+                    dismissToast(toast.id);
+                    toast.action?.onPress();
+                  },
+                }
+              : undefined
+          }
+        />
+      </Animated.View>
+    ) : null;
+  const renderedToast = toastNode ? (renderToast ? renderToast(toastNode) : toastNode) : null;
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {toast && toastMotion.mounted ? (
-        <Animated.View
-          key={toast.id}
-          accessibilityLiveRegion="assertive"
-          accessibilityRole="alert"
-          style={[
-            Platform.OS === 'web' ? webHost : styles.nativeHost,
-            {
-              opacity: toastMotion.progress,
-              paddingBottom: bottom,
-              transform: [
-                {
-                  translateY: toastMotion.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [space[8], 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <Toast
-            message={toast.message}
-            tone={toast.tone}
-            action={
-              toast.action
-                ? {
-                    label: toast.action.label,
-                    onPress: () => {
-                      if (toastRef.current?.id !== toast.id) {
-                        return;
-                      }
-                      dismissToast(toast.id);
-                      toast.action?.onPress();
-                    },
-                  }
-                : undefined
-            }
-          />
-        </Animated.View>
-      ) : null}
+      {renderedToast}
     </ToastContext.Provider>
   );
 }

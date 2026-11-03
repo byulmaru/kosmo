@@ -3,9 +3,7 @@ import { XIcon } from 'lucide-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -19,6 +17,7 @@ import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
@@ -57,7 +56,6 @@ const ReplyComposerSurfaceParentFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -338,6 +336,11 @@ function ReplyComposerSurfaceContents({
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
+  const handlePostRequestAccepted = useCallback(() => {
+    closeImmediately();
+    showToast('게시 요청을 접수했어요', { tone: 'success' });
+  }, [closeImmediately, showToast]);
+
   useEffect(() => {
     if (!discardConfirmOpen || Platform.OS !== 'web') {
       return;
@@ -391,11 +394,12 @@ function ReplyComposerSurfaceContents({
   const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
 
   return (
-    <Modal
+    <ModalSheetHost
       accessibilityLabel={`${composerName} 쓰기`}
       accessibilityElementsHidden={!open}
       animationType="none"
       aria-hidden={!open || undefined}
+      interactionDisabled={!open}
       navigationBarTranslucent
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
@@ -409,13 +413,12 @@ function ReplyComposerSurfaceContents({
       visible={overlayMotion.mounted}
     >
       <ToastProvider>
-        <OverlayBackdrop
+        <View
           {...(Platform.OS === 'web' ? ({ inert: !open || undefined } as never) : {})}
           accessible={false}
           accessibilityElementsHidden={!open}
           aria-hidden={!open || undefined}
           importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-          onRequestClose={handleOverlayRequestClose}
           pointerEvents={open ? 'auto' : 'none'}
           style={[
             styles.backdrop,
@@ -425,6 +428,11 @@ function ReplyComposerSurfaceContents({
             { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
           ]}
         >
+          <OverlayBackdrop
+            onRequestClose={handleOverlayRequestClose}
+            style={StyleSheet.absoluteFill}
+            testID="reply-composer-backdrop"
+          />
           <PostComposerController
             beforeEditor={
               quoteMode ? undefined : (
@@ -435,7 +443,7 @@ function ReplyComposerSurfaceContents({
                   <View style={styles.parentAvatarColumn}>
                     <Avatar
                       imageUri={parent.profile.avatar?.url}
-                      label={parent.profile.displayName || parent.profile.handle}
+                      label={parent.profile.displayName || parent.profile.relativeHandle}
                       size={40}
                     />
                     <PostThreadConnector
@@ -481,15 +489,15 @@ function ReplyComposerSurfaceContents({
             initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
             presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
             onPostCreated={handlePostCreated}
+            onPostRequestAccepted={handlePostRequestAccepted}
             onSubmittingChange={setSubmitting}
             profile={profile.composer}
             registerNativeBackHandler={registerNativeBackHandler}
             renderSurface={({ form, mediaEditorOpen }) => (
-              <Pressable
+              <View
                 accessible={false}
                 accessibilityViewIsModal
                 onAccessibilityEscape={requestNativeBack}
-                onPress={(event) => event.stopPropagation()}
                 ref={dialogRef}
                 style={[
                   styles.dialog,
@@ -562,7 +570,7 @@ function ReplyComposerSurfaceContents({
                   </View>
                   {discardConfirm}
                 </View>
-              </Pressable>
+              </View>
             )}
             {...(quoteMode
               ? { repostSourceId: parent.id }
@@ -572,9 +580,9 @@ function ReplyComposerSurfaceContents({
               <PostSourcePreview interactive={false} source={parent} style={styles.quoteSource} />
             ) : null}
           </PostComposerController>
-        </OverlayBackdrop>
+        </View>
       </ToastProvider>
-    </Modal>
+    </ModalSheetHost>
   );
 }
 
@@ -599,7 +607,7 @@ const styles = StyleSheet.create({
   },
   webModal: {
     marginTop: spacing.xxl,
-    maxHeight: 'calc(100dvh - 96px)' as never,
+    maxHeight: 'calc(100% - 64px)' as never,
     overflow: 'clip' as never,
   },
   webMediaEditorDialog: {

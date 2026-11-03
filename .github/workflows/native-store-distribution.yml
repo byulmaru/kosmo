@@ -3,6 +3,15 @@ name: Native Store Distribution
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        description: Target platform
+        required: true
+        type: choice
+        options:
+          - both
+          - ios
+          - android
+        default: both
       release_status:
         description: Play release status for the Internal and Alpha releases
         required: true
@@ -23,7 +32,7 @@ jobs:
       cancel-in-progress: false
 
     name: Build and distribute Android Internal and Alpha AAB
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (inputs.platform == 'both' || inputs.platform == 'android')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: prod
@@ -354,7 +363,7 @@ jobs:
       cancel-in-progress: false
 
     name: Build and distribute iOS App Store IPA
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (inputs.platform == 'both' || inputs.platform == 'ios')
     runs-on: macos-26
     timeout-minutes: 60
     environment: prod

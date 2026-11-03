@@ -581,38 +581,60 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
 
   const composer = page.getByRole('dialog', { name: '답글 쓰기' });
   await expect(composer).toBeVisible();
-  await expect(composer.getByText(parentBody)).toBeVisible();
-  const composerScroll = composer.getByTestId('mobile-fullscreen-composer-scroll');
+  const parentText = composer.getByText(parentBody, { exact: true });
   const parentPreview = composer.getByTestId('reply-parent');
+  const composerScroll = composer.getByTestId('mobile-fullscreen-composer-scroll');
   const visibility = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
-  await expect
-    .poll(async () => {
-      const [scrollBounds, parentBounds] = await Promise.all([
-        composerScroll.boundingBox(),
-        parentPreview.boundingBox(),
-      ]);
-      return scrollBounds && parentBounds
-        ? parentBounds.y + parentBounds.height - scrollBounds.y
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
-  await expect(composer.getByRole('textbox', { name: '답글 본문' })).toBeFocused();
+  const bodyTextbox = composer.getByRole('textbox', { name: '답글 본문' });
+  const parentIsAboveComposerScroll = async () => {
+    const [parentBox, scrollBox] = await Promise.all([
+      parentPreview.boundingBox(),
+      composerScroll.boundingBox(),
+    ]);
+    return (
+      parentBox !== null && scrollBox !== null && parentBox.y + parentBox.height <= scrollBox.y + 1
+    );
+  };
+  const parentIntersectsComposerScroll = async () => {
+    const [parentBox, scrollBox] = await Promise.all([
+      parentPreview.boundingBox(),
+      composerScroll.boundingBox(),
+    ]);
+    return (
+      parentBox !== null &&
+      scrollBox !== null &&
+      parentBox.y < scrollBox.y + scrollBox.height &&
+      parentBox.y + parentBox.height > scrollBox.y
+    );
+  };
+  await expect(composerScroll).toBeVisible();
+  await expect(bodyTextbox).toBeFocused();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(parentText).toBeVisible();
+  await expect(parentText).not.toBeInViewport();
+  await expect.poll(parentIsAboveComposerScroll).toBe(true);
+  await expect(visibility).toBeInViewport();
   await expect(composer.getByText(`@${viewer.profile!.handle}님에게 답글`)).toBeVisible();
-  await expect
-    .poll(async () => {
-      const [connectorBounds, visibilityBounds] = await Promise.all([
-        composer.getByTestId('reply-parent-thread-connector').boundingBox(),
-        visibility.boundingBox(),
-      ]);
-      return connectorBounds && visibilityBounds
-        ? Math.abs(connectorBounds.y + connectorBounds.height - visibilityBounds.y)
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
   await expect(parentRow.getByRole('textbox', { name: '답글 본문' })).toHaveCount(0);
+
+  await composerScroll.hover();
+  await page.mouse.wheel(0, -300);
+  await expect.poll(parentIntersectsComposerScroll).toBe(true);
+  await expect(parentText).toBeInViewport();
+  await expect(bodyTextbox).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(visibility).toBeFocused();
+  await expect(visibility).toBeInViewport();
+  await expect.poll(parentIntersectsComposerScroll).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(bodyTextbox).toBeFocused();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect.poll(parentIsAboveComposerScroll).toBe(true);
 
   await page.setViewportSize({ height: 844, width: 320 });
   await expect(composer).toBeVisible();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(visibility).toBeInViewport();
   await composer.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '답글 작성을 취소할까요?' })

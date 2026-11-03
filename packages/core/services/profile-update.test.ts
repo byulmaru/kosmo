@@ -345,9 +345,9 @@ test('40 code point 초과 legacy displayName은 저장 원문과 같을 때만 
   );
 });
 
-test('bio는 trim 후 JavaScript UTF-16 길이 500자를 적용한다', async () => {
+test('bio는 trim 후 Unicode code point 기준 500자를 적용한다', async () => {
   const { account, profile } = await createProfileFixture();
-  const valid = '😀'.repeat(250);
+  const valid = '😀'.repeat(500);
 
   const updated = await updateProfile({
     accountId: account.id,
@@ -359,7 +359,7 @@ test('bio는 trim 후 JavaScript UTF-16 길이 500자를 적용한다', async ()
   await assert.rejects(
     updateProfile({
       accountId: account.id,
-      bio: ` ${'😀'.repeat(251)} `,
+      bio: ` ${'😀'.repeat(501)} `,
       profileId: profile.id,
     }),
     (error) => error instanceof ValidationError && error.field === 'bio',

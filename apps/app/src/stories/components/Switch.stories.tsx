@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
@@ -11,6 +12,7 @@ type SwitchCatalogProps = {
   disabled?: boolean;
   label?: string;
   onValueChange?: (value: boolean) => void;
+  updateArgs?: (update: { value: boolean }) => void;
   value?: boolean;
 };
 
@@ -18,6 +20,7 @@ function SwitchCatalog({
   disabled = false,
   label = defaultLabel,
   onValueChange,
+  updateArgs,
   value: initialValue = false,
 }: SwitchCatalogProps) {
   const theme = useTheme();
@@ -42,6 +45,7 @@ function SwitchCatalog({
         onValueChange={(nextValue) => {
           setValue(nextValue);
           onValueChange?.(nextValue);
+          updateArgs?.({ value: nextValue });
         }}
         value={value}
       />
@@ -71,6 +75,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+    return <SwitchCatalog {...args} updateArgs={updateArgs} />;
+  },
   parameters: {
     controls: {
       disable: false,

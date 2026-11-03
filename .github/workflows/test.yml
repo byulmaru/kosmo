@@ -13,6 +13,8 @@ jobs:
     name: Test (${{ matrix.name }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
+    env:
+      KOSMO_TEST_REDIS_URL: ${{ matrix.redis && 'redis://127.0.0.1:63799' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +30,8 @@ jobs:
               helm template kosmo apps/helm --namespace kosmo-dev --set env=dev >/dev/null
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
+              ruby apps/helm/temporal-namespace.test.rb
+              ruby scripts/production-release.test.rb
           - name: Admin Image
             command: |
               set -euo pipefail
@@ -35,7 +39,7 @@ jobs:
               container="$(docker run --detach --rm --publish 127.0.0.1:18080:8080 kosmo-admin-smoke admin)"
               trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
               timeout 30 sh -c 'until test "$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18080/healthz)" = 200; do sleep 1; done'
-              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/healthz)"
+              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/healthz)"
               grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$health_post"
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$health_post"
               shell="$(curl --silent --show-error --dump-header - http://127.0.0.1:18080/)"
@@ -45,27 +49,30 @@ jobs:
               grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$escaped"
               grep -Fq '&lt;script>alert(1)&lt;/script>' <<<"$escaped"
               if grep -Fq '<script>alert(1)</script>' <<<"$escaped"; then exit 1; fi
-              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST http://127.0.0.1:18080/)"
+              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/)"
               grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$shell_post"
               grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
               test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404
           - name: Core
-            command: pnpm --filter @kosmo/core test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/core test
             database: true
+            redis: true
           - name: Fedify
-            command: pnpm --filter @kosmo/fedify test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/fedify test
             database: true
           - name: API
-            command: pnpm --filter @kosmo/api test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/api test
             database: true
+            redis: true
           - name: App
             command: pnpm --filter @kosmo/app test
             playwright: true
           - name: Web
             command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit
           - name: Worker
-            command: pnpm --filter @kosmo/worker test
+            command: pnpm test:temporal -- pnpm --filter @kosmo/worker test
             database: true
+            redis: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -113,6 +120,12 @@ jobs:
         if: matrix.playwright && steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
+      - name: Start Redis for integration tests
+        if: matrix.redis
+        run: |
+          docker compose -f docker-compose.test.yml up -d redis
+          timeout 30 sh -c 'until docker compose -f docker-compose.test.yml exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done'
+
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}
 
@@ -135,6 +148,8 @@ jobs:
           # Keep the derived service ports below Linux's default ephemeral range.
           - shard: 3
             port_offset: 25000
+          - shard: 4
+            port_offset: 26000
     env:
       DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/kosmo_test_web_e2e_shard_${{ matrix.shard }}
       KOSMO_TEST_PORT_OFFSET: ${{ matrix.port_offset }}

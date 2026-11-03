@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
@@ -24,6 +25,8 @@ const SettingsBlockedProfilesQuery = graphql`
   }
 `;
 
+const profileBlocksConnectionKey = 'SettingsBlockedProfiles_profileBlocks';
+
 const SettingsBlockedProfilesFragment = graphql`
   fragment SettingsBlockedProfiles_profile on Profile
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
@@ -46,18 +49,13 @@ const SettingsBlockedProfileRowFragment = graphql`
     ...ProfileBlockAction_profileBlock
     targetProfile {
       ...ProfileListItemRow_profile
-      ...ProfileBlockAction_profile
-      viewerState {
-        profileBlock {
-          ...ProfileBlockAction_profileBlock
-        }
-      }
     }
   }
 `;
 
 type BlockedProfile = Readonly<{
   key: string;
+  connectionId: string;
   profileBlock: SettingsBlockedProfileRow_profileBlock$key;
 }>;
 type Pagination =
@@ -75,19 +73,19 @@ type BlockedProfilesState =
       paginationEndRef?: ReturnType<typeof useAutomaticPagination>['endRef'];
     };
 
-export function SettingsBlockedProfiles() {
+export function SettingsBlockedProfiles({ onUnblockSuccess }: { onUnblockSuccess?: () => void }) {
   return (
     <RouteBoundary
       error={(retry) => <BlockedProfilesView state={{ onRetry: retry, status: 'error' }} />}
       loading={<BlockedProfilesView state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
-      <SettingsBlockedProfilesContent />
+      <SettingsBlockedProfilesContent onUnblockSuccess={onUnblockSuccess} />
     </RouteBoundary>
   );
 }
 
-function SettingsBlockedProfilesContent() {
+function SettingsBlockedProfilesContent({ onUnblockSuccess }: { onUnblockSuccess?: () => void }) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
@@ -119,8 +117,10 @@ function SettingsBlockedProfilesContent() {
       />
     );
   }
+  const connectionId = ConnectionHandler.getConnectionID(profile.id, profileBlocksConnectionKey);
   return (
     <BlockedProfilesView
+      onUnblockSuccess={onUnblockSuccess}
       state={{
         pagination: loadError
           ? { onRetry: loadNextPage, status: 'error' }
@@ -132,6 +132,7 @@ function SettingsBlockedProfilesContent() {
         paginationEndRef: endRef,
         profiles: edges.map((edge) => ({
           key: edge.cursor,
+          connectionId,
           profileBlock: edge.node,
         })),
         status: 'loaded',
@@ -140,11 +141,22 @@ function SettingsBlockedProfilesContent() {
   );
 }
 
-export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) {
+export function BlockedProfilesView({
+  onUnblockSuccess,
+  state,
+}: {
+  onUnblockSuccess?: () => void;
+  state: BlockedProfilesState;
+}) {
   const children =
     state.status === 'loaded'
       ? state.profiles.map((profile) => (
-          <SettingsBlockedProfileRow key={profile.key} profileBlock={profile.profileBlock} />
+          <SettingsBlockedProfileRow
+            connectionId={profile.connectionId}
+            key={profile.key}
+            onUnblockSuccess={onUnblockSuccess}
+            profileBlock={profile.profileBlock}
+          />
         ))
       : null;
   const listState =
@@ -165,20 +177,24 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
 }
 
 function SettingsBlockedProfileRow({
+  connectionId,
+  onUnblockSuccess,
   profileBlock,
 }: {
+  connectionId: string;
+  onUnblockSuccess?: () => void;
   profileBlock: SettingsBlockedProfileRow_profileBlock$key;
 }) {
   const data = useFragment(SettingsBlockedProfileRowFragment, profileBlock);
   const targetProfile = data.targetProfile;
-  const currentProfileBlock = targetProfile.viewerState?.profileBlock ?? null;
 
   return (
     <ProfileListItemRow profile={targetProfile} style={styles.row}>
       <ProfileBlockAction
-        {...(currentProfileBlock
-          ? { nextBlocked: false as const, profileBlock: currentProfileBlock }
-          : { nextBlocked: true as const, profile: targetProfile })}
+        connections={[connectionId]}
+        nextBlocked={false}
+        onUnblockSuccess={onUnblockSuccess}
+        profileBlock={data}
         surface="button"
       />
     </ProfileListItemRow>

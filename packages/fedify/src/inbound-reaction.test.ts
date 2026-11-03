@@ -24,7 +24,6 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
@@ -87,7 +86,7 @@ const createProfile = async (kind: InstanceKind) => {
 const createLocalTarget = async () => {
   const author = await createProfile(InstanceKind.LOCAL);
   const post = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
+    bodyText: crypto.randomUUID(),
     origin: 'LOCAL',
     profileId: author.profile.id,
     visibility: PostVisibility.PUBLIC,

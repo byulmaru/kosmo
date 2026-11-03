@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, describe, mock, test } from 'node:test';
-import { Follow, Undo } from '@fedify/vocab';
+import { Accept, Follow, Undo } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -15,6 +15,7 @@ import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { ProfileFollowAcceptEffectInput } from '@kosmo/core/services';
 import type { federation as Federation } from '@kosmo/fedify';
 import type * as ProfileFollowActivities from './profile-follow-activities';
 
@@ -33,6 +34,7 @@ let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof Federation;
+let sendProfileFollowAcceptActivity: typeof ProfileFollowActivities.sendProfileFollowAcceptActivity;
 let sendProfileFollowActivity: typeof ProfileFollowActivities.sendProfileFollowActivity;
 let sendProfileUnfollowActivity: typeof ProfileFollowActivities.sendProfileUnfollowActivity;
 
@@ -50,7 +52,7 @@ describe('profile follow delivery activities', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ federation } = await import('@kosmo/fedify'));
-    ({ sendProfileFollowActivity, sendProfileUnfollowActivity } =
+    ({ sendProfileFollowAcceptActivity, sendProfileFollowActivity, sendProfileUnfollowActivity } =
       await import('./profile-follow-activities'));
 
     await seedDatabase({ publicOrigin });
@@ -208,6 +210,68 @@ describe('profile follow delivery activities', () => {
     );
   });
 
+  test('remote Follow Accept는 envelope가 없으면 actor/object로 보내고 stale source는 no-op한다', async () => {
+    const source = await createFollowFixture({
+      followerKind: InstanceKind.ACTIVITYPUB,
+      followeeKind: InstanceKind.LOCAL,
+    });
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({
+        followerProfileId: source.follower.id,
+        followeeProfileId: source.followee.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const fixture = createContextFixture();
+    mock.method(federation, 'createContext', () => fixture.context);
+    const published = '2026-09-29T00:03:00Z';
+    const effectInput: ProfileFollowAcceptEffectInput = {
+      followerProfileId: source.follower.id,
+      followeeProfileId: source.followee.id,
+      pendingRequestId: '00000000-0000-8000-8000-000000000711',
+      profileFollowId: follow.id,
+    };
+
+    await sendProfileFollowAcceptActivity(effectInput);
+    const fallbackCall = fixture.calls[0];
+    assert.ok(fallbackCall);
+    assert.ok(fallbackCall.activity instanceof Accept);
+    assert.deepEqual(fallbackCall.sender, { identifier: source.followee.id });
+    assert.equal(fallbackCall.recipient.id?.href, source.actor.uri);
+    const fallbackFollow = await fallbackCall.activity.getObject();
+    assert.ok(fallbackFollow instanceof Follow);
+    assert.equal(fallbackFollow.id, null);
+    assert.equal(fallbackFollow.published, null);
+    assert.equal(fallbackFollow.actorId?.href, source.actor.uri);
+    assert.equal(fallbackFollow.objectId?.href, `${publicOrigin}/ap/actor/${source.followee.id}`);
+
+    await sendProfileFollowAcceptActivity({
+      ...effectInput,
+      inboundFollow: {
+        actorUri: source.actor.uri,
+        objectUri: `${publicOrigin}/ap/actor/${source.followee.id}`,
+        activityUri: 'https://remote.example/activities/original-follow',
+        published,
+      },
+    });
+    const call = fixture.calls[1];
+    assert.ok(call);
+    assert.ok(call.activity instanceof Accept);
+    assert.deepEqual(call.sender, { identifier: source.followee.id });
+    assert.equal(call.recipient.id?.href, source.actor.uri);
+    const receivedFollow = await call.activity.getObject();
+    assert.ok(receivedFollow instanceof Follow);
+    assert.equal(receivedFollow.id?.href, 'https://remote.example/activities/original-follow');
+    assert.equal(receivedFollow.published?.toString(), published);
+    assert.equal(receivedFollow.actorId?.href, source.actor.uri);
+    assert.equal(receivedFollow.objectId?.href, `${publicOrigin}/ap/actor/${source.followee.id}`);
+
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.id, follow.id));
+    await sendProfileFollowAcceptActivity(effectInput);
+    assert.equal(fixture.calls.length, 2);
+  });
+
   test('삭제된 source를 재조회하지 않고 동일한 Undo identity와 ordering을 쓴다', async () => {
     const source = await createFollowFixture();
     const deleted = await db
@@ -271,17 +335,21 @@ const createContextFixture = () => {
 };
 
 const createFollowFixture = async ({
+  followerKind = InstanceKind.LOCAL,
   followeeKind = InstanceKind.ACTIVITYPUB,
 }: {
+  readonly followerKind?: InstanceKind;
   readonly followeeKind?: InstanceKind;
 } = {}) => {
   const suffix = crypto.randomUUID();
+  const followerDomain = `${suffix}.follower.${followerKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`;
+  const followeeDomain = `${suffix}.followee.${followeeKind === InstanceKind.LOCAL ? 'local' : 'remote'}.example`;
   const followerInstance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${suffix}.local.example`,
-      domain: `${suffix}.local.example`,
-      kind: InstanceKind.LOCAL,
+      canonicalOrigin: `https://${followerDomain}`,
+      domain: followerDomain,
+      kind: followerKind,
       state: InstanceState.ACTIVE,
     })
     .returning()
@@ -301,8 +369,8 @@ const createFollowFixture = async ({
   const followeeInstance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${suffix}.remote.example`,
-      domain: `${suffix}.remote.example`,
+      canonicalOrigin: `https://${followeeDomain}`,
+      domain: followeeDomain,
       kind: followeeKind,
       state: InstanceState.ACTIVE,
     })
@@ -320,14 +388,16 @@ const createFollowFixture = async ({
     })
     .returning()
     .then(firstOrThrow);
+  const remoteDomain = followeeKind === InstanceKind.ACTIVITYPUB ? followeeDomain : followerDomain;
   const actor = {
-    inboxUri: `https://${suffix}.remote.example/inbox`,
-    sharedInboxUri: `https://${suffix}.remote.example/shared-inbox`,
-    uri: `https://${suffix}.remote.example/users/followee`,
+    inboxUri: `https://${remoteDomain}/inbox`,
+    sharedInboxUri: `https://${remoteDomain}/shared-inbox`,
+    uri: `https://${remoteDomain}/users/${followeeKind === InstanceKind.ACTIVITYPUB ? 'followee' : 'follower'}`,
   };
+  const remoteProfile = followeeKind === InstanceKind.ACTIVITYPUB ? followee : follower;
   await db.insert(ActivityPubActors).values({
     ...actor,
-    profileId: followee.id,
+    profileId: remoteProfile.id,
     type: ActivityPubActorType.PERSON,
   });
 

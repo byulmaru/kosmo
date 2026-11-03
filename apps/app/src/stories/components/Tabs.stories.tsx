@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { fontFamilies } from '@/theme/tokens';
@@ -7,20 +8,30 @@ import type { TabOption, TabVariant } from '@/components/ui/Tabs';
 
 type TabValue = 'latest' | 'media' | 'popular';
 
+type TabsStoryArgs = {
+  latestLabel?: string;
+  mediaLabel?: string;
+  onValueChange?: (value: TabValue) => void;
+  popularLabel?: string;
+  value: TabValue;
+  variant?: TabVariant;
+};
+
+type TabsCatalogProps = TabsStoryArgs & {
+  updateArgs?: (update: Partial<TabsStoryArgs>) => void;
+};
+
 function TabsCatalog({
   latestLabel = '최신',
   mediaLabel = '미디어',
   onValueChange,
   popularLabel = '인기',
+  updateArgs,
+  value: initialValue,
   variant = 'underline',
-}: {
-  latestLabel?: string;
-  mediaLabel?: string;
-  onValueChange?: (value: TabValue) => void;
-  popularLabel?: string;
-  variant?: TabVariant;
-}) {
-  const [value, setValue] = useState<TabValue>('popular');
+}: TabsCatalogProps) {
+  const [localValue, setLocalValue] = useState(initialValue);
+  const value = updateArgs ? initialValue : localValue;
   const options = [
     { label: popularLabel, value: 'popular' },
     { disabled: true, label: latestLabel, value: 'latest' },
@@ -32,7 +43,10 @@ function TabsCatalog({
       accessibilityLabel="검색 결과 유형"
       onValueChange={(nextValue) => {
         onValueChange?.(nextValue);
-        setValue(nextValue);
+        if (!updateArgs) {
+          setLocalValue(nextValue);
+        }
+        updateArgs?.({ value: nextValue });
       }}
       value={value}
       variant={variant}
@@ -50,8 +64,10 @@ const meta = {
     mediaLabel: '미디어',
     onValueChange: fn(),
     popularLabel: '인기',
+    value: 'popular',
   },
   argTypes: {
+    value: { control: 'select', options: ['popular', 'media'] satisfies TabValue[] },
     variant: { control: 'select', options: ['underline', 'pill'] },
   },
   component: TabsCatalog,
@@ -67,8 +83,12 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: ['popularLabel', 'latestLabel', 'mediaLabel', 'variant'],
+      include: ['popularLabel', 'latestLabel', 'mediaLabel', 'value', 'variant'],
     },
+  },
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+    return <TabsCatalog {...args} updateArgs={updateArgs} />;
   },
 };
 

@@ -72,9 +72,9 @@ const disableProfileOnce = (profileId: string, handle?: Database) =>
       .where(eq(Sessions.activeProfileId, profileId));
   });
 
-export const disableProfile = async (profileId: string, handle?: Database) => {
+export const disableProfile = async (profileId: string, handle?: Database): Promise<void> => {
   try {
-    return await disableProfileOnce(profileId, handle);
+    await disableProfileOnce(profileId, handle);
   } catch (error) {
     const deadlock =
       error instanceof DrizzleQueryError &&
@@ -86,6 +86,6 @@ export const disableProfile = async (profileId: string, handle?: Database) => {
       throw error;
     }
 
-    return disableProfileOnce(profileId, handle);
+    await disableProfileOnce(profileId, handle);
   }
 };

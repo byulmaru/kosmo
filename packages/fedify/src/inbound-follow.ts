@@ -106,6 +106,12 @@ export const handleInboundFollow = async (
         kind: 'FOLLOW',
         origin: 'ACTIVITYPUB',
       },
+      inboundFollow: {
+        actorUri: actorUri.href,
+        objectUri: objectUri.href,
+        ...(follow.id === null ? {} : { activityUri: follow.id.href }),
+        ...(follow.published == null ? {} : { published: follow.published.toString() }),
+      },
     });
   } catch (error) {
     if (error instanceof NotFoundError) {

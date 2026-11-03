@@ -8,8 +8,13 @@
 - 루트 `dev` 스크립트가 `node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev`처럼 workspace script 실행을 감싸는 구조여도, 이것만으로 루트 `dev`가 자기 자신을 무한 재귀 호출한다고 판단하면 안 된다.
 - `scripts/vault-run.mjs`는 Vault CLI의 현재 인증 상태를 사용해 기본 `secret/kubernetes/kosmo/local` 값을 env로 주입하고, 토큰 조회가 실패하면 `vault login -method=oidc`를 실행한다. 다른 path가 필요하면 wrapper CLI 옵션 `--env <name>` 또는 `--secret-path <path>`를 `-- <command>` 앞에 둔다.
 - 새 local PostgreSQL volume은 `pnpm local:prepare`로만 role/database, immutable migration, Local Instance를 준비한다. 평상시 `pnpm dev`는 migration, bootstrap, reset, seed와 data deletion을 실행하지 않고 준비된 volume을 재사용한다.
-- 로컬 `pnpm dev`는 `127.0.0.1:54328`의 영속 PostgreSQL과 기존 `apps/worker/src/temporal-test-server.ts`의 ephemeral Temporal server를 사용해 API, Web, App, Worker, Fedify consumer를 실행한다. Coordinator는 고정된 local target과 필수 key만 검증하고 role/ACL invariant는 `pnpm local:prepare`와 통합 검증이 소유한다. Application DB는 canonical `PG*`와 `kosmo_runtime`, queue는 별도 URL/password와 `kosmo_fedify_queue`를 사용하며 `DATABASE_URL`이나 owner/bootstrap credential을 child process에 전달하지 않는다. DB를 사용하지 않는 Expo App과 Temporal helper에는 PG/queue credential도 전달하지 않는다.
-- Local PostgreSQL data는 named volume에 보존하고 `pnpm local:down`도 volume을 제거하지 않는다. Local Temporal은 개발용 임시 저장소이며 persistent SQLite volume을 사용하지 않는다. Worker health는 `127.0.0.1:8081`, Fedify consumer health는 `127.0.0.1:8082`이다.
+- 로컬 `pnpm dev`는 `127.0.0.1:54328`의 영속 PostgreSQL, `127.0.0.1:63798`의 ephemeral Redis, 기존 `apps/worker/src/temporal-test-server.ts`의 ephemeral Temporal server를 사용해 API, Web, App, Worker, Fedify consumer를 실행한다. Redis startup은 best-effort이며 API/Worker의 startup/readiness를 기다리지 않는다. API/Worker는 `REDIS_URL`이 없을 때 local Redis URL을 받고, Redis 연결을 사용할 수 없어도 DB fallback으로 요청을 계속 처리한다. Coordinator는 고정된 local target과 필수 key만 검증하고 role/ACL invariant는 `pnpm local:prepare`와 통합 검증이 소유한다. Application DB는 canonical `PG*`와 `kosmo_runtime`, queue는 별도 URL/password와 `kosmo_fedify_queue`를 사용하며 `DATABASE_URL`이나 owner/bootstrap credential을 child process에 전달하지 않는다. DB를 사용하지 않는 Expo App과 Temporal helper에는 PG/queue credential도 전달하지 않는다.
+- 루트 `mise install`은 로컬 Temporal helper와 worker `createLocal` 테스트가 사용하는 Temporal CLI 1.8.2를 설치하며, SDK는 테스트 서버를 다운로드하지 않고 해당 고정 실행 파일을 사용한다.
+- CI의 Core, Fedify, API, Worker 패키지 테스트는 `pnpm test:temporal -- <command>`로 실행한다. 바깥 명령은 고정 Temporal CLI로 SDK 서버를 하나 시작하고 production Workflow bundle을 한 번 생성해 child command에 전달한다. 각 테스트 파일은 같은 서버에 고유 namespace와 실제 Worker를 사용하며, 파일 종료 전에 Worker와 helper를 기다려 정리한다. 이 wrapper를 상속한 nested command는 부모 서버와 bundle을 재사용한다. wrapper 밖에서 `test-client.ts`를 직접 사용하는 테스트는 기존 자체 서버 fallback을 유지한다.
+- Temporal 서버와 Workflow bundle을 만든 바깥 wrapper만 child command를 별도 process group에서 실행하고 signal 전달·종료 유예·descendant cleanup을 소유한다. 상속된 nested wrapper는 부모 process group에서 명령을 실행하고 이 정리를 바깥 owner에 맡긴다.
+- 전역 이름을 쓰는 legacy `media-upload` Nexus endpoint 테스트는 bundle 소유 lease를 endpoint 삭제까지 유지해 해당 자원만 직렬화하고, 다른 Workflow 테스트는 병렬 실행한다.
+- Local PostgreSQL data는 named volume에 보존하고 `pnpm local:down`도 volume을 제거하지 않는다. Local Redis는 RDB/AOF와 data volume 없이 실행한다. Local Temporal은 개발용 임시 저장소이며 persistent SQLite volume을 사용하지 않는다. Worker health는 `127.0.0.1:8081`, Fedify consumer health는 `127.0.0.1:8082`이다.
+- `docker-compose.test.yml`은 Core/API/Worker 테스트용 별도 ephemeral Redis endpoint `127.0.0.1:63799`를 제공한다. 테스트는 `KOSMO_TEST_REDIS_URL`을 `REDIS_URL`로 적용하고 고유 key를 사용한다. 테스트 Redis를 `FLUSHDB`하지 않는다.
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.
 
@@ -22,7 +27,7 @@
 ## Container dependency scans
 
 - 앱 lockfile과 pnpm 배포물의 내장 의존성은 별개다. 이미지의 `/opt/pnpm/dist/node_modules` 탐지는 workspace override로 수정되지 않으므로 원문 report의 `PkgPath`를 확인한다.
-- pnpm 버전을 바꿀 때 `Dockerfile`, `mise.toml`, 루트 `packageManager`를 함께 맞추고 GHCR 태그 존재와 Linux ARM64 배포 아티팩트의 내장 버전도 확인한다. `ghcr.io/pnpm/pnpm:11.27.1`은 `undici@6.28.1`을 포함한다. npm에 공개된 버전이라도 같은 버전의 이미지 태그가 없을 수 있다.
+- pnpm 버전을 바꿀 때 `Dockerfile`, `mise.toml`, 루트 `packageManager`를 함께 맞추고 GHCR 태그 존재와 Linux ARM64 배포 아티팩트의 내장 버전도 확인한다. `ghcr.io/pnpm/pnpm:11.28.8`은 `undici@6.29.1`을 포함한다. npm에 공개된 버전이라도 같은 버전의 이미지 태그가 없을 수 있다.
 - `packages/core`의 `jsdom`과 `apps/admin`의 SvelteKit/Svelte는 production 의존성이므로 해당 경로의 undici/devalue를 빌드 도구 전용으로 분류하지 않는다. CI와 같은 platform의 최종 이미지 재빌드·재스캔은 lockfile 검사나 로컬 package 스캔과 별도 검증이다.
 - pnpm 11.27.1은 자식 command에 signal을 전달하고 종료를 기다린다. Playwright가 pnpm으로 실행한 서버에는 `gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }`을 지정한다. pnpm을 기본 SIGKILL로 먼저 종료하면 자식 서버가 남아 E2E teardown이 정체될 수 있다. 작은 HTTP 서버 재현에서 11.22.0 기본 종료는 통과, 11.27.1 기본 종료는 timeout, 11.27.1 SIGTERM 종료는 통과했다.
 
@@ -33,3 +38,4 @@
 - test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
 - workspace package의 기본 `test`는 CI에서 해당 package의 전체 테스트를 실행한다. API integration처럼 DB가 필요한 suite는 package 단위 aggregate script 하나가 격리 DB를 준비해 전체 suite를 실행하며, 개별 테스트 파일 선택용 root script를 추가하지 않는다.
 - 특정 API integration 파일만 디버깅할 때는 package manifest에 파일별 alias를 늘리지 말고 준비된 test DB에서 Node test runner에 파일 경로를 직접 전달한다.
+- Worker tests are recursively discovered from `apps/worker/src/**/*.test.ts`: `.native-database.test.ts` selects native database, then `.database.test.ts` selects standard database, then `.workflow.test.ts` selects workflow; other test files enter unit. Standard database files run serially with the Temporal test-client preload and `KOSMO_TEST_TEMPORAL_RUNTIME=0`; native database files run serially with the native Temporal runtime.

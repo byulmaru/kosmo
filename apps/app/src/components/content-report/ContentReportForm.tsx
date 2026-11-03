@@ -134,7 +134,6 @@ export function ContentReportForm({ onDelivered, onStateChange, target }: Props)
         editable={!submitting}
         error={showValidationError ? (validationError ?? undefined) : undefined}
         label={`상세 내용 (${reason === ContentReportReason.OTHER ? '필수' : '선택'})`}
-        maxLength={contentReportDetailsMaxLength}
         onChangeText={(value) => {
           setDetails(value);
           setStatus('idle');
@@ -143,7 +142,8 @@ export function ContentReportForm({ onDelivered, onStateChange, target }: Props)
         value={details}
       />
       <Text style={[styles.counter, { color: theme.textSecondary }]}>
-        {details.length.toLocaleString()} / {contentReportDetailsMaxLength.toLocaleString()}
+        {[...details.trim()].length.toLocaleString()} /{' '}
+        {contentReportDetailsMaxLength.toLocaleString()}
       </Text>
 
       {status === 'rejected' ? (

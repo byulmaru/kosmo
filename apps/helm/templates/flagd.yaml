@@ -24,17 +24,6 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
-      profile-migration:
-        state: ENABLED
-        variants:
-          'on': true
-          'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
       profile-tag-mute:
         state: ENABLED
         variants:
@@ -57,6 +46,12 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
+      post-composer-nightshade:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'on'
     $evaluators:
       isDeveloper:
         in:
@@ -78,6 +73,13 @@ spec:
   sources:
     - source: {{ printf "%s/%s" .Release.Namespace $featureFlagName | quote }}
       provider: kubernetes
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
   cors:
     - https://kos.moe
     - https://dev.kos.moe

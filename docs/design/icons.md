@@ -166,3 +166,4 @@ back에 chevron을 사용하지 않는다.
 - 이 문서는 semantic mapping과 Figma handoff의 정본이다.
 - 기존 Storybook story는 실제 화면의 size, state, focus, keyboard, theme를 확인한다. 별도 icon catalog story는 전체 inventory를 시각 비교할 필요가 생길 때 추가한다.
 - 아이콘 교체 시 해당 component test 또는 기존 story에서 glyph identity와 기존 target·accessible name·disabled/focus 계약을 함께 검증한다.
+- Custom icon 예외 등록, canonical UI component와 대표 component/pattern story는 같은 UI-only PR에서 함께 진행할 수 있다. 별도 icon PR이나 icon-only story는 필요하지 않으며, 대표 component story로 계약을 검증한다. 실제 runtime consumer·Relay/route/data 연결과 feature-flag rollout은 별도 feature/runtime PR로 분리한다. PR에는 고려한 Lucide 대안과 미채택 이유를 적고, 예외 승인과 대안의 적절성은 사람이 검토한다.

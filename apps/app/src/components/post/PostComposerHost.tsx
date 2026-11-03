@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
+import { OverlayPortal, OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -55,7 +57,6 @@ export function PostComposerHost({
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
   const web = Platform.OS === 'web';
-  const ComposerSurface = web ? View : Animated.View;
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
     mode === 'rail'
@@ -76,6 +77,8 @@ export function PostComposerHost({
     }
   }, [mode, onDismiss, web]);
   const overlayMotion = useOverlayMotion(overlayVisible, handleOverlayExitComplete);
+  const active = mode === 'rail' || overlayMotion.mounted;
+  const webInteractionDisabled = !active || (mode !== 'rail' && !overlayVisible);
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const requestClose = useCallback(
     (reason: PostComposerRequestCloseReason = 'dismiss') => {
@@ -129,65 +132,134 @@ export function PostComposerHost({
     ) : null;
 
   const composer = (
-    <ToastProvider>
+    <ToastProvider
+      renderToast={
+        web && mode !== 'rail'
+          ? (toast) => (
+              <OverlayPortalProvider hostRef={dialogRef}>
+                <OverlayPortal>{toast}</OverlayPortal>
+              </OverlayPortalProvider>
+            )
+          : undefined
+      }
+    >
       <PostComposerController
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
-        onPostCreated={() => requestClose('created')}
+        onPostRequestAccepted={() => requestClose('created')}
         onSubmittingChange={setSubmitting}
         profile={profile}
         profiles={profiles}
         registerNativeBackHandler={registerNativeBackHandler}
-        renderSurface={({ form, mediaEditorOpen }) => (
-          <ComposerSurface
-            accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
-            accessibilityViewIsModal={overlayVisible}
-            aria-modal={overlayVisible || undefined}
-            onAccessibilityEscape={requestNativeBack}
-            ref={dialogRef}
-            role={overlayVisible ? 'dialog' : undefined}
-            style={[
-              styles.dialog,
-              mode !== 'rail' && !nativeMobile && elevation.overlay,
-              mode === 'rail'
-                ? styles.railDialog
-                : mode === 'mobile'
-                  ? styles.mobileDialog
-                  : styles.overlayDialog,
-              mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
-              mode !== 'rail' && !web
-                ? {
-                    opacity: overlayMotion.progress,
-                    transform: [
-                      {
-                        translateY: overlayMotion.progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [spacing.sm, 0],
-                        }),
-                      },
-                    ],
-                  }
-                : null,
-              { backgroundColor: composerSurface, borderColor: theme.borderDefault },
-            ]}
-            testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
-          >
-            {header}
-            <KeyboardAvoidingView
-              behavior="height"
-              keyboardVerticalOffset={insets.top}
+        renderSurface={({ form, mediaEditorOpen }) => {
+          const surface = (
+            <Animated.View
+              accessibilityLabel={!web && overlayVisible ? '글쓰기' : undefined}
+              accessibilityViewIsModal={!web && overlayVisible}
+              aria-modal={(!web && overlayVisible) || undefined}
+              onAccessibilityEscape={requestNativeBack}
+              ref={dialogRef}
+              role={!web && overlayVisible ? 'dialog' : undefined}
               style={[
-                styles.composerFrame,
-                mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
-                  ? styles.composerFrameFill
+                styles.dialog,
+                mode !== 'rail' && !nativeMobile && elevation.overlay,
+                mode === 'rail'
+                  ? styles.railDialog
+                  : mode === 'mobile'
+                    ? styles.mobileDialog
+                    : styles.overlayDialog,
+                web && mode === 'overlay' ? styles.webOverlayDialog : null,
+                mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
+                mode !== 'rail'
+                  ? {
+                      opacity: web ? 1 : overlayMotion.progress,
+                      transform: [
+                        {
+                          translateY: overlayMotion.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [spacing.sm, 0],
+                          }),
+                        },
+                      ],
+                    }
                   : null,
+                { backgroundColor: composerSurface, borderColor: theme.borderDefault },
+              ]}
+              testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
+            >
+              <View
+                style={[
+                  styles.clippedSurface,
+                  mode === 'overlay' ? { borderRadius: radii.lg } : null,
+                  mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                    ? styles.composerFrameFill
+                    : null,
+                ]}
+              >
+                <OverlayPortalProvider hostRef={dialogRef}>
+                  {header}
+                  <KeyboardAvoidingView
+                    behavior="height"
+                    keyboardVerticalOffset={insets.top}
+                    style={[
+                      styles.composerFrame,
+                      mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                        ? styles.composerFrameFill
+                        : null,
+                    ]}
+                  >
+                    {form}
+                  </KeyboardAvoidingView>
+                </OverlayPortalProvider>
+              </View>
+            </Animated.View>
+          );
+
+          if (!web) {
+            return surface;
+          }
+
+          const host = (
+            <Animated.View
+              accessibilityElementsHidden={!active}
+              aria-hidden={webInteractionDisabled || undefined}
+              pointerEvents={webInteractionDisabled ? 'none' : 'auto'}
+              style={[
+                mode === 'rail' ? styles.railHost : styles.webOverlayHost,
+                mode === 'mobile' ? styles.webMobileHost : null,
+                mode !== 'rail' ? safeAreaStyle : null,
+                !active ? styles.hiddenHost : null,
+                mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
+                mode !== 'rail' ? { opacity: overlayMotion.progress } : null,
               ]}
             >
-              {form}
-            </KeyboardAvoidingView>
-          </ComposerSurface>
-        )}
+              {mode !== 'rail' ? (
+                <OverlayBackdrop
+                  onRequestClose={requestClose}
+                  style={StyleSheet.absoluteFill}
+                  testID="post-composer-backdrop"
+                />
+              ) : null}
+              {surface}
+            </Animated.View>
+          );
+
+          return mode === 'rail' ? (
+            host
+          ) : (
+            <ModalSheetHost
+              accessibilityLabel="글쓰기"
+              animationType="none"
+              interactionDisabled={!overlayVisible}
+              role="dialog"
+              transparent
+              visible={overlayMotion.mounted}
+            >
+              {host}
+            </ModalSheetHost>
+          );
+        }}
         {...(mode === 'rail'
           ? { onExpand, onRequestClose: requestClose, presentation: mode }
           : { onRequestClose: requestClose, presentation: mode })}
@@ -248,77 +320,28 @@ export function PostComposerHost({
     );
   }
 
-  const active = mode === 'rail' || overlayMotion.mounted;
-  const webInteractionDisabled = !active || (mode !== 'rail' && !overlayVisible);
-  return (
-    <Animated.View
-      accessibilityElementsHidden={!active}
-      aria-hidden={webInteractionDisabled || undefined}
-      pointerEvents={webInteractionDisabled ? 'none' : 'auto'}
-      style={[
-        mode === 'rail' ? styles.railHost : styles.webOverlayHost,
-        mode === 'mobile' ? styles.webMobileHost : null,
-        mode !== 'rail' ? safeAreaStyle : null,
-        !active ? styles.hiddenHost : null,
-        mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
-        mode !== 'rail' ? { opacity: overlayMotion.progress } : null,
-      ]}
-    >
-      <div inert={webInteractionDisabled} style={{ display: 'contents' }}>
-        <View pointerEvents="box-none" style={styles.webBackdropLayer}>
-          {mode !== 'rail' ? (
-            <OverlayBackdrop onRequestClose={requestClose} style={styles.webBackdrop} />
-          ) : null}
-        </View>
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            styles.webComposerLayer,
-            mode !== 'rail' ? styles.webComposerLayerOverlay : null,
-            mode !== 'rail'
-              ? {
-                  transform: [
-                    {
-                      translateY: overlayMotion.progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [spacing.sm, 0],
-                      }),
-                    },
-                  ],
-                }
-              : null,
-          ]}
-        >
-          {composer}
-        </Animated.View>
-      </div>
-    </Animated.View>
-  );
+  return composer;
 }
 
 const styles = StyleSheet.create({
   railHost: { minWidth: 0, width: '100%' },
   webOverlayHost: {
+    alignSelf: 'stretch',
     alignItems: 'center',
-    bottom: 0,
+    flex: 1,
     justifyContent: 'flex-start',
-    left: 0,
+    minHeight: 0,
     padding: spacing.lg,
-    position: 'fixed' as never,
-    right: 0,
-    top: 0,
     zIndex: 100,
   },
-  webMobileHost: { height: '100dvh' as never, padding: 0 },
-  webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
-  webBackdropLayer: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
-  webComposerLayer: { minWidth: 0, width: '100%' },
-  webComposerLayerOverlay: { alignItems: 'center', flex: 1, minHeight: 0 },
+  webMobileHost: { alignItems: 'stretch', padding: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
   nativeMobileSurface: { flex: 1 },
-  dialog: { minHeight: 0, overflow: 'hidden' },
+  // Only the visual surface clips; dropdown portals stay in the existing dialog focus scope.
+  dialog: { minHeight: 0, overflow: 'visible', position: 'relative' },
+  clippedSurface: { minHeight: 0, flexShrink: 1, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
@@ -328,6 +351,7 @@ const styles = StyleSheet.create({
     maxHeight: 'calc(100dvh - 96px)' as never,
     width: '100%',
   },
+  webOverlayDialog: { maxHeight: 'calc(100% - 64px)' as never },
   mediaEditorDialog: {
     height: 678,
     maxWidth: 'min(920px, calc(100vw - 48px))' as never,

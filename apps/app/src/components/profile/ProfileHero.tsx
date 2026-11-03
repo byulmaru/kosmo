@@ -42,7 +42,6 @@ type ProfileHeroProps = {
 const profileHeroFragment = graphql`
   fragment ProfileHero_profile on Profile {
     id
-    handle
     relativeHandle
     displayName
     bio
@@ -247,6 +246,7 @@ export function ProfileHero({
         {data.header?.url ? (
           <Image
             accessible={false}
+            fadeDuration={0}
             resizeMode="cover"
             source={{ uri: data.header.url }}
             style={styles.coverImage}
@@ -264,7 +264,7 @@ export function ProfileHero({
         >
           <Avatar
             imageUri={data.avatar?.url}
-            label={data.displayName || data.handle}
+            label={data.displayName || data.relativeHandle}
             size={avatarSize}
           />
         </View>
@@ -291,31 +291,37 @@ export function ProfileHero({
             <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
           </ProfileBioPrivacyBoundary>
         ) : null}
-        {data.tags.length ? (
+        {data.tags?.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
               <ProfileTagLink accountId={accountId} id={tag.id} key={tag.id} name={tag.name} />
             ))}
           </View>
         ) : null}
-        <View style={styles.counts}>
-          <NavigationLink href={followingHref}>
-            <Pressable ref={followingRef} accessibilityRole="link" style={styles.countLink}>
-              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-                {countFormatter.format(data.followingCount).toLowerCase()}
-              </Text>
-              <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>팔로잉</Text>
-            </Pressable>
-          </NavigationLink>
-          <NavigationLink href={followersHref}>
-            <Pressable accessibilityRole="link" style={styles.countLink}>
-              <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
-                {countFormatter.format(data.followersCount).toLowerCase()}
-              </Text>
-              <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>팔로워</Text>
-            </Pressable>
-          </NavigationLink>
-        </View>
+        {data.followingCount != null && data.followersCount != null ? (
+          <View style={styles.counts}>
+            <NavigationLink href={followingHref}>
+              <Pressable ref={followingRef} accessibilityRole="link" style={styles.countLink}>
+                <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                  {countFormatter.format(data.followingCount).toLowerCase()}
+                </Text>
+                <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>
+                  팔로잉
+                </Text>
+              </Pressable>
+            </NavigationLink>
+            <NavigationLink href={followersHref}>
+              <Pressable accessibilityRole="link" style={styles.countLink}>
+                <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
+                  {countFormatter.format(data.followersCount).toLowerCase()}
+                </Text>
+                <Text style={[styles.countLabel, { color: theme.foregroundSecondary }]}>
+                  팔로워
+                </Text>
+              </Pressable>
+            </NavigationLink>
+          </View>
+        ) : null}
         {data.viewerState?.profileMute ? (
           <View style={[styles.muteRow, compact ? styles.mobileMuteRow : undefined]}>
             <VolumeOff accessible={false} aria-hidden color={theme.foregroundSecondary} size={16} />

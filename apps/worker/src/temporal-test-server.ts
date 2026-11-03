@@ -1,6 +1,9 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
+import { createTestWorkflowEnvironment } from './temporal-test-environment.js';
+import { temporalTestExecutable } from './temporal-test-executable.js';
+import { POST_REQUEST_TEST_SEARCH_ATTRIBUTES } from './temporal-test-search-attributes.js';
 
 const host = process.env.HOST?.trim() || '127.0.0.1';
 const healthPort = Number(process.env.PORT);
@@ -21,15 +24,18 @@ if (!namespace) {
   throw new Error('TEMPORAL_NAMESPACE is required');
 }
 
-const environment = await TestWorkflowEnvironment.createLocal({
-  server: {
-    executable: { type: 'cached-download', version: 'v1.8.2' },
-    ip: host,
-    namespace,
-    port: temporalPort,
-    ui: false,
-  },
-});
+const environment = process.env.KOSMO_TEST_TEMPORAL_ADDRESS?.trim()
+  ? await createTestWorkflowEnvironment(namespace)
+  : await TestWorkflowEnvironment.createLocal({
+      server: {
+        executable: temporalTestExecutable,
+        ip: host,
+        namespace,
+        port: temporalPort,
+        searchAttributes: [...POST_REQUEST_TEST_SEARCH_ATTRIBUTES],
+        ui: false,
+      },
+    });
 const healthServer = createServer((request, response) => {
   const isHealth = request.url === '/health';
   response.writeHead(isHealth ? 200 : 404).end(isHealth ? environment.address : undefined);

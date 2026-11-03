@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
-import type { ReactElement, ReactNode } from 'react';
+import { before, beforeEach, mock, test } from 'node:test';
+import { createElement } from 'react';
+import { act, create } from 'react-test-renderer';
+import type { ElementType, ReactElement, ReactNode } from 'react';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const viewHost = 'View' as unknown as ElementType;
+const animatedViewHost = 'AnimatedView' as unknown as ElementType;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -10,11 +18,73 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const mockPlatform: { OS: string } = { OS: 'web' };
 let reducedMotion = false;
 const theme = { stateHover: 'hover', statePressed: 'pressed' };
+let pressState = { hovered: false, pressed: false };
+const timingCalls: Array<{
+  active: boolean;
+  duration: number;
+  handle: AnimatedColorMock;
+  stopCalls: number;
+  target: AnimatedColorMock;
+}> = [];
+let setValueCalls = 0;
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    setValueCalls += 1;
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
+
+const PressableHost = ({
+  children,
+  ...props
+}: {
+  children?: ReactNode | ((state: typeof pressState) => ReactNode);
+  [key: string]: unknown;
+}) =>
+  createElement(
+    'Pressable',
+    props,
+    typeof children === 'function' ? children(pressState) : children,
+  );
 
 mockModule('react-native', {
+  processColor: () => undefined,
+  Animated: {
+    Color: AnimatedColorMock,
+    View: 'AnimatedView',
+    timing: (
+      value: AnimatedColorMock,
+      config: { duration: number; toValue: AnimatedColorMock },
+    ) => {
+      const timing = {
+        active: false,
+        duration: config.duration,
+        handle: value,
+        stopCalls: 0,
+        target: config.toValue,
+      };
+      timingCalls.push(timing);
+      return {
+        start: () => {
+          timing.active = true;
+        },
+        stop: () => {
+          timing.active = false;
+          timing.stopCalls += 1;
+        },
+      };
+    },
+  },
+  Easing: { bezier: () => () => 0 },
   Platform: mockPlatform,
-  Pressable: 'Pressable',
+  Pressable: PressableHost,
   StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
     flatten: (style: unknown) => flattenStyle(style),
   },
@@ -23,29 +93,17 @@ mockModule('react-native', {
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => reducedMotion,
   useTheme: () => theme,
+  useThemeMode: () => 'light',
 });
 mockModule('@/theme/tokens', {
   motion: {
-    duration: { fast: 120, instant: 0 },
+    duration: { fast: 120, instant: 0, standard: 200 },
     easing: { standard: 'standard-easing' },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
   },
   radius: { 12: 12, full: 999 },
 });
 
-type TestElementProps = {
-  accessibilityLabel?: string;
-  accessibilityRole?: string;
-  accessibilityState?: { busy?: boolean; disabled?: boolean; expanded?: boolean };
-  children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
-  disabled?: boolean;
-  focusable?: boolean;
-  hitSlop?: number | { bottom: number; left: number; right: number; top: number };
-  onFocus?: () => void;
-  onPressIn?: () => void;
-  ref?: unknown;
-  style?: unknown;
-};
-type TestElement = ReactElement<TestElementProps>;
 type IconButtonProps = {
   accessibilityLabel: string;
   accessibilityRole?: 'button' | 'link';
@@ -64,7 +122,7 @@ type IconButtonProps = {
   visualSize?: number;
   visualStyle?: unknown;
 };
-type IconButtonComponent = (props: IconButtonProps) => TestElement;
+type IconButtonComponent = (props: IconButtonProps) => ReactElement;
 
 let IconButton: IconButtonComponent | undefined;
 let getIconButtonHitSlop:
@@ -104,26 +162,44 @@ before(async () => {
   }
 });
 
-function renderIconButton(props: IconButtonProps) {
+beforeEach(() => {
+  mockPlatform.OS = 'web';
+  pressState = { hovered: false, pressed: false };
+  reducedMotion = false;
+  timingCalls.length = 0;
+  setValueCalls = 0;
+});
+
+function renderIconButton(props: IconButtonProps): ReactTestInstance {
   assert.ok(IconButton, 'IconButton component must exist');
-  return IconButton(props);
+  pressState = { hovered: false, pressed: false };
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(createElement(IconButton!, props));
+  });
+  return renderer.root.findByType(PressableHost);
 }
 
-function findElements(node: ReactNode, type: string): TestElement[] {
-  if (!node || typeof node !== 'object' || !('type' in node)) {
-    return [];
-  }
+function renderVisual(
+  button: ReactTestInstance,
+  state: { hovered: boolean; pressed: boolean },
+): ReactTestRenderer {
+  assert.equal(typeof button.props.children, 'function');
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(button.props.children(state) as ReactElement);
+  });
+  return renderer;
+}
 
-  const element = node as TestElement;
-  const matches = element.type === type ? [element] : [];
-  const children =
-    typeof element.props.children === 'function'
-      ? []
-      : Array.isArray(element.props.children)
-        ? element.props.children
-        : [element.props.children];
-
-  return [...matches, ...children.flatMap((child) => findElements(child, type))];
+function updateVisual(
+  renderer: ReactTestRenderer,
+  button: ReactTestInstance,
+  state: { hovered: boolean; pressed: boolean },
+) {
+  act(() => {
+    renderer.update(button.props.children(state) as ReactElement);
+  });
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
@@ -304,13 +380,10 @@ test('visual size remains independent from the accessible input target', () => {
   const targetStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
   );
-  const renderedChildren =
-    typeof button.props.children === 'function'
-      ? button.props.children({ pressed: false })
-      : button.props.children;
-  const visual = findElements(renderedChildren, 'View')[0];
+  const visualRenderer = renderVisual(button, { hovered: false, pressed: false });
+  const visual = visualRenderer.root.findByType(viewHost);
 
-  assert.equal(button.type, 'Pressable');
+  assert.equal(button.type, PressableHost);
   assert.equal(targetStyle.minHeight, 44);
   assert.equal(targetStyle.minWidth, 44);
   assert.equal(targetStyle.position, 'absolute');
@@ -321,6 +394,24 @@ test('visual size remains independent from the accessible input target', () => {
   assert.equal(visualStyle.width, 32);
   assert.equal(visualStyle.backgroundColor, 'white');
   assert.equal(visualStyle.borderWidth, 1);
+});
+
+test('visualStyle without visualSize keeps the requested feedback dimensions', () => {
+  const button = renderIconButton({
+    accessibilityLabel: '더보기',
+    children: '…',
+    targetSize: 44,
+    visualStyle: { borderWidth: 1 },
+  });
+  const renderer = renderVisual(button, { hovered: false, pressed: false });
+  const visualStyle = flattenStyle(renderer.root.findByType(viewHost).props.style);
+  const feedbackStyle = flattenStyle(renderer.root.findByType(animatedViewHost).props.style);
+
+  assert.equal(visualStyle.height, 44);
+  assert.equal(visualStyle.width, 44);
+  assert.equal(visualStyle.borderWidth, 1);
+  assert.equal(feedbackStyle.height, 44);
+  assert.equal(feedbackStyle.width, 44);
 });
 
 test('button semantics and interaction props are forwarded without losing press state', () => {
@@ -340,11 +431,8 @@ test('button semantics and interaction props are forwarded without losing press 
   const disabledStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
   );
-  const pressedChildren =
-    typeof button.props.children === 'function'
-      ? button.props.children({ pressed: true })
-      : button.props.children;
-  const pressedContent = findElements(pressedChildren, 'View')[0]?.props.children;
+  const pressedVisual = renderVisual(button, { hovered: false, pressed: true });
+  const pressedContent = pressedVisual.root.findByType(viewHost).props.children;
 
   assert.equal(button.props.accessibilityLabel, '프로필 편집 닫기');
   assert.equal(button.props.accessibilityRole, 'button');
@@ -377,12 +465,11 @@ test('consumer feedback radius changes only the temporary surface and preserves 
     onFocus,
     targetSize: 44,
   });
-  const children = button.props.children as (state: {
-    hovered: boolean;
-    pressed: boolean;
-  }) => ReactNode;
   const getSurfaceStyle = (pressed: boolean) =>
-    flattenStyle(findElements(children({ hovered: false, pressed }), 'View')[1].props.style);
+    flattenStyle(
+      renderVisual(button, { hovered: false, pressed }).root.findByType(animatedViewHost).props
+        .style,
+    );
   const targetStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
   );
@@ -405,12 +492,9 @@ test('consumer feedback radius changes only the temporary surface and preserves 
     feedbackRadius: 12,
     targetSize: 44,
   });
-  const disabledChildren = disabledButton.props.children as (state: {
-    hovered: boolean;
-    pressed: boolean;
-  }) => ReactNode;
   const disabledSurface = flattenStyle(
-    findElements(disabledChildren({ hovered: true, pressed: true }), 'View')[1].props.style,
+    renderVisual(disabledButton, { hovered: true, pressed: true }).root.findByType(animatedViewHost)
+      .props.style,
   );
   assert.equal(disabledSurface.borderRadius, 12);
   assert.equal(disabledSurface.backgroundColor, 'transparent');
@@ -423,13 +507,8 @@ test('default feedback owns a circular surface while preserving state and geomet
     targetSize: 44,
   });
   const surfaceStyle = (state: { hovered: boolean; pressed: boolean }) => {
-    const children = button.props.children as (state: {
-      hovered: boolean;
-      pressed: boolean;
-    }) => ReactNode;
-    const views = findElements(children(state), 'View');
-    assert.equal(views.length, 2);
-    return flattenStyle(views[1].props.style);
+    const renderer = renderVisual(button, state);
+    return flattenStyle(renderer.root.findByType(animatedViewHost).props.style);
   };
   const rootStyle = flattenStyle(
     (button.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
@@ -441,19 +520,88 @@ test('default feedback owns a circular surface while preserving state and geomet
   assert.equal(rootStyle.opacity, undefined);
   assert.equal(surfaceStyle({ hovered: false, pressed: false }).backgroundColor, 'transparent');
   assert.equal(surfaceStyle({ hovered: false, pressed: false }).borderRadius, 999);
-  assert.equal(surfaceStyle({ hovered: false, pressed: false }).height, undefined);
+  assert.equal(surfaceStyle({ hovered: false, pressed: false }).height, 44);
   assert.equal(surfaceStyle({ hovered: true, pressed: false }).backgroundColor, 'hover');
   assert.equal(surfaceStyle({ hovered: true, pressed: true }).backgroundColor, 'pressed');
   assert.equal(surfaceStyle({ hovered: false, pressed: true }).backgroundColor, 'pressed');
-  assert.equal(surfaceStyle({ hovered: false, pressed: false }).transitionDuration, '120ms');
+  assert.equal(surfaceStyle({ hovered: false, pressed: false }).transitionDuration, undefined);
 
-  const wrapper = findElements(
-    (button.props.children as (state: { pressed: boolean }) => ReactNode)({ pressed: false }),
-    'View',
-  )[0];
-  assert.ok(wrapper);
+  const wrapper = renderVisual(button, { hovered: false, pressed: false }).root.findByType(
+    viewHost,
+  );
   assert.equal(flattenStyle(wrapper.props.style).height, 44);
   assert.equal(flattenStyle(wrapper.props.style).width, 44);
+});
+
+test('feedback retargets hover and pressed colors at 120ms on one visual handle', () => {
+  const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
+  const renderer = renderVisual(button, { hovered: false, pressed: false });
+  const feedback = () => renderer.root.findByType(animatedViewHost);
+
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const hoverHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.ok(hoverHandle instanceof AnimatedColorMock);
+  const hoverTiming = timingCalls.at(-1);
+  assert.ok(hoverTiming);
+  assert.equal(hoverTiming.duration, 120);
+  assert.equal(hoverTiming.handle, hoverHandle);
+  assert.equal(hoverTiming.target.value, 'hover');
+  assert.equal(hoverTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: false, pressed: true });
+  const pressedHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(pressedHandle, hoverHandle);
+  const pressedTiming = timingCalls.at(-1);
+  assert.ok(pressedTiming);
+  assert.equal(pressedTiming.duration, 120);
+  assert.equal(pressedTiming.handle, pressedHandle);
+  assert.equal(pressedTiming.target.value, 'pressed');
+  assert.equal(pressedTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const hoverReturnHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(hoverReturnHandle, pressedHandle);
+  const hoverReturnTiming = timingCalls.at(-1);
+  assert.ok(hoverReturnTiming);
+  assert.equal(hoverReturnTiming.duration, 120);
+  assert.equal(hoverReturnTiming.handle, hoverReturnHandle);
+  assert.equal(hoverReturnTiming.target.value, 'hover');
+  assert.equal(hoverReturnTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: false, pressed: false });
+  const finalIdleHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(finalIdleHandle, hoverReturnHandle);
+  const finalIdleTiming = timingCalls.at(-1);
+  assert.ok(finalIdleTiming);
+  assert.equal(finalIdleTiming.duration, 120);
+  assert.equal(finalIdleTiming.handle, finalIdleHandle);
+  assert.equal(finalIdleTiming.target.value, 'transparent');
+  assert.equal(finalIdleTiming.active, true);
+});
+
+test('reduced motion stops pending feedback and commits the latest color immediately', () => {
+  const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
+  const renderer = renderVisual(button, { hovered: false, pressed: false });
+
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const pendingTiming = timingCalls.at(-1);
+  assert.ok(pendingTiming);
+  const setValueCountBeforeReduced = setValueCalls;
+  reducedMotion = true;
+  updateVisual(renderer, button, { hovered: false, pressed: true });
+
+  assert.equal(timingCalls.length, 1);
+  assert.equal(pendingTiming.active, false);
+  assert.ok(pendingTiming.stopCalls > 0);
+  assert.ok(setValueCalls > setValueCountBeforeReduced);
+  assert.equal(
+    flattenStyle(renderer.root.findByType(animatedViewHost).props.style).backgroundColor,
+    'pressed',
+  );
+  reducedMotion = false;
 });
 
 test('disabled feedback keeps the common opacity and hides the surface', () => {
@@ -470,14 +618,13 @@ test('disabled feedback keeps the common opacity and hides the surface', () => {
       pressed: true,
     }),
   );
-  const children = button.props.children as (state: {
-    hovered: boolean;
-    pressed: boolean;
-  }) => ReactNode;
-  const views = findElements(children({ hovered: true, pressed: true }), 'View');
+  const disabledVisual = renderVisual(button, { hovered: true, pressed: true });
 
   assert.equal(rootStyle.opacity, 0.45);
-  assert.equal(flattenStyle(views[1].props.style).backgroundColor, 'transparent');
+  assert.equal(
+    flattenStyle(disabledVisual.root.findByType(animatedViewHost).props.style).backgroundColor,
+    'transparent',
+  );
 });
 
 test('enabled feedback preserves static and state-dependent caller opacity', () => {
@@ -503,11 +650,7 @@ test('inverse feedback uses the media contrast while reduced motion is instant',
     targetSize: 48,
   });
   const surfaceStyle = (state: { hovered: boolean; pressed: boolean }) => {
-    const children = button.props.children as (state: {
-      hovered: boolean;
-      pressed: boolean;
-    }) => ReactNode;
-    return flattenStyle(findElements(children(state), 'View')[1].props.style);
+    return flattenStyle(renderVisual(button, state).root.findByType(animatedViewHost).props.style);
   };
 
   assert.equal(
@@ -527,15 +670,13 @@ test('inverse feedback uses the media contrast while reduced motion is instant',
       feedbackTone: 'inverse',
       targetSize: 48,
     });
-    const reducedChildren = reducedButton.props.children as (state: {
-      hovered: boolean;
-      pressed: boolean;
-    }) => ReactNode;
     assert.equal(
       flattenStyle(
-        findElements(reducedChildren({ hovered: false, pressed: false }), 'View')[1].props.style,
-      ).transitionDuration,
-      '0ms',
+        renderVisual(reducedButton, { hovered: false, pressed: false }).root.findByType(
+          animatedViewHost,
+        ).props.style,
+      ).backgroundColor,
+      'transparent',
     );
   } finally {
     reducedMotion = false;
@@ -551,12 +692,9 @@ test('Native pressed feedback is immediate and preserves the platform target', (
       feedbackRadius: 12,
       targetSize: 44,
     });
-    const children = button.props.children as (state: {
-      hovered: boolean;
-      pressed: boolean;
-    }) => ReactNode;
     const surfaceStyle = flattenStyle(
-      findElements(children({ hovered: false, pressed: true }), 'View')[1].props.style,
+      renderVisual(button, { hovered: false, pressed: true }).root.findByType(animatedViewHost)
+        .props.style,
     );
     const targetStyle = flattenStyle(
       (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),

@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "check": "tsc --noEmit",
     "dev": "PORT=5174 tsx watch src/server/index.ts",
-    "start": "tsx src/server/index.ts",
+    "start": "node --import tsx --import ./src/server/sentry.ts src/server/index.ts",
     "test": "pnpm check && pnpm test:unit && pnpm --workspace-root test:e2e",
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:unit": "vitest run"
@@ -20,7 +20,7 @@
     "vitest": "^4.1.12"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.10",
+    "@hono/node-server": "^2.1.3",
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
     "@sentry/node": "^10.66.0",

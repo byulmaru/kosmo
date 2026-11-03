@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -78,6 +79,7 @@ const cancelProfileFollowRequestMutation = graphql`
 const unfollowProfileMutation = graphql`
   mutation FollowButtonUnfollowProfileMutation($id: ID!) {
     unfollowProfile(input: { id: $id }) {
+      profileFollowId
       followerProfile {
         id
         followingCount
@@ -106,9 +108,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
-  const { selectedProfileId } = useSession();
-  const { showToast } = useToast();
-  const data = useFragment(followButtonProfileFragment, profile);
+  const environment = useRelayEnvironment();
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
   const [commitCancel, cancelling] = useMutation<FollowButtonCancelProfileFollowRequestMutation>(
@@ -116,15 +116,24 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
+  const loading = following || cancelling || unfollowing;
+  const { selectedProfileId } = useSession();
+  const { showToast } = useToast();
+  const data = useFragment(followButtonProfileFragment, profile);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
   const isPending = Boolean(viewerState?.followRequest);
-  const loading = following || cancelling || unfollowing;
   const showFailureToast = () => {
     showToast(followFailureMessage, { tone: 'danger' });
   };
+  const invalidateHome = () =>
+    environment.commitUpdate((store) => {
+      store
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+        ?.invalidateRecord();
+    });
 
-  if (!viewerState || viewerState.isSelf) {
+  if (!viewerState || viewerState.isSelf !== false || !data.followPolicy) {
     return null;
   }
 
@@ -151,33 +160,49 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
     if (isFollowing) {
       const follower = viewerState.follow?.follower;
+      const followerCount = data.followersCount;
+      const followingCount = follower?.followingCount;
+      const canOptimisticallyUnfollow =
+        typeof followerCount === 'number' && typeof followingCount === 'number';
 
       commitUnfollow({
         ...callbacks,
-        optimisticResponse: follower
-          ? {
-              unfollowProfile: {
-                followeeProfile: {
-                  displayName: data.displayName,
-                  followPolicy: data.followPolicy,
-                  followersCount: Math.max(data.followersCount - 1, 0),
-                  handle: data.handle,
-                  id: data.id,
-                  relativeHandle: data.relativeHandle,
-                  viewerState: {
-                    follow: null,
-                    followRequest: null,
-                    isSelf: viewerState.isSelf,
-                    profileBlock: null,
+        onCompleted: (response, errors) => {
+          if (errors?.length) {
+            if (response?.unfollowProfile?.profileFollowId != null) {
+              invalidateHome();
+            }
+            showFailureToast();
+            return;
+          }
+          invalidateHome();
+        },
+        optimisticResponse:
+          follower && canOptimisticallyUnfollow
+            ? {
+                unfollowProfile: {
+                  profileFollowId: null,
+                  followeeProfile: {
+                    displayName: data.displayName,
+                    followPolicy: data.followPolicy,
+                    followersCount: Math.max(followerCount - 1, 0),
+                    handle: data.handle,
+                    id: data.id,
+                    relativeHandle: data.relativeHandle,
+                    viewerState: {
+                      follow: null,
+                      followRequest: null,
+                      isSelf: viewerState.isSelf,
+                      profileBlock: null,
+                    },
+                  },
+                  followerProfile: {
+                    followingCount: Math.max(followingCount - 1, 0),
+                    id: follower.id,
                   },
                 },
-                followerProfile: {
-                  followingCount: Math.max(follower.followingCount - 1, 0),
-                  id: follower.id,
-                },
-              },
-            }
-          : undefined,
+              }
+            : undefined,
         variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {
@@ -193,6 +218,10 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     } else {
       commitFollow({
         onCompleted: (response, errors) => {
+          const result = response?.followProfile?.result;
+          if (result?.__typename === 'ProfileFollow') {
+            invalidateHome();
+          }
           const failed = Boolean(errors?.length);
           if (failed) {
             showFailureToast();

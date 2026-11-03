@@ -15,9 +15,9 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
   `#`를 한 번만 표시하고, 저장 성공 뒤 편집 화면과 공개 화면에는 서버가 반환한 first-write-wins Display
   Hashtag Name 앞에 `#`를 한 번만 표시한다. 저장 전에는 기존 Hashtag identity의 Display Name을 조회한다고
   가정하지 않으며 canonical lowercase 이름은 identity·중복 판정에만 사용한다.
-- 빈 값, [Hashtag Name 규칙](../domain/objects/hashtag.md)에 맞지 않는 문자, 정규화 결과의 Unicode code point
-  20자 초과와 동일 Hashtag identity 중복은 저장 전에 필드 가까이 안내한다. 서버 검증 실패도 같은 항목에
-  연결하되 저장된 기존 목록은 유지한다.
+- 빈 값, [Profile Tag 입력 규칙](../domain/decisions/0020-profile-tag-shared-hashtag-identity.md)에 맞지 않는 문자,
+  정규화 결과의 Unicode code point 20자 초과와 동일 Hashtag identity 중복은 저장 전에 필드 가까이 안내한다. 서버 검증
+  실패도 같은 항목에 연결하되 저장된 기존 목록은 유지한다.
 - Tag 목록은 Profile의 다른 편집 값과 같은 저장 action에 포함한다. 저장 중 중복 제출을 막고 실패 뒤 현재
   입력을 보존해 재시도할 수 있게 한다.
 

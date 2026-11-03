@@ -12,16 +12,18 @@ if (process.env.KOSMO_TEST_TEMPORAL_RUNTIME !== '0') {
 
 const { temporalClient } = await import('./client');
 const { PROFILE_MIGRATION_WORKFLOW_TYPE } = await import('./profile-migration');
+const { POST_REQUEST_WORKFLOW_TYPE } = await import('./post-request');
 
 const nativeWorkflowStart = temporalClient.workflow.start.bind(temporalClient.workflow);
 
 // Legacy effects-only services still use this test seam. Profile migration
-// Move starts deliberately reach the real Temporal client and are handled by
-// the production Worker started by test-runtime.ts.
+// and post request starts deliberately reach the real Temporal client and are
+// handled by the production Worker started by test-runtime.ts.
 temporalClient.workflow.start = async <T extends Workflow>(
   workflowTypeOrFunc: string | T,
   options: WorkflowStartOptions<T>,
 ) =>
-  workflowTypeOrFunc === PROFILE_MIGRATION_WORKFLOW_TYPE
+  workflowTypeOrFunc === PROFILE_MIGRATION_WORKFLOW_TYPE ||
+  workflowTypeOrFunc === POST_REQUEST_WORKFLOW_TYPE
     ? nativeWorkflowStart(workflowTypeOrFunc, options)
     : (undefined as never);

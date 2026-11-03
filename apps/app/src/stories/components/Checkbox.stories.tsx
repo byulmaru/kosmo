@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
+import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -9,11 +10,15 @@ import type { CheckboxValue } from '@/components/ui/Checkbox';
 
 const defaultLabel = '모두 선택';
 
-type CheckboxCatalogProps = {
+type CheckboxStoryArgs = {
   checked?: CheckboxValue;
   disabled?: boolean;
   label?: string;
   onCheckedChange?: (checked: boolean) => void;
+};
+
+type CheckboxCatalogProps = CheckboxStoryArgs & {
+  updateArgs?: (update: Partial<Pick<CheckboxStoryArgs, 'checked'>>) => void;
 };
 
 function CheckboxCatalog({
@@ -21,6 +26,7 @@ function CheckboxCatalog({
   disabled = false,
   label = defaultLabel,
   onCheckedChange,
+  updateArgs,
 }: CheckboxCatalogProps) {
   const theme = useTheme();
   const [checked, setChecked] = useState<CheckboxValue>(initialChecked);
@@ -36,6 +42,7 @@ function CheckboxCatalog({
         onCheckedChange={(next) => {
           setChecked(next);
           onCheckedChange?.(next);
+          updateArgs?.({ checked: next });
         }}
       />
       <Text style={[textStyles.uiCopyM, { color: theme.foregroundPrimary, flexShrink: 1 }]}>
@@ -60,7 +67,6 @@ const meta = {
   component: CheckboxCatalog,
   excludeStories: ['InteractionContract', 'DisabledInteractionContract'],
   parameters: { controls: { disable: true } },
-  render: (args) => <CheckboxCatalog key={String(args.checked)} {...args} />,
   title: 'KOSMO/Components/Checkbox',
 } satisfies Meta<typeof CheckboxCatalog>;
 
@@ -68,6 +74,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs<CheckboxStoryArgs>();
+    return <CheckboxCatalog {...args} updateArgs={updateArgs} />;
+  },
   parameters: {
     controls: { disable: false, include: ['checked', 'disabled', 'label'] },
   },

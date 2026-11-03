@@ -65,7 +65,7 @@ builder.mutationField('createProfile', (t) =>
                 instanceId: localInstance.id,
                 normalizedHandle: normalizeHandle(input.handle),
                 displayName: input.handle,
-                defaultPostVisibility: PostVisibility.UNLISTED,
+                defaultPostVisibility: PostVisibility.PUBLIC,
                 followPolicy: ProfileFollowPolicy.OPEN,
               })
               .returning()

@@ -1,11 +1,12 @@
 import { CheckIcon, XIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileListItemRow } from '@/components/profile/ProfileListItemRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space } from '@/theme/tokens';
@@ -188,8 +189,10 @@ function FollowRequestActionButton({
       targetSize={targetSize}
     >
       {pending ? (
-        <ActivityIndicator
+        <LoadingIndicator
           accessibilityLabel={`${name} 팔로우 요청 ${label} 처리 중`}
+          accessible={false}
+          aria-hidden
           color={theme.foregroundPrimary}
           size="small"
           style={styles.spinner}

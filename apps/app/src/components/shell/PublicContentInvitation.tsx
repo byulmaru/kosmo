@@ -22,16 +22,23 @@ import type { TextStyle, ViewStyle } from 'react-native';
 type Props = {
   onDismiss: () => void;
   onLayout: (height: number) => void;
+  pinToBottom?: boolean;
   visible: boolean;
 };
 
-export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props) {
+export function PublicContentInvitation({
+  onDismiss,
+  onLayout,
+  pinToBottom = false,
+  visible,
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const mobile = width < breakpoints.compact;
   const placement = getPublicContentInvitationPlacement({
     height,
+    pinToBottom,
     safeAreaBottom: insets.bottom,
     width,
   });
@@ -59,6 +66,16 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
       style={[
         styles.root,
         positionedStyle,
+        pinToBottom && mobile
+          ? ({
+              paddingBottom: space[12] + insets.bottom,
+              paddingLeft: spacing.lg + insets.left,
+              paddingRight: spacing.lg + insets.right,
+              // Keep every control reachable when reflow makes the fixed panel taller than the viewport.
+              maxHeight: '100dvh',
+              overflowY: 'auto',
+            } as unknown as ViewStyle)
+          : null,
         {
           backgroundColor: theme.backgroundCanvas,
           borderColor: theme.borderSubtle,
@@ -69,11 +86,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
       <View style={styles.content}>
         <View style={styles.header}>
           <Text
-            style={[
-              mobile ? textStyles.uiCopyS : textStyles.uiCopyL,
-              styles.invitationText,
-              { color: theme.foregroundPrimary },
-            ]}
+            style={[textStyles.uiCopyL, styles.invitationText, { color: theme.foregroundPrimary }]}
           >
             {mobile ? null : '지금 가입하고 '}
             <Text style={styles.emphasis}>취향이 통하는 사람들</Text>
@@ -110,7 +123,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, visible }: Props)
             </Link>
             <NavigationLink href="/privacy">
               <Pressable accessibilityRole="link" style={styles.textLink}>
-                <Text style={[textStyles.uiCopyS, { color: theme.textSecondary }]}>
+                <Text style={[textStyles.uiCopyS, styles.emphasis, { color: theme.textSecondary }]}>
                   개인정보처리방침
                 </Text>
               </Pressable>

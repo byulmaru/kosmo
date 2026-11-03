@@ -246,6 +246,71 @@ test('서버가 발급한 Global ID로 등록·갱신·해제하고 삭제된 ID
   }
 });
 
+test('Web FID는 기존 installation 등록·갱신·해제 lifecycle을 사용한다', async () => {
+  const { account, session } = await createSession();
+  const fid = `web-fid-${crypto.randomUUID()}`;
+
+  try {
+    const registered = await request<RegisterResult>(
+      registerMutation(PushInstallationPlatform.WEB, fid),
+      session.token,
+    );
+    const installationId = decodeInstallationId(registered);
+    assert.deepEqual(
+      await db
+        .select({
+          accountId: PushInstallations.accountId,
+          platform: PushInstallations.platform,
+          sessionId: PushInstallations.sessionId,
+          token: PushInstallations.token,
+        })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, installationId)),
+      [
+        {
+          accountId: account.id,
+          platform: PushInstallationPlatform.WEB,
+          sessionId: session.id,
+          token: fid,
+        },
+      ],
+    );
+
+    const refreshedFid = `web-fid-${crypto.randomUUID()}`;
+    const updated = await request<{ updatePushInstallation: { completed: boolean } }>(
+      updateMutation(
+        registered.data!.registerPushInstallation.id,
+        PushInstallationPlatform.WEB,
+        refreshedFid,
+      ),
+      session.token,
+    );
+    assert.deepEqual(updated, { data: { updatePushInstallation: { completed: true } } });
+    assert.deepEqual(
+      await db
+        .select({ platform: PushInstallations.platform, token: PushInstallations.token })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, installationId)),
+      [{ platform: PushInstallationPlatform.WEB, token: refreshedFid }],
+    );
+
+    const unregistered = await request<{ unregisterPushInstallation: { completed: boolean } }>(
+      unregisterMutation(registered.data!.registerPushInstallation.id),
+      session.token,
+    );
+    assert.deepEqual(unregistered, { data: { unregisterPushInstallation: { completed: true } } });
+    assert.deepEqual(
+      await db
+        .select({ id: PushInstallations.id })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, installationId)),
+      [],
+    );
+  } finally {
+    await cleanup([account.id]);
+  }
+});
+
 test('Account 소유권·동일 Account 다른 Session 관리와 token 이동을 검증한다', async () => {
   const owner = await createSession();
   const other = await createSession();

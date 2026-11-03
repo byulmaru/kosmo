@@ -57,4 +57,20 @@ test('Content Report allows omitted details for other reasons and enforces the s
     }).success,
     false,
   );
+
+  const detailsAtLimit = '😀'.repeat(contentReportDetailsMaxLength);
+  assert.equal(
+    contentReportInputSchema.safeParse({
+      reason: ContentReportReason.SPAM_FRAUD,
+      details: detailsAtLimit,
+    }).success,
+    true,
+  );
+  assert.equal(
+    contentReportInputSchema.safeParse({
+      reason: ContentReportReason.SPAM_FRAUD,
+      details: `${detailsAtLimit}😀`,
+    }).success,
+    false,
+  );
 });

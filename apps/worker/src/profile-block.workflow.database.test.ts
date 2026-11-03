@@ -6,9 +6,9 @@ import { after, test } from 'node:test';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { WithStartWorkflowOperation } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type {
   ProfileBlockTransitionResult,
   ProfileUnblockTransitionResult,
@@ -16,9 +16,7 @@ import type {
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
-const environment = await TestWorkflowEnvironment.createLocal({
-  server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-});
+const environment = await createTestWorkflowEnvironment();
 process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
 
@@ -38,7 +36,6 @@ const [
   import('@kosmo/core/db'),
   import('./activities'),
 ]);
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 let worker: Worker | undefined;
 let workerRun: Promise<void> | undefined;
 
@@ -144,7 +141,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue: KOSMO_TASK_QUEUE,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     workerRun = worker.run();
 
@@ -276,7 +273,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     await retryWorker.runUntil(async () => {
       const startWorkflowOperation = new WithStartWorkflowOperation(
@@ -341,7 +338,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await heldUndoWorker.runUntil(async () => {

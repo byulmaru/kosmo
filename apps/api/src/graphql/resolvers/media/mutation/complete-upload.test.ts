@@ -21,3 +21,26 @@ test('requires an authenticated selected Profile', async () => {
     assert.match(result.errors?.[0]?.message ?? '', /Not authorized/);
   }
 });
+
+test('rejects the legacy media processing alias', async () => {
+  const mediaId = encodeGlobalId('Media', '00000000-0000-8000-8000-000000000001');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation {
+        completeMediaUpload(input: { id: "${mediaId}", applyNightshade: true }) {
+          media { id }
+        }
+      }
+    `,
+    contextValue: {
+      session: {
+        accountId: '00000000-0000-0000-0000-000000000001',
+        profile: { id: '00000000-0000-0000-0000-000000000002', role: 'MEMBER' },
+      },
+    },
+  });
+
+  assert.equal(result.data, undefined);
+  assert.match(result.errors?.[0]?.message ?? '', /applyNightshade/);
+});

@@ -189,6 +189,34 @@ describe('GraphQL Hashtag related Profiles', () => {
     assert.equal(result.data?.node?.relatedProfiles.pageInfo.hasNextPage, false);
   });
 
+  test('excludes the selected Profile while retaining another Profile on the same Account', async () => {
+    const hashtag = await createHashtag('selected-profile-filtered');
+    const auth = await createAuthenticatedSession({ selectedProfileId: profileId(1) });
+    const sameAccountProfile = await createProfile({
+      handle: 'same-account',
+      id: profileId(2),
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: sameAccountProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await Promise.all([auth.profile, sameAccountProfile].map(({ id }) => addTag(id, hashtag.id)));
+
+    const result = await requestGraphQL<RelatedProfilesData>(
+      relatedProfilesQuery,
+      { first: 1, id: globalId('Hashtag', hashtag.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.node?.relatedProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', sameAccountProfile.id)],
+    );
+    assert.equal(result.data?.node?.relatedProfiles.pageInfo.hasNextPage, false);
+  });
+
   test('includes a stored ActivityPub Profile without remote lookup', async (t) => {
     let fetchCalls = 0;
     t.mock.method(globalThis, 'fetch', async () => {
@@ -466,7 +494,8 @@ const createProfile = async ({
 
 const createAuthenticatedSession = async ({
   selectedProfile = true,
-}: { selectedProfile?: boolean } = {}) => {
+  selectedProfileId = crypto.randomUUID(),
+}: { selectedProfile?: boolean; selectedProfileId?: string } = {}) => {
   const account = await db
     .insert(Accounts)
     .values({
@@ -478,7 +507,7 @@ const createAuthenticatedSession = async ({
     .then(firstOrThrow);
   const profile = await createProfile({
     handle: `viewer-${crypto.randomUUID().slice(0, 8)}`,
-    id: crypto.randomUUID(),
+    id: selectedProfileId,
   });
   await db.insert(AccountProfiles).values({
     accountId: account.id,
@@ -493,7 +522,7 @@ const createAuthenticatedSession = async ({
     token,
   });
 
-  return { profile, token };
+  return { account, profile, token };
 };
 
 const resetFixtures = async () => {

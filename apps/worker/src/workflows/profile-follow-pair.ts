@@ -13,11 +13,13 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
+  ProfileFollowInboundFollow,
   ProfileFollowPair,
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
   ProfileFollowPairLifecycleState,
   ProfileFollowPairTransitionOutcome,
+  ProfileFollowPairTransitionResult,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
@@ -41,6 +43,18 @@ const actorProfileIdSchema = z
 const actorAccountIdSchema = z
   .string({ error: 'Profile Follow command actorAccountId is invalid' })
   .min(1, 'Profile Follow command actorAccountId is invalid');
+
+const inboundFollowUriSchema = z.url({
+  protocol: /^https?$/,
+  error: 'Profile Follow inbound ActivityPub URI is invalid',
+});
+
+const inboundFollowSchema = z.strictObject({
+  actorUri: inboundFollowUriSchema,
+  objectUri: inboundFollowUriSchema,
+  activityUri: inboundFollowUriSchema.optional(),
+  published: z.iso.datetime().optional(),
+});
 
 const profileFollowEffectOriginSchema = z.enum(['LOCAL', 'ACTIVITYPUB'], {
   error: 'Profile Follow command origin is invalid',
@@ -111,7 +125,10 @@ const {
   deleteFollowNotificationActivity,
   deleteFollowRequestNotificationActivity,
   executeProfileFollowPairTransitionActivity,
+  invalidateHomeTimelinesActivity,
   loadPendingFollowRequestIdActivity,
+  reconcileHomeTimelineFollowActivity,
+  sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -124,20 +141,61 @@ const isTerminalState = (
 const pairConflict = (message: string): ApplicationFailure =>
   ApplicationFailure.nonRetryable(message, PROFILE_FOLLOW_PAIR_CONFLICT_FAILURE_TYPE);
 
-const parseProfileFollowPairCommand = (value: unknown): ProfileFollowPairCommand => {
-  const result = profileFollowPairCommandSchema.safeParse(value);
-  if (result.success) {
-    return result.data;
+const parseProfileFollowPairUpdate = (
+  commandValue: unknown,
+  inboundFollowValue?: unknown,
+): {
+  readonly command: ProfileFollowPairCommand;
+  readonly inboundFollow?: ProfileFollowInboundFollow;
+} => {
+  const commandResult = profileFollowPairCommandSchema.safeParse(commandValue);
+  if (!commandResult.success) {
+    throw ApplicationFailure.nonRetryable(
+      commandResult.error.issues[0]?.message ?? 'Profile Follow command is invalid',
+    );
   }
 
-  throw ApplicationFailure.nonRetryable(
-    result.error.issues[0]?.message ?? 'Profile Follow command is invalid',
-  );
+  if (inboundFollowValue === undefined) {
+    return { command: commandResult.data };
+  }
+
+  const inboundFollowResult = inboundFollowSchema.safeParse(inboundFollowValue);
+  if (!inboundFollowResult.success) {
+    throw ApplicationFailure.nonRetryable(
+      inboundFollowResult.error.issues[0]?.message ?? 'Profile Follow inbound Follow is invalid',
+    );
+  }
+  if (commandResult.data.kind !== 'FOLLOW' || commandResult.data.origin !== 'ACTIVITYPUB') {
+    throw ApplicationFailure.nonRetryable(
+      'Profile Follow inbound Follow envelope requires ACTIVITYPUB FOLLOW command',
+    );
+  }
+
+  return { command: commandResult.data, inboundFollow: inboundFollowResult.data };
 };
 
 type EffectFailure = {
   readonly sourceId: string;
   readonly message: string;
+};
+
+type PendingProfileFollowEffect =
+  | ProfileFollowPairEffect
+  | { readonly kind: 'INVALIDATE_HOME_TIMELINE'; readonly profileId: string }
+  | { readonly kind: 'RECONCILE_HOME_TIMELINE'; readonly profileId: string };
+
+const shouldInvalidateHomeTimeline = (
+  command: ProfileFollowPairCommand,
+  result: ProfileFollowPairTransitionResult,
+): boolean => {
+  if (command.kind === 'FOLLOW') {
+    return result.commandKind === 'FOLLOW' && result.created && result.kind === 'ESTABLISHED';
+  }
+  return (
+    (command.kind === 'APPROVE' || command.kind === 'ACCEPT') &&
+    result.commandKind === command.kind &&
+    result.kind === 'ACCEPTED'
+  );
 };
 
 const errorMessage = (error: unknown): string =>
@@ -149,19 +207,27 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
   }
   const pair = parsedPair.data;
+  const homeTimelineInvalidationEnabled = patched('profile-follow-pair-home-invalidation-v1');
+  const homeTimelineReconciliationEnabled = patched(
+    'profile-follow-pair-home-timeline-reconcile-v1',
+  );
   let lifecycleState: ProfileFollowPairLifecycleState = 'INITIAL';
   let updateReceived = false;
   let inFlight = false;
   let transitionFailure: string | undefined;
   let pendingRequestId: string | undefined;
-  const effectQueue: ProfileFollowPairEffect[] = [];
+  let inboundFollowForPendingRequest:
+    | { readonly requestId: string; readonly inboundFollow?: ProfileFollowInboundFollow }
+    | undefined;
+  const effectQueue: PendingProfileFollowEffect[] = [];
   const effectFailures: EffectFailure[] = [];
 
   setHandler(
-    defineUpdate<ProfileFollowPairTransitionOutcome, [ProfileFollowPairCommand]>(
-      PROFILE_FOLLOW_PAIR_UPDATE_NAME,
-    ),
-    async (command) => {
+    defineUpdate<
+      ProfileFollowPairTransitionOutcome,
+      [ProfileFollowPairCommand, ProfileFollowInboundFollow | undefined]
+    >(PROFILE_FOLLOW_PAIR_UPDATE_NAME),
+    async (command, inboundFollow) => {
       if (inFlight) {
         throw pairConflict('Profile Follow pair transition is already in flight');
       }
@@ -169,7 +235,8 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       updateReceived = true;
 
       try {
-        const parsedCommand = parseProfileFollowPairCommand(command);
+        const parsedUpdate = parseProfileFollowPairUpdate(command, inboundFollow);
+        const parsedCommand = parsedUpdate.command;
         if (isTerminalState(lifecycleState)) {
           throw pairConflict('Profile Follow pair lifecycle is already terminal');
         }
@@ -203,10 +270,14 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
             lifecycleState = 'PENDING';
           }
 
+          const previousPendingRequestId = pendingRequestId;
+          const acceptInboundFollowEnabled =
+            parsedCommand.kind === 'APPROVE' && patched('profile-follow-pair-accept-v1');
           const execution = await executeProfileFollowPairTransitionActivity({
             pair,
             command: parsedCommand,
             pendingRequestId,
+            ...(acceptInboundFollowEnabled ? { acceptInboundFollow: true as const } : {}),
           });
 
           if (!execution.ok) {
@@ -216,8 +287,62 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           lifecycleState = execution.nextState;
           if (execution.nextState === 'PENDING') {
             pendingRequestId = execution.pendingRequestId;
+            if (parsedCommand.kind === 'FOLLOW') {
+              if (parsedCommand.origin === 'ACTIVITYPUB' && pendingRequestId !== undefined) {
+                const previousFollow =
+                  inboundFollowForPendingRequest?.requestId === pendingRequestId
+                    ? inboundFollowForPendingRequest.inboundFollow
+                    : undefined;
+                const inboundFollow = parsedUpdate.inboundFollow ?? previousFollow;
+                inboundFollowForPendingRequest = {
+                  requestId: pendingRequestId,
+                  ...(inboundFollow === undefined ? {} : { inboundFollow }),
+                };
+              } else {
+                inboundFollowForPendingRequest = undefined;
+              }
+            } else if (
+              inboundFollowForPendingRequest?.requestId !== pendingRequestId ||
+              previousPendingRequestId !== pendingRequestId
+            ) {
+              inboundFollowForPendingRequest = undefined;
+            }
           }
-          effectQueue.push(...execution.effectPlan);
+          effectQueue.push(
+            ...(shouldInvalidateHomeTimeline(parsedCommand, execution.result)
+              ? homeTimelineReconciliationEnabled
+                ? [
+                    {
+                      kind: 'RECONCILE_HOME_TIMELINE' as const,
+                      profileId: pair.followerProfileId,
+                    },
+                  ]
+                : homeTimelineInvalidationEnabled
+                  ? [
+                      {
+                        kind: 'INVALIDATE_HOME_TIMELINE' as const,
+                        profileId: pair.followerProfileId,
+                      },
+                    ]
+                  : []
+              : []),
+            ...execution.effectPlan.map((effect) => {
+              if (effect.kind !== 'ACCEPT_INBOUND_FOLLOW') {
+                return effect;
+              }
+              const inboundFollow =
+                inboundFollowForPendingRequest?.requestId === effect.input.pendingRequestId
+                  ? inboundFollowForPendingRequest.inboundFollow
+                  : undefined;
+              return {
+                ...effect,
+                input: {
+                  ...effect.input,
+                  ...(inboundFollow === undefined ? {} : { inboundFollow }),
+                },
+              };
+            }),
+          );
           return { ok: true as const, result: execution.result };
         } catch (error) {
           // Only the Activity phase is inside this catch. Parse, state and
@@ -230,8 +355,8 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       }
     },
     {
-      validator: (command) => {
-        parseProfileFollowPairCommand(command);
+      validator: (command, inboundFollow) => {
+        parseProfileFollowPairUpdate(command, inboundFollow);
         if (isTerminalState(lifecycleState)) {
           throw pairConflict('Profile Follow pair lifecycle is already terminal');
         }
@@ -288,6 +413,15 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     try {
       await settleEffects(
         match(effect)
+          .with({ kind: 'INVALIDATE_HOME_TIMELINE' }, ({ profileId }) => [
+            invalidateHomeTimelinesActivity({ profileIds: [profileId] }),
+          ])
+          .with({ kind: 'RECONCILE_HOME_TIMELINE' }, ({ profileId }) => [
+            reconcileHomeTimelineFollowActivity({ profileId }),
+          ])
+          .with({ kind: 'ACCEPT_INBOUND_FOLLOW' }, ({ input }) => {
+            return [sendProfileFollowAcceptActivity(input)];
+          })
           .with({ kind: 'CREATE' }, ({ input }) => [
             pushNotificationDispatchEnabled
               ? match(input.sourceKind)
@@ -331,8 +465,14 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           .exhaustive(),
       );
     } catch (error) {
+      const sourceId =
+        effect.kind === 'ACCEPT_INBOUND_FOLLOW'
+          ? effect.input.pendingRequestId
+          : effect.kind === 'INVALIDATE_HOME_TIMELINE' || effect.kind === 'RECONCILE_HOME_TIMELINE'
+            ? effect.profileId
+            : effect.input.sourceId;
       effectFailures.push({
-        sourceId: effect.input.sourceId,
+        sourceId,
         message: errorMessage(error),
       });
     }

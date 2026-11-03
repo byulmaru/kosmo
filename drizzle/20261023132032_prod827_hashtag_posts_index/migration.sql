@@ -1,0 +1,1 @@
+CREATE INDEX "post_content_hashtag_hashtag_id_post_content_id_index" ON "post_content_hashtag" ("hashtag_id","post_content_id");

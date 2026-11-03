@@ -76,3 +76,13 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - [Profile Tag 디자인](../../design/profile-tags.md)은 reorder UI와 안정적인 표시 순서에 의존하지 않는 편집·공개
   표시의 플랫폼 공통 경계를 정의한다.
 - [ADR 0021](./0021-hashtag-related-profile-navigation.md)은 Hashtag 관련 Profile 목록 탐색 계약을 정의한다.
+
+## 추가 결정 — 2026-10-22: 입력 검증과 공통 Hashtag identity
+
+PROD-1153은 이 결정의 공통 identity 정규화와 작성 입력 검증이 별도 경계임을 명확히 한다. Hashtag는 같은 정규화 결과를
+공유하지만 각 입력 경계가 자신의 문법과 길이를 검증한다. Profile Tag 입력의 기존 Unicode Letter (`L`)·Number (`N`)·`_` 및 1–20 code point
+제한은 유지한다. Local Post·Reply·Quote 본문은 별도 Hashtag 문법과 1–64 code point 제한을 사용하며, 기준을 넘는 text는
+원문 그대로 보존하고 Hashtag identity로 연결하지 않는다.
+
+공통 Hashtag identity는 Profile Tag나 Local Post의 길이·문자 제한으로 원격 이름을 제한하지 않는다. 원격 Hashtag 수집과
+표현은 PROD-1196·PROD-1197의 별도 ActivityPub 계약이 소유하며, 이 clarification은 그 동작을 활성화하지 않는다.

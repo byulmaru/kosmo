@@ -62,9 +62,11 @@ Inbound Undo 경로는 embedded object가 실제 `Block`일 때만 처리하며,
 
 ## 조회 정책
 
-- GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 [Profile](./profile.md)의 기존 lifecycle·membership·공개 조회
-  정책을 적용해 Block만을 이유로 숨기지 않고 기본 Profile 정보를 제공한다. Profile 자체가 기존 lifecycle 정책으로 조회
-  불가하면 기존 null/unavailable 결과를 유지하며 Block 전용 identity payload를 만들지 않는다.
+- GraphQL `node(id:)`의 알려진 Profile ID 참조와 게시물 등에서 참조하는 Profile 객체는 [Profile](./profile.md)의
+  상태별 응답 정책을 따른다. Active Profile의 필드는 기존 조회 권한을 적용하며, 그 외 상태에서는 identity 필드만
+  제공하고 나머지는 `null`로 반환한다. 이 제한 응답으로 GraphQL 오류를 발생시키지 않으며 Profile Block만을 이유로
+  Profile 참조를 숨기지 않는다. `profileByHandle` 직접 조회는 기존 lifecycle·membership·공개 조회 조건을 계속 적용하며
+  Block 전용 identity payload를 만들지 않는다.
 - 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용한다. GraphQL `searchProfiles`가
   exact-match 또는 partial-match 후보를 반환할 때는 [Profile](./profile.md)의 기존 공개 조회 조건을 통과한 후보 중
   viewer와 양방향 Active Block 관계인 Profile을 제외한다. 이 제외는 pagination·cursor·limit보다 먼저 적용한다.
@@ -75,8 +77,9 @@ Inbound Undo 경로는 embedded object가 실제 `Block`일 때만 처리하며,
   Profile 후보 계약을 유지한다. 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용해
   양방향 Active Block 관계인 후보를 pagination·cursor·limit 전에 제외한다. selected Profile이 없으면 기존
   Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지 않는다.
-- 정상적인 direct route 진입·새로고침의 API 결과는 GraphQL `node(id:)`·`profileByHandle` 직접 조회의 기존 기본 Profile
-  정보와 현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 사용한다.
+- 기존 공개 조회 조건을 통과하는 Profile의 direct route 진입·새로고침은 GraphQL `node(id:)`·`profileByHandle` 직접
+  조회의 Profile 정보와 현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 사용한다. 비활성 Profile의 알려진 ID
+  참조는 기본 Profile 정보 전체를 제공하지 않고 [Profile](./profile.md)의 identity 필드만 따른다.
 - Owner Profile이 Target Profile의 Post를 직접 조회하는 경우에는 Post Visibility·Post Eligibility와 Media 조회
   정책을 적용한다. Target Profile의 Post List, Post detail과 첨부 Media도 같은 정책을 따른다.
 - Target Profile이 Owner Profile의 Post를 조회하는 경우에는 Post와 첨부 Media를 모든 직접 API 조회 표면에서

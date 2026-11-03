@@ -810,7 +810,7 @@ const createRemoteSource = async () => {
 
 const createLocalSource = async (profileId: string) =>
   createPost({
-    document: postContentDocumentFromText('local source'),
+    bodyText: 'local source',
     origin: 'LOCAL',
     profileId,
     visibility: PostVisibility.PUBLIC,

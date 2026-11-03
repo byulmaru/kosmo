@@ -1,13 +1,15 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { SettingsFollowingImportDetail } from '@/components/settings/SettingsFollowingImportDetail';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { SettingsProfileMigrationDetail } from '@/components/settings/SettingsProfileMigrationDetail';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, spacing, textStyles } from '@/theme/tokens';
 
 export default function SettingsProfileMigrationRoute() {
   const router = useRouter();
@@ -36,7 +38,20 @@ export default function SettingsProfileMigrationRoute() {
       {detailHeaderMode !== 'hidden' ? (
         <PageHeader leading={backButton} title="다른 서비스에서 이전" />
       ) : null}
-      <SettingsProfileMigrationDetail />
+      <View style={styles.sections}>
+        <View style={[styles.section, styles.accountSection, { borderColor: theme.divider }]}>
+          <Text accessibilityRole="header" style={[styles.sectionHeading, { color: theme.text }]}>
+            계정 이전
+          </Text>
+          <SettingsProfileMigrationDetail />
+        </View>
+        <View style={styles.section}>
+          <Text accessibilityRole="header" style={[styles.sectionHeading, { color: theme.text }]}>
+            팔로잉 가져오기
+          </Text>
+          <SettingsFollowingImportDetail />
+        </View>
+      </View>
     </RouteScrollContainer>
   );
 }
@@ -51,5 +66,9 @@ const styles = StyleSheet.create({
   },
   nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
   nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
+  accountSection: { borderBottomWidth: borderWidths[1] },
+  section: { minWidth: 0, width: '100%' },
+  sectionHeading: { ...textStyles.uiHeadingS, paddingHorizontal: spacing.lg },
+  sections: { gap: spacing.xl, minWidth: 0, paddingTop: spacing.lg, width: '100%' },
   webRoot: { minWidth: 0, width: '100%' },
 });

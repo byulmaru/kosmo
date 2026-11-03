@@ -3,8 +3,10 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { WebPushSupport } from '@/components/native-push/webPushPermissionContext';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,8 +17,14 @@ const require = createRequire(import.meta.url);
 const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 let activeProfileId = 'profile-a';
+let postRequestSummaryMode: 'ready' | 'pending' | 'error' = 'ready';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
+const postRequestSummaryCalls: Array<{
+  fetchKey?: string;
+  fetchPolicy: string;
+  profileId: string;
+}> = [];
 let HomeTimelineScreen: ComponentType;
 let LocalTimelineScreen: ComponentType;
 
@@ -37,12 +45,34 @@ const toasts: Array<{
 let toastCleanupCount = 0;
 
 const environment = {
-  check: () => ({ status: 'missing' }),
   retain: () => ({ dispose: () => undefined }),
 };
 
-function MockPostList({ identityKey }: { identityKey?: string }) {
-  return createElement('TimelineRows', { identityKey });
+function MockPostList({ header, ...props }: { header?: ReactNode; [key: string]: unknown }) {
+  return createElement('TimelineRows', props, header);
+}
+
+function MockPostRequestListSummary({
+  fetchKey,
+  fetchPolicy,
+  profileId,
+}: {
+  fetchKey?: string;
+  fetchPolicy: string;
+  profileId: string;
+}) {
+  postRequestSummaryCalls.push({ fetchKey, fetchPolicy, profileId });
+  if (postRequestSummaryMode === 'pending') {
+    throw new Promise(() => undefined);
+  }
+  if (postRequestSummaryMode === 'error') {
+    throw new Error('post requests unavailable');
+  }
+  return createElement('PostRequestSummary', { fetchKey, profileId });
+}
+
+function MockBanner() {
+  return createElement('Banner');
 }
 
 function localData() {
@@ -59,6 +89,20 @@ const homeData = {
   currentSession: { id: 'session', selectedProfile: { id: 'profile-a' } },
   me: { id: 'me', name: 'Me', profiles: [{ id: 'profile-a' }] },
 };
+
+function homeWithWebPush(support: WebPushSupport) {
+  return createElement(
+    WebPushPermissionContext.Provider,
+    {
+      value: {
+        permission: 'default',
+        requestPermission: async () => undefined,
+        support,
+      },
+    },
+    createElement(HomeTimelineScreen),
+  );
+}
 
 const localRefetch = (
   _variables: object,
@@ -83,8 +127,14 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
   };
 };
 
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('expo-router', {
+  Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
+});
+mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
+mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
+  UserRoundPlus: 'UserRoundPlus',
+});
 mockModule('react-native', {
   Platform: platform,
   StyleSheet: { create: (styles: object) => styles },
@@ -112,6 +162,10 @@ mockModule('relay-runtime', {
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
 mockModule('@/components/post/PostList', { PostList: MockPostList });
+mockModule('@/components/ui/Banner', { Banner: MockBanner });
+mockModule('@/components/post/PostRequestList', {
+  PostRequestListSummary: MockPostRequestListSummary,
+});
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });
@@ -135,6 +189,7 @@ mockModule('@/components/ui/StateView', { Skeleton: () => null, StateView: () =>
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast }),
 });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111', textSecondary: '#777' }),
 });
@@ -158,9 +213,11 @@ afterEach(async () => {
   homeRequests.length = 0;
   localRefetchRequests.length = 0;
   toasts.length = 0;
+  postRequestSummaryCalls.length = 0;
   toastCleanupCount = 0;
   nativeHomeReselectionHandler = null;
   activeProfileId = 'profile-a';
+  postRequestSummaryMode = 'ready';
   platform.OS = 'ios';
   if (originalWindowDescriptor) {
     Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
@@ -170,9 +227,83 @@ afterEach(async () => {
 });
 
 describe('Timeline refresh', () => {
+  it('leaves the Home request area empty while its query is pending', async () => {
+    postRequestSummaryMode = 'pending';
+
+    await act(async () => {
+      renderer = create(homeWithWebPush('unsupported'));
+    });
+
+    assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
+    // Count emitted host UI; `children` also includes the hidden ErrorBoundary composite.
+    assert.equal(
+      renderer?.root
+        .findByType('TimelineRows' as never)
+        .findAll((node) => typeof node.type === 'string').length,
+      1,
+    );
+  });
+
+  it('hides a Home request query error and restores cards after Home refresh', async () => {
+    postRequestSummaryMode = 'error';
+
+    await act(async () => {
+      renderer = create(homeWithWebPush('unsupported'));
+    });
+
+    assert.equal(renderer?.root.findAllByType('TimelineRows' as never).length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 0);
+    // Count emitted host UI; `children` also includes the hidden ErrorBoundary composite.
+    assert.equal(
+      renderer?.root
+        .findByType('TimelineRows' as never)
+        .findAll((node) => typeof node.type === 'string').length,
+      1,
+    );
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:0',
+      fetchPolicy: 'store-or-network',
+      profileId: 'profile-a',
+    });
+
+    postRequestSummaryMode = 'ready';
+    await act(async () => {
+      renderer?.root.findByType('TimelineRows' as never).props.onRefresh();
+    });
+
+    assert.equal(homeRequests.length, 1);
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:1',
+      fetchPolicy: 'store-and-network',
+      profileId: 'profile-a',
+    });
+
+    await act(async () => homeRequests[0]?.complete?.());
+    assert.equal(renderer?.root.findAllByType('PostRequestSummary' as never).length, 1);
+    assert.deepEqual(postRequestSummaryCalls.at(-1), {
+      fetchKey: '0:1',
+      fetchPolicy: 'store-and-network',
+      profileId: 'profile-a',
+    });
+  });
+
+  it('places the eligible Web permission banner before Home posts', async () => {
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(homeWithWebPush('supported'));
+    });
+
+    const contentOrder = renderer?.root
+      .findAll((node) => node.type === MockBanner || node.type === MockPostList)
+      .map((node) => node.type);
+    assert.deepEqual(contentOrder, [MockBanner, MockPostList]);
+  });
+
   it('iOS Home root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {
     await act(async () => {
-      renderer = create(createElement(HomeTimelineScreen));
+      renderer = create(homeWithWebPush('unsupported'));
     });
 
     assert.ok(nativeHomeReselectionHandler);
@@ -211,7 +342,7 @@ describe('Timeline refresh', () => {
       }
 
       await act(async () => {
-        renderer = create(createElement(HomeTimelineScreen));
+        renderer = create(homeWithWebPush('unsupported'));
       });
 
       let postList = renderer?.root.findByType(MockPostList);

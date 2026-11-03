@@ -28,9 +28,12 @@ let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
 let muteHeadingFocusCalls = 0;
+let blockedHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
+    Link: ({ children, ...props }: Record<string, unknown>) =>
+      createElement('Link', props, children as ReactNode),
     Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
     Slot: () => createElement(SlotRoute),
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
@@ -63,6 +66,7 @@ mock.module('react-relay', {
 
 mock.module('react-native', {
   exports: {
+    Animated: { View: 'View' },
     Platform: {
       get OS() {
         return platform;
@@ -83,7 +87,41 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
-  exports: { ChevronLeftIcon: 'ChevronLeftIcon' },
+  exports: {
+    ChevronDownIcon: 'ChevronDownIcon',
+    ChevronLeftIcon: 'ChevronLeftIcon',
+    ChevronRightIcon: 'ChevronRightIcon',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
+  exports: {
+    default: {
+      sourceSha256: 'fixture-source-sha256',
+      notices: [
+        {
+          license: 'MIT',
+          name: 'first-package',
+          sourceUrl: 'https://licenses.example/first-package',
+          text: 'Original license text\nSecond line.',
+          version: '1.0.0',
+        },
+        {
+          license: 'Apache-2.0',
+          name: 'second-package',
+          sourceUrl: 'https://licenses.example/second-package',
+          text: 'Second original license text.',
+          version: '2.0.0',
+        },
+        {
+          license: 'CC-BY-4.0',
+          name: 'sample-pending-package',
+          sourceUrl: 'https://licenses.example/pending-package',
+          text: '',
+          version: '',
+        },
+      ],
+    },
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../PageHeader.tsx', import.meta.url), {
   exports: {
@@ -182,6 +220,11 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     useTheme: () => ({ border: '#333333', text: '#111111' }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../Splash.tsx', import.meta.url), {
   exports: {
     Splash: (props: Record<string, unknown>) => createElement('Splash', props),
@@ -202,6 +245,7 @@ let SettingsAccountDeletionRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
+let SettingsLicensesRoute: ComponentType;
 let SettingsDeveloperRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let WebRouteScrollContainer: ComponentType<RouteScrollContainerProps>;
@@ -216,6 +260,8 @@ before(async () => {
     await import('../ui/RouteScrollContainer.web'));
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
+  ({ default: SettingsLicensesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/licenses'));
   ({ default: SettingsDeveloperRoute } =
     await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
@@ -255,6 +301,7 @@ afterEach(async () => {
   otaDownloadError = null;
   publicChannel = 'prod';
   muteHeadingFocusCalls = 0;
+  blockedHeadingFocusCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -325,7 +372,7 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web migration detail은 공통 master의 migration item과 Settings parent back을 사용한다', async () => {
+  it('full Web migration destination은 한 페이지에서 두 section과 Settings parent back을 제공한다', async () => {
     await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
 
     assert.ok(byTestId('settings-workspace'));
@@ -334,27 +381,28 @@ describe('Settings routes', () => {
       ['설정', '다른 서비스에서 이전'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
     const back = rendered('PageHeader')[1].props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
     assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
-  it('full Web following import detail은 같은 master와 Settings parent back을 사용한다', async () => {
+  it('legacy following-import route는 canonical migration destination으로 redirect한다', async () => {
     await renderRoute('/settings/following-import', SettingsFollowingImportRoute);
 
-    assert.ok(byTestId('settings-workspace'));
-    assert.deepEqual(
-      rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '팔로잉 가져오기'],
-    );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'following-import');
-    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
-    const back = rendered('PageHeader')[1].props.leading;
-    assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
-    await act(async () => back.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings']);
+    assert.equal(rendered('Redirect').length, 1);
+    assert.equal(rendered('Redirect')[0].props.href, '/settings/profile-migration');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
+    assert.equal(rendered('SettingsProfileMigrationDetail').length, 0);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 0);
   });
 
   it('legacy default-post-visibility route redirects to the canonical profile settings route', async () => {
@@ -484,12 +532,15 @@ describe('Settings routes', () => {
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
-  it('mobile Web blocked profile은 별도 heading focus 계약 없이 목록을 표시한다', async () => {
+  it('mobile Web blocked profile 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
     width = 390;
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
     assert.equal(rendered('PageHeader').length, 0);
-    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
+    const list = rendered('SettingsBlockedProfiles')[0];
+    assert.ok(list);
+    await act(async () => list.props.onUnblockSuccess());
+    assert.equal(blockedHeadingFocusCalls, 1);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
@@ -530,6 +581,13 @@ describe('Settings routes', () => {
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
   });
 
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
@@ -575,7 +633,7 @@ describe('Settings routes', () => {
     assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
-  it('iOS migration destination도 header와 content를 같은 ScrollView에 두고 Settings로 돌아간다', async () => {
+  it('iOS migration destination은 두 section과 header를 하나의 ScrollView에 두고 Settings로 돌아간다', async () => {
     platform = 'ios';
     width = 390;
     await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
@@ -590,6 +648,18 @@ describe('Settings routes', () => {
         .length,
       1,
     );
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsFollowingImportDetail')
+        .length,
+      1,
+    );
+    assert.deepEqual(
+      scrollView
+        .findAll((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['계정 이전', '팔로잉 가져오기'],
+    );
+    assert.equal(rendered('ScrollView').length, 1);
 
     await act(async () => header.props.leading.props.onPress());
     assert.deepEqual(dismissedToPaths, ['/settings']);
@@ -694,10 +764,102 @@ describe('Settings routes', () => {
 
     assert.deepEqual(
       rendered('SettingsLinkRow').map((node) => node.props.href),
-      ['/privacy', '/account-deletion', '/child-safety', '/settings/developer'],
+      [
+        '/privacy',
+        '/account-deletion',
+        '/child-safety',
+        '/settings/licenses',
+        '/settings/developer',
+      ],
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
+  });
+
+  it('오픈소스 라이선스는 한 항목만 펼치고 원문과 외부 출처 링크를 제공한다', async () => {
+    await renderRoute('/settings/licenses', SettingsLicensesRoute);
+
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    assert.equal(rendered('PageHeader')[1].props.title, '오픈소스 라이선스');
+    const rows = licenseRows();
+    assert.equal(rows.length, 2);
+    assert.deepEqual(
+      settingsItems().map((node) => [node.props.label, node.props.description]),
+      [
+        ['first-package', '버전 1.0.0, MIT'],
+        ['second-package', '버전 2.0.0, Apache-2.0'],
+      ],
+    );
+    assert.equal(
+      rendered('Pressable').some((node) =>
+        String(node.props.accessibilityLabel).startsWith('sample-pending-package'),
+      ),
+      false,
+    );
+    assert.deepEqual(
+      rows.map((node) => node.props.accessibilityState),
+      [{ expanded: false }, { expanded: false }],
+    );
+
+    await act(async () =>
+      rows[0].props.onFocus({
+        currentTarget: { matches: (selector: string) => selector === ':focus-visible' },
+      }),
+    );
+    assert.equal(flattenStyle(licenseRows()[0].props.style()).outlineStyle, 'solid');
+    assert.equal(flattenStyle(licenseRows()[1].props.style()).outlineStyle, 'none');
+    await act(async () => licenseRows()[0].props.onBlur());
+    assert.equal(flattenStyle(licenseRows()[0].props.style()).outlineStyle, 'none');
+
+    await act(async () => rows[0].props.onPress());
+    assert.deepEqual(licenseRows()[0].props.accessibilityState, { expanded: true });
+    assert.ok(
+      rendered('Text').some(
+        (node) =>
+          node.props.selectable && node.props.children === 'Original license text\nSecond line.',
+      ),
+    );
+    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/first-package');
+    const sourceLink = rendered('Link')[0].findAll(
+      (node) => (node.type as unknown) === 'Pressable',
+    )[0];
+    assert.equal(sourceLink.props.accessibilityRole, 'link');
+    assert.equal(sourceLink.props.accessibilityLabel, 'first-package 출처 보기');
+
+    await act(async () => licenseRows()[1].props.onPress());
+    assert.deepEqual(
+      licenseRows().map((node) => node.props.accessibilityState),
+      [{ expanded: false }, { expanded: true }],
+    );
+    assert.equal(
+      rendered('Text').some(
+        (node) => node.props.selectable && node.props.children === 'Second original license text.',
+      ),
+      true,
+    );
+    assert.equal(rendered('Link')[0].props.href, 'https://licenses.example/second-package');
+    assert.equal(
+      rendered('Link').some(
+        (node) => node.props.href === 'https://licenses.example/pending-package',
+      ),
+      false,
+    );
+
+    await act(async () => licenseRows()[1].props.onPress());
+    assert.equal(rendered('Link').length, 0);
+    assert.equal(
+      licenseRows().every((node) => node.props.accessibilityState.expanded === false),
+      true,
+    );
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.accessibilityRole === 'link'),
+      false,
+    );
+
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings/info']);
   });
 
   it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
@@ -832,7 +994,9 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
       createNodeMock: ({ props }) =>
         (props as { testID?: string }).testID === 'mute-heading-focus'
           ? { focus: () => (muteHeadingFocusCalls += 1) }
-          : null,
+          : (props as { testID?: string }).testID === 'blocked-heading-focus'
+            ? { focus: () => (blockedHeadingFocusCalls += 1) }
+            : null,
     });
   });
   assert.ok(renderer);
@@ -859,6 +1023,16 @@ function byTestId(testID: string): ReactTestInstance {
 
 function settingsItems(): ReactTestInstance[] {
   return rendered('SettingsItem');
+}
+
+function licenseRows(): ReactTestInstance[] {
+  return rendered('Pressable').filter(
+    (node) =>
+      node.props.accessibilityRole === 'button' &&
+      ['first-package', 'second-package', 'sample-pending-package'].some((name) =>
+        String(node.props.accessibilityLabel).startsWith(name),
+      ),
+  );
 }
 
 function settingsItem(label: string): ReactTestInstance {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, space, textStyles } from '@/theme/tokens';
 import type {
   ProfileMigrationSourceControl_profile$data,
   ProfileMigrationSourceControl_profile$key,
@@ -15,6 +15,7 @@ import type { ProfileMigrationSourceControlUnregisterMutation } from './__genera
 const ProfileFragment = graphql`
   fragment ProfileMigrationSourceControl_profile on Profile {
     id
+    hasMigrationSource
     displayName
     handle
     relativeHandle
@@ -65,6 +66,8 @@ export function ProfileMigrationSourceControl({
 }: ProfileMigrationSourceControlProps) {
   const profile = useFragment(ProfileFragment, profileKey);
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const wideWeb = Platform.OS === 'web' && width >= breakpoints.compact;
   const [sourceHandle, setSourceHandle] = useState('');
   const [registerState, setRegisterState] = useState<RegisterState>('idle');
   const [unregisterState, setUnregisterState] = useState<UnregisterState>('idle');
@@ -74,10 +77,37 @@ export function ProfileMigrationSourceControl({
   const [unregisterCommit, unregistering] =
     useMutation<ProfileMigrationSourceControlUnregisterMutation>(UnregisterMutation);
   const busy = registering || unregistering;
+  if (profile.displayName == null || profile.instance == null) {
+    return null;
+  }
+
+  const displayName = profile.displayName;
+  const controlLabel = `Kosmo 프로필 이전 원본 ${displayName} ${profile.relativeHandle}`;
+  if (editable && typeof profile.hasMigrationSource !== 'boolean') {
+    return (
+      <View
+        accessibilityLabel={controlLabel}
+        style={styles.root}
+        testID="profile-migration-source-control"
+      >
+        <Text accessibilityRole="alert" style={[styles.copy, { color: theme.danger }]}>
+          이전 설정을 확인하지 못했어요.
+        </Text>
+      </View>
+    );
+  }
+
   const destinationHandle = getQualifiedDestinationHandle(profile);
+  const hasRegisteredSource = editable
+    ? profile.hasMigrationSource === true
+    : profile.migrationSource != null;
+  const canRegister = editable && profile.hasMigrationSource === false;
+  const canUnregister = editable && profile.hasMigrationSource === true;
+  const preparedSource =
+    hasRegisteredSource && profile.migrationSource != null ? profile.migrationSource : null;
 
   const register = () => {
-    if (!editable || busy) {
+    if (!canRegister || busy) {
       return;
     }
 
@@ -105,7 +135,7 @@ export function ProfileMigrationSourceControl({
   };
 
   const unregister = () => {
-    if (!editable || busy) {
+    if (!canUnregister || busy) {
       return;
     }
 
@@ -127,88 +157,84 @@ export function ProfileMigrationSourceControl({
     });
   };
 
-  const preparedSource = profile.migrationSource;
-  const controlLabel = `Kosmo 프로필 이전 원본 ${profile.displayName} ${profile.relativeHandle}`;
   const registerButtonLabel = '기존 계정 등록';
   const unregisterButtonLabel = '기존 계정 등록 해제';
 
   return (
     <View
       accessibilityLabel={controlLabel}
-      style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={styles.root}
       testID="profile-migration-source-control"
     >
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        프로필 이전 원본
-      </Text>
-      <Text style={[styles.description, { color: theme.textSecondary }]}>
-        기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요.
-        팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.
-      </Text>
-      <View
-        accessibilityLabel={`이전받을 Kosmo 프로필 ${profile.displayName} ${destinationHandle ?? ''}`.trim()}
-        role="group"
-      >
-        <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>
-          이전받을 Kosmo 프로필
-        </Text>
-        <Text style={[styles.sourceName, { color: theme.text }]}>{profile.displayName}</Text>
-        {destinationHandle ? (
-          <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
-            {destinationHandle}
-          </Text>
-        ) : (
-          <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
-            주소를 확인할 수 없어요.
-          </Text>
-        )}
-      </View>
-      {preparedSource ? (
-        <View
-          accessibilityLabel={`현재 등록된 원본 ${preparedSource.displayName} ${preparedSource.relativeHandle}`}
-          role="group"
-        >
-          <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>현재 등록된 원본</Text>
-          <Text style={[styles.sourceName, { color: theme.text }]}>
-            {preparedSource.displayName}
-          </Text>
-          <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
-            {preparedSource.relativeHandle}
-          </Text>
-        </View>
-      ) : null}
-      {!preparedSource ? (
-        <TextField
-          accessibilityLabel="기존 계정 주소"
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={editable && !busy}
-          error={validationError}
-          label="기존 계정 주소"
-          onChangeText={(value) => {
-            setSourceHandle(value);
-            setValidationError(undefined);
-            setRegisterState('idle');
-          }}
-          placeholder="@handle@example.com"
-          value={sourceHandle}
-        />
-      ) : null}
-      {editable ? (
+      {canRegister || (!editable && !hasRegisteredSource) ? (
         <>
-          {!preparedSource ? (
-            <Button
-              accessibilityLabel={registerButtonLabel}
-              accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
-              disabled={!sourceHandle.trim() || busy}
-              loading={registering}
-              loadingText="등록 중"
-              onPress={register}
-              style={styles.register}
-            >
-              {registerButtonLabel}
-            </Button>
-          ) : null}
+          <Text style={[styles.copy, { color: theme.textSecondary }]}>
+            먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.
+          </Text>
+          <View style={[styles.form, wideWeb ? styles.wideForm : undefined]}>
+            <View style={wideWeb ? styles.field : undefined}>
+              <TextField
+                accessibilityLabel="기존 계정 주소"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={canRegister && !busy}
+                error={validationError}
+                label="기존 계정 주소"
+                onChangeText={(value) => {
+                  setSourceHandle(value);
+                  setValidationError(undefined);
+                  setRegisterState('idle');
+                }}
+                placeholder="@handle@example.com"
+                value={sourceHandle}
+              />
+            </View>
+            {canRegister ? (
+              <Button
+                accessibilityLabel={registerButtonLabel}
+                accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
+                disabled={!sourceHandle.trim() || busy}
+                loading={registering}
+                loadingText="등록 중"
+                onPress={register}
+                style={wideWeb ? styles.wideRegister : styles.register}
+              >
+                {registerButtonLabel}
+              </Button>
+            ) : null}
+          </View>
+        </>
+      ) : preparedSource ? (
+        <>
+          <View
+            accessibilityLabel={`등록한 계정 ${preparedSource.relativeHandle}`}
+            role="group"
+            style={styles.accountGroup}
+          >
+            <Text style={[styles.copy, { color: theme.textSecondary }]}>등록한 계정</Text>
+            <Text style={[styles.account, { color: theme.text }]}>
+              {preparedSource.relativeHandle}
+            </Text>
+          </View>
+          <View
+            accessibilityLabel={`이전할 Kosmo 프로필 ${destinationHandle ?? '주소를 확인할 수 없어요.'}`}
+            role="group"
+            style={styles.nextTask}
+          >
+            <Text style={[styles.copy, { color: theme.textSecondary }]}>
+              이제 기존 서비스에서 아래 주소로 이전을 시작하세요.
+            </Text>
+            <Text style={[styles.account, { color: theme.text }]}>
+              {destinationHandle ?? '주소를 확인할 수 없어요.'}
+            </Text>
+          </View>
+        </>
+      ) : null}
+      {canUnregister ? (
+        <View style={styles.footer}>
+          <Text style={[styles.copy, { color: theme.textSecondary }]}>
+            등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.
+          </Text>
           <Button
             accessibilityLabel={unregisterButtonLabel}
             accessibilityState={{ busy: unregistering, disabled: busy }}
@@ -216,36 +242,29 @@ export function ProfileMigrationSourceControl({
             loading={unregistering}
             loadingText="해제 중"
             onPress={unregister}
-            style={styles.register}
+            style={styles.unregister}
+            tone="secondary"
           >
             {unregisterButtonLabel}
           </Button>
-          <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
-            등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.
-          </Text>
-        </>
-      ) : (
-        <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
+        </View>
+      ) : !editable ? (
+        <Text style={[styles.copy, { color: theme.textSecondary }]}>
           프로필 소유자만 원본을 변경할 수 있어요.
         </Text>
-      )}
-      {registerState === 'error' ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+      ) : null}
+      {registerState === 'error' && canRegister ? (
+        <Text accessibilityRole="alert" style={[styles.copy, { color: theme.danger }]}>
           이전 원본을 등록하지 못했어요.
         </Text>
       ) : null}
-      {registerState === 'success' ? (
-        <View accessibilityLiveRegion="polite">
-          <Text style={[styles.success, { color: theme.textSecondary }]}>
-            이전 원본을 등록했어요
-          </Text>
-          <Text style={[styles.success, { color: theme.textSecondary }]}>
-            이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.
-          </Text>
+      {registerState === 'success' && preparedSource ? (
+        <View accessibilityLiveRegion="polite" role="status">
+          <Text style={[styles.copy, { color: theme.textSecondary }]}>기존 계정을 등록했어요.</Text>
         </View>
       ) : null}
       {unregisterState === 'error' ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+        <Text accessibilityRole="alert" style={[styles.copy, { color: theme.danger }]}>
           기존 계정 등록을 해제하지 못했어요.
         </Text>
       ) : null}
@@ -256,22 +275,28 @@ export function ProfileMigrationSourceControl({
 function getQualifiedDestinationHandle(
   profile: ProfileMigrationSourceControl_profile$data,
 ): string | null {
-  if (!profile.instance.canonicalOrigin) {
+  const canonicalOrigin = profile.instance?.canonicalOrigin;
+  if (!canonicalOrigin) {
     return null;
   }
 
-  return `@${profile.handle}@${new URL(profile.instance.canonicalOrigin).host}`;
+  return `@${profile.handle}@${new URL(canonicalOrigin).host}`;
 }
 
 const styles = StyleSheet.create({
-  root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  description: { fontFamily: 'SUIT', ...typography.sm },
-  sourceLabel: { fontFamily: 'SUIT', ...typography.sm },
-  sourceName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  sourceHandle: { fontFamily: 'SUIT', ...typography.sm },
-  error: { fontFamily: 'SUIT', ...typography.sm },
-  success: { fontFamily: 'SUIT', ...typography.sm },
-  memberNote: { fontFamily: 'SUIT', ...typography.sm },
-  register: { alignSelf: 'flex-start' },
+  root: { gap: space[24] },
+  account: textStyles.uiLabelM,
+  accountGroup: { gap: space[4] },
+  copy: textStyles.uiCopyM,
+  footer: {
+    gap: space[12],
+    paddingTop: space[16],
+  },
+  field: { flex: 1, minWidth: 0 },
+  form: { gap: space[16] },
+  wideForm: { flexDirection: 'row', alignItems: 'flex-start', gap: space[12] },
+  nextTask: { gap: space[8] },
+  register: { width: '100%' },
+  wideRegister: { marginTop: space[24] },
+  unregister: { alignSelf: 'flex-start' },
 });

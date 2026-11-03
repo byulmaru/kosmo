@@ -1,16 +1,8 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, History, Menu, Search as SearchIcon, X } from 'lucide-react-native';
+import { History, X } from 'lucide-react-native';
 import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
@@ -33,9 +25,10 @@ import { StateView } from '@/components/ui/StateView';
 import { Tab } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement } from 'react';
+import type { TextInput } from 'react-native';
 import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/SearchToolbar';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
@@ -235,7 +228,6 @@ export default function SearchScreen() {
   const query = typeof params.q === 'string' ? params.q.trim() : '';
   const activeTab = parseSearchTab(params.tab ?? null);
   const inputRef = useRef<TextInput>(null);
-  const [input, setInput] = useState(query);
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -340,11 +332,6 @@ export default function SearchScreen() {
     },
     [],
   );
-  useEffect(() => {
-    if (!focused) {
-      setInput(query);
-    }
-  }, [focused, query]);
   const remember = (term: string) => {
     setRecent((current) => {
       const next = addRecentSearch(current, term);
@@ -398,16 +385,15 @@ export default function SearchScreen() {
   };
 
   const clearSearch = () => {
-    setInput('');
     keepSearchFocused();
     if (query) {
       preserveQueryNavigationPosition();
       router.setParams({ q: undefined });
     }
-    inputRef.current?.focus();
   };
 
   const phase = focused ? 'input' : query ? 'results' : 'before';
+  const leadingAction = phase === 'before' ? (web && !mobileWeb ? 'none' : 'menu') : 'back';
   const renderLeadingControl = ({ children }: SearchToolbarRenderLeadingControlProps) => {
     const linkControl = cloneElement(
       children as ReactElement<{
@@ -419,81 +405,28 @@ export default function SearchScreen() {
     return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
   };
 
-  const nativeSearchHeader = !web ? (
-    <PageHeader>
-      <View
-        accessibilityLabel="검색"
-        onBlur={leaveSearchFocus}
-        onFocus={keepSearchFocused}
-        style={styles.nativeSearchHeader}
-      >
-        {phase === 'before' ? (
-          <IconButton
-            aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
-            accessibilityLabel="메뉴 열기"
-            accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
-            controlRef={shellChrome?.navigationDrawerTriggerRef}
-            onFocus={(event) => event.stopPropagation()}
-            onPress={shellChrome?.openNavigationDrawer}
-            style={styles.iconButton}
-            targetSize={44}
-            visualSize={44}
-          >
-            <Menu color={theme.text} size={24} strokeWidth={2} />
-          </IconButton>
-        ) : (
-          <NavigationLink href={searchHref('', activeTab)}>
-            <IconButton
-              accessibilityLabel="뒤로"
-              accessibilityRole="link"
-              onPress={() => {
-                preserveQueryNavigationPosition(false);
-                setInput('');
-                setFocused(false);
-              }}
-              onPressIn={keepSearchFocused}
-              style={styles.iconButton}
-              targetSize={44}
-              visualSize={44}
-            >
-              <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-            </IconButton>
-          </NavigationLink>
-        )}
-        <View
-          style={[styles.inputShell, { backgroundColor: theme.surface }]}
-          testID="search-input-shell"
-        >
-          <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel="검색어"
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setInput}
-            onSubmitEditing={() => navigate(input)}
-            placeholder="검색어를 입력하세요"
-            placeholderTextColor={theme.textSecondary}
-            returnKeyType="search"
-            style={[styles.input, { color: theme.text }]}
-            value={input}
-          />
-          {input ? (
-            <IconButton
-              accessibilityLabel="검색 지우기"
-              onPress={clearSearch}
-              onPressIn={keepSearchFocused}
-              style={styles.clearButton}
-              targetSize={44}
-              visualSize={44}
-            >
-              <X color={theme.textSecondary} size={18} strokeWidth={2} />
-            </IconButton>
-          ) : null}
-        </View>
-      </View>
-    </PageHeader>
-  ) : null;
+  const searchToolbar = (
+    <SearchToolbar
+      focused={focused}
+      inputRef={inputRef}
+      leadingAction={leadingAction}
+      leadingControlAriaControls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
+      leadingControlExpanded={shellChrome?.navigationDrawerOpen ?? false}
+      leadingControlRef={shellChrome?.navigationDrawerTriggerRef}
+      onBackPress={() => {
+        preserveQueryNavigationPosition(false);
+        setFocused(false);
+      }}
+      onBlur={leaveSearchFocus}
+      onClear={clearSearch}
+      onFocus={keepSearchFocused}
+      onMenuPress={shellChrome?.openNavigationDrawer}
+      onSubmit={navigate}
+      renderLeadingControl={renderLeadingControl}
+      query={query}
+    />
+  );
+  const nativeSearchHeader = !web ? <PageHeader>{searchToolbar}</PageHeader> : null;
 
   return (
     <PaginationScrollView
@@ -506,29 +439,7 @@ export default function SearchScreen() {
     >
       {nativeSearchHeader}
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
-        {web ? (
-          <SearchToolbar
-            inputRef={inputRef}
-            leadingAction={phase === 'before' ? (mobileWeb ? 'menu' : 'none') : 'back'}
-            leadingControlAriaControls={
-              mobileWeb && shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined
-            }
-            leadingControlExpanded={shellChrome?.navigationDrawerOpen ?? false}
-            leadingControlRef={shellChrome?.navigationDrawerTriggerRef}
-            onBackPress={() => {
-              preserveQueryNavigationPosition(false);
-              setInput('');
-              setFocused(false);
-            }}
-            onChangeText={setInput}
-            onClear={clearSearch}
-            onMenuPress={shellChrome?.openNavigationDrawer}
-            onSubmit={navigate}
-            platform="web"
-            renderLeadingControl={renderLeadingControl}
-            value={input}
-          />
-        ) : null}
+        {web ? searchToolbar : null}
 
         {phase === 'input' ? (
           <View style={styles.recent}>
@@ -657,31 +568,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
-  nativeSearchHeader: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
-  inputShell: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    flex: 1,
-    flexDirection: 'row',
-    height: 44,
-    paddingLeft: spacing.lg,
-  },
-  input: {
-    flex: 1,
-    fontFamily: fontFamilies.ui,
-    minWidth: 0,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    ...typography.sm,
-    fontSize: typography.md.fontSize,
-  },
-  clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
   sectionTitle: {
     fontFamily: fontFamilies.ui,

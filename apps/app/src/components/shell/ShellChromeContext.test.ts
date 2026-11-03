@@ -10,9 +10,15 @@ test('경로만 바뀐 shell 갱신은 chrome 소비자를 다시 렌더링하�
   let renders = 0;
   const Consumer = memo(function Consumer() {
     renders += 1;
-    return createElement('drawer-state', { open: useShellChrome()?.navigationDrawerOpen });
+    const chrome = useShellChrome();
+    return createElement('drawer-state', {
+      onCompose: chrome?.openComposer,
+      open: chrome?.navigationDrawerOpen,
+    });
   });
+  const openComposer = () => {};
   const actions = {
+    openComposer,
     openNavigationDrawer: () => {},
     openProfileSwitcher: () => {},
     registerHomeReselection: () => () => {},
@@ -30,6 +36,10 @@ test('경로만 바뀐 shell 갱신은 chrome 소비자를 다시 렌더링하�
   });
   try {
     const initialRenders = renders;
+    assert.equal(
+      renderer!.root.find((node) => (node.type as unknown) === 'drawer-state').props.onCompose,
+      openComposer,
+    );
     await act(async () => {
       renderer.update(render(false));
     });
@@ -40,6 +50,10 @@ test('경로만 바뀐 shell 갱신은 chrome 소비자를 다시 렌더링하�
     assert.equal(
       renderer!.root.find((node) => (node.type as unknown) === 'drawer-state').props.open,
       true,
+    );
+    assert.equal(
+      renderer!.root.find((node) => (node.type as unknown) === 'drawer-state').props.onCompose,
+      openComposer,
     );
     assert.equal(renders, initialRenders + 1);
   } finally {

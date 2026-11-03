@@ -1,4 +1,4 @@
-import { Children, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -17,41 +17,67 @@ import { Button } from './Button';
 import { getCoachmarkPosition } from './coachmarkPosition';
 import { ModalSheetHost } from './ModalSheetHost';
 import { useOverlayLifecycle } from './Overlay';
-import type { PropsWithChildren, RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
-export type CoachmarkProps = PropsWithChildren<{
+export type CoachmarkProgress = Readonly<{
+  current: number;
+  total: number;
+}>;
+
+export type CoachmarkProps = {
   anchorRef: RefObject<NativeView | null>;
   description: string;
   onClose: () => void;
   onComplete: () => void;
+  onExited?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  onShown?: () => void;
+  preferredFocusRef?: RefObject<NativeView | HTMLElement | null>;
+  progress?: CoachmarkProgress;
   title?: string;
   visible: boolean;
-}>;
+};
 
 type Layout = Readonly<{ height: number; width: number }>;
+
+type WebProgressProps = {
+  'aria-valuemax': number;
+  'aria-valuemin': number;
+  'aria-valuenow': number;
+};
 
 const MAX_WIDTH = 256;
 const ARROW_SIZE = iconSizes[16];
 const ARROW_HALF = ARROW_SIZE / 2;
 
-// Web Modal focus trapping can start before measured content mounts; focus the primary action on mount.
-const focusCoachmarkAction = (node: NativeView | null) => {
-  if (Platform.OS === 'web') {
-    node?.focus();
-  }
-};
+function isValidProgress(
+  progress: CoachmarkProgress | undefined,
+): progress is CoachmarkProgress & { current: number; total: number } {
+  return Boolean(
+    progress &&
+    progress.total > 1 &&
+    Number.isFinite(progress.current) &&
+    Number.isFinite(progress.total) &&
+    Number.isInteger(progress.current) &&
+    Number.isInteger(progress.total) &&
+    progress.current >= 1 &&
+    progress.current <= progress.total,
+  );
+}
 
 export function Coachmark({
   anchorRef,
-  children,
   description,
   onClose,
   onComplete,
+  onExited,
   onNext,
   onPrevious,
+  onShown,
+  preferredFocusRef,
+  progress,
   title,
   visible,
 }: CoachmarkProps) {
@@ -66,7 +92,6 @@ export function Coachmark({
       : undefined;
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const overlayMotion = useOverlayMotion(visible);
   const dialogRef = useRef<NativeView>(null);
   const [anchor, setAnchor] = useState<{
     height: number;
@@ -75,6 +100,26 @@ export function Coachmark({
     y: number;
   } | null>(null);
   const [bubble, setBubble] = useState<Layout>({ height: 0, width: MAX_WIDTH });
+  const [shown, setShown] = useState(false);
+  const [exitPending, setExitPending] = useState(false);
+  if (visible && !exitPending) {
+    setExitPending(true);
+  }
+  const targetReady = Boolean(
+    (!visible || anchorRef.current) && anchor && anchor.width > 0 && anchor.height > 0,
+  );
+  const overlayMotion = useOverlayMotion(visible && targetReady);
+  const modalVisible = overlayMotion.mounted && targetReady;
+  const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
+  // Web Modal focus trapping can start before measured content mounts; refocus once actions are ready.
+  const focusCoachmarkAction = useCallback(
+    (node: NativeView | null) => {
+      if (Platform.OS === 'web' && presentationReady) {
+        node?.focus();
+      }
+    },
+    [presentationReady],
+  );
 
   const close = () => {
     if (visible) {
@@ -84,9 +129,30 @@ export function Coachmark({
 
   useOverlayLifecycle({
     focusScopeRef: dialogRef,
-    open: overlayMotion.mounted,
+    open: modalVisible,
     onRequestClose: close,
+    preferredFocusRef,
   });
+
+  // Persistence is tied to the measured, entered presentation rather than visibility alone.
+  useEffect(() => {
+    if (!visible) {
+      setShown(false);
+      return;
+    }
+
+    if (!shown && overlayMotion.entered && targetReady && anchor && bubble.height > 0) {
+      setShown(true);
+      onShown?.();
+    }
+  }, [anchor, bubble.height, onShown, overlayMotion.entered, shown, targetReady, visible]);
+
+  useEffect(() => {
+    if (!visible && !overlayMotion.mounted && exitPending) {
+      setExitPending(false);
+      onExited?.();
+    }
+  }, [exitPending, onExited, overlayMotion.mounted, visible]);
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {
@@ -110,28 +176,23 @@ export function Coachmark({
     return () => cancelAnimationFrame(frame);
   });
 
-  const position = anchor
-    ? getCoachmarkPosition({
-        anchor,
-        bubble,
-        viewport: {
-          bottomInset: insets.bottom,
-          height,
-          leftInset: insets.left,
-          rightInset: insets.right,
-          topInset: insets.top,
-          width,
-        },
-      })
-    : null;
-  const progress = Children.map(children, (child) =>
-    typeof child === 'string' || typeof child === 'number' ? (
-      <Text style={styles.footerLabel}>{child}</Text>
-    ) : (
-      child
-    ),
-  );
+  const position =
+    targetReady && anchor
+      ? getCoachmarkPosition({
+          anchor,
+          bubble,
+          viewport: {
+            bottomInset: insets.bottom,
+            height,
+            leftInset: insets.left,
+            rightInset: insets.right,
+            topInset: insets.top,
+            width,
+          },
+        })
+      : null;
   const label = title?.trim() || description;
+  const visibleProgress = isValidProgress(progress) ? progress : null;
   const maxWidth = Math.min(
     MAX_WIDTH,
     Math.max(0, width - insets.left - insets.right - space[16] * 2),
@@ -139,6 +200,7 @@ export function Coachmark({
 
   return (
     <ModalSheetHost
+      aria-hidden={!presentationReady || undefined}
       accessibilityLabel={label}
       animationType="none"
       closeRequestDisabled={!visible}
@@ -148,24 +210,27 @@ export function Coachmark({
       role="dialog"
       statusBarTranslucent
       transparent
-      visible={overlayMotion.mounted}
+      visible={modalVisible}
     >
       <View
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
-        pointerEvents={visible ? 'auto' : 'none'}
+        accessibilityElementsHidden={!presentationReady}
+        importantForAccessibility={presentationReady ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={presentationReady ? 'auto' : 'none'}
         style={styles.backdrop}
       >
         <Animated.View
           pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+            {
+              backgroundColor: theme.overlayScrim,
+              opacity: modalVisible ? overlayMotion.progress : 0,
+            },
           ]}
         />
         {position ? (
           <Animated.View
-            pointerEvents={visible ? 'auto' : 'none'}
+            pointerEvents={presentationReady ? 'auto' : 'none'}
             style={[
               styles.bubble,
               {
@@ -190,6 +255,7 @@ export function Coachmark({
                 styles.arrow,
                 {
                   backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.borderDefault,
                   left: position.arrowLeft - ARROW_HALF,
                 },
                 position.placement === 'bottom' ? styles.arrowAbove : styles.arrowBelow,
@@ -197,12 +263,12 @@ export function Coachmark({
               testID="coachmark-arrow"
             />
             <View
-              accessibilityElementsHidden={!visible}
+              accessibilityElementsHidden={!presentationReady}
               accessible={false}
-              accessibilityLabel={label}
-              accessibilityViewIsModal
-              aria-hidden={!visible || undefined}
-              importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+              accessibilityLabel={Platform.OS === 'web' ? undefined : label}
+              accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true}
+              aria-hidden={!presentationReady || undefined}
+              importantForAccessibility={presentationReady ? 'auto' : 'no-hide-descendants'}
               onAccessibilityEscape={close}
               onLayout={({ nativeEvent }) => {
                 const nextWidth = nativeEvent.layout.width;
@@ -237,6 +303,53 @@ export function Coachmark({
                 testID="coachmark-body"
               >
                 <View style={styles.copy}>
+                  {visibleProgress ? (
+                    <View
+                      accessible
+                      accessibilityLabel="진행률"
+                      accessibilityRole="progressbar"
+                      accessibilityValue={{
+                        max: visibleProgress.total,
+                        min: 1,
+                        now: visibleProgress.current,
+                      }}
+                      style={styles.progressRow}
+                      {...(Platform.OS === 'web'
+                        ? ({
+                            'aria-valuemax': visibleProgress.total,
+                            'aria-valuemin': 1,
+                            'aria-valuenow': visibleProgress.current,
+                          } as WebProgressProps)
+                        : undefined)}
+                    >
+                      <Text
+                        accessible={false}
+                        style={[styles.progressLabel, { color: theme.foregroundSecondary }]}
+                      >
+                        {`${visibleProgress.current}/${visibleProgress.total}`}
+                      </Text>
+                      <View accessible={false} style={styles.progressTrack}>
+                        {Array.from({ length: visibleProgress.total }, (_, index) => {
+                          const filled = index < visibleProgress.current;
+                          return (
+                            <View
+                              accessible={false}
+                              key={index}
+                              style={[
+                                styles.progressSegment,
+                                {
+                                  backgroundColor: filled
+                                    ? theme.actionPrimaryBase
+                                    : theme.borderDefault,
+                                },
+                              ]}
+                              testID="coachmark-progress-segment"
+                            />
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
                   {title?.trim() ? (
                     <Text
                       accessibilityRole="header"
@@ -250,11 +363,10 @@ export function Coachmark({
                   </Text>
                 </View>
                 <View style={styles.footer}>
-                  {progress?.length ? <View style={styles.progress}>{progress}</View> : null}
                   <View style={styles.actions}>
                     <Button
                       accessibilityLabel="건너뛰기"
-                      disabled={!visible}
+                      disabled={!presentationReady}
                       onPress={close}
                       size="compact"
                       tone="secondary"
@@ -266,7 +378,7 @@ export function Coachmark({
                       {onNext || onPrevious ? (
                         <Button
                           accessibilityLabel="이전"
-                          disabled={!visible || !onPrevious}
+                          disabled={!presentationReady || !onPrevious}
                           onPress={onPrevious}
                           size="compact"
                           tone="secondary"
@@ -284,7 +396,7 @@ export function Coachmark({
                       <Button
                         accessibilityLabel={onNext ? '다음' : '완료'}
                         controlRef={focusCoachmarkAction}
-                        disabled={!visible}
+                        disabled={!presentationReady}
                         onPress={onNext ?? onComplete}
                         size="compact"
                         tone="primary"
@@ -306,7 +418,7 @@ export function Coachmark({
         ) : null}
         <Pressable
           accessible={false}
-          disabled={!visible}
+          disabled={!presentationReady}
           aria-hidden
           focusable={false}
           importantForAccessibility="no"
@@ -328,8 +440,16 @@ const styles = StyleSheet.create({
     width: ARROW_SIZE,
     zIndex: 1,
   },
-  arrowAbove: { top: -ARROW_HALF },
-  arrowBelow: { bottom: -ARROW_HALF },
+  arrowAbove: {
+    borderLeftWidth: borderWidths[1],
+    borderTopWidth: borderWidths[1],
+    top: -ARROW_HALF,
+  },
+  arrowBelow: {
+    borderBottomWidth: borderWidths[1],
+    borderRightWidth: borderWidths[1],
+    bottom: -ARROW_HALF,
+  },
   backdrop: { flex: 1, width: '100%' },
   backdropDismiss: { zIndex: 0 },
   body: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
@@ -344,7 +464,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
   },
-  progress: { justifyContent: 'center', minWidth: 0 },
+  progressRow: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8], minWidth: 0 },
+  progressLabel: { ...textStyles.uiCopyS },
+  progressTrack: { flexDirection: 'row', flex: 1, gap: space[4], marginTop: space[4], minWidth: 0 },
+  progressSegment: {
+    borderRadius: radius[8],
+    flex: 1,
+    height: space[4],
+    minWidth: 0,
+  },
   actions: { ...layoutRecipes.dialogActions, alignItems: 'center', marginLeft: 'auto' },
   footerLabel: { ...textStyles.uiCopyS, lineHeight: textStyles.uiCopyM.lineHeight },
   divider: { alignSelf: 'stretch', width: borderWidths[1] },
