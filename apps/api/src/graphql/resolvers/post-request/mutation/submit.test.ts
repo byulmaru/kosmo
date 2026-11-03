@@ -867,7 +867,9 @@ test('createPost reuses READY Media after an active publication Update without w
   assert.equal(execute.mock.callCount(), 1);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(select.mock.callCount(), 4);
-  assert.equal(workflowArgs[0]?.input.media?.[0]?.mediaId, mediaId);
+  const createdMedia = workflowArgs[0]?.input.media?.[0];
+  assert.ok(createdMedia && 'mediaId' in createdMedia);
+  assert.equal(createdMedia.mediaId, mediaId);
 });
 
 test('createPost maps nested Media selection conflicts and preserves unrelated publish errors', async (t) => {
