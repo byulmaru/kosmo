@@ -307,17 +307,13 @@ export const touchHomeTimeline = async ({
   }
 };
 
-export const listHomeTimelineRecipientPage = async ({
+const listHomeTimelineCandidatePage = async ({
   postId,
   afterProfileId,
 }: {
   readonly postId: string;
   readonly afterProfileId?: string;
 }): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
-  if (!process.env.REDIS_URL?.trim()) {
-    return { profileIds: [], nextCursor: null };
-  }
-
   const candidateRows = await db
     .select({ profileId: HomeFanoutViewers.id })
     .from(HomeFanoutViewers)
@@ -333,13 +329,28 @@ export const listHomeTimelineRecipientPage = async ({
   const candidates = candidateRows.slice(0, candidateBatchSize);
   const nextCursor =
     candidateRows.length > candidateBatchSize ? (candidates.at(-1)?.profileId ?? null) : null;
-  if (candidates.length === 0) {
-    return { profileIds: [], nextCursor };
+  return { profileIds: candidates.map(({ profileId }) => profileId), nextCursor };
+};
+
+export const listHomeTimelineRecipientPage = async ({
+  postId,
+  afterProfileId,
+}: {
+  readonly postId: string;
+  readonly afterProfileId?: string;
+}): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
+  if (!process.env.REDIS_URL?.trim()) {
+    return { profileIds: [], nextCursor: null };
+  }
+
+  const candidatePage = await listHomeTimelineCandidatePage({ postId, afterProfileId });
+  if (candidatePage.profileIds.length === 0) {
+    return candidatePage;
   }
 
   const readyResult = await runRedisCommand((client) => {
     const transaction = client.multi();
-    for (const { profileId } of candidates) {
+    for (const profileId of candidatePage.profileIds) {
       transaction.zScore(feedKey(profileId), readyMember);
     }
     return transaction.exec();
@@ -350,10 +361,8 @@ export const listHomeTimelineRecipientPage = async ({
 
   const readyScores = readyResult.value as unknown as (number | null)[];
   return {
-    profileIds: candidates
-      .filter((_, index) => readyScores[index] === -1)
-      .map(({ profileId }) => profileId),
-    nextCursor,
+    profileIds: candidatePage.profileIds.filter((_, index) => readyScores[index] === -1),
+    nextCursor: candidatePage.nextCursor,
   };
 };
 
@@ -403,21 +412,14 @@ export const removeHomeTimelinePost = async ({
     return;
   }
 
-  let cursor = '0';
+  let afterProfileId: string | undefined;
   do {
-    const scanResult = await runRedisCommand((client) =>
-      client.scan(cursor, { MATCH: `${feedKeyPrefix}*`, COUNT: candidateBatchSize }),
-    );
-    if (scanResult === null) {
-      throw new Error('Redis unavailable while removing Home timeline post');
-    }
-    cursor = scanResult.value.cursor;
-    for (let offset = 0; offset < scanResult.value.keys.length; offset += candidateBatchSize) {
-      const keys = scanResult.value.keys.slice(offset, offset + candidateBatchSize);
+    const candidatePage = await listHomeTimelineCandidatePage({ postId, afterProfileId });
+    if (candidatePage.profileIds.length > 0) {
       const removalResult = await runRedisCommand((client) => {
         const transaction = client.multi();
-        for (const key of keys) {
-          transaction.zRem(key, postId);
+        for (const profileId of candidatePage.profileIds) {
+          transaction.zRem(feedKey(profileId), postId);
         }
         return transaction.exec();
       });
@@ -425,7 +427,8 @@ export const removeHomeTimelinePost = async ({
         throw new Error('Redis unavailable while removing Home timeline post');
       }
     }
-  } while (cursor !== '0');
+    afterProfileId = candidatePage.nextCursor ?? undefined;
+  } while (afterProfileId !== undefined);
 };
 
 const reconcileScript = `

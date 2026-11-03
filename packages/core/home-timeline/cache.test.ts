@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { after, test } from 'node:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -277,41 +277,108 @@ test(
 );
 
 test(
-  'post removal preserves other Home cache entries, readiness, and expiry',
+  'post removal pages tombstoned recipients, preserves unrelated entries, readiness, and expiry',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
-    const firstViewer = await createProfile();
-    const secondViewer = await createProfile();
-    const targetPostId = randomUUID();
+    const author = await createProfile();
+    const followers = await createProfiles(author.instanceId, 100);
+    const parentOwner = await createProfile();
+    const formerFollower = (await createProfiles(author.instanceId, 1))[0]!;
+    const recipientProfiles = [author, ...followers, parentOwner];
+    const missingCacheViewer = recipientProfiles[0]!;
+    const unreadyCacheViewer = recipientProfiles.at(-1)!;
+    const parentPost = await createPost({ profileId: parentOwner.id });
+    const targetPost = await createPost({
+      profileId: author.id,
+      replyParentId: parentPost.id,
+    });
+    await db
+      .insert(ProfileFollows)
+      .values([
+        ...followers.map(({ id }) => ({ followerProfileId: id, followeeProfileId: author.id })),
+        { followerProfileId: formerFollower.id, followeeProfileId: author.id },
+      ]);
+    await db
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, formerFollower.id),
+          eq(ProfileFollows.followeeProfileId, author.id),
+        ),
+      );
+    await db
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(eq(Posts.id, targetPost.id));
+
     const retainedPostId = randomUUID();
-    const keys = [firstViewer, secondViewer].map(({ id }) => `kosmo:home-timeline:profile:${id}`);
-    for (const key of keys) {
-      await runRedisCommand((client) =>
-        client.zAdd(key, [
-          { score: -1, value: '__ready__' },
-          { score: 100, value: targetPostId },
+    const keyFor = (profileId: string) => `kosmo:home-timeline:profile:${profileId}`;
+    const formerFollowerKey = keyFor(formerFollower.id);
+    await runRedisCommand((client) => {
+      const transaction = client.multi();
+      for (const { id } of recipientProfiles) {
+        if (id === missingCacheViewer.id) {
+          continue;
+        }
+        transaction.zAdd(keyFor(id), [
+          ...(id === unreadyCacheViewer.id ? [] : [{ score: -1, value: '__ready__' }]),
+          { score: 100, value: targetPost.id },
           { score: 200, value: retainedPostId },
-        ]),
-      );
-      await runRedisCommand((client) => client.expire(key, 400));
-    }
+        ]);
+        transaction.expire(keyFor(id), 400);
+      }
+      transaction.zAdd(formerFollowerKey, [
+        { score: -1, value: '__ready__' },
+        { score: 100, value: targetPost.id },
+        { score: 200, value: retainedPostId },
+      ]);
+      transaction.expire(formerFollowerKey, 400);
+      return transaction.exec();
+    });
 
-    await removeHomeTimelinePost({ postId: targetPostId });
+    await removeHomeTimelinePost({ postId: targetPost.id });
 
-    for (const key of keys) {
-      assert.equal(
-        (await runRedisCommand((client) => client.zScore(key, targetPostId)))?.value,
-        null,
-      );
-      assert.equal(
-        (await runRedisCommand((client) => client.zScore(key, retainedPostId)))?.value,
-        200,
-      );
-      assert.equal((await runRedisCommand((client) => client.zScore(key, '__ready__')))?.value, -1);
-      const ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
-      assert.ok(ttl !== undefined && ttl <= 400 && ttl > 390, `unexpected TTL ${ttl}`);
+    const cacheState = await runRedisCommand((client) => {
+      const transaction = client.multi();
+      for (const { id } of recipientProfiles) {
+        const key = keyFor(id);
+        transaction.zScore(key, targetPost.id);
+        transaction.zScore(key, retainedPostId);
+        transaction.zScore(key, '__ready__');
+        transaction.ttl(key);
+      }
+      transaction.zScore(formerFollowerKey, targetPost.id);
+      transaction.zScore(formerFollowerKey, retainedPostId);
+      transaction.zScore(formerFollowerKey, '__ready__');
+      transaction.ttl(formerFollowerKey);
+      return transaction.exec();
+    });
+    assert.ok(cacheState);
+    const values = cacheState.value as unknown as (number | null)[];
+    for (const [index, { id }] of recipientProfiles.entries()) {
+      const offset = index * 4;
+      assert.equal(values[offset], null);
+      if (id === missingCacheViewer.id) {
+        assert.equal(values[offset + 1], null);
+        assert.equal(values[offset + 2], null);
+        assert.equal(values[offset + 3], -2);
+        continue;
+      }
+      assert.equal(values[offset + 1], 200);
+      assert.equal(values[offset + 2], id === unreadyCacheViewer.id ? null : -1);
+      const ttl = values[offset + 3];
+      assert.ok(ttl !== null && ttl <= 400 && ttl > 390, `unexpected TTL ${ttl}`);
     }
+    const formerFollowerOffset = recipientProfiles.length * 4;
+    assert.equal(values[formerFollowerOffset], 100);
+    assert.equal(values[formerFollowerOffset + 1], 200);
+    assert.equal(values[formerFollowerOffset + 2], -1);
+    const formerFollowerTtl = values[formerFollowerOffset + 3];
+    assert.ok(
+      formerFollowerTtl !== null && formerFollowerTtl <= 400 && formerFollowerTtl > 390,
+      `unexpected TTL ${formerFollowerTtl}`,
+    );
   },
 );
 

@@ -158,9 +158,6 @@ let failNextRedisCall = false;
 let candidateRows = [];
 
 const client = {
-  async scan() {
-    return { cursor: '0', keys: [] };
-  },
   async zScore() {
     return null;
   },
