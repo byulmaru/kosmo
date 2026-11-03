@@ -16,6 +16,7 @@
 | 영역                            | 책임                                          | 이 변경에서의 기준                                                                              |
 | ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Repository                      | 보호·내부 경로와 sitemap 지시어               | `User-agent: *` 아래 보호 경로만 `Disallow`하고 나머지는 기본 허용                              |
+| Repository TDMRep               | TDM 권리 유보의 기계 판독 신호                | BFF origin JSON 응답으로 제공하며 크롤링·학습을 기술적으로 차단하지 않음                        |
 | Cloudflare Managed robots.txt   | 동적 AI content signal과 관리되는 크롤러 분류 | 동적 user-agent·detection 목록을 저장소에 복사하지 않음                                         |
 | Cloudflare AI Crawl Control/WAF | AI 학습·대량 수집의 edge 차단과 관측          | Training 및 Search+Training은 차단하고 Search-only·사용자 요청은 학습 근거 없이는 차단하지 않음 |
 | Origin/Fedify                   | ActivityPub 요청의 인증·서명·활동 검증        | edge 예외가 있어도 origin 검증을 생략하지 않음                                                  |
@@ -51,6 +52,18 @@ Sitemap: https://kos.moe/sitemap.xml
 ```
 
 해당 URL의 실제 XML 응답과 canonical URL 집합은 `PROD-731` 배포 뒤에만 완료 검증한다.
+
+## TDM Reservation Protocol
+
+저장소의 TDM 권리 유보는 [TDM Reservation Protocol (TDMRep)](https://w3c-cg.github.io/tdm-reservation-protocol/spec/)의 origin 파일 방식으로 `/.well-known/tdmrep.json`에서 제공한다. 응답은 `apps/web/src/server/app.ts`의 BFF endpoint에서 생성하며 `GET`과 `HEAD`를 지원하고 `Cache-Control: no-cache`를 사용한다.
+
+```json
+[{ "location": "/", "tdm-reservation": 1 }]
+```
+
+`/` 규칙은 각 origin의 모든 경로에 적용된다. 적용 대상은 Kosmo Web production `kos.moe`와 development `dev.kos.moe`이며, 두 origin에 각각 적용된다. 외부 Media service origin은 이 응답의 적용 범위에 포함되지 않는다. 이 표시는 AI 학습을 포함한 TDM 권리 유보를 기계 판독 가능하게 알리지만, 크롤링이나 학습을 기술적으로 차단하지 않는다. TDMRep은 이 endpoint의 JSON 응답으로 제공하며 TDM response header나 HTML metadata는 추가하지 않는다.
+
+이 문서는 저장소의 source와 적용 범위를 기록하며 production 또는 development의 실제 배포·live 응답을 검증했다는 뜻은 아니다. Cloudflare Managed robots content, WAF, federation 검증 및 위 `robots.txt` 경로 정책은 이 TDMRep 기록으로 변경되지 않는다.
 
 ## 저장소 검증 기록
 
