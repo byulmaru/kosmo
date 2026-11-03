@@ -30,10 +30,7 @@ import {
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
-import {
-  POST_REQUEST_WORKFLOW_TYPE,
-  postRequestWorkflowId,
-} from '@kosmo/core/temporal/post-request';
+import { POST_REQUEST_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-request';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -44,7 +41,6 @@ import {
 } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
-import type { PostRequestSnapshot } from '@kosmo/core/temporal/post-request';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
 import type { projectLocalPostNote as ProjectLocalPostNote } from '../../../../../packages/fedify/src/local-post-note';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -620,23 +616,21 @@ describe('Post Reply GraphQL 경계', () => {
       'start',
       (...args: Parameters<typeof temporalClient.workflow.start>) => originalStart(...args),
     );
-
     const result = await requestCreatePost(
       { bodyText, visibility: PostVisibility.PUBLIC },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
-    const postRequestCalls = start.mock.calls.filter(
-      (call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE,
+    assert.equal(
+      start.mock.calls.filter((call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE).length,
+      0,
     );
-    assert.equal(postRequestCalls.length, 1);
-    const [, options] = postRequestCalls[0]!.arguments;
-    const snapshot = options.args?.[0] as PostRequestSnapshot;
-    assert.equal(snapshot.input.origin, 'LOCAL');
-    assert.equal(snapshot.input.accountId, auth.account.id);
-    assert.equal(snapshot.input.profileId, auth.profile.id);
-    assert.equal(options.workflowId, postRequestWorkflowId(auth.account.id, snapshot.requestId));
+    const postId = result.data?.createPost.post.id;
+    assert.ok(postId);
+    const projected = await requestPostContent(postId, auth.token);
+    assertNoGraphQLErrors(projected);
+    assert.equal(projected.data?.node?.content.bodyText, bodyText);
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -1384,20 +1378,6 @@ describe('Post Reply GraphQL 경계', () => {
         } as never;
       },
     );
-    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
-    const start = t.mock.method(
-      temporalClient.workflow,
-      'start',
-      async (...args: Parameters<typeof temporalClient.workflow.start>) => {
-        const [workflow, options] = args;
-        if (workflow === POST_REQUEST_WORKFLOW_TYPE) {
-          const snapshot = options.args?.[0] as PostRequestSnapshot;
-          assert.equal(snapshot.input.accountId, auth.account.id);
-          assert.equal(snapshot.input.media?.[0]?.mediaId, storedMedia.id);
-        }
-        return originalStart(...args);
-      },
-    );
     const completed = await requestCompleteMediaUpload(mediaId, auth.token);
     assertNoGraphQLErrors(completed);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
@@ -1414,6 +1394,12 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(selectedMedia.accountId, auth.account.id);
     assert.equal(selectedMedia.source, MediaSource.LOCAL);
     assert.equal(selectedMedia.state, MediaState.READY);
+    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      (...args: Parameters<typeof temporalClient.workflow.start>) => originalStart(...args),
+    );
 
     const created = await requestCreatePost(
       {
@@ -1427,7 +1413,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(created);
     assert.equal(
       start.mock.calls.filter((call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE).length,
-      1,
+      0,
     );
     const postId = created.data?.createPost.post.id;
     assert.ok(postId);
