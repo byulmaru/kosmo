@@ -1061,6 +1061,11 @@ test('createPost reports unsupported uploads by their original media index', asy
     'getHandle',
     () =>
       ({
+        executeUpdate: async () =>
+          ({
+            status: 'processing',
+            id: readyMediaId,
+          }) as MediaUploadPublishResult,
         result: async () => null as never,
       }) as never,
   );
@@ -1140,6 +1145,11 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
     'getHandle',
     () =>
       ({
+        executeUpdate: async () =>
+          ({
+            status: 'processing',
+            id: readyMediaId,
+          }) as MediaUploadPublishResult,
         result: async () => null as never,
       }) as never,
   );
