@@ -2,10 +2,25 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { relayVitePlugin } from './relay-vite-plugin.ts';
 import type { StorybookConfig } from '@storybook/react-vite';
+import type { Plugin } from 'vite';
 
 const require = createRequire(import.meta.url);
 const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url));
 const storybookAllowedHost = process.env.STORYBOOK_ALLOWED_HOST;
+
+// expo-modules-core's ambient declarations have no runtime behavior; revisit this SDK-internal path after Expo upgrades.
+const expoModulesCoreGlobalTypesPlugin: Plugin = {
+  name: 'storybook-expo-modules-core-global-types',
+  apply: 'build',
+  enforce: 'pre',
+  transform(_source, id) {
+    const normalizedId = id.replaceAll('\\', '/').split('?', 1)[0] ?? '';
+    if (normalizedId.endsWith('/expo-modules-core/src/ts-declarations/global.ts')) {
+      return { code: '', map: null };
+    }
+    return undefined;
+  },
+};
 
 const config: StorybookConfig = {
   addons: ['@storybook/addon-a11y', '@storybook/addon-vitest'],
@@ -22,7 +37,7 @@ const config: StorybookConfig = {
       'process.env.EXPO_PUBLIC_SENTRY_RELEASE': 'undefined',
     },
     publicDir: false,
-    plugins: [relayVitePlugin(), ...(viteConfig.plugins ?? [])],
+    plugins: [relayVitePlugin(), expoModulesCoreGlobalTypesPlugin, ...(viteConfig.plugins ?? [])],
     resolve: {
       ...viteConfig.resolve,
       alias: [

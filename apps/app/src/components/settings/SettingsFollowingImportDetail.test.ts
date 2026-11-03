@@ -34,7 +34,6 @@ type MutationOptions = {
 };
 
 let platform: 'android' | 'ios' | 'web' = 'web';
-let migrationEnabled = false;
 let queryCalls = 0;
 let queryData: QueryData = { currentSession: { selectedProfile: null } };
 let pickerCalls = 0;
@@ -70,9 +69,6 @@ mock.module('react-relay', {
     },
     useMutation: () => [(options: MutationOptions) => mutationCalls.push(options), false],
   },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../RouteBoundary.tsx', import.meta.url), {
   exports: {
@@ -141,7 +137,6 @@ before(async () => {
 
 afterEach(async () => {
   platform = 'web';
-  migrationEnabled = false;
   queryCalls = 0;
   queryData = { currentSession: { selectedProfile: null } };
   pickerCalls = 0;
@@ -162,17 +157,16 @@ afterEach(async () => {
 });
 
 describe('SettingsFollowingImportDetail', () => {
-  it('direct route는 flag가 꺼져 있으면 query와 import control을 렌더링하지 않는다', async () => {
+  it('선택된 Profile이 없으면 import control을 제공하지 않는다', async () => {
     await render();
 
-    assert.equal(queryCalls, 0);
+    assert.equal(queryCalls, 1);
     assert.equal(mutationCalls.length, 0);
-    assert.equal(rendered('StateView')[0]?.props.title, '현재 이용할 수 없는 설정이에요');
+    assert.equal(rendered('StateView').length, 1);
     assert.equal(rendered('Button').length, 0);
   });
 
   it('선택된 Local Member Profile의 CSV만 actor ID 없이 전송한다', async () => {
-    migrationEnabled = true;
     const profile: Profile = {
       instance: { kind: 'LOCAL' },
       viewerState: { membership: { role: 'MEMBER' } },
@@ -217,7 +211,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('파일 선택 취소는 안전하고 mutation을 보내지 않는다', async () => {
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     pickerResult = { canceled: true, assets: null };
     await render();
@@ -235,7 +228,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('512 KiB보다 큰 CSV는 읽거나 전송하지 않는다', async () => {
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     webFileSize = 512 * 1024 + 1;
     pickerResult = webResult();
@@ -253,7 +245,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('파일 읽기 또는 picker 오류를 안전하게 안내하고 예외 원문을 숨긴다', async () => {
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     fileReadFailure = true;
     await render();
@@ -280,7 +271,6 @@ describe('SettingsFollowingImportDetail', () => {
 
   it('Android는 Expo File로 크기 제한을 확인하고 파일을 읽는다', async () => {
     platform = 'android';
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     nativeFileSize = 512 * 1024 + 1;
     pickerResult = {
@@ -303,7 +293,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('ActivityPub Profile에는 import control을 제공하지 않는다', async () => {
-    migrationEnabled = true;
     queryData = {
       currentSession: {
         selectedProfile: {
@@ -322,7 +311,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('selected Local Profile의 멤버십이 없으면 import control을 제공하지 않는다', async () => {
-    migrationEnabled = true;
     queryData = {
       currentSession: {
         selectedProfile: {
@@ -343,7 +331,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('mutation 오류는 안전한 한국어 상태를 표시한다', async () => {
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     await render();
     await press('팔로잉 CSV 파일 선택');
@@ -362,7 +349,6 @@ describe('SettingsFollowingImportDetail', () => {
   });
 
   it('CSV GraphQL validation 메시지를 표시하고 이후 성공하면 기존 오류를 지운다', async () => {
-    migrationEnabled = true;
     queryData = { currentSession: { selectedProfile: localMember() } };
     await render();
     await press('팔로잉 CSV 파일 선택');

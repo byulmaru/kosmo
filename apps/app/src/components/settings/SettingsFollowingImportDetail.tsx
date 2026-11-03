@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
@@ -60,11 +59,6 @@ function csvValidationMessage(errors: ReadonlyArray<PayloadError> | null | undef
 }
 
 export function SettingsFollowingImportDetail() {
-  const migrationEnabled = useFeatureFlag('profile-migration');
-  if (!migrationEnabled) {
-    return <StateView title="현재 이용할 수 없는 설정이에요" />;
-  }
-
   return (
     <RouteBoundary
       loading={<StateView loading title="팔로잉 가져오기 설정을 불러오는 중입니다." />}

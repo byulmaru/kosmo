@@ -94,18 +94,12 @@ function expectProfileMigrationContentGutter(canvasElement: HTMLElement) {
   if (!content) {
     throw new Error('Profile migration content wrapper is missing.');
   }
-  const route = content.parentElement;
-  const pane = route?.parentElement;
-  if (!route || !pane) {
-    throw new Error('Profile migration route content or Settings pane is missing.');
-  }
 
   const controlBounds = control.getBoundingClientRect();
   const contentBounds = content.getBoundingClientRect();
-  const paneBounds = pane.getBoundingClientRect();
 
-  expect(Math.abs(controlBounds.left - paneBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
-  expect(Math.abs(paneBounds.right - controlBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(controlBounds.left - contentBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(contentBounds.right - controlBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
   expect(Math.abs(controlBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
 }
 
@@ -224,6 +218,15 @@ export const ProfileMigrationFullWeb: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '다른 서비스에서 이전' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '계정 이전' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '팔로잉 가져오기' })).toBeVisible();
+    const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
+    expect(
+      within(navigation).getAllByRole('link', { name: '다른 서비스에서 이전 설정 열기' }),
+    ).toHaveLength(1);
+    expect(
+      within(navigation).queryByRole('link', { name: '팔로잉 가져오기 설정 열기' }),
+    ).toBeNull();
     expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -231,6 +234,8 @@ export const ProfileMigrationFullWeb: Story = {
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
   },
   render: () => (
@@ -250,8 +255,12 @@ export const ProfileMigrationMobileWeb: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '계정 이전' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '팔로잉 가져오기' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
   },
   render: () => (

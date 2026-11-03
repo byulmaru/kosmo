@@ -84,7 +84,7 @@ describe('getShellLayout', () => {
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/following-import', []), {
       leading: 'back',
-      title: '팔로잉 가져오기',
+      title: '다른 서비스에서 이전',
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
       leading: 'back',

@@ -18,7 +18,6 @@ let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermine
 };
 let permissionStatusCalls = 0;
 let requestPermissionAndSyncCalls = 0;
-let migrationEnabled = false;
 let webPushConfigAvailable = false;
 let webPushPermissionContextAvailable = false;
 let browserPushSupport:
@@ -93,9 +92,6 @@ mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
   exports: {
     useRequestNativePushPermissionAndSync: () => requestPermissionAndSync,
@@ -169,7 +165,6 @@ let SettingsNavigationList: ComponentType<{
   selected?:
     | 'profile'
     | 'profile-migration'
-    | 'following-import'
     | 'mute-and-block'
     | 'theme'
     | 'info'
@@ -213,7 +208,6 @@ afterEach(async () => {
   requestPermissionAndSync = async () => {
     requestPermissionAndSyncCalls += 1;
   };
-  migrationEnabled = false;
   webPushConfigAvailable = false;
   webPushPermissionContextAvailable = false;
   browserPushSupport = 'supported';
@@ -237,7 +231,6 @@ afterEach(async () => {
 
 describe('SettingsNavigationList', () => {
   it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
-    migrationEnabled = true;
     await render();
 
     const links = rendered('Pressable');
@@ -254,28 +247,35 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
     assert.equal(links[2].props.href, '/settings/profile-migration');
-    assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
-    assert.equal(links[3].props.href, '/settings/following-import');
-    assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[4].props.href, '/settings/mute-and-block');
-    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
-    assert.equal(links[5].props.href, '/settings/theme');
-    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
-    assert.equal(links[6].props.href, '/settings/info');
-    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
-    assert.equal(links[7].props.href, '/settings/account-deletion');
+    assert.equal(links[3].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
+    assert.equal(links[3].props.href, '/settings/mute-and-block');
+    assert.equal(links[4].props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(links[4].props.href, '/settings/theme');
+    assert.equal(links[5].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[5].props.href, '/settings/info');
+    assert.equal(links[6].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[6].props.href, '/settings/account-deletion');
+    assert.equal(
+      links.filter((node) => node.props.href === '/settings/profile-migration').length,
+      1,
+    );
+    assert.equal(
+      links.some((node) => node.props.href === '/settings/following-import'),
+      false,
+    );
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
     );
   });
 
-  it('migration feature flag가 꺼져 있으면 Settings root에 진입점을 노출하지 않는다', async () => {
+  it('feature flag provider 없이도 통합 migration destination을 노출한다', async () => {
     await render();
 
     assert.equal(
-      rendered('Pressable').some((node) => node.props.href === '/settings/profile-migration'),
-      false,
+      rendered('Pressable').filter((node) => node.props.href === '/settings/profile-migration')
+        .length,
+      1,
     );
     assert.equal(
       rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
@@ -584,8 +584,7 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
 
-  it('migration route는 feature flag가 켜졌을 때 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
+  it('migration route는 현재·선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/profile-migration', selected: 'profile-migration' });
 
     const migration = rendered('Pressable').find(
@@ -596,16 +595,15 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
-  it('following import route는 같은 feature flag 아래 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
-    await render({ pathname: '/settings/following-import', selected: 'following-import' });
+  it('legacy following import path는 canonical migration row의 현재·선택 상태를 사용한다', async () => {
+    await render({ pathname: '/settings/following-import', selected: 'profile-migration' });
 
-    const followingImport = rendered('Pressable').find(
-      (link) => link.props.href === '/settings/following-import',
+    const migration = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/profile-migration',
     );
-    assert.ok(followingImport);
-    assert.equal(followingImport.props['aria-current'], 'page');
-    assert.deepEqual(followingImport.props.accessibilityState, { selected: true });
+    assert.ok(migration);
+    assert.equal(migration.props['aria-current'], 'page');
+    assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
@@ -619,7 +617,10 @@ describe('SettingsNavigationList', () => {
   it('차단 프로필 route에서도 뮤트 및 차단 category는 선택 상태만 유지한다', async () => {
     await render({ pathname: '/settings/blocked-profiles', selected: 'mute-and-block' });
 
-    const muteAndBlock = rendered('Pressable')[2];
+    const muteAndBlock = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/mute-and-block',
+    );
+    assert.ok(muteAndBlock);
     assert.equal(muteAndBlock.props['aria-current'], undefined);
     assert.deepEqual(muteAndBlock.props.accessibilityState, { selected: true });
   });
@@ -656,7 +657,6 @@ async function render(
     selected?:
       | 'profile'
       | 'profile-migration'
-      | 'following-import'
       | 'mute-and-block'
       | 'theme'
       | 'info'

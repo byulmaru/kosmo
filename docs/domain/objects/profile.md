@@ -177,12 +177,11 @@ source를 하나만 가질 수 있고, 같은 Remote source는 하나의 target 
 검증된 원격 actor를 Remote Profile로 먼저 materialize한다. Local Actor의 ActivityPub `alsoKnownAs` aliases는 이
 관계의 Remote source canonical Actor URI에서 파생하며 별도 Profile 속성이나 사용자 입력으로 저장하지 않는다.
 
-Profile Migration source 지정은 Settings의 `다른 서비스에서 이전`에서 feature flag가 켜져 있을 때만 노출한다. 현재
-선택된 Profile을 target으로 사용하며 별도 target Profile ID를 입력받지 않는다. 현재 context의 `Account.Active`와
-`Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가
-아니며, Profile Owner 검증은 기존 `Account.Active`와 `Profile.Owner`를 사용한다. flag가
-꺼져 있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. 이미 준비된 관계와 그로부터
-파생된 alias, inbound Move 처리는 flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
+Settings의 `다른 서비스에서 이전` entry는 기능 공개 플래그와 관계없이 항상 표시한다. `계정 이전`의 source 준비
+control은 현재 선택된 Profile을 target으로 사용하고 기존 `Account.Active`와 `Profile.Owner` 권한에 따라 제공한다.
+별도 target Profile ID를 입력받지 않으며 Settings 노출 여부는 권한 증거가 아니다. Profile Owner에는 별도 target
+eligibility를 적용하지 않는다. 이미 준비된 관계와 그로부터
+파생된 alias, inbound Move 처리는 feature flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
 Profile과 source 관계를 검증하고, 해당 target Profile의 기존 Follow Approval Policy에 따라 Follow Relationship 또는 Follow
 Request를 선택한다. remote-to-remote Move는 준비 관계 없이 canonical target identity와 해당 target Profile의 기존 Follow
 Approval Policy를 검증한다. Kosmo가 source가 되어 Move를 발행하는 동작은
