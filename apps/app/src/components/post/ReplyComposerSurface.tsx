@@ -101,6 +101,27 @@ export const ReplyComposerSurface = forwardRef<
   ReplyComposerSurfaceHandle,
   ReplyComposerSurfaceProps
 >(function ReplyComposerSurface(props, ref) {
+  const overlayMotion = useOverlayMotion(props.open);
+
+  if (!overlayMotion.mounted) {
+    return null;
+  }
+
+  return <ReplyComposerSurfaceBoundary {...props} overlayMotion={overlayMotion} surfaceRef={ref} />;
+});
+
+type ReplyComposerSurfaceMotion = ReturnType<typeof useOverlayMotion>;
+
+type ReplyComposerSurfaceBoundaryProps = ReplyComposerSurfaceProps & {
+  overlayMotion: ReplyComposerSurfaceMotion;
+  surfaceRef: ForwardedRef<ReplyComposerSurfaceHandle>;
+};
+
+function ReplyComposerSurfaceBoundary({
+  overlayMotion,
+  surfaceRef,
+  ...props
+}: ReplyComposerSurfaceBoundaryProps) {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const environmentRef = useRef(environment);
@@ -141,13 +162,15 @@ export const ReplyComposerSurface = forwardRef<
       {...props}
       contextGuard={contextGuard}
       key={`${contentKey.current}:${environmentGenerationRef?.current ?? 0}`}
-      surfaceRef={ref}
+      overlayMotion={overlayMotion}
+      surfaceRef={surfaceRef}
     />
   );
-});
+}
 
 type ReplyComposerSurfaceContentsProps = ReplyComposerSurfaceProps & {
   contextGuard: RefObject<number>;
+  overlayMotion: ReplyComposerSurfaceMotion;
   surfaceRef: ForwardedRef<ReplyComposerSurfaceHandle>;
 };
 
@@ -157,6 +180,7 @@ function ReplyComposerSurfaceContents({
   onPostCreated,
   onRequestClose,
   open,
+  overlayMotion,
   parent: parentKey,
   profile: profileKey,
   surfaceRef,
@@ -194,7 +218,6 @@ function ReplyComposerSurfaceContents({
   const replyPlatform =
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(replyPlatform, width);
-  const overlayMotion = useOverlayMotion(open);
   const [dismissImmediately, setDismissImmediately] = useState(false);
   const webOverlayOpen = open && Platform.OS === 'web';
   const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);

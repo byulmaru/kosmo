@@ -12,6 +12,8 @@ import type { ReplyComposerSurface as ReplyComposerSurfaceComponent } from './Re
 const platform = { OS: 'android' };
 const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let relayEnvironment = {};
+let relayEnvironmentReadCount = 0;
+let relayFragmentReadCount = 0;
 let composerProps:
   | {
       initialBodyText?: string;
@@ -51,8 +53,14 @@ mockModule('react-native-safe-area-context', {
 });
 mockModule('react-relay', {
   graphql: () => ({}),
-  useFragment: (_fragment: unknown, value: unknown) => value,
-  useRelayEnvironment: () => relayEnvironment,
+  useFragment: (_fragment: unknown, value: unknown) => {
+    relayFragmentReadCount += 1;
+    return value;
+  },
+  useRelayEnvironment: () => {
+    relayEnvironmentReadCount += 1;
+    return relayEnvironment;
+  },
 });
 mockModule('relay-runtime', {
   getDataIDsFromFragment: (_fragment: unknown, value: { id?: string }) => value.id,
@@ -129,6 +137,8 @@ afterEach(async () => {
   exitMounted = false;
   composerMountCount = 0;
   relayEnvironment = {};
+  relayEnvironmentReadCount = 0;
+  relayFragmentReadCount = 0;
   platform.OS = 'android';
   safeAreaInsets.top = 0;
 });
@@ -252,6 +262,58 @@ test('iOS Reply와 Quote는 키보드 회피에 safe-area 화면 offset을 사�
   keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
   assert.equal(keyboardAvoidingView?.props.behavior, 'height');
   assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
+});
+
+test('처음 닫힌 surface는 Relay composer subtree를 읽지 않는다', async () => {
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => undefined,
+    open: false,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
+
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+
+  assert.equal(relayEnvironmentReadCount, 0);
+  assert.equal(relayFragmentReadCount, 0);
+  assert.equal(composerMountCount, 0);
+  assert.equal(renderer?.root.findAllByType('Modal' as ElementType).length, 0);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(ReplyComposerSurface, {
+        ...props,
+        parent: { id: 'post-2' } as never,
+        profile: { composer: {}, id: 'profile-2', relativeHandle: '@other' } as never,
+      }),
+    );
+  });
+
+  assert.equal(relayEnvironmentReadCount, 0);
+  assert.equal(relayFragmentReadCount, 0);
+
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: true }));
+  });
+  assert.ok(relayEnvironmentReadCount > 0);
+  assert.ok(relayFragmentReadCount > 0);
+
+  exitMounted = true;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  const exitEnvironmentReadCount = relayEnvironmentReadCount;
+  const exitFragmentReadCount = relayFragmentReadCount;
+  exitMounted = false;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+
+  assert.equal(relayEnvironmentReadCount, exitEnvironmentReadCount);
+  assert.equal(relayFragmentReadCount, exitFragmentReadCount);
 });
 
 test('닫힌 Reply surface는 exit 동안 유지되지만 입력과 접근성을 즉시 차단한다', async () => {
