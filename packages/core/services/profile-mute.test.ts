@@ -652,11 +652,6 @@ test(
         targetProfileId: target.profile.id,
       });
       await waitForMissingHomeTimeline(owner.profile.id);
-      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [] });
-      assert.deepEqual(
-        (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries,
-        [],
-      );
 
       assert.equal(
         (await unmuteProfile({ ownerProfileId: owner.profile.id, profileMuteId: mute.id }))?.id,
