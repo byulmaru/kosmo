@@ -133,7 +133,8 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
   const segments = pathname.split('/').filter(Boolean);
   const isProfileHome =
     segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
-  const isReactionPeopleRoute = segments.length === 3 && segments[2] === 'reactions';
+  const isPostActivityRoute =
+    segments.length === 3 && (segments[2] === 'reactions' || segments[2] === 'activity');
 
   return (
     web &&
@@ -141,7 +142,7 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
     (pathname === '/search' ||
       pathname === '/profile-edit' ||
       isProfileHome ||
-      isReactionPeopleRoute ||
+      isPostActivityRoute ||
       getProfileConnectionKind(pathname) !== null)
   );
 }
