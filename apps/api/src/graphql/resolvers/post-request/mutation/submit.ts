@@ -1,19 +1,32 @@
 import { randomUUID } from 'node:crypto';
-import { db, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
+import { db, first, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
-import { ConflictError, FieldError, ValidationError } from '@kosmo/core/error';
+import { ValidationError } from '@kosmo/core/error';
 import { headNexusMediaUploadSource, isNexusMediaUpload } from '@kosmo/core/media-upload';
 import { runWorkflow, temporalClient } from '@kosmo/core/temporal/client';
+import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
+import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
   PostRequestStatus,
   postRequestWorkflow,
-  postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
+import {
+  ApplicationFailure,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowNotFoundError,
+} from '@temporalio/client';
 import { and, eq, inArray } from 'drizzle-orm';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
-import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
+import type {
+  PostAnalyticsPlatform,
+  PostCreateWorkflowArgs,
+} from '@kosmo/core/temporal/post-create';
 import type { PostRequestSnapshot, PostRequestState } from '@kosmo/core/temporal/post-request';
 import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type { SessionContext } from '@/context';
@@ -22,13 +35,71 @@ import type { LocalPostMutationInput } from '../../post/mutation/prepare-local-i
 const unusableMedia = (index: number, message = '이미지를 다시 첨부해 주세요') =>
   new ValidationError(message, { field: `media.${index}` });
 
+type SubmittedPostMedia = {
+  readonly altText: string | null;
+  readonly applyAiProhibitFilter: boolean;
+  readonly mediaId: string;
+};
+
+type VerifiedAttachedMedia = SubmittedPostMedia & {
+  readonly state: MediaState;
+  readonly storageReference: string | null;
+};
+
+type MediaUploadWorkflow = (input: MediaUploadWorkflowInput) => Promise<MediaUploadWorkflowResult>;
+
+export type LocalPostSubmission =
+  | {
+      readonly postId: string;
+      readonly profileId: string;
+      readonly request: null;
+    }
+  | {
+      readonly postId: null;
+      readonly profileId: null;
+      readonly request: PostRequestState;
+    };
+
+const getRetainedMediaUploadResult = async (
+  mediaId: string,
+  accountId: string,
+): Promise<MediaUploadWorkflowResult | null> => {
+  try {
+    return await temporalClient.withDeadline(
+      Date.now() + (mediaUploadWorkflow.timeoutMs ?? 30_000),
+      () =>
+        temporalClient.workflow
+          .getHandle<MediaUploadWorkflow>(
+            mediaUploadWorkflow.workflowIdFromArgs({ mediaId, accountId }),
+          )
+          .result(),
+    );
+  } catch (error) {
+    if (error instanceof WorkflowNotFoundError) {
+      return null;
+    }
+    throw error;
+  }
+};
+
+const hasCompatibleMediaUploadFilter = (
+  result: MediaUploadWorkflowResult | null,
+  requestedFilter: boolean,
+): boolean => {
+  const appliedFilter = result?.applyAiProhibitFilter;
+  return (
+    (appliedFilter === undefined || appliedFilter === requestedFilter) &&
+    (!requestedFilter || appliedFilter === true)
+  );
+};
+
 const verifyAttachedMedia = async (
   accountId: string,
-  media: readonly { applyNightshade: boolean; mediaId: string }[],
-) => {
-  const uniqueMediaIds = [...new Set(media.map(({ mediaId }) => mediaId))];
+  submittedMedia: readonly SubmittedPostMedia[],
+): Promise<readonly VerifiedAttachedMedia[]> => {
+  const uniqueMediaIds = [...new Set(submittedMedia.map(({ mediaId }) => mediaId))];
   if (uniqueMediaIds.length === 0) {
-    return false;
+    return [];
   }
 
   const rows = await withPrimaryDatabase(async () =>
@@ -49,15 +120,42 @@ const verifyAttachedMedia = async (
       ),
   );
   const rowsById = new Map(rows.map((row) => [row.id, row]));
-  let hasUploadingMediaWithAiFilter = false;
+  const verified: VerifiedAttachedMedia[] = [];
 
-  for (const [index, { applyNightshade, mediaId }] of media.entries()) {
-    const media = rowsById.get(mediaId);
+  for (const [index, mediaInput] of submittedMedia.entries()) {
+    const media = rowsById.get(mediaInput.mediaId);
     if (!media) {
       throw unusableMedia(index, '첨부한 이미지를 다시 선택해 주세요');
     }
 
     if (media.state === MediaState.READY && media.url) {
+      const workflowArgs = { mediaId: media.id, accountId };
+      try {
+        await runWorkflow(mediaUploadWorkflow, {
+          args: [workflowArgs],
+          updateArgs: [{ applyAiProhibitFilter: mediaInput.applyAiProhibitFilter }],
+          mode: 'update',
+        });
+      } catch (error) {
+        if (error instanceof ApplicationFailure && error.type === 'MediaUploadSelectionConflict') {
+          throw unusableMedia(index);
+        }
+        if (
+          !(error instanceof WorkflowNotFoundError) ||
+          error.workflowId !== mediaUploadWorkflow.workflowIdFromArgs(workflowArgs)
+        ) {
+          throw error;
+        }
+        const result = await getRetainedMediaUploadResult(media.id, accountId);
+        if (!hasCompatibleMediaUploadFilter(result, mediaInput.applyAiProhibitFilter)) {
+          throw unusableMedia(index);
+        }
+      }
+      verified.push({
+        ...mediaInput,
+        state: media.state,
+        storageReference: media.storageReference,
+      });
       continue;
     }
 
@@ -78,79 +176,93 @@ const verifyAttachedMedia = async (
       throw unusableMedia(index, error.message);
     }
 
-    hasUploadingMediaWithAiFilter ||= applyNightshade;
+    verified.push({ ...mediaInput, state: media.state, storageReference: media.storageReference });
   }
 
-  return hasUploadingMediaWithAiFilter;
+  return verified;
 };
 
-type PostRequestWorkflow = (args: PostRequestSnapshot) => Promise<PostRequestState>;
-
-export async function waitForPostRequestResult(
+const publishUploadingMedia = async (
   accountId: string,
-  request: PostRequestState,
-): Promise<PostRequestState> {
-  const state =
-    request.status === PostRequestStatus.PUBLISHED
-      ? request
-      : await temporalClient
-          .withDeadline(Date.now() + 30_000, () =>
-            temporalClient.workflow
-              .getHandle<PostRequestWorkflow>(
-                postRequestWorkflowId(accountId, request.snapshot.requestId),
-              )
-              .result(),
-          )
-          .catch(rethrowPostWorkflowFailure);
+  media: readonly VerifiedAttachedMedia[],
+): Promise<readonly { readonly status: 'completed' | 'processing' }[]> =>
+  Promise.all(
+    media.flatMap((item, index) =>
+      item.state === MediaState.UPLOADING
+        ? [
+            runWorkflow(mediaUploadWorkflow, {
+              args: [
+                {
+                  mediaId: item.mediaId,
+                  accountId,
+                  applyAiProhibitFilter: item.applyAiProhibitFilter,
+                },
+              ],
+              updateArgs: [{ applyAiProhibitFilter: item.applyAiProhibitFilter }],
+              mode: 'update-with-start',
+              workflowIdConflictPolicy: 'USE_EXISTING',
+              workflowIdReusePolicy: 'REJECT_DUPLICATE',
+            }).catch(async (error: unknown) => {
+              if (
+                error instanceof ApplicationFailure &&
+                error.type === 'MediaUploadSelectionConflict'
+              ) {
+                throw unusableMedia(index);
+              }
+              const workflowArgs = { mediaId: item.mediaId, accountId };
+              if (
+                !(
+                  error instanceof WorkflowExecutionAlreadyStartedError &&
+                  error.workflowId === mediaUploadWorkflow.workflowIdFromArgs(workflowArgs) &&
+                  error.workflowType === mediaUploadWorkflow.workflow
+                )
+              ) {
+                throw error;
+              }
 
-  if (state.status === PostRequestStatus.PUBLISHED) {
-    if (!state.result?.postId) {
-      throw new Error('Published Post request has no Post ID');
-    }
+              const readyMedia = await withPrimaryDatabase(async () =>
+                db
+                  .select({ state: MediaTable.state, url: MediaTable.url })
+                  .from(MediaTable)
+                  .where(
+                    and(
+                      eq(MediaTable.id, item.mediaId),
+                      eq(MediaTable.accountId, accountId),
+                      eq(MediaTable.source, MediaSource.LOCAL),
+                    ),
+                  )
+                  .then(first),
+              );
+              if (!readyMedia || readyMedia.state !== MediaState.READY || !readyMedia.url) {
+                throw error;
+              }
 
-    return state;
-  }
+              const result = await getRetainedMediaUploadResult(item.mediaId, accountId);
+              if (!hasCompatibleMediaUploadFilter(result, item.applyAiProhibitFilter)) {
+                throw unusableMedia(index);
+              }
+              return { status: 'completed' as const };
+            }),
+          ]
+        : [],
+    ),
+  );
 
-  if (state.status === PostRequestStatus.FAILED) {
-    if (state.error && state.error.code !== 'INTERNAL_SERVER_ERROR') {
-      throw new FieldError({
-        code: state.error.code,
-        field: state.error.field,
-        message: state.error.message,
-      });
-    }
-    throw new Error(state.error?.message ?? 'Post request failed');
-  }
-
-  if (state.status === PostRequestStatus.CANCELLED) {
-    throw new ConflictError({ message: 'Post request is already finished' });
-  }
-
-  throw new Error(`Post request completed with unexpected status: ${state.status}`);
-}
-
-export async function submitPostRequest(
-  input: LocalPostMutationInput,
-  ctx: SessionContext,
+const startPostRequest = async (
+  preparedInput: Awaited<ReturnType<typeof prepareLocalPostInput>>,
+  submittedMedia: readonly SubmittedPostMedia[],
   analyticsPlatform?: PostAnalyticsPlatform,
-): Promise<PostRequestState> {
+): Promise<PostRequestState> => {
   const requestId = randomUUID();
-  const submittedMedia = input.media ?? [];
-  if (new Set(submittedMedia.map(({ mediaId }) => mediaId.id)).size !== submittedMedia.length) {
-    throw new ValidationError('Post request media must be unique', { field: 'media' });
-  }
-
-  const media = submittedMedia.map(({ altText, applyAiProhibitFilter, mediaId }) => ({
-    altText: altText ?? null,
-    applyNightshade: applyAiProhibitFilter ?? false,
-    mediaId: mediaId.id,
-  }));
-
-  const preparedInput = await prepareLocalPostInput(input, ctx);
-  const hasUploadingMediaWithAiFilter = await verifyAttachedMedia(ctx.session.accountId, media);
-
   const snapshot: PostRequestSnapshot = {
-    input: { ...preparedInput, media },
+    input: {
+      ...preparedInput,
+      media: submittedMedia.map(({ altText, applyAiProhibitFilter, mediaId }) => ({
+        altText,
+        applyNightshade: applyAiProhibitFilter,
+        mediaId,
+      })),
+    },
     requestId,
     submittedAt: new Date().toISOString(),
     ...(analyticsPlatform ? { analyticsPlatform } : {}),
@@ -159,6 +271,7 @@ export async function submitPostRequest(
     snapshot,
     status: PostRequestStatus.QUEUED,
   };
+
   try {
     await runWorkflow(postRequestWorkflow, {
       args: [snapshot],
@@ -184,7 +297,64 @@ export async function submitPostRequest(
     return rethrowPostWorkflowFailure(error);
   }
 
-  return hasUploadingMediaWithAiFilter
-    ? state
-    : waitForPostRequestResult(ctx.session.accountId, state);
+  return state;
+};
+
+export async function submitLocalPost(
+  input: LocalPostMutationInput,
+  ctx: SessionContext,
+  analyticsPlatform?: PostAnalyticsPlatform,
+): Promise<LocalPostSubmission> {
+  const submittedInputMedia = input.media ?? [];
+  if (
+    new Set(submittedInputMedia.map(({ mediaId }) => mediaId.id)).size !==
+    submittedInputMedia.length
+  ) {
+    throw new ValidationError('Post request media must be unique', { field: 'media' });
+  }
+
+  const submittedMedia = submittedInputMedia.map(
+    ({ altText, applyAiProhibitFilter, mediaId }): SubmittedPostMedia => ({
+      altText: altText ?? null,
+      applyAiProhibitFilter: applyAiProhibitFilter ?? false,
+      mediaId: mediaId.id,
+    }),
+  );
+
+  const preparedInput = await prepareLocalPostInput(input, ctx);
+  const media = await verifyAttachedMedia(ctx.session.accountId, submittedMedia);
+  const publications = await publishUploadingMedia(ctx.session.accountId, media);
+
+  if (publications.some(({ status }) => status === 'processing')) {
+    return {
+      postId: null,
+      profileId: null,
+      request: await startPostRequest(preparedInput, submittedMedia, analyticsPlatform),
+    };
+  }
+
+  const args: PostCreateWorkflowArgs = {
+    input: preparedInput,
+    revalidateAuthorization: true,
+    requestId: randomUUID(),
+    ...(analyticsPlatform ? { analyticsPlatform } : {}),
+  };
+  try {
+    const result = await runWorkflow(postCreateWorkflow, {
+      args: [args],
+      mode: 'execute',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'REJECT_DUPLICATE',
+    });
+    if (result.status === 'rejected') {
+      throw new Error('Local Post creation returned an unexpected rejection');
+    }
+    return {
+      postId: result.postId,
+      profileId: preparedInput.profileId,
+      request: null,
+    };
+  } catch (error) {
+    return rethrowPostWorkflowFailure(error);
+  }
 }
