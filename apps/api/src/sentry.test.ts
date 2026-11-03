@@ -6,6 +6,19 @@ import type { Event } from '@sentry/node';
 const metadataKeys = ['ENVIRONMENT', 'EXPO_PUBLIC_SENTRY_DSN', 'SENTRY_RELEASE'] as const;
 const originalMetadata = Object.fromEntries(metadataKeys.map((key) => [key, process.env[key]]));
 const sentryModule = new URL('./sentry.ts', import.meta.url).href;
+const createRequestFixture = (url: string) => ({
+  url,
+  method: 'POST',
+  headers: {
+    aUtHoRiZaTiOn: 'Bearer authorization-value',
+    'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
+    cOoKiE: 'kosmo_session=cookie-header-value',
+    Accept: 'application/json',
+    'X-Request-Id': 'request-id',
+  },
+  cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
+  data: { retainedBodyMarker: 'request-data-value' },
+});
 
 const setMetadata = (metadata: Partial<Record<(typeof metadataKeys)[number], string>>) => {
   for (const key of metadataKeys) {
@@ -42,19 +55,7 @@ describe('API Sentry configuration', () => {
       type: 'transaction',
       event_id: 'transaction-event',
       transaction: 'POST /graphql',
-      request: {
-        url: 'https://kosmo.invalid/graphql?request-id=url-query-value',
-        method: 'POST',
-        headers: {
-          aUtHoRiZaTiOn: 'Bearer authorization-value',
-          'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
-          cOoKiE: 'kosmo_session=cookie-header-value',
-          Accept: 'application/json',
-          'X-Request-Id': 'request-id',
-        },
-        cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
-        data: { retainedBodyMarker: 'request-data-value' },
-      },
+      request: createRequestFixture('https://kosmo.invalid/graphql?request-id=url-query-value'),
     };
     const originalRequest = transactionEvent.request;
     const originalHeaders = transactionEvent.request?.headers;
@@ -92,19 +93,9 @@ describe('API Sentry configuration', () => {
     assert.ok(transport);
     const send = mock.method(transport, 'send', async () => ({ statusCode: 200 }));
     const originalError = new Error('remote profile lookup failed');
-    const syntheticRequest = {
-      url: 'https://kosmo.invalid/error?request-id=url-query-value',
-      method: 'POST',
-      headers: {
-        aUtHoRiZaTiOn: 'Bearer authorization-value',
-        'PrOxY-aUtHoRiZaTiOn': 'Basic proxy-authorization-value',
-        cOoKiE: 'kosmo_session=cookie-header-value',
-        Accept: 'application/json',
-        'X-Request-Id': 'request-id',
-      },
-      cookies: { kosmo_session: 'parsed-cookie-value', locale: 'ko' },
-      data: { retainedBodyMarker: 'request-data-value' },
-    };
+    const syntheticRequest = createRequestFixture(
+      'https://kosmo.invalid/error?request-id=url-query-value',
+    );
     let observedError: unknown;
 
     try {

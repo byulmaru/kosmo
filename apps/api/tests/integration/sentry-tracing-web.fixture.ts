@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import * as Sentry from '@sentry/node';
 import { Hono } from 'hono';
 import graphqlRoutes from '../../../web/src/server/routes/graphql';
+import { captureUnexpectedError } from '../../../web/src/server/sentry';
 
 type CapturedEnvelope = [unknown, Array<[Record<string, unknown>, unknown]>];
 
@@ -57,6 +58,29 @@ process.on('message', (message: unknown) => {
   void (async () => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
+    });
+    const authToken = process.env.TRACE_AUTH_TOKEN;
+    if (!authToken) {
+      throw new Error('TRACE_AUTH_TOKEN is required');
+    }
+    const errorMessage = 'Web tracing fixture capture error';
+    Sentry.withScope((scope) => {
+      scope.addEventProcessor((event) => ({
+        ...event,
+        request: {
+          url: 'https://kosmo.invalid/error?request-id=retained-error-url-marker',
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            'Proxy-Authorization': `Basic ${authToken}`,
+            Cookie: `kosmo_session=${authToken}`,
+            'X-Request-Id': 'web-error-request-id',
+          },
+          cookies: { kosmo_session: authToken, locale: 'ko' },
+          data: { retainedBodyMarker: 'web-error-request-body-value' },
+        },
+      }));
+      captureUnexpectedError(new Error(errorMessage));
     });
     await Sentry.flush(1_000);
     const envelopes = JSON.parse(JSON.stringify(sentryEnvelopes)) as CapturedEnvelope[];

@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import type { ChildProcess } from 'node:child_process';
 
 type FixtureMessage = {
@@ -491,6 +492,28 @@ test(
       assertCapturedTransaction('BFF', 'web-bff', transactionsForTrace(webEnvelopes, traceId));
       assertCapturedTransaction('API', 'api', transactionsForTrace(apiEnvelopes, traceId));
 
+      const webErrorEvent = findEnvelopePayloads(webEnvelopes, 'event').find((event) =>
+        (event.exception as { values?: Array<{ value?: unknown }> } | undefined)?.values?.some(
+          ({ value }) => value === 'Web tracing fixture capture error',
+        ),
+      );
+      assert.ok(webErrorEvent, 'the Web SDK must emit the captured ERROR event');
+      assert.ok(
+        isDeepStrictEqual(webErrorEvent.request, {
+          url: 'https://kosmo.invalid/error?request-id=retained-error-url-marker',
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            'Proxy-Authorization': `Basic ${authToken}`,
+            Cookie: `kosmo_session=${authToken}`,
+            'X-Request-Id': 'web-error-request-id',
+          },
+          cookies: { kosmo_session: authToken, locale: 'ko' },
+          data: { retainedBodyMarker: 'web-error-request-body-value' },
+        }),
+        'the Web SDK ERROR event must preserve its synthetic request metadata',
+      );
+
       const bffHttp = spansFor(bffSpans, /http\.server/u).find(
         (span) => span.parent_span_id === incomingSpanId,
       );
@@ -541,11 +564,17 @@ test(
         'the bound handle value must not appear in the profile lookup Postgres span',
       );
 
-      const authPaths = pathsContaining([webEnvelopes, apiEnvelopes], authToken);
+      const authPaths = pathsContaining(
+        [
+          ...findEnvelopePayloads(webEnvelopes, 'transaction'),
+          ...findEnvelopePayloads(apiEnvelopes, 'transaction'),
+        ],
+        authToken,
+      );
       assert.equal(
         authPaths.length,
         0,
-        `captured envelopes must omit auth credentials (paths: ${authPaths.join(', ')})`,
+        `captured transaction events must omit auth credentials (paths: ${authPaths.join(', ')})`,
       );
     } finally {
       await stopIfRunning(web);
