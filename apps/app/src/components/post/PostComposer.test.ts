@@ -108,6 +108,7 @@ let mutationCalls: Array<{
   onCompleted: (
     response: {
       createPost: {
+        post?: { id: string } | null;
         request: {
           id: string;
           post?: { id: string } | null;
@@ -135,9 +136,12 @@ const serverGeneratedRequestId = (callIndex: number) =>
 
 const acceptedRequestResponse = (callIndex: number) => ({
   createPost: {
+    post: null,
     request: {
       id: `post-request-node-${callIndex}`,
+      post: null,
       requestId: serverGeneratedRequestId(callIndex),
+      status: 'QUEUED',
     },
   },
 });
@@ -248,6 +252,57 @@ function seedHomeTimeline(environment: Environment, existingPostIds: readonly st
       getRelayHandleKey('connection', 'PostList_homeTimeline', null),
     );
   });
+}
+
+function makeCreatedPost({
+  bodyText,
+  id,
+  profileId,
+  relativeHandle,
+}: Readonly<{ bodyText: string; id: string; profileId: string; relativeHandle: string }>) {
+  const profile = {
+    __typename: 'Profile',
+    avatar: null,
+    displayName: profileId,
+    id: profileId,
+    instance: { __typename: 'ProfileInstance', kind: 'LOCAL' },
+    relativeHandle,
+    viewerState: {
+      __typename: 'ProfileViewerState',
+      blockedBy: false,
+      isSelf: true,
+      profileBlock: null,
+      profileMute: null,
+    },
+  };
+  const content = {
+    __typename: 'PostContent',
+    bodyText,
+    contentWarning: null,
+    document: null,
+    id: `content:${id}`,
+    media: [],
+    mentionedProfiles: [],
+  };
+
+  return {
+    __typename: 'Post',
+    content,
+    createdAt: '2026-11-03T00:00:00.000Z',
+    id,
+    isPinned: false,
+    profile,
+    reactionCounts: [],
+    replyCount: 0,
+    replyParent: null,
+    repostCount: 0,
+    repostSource: null,
+    state: 'ACTIVE',
+    viewerBookmark: null,
+    viewerReactions: [],
+    viewerRepost: null,
+    visibility: 'UNLISTED',
+  };
 }
 
 function homeTimelinePostIds(environment: Environment) {
@@ -705,23 +760,16 @@ describe('PostComposer request acknowledgement cache projection', () => {
       );
       const publishedPost =
         status === 'PUBLISHED'
-          ? {
-              __typename: 'Post',
-              content: { __typename: 'PostContent', id: `content:${publishedPostId}` },
+          ? makeCreatedPost({
+              bodyText: '접수된 본문',
               id: publishedPostId,
-              profile: {
-                __typename: 'Profile',
-                avatar: null,
-                displayName: '작성자 A',
-                handle: '@profile-a',
-                id: 'profile-a',
-                relativeHandle: '@profile-a',
-              },
-              replyParent: null,
-            }
+              profileId: 'profile-a',
+              relativeHandle: '@profile-a',
+            })
           : null;
       environment.commitPayload(mutationOperation, {
         createPost: {
+          post: publishedPost,
           request: {
             __typename: 'PostRequest',
             authorProfile: {
@@ -745,6 +793,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
       await act(async () =>
         call.onCompleted({
           createPost: {
+            post: publishedPost ? { id: publishedPostId } : null,
             request: {
               id: requestNodeId,
               post: publishedPost ? { id: publishedPostId } : null,
@@ -819,6 +868,12 @@ describe('PostComposer request acknowledgement cache projection', () => {
         const authorBRequestId = serverGeneratedRequestId(1);
         const authorBRequestNodeId = 'post-request-node-profile-b';
         const authorBPostId = 'post-published-profile-b';
+        const authorBPost = makeCreatedPost({
+          bodyText: '프로필 B에서 작성한 본문',
+          id: authorBPostId,
+          profileId: profileB.id,
+          relativeHandle: profileB.relativeHandle,
+        });
         assert.equal(authorBCall.variables.input.actorProfileId, profileB.id);
         const authorBMutation = createOperationDescriptor(
           getRequest(CreatePostMutation),
@@ -826,6 +881,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
         );
         environment.commitPayload(authorBMutation, {
           createPost: {
+            post: authorBPost,
             request: {
               __typename: 'PostRequest',
               authorProfile: {
@@ -839,20 +895,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
               bodyText: '프로필 B에서 작성한 본문',
               id: authorBRequestNodeId,
               media: [],
-              post: {
-                __typename: 'Post',
-                content: { __typename: 'PostContent', id: `content:${authorBPostId}` },
-                id: authorBPostId,
-                profile: {
-                  __typename: 'Profile',
-                  avatar: null,
-                  displayName: '작성자 B',
-                  handle: '@profile-b',
-                  id: profileB.id,
-                  relativeHandle: profileB.relativeHandle,
-                },
-                replyParent: null,
-              },
+              post: authorBPost,
               requestId: authorBRequestId,
               sensitiveMedia: false,
               status: 'PUBLISHED',
@@ -862,6 +905,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
         await act(async () =>
           authorBCall.onCompleted({
             createPost: {
+              post: { id: authorBPostId },
               request: {
                 id: authorBRequestNodeId,
                 post: { id: authorBPostId },
@@ -889,6 +933,104 @@ describe('PostComposer request acknowledgement cache projection', () => {
       }
     });
   }
+
+  it('accepts a real Post response with no request and reconciles it into Home once', async () => {
+    const createdPostId = 'post-direct-created';
+    const createdPosts: Array<{ id: string }> = [];
+    let acceptedCount = 0;
+    const query = getRequest(PostRequestListQueryNode);
+    const environment = relayEnvironment;
+    for (const profileId of [profileA.id, profileB.id]) {
+      environment.commitPayload(createOperationDescriptor(query, { profileId }), {
+        node: { __typename: 'Profile', id: profileId, postRequests: [] },
+      });
+    }
+    seedHomeTimeline(environment, ['post-home-existing']);
+
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostRequestAccepted: () => acceptedCount++,
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('바로 게시된 본문'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    const mutationOperation = createOperationDescriptor(
+      getRequest(CreatePostMutation),
+      call.variables as PostComposerCreatePostMutation['variables'],
+    );
+    environment.commitPayload(mutationOperation, {
+      createPost: {
+        post: makeCreatedPost({
+          bodyText: '바로 게시된 본문',
+          id: createdPostId,
+          profileId: profileA.id,
+          relativeHandle: profileA.relativeHandle,
+        }),
+        request: null,
+      },
+    });
+    await act(async () =>
+      call.onCompleted({ createPost: { post: { id: createdPostId }, request: null } }),
+    );
+
+    assert.equal(targetProps?.body, '');
+    assert.deepEqual(createdPosts, [{ id: createdPostId }]);
+    assert.equal(acceptedCount, 0);
+    assert.deepEqual(analyticsEvents, [
+      {
+        event: 'post_created',
+        properties: { selected_profile_id: profileA.id, visibility: 'UNLISTED' },
+      },
+    ]);
+    assert.deepEqual(homeTimelinePostIds(environment), [createdPostId, 'post-home-existing']);
+    for (const profileId of [profileA.id, profileB.id]) {
+      const data = environment.lookup(
+        createOperationDescriptor(query, { profileId }).fragment,
+      ).data as {
+        node: { __typename: string; postRequests: ReadonlyArray<{ id: string }> } | null;
+      };
+      const requestIds =
+        data.node?.__typename === 'Profile'
+          ? data.node.postRequests.map((request) => request.id)
+          : [];
+      assert.deepEqual(requestIds, []);
+    }
+  });
+
+  it('shows completion feedback and closes after a direct Post when no Post callback is supplied', async () => {
+    let closeCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onPostRequestAccepted: () => closeCount++,
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('게시 완료'));
+    await act(async () => targetProps?.onSubmit());
+
+    const call = mutationCalls[0];
+    assert.ok(call);
+    await act(async () =>
+      call.onCompleted({ createPost: { post: { id: 'post-direct-created' }, request: null } }),
+    );
+
+    assert.equal(targetProps?.body, '');
+    assert.equal(closeCount, 1);
+    assert.deepEqual(toastCalls, [['게시했어요', { tone: 'success' }]]);
+  });
 });
 
 it('requires a published Post ID and a completion handler before skipping the request acknowledgement', async () => {
@@ -1791,7 +1933,7 @@ describe('PostComposer local author', () => {
     ]);
   });
 
-  it('does not record a GraphQL response without an accepted request ID', async () => {
+  it('preserves the draft when a response has neither a real Post nor an accepted request', async () => {
     await act(async () => {
       renderer = create(createElement(PostComposer, { profile: profileA as never }));
     });
@@ -1801,11 +1943,17 @@ describe('PostComposer local author', () => {
     const call = mutationCalls[0];
     assert.ok(call);
     await act(async () =>
-      call.onCompleted({ createPost: { request: null } }, [{ message: 'request was rejected' }]),
+      call.onCompleted(
+        { createPost: { post: null, request: null } },
+        [{ message: 'request was rejected' }],
+      ),
     );
 
     assert.equal(targetProps?.body, '접수되지 않은 본문');
     assert.deepEqual(analyticsEvents, []);
+    assert.deepEqual(toastCalls, [
+      ['게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.', { tone: 'danger' }],
+    ]);
   });
 });
 

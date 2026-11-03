@@ -67,10 +67,12 @@ export function reconcilePublishedPostInHome(
     currentProfileId: string | null;
     postId: string | null;
     profileId: string;
-    requestNodeId: string;
+    requestNodeId?: string;
   }>,
 ) {
-  removePostRequestFromLoadedProfileRequests(store, profileId, requestNodeId);
+  if (requestNodeId) {
+    removePostRequestFromLoadedProfileRequests(store, profileId, requestNodeId);
+  }
 
   if (!postId || !authorProfileId || authorProfileId !== currentProfileId) {
     return;

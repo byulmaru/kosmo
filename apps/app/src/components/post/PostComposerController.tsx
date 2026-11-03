@@ -95,6 +95,10 @@ const PostComposerFragment = graphql`
 const CreatePostMutation = graphql`
   mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
     createPost(input: $input) {
+      post {
+        id
+        ...PostListItem_post
+      }
       request {
         id
         post {
@@ -512,8 +516,12 @@ function PostComposerContents({
         if (!isCurrentSubmission()) {
           return;
         }
+        const createdPost = response?.createPost?.post;
         const acceptedRequest = response?.createPost?.request;
-        if (acceptedRequest?.id) {
+        const publishedRequestPostId =
+          acceptedRequest?.status === 'PUBLISHED' ? acceptedRequest.post?.id : undefined;
+        const publishedPostId = createdPost?.id ?? publishedRequestPostId;
+        if (acceptedRequest?.id || createdPost?.id) {
           trackAnalytics('post_created', {
             selected_profile_id: profile.id,
             visibility,
@@ -521,22 +529,27 @@ function PostComposerContents({
           const actorProfileId = input.actorProfileId;
           if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
             commitLocalUpdate(environment, (store) => {
-              prependPostRequestToLoadedProfileRequests(store, actorProfileId, acceptedRequest.id);
-
-              const request = store.get(acceptedRequest.id);
-              if (request?.getValue('status') !== 'PUBLISHED') {
-                return;
+              if (acceptedRequest?.id) {
+                prependPostRequestToLoadedProfileRequests(store, actorProfileId, acceptedRequest.id);
               }
 
-              const post = request.getLinkedRecord('post');
-              const authorProfile = post?.getLinkedRecord('profile');
-              reconcilePublishedPostInHome(store, {
-                authorProfileId: authorProfile?.getDataID() ?? null,
-                currentProfileId: selectedProfileId,
-                postId: post?.getDataID() ?? null,
-                profileId: actorProfileId,
-                requestNodeId: acceptedRequest.id,
-              });
+              const request = acceptedRequest?.id ? store.get(acceptedRequest.id) : null;
+              const requestStatus = request?.getValue('status');
+              const post = createdPost?.id
+                ? store.get(createdPost.id)
+                : requestStatus === 'PUBLISHED'
+                  ? request?.getLinkedRecord('post')
+                  : null;
+              if (createdPost?.id || requestStatus === 'PUBLISHED') {
+                const authorProfile = post?.getLinkedRecord('profile');
+                reconcilePublishedPostInHome(store, {
+                  authorProfileId: authorProfile?.getDataID() ?? null,
+                  currentProfileId: selectedProfileId,
+                  postId: post?.getDataID() ?? null,
+                  profileId: actorProfileId,
+                  ...(acceptedRequest?.id ? { requestNodeId: acceptedRequest.id } : {}),
+                });
+              }
             });
           }
           onBodyReset();
@@ -551,12 +564,11 @@ function PostComposerContents({
               replyParentVisibility,
             ),
           );
-          if (
-            acceptedRequest.status === 'PUBLISHED' &&
-            acceptedRequest.post?.id &&
-            submittedCreatedCallback
-          ) {
-            submittedCreatedCallback({ id: acceptedRequest.post.id });
+          if (publishedPostId && submittedCreatedCallback) {
+            submittedCreatedCallback({ id: publishedPostId });
+          } else if (publishedPostId) {
+            showToast('게시했어요', { tone: 'success' });
+            submittedCallback?.();
           } else {
             showToast('게시 요청을 접수했어요', { tone: 'success' });
             submittedCallback?.();

@@ -84,6 +84,7 @@ function acknowledgedPostRequest(
             id: mediaId,
             url: `https://media.example/${mediaId}.webp`,
           })),
+          post: null,
           requestId: acknowledgedRequestId,
           sensitiveMedia: input.sensitiveMedia,
           status: 'QUEUED',
