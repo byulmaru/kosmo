@@ -16,15 +16,23 @@ const author = profile({
   id: 'post-request-card-author',
   relativeHandle: '@starlight',
 });
+type MediaFixture = {
+  readonly __typename: 'Media';
+  readonly altText: string | null;
+  readonly id: string;
+  readonly thumbhash: string | null;
+  readonly url: string | null;
+};
 const mediaUrl =
   'data:image/svg+xml,' +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#8b7dea"/></svg>',
   );
-const media = {
-  __typename: 'Media' as const,
+const media: MediaFixture = {
+  __typename: 'Media',
   altText: '보라색 하늘',
   id: 'post-request-card-media',
+  thumbhash: null,
   url: mediaUrl,
 };
 
@@ -35,6 +43,7 @@ function request({
   contentWarning = null,
   sensitiveMedia = false,
   publishedPost = null,
+  mediaItems,
 }: {
   id: string;
   status: 'PROCESSING' | 'FAILED' | 'PUBLISHED';
@@ -42,6 +51,7 @@ function request({
   contentWarning?: string | null;
   sensitiveMedia?: boolean;
   publishedPost?: ReturnType<typeof post> | null;
+  mediaItems?: readonly MediaFixture[];
 }) {
   return {
     __typename: 'PostRequest' as const,
@@ -49,7 +59,7 @@ function request({
     bodyText,
     contentWarning,
     id: `post-request-card-node-${id}`,
-    media: [media],
+    media: mediaItems ?? [media],
     post: publishedPost,
     requestId: `post-request-card-${id}`,
     status,
@@ -60,6 +70,34 @@ function request({
 const processing = request({
   bodyText: '빛이 천천히 번지는 저녁 하늘을 기록했어요.',
   id: 'processing',
+  status: 'PROCESSING',
+});
+const hashOnlyProcessing = request({
+  bodyText: '처리 중인 이미지의 ThumbHash 미리보기예요.',
+  id: 'hash-only-processing',
+  mediaItems: [
+    {
+      __typename: 'Media',
+      altText: '보라색 하늘',
+      id: 'post-request-card-hash-only-media',
+      thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      url: null,
+    },
+  ],
+  status: 'PROCESSING',
+});
+const missingThumbhashProcessing = request({
+  bodyText: '이전 업로드 응답에는 ThumbHash가 없어요.',
+  id: 'missing-thumbhash-processing',
+  mediaItems: [
+    {
+      __typename: 'Media',
+      altText: '하늘',
+      id: 'post-request-card-missing-thumbhash-media',
+      thumbhash: null,
+      url: null,
+    },
+  ],
   status: 'PROCESSING',
 });
 const failed = request({
@@ -79,7 +117,7 @@ const published = request({
   sensitiveMedia: true,
   status: 'PUBLISHED',
 });
-const requests = [processing, failed, published];
+const requests = [processing, hashOnlyProcessing, missingThumbhashProcessing, failed, published];
 const requestNodeIds = requests.map(({ id }) => id);
 
 const PostRequestCardStoriesQuery = graphql`
@@ -139,6 +177,14 @@ function RepresentativeStatesCatalog({ onCompose }: { onCompose: () => void }) {
     <Catalog>
       <Section title="Processing">
         <PostRequestCard request={requireRequest(storyRequests, processing.id).request} />
+      </Section>
+      <Section title="Processing, ThumbHash fallback">
+        <PostRequestCard request={requireRequest(storyRequests, hashOnlyProcessing.id).request} />
+      </Section>
+      <Section title="Processing, no preview metadata">
+        <PostRequestCard
+          request={requireRequest(storyRequests, missingThumbhashProcessing.id).request}
+        />
       </Section>
       <Section title="Failed, available to compose">
         <PostRequestCard

@@ -9,7 +9,7 @@ import {
   parseNexusMediaUploadReference,
 } from '@kosmo/core/media-upload';
 import { ApplicationFailure } from '@temporalio/activity';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type {
   MediaUploadResult,
@@ -35,6 +35,7 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
       source: MediaTable.source,
       state: MediaTable.state,
       storageReference: MediaTable.storageReference,
+      thumbhash: MediaTable.thumbhash,
     })
     .from(MediaTable)
     .where(eq(MediaTable.id, mediaId))
@@ -54,7 +55,23 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
 
   const storageReference = media.storageReference;
   try {
-    return await headNexusMediaUploadSource(storageReference);
+    const source = await headNexusMediaUploadSource(storageReference);
+    if (media.thumbhash === null && source.thumbhash !== undefined) {
+      await db
+        .update(MediaTable)
+        .set({ thumbhash: source.thumbhash })
+        .where(
+          and(
+            eq(MediaTable.id, mediaId),
+            eq(MediaTable.accountId, accountId),
+            eq(MediaTable.source, MediaSource.LOCAL),
+            eq(MediaTable.state, MediaState.UPLOADING),
+            eq(MediaTable.storageReference, storageReference),
+            isNull(MediaTable.thumbhash),
+          ),
+        );
+    }
+    return { id: source.id, sourceKey: source.sourceKey, contentType: source.contentType };
   } catch (error) {
     if (error instanceof ValidationError) {
       throw ApplicationFailure.nonRetryable(error.message, 'NexusMediaUploadSourceError');

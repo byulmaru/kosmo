@@ -2,6 +2,7 @@ import { Link, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { AppState, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
+import { thumbHashToDataURL } from 'thumbhash';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,6 +13,24 @@ import type { PostRequestCardRefetchQuery } from './__generated__/PostRequestCar
 
 const ACTIVE_STATUSES = new Set(['QUEUED', 'PROCESSING', 'PUBLISHING', 'CONFIRMING']);
 const POLL_INTERVAL_MS = 5_000;
+
+function getThumbhashPreviewUri(thumbhash: string | null | undefined): string | undefined {
+  if (!thumbhash || thumbhash.length < 8 || thumbhash.length > 128) {
+    return undefined;
+  }
+
+  try {
+    const decoded = atob(thumbhash);
+    if (btoa(decoded) !== thumbhash) {
+      return undefined;
+    }
+
+    const hash = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+    return thumbHashToDataURL(hash);
+  } catch {
+    return undefined;
+  }
+}
 
 const PostRequestCardFragment = graphql`
   fragment PostRequestCard_request on PostRequest
@@ -30,6 +49,7 @@ const PostRequestCardFragment = graphql`
       id
       url
       altText
+      thumbhash
     }
     sensitiveMedia
     id
@@ -188,9 +208,19 @@ export function PostRequestCard({
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
   const canCompose = request.status === 'FAILED' || request.status === 'CANCELLED';
   const excerpt = request.bodyText.trim();
-  const thumbnail = request.sensitiveMedia
-    ? undefined
-    : request.media.find((item) => Boolean(item?.url));
+  let thumbnail: { readonly altText: string | null; readonly uri: string } | undefined;
+  if (!request.sensitiveMedia) {
+    for (const item of request.media) {
+      if (!item) {
+        continue;
+      }
+      const uri = item.url?.trim() || getThumbhashPreviewUri(item.thumbhash);
+      if (uri) {
+        thumbnail = { altText: item.altText ?? null, uri };
+        break;
+      }
+    }
+  }
   const publishedHref = request.post?.profile.relativeHandle
     ? `/${request.post.profile.relativeHandle}/${request.post.id}`
     : undefined;
@@ -231,18 +261,18 @@ export function PostRequestCard({
         <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{statusLabel}</Text>
       </View>
 
-      {excerpt || thumbnail?.url ? (
+      {excerpt || thumbnail ? (
         <View style={styles.preview}>
           {excerpt ? (
             <Text numberOfLines={2} style={[styles.excerpt, { color: theme.foregroundPrimary }]}>
               {excerpt}
             </Text>
           ) : null}
-          {thumbnail?.url ? (
+          {thumbnail ? (
             <Image
               accessibilityLabel={thumbnail.altText || '첨부 이미지'}
               resizeMode="cover"
-              source={{ uri: thumbnail.url }}
+              source={{ uri: thumbnail.uri }}
               style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
             />
           ) : null}

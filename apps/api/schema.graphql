@@ -339,6 +339,7 @@ type Media implements Node {
   mediaType: String
   readyAt: DateTime
   state: MediaState!
+  thumbhash: String
   url: String
 }
 
