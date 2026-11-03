@@ -28,6 +28,7 @@ let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
 let muteHeadingFocusCalls = 0;
+let blockedHeadingFocusCalls = 0;
 const openNavigationDrawer = mock.fn();
 
 mock.module('expo-router', {
@@ -310,6 +311,7 @@ afterEach(async () => {
   otaDownloadError = null;
   publicChannel = 'prod';
   muteHeadingFocusCalls = 0;
+  blockedHeadingFocusCalls = 0;
   openNavigationDrawer.mock.resetCalls();
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -541,11 +543,15 @@ describe('Settings routes', () => {
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
-  it('mobile Web blocked profile 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
+  it('mobile Web blocked profile 해제 성공은 보이는 detail 제목으로 focus를 옮긴다', async () => {
     width = 390;
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
     assert.equal(rendered('PageHeader').length, 1);
+    const list = rendered('SettingsBlockedProfiles')[0];
+    assert.ok(list);
+    await act(async () => list.props.onUnblockSuccess());
+    assert.equal(blockedHeadingFocusCalls, 1);
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
@@ -1008,7 +1014,9 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
       createNodeMock: ({ props }) =>
         (props as { children?: unknown }).children === '뮤트한 프로필'
           ? { focus: () => (muteHeadingFocusCalls += 1) }
-          : null,
+          : (props as { children?: unknown }).children === '차단한 프로필'
+            ? { focus: () => (blockedHeadingFocusCalls += 1) }
+            : null,
     });
   });
   assert.ok(renderer);

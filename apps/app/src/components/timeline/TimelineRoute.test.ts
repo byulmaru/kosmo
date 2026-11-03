@@ -78,6 +78,9 @@ mockModule('@/components/post/PostRequestList', {
   PostRequestHomeSummaryLoading: () => null,
   PostRequestListSummary: () => null,
 });
+mockModule('@/components/timeline/HomePushPermissionBanner', {
+  HomePushPermissionBanner: () => null,
+});
 mockModule('@/components/RelayFailOpenBoundary', {
   RelayFailOpenBoundary: ({ children }: { children: ReactNode }) => children,
 });
