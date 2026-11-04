@@ -3,6 +3,12 @@ import type { ExpoConfig } from 'expo/config';
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
 const googleServicesJson = process.env.KOSMO_ANDROID_GOOGLE_SERVICES_FILE;
 const googleServiceInfoPlist = process.env.KOSMO_IOS_GOOGLE_SERVICES_FILE;
+const appVersion = process.env.KOSMO_APP_VERSION ?? '0.4.5';
+
+if (!/^\d+\.\d+\.\d+$/.test(appVersion)) {
+  throw new Error('Expected KOSMO_APP_VERSION to use major.minor.patch format.');
+}
+
 // Temporary Android workaround: expo-font 56 ignores requested weights for runtime-loaded variable fonts (SUIT defaults to 100).
 // Upstream fix: https://github.com/expo/expo/pull/48129
 // Remove this list and the Android expo-font plugin config after upgrading to an Expo SDK with the fix (expo-font >=58.0.0)
@@ -42,7 +48,7 @@ if (!/^[1-9]\d*$/.test(iosBuildNumber)) {
 const config: ExpoConfig = {
   name: 'Kosmo',
   slug: 'kosmo',
-  version: '0.4.5',
+  version: appVersion,
   scheme: 'kosmo',
   orientation: 'default',
   userInterfaceStyle: 'automatic',
