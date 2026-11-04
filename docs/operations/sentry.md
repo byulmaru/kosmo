@@ -81,12 +81,11 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 - 업로드 경계가 추가하는 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
 - SDK가 생성한 원본 Error는 호출자에게 던지는 오류의 `cause`에서 수정 없이 보존한다. Sentry event의 오류·context에는 원본의 data/blob/file URI나 signed URL을 포함하지 않는다.
 
-#### Web Push 권한·Firebase 실패
+#### Web Push 처리된 실패
 
-- Web Push 처리된 실패 event는 `feature: 'web-push'`와 다음 고정 `stage` 중 하나만 context에 추가하고, 각 실패 실행에서 한 번 capture한다: `permission-request`, `firebase-initialization`, `service-worker-registration`, `push-registration`, `push-unregistration`. `Error`는 원본을 capture하고, `Error`가 아닌 throw/rejection 값은 임의로 직렬화하거나 `cause`에 넣지 않고 미리 정한 일반 보고용 `Error`로 대체한다.
-- `permission-request`는 Notification API의 동기 throw 또는 거절된 Promise만 포함하며, 정상적인 `default`·`denied` 권한 결과는 capture하지 않는다. `firebase-initialization`은 Firebase SDK import, 예외를 던지는 support probe, Firebase 초기화와 listener 설정 실패를 포함한다. `service-worker-registration`은 페이지의 `navigator.serviceWorker.register` 실패다. `push-registration`·`push-unregistration`은 자동·focus 복원·사용자 요청을 포함한 공통 messaging permission 동기화의 실패다.
-- 비인증 guest, Web Push 설정 부재, Firebase의 정상적인 미지원 결과와 정상적인 권한 거절·미결정은 보고하지 않는다. 서버 설치 정보의 등록·수정·삭제, 브라우저 저장소 오류·알림 표시와 Service Worker 내부 오류는 별도 capture하지 않는다.
-- context에는 `feature`와 `stage`만 넣는다. Firebase 설정, push token/FID, account·installation ID, URL, 알림 또는 사용자 콘텐츠를 context에 추가하지 않는다. 공통 reporter의 기존 runtime metadata gate와 best-effort capture를 재사용하며, capture 실패는 권한 결과, 지원 상태, 등록·해제, 오류 전달과 retry 동작을 바꾸지 않는다.
+- 기존 Web Push 처리된 오류 경계에서 실패당 한 번, 원본 `Error`와 stack을 기존 Sentry reporter로 수집한다. `Error`가 아닌 throw/rejection 값은 임의로 직렬화하거나 `cause`에 넣지 않고 미리 정한 일반 보고용 `Error`로 대체한다.
+- 성공, 정상적인 권한 `default`·`denied`, 설정 누락, 비인증 guest와 Firebase의 정상적인 미지원 결과는 event를 만들지 않는다.
+- 별도의 단계 분류나 진단용 context와 raw data를 추가하지 않는다. Sentry capture 실패나 동기 예외는 권한 결과, 지원 상태, 등록·해제, 오류 전달과 재시도 동작을 바꾸지 않는다.
 
 이 처리된 실패 수집은 기존 runtime 활성화 조건을 따른다. DSN·environment·release metadata가 완전하지 않은 local·test 실행은 외부 event를 전송하지 않으며, 자동 breadcrumb·session tracking을 다시 활성화하지 않는다.
 

@@ -22,8 +22,6 @@ type MutationConfig = {
 };
 
 type Permission = NotificationPermission;
-type CaptureContext = Record<string, string | number | boolean>;
-type CaptureCall = { context?: CaptureContext; error: Error };
 
 let session: { accountId: string | null; status: 'guest' | 'valid' } = {
   accountId: null,
@@ -35,7 +33,6 @@ let webPushConfigAvailable = true;
 let supportAvailable = true;
 let supportFailure: unknown = null;
 let updateFails = false;
-let serviceWorkerFailure: unknown = null;
 let firebaseRegistrationFailure: unknown = null;
 let firebaseUnregistrationFailure: unknown = null;
 let notificationPermissionSyncFailure: unknown = null;
@@ -55,7 +52,7 @@ const originalLocationDescriptor = Object.getOwnPropertyDescriptor(globalThis, '
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
 const eventOrder: string[] = [];
-const captureCalls: CaptureCall[] = [];
+const captureCalls: Error[] = [];
 const focusListeners = new Set<() => void>();
 const visibilityListeners = new Set<() => void>();
 let documentVisibilityState: DocumentVisibilityState = 'visible';
@@ -81,8 +78,8 @@ const webPushConfig = {
 
 mock.module('@/observability/sentry', {
   exports: {
-    captureHandledError: (error: Error, context?: CaptureContext) => {
-      captureCalls.push({ context, error });
+    captureHandledError: (error: Error) => {
+      captureCalls.push(error);
       if (sentryCaptureFails) {
         throw new Error('Sentry unavailable');
       }
@@ -212,7 +209,6 @@ afterEach(async () => {
   supportAvailable = true;
   supportFailure = null;
   updateFails = false;
-  serviceWorkerFailure = null;
   firebaseRegistrationFailure = null;
   firebaseUnregistrationFailure = null;
   notificationPermissionSyncFailure = null;
@@ -261,7 +257,7 @@ describe('Web Push provider', () => {
     assert.equal(captureCalls.length, 0);
   });
 
-  it('reports Firebase setup errors with the original Error and unavailable support state', async () => {
+  it('captures setup errors and marks Web Push unavailable', async () => {
     const originalError = new Error('Firebase support check failed');
     supportFailure = originalError;
     session = { accountId: 'account-1', status: 'valid' };
@@ -270,28 +266,7 @@ describe('Web Push provider', () => {
 
     assert.equal(supportState, 'unavailable');
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'firebase-initialization',
-    });
-  });
-
-  it('reports service worker registration errors with their own stage', async () => {
-    const originalError = new Error('Service worker registration failed');
-    serviceWorkerFailure = originalError;
-    session = { accountId: 'account-1', status: 'valid' };
-    exposeBrowserGlobals();
-    await mountProvider(createElement(PermissionActionCapture));
-
-    assert.equal(supportState, 'unavailable');
-    assert.equal(serviceWorkerCalls.length, 1);
-    assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'service-worker-registration',
-    });
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('uses a generic captured Error for non-Error failures', async () => {
@@ -301,12 +276,8 @@ describe('Web Push provider', () => {
     await mountProvider(createElement(PermissionActionCapture));
 
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error.message, 'Web Push operation failed.');
-    assert.equal(captureCalls[0]?.error.cause, undefined);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'firebase-initialization',
-    });
+    assert.equal(captureCalls[0]?.message, 'Web Push operation failed.');
+    assert.equal(captureCalls[0]?.cause, undefined);
   });
 
   it('starts registration only after the settings permission result is granted', async () => {
@@ -363,11 +334,7 @@ describe('Web Push provider', () => {
     });
     assert.equal(eventOrder.filter((event) => event === 'register').length, 1);
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'push-registration',
-    });
+    assert.equal(captureCalls[0], originalError);
 
     firebaseRegistrationFailure = null;
     sentryCaptureFails = false;
@@ -387,11 +354,7 @@ describe('Web Push provider', () => {
     assert.equal(supportState, 'supported');
     assert.equal(eventOrder.filter((event) => event === 'register').length, 1);
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'push-registration',
-    });
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('reports permission API throws and preserves the synchronous throw', async () => {
@@ -409,11 +372,7 @@ describe('Web Push provider', () => {
     );
     assert.equal(notificationPermissionRequestCalls, 1);
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'permission-request',
-    });
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('reports permission API promise rejection and preserves its rejection', async () => {
@@ -428,11 +387,7 @@ describe('Web Push provider', () => {
     await assert.rejects(requestPermission(), (error: unknown) => error === originalError);
     assert.equal(notificationPermissionRequestCalls, 1);
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'permission-request',
-    });
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('reports Firebase unregistration failure once and preserves the rejection', async () => {
@@ -449,11 +404,7 @@ describe('Web Push provider', () => {
       await assert.rejects(requestPermission(), (error: unknown) => error === originalError);
     });
     assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.error, originalError);
-    assert.deepEqual(captureCalls[0]?.context, {
-      feature: 'web-push',
-      stage: 'push-unregistration',
-    });
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('registers after attaching the FID observer and stores the server-issued row ID', async () => {
@@ -730,9 +681,6 @@ function exposeBrowserGlobals() {
       serviceWorker: {
         register: async (scriptUrl: string, options: { scope: string }) => {
           serviceWorkerCalls.push({ scriptUrl, options });
-          if (serviceWorkerFailure !== null) {
-            throw serviceWorkerFailure;
-          }
           return serviceWorkerRegistration;
         },
       },

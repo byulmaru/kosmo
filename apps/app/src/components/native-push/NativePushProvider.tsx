@@ -52,13 +52,6 @@ type WebPushResources = {
   unregister: () => Promise<void>;
 };
 
-type WebPushFailureStage =
-  | 'firebase-initialization'
-  | 'permission-request'
-  | 'push-registration'
-  | 'push-unregistration'
-  | 'service-worker-registration';
-
 export function NativePushProvider({ children }: PropsWithChildren) {
   const session = useSession();
   const webPush = getPublicConfig('webPush');
@@ -203,8 +196,6 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       };
     }
 
-    let failureStage: 'firebase-initialization' | 'service-worker-registration' =
-      'firebase-initialization';
     void (async () => {
       const [appSdk, messagingSdk] = await Promise.all([
         import('firebase/app'),
@@ -232,12 +223,10 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       const messaging = messagingSdk.getMessaging(app);
       const serviceWorkerUrl = new URL('/firebase-messaging-sw.js', globalThis.location.origin);
       serviceWorkerUrl.searchParams.set('firebase', JSON.stringify(firebaseConfig));
-      failureStage = 'service-worker-registration';
       const serviceWorkerRegistration = await navigator.serviceWorker.register(
         serviceWorkerUrl.toString(),
         { scope: '/' },
       );
-      failureStage = 'firebase-initialization';
       if (!active) {
         return;
       }
@@ -288,7 +277,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       );
     })().catch((error: unknown) => {
       if (active) {
-        reportWebPushError(error, failureStage);
+        reportWebPushError(error);
         setSupport('unavailable');
       }
     });
@@ -334,12 +323,12 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     try {
       permissionRequest = Notification.requestPermission();
     } catch (error) {
-      reportWebPushError(error, 'permission-request');
+      reportWebPushError(error);
       throw error;
     }
 
     return permissionRequest.then(syncPermission, (error: unknown) => {
-      reportWebPushError(error, 'permission-request');
+      reportWebPushError(error);
       throw error;
     });
   }, [syncPermission]);
@@ -355,29 +344,21 @@ async function syncMessagingPermission(
   resources: WebPushResources,
   permission: NotificationPermission,
 ): Promise<void> {
-  if (permission === 'granted') {
-    try {
+  try {
+    if (permission === 'granted') {
       await resources.register();
-    } catch (error) {
-      reportWebPushError(error, 'push-registration');
-      throw error;
-    }
-  } else if (permission === 'denied') {
-    try {
+    } else if (permission === 'denied') {
       await resources.unregister();
-    } catch (error) {
-      reportWebPushError(error, 'push-unregistration');
-      throw error;
     }
+  } catch (error) {
+    reportWebPushError(error);
+    throw error;
   }
 }
 
-function reportWebPushError(error: unknown, stage: WebPushFailureStage): void {
+function reportWebPushError(error: unknown): void {
   try {
-    captureHandledError(error instanceof Error ? error : new Error('Web Push operation failed.'), {
-      feature: 'web-push',
-      stage,
-    });
+    captureHandledError(error instanceof Error ? error : new Error('Web Push operation failed.'));
   } catch {
     // Error reporting must not change the Web Push outcome.
   }
