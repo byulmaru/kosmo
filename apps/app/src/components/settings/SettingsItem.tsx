@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, layoutRecipes, typography } from '@/theme/tokens';
+import { borderWidths, fontFamilies, layoutRecipes, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 export type SettingsItemProps = {
@@ -28,7 +28,7 @@ export function SettingsItem({
         styles.root,
         {
           backgroundColor: selected ? theme.stateSelectedSurface : 'transparent',
-          borderColor: theme.borderSubtle,
+          borderColor: 'transparent',
         },
       ])}
       testID={testID}
@@ -43,6 +43,10 @@ export function SettingsItem({
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      <View
+        pointerEvents="none"
+        style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
+      />
     </View>
   );
 }
@@ -52,6 +56,7 @@ const styles = StyleSheet.create({
     ...layoutRecipes.listRow,
     borderBottomWidth: 1,
     minWidth: 0,
+    position: 'relative',
     width: '100%',
   },
   leading: { flexShrink: 0 },
@@ -64,4 +69,5 @@ const styles = StyleSheet.create({
   },
   description: { flexShrink: 1, fontFamily: fontFamilies.ui, ...typography.sm },
   trailing: { flexShrink: 0 },
+  divider: { bottom: -1.5, height: borderWidths[1], left: 0, position: 'absolute', right: 0 },
 });

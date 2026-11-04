@@ -5,7 +5,7 @@ import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths } from '@/theme/tokens';
+import { borderWidths, radius, space } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
 import type { Href, WebAnchorProps } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -49,22 +49,11 @@ function SettingsLinkFeedback({ children, hovered, pressed, selected }: Settings
     reducedMotion,
     role: interaction ? 'interaction' : 'selection',
   });
-  const animatedBorder = useAnimatedColorTransition({
-    color: selected ? theme.stateSelectedBorder : 'transparent',
-    instantKey: theme,
-    reducedMotion,
-    role: 'selection',
-  });
-
   return (
     <>
       <Animated.View
         pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          styles.feedback,
-          { backgroundColor: animatedBackground, borderColor: animatedBorder } as ViewStyle,
-        ]}
+        style={[styles.feedback, { backgroundColor: animatedBackground } as ViewStyle]}
       />
       {children}
     </>
@@ -159,7 +148,14 @@ export function SettingsLinkRow({
 }
 
 const styles = StyleSheet.create({
-  feedback: { borderWidth: borderWidths[1], width: '100%' },
+  feedback: {
+    borderRadius: radius[8],
+    bottom: space[4],
+    left: space[4],
+    position: 'absolute',
+    right: space[4],
+    top: space[4],
+  },
   entry: {
     minHeight: 64,
     width: '100%',

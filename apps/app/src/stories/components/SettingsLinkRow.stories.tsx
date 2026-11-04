@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
-import { colors } from '@/theme/tokens';
+import { colors, radius } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function SettingsLinkRowComparison() {
@@ -114,7 +114,8 @@ export const RepresentativeStates: Story = {
     await expect(selected).toHaveAttribute('href', '/settings/default-post-visibility');
     await expect(selected.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
-      borderColor: colors.light.selectedBorder,
+      borderRadius: `${radius[8]}px`,
+      borderWidth: '0px',
     });
     await expect(selected).not.toHaveAttribute('aria-current');
     await expect(external).toHaveAttribute('href', 'https://id.byulmaru.co');
