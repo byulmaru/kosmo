@@ -22,13 +22,10 @@ test.beforeEach(async () => {
 });
 
 const gotoPostDetail = async (page: Page, path: string) => {
-  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
-  await page.goto(path);
-
-  const response = await detailResponse;
-  const body = (await response.json()) as { errors?: unknown[] };
-  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
-  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
+    expectGraphQLSuccess,
+  );
+  await Promise.all([page.goto(path), detailResponse]);
 };
 
 const expectGraphQLSuccess = async (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
