@@ -3,6 +3,10 @@ name: Native Store Distribution
 on:
   workflow_dispatch:
     inputs:
+      app_version:
+        description: Marketing version to publish (for example, 0.4.6)
+        required: true
+        type: string
       platform:
         description: Target platform
         required: true
@@ -48,6 +52,7 @@ jobs:
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
+      KOSMO_APP_VERSION: ${{ inputs.app_version }}
       KOSMO_OTA_CHANNEL: prod
       KOSMO_OTA_PLATFORM: android
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
@@ -375,6 +380,7 @@ jobs:
       FIREBASE_NATIVE_CONFIG_PROJECT_ID: ${{ vars.FIREBASE_NATIVE_CONFIG_PROJECT_ID }}
       FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT: ${{ vars.FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT }}
       FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER }}
+      KOSMO_APP_VERSION: ${{ inputs.app_version }}
       KOSMO_OTA_CHANNEL: prod
       KOSMO_OTA_PLATFORM: ios
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
