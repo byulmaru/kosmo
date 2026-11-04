@@ -1,0 +1,246 @@
+{
+  "uid": "kosmo-uptime",
+  "title": "KOSMO Uptime",
+  "tags": [
+    "kosmo",
+    "uptime"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "version": 0,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "평균 가동률",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 3,
+          "max": 100,
+          "min": 0,
+          "noValue": "—",
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "100 * avg(avg by (target) (avg_over_time(probe_success{job=\"kosmo-public\",namespace=\"prometheus\"}[$__range])))",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "평균",
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "서비스별 가동률",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 3,
+          "max": 100,
+          "min": 0,
+          "noValue": "—",
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kosmo-web"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "웹"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kosmo-api"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "API"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "100 * avg by (target) (avg_over_time(probe_success{job=\"kosmo-public\",namespace=\"prometheus\"}[$__range]))",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "{{target}}",
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "서비스별 가동률 추이",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 9
+      },
+      "maxDataPoints": 1000,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          },
+          "decimals": 3,
+          "max": 100,
+          "min": 0,
+          "noValue": "—",
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kosmo-web"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "웹"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kosmo-api"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "API"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "100 * avg by (target) (avg_over_time(probe_success{job=\"kosmo-public\",namespace=\"prometheus\"}[$__interval]))",
+          "hide": false,
+          "instant": false,
+          "interval": "30s",
+          "legendFormat": "{{target}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
