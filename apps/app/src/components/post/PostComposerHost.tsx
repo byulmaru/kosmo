@@ -1,24 +1,18 @@
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
 import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { OverlayPortal, OverlayPortalProvider } from '@/components/ui/OverlayPortal';
-import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
+import { requestStoreReview } from '@/lib/storeReview';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
+import { PostComposerModalHost } from './PostComposerModalHost';
 import type { RefObject } from 'react';
 import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -52,6 +46,8 @@ export function PostComposerHost({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingNativeDismiss, setAwaitingNativeDismiss] = useState(false);
+  const { showToast } = useToast();
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -61,6 +57,7 @@ export function PostComposerHost({
         ? theme.backgroundCanvas
         : theme.backgroundElevated;
   const overlayVisible = mode !== 'rail' && open;
+  const nativeModalVisible = overlayVisible && !awaitingNativeDismiss;
   const active = mode === 'rail' || overlayVisible;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
@@ -87,6 +84,18 @@ export function PostComposerHost({
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
+  const handleNativePostCreated = useCallback(() => {
+    setAwaitingNativeDismiss(true);
+  }, []);
+  const handleNativeDismiss = useCallback(() => {
+    if (!awaitingNativeDismiss) {
+      return;
+    }
+    setAwaitingNativeDismiss(false);
+    requestClose('created');
+    showToast('게시했어요', { tone: 'success' });
+    void requestStoreReview();
+  }, [awaitingNativeDismiss, requestClose, showToast]);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
     onRequestClose: requestClose,
@@ -129,6 +138,7 @@ export function PostComposerHost({
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
+        onPostCreated={web ? undefined : handleNativePostCreated}
         onPostRequestAccepted={() => requestClose('created')}
         onSubmittingChange={setSubmitting}
         profile={profile}
@@ -236,18 +246,26 @@ export function PostComposerHost({
   );
 
   if (!web) {
+    // Android fades the themed child; transparency avoids React Native's default white window.
     return (
-      <Modal
+      <PostComposerModalHost
         accessibilityLabel="글쓰기"
         accessibilityViewIsModal
-        animationType="fade"
+        interactionDisabled={!nativeModalVisible}
+        onDismiss={handleNativeDismiss}
         onRequestClose={requestNativeBack}
         navigationBarTranslucent
-        presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
+        presentationStyle={
+          mode !== 'mobile'
+            ? undefined
+            : Platform.OS === 'android'
+              ? 'overFullScreen'
+              : 'fullScreen'
+        }
         role="dialog"
         statusBarTranslucent
-        transparent={mode !== 'mobile'}
-        visible={overlayVisible}
+        transparent={Platform.OS === 'android' || mode !== 'mobile'}
+        visible={nativeModalVisible}
       >
         {mode === 'mobile' ? (
           <View
@@ -270,7 +288,7 @@ export function PostComposerHost({
             </Pressable>
           </OverlayBackdrop>
         )}
-      </Modal>
+      </PostComposerModalHost>
     );
   }
 

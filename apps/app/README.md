@@ -23,6 +23,8 @@ After a successful callback, native login sends only the authorization code, PKC
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
+Store rating uses an optional native module; see [OTA compatibility](../../docs/operations/expo-ota.md) for existing binaries.
+
 ### iOS build tools
 
 Use Ruby 3.4 (the CI version) and the CocoaPods 1.17.0 version locked in `Gemfile.lock` via `bundle exec pod install`. macOS's system Ruby is not the CI toolchain. Run `xcodebuild -version` and `swift --version` when reporting a native build failure: the `macos-26` CI runner does not pin an Xcode version.

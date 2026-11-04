@@ -22,11 +22,13 @@ import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { requestStoreReview } from '@/lib/storeReview';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposerController } from './PostComposerController';
+import { PostComposerModalHost } from './PostComposerModalHost';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
@@ -171,6 +173,9 @@ function ReplyComposerSurfaceContents({
         .join('');
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
+  const [pendingCreatedPost, setPendingCreatedPost] = useState<PostComposerCreatedPost | null>(
+    null,
+  );
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
@@ -181,6 +186,7 @@ function ReplyComposerSurfaceContents({
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(replyPlatform, width);
   const webOverlayOpen = open && Platform.OS === 'web';
+  const ComposerModalHost = Platform.OS === 'web' ? ModalSheetHost : PostComposerModalHost;
   const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
 
   useEffect(() => {
@@ -279,7 +285,7 @@ function ReplyComposerSurfaceContents({
     triggerFocusRef: triggerRef as unknown as RefObject<HTMLElement | null> | undefined,
   });
 
-  const handlePostCreated = useCallback(
+  const finishPostCreated = useCallback(
     (post: PostComposerCreatedPost) => {
       closeImmediately();
       showToast(`${composerName}을 게시했어요`, {
@@ -293,6 +299,27 @@ function ReplyComposerSurfaceContents({
     },
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
+
+  const handlePostCreated = useCallback(
+    (post: PostComposerCreatedPost) => {
+      if (Platform.OS !== 'web') {
+        setPendingCreatedPost(post);
+        return;
+      }
+      finishPostCreated(post);
+    },
+    [finishPostCreated],
+  );
+
+  const handleNativeModalDismiss = useCallback(() => {
+    if (!pendingCreatedPost) {
+      return;
+    }
+    const post = pendingCreatedPost;
+    setPendingCreatedPost(null);
+    finishPostCreated(post);
+    void requestStoreReview();
+  }, [finishPostCreated, pendingCreatedPost]);
 
   const handlePostRequestAccepted = useCallback(() => {
     closeImmediately();
@@ -352,11 +379,12 @@ function ReplyComposerSurfaceContents({
   const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
 
   return (
-    <ModalSheetHost
+    <ComposerModalHost
       accessibilityLabel={`${composerName} 쓰기`}
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
-      interactionDisabled={false}
+      interactionDisabled={pendingCreatedPost !== null}
       navigationBarTranslucent
+      onDismiss={Platform.OS === 'web' ? undefined : handleNativeModalDismiss}
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
           requestNativeBack();
@@ -366,7 +394,7 @@ function ReplyComposerSurfaceContents({
       role="dialog"
       statusBarTranslucent
       transparent
-      visible
+      visible={pendingCreatedPost === null}
     >
       <ToastProvider>
         <View
@@ -523,7 +551,7 @@ function ReplyComposerSurfaceContents({
           </PostComposerController>
         </View>
       </ToastProvider>
-    </ModalSheetHost>
+    </ComposerModalHost>
   );
 }
 
