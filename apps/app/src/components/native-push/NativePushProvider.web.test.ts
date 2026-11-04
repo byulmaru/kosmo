@@ -37,7 +37,6 @@ let firebaseRegistrationFailure: unknown = null;
 let firebaseUnregistrationFailure: unknown = null;
 let notificationPermissionSyncFailure: unknown = null;
 let notificationPermissionRejection: unknown = null;
-let sentryCaptureFails = false;
 let installationId: string | null = null;
 let nextInstallationId = 'installation-1';
 let registeredListener: ((fid: string) => void) | null = null;
@@ -52,7 +51,7 @@ const originalLocationDescriptor = Object.getOwnPropertyDescriptor(globalThis, '
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
 const eventOrder: string[] = [];
-const captureCalls: Error[] = [];
+const captureCalls: unknown[] = [];
 const focusListeners = new Set<() => void>();
 const visibilityListeners = new Set<() => void>();
 let documentVisibilityState: DocumentVisibilityState = 'visible';
@@ -78,11 +77,8 @@ const webPushConfig = {
 
 mock.module('@/observability/sentry', {
   exports: {
-    captureHandledError: (error: Error) => {
+    captureHandledError: (error: unknown) => {
       captureCalls.push(error);
-      if (sentryCaptureFails) {
-        throw new Error('Sentry unavailable');
-      }
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -213,7 +209,6 @@ afterEach(async () => {
   firebaseUnregistrationFailure = null;
   notificationPermissionSyncFailure = null;
   notificationPermissionRejection = null;
-  sentryCaptureFails = false;
   installationId = null;
   nextInstallationId = 'installation-1';
   registeredListener = null;
@@ -269,17 +264,6 @@ describe('Web Push provider', () => {
     assert.equal(captureCalls[0], originalError);
   });
 
-  it('uses a generic captured Error for non-Error failures', async () => {
-    supportFailure = 'private Firebase detail';
-    session = { accountId: 'account-1', status: 'valid' };
-    exposeBrowserGlobals();
-    await mountProvider(createElement(PermissionActionCapture));
-
-    assert.equal(captureCalls.length, 1);
-    assert.equal(captureCalls[0]?.message, 'Web Push operation failed.');
-    assert.equal(captureCalls[0]?.cause, undefined);
-  });
-
   it('starts registration only after the settings permission result is granted', async () => {
     session = { accountId: 'account-1', status: 'valid' };
     exposeBrowserGlobals();
@@ -318,13 +302,12 @@ describe('Web Push provider', () => {
     );
   });
 
-  it('preserves a registration rejection when capture fails and then retries', async () => {
+  it('preserves a registration rejection and allows retry', async () => {
     session = { accountId: 'account-1', status: 'valid' };
     exposeBrowserGlobals();
     await mountProvider(createElement(PermissionActionCapture));
     const originalError = new Error('Firebase registration failed');
     firebaseRegistrationFailure = originalError;
-    sentryCaptureFails = true;
     permission = 'granted';
 
     const requestPermission = permissionAction;
@@ -337,7 +320,6 @@ describe('Web Push provider', () => {
     assert.equal(captureCalls[0], originalError);
 
     firebaseRegistrationFailure = null;
-    sentryCaptureFails = false;
     await act(async () => requestPermission());
     assert.equal(eventOrder.filter((event) => event === 'register').length, 2);
     assert.equal(captureCalls.length, 1);

@@ -67,7 +67,7 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 
 ### 앱에서 명시적으로 수집하는 처리된 실패
 
-공통 앱 수집 진입점은 Web·Native 플랫폼별 SDK의 `captureException` 경계를 한 번 호출할 수 있게 한다. 이 진입점은 기존 DSN·environment·release metadata gate와 SDK event 전달 정책을 재사용하며, 전달받은 오류와 호출자가 구성한 안전한 context를 임의의 전역 정제 규칙으로 재작성하지 않는다. 오류를 어떤 context로 전달할지는 호출 경계가 소유하고, 인증 정보·불필요한 사용자 콘텐츠·개인정보를 추가하지 않아야 한다.
+공통 앱 수집 진입점은 Web·Native 플랫폼별 SDK의 `captureException` 경계를 한 번 호출할 수 있으며 `unknown` 오류를 받는다. 전달된 값이 `Error`이면 원본 객체를 바꾸지 않고 전달하고, 호출자가 구성한 안전한 context도 임의의 전역 정제 규칙으로 재작성하지 않는다. `Error`가 아닌 값은 원시 값을 직렬화하거나 `cause`에 넣지 않고 `Error('Unexpected error')`로 대체한다. 오류를 어떤 context로 전달할지는 호출 경계가 소유하고, 인증 정보·불필요한 사용자 콘텐츠·개인정보를 추가하지 않아야 한다.
 
 현재 처리된 실패의 적용 범위는 공통 이미지 업로드와 Web Push 경계다.
 
@@ -83,7 +83,7 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 
 #### Web Push 처리된 실패
 
-- 기존 Web Push 처리된 오류 경계에서 실패당 한 번, 원본 `Error`와 stack을 기존 Sentry reporter로 수집한다. `Error`가 아닌 throw/rejection 값은 임의로 직렬화하거나 `cause`에 넣지 않고 미리 정한 일반 보고용 `Error`로 대체한다.
+- 기존 Web Push 처리된 오류 경계에서 실패당 한 번 공통 앱 수집 진입점을 호출한다. 오류 전달과 `Error`가 아닌 값의 처리는 위 공통 정책을 따른다.
 - 성공, 정상적인 권한 `default`·`denied`, 설정 누락, 비인증 guest와 Firebase의 정상적인 미지원 결과는 event를 만들지 않는다.
 - 별도의 단계 분류나 진단용 context와 raw data를 추가하지 않는다. Sentry capture 실패나 동기 예외는 권한 결과, 지원 상태, 등록·해제, 오류 전달과 재시도 동작을 바꾸지 않는다.
 

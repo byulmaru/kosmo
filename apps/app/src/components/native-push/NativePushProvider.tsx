@@ -277,7 +277,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       );
     })().catch((error: unknown) => {
       if (active) {
-        reportWebPushError(error);
+        captureHandledError(error);
         setSupport('unavailable');
       }
     });
@@ -323,12 +323,12 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     try {
       permissionRequest = Notification.requestPermission();
     } catch (error) {
-      reportWebPushError(error);
+      captureHandledError(error);
       throw error;
     }
 
     return permissionRequest.then(syncPermission, (error: unknown) => {
-      reportWebPushError(error);
+      captureHandledError(error);
       throw error;
     });
   }, [syncPermission]);
@@ -351,16 +351,8 @@ async function syncMessagingPermission(
       await resources.unregister();
     }
   } catch (error) {
-    reportWebPushError(error);
+    captureHandledError(error);
     throw error;
-  }
-}
-
-function reportWebPushError(error: unknown): void {
-  try {
-    captureHandledError(error instanceof Error ? error : new Error('Web Push operation failed.'));
-  } catch {
-    // Error reporting must not change the Web Push outcome.
   }
 }
 
