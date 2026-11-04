@@ -197,7 +197,7 @@ describe('SettingsProfileDetail', () => {
     await render();
 
     const screen = rendered('ProfileSettingsScreen')[0];
-    assert.equal(screen.props.profile, profile);
+    assert.deepEqual(screen.props.profile, { ...profile, avatarUri: undefined });
     assert.equal(screen.props.embedded, true);
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, true);
     await act(async () =>

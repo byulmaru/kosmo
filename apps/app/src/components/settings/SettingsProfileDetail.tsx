@@ -25,6 +25,9 @@ const query = graphql`
         id
         displayName
         relativeHandle
+        avatar {
+          url
+        }
         followPolicy
         instance {
           kind
@@ -288,7 +291,7 @@ function SettingsProfileEditor({
             }
           : undefined
       }
-      profile={profile}
+      profile={{ ...profile, avatarUri: profile.avatar?.url }}
     >
       <ProfilePostingSettings
         disabled={saving}
