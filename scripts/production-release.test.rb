@@ -102,6 +102,8 @@ def run_step(scenario)
 
     timed_out = false
     status = nil
+    # Executes the checked-in workflow step with fixture values and fake deployment commands.
+    # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec
     Open3.popen2e(
       environment,
       'bash', '--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', RUN_STEP,
