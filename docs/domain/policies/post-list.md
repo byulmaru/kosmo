@@ -12,7 +12,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Home    | viewer Profile의 기본 Post List                                            |
 | Local   | configured Local Instance와 운영자가 추가 설정한 Instance의 공개 Post List |
 | Profile | Target Profile이 작성한 Post List                                          |
-| Hashtag | Target Hashtag가 포함된 공개 Post List                                     |
+| Hashtag | Target Hashtag가 포함된 Post List                                          |
 
 ## Control Decision
 
@@ -85,8 +85,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Hashtag Post List
 
-- Post Visibility가 Public 또는 Unlisted이고 Content가 있으며 Reply Parent가 없고 Target Hashtag가 포함된 eligible Post만
-  포함한다.
+- Content가 있고 Reply Parent가 없으며 Target Hashtag가 포함되고 Post Eligibility를 통과한 Post를 후보로 삼는다.
+- 현재 선택한 viewer Profile이 Author인 후보는 Visibility와 무관하게 포함한다. 그 외 후보는 Public 또는 Unlisted로 제한하며, 선택 Profile이 없는 게스트와 같은 Account의 다른 Profile에는 예외를 적용하지 않는다.
 - Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
 
 ## 제어 정책

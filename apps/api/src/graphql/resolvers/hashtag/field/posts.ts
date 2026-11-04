@@ -1,7 +1,7 @@
 import { db, Instances, PostContentHashtags, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '@/graphql/resolvers/post/access';
 import { Post, PostConnection } from '@/graphql/resolvers/post/ref';
@@ -31,7 +31,10 @@ builder.objectField(Hashtag, 'posts', (t) =>
                 and(
                   eq(PostContentHashtags.hashtagId, hashtag.id),
                   eq(Posts.currentContentId, PostContents.id),
-                  inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+                  or(
+                    inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+                    ctx.session?.profile ? eq(Posts.profileId, ctx.session.profile.id) : undefined,
+                  ),
                   isNull(Posts.replyParentId),
                   postAccessWhere({ ctx, profileMute: 'exclude' }),
                   before ? gt(Posts.id, before) : undefined,
