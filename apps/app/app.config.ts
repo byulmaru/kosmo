@@ -3,7 +3,7 @@ import type { ExpoConfig } from 'expo/config';
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
 const googleServicesJson = process.env.KOSMO_ANDROID_GOOGLE_SERVICES_FILE;
 const googleServiceInfoPlist = process.env.KOSMO_IOS_GOOGLE_SERVICES_FILE;
-const appVersion = process.env.KOSMO_APP_VERSION ?? '0.4.5';
+const appVersion = process.env.KOSMO_APP_VERSION ?? '0.0.0';
 
 if (!/^\d+\.\d+\.\d+$/.test(appVersion)) {
   throw new Error('Expected KOSMO_APP_VERSION to use major.minor.patch format.');
