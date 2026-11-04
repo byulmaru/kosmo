@@ -1,6 +1,5 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
-import SettingsNaturalLanguageMuteRoute from '@/app/(tabs)/(protected)/settings/natural-language-mute';
+import { SettingsNaturalLanguageMute } from '@/components/settings/SettingsNaturalLanguageMute';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { RequestParameters, Variables } from 'relay-runtime';
@@ -65,16 +64,8 @@ function observeMutation(request: RequestParameters, variables: Variables) {
   }
 }
 
-function StoryCanvas() {
-  return (
-    <SettingsRouteLayout>
-      <SettingsNaturalLanguageMuteRoute />
-    </SettingsRouteLayout>
-  );
-}
-
 const meta = {
-  component: StoryCanvas,
+  component: SettingsNaturalLanguageMute,
   parameters: {
     layout: 'fullscreen',
     relay: {
@@ -84,9 +75,9 @@ const meta = {
     },
     router: { pathname: '/settings/natural-language-mute' },
   },
-  render: () => <StoryCanvas />,
-  title: 'KOSMO/Screens/Natural Language Mute',
-} satisfies Meta<typeof StoryCanvas>;
+  render: () => <SettingsNaturalLanguageMute />,
+  title: 'KOSMO/Patterns/Natural Language Mute',
+} satisfies Meta<typeof SettingsNaturalLanguageMute>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -96,7 +87,6 @@ export const Empty: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('heading', { name: '자연어 뮤트' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '제외 조건' })).toHaveValue('');
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(canvas.queryByRole('button', { name: '삭제' })).toBeNull();

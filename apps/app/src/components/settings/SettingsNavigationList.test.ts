@@ -181,7 +181,7 @@ before(async () => {
 });
 
 describe('SettingsMuteAndBlockNavigation', () => {
-  it('기존 뮤트와 차단 관리 destination을 이 순서로 직접 연결한다', async () => {
+  it('뮤트 및 차단 설정 destination을 이 순서로 직접 연결한다', async () => {
     await act(async () => {
       renderer = create(createElement(SettingsMuteAndBlockNavigation));
     });
@@ -193,6 +193,7 @@ describe('SettingsMuteAndBlockNavigation', () => {
       [
         { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
         { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
+        { label: '자연어 뮤트 설정 열기', href: '/settings/natural-language-mute' },
       ],
     );
   });

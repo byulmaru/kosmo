@@ -93,12 +93,12 @@ export function SettingsNaturalLanguageMute() {
 }
 
 function SettingsNaturalLanguageMuteContent() {
-  const { fetchKey } = useRouteBoundary();
+  const { fetchKey, fetchPolicy } = useRouteBoundary();
   const shellChrome = useShellChrome();
   const data = useLazyLoadQuery<SettingsNaturalLanguageMuteQuery>(
     query,
     {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy },
   );
   const profileRef = data.currentSession?.selectedProfile ?? null;
   const profile = useFragment<SettingsNaturalLanguageMute_profile$key>(profileFragment, profileRef);
