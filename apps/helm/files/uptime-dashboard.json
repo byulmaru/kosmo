@@ -1,10 +1,7 @@
 {
   "uid": "kosmo-uptime",
   "title": "KOSMO Uptime",
-  "tags": [
-    "kosmo",
-    "uptime"
-  ],
+  "tags": ["kosmo", "uptime"],
   "timezone": "Asia/Seoul",
   "editable": true,
   "refresh": "1m",
@@ -48,9 +45,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -131,9 +126,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
