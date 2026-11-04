@@ -17,6 +17,7 @@ export {
   generateLocalPostIdActivity,
 } from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
+export { executeNaturalLanguageMuteRuleActivity } from './activities/natural-language-mute-rule';
 export { createNotificationActivity } from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,

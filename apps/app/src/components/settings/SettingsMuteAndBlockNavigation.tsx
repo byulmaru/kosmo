@@ -5,7 +5,7 @@ import { SettingsLinkRow } from './SettingsLinkRow';
 export function SettingsMuteAndBlockNavigation({
   selected,
 }: {
-  selected?: 'blocked-profiles' | 'muted-profiles';
+  selected?: 'blocked-profiles' | 'muted-profiles' | 'natural-language-mute';
 }) {
   return (
     <View
@@ -26,6 +26,13 @@ export function SettingsMuteAndBlockNavigation({
         label="차단한 프로필"
         primary
         selected={selected === 'blocked-profiles'}
+      />
+      <SettingsLinkRow
+        accessibilityLabel="자연어 뮤트 설정 열기"
+        href="/settings/natural-language-mute"
+        label="자연어 뮤트"
+        primary
+        selected={selected === 'natural-language-mute'}
       />
     </View>
   );

@@ -5,6 +5,7 @@ import './follow-request';
 import './instance';
 import './migration';
 import './mute';
+import './natural-language-mute-rules';
 import './pinned-posts';
 import './private';
 import './tags';

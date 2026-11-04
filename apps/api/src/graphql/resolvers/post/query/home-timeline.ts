@@ -5,7 +5,7 @@ import {
   readHomeTimelineCache,
   touchHomeTimeline,
 } from '@kosmo/core/home-timeline/cache';
-import { queryHomeTimeline } from '@kosmo/core/home-timeline/query';
+import { queryHomeTimelineForInsertion } from '@kosmo/core/home-timeline/query';
 import { homePostProfileStateWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
@@ -160,7 +160,7 @@ const readCachedHomeTimeline = async ({
 
   const remaining = limit - rows.length;
   if (remaining > 0 && databaseBoundaryPostId) {
-    const boundaryRows = await queryHomeTimeline({
+    const boundaryRows = await queryHomeTimelineForInsertion({
       profileId,
       ...(inverted ? { before: databaseBoundaryPostId } : { after: databaseBoundaryPostId }),
       limit: remaining,
@@ -245,7 +245,7 @@ builder.queryField('homeTimeline', (t) =>
               await touchHomeTimeline({ profileId });
             }
 
-            const rows = await queryHomeTimeline({
+            const rows = await queryHomeTimelineForInsertion({
               profileId,
               after:
                 compatibleCursors && after?.kind === 'db' && cursorKind === 'db'

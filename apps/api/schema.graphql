@@ -138,6 +138,14 @@ type CreateHashtagMuteRulePayload {
   hashtagMuteRule: HashtagMuteRule!
 }
 
+input CreateNaturalLanguageMuteRuleInput {
+  condition: String!
+}
+
+type CreateNaturalLanguageMuteRulePayload {
+  profile: Profile!
+}
+
 input CreatePostInput {
   actorProfileId: ID
   bodyText: String!
@@ -199,6 +207,15 @@ input DeleteHashtagMuteRuleInput {
 
 type DeleteHashtagMuteRulePayload {
   hashtagMuteRuleId: ID!
+}
+
+input DeleteNaturalLanguageMuteRuleInput {
+  naturalLanguageMuteRuleId: ID!
+}
+
+type DeleteNaturalLanguageMuteRulePayload {
+  naturalLanguageMuteRuleId: ID!
+  profile: Profile!
 }
 
 input DeletePostInput {
@@ -365,11 +382,13 @@ type Mutation {
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createHashtagMuteRule(input: CreateHashtagMuteRuleInput!): CreateHashtagMuteRulePayload!
+  createNaturalLanguageMuteRule(input: CreateNaturalLanguageMuteRuleInput!): CreateNaturalLanguageMuteRulePayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteAccount: DeleteAccountPayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteHashtagMuteRule(input: DeleteHashtagMuteRuleInput!): DeleteHashtagMuteRulePayload!
+  deleteNaturalLanguageMuteRule(input: DeleteNaturalLanguageMuteRuleInput!): DeleteNaturalLanguageMuteRulePayload!
   deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
@@ -396,6 +415,7 @@ type Mutation {
   unregisterProfileMigrationSource: UnregisterProfileMigrationSourcePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateHashtagMuteRule(input: UpdateHashtagMuteRuleInput!): UpdateHashtagMuteRulePayload!
+  updateNaturalLanguageMuteRule(input: UpdateNaturalLanguageMuteRuleInput!): UpdateNaturalLanguageMuteRulePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
@@ -406,6 +426,11 @@ input MuteProfileInput {
 
 type MuteProfilePayload {
   profileMute: ProfileMute!
+}
+
+type NaturalLanguageMuteRule implements Node {
+  condition: String!
+  id: ID!
 }
 
 interface Node {
@@ -551,6 +576,7 @@ type Profile implements Node {
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
   instance: ProfileInstance
   migrationSource: Profile
+  naturalLanguageMuteRules: [NaturalLanguageMuteRule!]
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   pinnedPosts: [Post!]
@@ -909,6 +935,15 @@ input UpdateHashtagMuteRuleInput {
 
 type UpdateHashtagMuteRulePayload {
   hashtagMuteRule: HashtagMuteRule!
+}
+
+input UpdateNaturalLanguageMuteRuleInput {
+  condition: String!
+  naturalLanguageMuteRuleId: ID!
+}
+
+type UpdateNaturalLanguageMuteRulePayload {
+  profile: Profile!
 }
 
 input UpdateProfileInput {

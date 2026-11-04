@@ -43,6 +43,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   정보 화면에는 세 public policy link 다음, `개발 정보` 앞에 `오픈소스 라이선스` 진입점을 둔다.
 - Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
   `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
+- Natural Language Mute 설정의 canonical 내부 route는 `/settings/natural-language-mute`이며 parent는
+  `/settings/mute-and-block`이다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -84,9 +86,13 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   값을 임의로 채우지 않는다.
 - 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
   이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다.
-- `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
-  두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
-  [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
+- `뮤트 및 차단`은 `뮤트한 프로필`, `차단한 프로필`, `자연어 뮤트`를 각각 별도 destination으로 제공한다.
+  Profile 관계 두 상태를 하나의 혼합 목록으로 표시하지 않는다. Profile 간 세부 action과 상태는
+  [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다. `/settings/natural-language-mute`는
+  route header와 한 개의 선택 Profile 편집기를 사용한다. 편집기는 `제외 조건` TextArea, `저장` action과 Rule이
+  있을 때만 표시하는 `삭제` action으로 구성하며, 설명 문구나 추가 설정 control을 두지 않는다. 선택된 Local
+  Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
+  Rule이 없으면 생성하며 있으면 갱신한다. 삭제는 현재 Rule만 제거한다.
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
@@ -318,6 +324,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   unavailable 상태를 표시하지 않는다. 기존 `/settings/following-import` direct link는
   `/settings/profile-migration`으로 이동하고 Settings parent/back destination은 `/settings`를 유지한다. Profile query
   오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공한다.
+- `/settings/natural-language-mute`는 기존 Settings의 selected Local Profile 선택 state와 query loading/error 경계를
+  사용한다. 선택된 Local Profile이 없으면 기존 Profile 선택 action을, Membership이 없으면 Rule 관리 권한 state를
+  표시한다. 조회·저장·삭제 실패는 안전한 한국어 오류와 현재 입력값을 유지한다.
 - Profile 조회 중에는 확인되지 않은 값을 확정된 것처럼 표시하지 않고, 오류에는 backend 원문이 아닌 안전한
   한국어 설명과 재시도 action을 제공한다.
 - Profile 전환 중에는 새 대상의 identity와 데이터가 일치할 때까지 이전 Profile 설정 control을 새 대상의
@@ -338,6 +347,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
   `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
   expanded entry의 full text와 제공된 출처 link를 읽는다.
+  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필`, `자연어 뮤트` link를
+  이 순서로 읽는다. `/settings/natural-language-mute`에서는 detail heading 다음 `제외 조건` text area와 활성화된
+  `저장`·`삭제` action을 읽고, 실패 상태를 alert로 전달한다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
   Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.

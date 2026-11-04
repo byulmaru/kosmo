@@ -221,6 +221,11 @@ mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
       createElement('SettingsBlockedProfiles', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsNaturalLanguageMute.tsx', import.meta.url), {
+  exports: {
+    SettingsNaturalLanguageMute: () => createElement('SettingsNaturalLanguageMute'),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({ openNavigationDrawer }) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -251,6 +256,7 @@ let SettingsProfileRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
+let SettingsNaturalLanguageMuteRoute: ComponentType;
 let SettingsAccountDeletionRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
@@ -288,6 +294,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
   ({ default: SettingsBlockedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/blocked-profiles'));
+  ({ default: SettingsNaturalLanguageMuteRoute } =
+    await import('../../app/(tabs)/(protected)/settings/natural-language-mute'));
   ({ default: SettingsAccountDeletionRoute } =
     await import('../../app/(tabs)/(protected)/settings/account-deletion'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
@@ -440,6 +448,22 @@ describe('Settings routes', () => {
       rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
       '설정으로 돌아가기',
     );
+  });
+
+  it('full Web 자연어 뮤트 detail은 mute category를 선택하고 category parent로 돌아간다', async () => {
+    await renderRoute('/settings/natural-language-mute', SettingsNaturalLanguageMuteRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '자연어 뮤트'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsNaturalLanguageMute').length, 1);
+
+    const back = rendered('PageHeader')[1]?.props.leading;
+    assert.equal(back?.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
+    await act(async () => back?.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings/mute-and-block']);
   });
 
   it('full Web 코스모 탈퇴 detail은 마지막 master entry와 route heading을 선택한다', async () => {

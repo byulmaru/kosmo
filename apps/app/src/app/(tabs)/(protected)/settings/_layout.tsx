@@ -38,7 +38,8 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
           ? 'info'
           : pathname === '/settings/mute-and-block' ||
               pathname === '/settings/muted-profiles' ||
-              pathname === '/settings/blocked-profiles'
+              pathname === '/settings/blocked-profiles' ||
+              pathname === '/settings/natural-language-mute'
             ? 'mute-and-block'
             : pathname === '/settings/theme'
               ? 'theme'

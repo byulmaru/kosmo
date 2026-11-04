@@ -32,6 +32,7 @@
     "./temporal/post-content-reprocessing": "./temporal/post-content-reprocessing.ts",
     "./temporal/post-request": "./temporal/post-request.ts",
     "./temporal/hashtag-mute": "./temporal/hashtag-mute.ts",
+    "./temporal/natural-language-mute": "./temporal/natural-language-mute.ts",
     "./temporal/push-notification": "./temporal/push-notification.ts",
     "./temporal/profile-block": "./temporal/profile-block.ts",
     "./temporal/profile-block-failure": "./temporal/profile-block-failure.ts",
