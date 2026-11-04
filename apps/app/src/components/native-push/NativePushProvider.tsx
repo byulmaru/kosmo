@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useMutation } from 'react-relay';
 import { getPublicConfig } from '@/config/public';
+import { captureHandledError } from '@/observability/sentry';
 import { useSession } from '@/session/SessionProvider';
 import {
   deletePushInstallationId,
@@ -50,6 +51,13 @@ type WebPushResources = {
   register: () => Promise<void>;
   unregister: () => Promise<void>;
 };
+
+type WebPushFailureStage =
+  | 'firebase-initialization'
+  | 'permission-request'
+  | 'push-registration'
+  | 'push-unregistration'
+  | 'service-worker-registration';
 
 export function NativePushProvider({ children }: PropsWithChildren) {
   const session = useSession();
@@ -195,6 +203,8 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       };
     }
 
+    let failureStage: 'firebase-initialization' | 'service-worker-registration' =
+      'firebase-initialization';
     void (async () => {
       const [appSdk, messagingSdk] = await Promise.all([
         import('firebase/app'),
@@ -222,10 +232,12 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       const messaging = messagingSdk.getMessaging(app);
       const serviceWorkerUrl = new URL('/firebase-messaging-sw.js', globalThis.location.origin);
       serviceWorkerUrl.searchParams.set('firebase', JSON.stringify(firebaseConfig));
+      failureStage = 'service-worker-registration';
       const serviceWorkerRegistration = await navigator.serviceWorker.register(
         serviceWorkerUrl.toString(),
         { scope: '/' },
       );
+      failureStage = 'firebase-initialization';
       if (!active) {
         return;
       }
@@ -274,8 +286,9 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       void syncMessagingPermission(messagingResources, readBrowserNotificationPermission()).catch(
         () => undefined,
       );
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (active) {
+        reportWebPushError(error, failureStage);
         setSupport('unavailable');
       }
     });
@@ -316,10 +329,20 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     [unregisterInstallation],
   );
 
-  const requestPermission = useCallback(
-    () => Notification.requestPermission().then(syncPermission),
-    [syncPermission],
-  );
+  const requestPermission = useCallback(() => {
+    let permissionRequest: Promise<NotificationPermission>;
+    try {
+      permissionRequest = Notification.requestPermission();
+    } catch (error) {
+      reportWebPushError(error, 'permission-request');
+      throw error;
+    }
+
+    return permissionRequest.then(syncPermission, (error: unknown) => {
+      reportWebPushError(error, 'permission-request');
+      throw error;
+    });
+  }, [syncPermission]);
 
   return (
     <WebPushPermissionContext.Provider value={{ permission, support, requestPermission }}>
@@ -333,9 +356,30 @@ async function syncMessagingPermission(
   permission: NotificationPermission,
 ): Promise<void> {
   if (permission === 'granted') {
-    await resources.register();
+    try {
+      await resources.register();
+    } catch (error) {
+      reportWebPushError(error, 'push-registration');
+      throw error;
+    }
   } else if (permission === 'denied') {
-    await resources.unregister();
+    try {
+      await resources.unregister();
+    } catch (error) {
+      reportWebPushError(error, 'push-unregistration');
+      throw error;
+    }
+  }
+}
+
+function reportWebPushError(error: unknown, stage: WebPushFailureStage): void {
+  try {
+    captureHandledError(error instanceof Error ? error : new Error('Web Push operation failed.'), {
+      feature: 'web-push',
+      stage,
+    });
+  } catch {
+    // Error reporting must not change the Web Push outcome.
   }
 }
 

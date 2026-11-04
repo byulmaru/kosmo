@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 이 설정의 범위가 아니다. API와 Web BFF HTTP 요청 trace의 별도 범위와 운영 조건은 아래 Request tracing 정책을 따른다.
+Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 적용 범위는 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계와 Web Push 권한·Firebase 초기화·등록 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 이 설정의 범위가 아니다. API와 Web BFF HTTP 요청 trace의 별도 범위와 운영 조건은 아래 Request tracing 정책을 따른다.
 
 피드백 본문·선택적 이미지도 기존 SDK를 통해 User Feedback으로 접수한다. 제출 결과와 Slack 알림의 운영 조건은 [피드백 Sentry 접수 운영](./feedback-sentry.md)을 따른다.
 
@@ -69,7 +69,9 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 
 공통 앱 수집 진입점은 Web·Native 플랫폼별 SDK의 `captureException` 경계를 한 번 호출할 수 있게 한다. 이 진입점은 기존 DSN·environment·release metadata gate와 SDK event 전달 정책을 재사용하며, 전달받은 오류와 호출자가 구성한 안전한 context를 임의의 전역 정제 규칙으로 재작성하지 않는다. 오류를 어떤 context로 전달할지는 호출 경계가 소유하고, 인증 정보·불필요한 사용자 콘텐츠·개인정보를 추가하지 않아야 한다.
 
-현재 처리된 실패의 적용 범위는 공통 이미지 업로드 경계다.
+현재 처리된 실패의 적용 범위는 공통 이미지 업로드와 Web Push 경계다.
+
+#### 이미지 업로드
 
 - 게시물·프로필 호출부가 같은 업로드 실패를 다시 capture하지 않도록 공통 업로드 경계에서 실패당 한 번만 수집한다.
 - 업로드 실패 event에는 기존 오류 정책에서 허용한 안전한 `stage`·`reason` 분류와 다음 context를 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나로 실패 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 `status`를 기록한다. 응답의 machine-readable `code`는 `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나일 때만 기록하며, 그 밖의 code는 버린다.
@@ -78,6 +80,13 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 - 호출자에게 던지는 업로드 오류는 원본 Error를 표준 `cause`에 연결해 진단 정보를 보존한다. Sentry에는 같은 실패 분류와 관측 정보만 가진, 원본 `cause`가 없는 업로드 오류를 전달한다. 사용자-facing 오류 분류와 안내 문구는 유지한다.
 - 업로드 경계가 추가하는 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
 - SDK가 생성한 원본 Error는 호출자에게 던지는 오류의 `cause`에서 수정 없이 보존한다. Sentry event의 오류·context에는 원본의 data/blob/file URI나 signed URL을 포함하지 않는다.
+
+#### Web Push 권한·Firebase 실패
+
+- Web Push 처리된 실패 event는 `feature: 'web-push'`와 다음 고정 `stage` 중 하나만 context에 추가하고, 각 실패 실행에서 한 번 capture한다: `permission-request`, `firebase-initialization`, `service-worker-registration`, `push-registration`, `push-unregistration`. `Error`는 원본을 capture하고, `Error`가 아닌 throw/rejection 값은 임의로 직렬화하거나 `cause`에 넣지 않고 미리 정한 일반 보고용 `Error`로 대체한다.
+- `permission-request`는 Notification API의 동기 throw 또는 거절된 Promise만 포함하며, 정상적인 `default`·`denied` 권한 결과는 capture하지 않는다. `firebase-initialization`은 Firebase SDK import, 예외를 던지는 support probe, Firebase 초기화와 listener 설정 실패를 포함한다. `service-worker-registration`은 페이지의 `navigator.serviceWorker.register` 실패다. `push-registration`·`push-unregistration`은 자동·focus 복원·사용자 요청을 포함한 공통 messaging permission 동기화의 실패다.
+- 비인증 guest, Web Push 설정 부재, Firebase의 정상적인 미지원 결과와 정상적인 권한 거절·미결정은 보고하지 않는다. 서버 설치 정보의 등록·수정·삭제, 브라우저 저장소 오류·알림 표시와 Service Worker 내부 오류는 별도 capture하지 않는다.
+- context에는 `feature`와 `stage`만 넣는다. Firebase 설정, push token/FID, account·installation ID, URL, 알림 또는 사용자 콘텐츠를 context에 추가하지 않는다. 공통 reporter의 기존 runtime metadata gate와 best-effort capture를 재사용하며, capture 실패는 권한 결과, 지원 상태, 등록·해제, 오류 전달과 retry 동작을 바꾸지 않는다.
 
 이 처리된 실패 수집은 기존 runtime 활성화 조건을 따른다. DSN·environment·release metadata가 완전하지 않은 local·test 실행은 외부 event를 전송하지 않으며, 자동 breadcrumb·session tracking을 다시 활성화하지 않는다.
 
