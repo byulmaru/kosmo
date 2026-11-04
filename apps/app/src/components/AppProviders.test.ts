@@ -244,6 +244,9 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 });
+mockModule('@/observability/sentry', {
+  captureHandledError: () => undefined,
+});
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
