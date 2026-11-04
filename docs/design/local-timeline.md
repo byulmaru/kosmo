@@ -37,9 +37,9 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
 - Web에서 비활성 탭을 선택하면 해당 canonical route로 전환한다. Android/iOS에서는 현재 타임라인
   부모 route의 `timeline` 파라미터와 자식 콘텐츠만 바꾸며 새 Stack 화면이나 전환 animation을 만들지 않는다.
   `/home`과 `/local`은 Native 직접 진입의 canonical route로도 계속 동작한다.
-- 이미 선택된 상단 홈 또는 로컬 탭을 다시 선택하면 현재 타임라인 맨 위로 스크롤한다. 이 입력으로 데이터를
-  다시 요청하거나 새로고침하지 않으며, 현재 탭과 route를 유지한다. 연속 입력이나 다른 경로의 새로고침 진행
-  중에도 스크롤만 수행한다. 이는 PROD-1162의 2026-10-22 사용자 결정이다.
+- 이미 선택된 상단 홈 또는 로컬 탭을 다시 선택하면 현재 타임라인 맨 위로 스크롤하고 해당 화면의 기존 refresh
+  경로를 실행한다. 현재 탭과 route를 유지하며, 새로고침 중에도 마지막 목록을 계속 표시한다. 진행 중 반복 입력은
+  스크롤을 수행하고 기존 refresh 경로가 중복 요청을 막는다.
 - 비활성 탭 선택은 기존 타임라인 진입 동작을 따른다. 이 재선택 정책으로 전환에 별도 새로고침을 추가하지 않는다.
 - 같은 Profile actor에서 Home route로 재진입하면 유효한 Relay cache 데이터를 바로 표시하고, cache hit만으로
   네트워크 요청을 강제하지 않는다. 데이터가 없거나 stale이면 기존 `store-or-network` query 경로를 사용한다.
@@ -70,17 +70,16 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
 
 추가 로딩 spinner는 공용 secondary 전경 색상(`theme.foregroundSecondary`)을 사용한다.
 
-Local의 shell 홈 항목 재선택과 Native pull-to-refresh의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는
-동일 store에 적용하고, hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry
-toast를 표시한다. Web과 Native 모두 새로고침 요청이 진행 중이면 새로고침을 실행하는 경로의 반복 입력을
-무시하고, 요청이 끝나면 다시 새로고침할 수 있다.
-refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
-이탈·selected Profile 전환 때 stale toast를 정리한다.
-목록은 refetch 오류 경계 밖에서 동일한 Relay store를 계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만
-교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지 않는다. Relay refetch lifecycle을 사용한다.
-이 사용자가 다시 시도할 수 있는 hard refresh 오류는 unexpected-error reporter에 별도 보고하지 않는다.
-HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다. `localTimeline: null`이면 목록의
-빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
+상단 Home·Local 탭 재선택, Local의 shell 홈 항목 재선택과 Native pull-to-refresh는 각 화면이 소유한 기존 Relay
+query·environment와 refresh 경로를 재사용한다. 성공 payload는 동일 store에 적용하고, hard transport error에서는
+마지막 성공 목록과 scroll position을 유지한 채 persistent retry toast를 표시한다. Web과 Native 모두 새로고침
+요청이 진행 중이면 refresh owner가 반복 입력에 따른 중복 요청을 막고, 요청이 끝나면 다시 새로고침할 수 있다.
+Local은 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
+이탈·selected Profile 전환 때 stale toast를 정리한다. Local 목록은 refetch 오류 경계 밖에서 동일한 Relay store를
+계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만 교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지
+않는다. Relay refetch lifecycle을 사용한다. 사용자가 다시 시도할 수 있는 Local hard refresh 오류는 unexpected-error
+reporter에 별도 보고하지 않는다. HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다.
+`localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
 
 Local query가 성공 결과를 렌더링하기 전 발생한 오류는 Web의 빈 목록 영역 또는 Android/iOS Native의 2행 skeleton과
 공용 persistent Toast로 표시한다. 성공 결과에는 빈 목록과 route 재진입 뒤 Relay cache에서 렌더링한 목록도 포함한다.

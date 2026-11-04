@@ -105,7 +105,7 @@
 
 ## CI And PR Completion
 
-- 로컬 테스트는 환경과 검증 범위가 제한된 사전 진단이며 PR 필수 CI를 대신하지 않는다. PR 범위의 구현·문서와 필수 CI 검증이 모두 끝나야 PR 완료로 보고하고 Ready로 전환한다. 필수 CI는 최신 PR head SHA에서 모두 성공해야 한다.
+- 테스트는 로컬에서 실행하지 않고 CI에서 실행한다. 로컬 테스트 실행을 PR 준비 조건으로 요구하지 않는다. PR 범위의 구현·문서와 필수 CI 검증이 모두 끝나야 PR 완료로 보고하고 Ready로 전환한다. 필수 CI는 최신 PR head SHA에서 모두 성공해야 한다.
 - `gh stack push` 또는 `gh stack submit` 뒤 최신 PR head SHA와 해당 commit의 필수 check 상태를 다시 조회한다. check가 queued 또는 pending인 동안에는 완료로 보고하지 않는다.
 - 변경으로 인한 CI 실패는 수정한 뒤 `gh stack push`로 게시하고 새 head SHA의 필수 CI 결과를 확인한다. 필요한 check가 누락·차단되었거나 외부 사유로 확인 불가능하면 최신 SHA와 check 상태를 근거로 완료가 미해결임을 보고하며 통과로 간주하지 않는다.
 - CI 성공은 PR check에 포함된 범위의 증거다. production·remote Sentry·device 동작 검증이나 merge·배포 승인을 뜻하지 않는다.

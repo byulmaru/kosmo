@@ -10,6 +10,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 const navigations: unknown[] = [];
 const platform = { OS: 'ios' };
 const reselectTab = mock.fn();
+const reselectHome = mock.fn();
 const scrollTo = mock.fn();
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 let onValueChange: ((value: 'home' | 'local') => void) | undefined;
@@ -44,7 +45,7 @@ mock.module(new URL('./ui/Tabs.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module(new URL('./shell/ShellChromeContext.tsx', import.meta.url), {
-  exports: { useShellChrome: () => ({ reselectTab }) },
+  exports: { useShellChrome: () => ({ reselectHome, reselectTab }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
@@ -61,6 +62,7 @@ afterEach(async () => {
   onValueChange = undefined;
   navigations.length = 0;
   platform.OS = 'ios';
+  reselectHome.mock.resetCalls();
   reselectTab.mock.resetCalls();
   scrollTo.mock.resetCalls();
   if (originalWindowDescriptor) {
@@ -73,7 +75,7 @@ afterEach(async () => {
 describe('TimelineTabs', () => {
   for (const os of ['ios', 'android']) {
     for (const value of ['home', 'local'] as const) {
-      it(`${os}: ${value} 재선택은 현재 목록의 scroll owner만 호출한다`, async () => {
+      it(`${os}: ${value} 재선택은 목록을 올리고 Home refresh owner를 호출한다`, async () => {
         platform.OS = os;
         await act(async () => {
           renderer = create(createElement(TimelineTabs, { value }));
@@ -83,6 +85,7 @@ describe('TimelineTabs', () => {
           reselectTab.mock.calls.map(({ arguments: args }) => args),
           [['home']],
         );
+        assert.equal(reselectHome.mock.callCount(), 1);
         assert.deepEqual(navigations, []);
       });
     }
@@ -99,7 +102,7 @@ describe('TimelineTabs', () => {
     );
   });
 
-  it('Native 비활성 route는 현재 화면의 파라미터만 바꾼다', async () => {
+  it('Native 비활성 route는 현재 파라미터만 바꾸고 refresh하지 않는다', async () => {
     await act(async () => {
       renderer = create(createElement(TimelineTabs, { value: 'home' }));
     });
@@ -108,9 +111,11 @@ describe('TimelineTabs', () => {
     await act(async () => onValueChange?.('local'));
 
     assert.deepEqual(navigations, [{ mode: 'setParams', params: { timeline: 'local' } }]);
+    assert.equal(reselectHome.mock.callCount(), 0);
+    assert.equal(reselectTab.mock.callCount(), 0);
   });
 
-  it('Web 비활성 route는 교체하고 현재 탭은 document 맨 위로만 이동한다', async () => {
+  it('Web 비활성 route는 교체하고 Home·Local 재선택은 scroll과 refresh를 호출한다', async () => {
     platform.OS = 'web';
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
@@ -124,6 +129,7 @@ describe('TimelineTabs', () => {
     await act(async () => onValueChange?.('local'));
     assert.deepEqual(navigations, [{ href: '/local', mode: 'replace' }]);
     assert.equal(scrollTo.mock.callCount(), 0);
+    assert.equal(reselectHome.mock.callCount(), 0);
 
     await act(async () => {
       renderer?.update(createElement(TimelineTabs, { value: 'local' }));
@@ -134,6 +140,7 @@ describe('TimelineTabs', () => {
       scrollTo.mock.calls.map(({ arguments: args }) => args),
       [[{ behavior: 'auto', left: 0, top: 0 }]],
     );
+    assert.equal(reselectHome.mock.callCount(), 1);
     assert.equal(reselectTab.mock.callCount(), 0);
 
     await act(async () => onValueChange?.('home'));
@@ -141,5 +148,13 @@ describe('TimelineTabs', () => {
       { href: '/local', mode: 'replace' },
       { href: '/home', mode: 'replace' },
     ]);
+    assert.equal(reselectHome.mock.callCount(), 1);
+
+    await act(async () => {
+      renderer?.update(createElement(TimelineTabs, { value: 'home' }));
+    });
+    await act(async () => onValueChange?.('home'));
+    assert.equal(scrollTo.mock.callCount(), 2);
+    assert.equal(reselectHome.mock.callCount(), 2);
   });
 });

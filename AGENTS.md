@@ -27,6 +27,7 @@
 
 ## Tests
 
+- 테스트는 로컬에서 실행하지 않고 CI에서 실행한다. 로컬 테스트 실행을 PR 준비 조건으로 요구하지 않는다.
 - Test executed behavior: inputs, outputs, state changes, and failure paths. Do not substitute source-text checks for behavior; use [memory/coding/tests.md](memory/coding/tests.md) for the boundary between implementation inspection and legitimate observable text assertions.
 - Use standard linters/validators for syntax and configuration checks.
 
