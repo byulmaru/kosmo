@@ -22,7 +22,7 @@ Accepted
 - Word Mute Rule과 Hashtag Mute Rule은 선택된 Mute Scope에서만 소비한다.
 - Post 검색 후보는 Public Post 중 Post Eligibility를 통과한 대상이다.
 - Profile 검색 후보는 공개 조회 정책을 통과하며 Domain Limit Instance의 Remote Profile은 제외한다.
-- Hashtag Post List는 Public Original/Quote Post만 대상으로 한다.
+- Hashtag Post List는 Public 또는 Unlisted Original/Quote Post만 대상으로 한다.
 - Profile Domain Block은 Post List와 검색뿐 아니라 직접 Profile/Post/Media 조회에도 적용한다.
 
 ## 문서 반영

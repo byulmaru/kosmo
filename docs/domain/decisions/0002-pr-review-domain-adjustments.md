@@ -23,7 +23,7 @@ Accepted
 - Post List의 canonical term은 `Post List`다. Home, Profile, Hashtag Post List만 현재 범위로 둔다.
 - Post List는 durable 객체가 아니라 [Post List Policy](../policies/post-list.md)다.
 - Home과 Profile Post List는 Post Kind가 Repost 또는 Quote인 Post를 후보로 사용할 수 있다.
-- Hashtag Post List는 Public Original/Quote Post만 포함하고 Reply와 Repost는 포함하지 않는다.
+- Hashtag Post List는 Public 또는 Unlisted Original/Quote Post만 포함하고 Reply와 Repost는 포함하지 않는다.
 - Reply Author는 Parent와 독립적으로 Post Visibility를 선택한다.
 - Public/Unlisted Post의 Repost는 Unlisted가 된다. Followers Only Post는 Source Author만 Repost할 수 있고
   결과도 Followers Only가 된다.

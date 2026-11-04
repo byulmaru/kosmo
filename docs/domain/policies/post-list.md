@@ -85,7 +85,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ### Hashtag Post List
 
-- Post Visibility가 Public이고 Content가 있으며 Reply Parent가 없고 Target Hashtag가 포함된 eligible Post만
+- Post Visibility가 Public 또는 Unlisted이고 Content가 있으며 Reply Parent가 없고 Target Hashtag가 포함된 eligible Post만
   포함한다.
 - Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
 

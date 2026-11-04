@@ -122,7 +122,7 @@ describe('GraphQL Hashtag posts', () => {
     await pg.end();
   });
 
-  test('lists only public current tagged posts and does not inherit a source post tag', async () => {
+  test('lists only public and unlisted current tagged posts and does not inherit a source post tag', async () => {
     const publisher = await createAuthenticatedSession();
     const created = await requestGraphQL<{
       createPost: { post: { id: string } };
@@ -196,6 +196,12 @@ describe('GraphQL Hashtag posts', () => {
     const unlisted = await createContentfulPost(directAuthor.id, [tagId], {
       visibility: PostVisibility.UNLISTED,
     });
+    const followersOnly = await createContentfulPost(publisher.profile.id, [tagId], {
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const directOnly = await createContentfulPost(publisher.profile.id, [tagId], {
+      visibility: PostVisibility.DIRECT,
+    });
     const deleted = await createContentfulPost(directAuthor.id, [tagId], {
       state: PostState.DELETED,
     });
@@ -216,14 +222,14 @@ describe('GraphQL Hashtag posts', () => {
       .where(eq(Posts.id, stale.post.id));
 
     const firstPage = await requestGraphQL<HashtagPostsData>(postsQuery, {
-      first: 2,
+      first: 3,
       id: globalId('Hashtag', tagId),
     });
 
     assertNoGraphQLErrors(firstPage);
     const firstPosts = firstPage.data?.node?.posts;
     assert.ok(firstPosts);
-    assert.equal(firstPosts.edges.length, 2);
+    assert.equal(firstPosts.edges.length, 3);
     assert.equal(firstPosts.pageInfo.hasNextPage, true);
     const endCursor = firstPosts.pageInfo.endCursor;
     assert.ok(endCursor);
@@ -249,16 +255,34 @@ describe('GraphQL Hashtag posts', () => {
       globalId('Post', remotePost.post.id),
       globalId('Post', source.post.id),
       globalId('Post', ownTagQuote.post.id),
+      globalId('Post', unlisted.post.id),
     ];
     assert.deepEqual(new Set(listedIds), new Set(expectedIds));
     assert.equal(new Set(listedIds).size, listedIds.length);
     assert.equal(listedIds.includes(globalId('Post', inheritedQuote.post.id)), false);
     assert.equal(listedIds.includes(globalId('Post', contentlessRepost.id)), false);
     assert.equal(listedIds.includes(globalId('Post', reply.post.id)), false);
-    assert.equal(listedIds.includes(globalId('Post', unlisted.post.id)), false);
+    assert.equal(listedIds.includes(globalId('Post', followersOnly.post.id)), false);
+    assert.equal(listedIds.includes(globalId('Post', directOnly.post.id)), false);
     assert.equal(listedIds.includes(globalId('Post', deleted.post.id)), false);
     assert.equal(listedIds.includes(globalId('Post', disabledPost.post.id)), false);
     assert.equal(listedIds.includes(globalId('Post', stale.post.id)), false);
+
+    const publisherPage = await requestGraphQL<HashtagPostsData>(
+      postsQuery,
+      { first: 10, id: globalId('Hashtag', tagId) },
+      publisher.token,
+    );
+
+    assertNoGraphQLErrors(publisherPage);
+    const publisherPosts = publisherPage.data?.node?.posts;
+    assert.ok(publisherPosts);
+    assert.equal(publisherPosts.pageInfo.hasNextPage, false);
+    assert.deepEqual(
+      new Set(publisherPosts.edges.map(({ node }) => node.id)),
+      new Set(expectedIds),
+    );
+    assert.equal(publisherPosts.edges.length, expectedIds.length);
   });
 
   test('applies the selected profile mute before pagination and scopes it to that profile', async () => {
@@ -281,6 +305,7 @@ describe('GraphQL Hashtag posts', () => {
       authors.map((author, index) =>
         createContentfulPost(author.id, [hashtag.id], {
           id: orderedPostId(4 - index),
+          visibility: index < 2 ? PostVisibility.UNLISTED : PostVisibility.PUBLIC,
         }),
       ),
     );
