@@ -45,7 +45,10 @@ test('sends every outer and direct source field and image to Decisions', async (
     });
   };
 
-  assert.equal(await evaluateNaturalLanguageMute(input), 'exclude');
+  assert.deepEqual(await evaluateNaturalLanguageMute(input), {
+    decision: 'exclude',
+    probability: 0.8,
+  });
   assert.equal(sentUrl, 'https://api.openai.com/v1/decisions');
   assert.equal(sentInit?.method, 'POST');
   assert.equal(new Headers(sentInit?.headers).get('authorization'), 'Bearer test-openai-key');
@@ -92,14 +95,17 @@ test('sends every outer and direct source field and image to Decisions', async (
   assert.ok(conditionInstruction?.text.endsWith(JSON.stringify(input.condition)!));
 });
 
-test('includes a post below the 0.8 exclusion threshold', async () => {
+test('includes a post below the 0.8 exclusion threshold and preserves its probability', async () => {
   process.env.OPENAI_API_KEY = 'test-openai-key';
   globalThis.fetch = async () =>
     response({
       answers: [{ type: 'predicate', name: 'matches_mute_condition', probability: 0.799999 }],
     });
 
-  assert.equal(await evaluateNaturalLanguageMute(input), 'include');
+  assert.deepEqual(await evaluateNaturalLanguageMute(input), {
+    decision: 'include',
+    probability: 0.799999,
+  });
 });
 
 test('returns failure without a key or when a required image URL is invalid', async () => {

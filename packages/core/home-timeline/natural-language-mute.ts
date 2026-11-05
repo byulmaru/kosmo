@@ -228,12 +228,12 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
       candidate,
       decision: conditions.has(candidate.profileId)
         ? await getNaturalLanguageMuteDecision(candidate.profileId, candidate.post.id)
-        : 'no-rule',
+        : ('no-rule' as const),
     })),
   );
   for (const { candidate, decision } of cacheDecisions) {
     const key = candidateKey(candidate);
-    if (decision === 'no-rule' || decision === 'include') {
+    if (decision === 'no-rule' || decision?.decision === 'include') {
       included.add(key);
     } else if (decision === null) {
       pending.push(candidate);
@@ -331,7 +331,7 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
             candidate.post.id,
             decision,
           );
-          if (winningDecision === 'include') {
+          if (winningDecision.decision === 'include') {
             included.add(key);
           }
         }),

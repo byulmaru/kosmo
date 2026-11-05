@@ -10,7 +10,10 @@ export type NaturalLanguageMuteInput = {
   readonly source?: NaturalLanguageMutePost;
 };
 
-export type NaturalLanguageMuteDecision = 'include' | 'exclude';
+export type NaturalLanguageMuteDecision = {
+  readonly decision: 'include' | 'exclude';
+  readonly probability: number;
+};
 
 const endpoint = 'https://api.openai.com/v1/decisions';
 const model = 'gpt-6-luna';
@@ -158,7 +161,10 @@ export async function evaluateNaturalLanguageMute({
       return null;
     }
 
-    return probability >= exclusionProbability ? 'exclude' : 'include';
+    return {
+      decision: probability >= exclusionProbability ? 'exclude' : 'include',
+      probability,
+    };
   } catch {
     return null;
   }

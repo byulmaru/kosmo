@@ -7,14 +7,41 @@ const keyLifetimeSeconds = 604_800;
 const cacheKey = (profileId: string, postId: string) =>
   `${cacheKeyPrefix}${profileId}:post:${postId}`;
 
+function parseNaturalLanguageMuteDecision(value: unknown): NaturalLanguageMuteDecision | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const { decision, probability } = parsed as Record<string, unknown>;
+    if (
+      (decision !== 'include' && decision !== 'exclude') ||
+      typeof probability !== 'number' ||
+      !Number.isFinite(probability) ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return null;
+    }
+
+    return { decision, probability };
+  } catch {
+    return null;
+  }
+}
+
 export async function getNaturalLanguageMuteDecision(
   profileId: string,
   postId: string,
 ): Promise<NaturalLanguageMuteDecision | null> {
   try {
     const result = await runRedisCommand((client) => client.get(cacheKey(profileId, postId)));
-    const value = result?.value;
-    return value === 'include' || value === 'exclude' ? value : null;
+    return parseNaturalLanguageMuteDecision(result?.value);
   } catch {
     return null;
   }
@@ -27,15 +54,15 @@ export async function cacheNaturalLanguageMuteDecision(
 ): Promise<NaturalLanguageMuteDecision> {
   try {
     const result = await runRedisCommand((client) =>
-      client.set(cacheKey(profileId, postId), decision, {
+      client.set(cacheKey(profileId, postId), JSON.stringify(decision), {
         EX: keyLifetimeSeconds,
         GET: true,
         NX: true,
       }),
     );
 
-    const cachedDecision = result?.value;
-    if (cachedDecision === 'include' || cachedDecision === 'exclude') {
+    const cachedDecision = parseNaturalLanguageMuteDecision(result?.value);
+    if (cachedDecision !== null) {
       return cachedDecision;
     }
   } catch {
