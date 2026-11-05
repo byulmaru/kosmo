@@ -88,6 +88,7 @@ type HomeConnection = {
     };
   }[];
   readonly pageInfo: {
+    readonly startCursor?: string | null;
     readonly endCursor: string | null;
     readonly hasNextPage: boolean;
     readonly hasPreviousPage: boolean;
@@ -912,7 +913,7 @@ test(
   },
 );
 
-test('fills Home DB pages past muted posts and omits an inaccessible quote source from model input', async () => {
+test('bounds Home DB candidate pages before natural-language filtering', async () => {
   const viewer = await createAuth();
   const hiddenAuthor = await createProfile('natural-mute-hidden-source');
   const hiddenSource = await createContentfulPost(
@@ -921,11 +922,19 @@ test('fills Home DB pages past muted posts and omits an inaccessible quote sourc
     undefined,
     PostVisibility.DIRECT,
   );
-  await createQuote(viewer.profile.id, hiddenSource.id, 'visible quote body');
-  await createContentfulPost(viewer.profile.id, 'exclude-me first');
-  await createContentfulPost(viewer.profile.id, 'include this body');
-  await createContentfulPost(viewer.profile.id, 'exclude-me second');
-  await createContentfulPost(viewer.profile.id, 'include another body');
+  const idPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const posts = [
+    await createQuote(
+      viewer.profile.id,
+      hiddenSource.id,
+      'exclude-me visible quote body',
+      `${idPrefix}000000000001`,
+    ),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 2', `${idPrefix}000000000002`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 3', `${idPrefix}000000000003`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 4', `${idPrefix}000000000004`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 5', `${idPrefix}000000000005`),
+  ];
   await db.insert(NaturalLanguageMuteRules).values({
     ownerProfileId: viewer.profile.id,
     condition: 'exclude matching posts',
@@ -940,29 +949,48 @@ test('fills Home DB pages past muted posts and omits an inaccessible quote sourc
     return text.includes('exclude-me') ? 0.99 : 0.1;
   });
   try {
-    const first = await requestHome(viewer.token, { first: 1 });
+    const zero = await requestHome(viewer.token, { first: 0 });
+    assert.equal(zero.errors, undefined, JSON.stringify(zero.errors));
+    assert.deepEqual(zero.data?.homeTimeline.edges, []);
+    assert.equal(zero.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.ok(
+      modelInputs.length <= 1,
+      `expected at most one lookahead decision, got ${modelInputs.length}`,
+    );
+
+    const callsAfterZero = modelInputs.length;
+    const first = await requestHome(viewer.token, { first: 2 });
     assert.equal(first.errors, undefined, JSON.stringify(first.errors));
-    assert.equal(first.data?.homeTimeline.edges.length, 1);
-    assert.ok(first.data!.homeTimeline.pageInfo.hasNextPage);
-    assert.doesNotMatch(
-      first.data!.homeTimeline.edges[0]!.node.content?.bodyText ?? '',
-      /exclude-me/,
+    assert.deepEqual(first.data?.homeTimeline.edges, []);
+    assert.equal(first.data?.homeTimeline.pageInfo.startCursor, `db:${posts[4]!.id}`);
+    assert.equal(first.data?.homeTimeline.pageInfo.endCursor, `db:${posts[3]!.id}`);
+    assert.equal(first.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.equal(first.data?.homeTimeline.pageInfo.hasPreviousPage, false);
+    assert.ok(
+      modelInputs.length - callsAfterZero <= 3,
+      `expected at most three candidate decisions, got ${modelInputs.length - callsAfterZero}`,
     );
 
     const next = await requestHome(viewer.token, {
       first: 1,
-      after: first.data!.homeTimeline.edges[0]!.cursor,
+      after: first.data!.homeTimeline.pageInfo.endCursor!,
     });
     assert.equal(next.errors, undefined, JSON.stringify(next.errors));
-    assert.equal(next.data?.homeTimeline.edges.length, 1);
-    assert.doesNotMatch(
-      next.data!.homeTimeline.edges[0]!.node.content?.bodyText ?? '',
-      /exclude-me/,
-    );
-    const allCandidates = await requestHome(viewer.token, { first: 10 });
-    assert.equal(allCandidates.errors, undefined, JSON.stringify(allCandidates.errors));
+    assert.deepEqual(next.data?.homeTimeline.edges, []);
+    assert.equal(next.data?.homeTimeline.pageInfo.endCursor, `db:${posts[2]!.id}`);
+    assert.equal(next.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const last = await requestHome(viewer.token, {
+      first: 2,
+      after: next.data!.homeTimeline.pageInfo.endCursor!,
+    });
+    assert.equal(last.errors, undefined, JSON.stringify(last.errors));
+    assert.deepEqual(last.data?.homeTimeline.edges, []);
+    assert.equal(last.data?.homeTimeline.pageInfo.endCursor, `db:${posts[0]!.id}`);
+    assert.equal(last.data?.homeTimeline.pageInfo.hasNextPage, false);
+
     assert.ok(modelInputs.length > 0);
-    assert.ok(modelInputs.some((text) => text.includes('visible quote body')));
+    assert.ok(modelInputs.some((text) => text.includes('exclude-me visible quote body')));
     assert.ok(
       modelInputs.every((text) => !text.includes('hidden source must not reach the model')),
     );
@@ -973,6 +1001,121 @@ test('fills Home DB pages past muted posts and omits an inaccessible quote sourc
     } else {
       process.env.REDIS_URL = redisUrl;
     }
+  }
+});
+
+test('keeps forward and backward Home lookahead candidates for the next page', async () => {
+  const forwardViewer = await createAuth();
+  const forwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const forwardPosts = [
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me oldest forward post',
+      `${forwardIdPrefix}000000000001`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'include forward lookahead',
+      `${forwardIdPrefix}000000000002`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me middle forward post',
+      `${forwardIdPrefix}000000000003`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me newest forward post',
+      `${forwardIdPrefix}000000000004`,
+    ),
+  ];
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: forwardViewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const backwardViewer = await createAuth();
+  const backwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const backwardPosts = [
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me oldest backward post',
+      `${backwardIdPrefix}000000000001`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me before boundary backward post',
+      `${backwardIdPrefix}000000000002`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me backward page post 1',
+      `${backwardIdPrefix}000000000003`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me backward page post 2',
+      `${backwardIdPrefix}000000000004`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'include backward lookahead',
+      `${backwardIdPrefix}000000000005`,
+    ),
+  ];
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: backwardViewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const restoreModel = installNaturalMuteModel((request) =>
+    naturalMuteInputText(request).includes('exclude-me') ? 0.99 : 0.1,
+  );
+  try {
+    const forwardEmpty = await requestHome(forwardViewer.token, { first: 2 });
+    assert.equal(forwardEmpty.errors, undefined, JSON.stringify(forwardEmpty.errors));
+    assert.deepEqual(forwardEmpty.data?.homeTimeline.edges, []);
+    assert.equal(forwardEmpty.data?.homeTimeline.pageInfo.endCursor, `db:${forwardPosts[2]!.id}`);
+    assert.equal(forwardEmpty.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const forwardNext = await requestHome(forwardViewer.token, {
+      first: 2,
+      after: forwardEmpty.data!.homeTimeline.pageInfo.endCursor!,
+    });
+    assert.equal(forwardNext.errors, undefined, JSON.stringify(forwardNext.errors));
+    assert.deepEqual(
+      forwardNext.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', forwardPosts[1]!.id)],
+    );
+    assert.equal(forwardNext.data?.homeTimeline.pageInfo.endCursor, `db:${forwardPosts[0]!.id}`);
+    assert.equal(forwardNext.data?.homeTimeline.pageInfo.hasNextPage, false);
+
+    const backwardEmpty = await requestHome(backwardViewer.token, {
+      last: 2,
+      before: `db:${backwardPosts[1]!.id}`,
+    });
+    assert.equal(backwardEmpty.errors, undefined, JSON.stringify(backwardEmpty.errors));
+    assert.deepEqual(backwardEmpty.data?.homeTimeline.edges, []);
+    assert.equal(
+      backwardEmpty.data?.homeTimeline.pageInfo.startCursor,
+      `db:${backwardPosts[3]!.id}`,
+    );
+    assert.equal(backwardEmpty.data?.homeTimeline.pageInfo.hasPreviousPage, true);
+
+    const backwardStartCursor = backwardEmpty.data!.homeTimeline.pageInfo.startCursor;
+    assert.ok(backwardStartCursor);
+    const backwardNext = await requestHome(backwardViewer.token, {
+      last: 2,
+      before: backwardStartCursor,
+    });
+    assert.equal(backwardNext.errors, undefined, JSON.stringify(backwardNext.errors));
+    assert.deepEqual(
+      backwardNext.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', backwardPosts[4]!.id)],
+    );
+    assert.equal(backwardNext.data?.homeTimeline.pageInfo.hasPreviousPage, false);
+  } finally {
+    restoreModel();
   }
 });
 
@@ -1344,8 +1487,8 @@ async function createRemoteImageMedia(profileId: string) {
   return media;
 }
 
-async function createQuote(profileId: string, sourcePostId: string, bodyText: string) {
-  const quote = await createContentfulPost(profileId, bodyText);
+async function createQuote(profileId: string, sourcePostId: string, bodyText: string, id?: string) {
+  const quote = await createContentfulPost(profileId, bodyText, id);
   await db.update(Posts).set({ repostSourceId: sourcePostId }).where(eq(Posts.id, quote.id));
   return quote;
 }
@@ -1404,7 +1547,7 @@ async function requestHome(
     `query HomeTimeline($first: Int, $last: Int, $after: String, $before: String) {
       homeTimeline(first: $first, last: $last, after: $after, before: $before) {
         edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } } }
-        pageInfo { endCursor hasNextPage hasPreviousPage }
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
       }
     }`,
     pagination,

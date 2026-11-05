@@ -32,6 +32,10 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   Eligibility, Follow, Block, Mute 규칙을 판정한다. Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에
   몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부, 바깥 Post와 direct Source Post의 Author
   Profile ACTIVE 상태를 다시 확인한다.
+- Home GraphQL 페이지는 Natural Language Mute Rule을 적용하기 전의 bounded 후보 Post를 기준으로 나눈다. 요청한
+  후보 수와 최대 한 항목의 lookahead만 읽으며, 제외 후 반환 edge 수는 더 적거나 비어 있을 수 있다. `pageInfo`와
+  cursor는 소비한 후보 페이지를 나타내고 lookahead 후보는 다음 요청에 남으므로, edge가 비어 있어도 다음 페이지로
+  이어질 수 있다. 보이는 Post 수를 채우기 위해 추가 후보를 계속 읽지 않는다.
 - [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때만
   기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. 일반 적재, Follow 보정과 Home
   목록 cache 재구성에서 새로 추가할 때도 적용하며, 이미 Home에 있는 항목을 규칙 생성·변경·제거로 소급 변경하지
