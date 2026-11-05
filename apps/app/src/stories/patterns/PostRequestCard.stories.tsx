@@ -1,5 +1,5 @@
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostRequestCard } from '@/components/post/PostRequestCard';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import { post, profile } from '../fixtures';
@@ -266,15 +266,15 @@ export const CancellationConfirmation: Story = {
     };
 
     let dialog = await open();
-    for (let i = 0; i < 4; i++) {
-      await userEvent.tab();
-      expect(dialog.contains(canvasElement.ownerDocument.activeElement)).toBe(true);
-    }
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(within(dialog).getByRole('button', { name: '닫기' })).toHaveFocus();
+    await userEvent.keyboard('{Tab}');
+    expect(within(dialog).getByRole('button', { name: '계속 기다리기' })).toHaveFocus();
     await userEvent.click(within(dialog).getByRole('button', { name: '계속 기다리기' }));
     await expectWaiting();
 
-    await open();
-    await userEvent.keyboard('{Escape}');
+    dialog = await open();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
     await expectWaiting();
 
     dialog = await open();
