@@ -124,6 +124,9 @@ resource "argocd_application" "kosmo_prod" {
               projectId: '${local.firebase_project_id}'
               workloadIdentityProvider: '${google_iam_workload_identity_pool_provider.kosmo_worker.name}'
               serviceAccountEmail: '${google_service_account.firebase_fcm_sender.email}'
+            resources:
+              limits:
+                memory: 1Gi
         EOT
       }
     }
