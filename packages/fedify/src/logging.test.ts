@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getConfig, getLogger } from '@logtape/logtape';
+import { getLogger } from '@logtape/logtape';
 import { configureFedifyInboxLogging } from './logging';
 import type { SentryNamespace } from '@logtape/sentry';
 
@@ -33,9 +33,10 @@ const createSentry = () => {
   return { issues, logs, sentry };
 };
 
-test('emits native JSON lines and samples only info records', (t) => {
+test('emits native JSON lines, samples only info records, and keeps the first Sentry sink', (t) => {
   const output: string[] = [];
   const { issues, logs, sentry } = createSentry();
+  const replacement = createSentry();
   let random = 0.009;
   const capture = (...args: unknown[]) => output.push(String(args[0]));
   t.mock.method(console, 'debug', capture);
@@ -45,6 +46,7 @@ test('emits native JSON lines and samples only info records', (t) => {
   t.mock.method(Math, 'random', () => random);
 
   configureFedifyInboxLogging(sentry);
+  configureFedifyInboxLogging(replacement.sentry);
   const logger = getLogger(['fedify', 'federation', 'inbox']);
   const activityId = 'https://remote.example/activities/queued?secret=activity-query';
   logger.info('Activity {activityId} is enqueued.', { activityId });
@@ -144,10 +146,6 @@ test('emits native JSON lines and samples only info records', (t) => {
       { level: 'fatal', message: "Fatal 'fatal property'" },
     ],
   );
-});
-
-test('configuration is idempotent and leaves the existing owner untouched', () => {
-  const config = getConfig();
-  configureFedifyInboxLogging(createSentry().sentry);
-  assert.equal(getConfig(), config);
+  assert.deepEqual(replacement.logs, []);
+  assert.deepEqual(replacement.issues, []);
 });
