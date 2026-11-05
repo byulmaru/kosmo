@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsNaturalLanguageMute } from '@/components/settings/SettingsNaturalLanguageMute';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
@@ -11,6 +12,7 @@ import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SettingsNaturalLanguageMuteRoute() {
+  const naturalLanguageMuteSettingsEnabled = useFeatureFlag('natural-language-mute-settings');
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
@@ -37,7 +39,7 @@ export default function SettingsNaturalLanguageMuteRoute() {
       <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="자연어 뮤트" />
       </MobileWebRouteChrome>
-      <SettingsNaturalLanguageMute />
+      {naturalLanguageMuteSettingsEnabled ? <SettingsNaturalLanguageMute /> : null}
     </RouteScrollContainer>
   );
 }

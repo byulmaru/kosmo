@@ -93,6 +93,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   있을 때만 표시하는 `삭제` action으로 구성하며, 설명 문구나 추가 설정 control을 두지 않는다. 선택된 Local
   Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
   Rule이 없으면 생성하며 있으면 갱신한다. 삭제는 현재 Rule만 제거한다.
+  `자연어 뮤트` 진입점과 `/settings/natural-language-mute` 편집기는 `natural-language-mute-settings` 기능
+  플래그로 제어하며, 일반 사용자에게는 기본 비활성화하고 기존 개발자·개발 채널 targeting을 따른다.
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings

@@ -31,6 +31,11 @@ let muteHeadingFocusCalls = 0;
 let blockedHeadingFocusCalls = 0;
 const openNavigationDrawer = mock.fn();
 
+mock.module('@/components/FeatureFlagsContext', {
+  exports: {
+    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-router', {
   exports: {
     Link: ({ children, ...props }: Record<string, unknown>) =>

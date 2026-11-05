@@ -13,6 +13,11 @@ mock.module('react-native', {
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/FeatureFlagsContext', {
+  exports: {
+    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/theme/tokens', {
   exports: { layoutRecipes: { listStack: {} } },
 } as unknown as Parameters<typeof mock.module>[1]);

@@ -38,6 +38,11 @@ let requestPermissionAndSync: () => Promise<void> = async () => {
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
 
+mock.module('@/components/FeatureFlagsContext', {
+  exports: {
+    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-router', {
   exports: {
     Link: ({ children, href }: { children: ReactElement; href: string }) =>
