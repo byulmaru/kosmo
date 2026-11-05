@@ -5,12 +5,15 @@ import { db } from '@kosmo/core/db';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
+import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { captureUnexpectedError } from '../sentry';
 import type { Hono } from 'hono';
 
 vi.mock('@kosmo/core/local-instance', () => ({
   resolveConfiguredLocalInstance: vi.fn(),
 }));
+vi.mock('@kosmo/fedify', () => ({ resolveActivityPubPostUri: vi.fn() }));
 vi.mock('../sentry', () => ({ captureUnexpectedError: vi.fn() }));
 
 const postId = '00000000-0000-8000-8000-000000000001';
@@ -38,6 +41,8 @@ afterEach(() => {
 });
 beforeEach(() => {
   vi.mocked(resolveConfiguredLocalInstance).mockReset();
+  vi.mocked(resolveActivityPubPostUri).mockReset();
+  vi.mocked(captureUnexpectedError).mockClear();
 });
 
 test.each([
@@ -124,14 +129,25 @@ test.each([
 });
 
 test.each([
-  [null, true, 'public body with sensitive media'],
-  ['spoiler warning', false, '열람 주의 문구: spoiler warning'],
-  ['spoiler warning', true, '열람 주의 문구: spoiler warning'],
+  [null, true, 'resolved', 'public body with sensitive media'],
+  ['spoiler warning', false, 'throws', '열람 주의 문구: spoiler warning'],
+  ['spoiler warning', true, 'missing', '열람 주의 문구: spoiler warning'],
 ])(
-  'preserves post metadata for warning %s and sensitive media %s',
-  async (summary, sensitive, description) => {
+  'preserves post metadata for warning %s and sensitive media %s with ActivityPub URI lookup %s and description %s',
+  async (summary, sensitive, activityPubUriResult, description) => {
     vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
     vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+    if (activityPubUriResult === 'resolved') {
+      vi.mocked(resolveActivityPubPostUri).mockResolvedValueOnce(
+        new URL('https://ap.example/objects/post?a=1&b=2'),
+      );
+    } else if (activityPubUriResult === 'throws') {
+      vi.mocked(resolveActivityPubPostUri).mockRejectedValueOnce(
+        new Error('ActivityPub URI lookup failed'),
+      );
+    } else {
+      vi.mocked(resolveActivityPubPostUri).mockResolvedValueOnce(undefined);
+    }
     const rows = [
       {
         authorDisplayName: 'uta',
@@ -173,6 +189,17 @@ test.each([
     expect(html).toContain(`property="og:description" content="${description}"`);
     expect(html).toContain(`name="twitter:description" content="${description}"`);
     expect(html).toContain('property="og:image" content="https://kos.moe/og-default.png"');
+    if (activityPubUriResult === 'resolved') {
+      expect(html).toMatch(
+        /<link\s+rel="alternate"\s+type="application\/activity\+json"\s+href="https:\/\/ap\.example\/objects\/post\?a=1&amp;b=2"\s+\/>/,
+      );
+      expect(html.match(/<link\s+rel="alternate"/g) ?? []).toHaveLength(1);
+    } else {
+      expect(html).not.toMatch(/<link\s+rel="alternate"/);
+    }
+    if (activityPubUriResult === 'throws') {
+      expect(captureUnexpectedError).toHaveBeenCalledOnce();
+    }
     if (summary) {
       expect(html).not.toContain('public body with sensitive media');
     }

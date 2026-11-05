@@ -45,6 +45,7 @@
 ## Pull Request Completion
 
 - Completion means the scoped implementation, required documentation and focused validation are finished, including repairs for failures caused by the change. Continue through that work before reporting the first working patch as done; keep optional follow-ups separate from required completion.
+- For implementation requests, default delivery includes an official `gh-stack` PR and required CI checks passing on its latest head, even when the user does not explicitly ask for a PR; respect explicit local-only/no-PR requests. See [`memory/git-pr-workflow.md#ci-and-pr-completion`](memory/git-pr-workflow.md#ci-and-pr-completion) for timing and check handling.
 - Treat pull request readiness separately from optional OpenSpec session-harness housekeeping; housekeeping is not a
   product decision or PR completion gate.
 - When practical, archive a used, completed, or superseded session harness in the same implementation PR with
