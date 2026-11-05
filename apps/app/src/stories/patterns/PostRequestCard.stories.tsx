@@ -278,7 +278,7 @@ export const CancellationConfirmation: Story = {
     await expectWaiting();
 
     dialog = await open();
-    await userEvent.click(within(dialog).getByRole('button', { name: '닫기', exact: true }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     await expectWaiting();
 
     dialog = await open();
