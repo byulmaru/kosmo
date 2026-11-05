@@ -21,16 +21,6 @@ const require = createRequire(import.meta.url);
 const relay = require('react-relay');
 const query =
   require('../../app/(tabs)/(protected)/hashtags/[hashtagId]/__generated__/HashtagRelatedProfilesPageQuery.graphql').default;
-const fragment = require('./__generated__/HashtagRelatedProfileList_hashtag.graphql').default;
-const artifacts = [
-  query,
-  fragment,
-  require('./__generated__/ProfileTagMuteAction_tag.graphql').default,
-  require('./__generated__/ProfileTagMuteActionCreateMutation.graphql').default,
-  require('./__generated__/ProfileTagMuteActionUpdateMutation.graphql').default,
-  require('./__generated__/ProfileTagMuteActionDeleteMutation.graphql').default,
-  require('./__generated__/ProfileTagMuteActionDeleteUpdaterQuery.graphql').default,
-];
 
 const events: Array<[string, Record<string, unknown>]> = [];
 type CapturedRequest = {
@@ -68,12 +58,13 @@ mockModule('expo-router', {
 mockModule('react-relay', {
   ...relay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|mutation|fragment)\s+(\w+)/)?.[1];
-    const artifact = artifacts.find(
-      (item) => ('params' in item ? item.params.name : item.name) === name,
-    );
-    assert.ok(artifact, name);
-    return artifact;
+    const document = parts.join('');
+    if (document.includes('query HashtagRelatedProfilesPageQuery')) {
+      return query;
+    }
+    const name = document.match(/(?:query|mutation|fragment)\s+(\w+)/)?.[1];
+    assert.ok(name, 'GraphQL document must be named');
+    return require(`./__generated__/${name}.graphql`).default;
   },
 });
 mockModule('react-native', {
@@ -259,8 +250,7 @@ for (const [cache, network] of [
         events.find(([name]) => name === 'profile_hashtag_list_viewed')?.[1].result_count,
         Math.min(cache, 20),
       );
-    }
-    else {
+    } else {
       assert.ok(renderer!.root.findAllByProps({ loading: true }).length > 0);
       assert.ok(!events.some(([name]) => name === 'profile_hashtag_list_viewed'));
     }

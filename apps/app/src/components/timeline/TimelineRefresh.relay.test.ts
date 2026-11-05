@@ -408,10 +408,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
 
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
 
-    assert.equal(
-      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
-      0,
-    );
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 0);
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
   });
 
@@ -437,10 +434,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     const initialRequest = latest('HomePageQuery');
     await respond(initialRequest, payload('homeTimeline', ['a', 'b']));
 
-    assert.equal(
-      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
-      0,
-    );
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 0);
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
 
     postRequestSummaryMode = 'ready';
@@ -449,10 +443,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     const refresh = latest('HomePageQuery');
     assert.notEqual(refresh, initialRequest);
     assert.equal(list().props.refreshing, true);
-    assert.equal(
-      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
-      1,
-    );
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 1);
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
 
     await respond(refresh, payload('homeTimeline', ['fresh']));
