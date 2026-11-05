@@ -133,12 +133,17 @@ const config: ExpoConfig = {
     [
       'expo-build-properties',
       {
+        android: {
+          enableMinifyInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+        },
         ios: {
           useFrameworks: 'static',
           forceStaticLinking: ['RNFBApp', 'RNFBMessaging'],
         },
       },
     ],
+    './plugins/withAndroidCodeOptimization',
     './plugins/withIosResourceBundleDeploymentTarget',
     [
       '@sentry/react-native/expo',
