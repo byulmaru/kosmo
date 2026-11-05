@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useArgs } from 'storybook/preview-api';
@@ -52,7 +52,9 @@ function ProfileSettingsExample(args: Args) {
         }),
       }}
     >
-      <ProfileSettingsExampleContents {...args} />
+      <Suspense fallback={null}>
+        <ProfileSettingsExampleContents {...args} />
+      </Suspense>
     </RelayStoryProvider>
   );
 }
