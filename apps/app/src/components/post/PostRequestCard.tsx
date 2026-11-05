@@ -1,10 +1,12 @@
 import { Link, useIsFocused } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
 import { thumbHashToDataURL } from 'thumbhash';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
+import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
@@ -104,6 +106,10 @@ export function PostRequestCard({
   >(PostRequestCardFragment, requestKey);
   const [commitCancel, cancelInFlight] =
     useMutation<PostRequestCardCancelMutation>(CancelPostRequestMutation);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  // Web dialog focus uses the existing control handles at its show/dismiss boundaries.
+  const cancelTriggerRef = useRef<View>(null);
+  const keepWaitingRef = useRef<View>(null);
   const [queryError, setQueryError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
@@ -196,6 +202,10 @@ export function PostRequestCard({
   }, [appIsActive, isFocused, queryError, refreshing, refetch, request.status]);
 
   const cancel = () => {
+    if (!confirmationOpen || !canCancel || cancelInFlight) {
+      return;
+    }
+    setConfirmationOpen(false);
     commitCancel({
       variables: {
         input: { requestId: request.requestId },
@@ -303,7 +313,8 @@ export function PostRequestCard({
             disabled={cancelInFlight}
             loading={cancelInFlight}
             loadingText="취소 중"
-            onPress={cancel}
+            controlRef={cancelTriggerRef}
+            onPress={() => setConfirmationOpen(true)}
             size="compact"
             tone="danger"
           >
@@ -325,6 +336,31 @@ export function PostRequestCard({
           </Link>
         ) : null}
       </View>
+      <ModalSheet
+        onClose={() => setConfirmationOpen(false)}
+        onShow={() => {
+          if (Platform.OS === 'web') {
+            keepWaitingRef.current?.focus();
+          }
+        }}
+        onDismiss={() => {
+          if (Platform.OS === 'web') {
+            cancelTriggerRef.current?.focus();
+          }
+        }}
+        role="alertdialog"
+        title="게시 요청을 취소할까요?"
+        visible={confirmationOpen && canCancel}
+      >
+        <ConfirmationContent
+          cancelLabel="계속 기다리기"
+          cancelRef={keepWaitingRef}
+          confirmLabel="게시 취소"
+          onCancel={() => setConfirmationOpen(false)}
+          onConfirm={cancel}
+          tone="danger"
+        />
+      </ModalSheet>
     </View>
   );
 }
