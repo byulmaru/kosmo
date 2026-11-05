@@ -41,6 +41,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Platform: platform,
   Pressable: forwardRef(
     (
@@ -70,7 +71,12 @@ mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: (props: Record<string, unknown>) => createElement('ProfilePicker', props),
 });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     card: '#fff',
     danger: '#c00',
