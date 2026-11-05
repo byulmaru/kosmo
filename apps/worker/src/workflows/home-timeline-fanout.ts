@@ -100,7 +100,7 @@ export async function homeTimelineFanoutWorkflow(input: HomeTimelineFanoutInput)
           (index + 1) * homeTimelineInsertBatchSize,
         ),
     );
-    const fanoutRunId = workflowInfo().runId;
+    const fanoutRunId = workflowInfo().firstExecutionRunId;
     let nextBatchIndex = 0;
 
     const processBatches = async (): Promise<void> => {

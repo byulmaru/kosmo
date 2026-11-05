@@ -119,8 +119,9 @@
 - Home timeline fanout의 신규 history는 `patched('home-timeline-batch-fanout-v1')` 뒤에서 수신자 페이지를 최대
   1,000개까지 읽고, 프로필 ID를 최대 100개씩 묶은 `homeTimelineInsertBatchWorkflow` child를 최대 4개 동시 실행한다.
   한 child가 끝나면 해당 lane이 다음 batch를 시작하며, 현재 페이지의 모든 child가 끝난 뒤에만 cursor로
-  `continueAsNew` 한다. Batch child ID에는 parent run ID와 첫·마지막 profile ID를 포함해 별도 fanout run의
-  identity를 구분한다. 종료된 batch child 실패는 context와 함께 기록하고 나머지 batch/page를 진행하지만,
+  `continueAsNew` 한다. Batch child ID에는 fanout chain의 `firstExecutionRunId`와 첫·마지막 profile ID를
+  포함해 identity를 구분한다. `firstExecutionRunId`는 Reset과 Continue-As-New 뒤에도 chain 시작 run을 가리켜,
+  현재 run ID와 달리 Reset 재실행에서도 child identity를 유지한다. 종료된 batch child 실패는 context와 함께 기록하고 나머지 batch/page를 진행하지만,
   cancellation과 child start 오류는 전파한다. Marker 이전 history는 기존 page Activity input과 프로필별
   `homeTimelineInsertWorkflow` start/acknowledgement, Continue-As-New 순서를 그대로 재생한다. 두 Workflow와
   legacy replay fixture는 해당 history가 drain될 때까지 유지한다.

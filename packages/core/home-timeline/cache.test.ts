@@ -347,7 +347,7 @@ test(
     postIds.push(repost.id);
     await db
       .update(Profiles)
-      .set({ state: ProfileState.INACTIVE })
+      .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, inactiveAuthor.id));
 
     const viewerKey = `kosmo:home-timeline:profile:${viewer.id}`;

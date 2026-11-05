@@ -124,6 +124,13 @@ test(
         }
         await fanout.result();
 
+        const firstRun = environment.client.workflow.getHandle(
+          fanout.workflowId,
+          fanout.firstExecutionRunId,
+        );
+        const history = await firstRun.fetchHistory();
+        await Worker.runReplayHistory({ workflowsPath }, history, fanout.workflowId);
+
         assert.equal(maximumActiveBatches, 4);
         assert.deepEqual(pageCalls, [
           { postId, limit: 1_000 },
