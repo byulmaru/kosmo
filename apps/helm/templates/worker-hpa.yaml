@@ -17,7 +17,7 @@ spec:
     kind: Deployment
     name: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
