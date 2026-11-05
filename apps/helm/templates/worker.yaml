@@ -42,7 +42,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   {{- if ne .Values.env "prod" }}
-  replicas: {{ get .Values.worker.replicas .Values.env }}
+  replicas: 1
   {{- end }}
   selector:
     matchLabels:

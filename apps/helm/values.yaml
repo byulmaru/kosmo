@@ -9,8 +9,6 @@ startupProbe:
 worker:
   # Populated by Terraform-managed Argo CD releases; omit to disable FCM identity wiring.
   fcm: {}
-  replicas:
-    dev: 1
   health:
     port: 8080
   posthog:
