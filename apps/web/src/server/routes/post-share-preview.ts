@@ -6,6 +6,7 @@ import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
+import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { html } from 'hono/html';
@@ -26,6 +27,7 @@ type ShareImage = {
 };
 
 type ShareMetadata = {
+  readonly activityPubUri?: string;
   readonly canonicalUrl: string;
   readonly description: string;
   readonly images: readonly ShareImage[];
@@ -211,8 +213,15 @@ async function createPostMetadata(
   const title = `${target.authorDisplayName.trim() || relativeHandle}(${relativeHandle}) on KOSMO`;
   const canonicalHandle = encodeURIComponent(relativeHandle).replace(/%40/gi, '@');
   const canonicalId = encodeURIComponent(encodeGlobalId('Post', target.postId));
+  let activityPubUri: string | undefined;
+  try {
+    activityPubUri = (await resolveActivityPubPostUri(target.postId))?.href;
+  } catch (cause) {
+    captureUnexpectedError(cause);
+  }
 
   return {
+    activityPubUri,
     canonicalUrl: new URL(`${canonicalHandle}/${canonicalId}`, `${origin}/`).toString(),
     description,
     images,
@@ -413,6 +422,13 @@ function renderMetadata(metadata: ShareMetadata) {
     <meta name="twitter:title" content="${metadata.title}" />
     <meta name="twitter:description" content="${metadata.description}" />
     <meta name="twitter:image" content="${firstImage.url}" />
+    ${metadata.activityPubUri
+      ? html`<link
+          rel="alternate"
+          type="application/activity+json"
+          href="${metadata.activityPubUri}"
+        />`
+      : ''}
     ${firstImage.altText !== undefined
       ? html`<meta name="twitter:image:alt" content="${firstImage.altText}" />`
       : ''}
