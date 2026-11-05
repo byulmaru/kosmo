@@ -206,7 +206,8 @@ export const FullMasterDetail: Story = {
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
     expect(profileEntry.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
-      borderWidth: '0px',
+      borderColor: colors.light.selectedBorder,
+      borderWidth: '1px',
     });
     expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(canvas.getByRole('button', { name: '브라우저 알림 켜기' })).toBeVisible();

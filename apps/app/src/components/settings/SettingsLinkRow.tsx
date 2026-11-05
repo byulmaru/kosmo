@@ -49,11 +49,21 @@ function SettingsLinkFeedback({ children, hovered, pressed, selected }: Settings
     reducedMotion,
     role: interaction ? 'interaction' : 'selection',
   });
+  const animatedBorder = useAnimatedColorTransition({
+    color: selected ? theme.stateSelectedBorder : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: 'selection',
+  });
+
   return (
     <>
       <Animated.View
         pointerEvents="none"
-        style={[styles.feedback, { backgroundColor: animatedBackground } as ViewStyle]}
+        style={[
+          styles.feedback,
+          { backgroundColor: animatedBackground, borderColor: animatedBorder } as ViewStyle,
+        ]}
       />
       {children}
     </>
@@ -149,12 +159,13 @@ export function SettingsLinkRow({
 
 const styles = StyleSheet.create({
   feedback: {
+    borderWidth: borderWidths[1],
     borderRadius: radius[8],
-    bottom: space[4],
-    left: space[4],
+    bottom: space[4] / 2,
+    left: space[4] / 2,
     position: 'absolute',
-    right: space[4],
-    top: space[4],
+    right: space[4] / 2,
+    top: space[4] / 2,
   },
   entry: {
     minHeight: 64,

@@ -203,7 +203,7 @@ describe('SettingsLinkRow', () => {
         feedbackStyle.bottom,
         feedbackStyle.left,
       ],
-      [undefined, 8, 4, 4, 4, 4],
+      [1, 8, 2, 2, 2, 2],
     );
     assert.equal(rowStyle.borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
@@ -231,6 +231,7 @@ describe('SettingsLinkRow', () => {
     assert.deepEqual(row.props.accessibilityState, { selected: true });
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
@@ -313,6 +314,7 @@ describe('SettingsLinkRow', () => {
 
     const idleStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(idleStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(idleStyle.borderColor), '#9a7800');
     assert.equal(idleStyle.transitionDuration, undefined);
   });
 
@@ -378,7 +380,7 @@ describe('SettingsLinkRow', () => {
     assert.equal(style.transitionTimingFunction, undefined);
   });
 
-  it('hover 중 선택 상태가 바뀌어도 hover 배경을 유지하고 추가 애니메이션을 만들지 않는다', async () => {
+  it('hover 중 선택 상태가 바뀌어도 border 전이는 양방향 200ms를 유지한다', async () => {
     pressableState = { hovered: true, pressed: false };
     const props = {
       accessibilityLabel: '설정 링크',
@@ -389,18 +391,27 @@ describe('SettingsLinkRow', () => {
     } satisfies SettingsLinkRowProps;
     await render(props);
 
-    const initialTimingCount = timingCalls.length;
+    timingCalls.length = 0;
     await act(async () => {
       renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
     });
     completePendingAnimations();
-    assert.equal(timingCalls.length, initialTimingCount);
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === '#9a7800'),
+      true,
+    );
 
+    timingCalls.length = 0;
     await act(async () => {
       renderer?.update(createElement(SettingsLinkRow, { ...props, selected: false }));
     });
     completePendingAnimations();
-    assert.equal(timingCalls.length, initialTimingCount);
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === 'transparent'),
+      true,
+    );
+    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(finalStyle.borderColor), 'transparent');
   });
 
   it('focus 진입은 진행 중 feedback 전이를 중단하거나 끝점으로 점프시키지 않는다', async () => {
@@ -434,6 +445,7 @@ describe('SettingsLinkRow', () => {
     completePendingAnimations();
     const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(finalStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(finalStyle.borderColor), '#9a7800');
     assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 2);
   });
 
