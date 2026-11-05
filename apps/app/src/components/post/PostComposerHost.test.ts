@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -24,6 +25,9 @@ let composerProps:
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
+const require = createRequire(import.meta.url);
+let storeReviewCalls = 0;
+const toastMessages: string[] = [];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -58,6 +62,10 @@ mockModule(require.resolve('./PostComposerController'), {
     return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
   },
 });
+mockModule('@/components/ui/ModalOverlay', {
+  ModalOverlay: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+    createElement('ModalOverlay', props, children),
+});
 mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('Pressable', props, children as never),
@@ -68,6 +76,16 @@ mockModule('@/components/ui/Button', {
 });
 mockModule('@/components/ui/ToastProvider', {
   ToastProvider: ({ children }: { children?: unknown }) => children,
+  useToast: () => ({
+    showToast: (message: string) => {
+      toastMessages.push(message);
+    },
+  }),
+});
+mockModule('@/lib/storeReview', {
+  requestStoreReview: async () => {
+    storeReviewCalls += 1;
+  },
 });
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule('@/theme/ThemeProvider', {
@@ -105,6 +123,8 @@ afterEach(async () => {
   composerProps = undefined;
   platform.OS = 'web';
   safeAreaInsets.top = 0;
+  storeReviewCalls = 0;
+  toastMessages.length = 0;
   mock.restoreAll();
 });
 
@@ -122,17 +142,44 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
     const dialogStyles = (dialog?.props.style as Array<Record<string, unknown>>).filter(Boolean);
 
-    assert.equal(modal?.props.transparent, false);
+    assert.equal(modal?.props.presentation, 'fullscreen');
+    assert.equal(modal?.props.iosPresentationStyle, 'fullScreen');
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
     assert.equal(dialogStyles.at(-1)?.backgroundColor, '#canvas');
     assert.equal(
       dialogStyles.some((style) => style.shadowOpacity === 1),
       false,
     );
+  });
+
+  it('Android fullscreen composer keeps its opaque themed surface', async () => {
+    platform.OS = 'android';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    const mobileSurface = renderer?.root.findAllByType('View' as ElementType).find((view) => {
+      const style = view.props.style as Array<Record<string, unknown>>;
+      return style.at(-1)?.backgroundColor === '#canvas';
+    });
+    const mobileSurfaceStyles = mobileSurface?.props.style as Array<Record<string, unknown>>;
+
+    assert.equal(modal?.props.presentation, 'fullscreen');
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
+    assert.equal(mobileSurfaceStyles[0]?.flex, 1);
+    assert.equal(mobileSurfaceStyles.at(-1)?.backgroundColor, '#canvas');
   });
 
   it('Native mobile KeyboardAvoidingView는 safe-area screen offset을 받는다', async () => {
@@ -304,21 +351,86 @@ describe('PostComposerHost', () => {
     }
   });
 
-  it('작성 성공 reason으로 열린 surface를 닫는다', async () => {
+  it('접수된 게시 요청은 닫고 Store Review는 요청하지 않는다', async () => {
     const events: string[] = [];
+    platform.OS = 'android';
+    const props = {
+      mode: 'mobile' as const,
+      onRequestClose: (reason: string) => events.push(reason),
+      open: true,
+      profile: {} as never,
+    };
     await act(async () => {
-      renderer = create(
-        createElement(PostComposerHost, {
-          mode: 'mobile',
-          onRequestClose: (reason) => events.push(reason),
-          open: true,
-          profile: {} as never,
-        }),
-      );
+      renderer = create(createElement(PostComposerHost, props));
     });
     await act(async () => composerProps?.onPostRequestAccepted?.());
 
     assert.deepEqual(events, ['created']);
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, { ...props, open: false }));
+    });
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    await act(async () => modal?.props.onDismiss?.());
+    assert.equal(storeReviewCalls, 0);
+  });
+
+  it('실제 Native 게시물은 modal dismissal 뒤 닫고 Store Review를 요청한다', async () => {
+    platform.OS = 'android';
+    const events: string[] = [];
+    const props = {
+      mode: 'mobile' as const,
+      onRequestClose: (reason: string) => events.push(reason),
+      open: true,
+      profile: {} as never,
+    };
+    await act(async () => {
+      renderer = create(createElement(PostComposerHost, props));
+    });
+    await act(async () => composerProps?.onPostCreated?.({ id: 'post-published' }));
+
+    let modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    assert.equal(modal?.props.visible, false);
+    assert.deepEqual(events, []);
+    assert.deepEqual(toastMessages, []);
+    assert.equal(storeReviewCalls, 0);
+
+    await act(async () => modal?.props.onDismiss?.());
+    assert.deepEqual(events, ['created']);
+    assert.deepEqual(toastMessages, ['게시했어요']);
+    assert.equal(storeReviewCalls, 1);
+
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, { ...props, open: false }));
+    });
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, props));
+    });
+    modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    assert.equal(modal?.props.visible, true);
+  });
+
+  it('Native 사용자 취소는 Store Review를 요청하지 않는다', async () => {
+    platform.OS = 'android';
+    const events: string[] = [];
+    const props = {
+      mode: 'mobile' as const,
+      onRequestClose: (reason: string) => events.push(reason),
+      open: true,
+      profile: {} as never,
+    };
+    await act(async () => {
+      renderer = create(createElement(PostComposerHost, props));
+    });
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    await act(async () => modal?.props.onRequestClose?.());
+
+    assert.deepEqual(events, ['dismiss']);
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, { ...props, open: false }));
+    });
+    const dismissedModal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    await act(async () => dismissedModal?.props.onDismiss?.());
+    assert.equal(storeReviewCalls, 0);
   });
 
   it('Native back은 제출 중에는 닫지 않는다', async () => {
@@ -335,7 +447,7 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.onSubmittingChange?.(true));
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.ok(modal);
     await act(async () => modal.props.onRequestClose());
 
@@ -357,7 +469,7 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.ok(modal);
     await act(async () => modal.props.onRequestClose());
 

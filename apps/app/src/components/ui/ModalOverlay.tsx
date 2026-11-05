@@ -6,7 +6,7 @@ import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { ModalSheetHost } from './ModalSheetHost';
 import type { PropsWithChildren } from 'react';
 
-export type ModalOverlayProps = PropsWithChildren<{
+type ModalOverlayBaseProps = {
   accessibilityLabel: string;
   backdropAccessibilityLabel?: string;
   backdropTestID?: string;
@@ -14,11 +14,21 @@ export type ModalOverlayProps = PropsWithChildren<{
   onDismiss?: () => void;
   onRequestClose: () => void;
   onShow?: () => void;
-  presentation?: 'sheet' | 'dialog';
   role?: 'dialog' | 'alertdialog';
   testID?: string;
   visible: boolean;
-}>;
+};
+
+export type ModalOverlayProps = PropsWithChildren<
+  ModalOverlayBaseProps &
+    (
+      | { presentation?: 'sheet' | 'dialog'; iosPresentationStyle?: never }
+      | {
+          iosPresentationStyle?: 'fullScreen' | 'overFullScreen';
+          presentation: 'fullscreen';
+        }
+    )
+>;
 
 export function ModalOverlay({
   accessibilityLabel,
@@ -30,12 +40,16 @@ export function ModalOverlay({
   onRequestClose,
   onShow,
   presentation = 'dialog',
+  iosPresentationStyle,
   role = 'dialog',
   testID,
   visible,
 }: ModalOverlayProps) {
   const theme = useTheme();
-  const overlayMotion = useOverlayMotion(visible);
+  const fullscreen = presentation === 'fullscreen';
+  const nativeIOSFullscreen = Platform.OS === 'ios' && fullscreen;
+  const iosStyle = nativeIOSFullscreen ? (iosPresentationStyle ?? 'overFullScreen') : undefined;
+  const overlayMotion = useOverlayMotion(nativeIOSFullscreen ? false : visible);
   // Android Modal has no onDismiss callback; presence ending is its close boundary.
   const wasMounted = useRef(overlayMotion.mounted);
 
@@ -52,51 +66,14 @@ export function ModalOverlay({
     }
   }, [dismissDisabled, onRequestClose, visible]);
   const hasBackdropLabel = Boolean(backdropAccessibilityLabel);
-
-  return (
-    <ModalSheetHost
-      accessibilityLabel={accessibilityLabel}
-      animationType="none"
-      closeRequestDisabled={!visible || dismissDisabled}
-      interactionDisabled={!visible}
-      onRequestClose={requestClose}
-      onShow={onShow}
-      onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
-      role={role}
-      transparent
-      visible={overlayMotion.mounted}
-    >
-      <View
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
-        pointerEvents={visible ? 'auto' : 'none'}
-        style={presentation === 'sheet' ? styles.sheetRoot : styles.dialogRoot}
-        testID={testID}
-      >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
-          ]}
-        />
-        <Pressable
-          accessibilityElementsHidden={!hasBackdropLabel}
-          accessibilityLabel={backdropAccessibilityLabel}
-          accessibilityRole={hasBackdropLabel ? 'button' : undefined}
-          accessible={hasBackdropLabel}
-          aria-hidden={!hasBackdropLabel}
-          disabled={!visible || dismissDisabled}
-          importantForAccessibility={hasBackdropLabel ? 'auto' : 'no'}
-          onPress={requestClose}
-          style={StyleSheet.absoluteFill}
-          testID={backdropTestID}
-        />
-        <Animated.View
-          style={[
-            presentation === 'sheet' ? styles.sheetSurface : styles.dialogSurface,
-            {
-              opacity: overlayMotion.progress,
+  const nativeAndroidFullscreen = Platform.OS === 'android' && fullscreen;
+  const surfaceMotionStyle = nativeIOSFullscreen
+    ? undefined
+    : {
+        opacity: overlayMotion.progress,
+        ...(fullscreen
+          ? {}
+          : {
               transform:
                 presentation === 'sheet'
                   ? [
@@ -121,7 +98,70 @@ export function ModalOverlay({
                         }),
                       },
                     ],
-            },
+            }),
+      };
+
+  return (
+    <ModalSheetHost
+      accessibilityLabel={accessibilityLabel}
+      animationType={nativeIOSFullscreen ? 'fade' : 'none'}
+      closeRequestDisabled={!visible || dismissDisabled}
+      interactionDisabled={!visible}
+      onRequestClose={requestClose}
+      onShow={onShow}
+      onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
+      {...(iosStyle ? { presentationStyle: iosStyle } : {})}
+      {...(nativeAndroidFullscreen
+        ? { navigationBarTranslucent: true, statusBarTranslucent: true }
+        : {})}
+      role={role}
+      transparent={iosStyle !== 'fullScreen'}
+      visible={nativeIOSFullscreen ? visible : overlayMotion.mounted}
+    >
+      <View
+        accessibilityElementsHidden={!visible}
+        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={visible ? 'auto' : 'none'}
+        style={
+          fullscreen
+            ? styles.fullscreenRoot
+            : presentation === 'sheet'
+              ? styles.sheetRoot
+              : styles.dialogRoot
+        }
+        testID={testID}
+      >
+        {!fullscreen ? (
+          <>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+              ]}
+            />
+            <Pressable
+              accessibilityElementsHidden={!hasBackdropLabel}
+              accessibilityLabel={backdropAccessibilityLabel}
+              accessibilityRole={hasBackdropLabel ? 'button' : undefined}
+              accessible={hasBackdropLabel}
+              aria-hidden={!hasBackdropLabel}
+              disabled={!visible || dismissDisabled}
+              importantForAccessibility={hasBackdropLabel ? 'auto' : 'no'}
+              onPress={requestClose}
+              style={StyleSheet.absoluteFill}
+              testID={backdropTestID}
+            />
+          </>
+        ) : null}
+        <Animated.View
+          style={[
+            fullscreen
+              ? styles.fullscreenSurface
+              : presentation === 'sheet'
+                ? styles.sheetSurface
+                : styles.dialogSurface,
+            surfaceMotionStyle,
           ]}
         >
           {children}
@@ -139,6 +179,8 @@ const styles = StyleSheet.create({
     padding: space[16],
   },
   dialogSurface: { maxWidth: 420, width: '100%' },
+  fullscreenRoot: { flex: 1 },
+  fullscreenSurface: { flex: 1, width: '100%' },
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   sheetSurface: { width: '100%' },
 });
