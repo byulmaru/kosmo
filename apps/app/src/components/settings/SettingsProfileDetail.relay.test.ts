@@ -57,6 +57,9 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
+    if (name === 'ProfileListItemRow_profile') {
+      return require('../profile/__generated__/ProfileListItemRow_profile.graphql.ts').default;
+    }
     if (name === 'SessionProviderQuery') {
       return require('../../session/__generated__/SessionProviderQuery.graphql.ts').default;
     }
