@@ -142,7 +142,9 @@ test('ModalOverlay gates dismissal and keeps dialog and fullscreen exits inert',
     await act(async () =>
       renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
     );
-    const root = renderer.root.findByProps({ testID: 'overlay-surface' });
+    const root = renderer.root.find(
+      (node) => node.type === 'View' && node.props.testID === 'overlay-surface',
+    );
     assert.equal(renderer.root.findByType('Modal' as never).props.visible, true);
     assert.equal(root.props.pointerEvents, 'none');
     assert.equal(root.props.accessibilityElementsHidden, true);
@@ -284,7 +286,9 @@ test('ModalOverlay fullscreen on iOS uses native fade and reports native dismiss
       renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
     );
     modal = renderer.root.findByType('Modal' as never);
-    const root = renderer.root.findByProps({ testID: 'fullscreen-overlay' });
+    const root = renderer.root.find(
+      (node) => node.type === 'View' && node.props.testID === 'fullscreen-overlay',
+    );
     const surfaceStyles = styleObjects(
       renderer.root.findByType('AnimatedView' as never).props.style,
     );
@@ -333,7 +337,9 @@ test('ModalOverlay fullscreen on Web keeps shared exit motion and dismissal hand
     renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
   );
   let modal = renderer.root.findByType('Modal' as never);
-  const root = renderer.root.findByProps({ testID: 'fullscreen-overlay' });
+  const root = renderer.root.find(
+    (node) => node.type === 'View' && node.props.testID === 'fullscreen-overlay',
+  );
   const surfaceStyles = styleObjects(renderer.root.findByType('AnimatedView' as never).props.style);
   assert.equal(modal.props.visible, true);
   assert.equal(root.props.pointerEvents, 'none');
