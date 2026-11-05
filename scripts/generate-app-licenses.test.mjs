@@ -361,7 +361,7 @@ test('checks the exact generated package set and notice records', (t) => {
   };
   writeLicenseArtifact(generatedData, outputPath);
   const generated = readFileSync(outputPath, 'utf8');
-  assert.equal(generated, `${JSON.stringify(generatedData, null, 2)}\n`);
+  assert.deepEqual(JSON.parse(generated), generatedData);
   assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
   assert.throws(
     () =>

@@ -100,11 +100,52 @@ mock.module('./PostContentMention', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostContentWarning', {
-  exports: { PostContentWarning: 'PostContentWarning' },
+  exports: {
+    PostContentWarning: ({
+      onPress,
+      revealed,
+      summary,
+    }: {
+      onPress: () => void;
+      revealed: boolean;
+      summary: string;
+    }) =>
+      createElement(
+        'Pressable',
+        {
+          accessibilityLabel: `${summary}, ${revealed ? '다시 가리기' : '보기'}`,
+          accessibilityRole: 'button',
+          accessibilityState: { expanded: revealed },
+          onPress,
+        },
+        createElement('Text', null, summary),
+        createElement('Text', null, revealed ? '다시 가리기' : '보기'),
+      ),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostMediaGallery', {
-  exports: { PostMediaGallery: 'PostMediaGallery' },
+  exports: {
+    PostMediaGallery: ({ media }: { media: ReadonlyArray<PostMediaItem> | null }) => {
+      if (!media?.length) {
+        return null;
+      }
+
+      return createElement(
+        'View',
+        null,
+        ...media.map(({ altText, id, url }) =>
+          createElement('Image', {
+            accessibilityLabel: `갤러리 이미지: ${altText ?? '설명 없는 이미지'}`,
+            accessibilityRole: 'image',
+            accessible: true,
+            key: id,
+            source: url ? { uri: url } : undefined,
+          }),
+        ),
+      );
+    },
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native-safe-area-context', {
@@ -319,39 +360,17 @@ describe('PostMediaViewer', () => {
     }
   });
 
-  it('같은 Post fragment의 Content·Media·Profile 데이터를 canonical body renderer에 전달한다', async () => {
+  it('Post 본문·작성자와 선택한 Media를 표시한다', async () => {
     await render();
 
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
-    assert.equal(textContents().includes('네 줄 이상이 될 수 있는 원문입니다.'), true);
     assert.equal(
-      renderer?.root.findAll(
-        (node) =>
-          (node.type as unknown) === 'View' && node.props.testID === 'post-content-renderer',
-      ).length,
-      1,
+      visibleText('네 줄 이상이 될 수 있는 원문입니다.').children.join(''),
+      '네 줄 이상이 될 수 있는 원문입니다.',
     );
-    assert.equal(rendered('PostContentWarning').length, 0);
-    assert.equal(rendered('PostMediaGallery').length, 0);
+    assert.equal(textContents().includes('작성자'), true);
     assert.equal(rendered('Avatar')[0]?.props.label, '작성자');
     assert.equal(textContents().includes('@author'), true);
-
-    await act(async () =>
-      byTestId('post-media-viewer-body-measure').props.onLayout({
-        nativeEvent: { layout: { height: 96 } },
-      }),
-    );
-    await act(async () => pressable('원문 더 보기').props.onPress());
-    assert.equal(
-      renderer?.root.findAll(
-        (node) =>
-          (node.type as unknown) === 'View' && node.props.testID === 'post-content-renderer',
-      ).length,
-      1,
-    );
-    assert.ok(
-      byTestId('post-media-viewer-body-scroll').findByProps({ testID: 'post-content-renderer' }),
-    );
   });
 
   it('사용자 Media와 Compact 본문만 개인정보 경계 안에 둔다', async () => {
@@ -365,13 +384,19 @@ describe('PostMediaViewer', () => {
     const imageBoundary = byTestId('post-media-viewer-image-privacy-boundary');
     const bodyBoundary = byTestId('post-media-viewer-body-privacy-boundary');
     assert.equal(isDescendant(currentImage(), imageBoundary), true);
-    assert.equal(isDescendant(byTestId('post-content-renderer'), bodyBoundary), true);
+    assert.equal(
+      isDescendant(visibleText('네 줄 이상이 될 수 있는 원문입니다.'), bodyBoundary),
+      true,
+    );
     assert.equal(isDescendant(pressable('다음 이미지'), imageBoundary), false);
     assert.equal(isDescendant(pressable('원문 더 보기'), bodyBoundary), false);
     assert.equal(isDescendant(byTestId('post-media-viewer-action-bar'), bodyBoundary), false);
 
     await act(async () => pressable('원문 더 보기').props.onPress());
-    assert.equal(isDescendant(byTestId('post-content-renderer'), bodyBoundary), true);
+    assert.equal(
+      isDescendant(visibleText('네 줄 이상이 될 수 있는 원문입니다.'), bodyBoundary),
+      true,
+    );
   });
 
   it('선택 index에서 시작해 non-wrapping control과 다중 위치를 제공한다', async () => {
@@ -689,6 +714,27 @@ describe('PostMediaViewer', () => {
       media: [media(0, '이미지')],
     });
     await render({ post });
+    const assertSensitiveOutputHidden = () => {
+      assert.equal(textContents().includes('민감한 내용'), false);
+      assert.equal(
+        renderer?.root.findAll(
+          (node) =>
+            node.props.accessibilityRole === 'button' &&
+            typeof node.props.accessibilityLabel === 'string' &&
+            node.props.accessibilityLabel.startsWith('민감한 내용,'),
+        ).length,
+        0,
+      );
+      assert.equal(
+        renderer?.root.findAll(
+          (node) =>
+            node.props.accessibilityRole === 'image' &&
+            typeof node.props.accessibilityLabel === 'string' &&
+            node.props.accessibilityLabel.startsWith('갤러리 이미지:'),
+        ).length,
+        0,
+      );
+    };
 
     await act(async () =>
       byTestId('post-media-viewer-body-measure').props.onLayout({
@@ -701,8 +747,7 @@ describe('PostMediaViewer', () => {
     assert.equal(collapsedLink.parent?.props.numberOfLines, 3);
     assert.equal(collapsedLink.props.accessibilityLabel, `${bodyText}, ${url}`);
     assert.deepEqual(openedUrls, []);
-    assert.equal(rendered('PostContentWarning').length, 0);
-    assert.equal(rendered('PostMediaGallery').length, 0);
+    assertSensitiveOutputHidden();
     await act(async () =>
       collapsedLink.props.onPress({
         preventDefault: () => undefined,
@@ -712,11 +757,12 @@ describe('PostMediaViewer', () => {
     assert.deepEqual(openedUrls, [url]);
 
     await act(async () => pressable('원문 더 보기').props.onPress());
-    assert.ok(byTestId('post-content-renderer'));
     const expandedLink = byTestId('post-media-viewer-body-scroll').findByProps({
       accessibilityRole: 'link',
     });
     assert.equal(expandedLink.parent?.props.numberOfLines, undefined);
+    assert.equal(expandedLink.props.accessibilityLabel, `${bodyText}, ${url}`);
+    assertSensitiveOutputHidden();
     await act(async () =>
       expandedLink.props.onPress({
         preventDefault: () => undefined,
@@ -724,8 +770,6 @@ describe('PostMediaViewer', () => {
       }),
     );
     assert.deepEqual(openedUrls, [url, url]);
-    assert.equal(rendered('PostContentWarning').length, 0);
-    assert.equal(rendered('PostMediaGallery').length, 0);
   });
 
   it('같은 높이의 새 Content에서 이전 원문 측정 callback이 overflow를 덮지 않는다', async () => {
@@ -1067,6 +1111,14 @@ function retryToast(): ReactTestInstance {
 
 function currentImage(): ReactTestInstance {
   return byTestId('post-media-viewer-image');
+}
+
+function visibleText(text: string): ReactTestInstance {
+  const result = rendered('Text').find(
+    (node) => node.props.accessible !== false && node.children.join('') === text,
+  );
+  assert.ok(result);
+  return result;
 }
 
 function byTestId(testID: string): ReactTestInstance {

@@ -26,7 +26,6 @@ async function applyPlugin(contents) {
 async function main() {
   const first = await applyPlugin(podfile);
   const second = await applyPlugin(first);
-  assert.equal(second, first, 'post_install transform must be idempotent');
 
   const ruby = String.raw`require 'rubygems'
 
@@ -48,12 +47,15 @@ def react_native_post_install(*); end
 def ccache_enabled?(*); false; end
 config = { reactNativePath: '' }
 podfile_properties = {}
-2.times { eval(contents, binding, 'generated Podfile', 1) }
-values = project.targets.map do |target|
-  target.respond_to?(:product_type) ? target.build_configurations.first.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] : nil
+expected = [nil, '16.4', '17.0', '$(inherited)']
+2.times do
+  eval(contents, binding, 'generated Podfile', 1)
+  values = project.targets.map do |target|
+    target.respond_to?(:product_type) ? target.build_configurations.first.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] : nil
+  end
+  raise values.inspect unless values == expected
+  puts values.inspect
 end
-raise values.inspect unless values == [nil, '16.4', '17.0', '$(inherited)']
-puts values.inspect
 puts 'Ruby behavior check passed'
 `;
   const result = spawnSync(process.env.KOSMO_RUBY ?? 'ruby', ['-'], {

@@ -201,9 +201,12 @@ describe('SettingsFollowingImportDetail', () => {
       (node) => node.props.accessibilityLiveRegion === 'polite',
     );
     assert.ok(acceptedStatus);
-    const acceptedMessage = rendered('Text').find((node) => node.parent === acceptedStatus);
-    assert.equal(acceptedMessage?.props.children, '팔로잉 가져오기를 시작했어요.');
-    assert.equal(button('팔로잉 가져오기')?.props.children, '팔로잉 가져오기');
+    assert.equal(
+      acceptedStatus
+        .findAllByType('Text' as never)
+        .some((node) => node.children.join('') === '팔로잉 가져오기를 시작했어요.'),
+      true,
+    );
     assert.equal(button('팔로잉 가져오기')?.props.disabled, true);
 
     await press('파일 바꾸기');

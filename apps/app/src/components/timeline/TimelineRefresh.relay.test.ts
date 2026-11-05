@@ -30,6 +30,8 @@ let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
 let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
 const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
+let postRequestSummaryMode: 'empty' | 'pending' | 'error' | 'ready' = 'empty';
+const pendingPostRequestSummary = new Promise<never>(() => undefined);
 const openProfileSwitcher = mock.fn();
 const browserListeners = new Map<string, () => void>();
 const browserScrollCalls: unknown[] = [];
@@ -163,11 +165,13 @@ mockModule('react-native', {
   FlatList: (props: {
     data: unknown[];
     keyExtractor: (item: unknown, index: number) => string;
+    ListHeaderComponent?: ReactNode;
     renderItem: (value: object) => ReactNode;
   }) =>
     createElement(
       'FlatList',
       props,
+      props.ListHeaderComponent,
       props.data.map((item, index) =>
         createElement(
           Fragment,
@@ -182,10 +186,23 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+
+function MockPostRequestListSummary() {
+  if (postRequestSummaryMode === 'pending') {
+    throw pendingPostRequestSummary;
+  }
+  if (postRequestSummaryMode === 'error') {
+    throw new Error('post requests unavailable');
+  }
+  return postRequestSummaryMode === 'ready'
+    ? createElement('Text', { accessibilityLabel: '게시 요청 요약' }, '게시 요청 요약')
+    : null;
+}
+
 mockModule('@/components/post/PostRequestList', {
   PostRequestHomeSummaryFallback: () => null,
   PostRequestHomeSummaryLoading: () => null,
-  PostRequestListSummary: () => null,
+  PostRequestListSummary: MockPostRequestListSummary,
 });
 mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
 mockModule('react-native-safe-area-context', {
@@ -256,6 +273,7 @@ afterEach(async () => {
   toasts.length = 0;
   platform.OS = 'ios';
   sessionStatus = 'valid';
+  postRequestSummaryMode = 'empty';
   browserWindow.scrollY = 0;
   browserScrollCalls.length = 0;
   browserListeners.clear();
@@ -369,6 +387,79 @@ function assertConnection(
 }
 
 describe('Timeline refresh and pagination with real Relay', () => {
+  it('Home: pending optional request summary preserves actual posts and connection', async () => {
+    postRequestSummaryMode = 'pending';
+    const environment = new Environment({
+      network: Network.create((operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requests.push({ name: operation.name, variables, sink });
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+
+    assert.equal(
+      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
+      0,
+    );
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+  });
+
+  it('Home: optional request summary error preserves posts and retries with Home refresh', async () => {
+    postRequestSummaryMode = 'error';
+    const environment = new Environment({
+      network: Network.create((operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requests.push({ name: operation.name, variables, sink });
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+
+    const initialRequest = latest('HomePageQuery');
+    await respond(initialRequest, payload('homeTimeline', ['a', 'b']));
+
+    assert.equal(
+      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
+      0,
+    );
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    postRequestSummaryMode = 'ready';
+    await act(async () => list().props.onRefresh());
+
+    const refresh = latest('HomePageQuery');
+    assert.notEqual(refresh, initialRequest);
+    assert.equal(list().props.refreshing, true);
+    assert.equal(
+      renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length,
+      1,
+    );
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await respond(refresh, payload('homeTimeline', ['fresh']));
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['fresh']);
+  });
+
   it('Home: re-entry reuses complete cache while stale cache still fetches', async () => {
     const environment = new Environment({
       network: Network.create((operation, variables) =>
