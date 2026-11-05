@@ -10,6 +10,7 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
 } from '../db';
@@ -27,6 +28,7 @@ import {
   cacheHomeTimelinePage,
   fanoutHomeTimelinePost,
   insertHomeTimelinePost,
+  insertHomeTimelinePostBatch,
   invalidateHomeTimelines,
   listHomeTimelineRecipientPage,
   readHomeTimelineCache,
@@ -221,6 +223,25 @@ test(
       profileIds: [sortedCandidates[100]!.id],
       nextCursor: null,
     });
+
+    const customFirst = await listHomeTimelineRecipientPage({ postId: post.id, limit: 2 });
+    assert.deepEqual(customFirst, {
+      profileIds: sortedCandidates.slice(0, 2).map(({ id }) => id),
+      nextCursor: sortedCandidates[1]!.id,
+    });
+    const customSecond = await listHomeTimelineRecipientPage({
+      postId: post.id,
+      afterProfileId: customFirst.nextCursor!,
+      limit: 2,
+    });
+    assert.deepEqual(customSecond, {
+      profileIds: sortedCandidates.slice(2, 4).map(({ id }) => id),
+      nextCursor: sortedCandidates[3]!.id,
+    });
+    assert.deepEqual(await listHomeTimelineRecipientPage({ postId: post.id, limit: 1_000 }), {
+      profileIds: sortedCandidates.map(({ id }) => id),
+      nextCursor: null,
+    });
   },
 );
 
@@ -284,6 +305,113 @@ test(
     const inactiveKey = `kosmo:home-timeline:profile:${inactiveViewer.id}`;
     await insertHomeTimelinePost({ postId: post.id, profileId: inactiveViewer.id });
     assert.equal((await runRedisCommand((client) => client.exists(inactiveKey)))?.value, 0);
+  },
+);
+
+test(
+  'batch insertion deduplicates supplied profiles and applies Home eligibility',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const author = await createProfile();
+    const viewer = await createProfile();
+    const unrequestedViewer = await createProfile();
+    const blockedViewer = await createProfile();
+    const inactiveAuthor = await createProfile();
+    const reposter = await createProfile();
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.id, followeeProfileId: author.id },
+      { followerProfileId: unrequestedViewer.id, followeeProfileId: author.id },
+      { followerProfileId: blockedViewer.id, followeeProfileId: author.id },
+      { followerProfileId: viewer.id, followeeProfileId: inactiveAuthor.id },
+      { followerProfileId: viewer.id, followeeProfileId: reposter.id },
+      { followerProfileId: blockedViewer.id, followeeProfileId: reposter.id },
+    ]);
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blockedViewer.id,
+      targetProfileId: author.id,
+    });
+
+    const post = await createPost({ profileId: author.id });
+    const inactivePost = await createPost({ profileId: inactiveAuthor.id });
+    const repost = await db
+      .insert(Posts)
+      .values({
+        profileId: reposter.id,
+        repostSourceId: post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    postIds.push(repost.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.INACTIVE })
+      .where(eq(Profiles.id, inactiveAuthor.id));
+
+    const viewerKey = `kosmo:home-timeline:profile:${viewer.id}`;
+    await insertHomeTimelinePostBatch({
+      postId: post.id,
+      profileIds: [viewer.id, blockedViewer.id, viewer.id],
+    });
+    const originalScore = (await runRedisCommand((client) => client.zScore(viewerKey, post.id)))
+      ?.value;
+    assert.ok(Number.isFinite(originalScore));
+    assert.equal(
+      (
+        await runRedisCommand((client) =>
+          client.zScore(`kosmo:home-timeline:profile:${blockedViewer.id}`, post.id),
+        )
+      )?.value,
+      null,
+    );
+    assert.equal(
+      (
+        await runRedisCommand((client) =>
+          client.zScore(`kosmo:home-timeline:profile:${unrequestedViewer.id}`, post.id),
+        )
+      )?.value,
+      null,
+    );
+
+    let ttl = (await runRedisCommand((client) => client.ttl(viewerKey)))?.value;
+    assert.ok(ttl !== undefined && ttl > 604_790 && ttl <= 604_800, `unexpected TTL ${ttl}`);
+    await runRedisCommand((client) => client.expire(viewerKey, 60));
+    await insertHomeTimelinePostBatch({
+      postId: post.id,
+      profileIds: [viewer.id, viewer.id],
+    });
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(viewerKey, post.id)))?.value,
+      originalScore,
+    );
+    ttl = (await runRedisCommand((client) => client.ttl(viewerKey)))?.value;
+    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 50, `unexpected TTL ${ttl}`);
+
+    await insertHomeTimelinePostBatch({ postId: inactivePost.id, profileIds: [viewer.id] });
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(viewerKey, inactivePost.id)))?.value,
+      null,
+    );
+
+    await insertHomeTimelinePostBatch({
+      postId: repost.id,
+      profileIds: [viewer.id, blockedViewer.id],
+    });
+    assert.ok(
+      Number.isFinite(
+        (await runRedisCommand((client) => client.zScore(viewerKey, repost.id)))?.value,
+      ),
+    );
+    assert.equal(
+      (
+        await runRedisCommand((client) =>
+          client.zScore(`kosmo:home-timeline:profile:${blockedViewer.id}`, repost.id),
+        )
+      )?.value,
+      null,
+    );
   },
 );
 

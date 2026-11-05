@@ -116,6 +116,14 @@
   transition effects는 domain contract가 정한 FIFO queue에 넣고, queue 순서를 보존해 drain한다.
 - `settleEffects` 같은 deterministic Workflow 전용 공통 로직은 `workflows` 아래 공용 모듈 한 곳에 둔다. 특정 domain Workflow 파일에 복사하거나 그 파일의 private helper로 두지 않는다.
 - Workflow effect는 개수와 관계없이 `settleEffects`로 정산해 종료와 실패 보고 경계를 일관되게 유지한다.
+- Home timeline fanout의 신규 history는 `patched('home-timeline-batch-fanout-v1')` 뒤에서 수신자 페이지를 최대
+  1,000개까지 읽고, 프로필 ID를 최대 100개씩 묶은 `homeTimelineInsertBatchWorkflow` child를 최대 4개 동시 실행한다.
+  한 child가 끝나면 해당 lane이 다음 batch를 시작하며, 현재 페이지의 모든 child가 끝난 뒤에만 cursor로
+  `continueAsNew` 한다. Batch child ID에는 parent run ID와 첫·마지막 profile ID를 포함해 별도 fanout run의
+  identity를 구분한다. 종료된 batch child 실패는 context와 함께 기록하고 나머지 batch/page를 진행하지만,
+  cancellation과 child start 오류는 전파한다. Marker 이전 history는 기존 page Activity input과 프로필별
+  `homeTimelineInsertWorkflow` start/acknowledgement, Continue-As-New 순서를 그대로 재생한다. 두 Workflow와
+  legacy replay fixture는 해당 history가 drain될 때까지 유지한다.
 - origin이나 transition variant와 무관하게 실행하는 Activity는 match 바깥에서 선언한다. `ts-pattern`의 exhaustive match는 variant별 추가 Activity만 선택하고, 공통 Activity를 각 branch에 반복해서 나열하지 않는다.
 - notification과 effect 목록처럼 한 번만 소비하는 중간 변수는 만들지 않는다. 공통 Activity와 variant별 추가 Activity를 `settleEffects([...])` 호출에 함께 인라인해 실제 실행 조합을 한 위치에서 읽을 수 있게 한다.
 - Workflow code에서는 wall clock, network, database와 process-local state에 직접 접근하지 않고 Temporal이 허용하는 deterministic API와 proxied Activity만 사용한다.
