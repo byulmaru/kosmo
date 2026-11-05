@@ -1,5 +1,5 @@
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostRequestCard } from '@/components/post/PostRequestCard';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import { post, profile } from '../fixtures';
@@ -228,4 +228,68 @@ export const Playground: Story = {
 export const RepresentativeStates: Story = {
   parameters: { controls: { disable: true } },
   render: ({ onCompose }) => <RepresentativeStatesCatalog onCompose={onCompose} />,
+};
+
+const cancelRequestObserver = fn();
+
+export const CancellationConfirmation: Story = {
+  beforeEach: () => cancelRequestObserver.mockClear(),
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      mutationRequestObserver: cancelRequestObserver,
+      operationResponses: {
+        PostRequestCardCancelMutation: {
+          data: { cancelPostRequest: { request: { ...processing, status: 'CANCELLED' } } },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = await canvas.findByRole('button', { name: '취소' });
+    const open = async () => {
+      await userEvent.click(trigger);
+      const dialog = await body.findByRole('alertdialog', { name: '게시 요청을 취소할까요?' });
+      await waitFor(() =>
+        expect(within(dialog).getByRole('button', { name: '계속 기다리기' })).toHaveFocus(),
+      );
+      expect(cancelRequestObserver).not.toHaveBeenCalled();
+      return dialog;
+    };
+    const expectWaiting = async () => {
+      await waitFor(() => expect(body.queryByRole('alertdialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(trigger).toHaveFocus());
+      expect(cancelRequestObserver).not.toHaveBeenCalled();
+      expect(canvas.getByText('이미지 처리 중')).toBeVisible();
+    };
+
+    let dialog = await open();
+    for (let i = 0; i < 4; i++) {
+      await userEvent.tab();
+      expect(dialog.contains(canvasElement.ownerDocument.activeElement)).toBe(true);
+    }
+    await userEvent.click(within(dialog).getByRole('button', { name: '계속 기다리기' }));
+    await expectWaiting();
+
+    await open();
+    await userEvent.keyboard('{Escape}');
+    await expectWaiting();
+
+    dialog = await open();
+    await userEvent.click(within(dialog).getByRole('button', { name: '닫기', exact: true }));
+    await expectWaiting();
+
+    dialog = await open();
+    await userEvent.click(within(dialog).getByRole('button', { name: '게시 취소' }));
+    await waitFor(() => expect(cancelRequestObserver).toHaveBeenCalledTimes(1));
+    expect(cancelRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'PostRequestCardCancelMutation' }),
+      { input: { requestId: 'post-request-card-processing' } },
+    );
+    await waitFor(() => expect(body.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(await canvas.findByRole('button', { name: '새 글 작성' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '취소' })).not.toBeInTheDocument();
+  },
 };

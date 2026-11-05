@@ -95,6 +95,14 @@ mockModule('@/components/ui/Button', {
   Button: ({ children, ...props }: Record<string, unknown>) =>
     createElement('Button', props, children as never),
 });
+mockModule('@/components/ui/ModalSheet', {
+  ModalSheet: ({ children, visible, ...props }: Record<string, unknown>) =>
+    visible ? createElement('ModalSheet', props, children as never) : null,
+});
+mockModule('@/components/ui/ConfirmationContent', {
+  ConfirmationContent: (props: Record<string, unknown>) =>
+    createElement('ConfirmationContent', props),
+});
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
     actionPrimaryBase: '#1455cc',
@@ -190,14 +198,17 @@ function visibleText() {
 describe('PostRequestCard', () => {
   it('waits for server-confirmed cancellation before offering a fresh composition', async () => {
     let config: MutationConfig | undefined;
-    cancelCommit = (nextConfig) => {
+    const commit = mock.fn((nextConfig: MutationConfig) => {
       config = nextConfig;
-    };
+    });
+    cancelCommit = commit;
     const onCompose = mock.fn();
     const props = { onCompose };
     await renderCard(makeRequest('QUEUED'), props);
 
     await act(async () => button('취소')?.props.onPress());
+    assert.equal(commit.mock.callCount(), 0);
+    await act(async () => findAllByType('ConfirmationContent')[0]?.props.onConfirm());
     assert.deepEqual(config?.variables, { input: { requestId: 'request-id' } });
     assert.equal(visibleText()?.includes('접수됨'), true);
     assert.equal(button('취소') !== undefined, true);
@@ -211,6 +222,46 @@ describe('PostRequestCard', () => {
     await act(async () => button('새 글 작성')?.props.onPress());
     assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
   });
+
+  it('keeps polling without cancelling when confirmation is declined or dismissed', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    focused = true;
+    const commit = mock.fn();
+    cancelCommit = commit;
+    await renderCard(makeRequest('PROCESSING'));
+
+    await act(async () => button('취소')?.props.onPress());
+    assert.equal(findAllByType('ModalSheet').length, 1);
+    assert.equal(commit.mock.callCount(), 0);
+    await act(async () => mock.timers.tick(POLL_INTERVAL_MS));
+    assert.equal(refetchCount, 1);
+    await act(async () => lastRefetch?.options.onComplete?.(null));
+    await act(async () => findAllByType('ConfirmationContent')[0]?.props.onCancel());
+    assert.equal(findAllByType('ModalSheet').length, 0);
+    assert.equal(commit.mock.callCount(), 0);
+
+    await act(async () => button('취소')?.props.onPress());
+    await act(async () => findAllByType('ModalSheet')[0]?.props.onClose());
+    assert.equal(findAllByType('ModalSheet').length, 0);
+    assert.equal(commit.mock.callCount(), 0);
+    await act(async () => mock.timers.tick(POLL_INTERVAL_MS));
+    assert.equal(refetchCount, 2);
+    assert.equal(button('취소') !== undefined, true);
+  });
+
+  for (const status of ['PUBLISHING', 'CONFIRMING', 'PUBLISHED', 'FAILED', 'CANCELLED']) {
+    it(`prevents confirmation after the request becomes ${status}`, async () => {
+      const commit = mock.fn();
+      cancelCommit = commit;
+      await renderCard(makeRequest('PROCESSING'));
+      await act(async () => button('취소')?.props.onPress());
+      assert.equal(findAllByType('ModalSheet').length, 1);
+
+      await updateCard(makeRequest(status));
+      assert.equal(findAllByType('ModalSheet').length, 0);
+      assert.equal(commit.mock.callCount(), 0);
+    });
+  }
 
   it('does not offer cancellation during publishing or confirmation', async () => {
     await renderCard(makeRequest('PUBLISHING'));
@@ -378,6 +429,8 @@ describe('PostRequestCard', () => {
     await renderCard(makeRequest('QUEUED'));
 
     await act(async () => button('취소')?.props.onPress());
+    assert.equal(refetchCount, 0);
+    await act(async () => findAllByType('ConfirmationContent')[0]?.props.onConfirm());
     assert.deepEqual(lastRefetch?.variables, {});
     assert.equal(lastRefetch?.options.fetchPolicy, 'store-and-network');
     await act(async () => lastRefetch?.options.onComplete?.(new Error('query error')));
