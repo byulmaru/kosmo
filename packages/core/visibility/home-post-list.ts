@@ -35,21 +35,20 @@ export const homePostProfileStateWhere = ({
   );
   const directSourceAuthorIsActive = or(
     isNull(Posts.repostSourceId),
-    exists(
-      db
-        .select({ id: HomeDirectRepostSources.id })
-        .from(HomeDirectRepostSources)
-        .innerJoin(
-          HomeDirectRepostSourceProfiles,
-          eq(HomeDirectRepostSourceProfiles.id, HomeDirectRepostSources.profileId),
-        )
-        .where(
-          and(
-            eq(HomeDirectRepostSources.id, Posts.repostSourceId),
-            eq(HomeDirectRepostSourceProfiles.state, ProfileState.ACTIVE),
-          ),
+    // OFFSET 0 keeps this direct-source probe correlated instead of materializing source IDs.
+    sql<boolean>`exists (${db
+      .select({ id: HomeDirectRepostSources.id })
+      .from(HomeDirectRepostSources)
+      .innerJoin(
+        HomeDirectRepostSourceProfiles,
+        eq(HomeDirectRepostSourceProfiles.id, HomeDirectRepostSources.profileId),
+      )
+      .where(
+        and(
+          eq(HomeDirectRepostSources.id, Posts.repostSourceId),
+          eq(HomeDirectRepostSourceProfiles.state, ProfileState.ACTIVE),
         ),
-    ),
+      )} offset 0)`,
   );
 
   return sql<boolean>`${and(outerAuthorIsActive, directSourceAuthorIsActive)!}`;
@@ -184,31 +183,30 @@ export const homePostListWhere = ({
     and(
       isNull(Posts.currentContentId),
       isNull(Posts.replyParentId),
-      exists(
-        db
-          .select({ id: HomeDirectRepostSources.id })
-          .from(HomeDirectRepostSources)
-          .innerJoin(
-            HomeDirectRepostSourceProfiles,
-            eq(HomeDirectRepostSourceProfiles.id, HomeDirectRepostSources.profileId),
-          )
-          .innerJoin(
-            HomeDirectRepostSourceInstances,
-            eq(HomeDirectRepostSourceInstances.id, HomeDirectRepostSourceProfiles.instanceId),
-          )
-          .where(
-            and(
-              eq(HomeDirectRepostSources.id, Posts.repostSourceId),
-              isNotNull(HomeDirectRepostSources.currentContentId),
-              directRepostSourceVisibilityWhere,
-              profileBlockVisibilityWhere({
-                database: db,
-                ownerProfileId: viewerProfileId,
-                targetProfileId: HomeDirectRepostSources.profileId,
-              }),
-            ),
+      // OFFSET 0 keeps this direct-source probe correlated instead of materializing source IDs.
+      sql<boolean>`exists (${db
+        .select({ id: HomeDirectRepostSources.id })
+        .from(HomeDirectRepostSources)
+        .innerJoin(
+          HomeDirectRepostSourceProfiles,
+          eq(HomeDirectRepostSourceProfiles.id, HomeDirectRepostSources.profileId),
+        )
+        .innerJoin(
+          HomeDirectRepostSourceInstances,
+          eq(HomeDirectRepostSourceInstances.id, HomeDirectRepostSourceProfiles.instanceId),
+        )
+        .where(
+          and(
+            eq(HomeDirectRepostSources.id, Posts.repostSourceId),
+            isNotNull(HomeDirectRepostSources.currentContentId),
+            directRepostSourceVisibilityWhere,
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: viewerProfileId,
+              targetProfileId: HomeDirectRepostSources.profileId,
+            }),
           ),
-      ),
+        )} offset 0)`,
     ),
   )!}`;
   const profileMuteWhere = and(
