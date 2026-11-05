@@ -7,6 +7,7 @@ import {
   db,
   firstOrThrow,
   Instances,
+  NaturalLanguageMuteRules,
   pg,
   PostContents,
   Posts,
@@ -16,6 +17,7 @@ import {
 import {
   InstanceKind,
   InstanceState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -45,6 +47,7 @@ const profileIds: string[] = [];
 const instanceIds: string[] = [];
 const postIds: string[] = [];
 const contentIds: string[] = [];
+const naturalLanguageMuteDecisionKeys: string[] = [];
 
 after(async () => {
   await invalidateHomeTimelines({ profileIds });
@@ -59,6 +62,9 @@ after(async () => {
   }
   if (postIds.length > 0) {
     await db.delete(Posts).where(inArray(Posts.id, postIds));
+  }
+  if (naturalLanguageMuteDecisionKeys.length > 0) {
+    await runRedisCommand((client) => client.unlink(naturalLanguageMuteDecisionKeys));
   }
   if (contentIds.length > 0) {
     await db.delete(PostContents).where(inArray(PostContents.id, contentIds));
@@ -129,9 +135,11 @@ const createProfiles = async (instanceId: string, count: number) => {
 const createPost = async ({
   profileId,
   replyParentId,
+  bodyText = 'home cache post',
 }: {
   readonly profileId: string;
   readonly replyParentId?: string;
+  readonly bodyText?: string;
 }) => {
   const post = await db
     .insert(Posts)
@@ -146,7 +154,7 @@ const createPost = async ({
   postIds.push(post.id);
   const content = await db
     .insert(PostContents)
-    .values({ postId: post.id, document: postContentDocumentFromText('home cache post') })
+    .values({ postId: post.id, document: postContentDocumentFromText(bodyText) })
     .returning()
     .then(firstOrThrow);
   contentIds.push(content.id);
@@ -303,6 +311,171 @@ test(
     const inactiveKey = `kosmo:home-timeline:profile:${inactiveViewer.id}`;
     await insertHomeTimelinePost({ postId: post.id, profileId: inactiveViewer.id });
     assert.equal((await runRedisCommand((client) => client.exists(inactiveKey)))?.value, 0);
+  },
+);
+
+test(
+  'per-recipient insertion filters each viewer independently and preserves cached membership',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const excludedViewer = await createProfile();
+    const includedViewer = await createProfile();
+    const cachedViewer = await createProfile();
+    const unavailableViewer = await createProfile();
+    const quoteAuthor = await createProfile();
+    const sourceAuthor = await createProfile();
+    const source = await createPost({
+      profileId: sourceAuthor.id,
+      bodyText: 'private quoted source text',
+    });
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.FOLLOWERS })
+      .where(eq(Posts.id, source.id));
+    const quote = await createPost({
+      profileId: quoteAuthor.id,
+      bodyText: 'outer quoted post',
+    });
+    await db
+      .update(Posts)
+      .set({
+        repostSourceId: source.id,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      })
+      .where(eq(Posts.id, quote.id));
+
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: excludedViewer.id, followeeProfileId: quoteAuthor.id },
+      { followerProfileId: includedViewer.id, followeeProfileId: quoteAuthor.id },
+      { followerProfileId: cachedViewer.id, followeeProfileId: quoteAuthor.id },
+      { followerProfileId: unavailableViewer.id, followeeProfileId: quoteAuthor.id },
+      { followerProfileId: excludedViewer.id, followeeProfileId: sourceAuthor.id },
+    ]);
+    await db.insert(NaturalLanguageMuteRules).values([
+      { ownerProfileId: excludedViewer.id, condition: 'exclude this post' },
+      { ownerProfileId: includedViewer.id, condition: 'include this post' },
+      { ownerProfileId: cachedViewer.id, condition: 'cached viewer must not be classified' },
+      { ownerProfileId: unavailableViewer.id, condition: 'provider unavailable' },
+    ]);
+
+    const cachedKey = `kosmo:home-timeline:profile:${cachedViewer.id}`;
+    await runRedisCommand((client) => client.zAdd(cachedKey, { score: 123, value: quote.id }));
+    await runRedisCommand((client) => client.expire(cachedKey, 60));
+    const cachedTtlBefore = (await runRedisCommand((client) => client.ttl(cachedKey)))?.value;
+    assert.ok(cachedTtlBefore !== undefined && cachedTtlBefore <= 60 && cachedTtlBefore > 50);
+
+    naturalLanguageMuteDecisionKeys.push(
+      ...[excludedViewer, includedViewer, cachedViewer, unavailableViewer].map(
+        ({ id }) => `kosmo:home-timeline:natural-language-mute:profile:${id}:post:${quote.id}`,
+      ),
+    );
+
+    const previousApiKey = process.env.OPENAI_API_KEY;
+    const previousFetch = globalThis.fetch;
+    const requests: {
+      readonly condition: string;
+      readonly posts: { readonly role: string; readonly bodyText: string }[];
+    }[] = [];
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    globalThis.fetch = async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as {
+        readonly input: readonly {
+          readonly content: readonly { readonly type: string; readonly text?: string }[];
+        }[];
+        readonly questions: readonly {
+          readonly instructions: readonly { readonly type: string; readonly text?: string }[];
+        }[];
+      };
+      const conditionPrefix = 'User-defined mute condition to evaluate (JSON string): ';
+      const conditionInstruction = payload.questions[0]?.instructions.find(({ text }) =>
+        text?.startsWith(conditionPrefix),
+      );
+      assert.ok(conditionInstruction?.text);
+      const condition = JSON.parse(
+        conditionInstruction.text.slice(conditionPrefix.length),
+      ) as string;
+      const posts = payload.input.flatMap(({ content }) =>
+        content
+          .filter(({ type, text }) => type === 'input_text' && text !== undefined)
+          .map(({ text }) => JSON.parse(text!) as { role: string; bodyText: string }),
+      );
+      requests.push({ condition, posts });
+
+      if (condition === 'provider unavailable') {
+        return new Response('{}', { status: 503 });
+      }
+      const probability = condition === 'exclude this post' ? 0.95 : 0.2;
+      return new Response(
+        JSON.stringify({
+          answers: [{ type: 'predicate', name: 'matches_mute_condition', probability }],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    try {
+      await Promise.all(
+        [excludedViewer.id, includedViewer.id, cachedViewer.id, unavailableViewer.id].map(
+          (profileId) => insertHomeTimelinePost({ postId: quote.id, profileId }),
+        ),
+      );
+
+      const excludedKey = `kosmo:home-timeline:profile:${excludedViewer.id}`;
+      const includedKey = `kosmo:home-timeline:profile:${includedViewer.id}`;
+      const unavailableKey = `kosmo:home-timeline:profile:${unavailableViewer.id}`;
+      assert.equal(
+        (await runRedisCommand((client) => client.zScore(excludedKey, quote.id)))?.value,
+        null,
+      );
+      assert.ok(
+        Number.isFinite(
+          (await runRedisCommand((client) => client.zScore(includedKey, quote.id)))?.value,
+        ),
+      );
+      assert.ok(
+        Number.isFinite(
+          (await runRedisCommand((client) => client.zScore(unavailableKey, quote.id)))?.value,
+        ),
+      );
+      assert.equal(
+        (await runRedisCommand((client) => client.zScore(cachedKey, quote.id)))?.value,
+        123,
+      );
+      const cachedTtlAfter = (await runRedisCommand((client) => client.ttl(cachedKey)))?.value;
+      assert.ok(
+        cachedTtlAfter !== undefined && cachedTtlAfter <= cachedTtlBefore && cachedTtlAfter > 50,
+      );
+
+      const requestsByCondition = new Map(requests.map((request) => [request.condition, request]));
+      assert.equal(requests.length, 3);
+      assert.equal(requestsByCondition.has('cached viewer must not be classified'), false);
+      assert.equal(
+        requestsByCondition
+          .get('exclude this post')
+          ?.posts.find(({ role }) => role === 'direct quote/source post')?.bodyText,
+        'private quoted source text',
+      );
+      assert.equal(
+        requestsByCondition
+          .get('include this post')
+          ?.posts.some(({ role }) => role === 'direct quote/source post'),
+        false,
+      );
+      assert.equal(
+        JSON.stringify(requestsByCondition.get('include this post')?.posts).includes(
+          'private quoted source text',
+        ),
+        false,
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousApiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousApiKey;
+      }
+    }
   },
 );
 
