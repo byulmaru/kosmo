@@ -62,14 +62,9 @@ mockModule(require.resolve('./PostComposerController'), {
     return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
   },
 });
-mockModule(require.resolve('./PostComposerModalHost'), {
-  PostComposerModalHost: ({
-    children,
-    ...props
-  }: {
-    children?: ReactNode;
-    [key: string]: unknown;
-  }) => createElement('Modal', props, children),
+mockModule('@/components/ui/ModalOverlay', {
+  ModalOverlay: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+    createElement('ModalOverlay', props, children),
 });
 mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
@@ -147,12 +142,12 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
     const dialogStyles = (dialog?.props.style as Array<Record<string, unknown>>).filter(Boolean);
 
-    assert.equal(modal?.props.transparent, false);
-    assert.equal(modal?.props.presentationStyle, 'fullScreen');
+    assert.equal(modal?.props.presentation, 'fullscreen');
+    assert.equal(modal?.props.iosPresentationStyle, 'fullScreen');
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
     assert.equal(dialogStyles.at(-1)?.backgroundColor, '#canvas');
     assert.equal(
@@ -161,7 +156,7 @@ describe('PostComposerHost', () => {
     );
   });
 
-  it('Android fullscreen modal uses a transparent window behind its opaque canvas', async () => {
+  it('Android fullscreen composer keeps its opaque themed surface', async () => {
     platform.OS = 'android';
     await act(async () => {
       renderer = create(
@@ -174,15 +169,14 @@ describe('PostComposerHost', () => {
       );
     });
 
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     const mobileSurface = renderer?.root.findAllByType('View' as ElementType).find((view) => {
       const style = view.props.style as Array<Record<string, unknown>>;
       return style.at(-1)?.backgroundColor === '#canvas';
     });
     const mobileSurfaceStyles = mobileSurface?.props.style as Array<Record<string, unknown>>;
 
-    assert.equal(modal?.props.transparent, true);
-    assert.equal(modal?.props.presentationStyle, 'overFullScreen');
+    assert.equal(modal?.props.presentation, 'fullscreen');
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
     assert.equal(mobileSurfaceStyles[0]?.flex, 1);
     assert.equal(mobileSurfaceStyles.at(-1)?.backgroundColor, '#canvas');
@@ -360,19 +354,23 @@ describe('PostComposerHost', () => {
   it('접수된 게시 요청은 닫고 Store Review는 요청하지 않는다', async () => {
     const events: string[] = [];
     platform.OS = 'android';
+    const props = {
+      mode: 'mobile' as const,
+      onRequestClose: (reason: string) => events.push(reason),
+      open: true,
+      profile: {} as never,
+    };
     await act(async () => {
-      renderer = create(
-        createElement(PostComposerHost, {
-          mode: 'mobile',
-          onRequestClose: (reason) => events.push(reason),
-          open: true,
-          profile: {} as never,
-        }),
-      );
+      renderer = create(createElement(PostComposerHost, props));
     });
     await act(async () => composerProps?.onPostRequestAccepted?.());
 
     assert.deepEqual(events, ['created']);
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, { ...props, open: false }));
+    });
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    await act(async () => modal?.props.onDismiss?.());
     assert.equal(storeReviewCalls, 0);
   });
 
@@ -390,7 +388,7 @@ describe('PostComposerHost', () => {
     });
     await act(async () => composerProps?.onPostCreated?.({ id: 'post-published' }));
 
-    let modal = renderer?.root.findByType('Modal' as ElementType);
+    let modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.equal(modal?.props.visible, false);
     assert.deepEqual(events, []);
     assert.deepEqual(toastMessages, []);
@@ -407,27 +405,31 @@ describe('PostComposerHost', () => {
     await act(async () => {
       renderer?.update(createElement(PostComposerHost, props));
     });
-    modal = renderer?.root.findByType('Modal' as ElementType);
+    modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.equal(modal?.props.visible, true);
   });
 
   it('Native 사용자 취소는 Store Review를 요청하지 않는다', async () => {
     platform.OS = 'android';
     const events: string[] = [];
+    const props = {
+      mode: 'mobile' as const,
+      onRequestClose: (reason: string) => events.push(reason),
+      open: true,
+      profile: {} as never,
+    };
     await act(async () => {
-      renderer = create(
-        createElement(PostComposerHost, {
-          mode: 'mobile',
-          onRequestClose: (reason) => events.push(reason),
-          open: true,
-          profile: {} as never,
-        }),
-      );
+      renderer = create(createElement(PostComposerHost, props));
     });
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     await act(async () => modal?.props.onRequestClose?.());
 
     assert.deepEqual(events, ['dismiss']);
+    await act(async () => {
+      renderer?.update(createElement(PostComposerHost, { ...props, open: false }));
+    });
+    const dismissedModal = renderer?.root.findByType('ModalOverlay' as ElementType);
+    await act(async () => dismissedModal?.props.onDismiss?.());
     assert.equal(storeReviewCalls, 0);
   });
 
@@ -445,7 +447,7 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.onSubmittingChange?.(true));
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.ok(modal);
     await act(async () => modal.props.onRequestClose());
 
@@ -467,7 +469,7 @@ describe('PostComposerHost', () => {
       );
     });
     await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
-    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.ok(modal);
     await act(async () => modal.props.onRequestClose());
 

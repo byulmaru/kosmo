@@ -116,14 +116,9 @@ mockModule(new URL('./PostComposerController.tsx', import.meta.url), {
     return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
   },
 });
-mockModule(new URL('./PostComposerModalHost.tsx', import.meta.url), {
-  PostComposerModalHost: ({
-    children,
-    ...props
-  }: {
-    children?: ReactNode;
-    [key: string]: unknown;
-  }) => createElement('Modal', props, children),
+mockModule('@/components/ui/ModalOverlay', {
+  ModalOverlay: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+    createElement('ModalOverlay', props, children),
 });
 mockModule(new URL('./PostSourcePresentationView.tsx', import.meta.url), {
   PostSourcePreview: 'PostSourcePreview',
@@ -291,7 +286,7 @@ test('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫
   assert.equal(surface?.props.style.at(-1).borderColor, '#border');
   await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
 
-  const modal = renderer?.root.findByType('Modal' as ElementType);
+  const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
   assert.ok(modal);
   await act(async () => modal.props.onRequestClose());
 
@@ -300,16 +295,15 @@ test('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫
 
 test('닫기 버튼 이벤트는 작성 취소 후 실행할 콜백으로 취급하지 않는다', async () => {
   let closeCount = 0;
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => closeCount++,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
   await act(async () => {
-    renderer = create(
-      createElement(ReplyComposerSurface, {
-        mode: 'quote',
-        onRequestClose: () => closeCount++,
-        open: true,
-        parent: { id: 'post-1' } as never,
-        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
-      }),
-    );
+    renderer = create(createElement(ReplyComposerSurface, props));
   });
 
   await act(async () => composerProps?.onRequestClose?.({ type: 'press' }));
@@ -320,26 +314,45 @@ test('닫기 버튼 이벤트는 작성 취소 후 실행할 콜백으로 취급
   await act(async () => discard.props.onPress());
 
   assert.equal(closeCount, 1);
+  const onDismiss = renderer?.root.findByType('ModalOverlay' as ElementType).props.onDismiss as
+    | (() => void)
+    | undefined;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+  assert.equal(modal?.props.visible, false);
+  await act(async () => onDismiss?.());
+  assert.equal(storeReviewCalls, 0);
 });
 
 test('게시 요청 접수는 작성 취소 확인 없이 답글/인용 surface를 닫는다', async () => {
   let closeCount = 0;
+  const props = {
+    mode: 'quote' as const,
+    onRequestClose: () => closeCount++,
+    open: true,
+    parent: { id: 'post-1' } as never,
+    profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+  };
   await act(async () => {
-    renderer = create(
-      createElement(ReplyComposerSurface, {
-        mode: 'quote',
-        onRequestClose: () => closeCount++,
-        open: true,
-        parent: { id: 'post-1' } as never,
-        profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
-      }),
-    );
+    renderer = create(createElement(ReplyComposerSurface, props));
   });
 
   await act(async () => composerProps?.onPostRequestAccepted?.());
 
   assert.equal(closeCount, 1);
   assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
+  const onDismiss = renderer?.root.findByType('ModalOverlay' as ElementType).props.onDismiss as
+    | (() => void)
+    | undefined;
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, open: false }));
+  });
+  const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
+  assert.equal(modal?.props.visible, false);
+  await act(async () => onDismiss?.());
+  assert.equal(storeReviewCalls, 0);
 });
 
 test('iOS VoiceOver Escape는 확인창을 먼저 닫고 부모 Quote를 유지한다', async () => {
@@ -458,7 +471,7 @@ test('Native 실제 Reply와 Quote는 modal dismissal 뒤 toast·callback·Store
       });
 
       await act(async () => composerProps?.onPostCreated?.(post));
-      const modal = renderer?.root.findByType('Modal' as ElementType);
+      const modal = renderer?.root.findByType('ModalOverlay' as ElementType);
       assert.equal(modal?.props.visible, false);
       assert.deepEqual(closeEvents, []);
       assert.equal(toastEvents.length, 0);

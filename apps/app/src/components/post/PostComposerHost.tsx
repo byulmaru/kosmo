@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { OverlayPortal, OverlayPortalProvider } from '@/components/ui/OverlayPortal';
@@ -12,7 +13,6 @@ import { requestStoreReview } from '@/lib/storeReview';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
-import { PostComposerModalHost } from './PostComposerModalHost';
 import type { RefObject } from 'react';
 import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -246,25 +246,15 @@ export function PostComposerHost({
   );
 
   if (!web) {
-    // Android fades the themed child; transparency avoids React Native's default white window.
     return (
-      <PostComposerModalHost
+      <ModalOverlay
         accessibilityLabel="글쓰기"
-        accessibilityViewIsModal
-        interactionDisabled={!nativeModalVisible}
+        dismissDisabled={submitting}
         onDismiss={handleNativeDismiss}
         onRequestClose={requestNativeBack}
-        navigationBarTranslucent
-        presentationStyle={
-          mode !== 'mobile'
-            ? undefined
-            : Platform.OS === 'android'
-              ? 'overFullScreen'
-              : 'fullScreen'
-        }
+        presentation="fullscreen"
+        iosPresentationStyle={nativeMobile ? 'fullScreen' : 'overFullScreen'}
         role="dialog"
-        statusBarTranslucent
-        transparent={Platform.OS === 'android' || mode !== 'mobile'}
         visible={nativeModalVisible}
       >
         {mode === 'mobile' ? (
@@ -288,7 +278,7 @@ export function PostComposerHost({
             </Pressable>
           </OverlayBackdrop>
         )}
-      </PostComposerModalHost>
+      </ModalOverlay>
     );
   }
 
