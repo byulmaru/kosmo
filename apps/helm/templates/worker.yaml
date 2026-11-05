@@ -41,7 +41,9 @@ metadata:
     app.kubernetes.io/version: {{ .Values.version | quote }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  replicas: {{ get .Values.worker.replicas .Values.env }}
+  {{- if ne .Values.env "prod" }}
+  replicas: 1
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: worker
