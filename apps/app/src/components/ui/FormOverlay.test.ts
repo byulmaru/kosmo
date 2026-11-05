@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
-import { createElement, useEffect } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { FormOverlay as FormOverlayExport, FormOverlayState } from './FormOverlay';
 
@@ -52,6 +53,10 @@ mockModule(new URL('./Button.tsx', import.meta.url), {
 mockModule(new URL('./IconButton.tsx', import.meta.url), {
   IconButton: (props: object) => createElement('IconButton', props),
 });
+mockModule(new URL('./ModalOverlay.tsx', import.meta.url), {
+  ModalOverlay: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+    createElement('ModalOverlay', props, children),
+});
 mockModule(new URL('./useSafeAreaPadding.ts', import.meta.url), {
   useSafeAreaPadding: () => ({}),
 });
@@ -96,9 +101,9 @@ test('dirty form close uses the shared discard flow before closing', async () =>
   });
   assert.ok(renderer);
 
-  const surface = renderer.root.findByProps({ testID: 'content-report-overlay-surface' });
-  assert.equal(surface.props.style.at(-1).backgroundColor, '#fff');
-  assert.equal(surface.props.style.at(-1).borderColor, '#ddd');
+  const overlay = renderer.root.findByType('ModalOverlay' as never);
+  assert.equal(overlay.props.surfaceStyle.at(-1).backgroundColor, '#fff');
+  assert.equal(overlay.props.surfaceStyle.at(-1).borderColor, '#ddd');
 
   const close = renderer.root.find((node) => (node.type as unknown) === 'IconButton');
   await act(async () => close.props.onPress());
@@ -136,4 +141,76 @@ test('native form scroll keeps the focused field above the keyboard', async () =
 
   const scroll = renderer?.root.findByProps({ testID: 'form-overlay-body' });
   assert.equal(scroll?.props.automaticallyAdjustKeyboardInsets, true);
+});
+
+test('dirty form keeps its draft when the discard confirmation is cancelled', async () => {
+  function DirtyForm({ onStateChange }: { onStateChange: (state: FormOverlayState) => void }) {
+    const [value, setValue] = useState('초안');
+    useEffect(() => {
+      onStateChange({ dirty: true, submitting: false });
+    }, [onStateChange]);
+    return createElement('input', {
+      onChange: (event: { target: { value: string } }) => setValue(event.target.value),
+      value,
+    });
+  }
+
+  await act(async () => {
+    renderer = create(
+      createElement(FormOverlay, {
+        discardConfirmLabel: '작성 버리기',
+        discardTitle: '작성을 버릴까요?',
+        onRequestClose: () => undefined,
+        renderForm: ({ onStateChange }) => createElement(DirtyForm, { onStateChange }),
+        testIDPrefix: 'form',
+        title: '폼',
+        visible: true,
+      }),
+    );
+  });
+
+  const input = renderer!.root.findByType('input' as never);
+  await act(async () => input.props.onChange({ target: { value: '수정된 초안' } }));
+  await act(async () => renderer!.root.findByType('IconButton' as never).props.onPress());
+  const buttons = renderer!.root.findAllByType('Button' as never);
+  await act(async () => buttons[0]?.props.onPress());
+  assert.equal(renderer!.root.findByType('input' as never).props.value, '수정된 초안');
+});
+
+test('form dismissal callback runs at the closing boundary', async () => {
+  const onDismiss = mock.fn();
+  await act(async () => {
+    renderer = create(
+      createElement(FormOverlay, {
+        discardConfirmLabel: '작성 버리기',
+        discardTitle: '작성을 버릴까요?',
+        onDismiss,
+        onRequestClose: () => undefined,
+        renderForm: () => createElement('Form'),
+        testIDPrefix: 'form',
+        title: '폼',
+        visible: true,
+      }),
+    );
+  });
+
+  const overlay = renderer!.root.findByType('ModalOverlay' as never);
+  await act(async () => overlay.props.onDismiss());
+  assert.equal(onDismiss.mock.callCount(), 0);
+  await act(async () =>
+    renderer!.update(
+      createElement(FormOverlay, {
+        discardConfirmLabel: '작성 버리기',
+        discardTitle: '작성을 버릴까요?',
+        onDismiss,
+        onRequestClose: () => undefined,
+        renderForm: () => createElement('Form'),
+        testIDPrefix: 'form',
+        title: '폼',
+        visible: false,
+      }),
+    ),
+  );
+  await act(async () => renderer!.root.findByType('ModalOverlay' as never).props.onDismiss());
+  assert.equal(onDismiss.mock.callCount(), 1);
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileEditDiscardDialog as ProfileEditDiscardDialogExport } from './ProfileEditDiscardDialog';
 
@@ -30,6 +31,10 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: (props: object) => createElement('Button', props),
+});
+mockModule(new URL('../ui/ModalOverlay.tsx', import.meta.url), {
+  ModalOverlay: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+    createElement('Modal', props, children),
 });
 
 let ProfileEditDiscardDialog: typeof ProfileEditDiscardDialogExport;
@@ -61,7 +66,10 @@ test('이탈 확인 dialog에서 계속 편집과 버리기를 실행한다', as
     (node) => (node.type as unknown) === 'Modal' && node.props.role === 'dialog',
   );
   assert.equal(dialogs.length, 1);
-  const surface = renderer.root.findAll((node) => (node.type as unknown) === 'View')[1];
+  const surface = renderer.root.findAll((node) => {
+    const style = node.props.style;
+    return Array.isArray(style) && style.some((entry) => entry?.backgroundColor === '#elevated');
+  })[0];
   assert.equal(surface.props.style.at(-1).backgroundColor, '#elevated');
   assert.equal(surface.props.style.at(-1).borderColor, '#border');
   const buttons = renderer.root.findAll((node) => (node.type as unknown) === 'Button');

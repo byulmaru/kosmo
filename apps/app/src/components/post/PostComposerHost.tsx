@@ -1,6 +1,7 @@
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import {
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,6 +19,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { PostComposerController } from './PostComposerController';
 import type { RefObject } from 'react';
 import type { OverlayCloseReason } from '@/components/ui/Overlay';
@@ -29,6 +31,7 @@ export type PostComposerHostCloseReason = 'created' | 'dismiss';
 
 type PostComposerHostProps = {
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  onDismiss?: () => void;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
@@ -42,6 +45,7 @@ export function PostComposerHost({
   fallbackFocusRef,
   mode,
   onExpand,
+  onDismiss,
   onRequestClose,
   open,
   profile,
@@ -60,22 +64,36 @@ export function PostComposerHost({
       : mode === 'mobile'
         ? theme.backgroundCanvas
         : theme.backgroundElevated;
-  const overlayVisible = mode !== 'rail' && open;
-  const active = mode === 'rail' || overlayVisible;
-  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
+  const overlayVisible = mode !== 'rail' && open;
+  const handleOverlayExitComplete = useCallback(() => {
+    if (mode === 'rail') {
+      return;
+    }
+    onDismiss?.();
+    if (web && typeof document !== 'undefined') {
+      requestAnimationFrame(() => expandControlRef.current?.focus());
+    }
+  }, [mode, onDismiss, web]);
+  const overlayMotion = useOverlayMotion(overlayVisible, handleOverlayExitComplete);
+  const active = mode === 'rail' || overlayMotion.mounted;
+  const webInteractionDisabled = !active || (mode !== 'rail' && !overlayVisible);
+  const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const requestClose = useCallback(
     (reason: PostComposerRequestCloseReason = 'dismiss') => {
       if (reason !== 'created' && submitting) {
         return;
       }
+      if (reason !== 'created' && !overlayVisible) {
+        return;
+      }
       onRequestClose(reason === 'created' ? 'created' : 'dismiss');
     },
-    [onRequestClose, submitting],
+    [onRequestClose, overlayVisible, submitting],
   );
   const requestNativeBack = useCallback(() => {
-    if (submitting) {
+    if (!overlayVisible || submitting) {
       return;
     }
     if (nativeBackHandlerRef.current) {
@@ -83,7 +101,7 @@ export function PostComposerHost({
       return;
     }
     requestClose('native-back');
-  }, [requestClose, submitting]);
+  }, [overlayVisible, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
@@ -91,7 +109,7 @@ export function PostComposerHost({
     fallbackFocusRef,
     onRequestClose: requestClose,
     open: overlayVisible,
-    preferredFocusRef: expandControlRef,
+    preferredFocusRef: mode === 'rail' ? expandControlRef : undefined,
     triggerFocusRef,
   });
 
@@ -136,7 +154,7 @@ export function PostComposerHost({
         registerNativeBackHandler={registerNativeBackHandler}
         renderSurface={({ form, mediaEditorOpen }) => {
           const surface = (
-            <View
+            <Animated.View
               accessibilityLabel={!web && overlayVisible ? '글쓰기' : undefined}
               accessibilityViewIsModal={!web && overlayVisible}
               aria-modal={(!web && overlayVisible) || undefined}
@@ -153,6 +171,19 @@ export function PostComposerHost({
                     : styles.overlayDialog,
                 web && mode === 'overlay' ? styles.webOverlayDialog : null,
                 mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
+                mode !== 'rail'
+                  ? {
+                      opacity: web ? 1 : overlayMotion.progress,
+                      transform: [
+                        {
+                          translateY: overlayMotion.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [spacing.sm, 0],
+                          }),
+                        },
+                      ],
+                    }
+                  : null,
                 { backgroundColor: composerSurface, borderColor: theme.borderDefault },
               ]}
               testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
@@ -182,7 +213,7 @@ export function PostComposerHost({
                   </KeyboardAvoidingView>
                 </OverlayPortalProvider>
               </View>
-            </View>
+            </Animated.View>
           );
 
           if (!web) {
@@ -190,16 +221,17 @@ export function PostComposerHost({
           }
 
           const host = (
-            <View
+            <Animated.View
               accessibilityElementsHidden={!active}
-              aria-hidden={!active || undefined}
-              pointerEvents={active ? 'auto' : 'none'}
+              aria-hidden={webInteractionDisabled || undefined}
+              pointerEvents={webInteractionDisabled ? 'none' : 'auto'}
               style={[
                 mode === 'rail' ? styles.railHost : styles.webOverlayHost,
                 mode === 'mobile' ? styles.webMobileHost : null,
                 mode !== 'rail' ? safeAreaStyle : null,
                 !active ? styles.hiddenHost : null,
                 mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
+                mode !== 'rail' ? { opacity: overlayMotion.progress } : null,
               ]}
             >
               {mode !== 'rail' ? (
@@ -210,7 +242,7 @@ export function PostComposerHost({
                 />
               ) : null}
               {surface}
-            </View>
+            </Animated.View>
           );
 
           return mode === 'rail' ? (
@@ -222,7 +254,7 @@ export function PostComposerHost({
               interactionDisabled={!overlayVisible}
               role="dialog"
               transparent
-              visible={overlayVisible}
+              visible={overlayMotion.mounted}
             >
               {host}
             </ModalSheetHost>
@@ -240,36 +272,50 @@ export function PostComposerHost({
       <Modal
         accessibilityLabel="글쓰기"
         accessibilityViewIsModal
-        animationType="fade"
+        animationType="none"
         onRequestClose={requestNativeBack}
         navigationBarTranslucent
         presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
         role="dialog"
         statusBarTranslucent
         transparent={mode !== 'mobile'}
-        visible={overlayVisible}
+        visible={overlayMotion.mounted}
       >
-        {mode === 'mobile' ? (
-          <View
-            style={[
-              styles.nativeMobileSurface,
-              safeAreaStyle,
-              { backgroundColor: theme.backgroundCanvas },
-            ]}
-          >
-            {composer}
-          </View>
-        ) : (
-          <OverlayBackdrop
-            onRequestClose={requestClose}
-            style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
-            testID="post-composer-backdrop"
-          >
-            <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
+        <Animated.View
+          accessibilityElementsHidden={!overlayVisible}
+          importantForAccessibility={overlayVisible ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={overlayVisible ? 'auto' : 'none'}
+          style={{ flex: 1, opacity: overlayMotion.progress }}
+        >
+          {mode === 'mobile' ? (
+            <View
+              style={[
+                styles.nativeMobileSurface,
+                safeAreaStyle,
+                { backgroundColor: theme.backgroundCanvas },
+              ]}
+            >
               {composer}
-            </Pressable>
-          </OverlayBackdrop>
-        )}
+            </View>
+          ) : (
+            <OverlayBackdrop
+              onRequestClose={requestClose}
+              style={[
+                styles.nativeBackdrop,
+                safeAreaStyle,
+                { backgroundColor: theme.overlayScrim },
+              ]}
+              testID="post-composer-backdrop"
+            >
+              <Pressable
+                onPress={(event) => event.stopPropagation()}
+                style={styles.nativeDialogWrap}
+              >
+                {composer}
+              </Pressable>
+            </OverlayBackdrop>
+          )}
+        </Animated.View>
       </Modal>
     );
   }

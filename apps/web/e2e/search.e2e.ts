@@ -150,7 +150,9 @@ test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 lead
 
   await menu.click();
   await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
-  await page.getByRole('button', { name: '사이드바 닫기' }).click();
+  await page.getByRole('button', { name: '사이드바 닫기' }).click({
+    position: { x: 380, y: 420 },
+  });
 
   await input.click();
   await expect(input).toBeFocused();
@@ -171,7 +173,9 @@ test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 lead
   await page.mouse.move(90, 240, { steps: 8 });
   await page.mouse.up();
   await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
-  await page.getByRole('button', { name: '사이드바 닫기' }).click();
+  await page.getByRole('button', { name: '사이드바 닫기' }).click({
+    position: { x: 380, y: 420 },
+  });
   await expect(page.getByRole('dialog', { name: '메뉴' })).not.toBeVisible();
 
   await input.blur();

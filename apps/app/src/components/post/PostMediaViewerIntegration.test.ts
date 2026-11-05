@@ -187,6 +187,10 @@ mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
 
 mock.module('@/theme/useOverlayMotion', {
   exports: {
+    useOverlayMotion: (visible: boolean) => ({
+      mounted: visible,
+      progress: { interpolate: () => 1 },
+    }),
     useToastMotion: (visible: boolean) => ({
       mounted: visible,
       progress: { interpolate: () => 1 },

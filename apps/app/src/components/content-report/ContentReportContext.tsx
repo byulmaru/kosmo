@@ -49,10 +49,15 @@ const ContentReportContext = createContext<ContentReportContextValue>({
 
 export function ContentReportProvider({ children }: PropsWithChildren) {
   const [target, setTarget] = useState<ContentReportTarget | null>(null);
+  const [visible, setVisible] = useState(false);
   const openContentReport = useCallback((nextTarget: ContentReportTarget) => {
     setTarget(nextTarget);
+    setVisible(true);
   }, []);
   const closeContentReport = useCallback(() => {
+    setVisible(false);
+  }, []);
+  const dismissContentReport = useCallback(() => {
     setTarget(null);
   }, []);
   const value = useMemo(() => ({ openContentReport }), [openContentReport]);
@@ -61,9 +66,10 @@ export function ContentReportProvider({ children }: PropsWithChildren) {
     <ContentReportContext.Provider value={value}>
       {children}
       <ContentReportOverlay
+        onDismiss={dismissContentReport}
         onRequestClose={closeContentReport}
         target={target}
-        visible={target !== null}
+        visible={visible}
       />
     </ContentReportContext.Provider>
   );

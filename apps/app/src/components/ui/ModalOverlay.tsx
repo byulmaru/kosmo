@@ -5,17 +5,24 @@ import { space } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { ModalSheetHost } from './ModalSheetHost';
 import type { PropsWithChildren } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 export type ModalOverlayProps = PropsWithChildren<{
   accessibilityLabel: string;
   backdropAccessibilityLabel?: string;
   backdropTestID?: string;
+  onBackdropPress?: () => void;
   dismissDisabled?: boolean;
   onDismiss?: () => void;
   onRequestClose: () => void;
   onShow?: () => void;
-  presentation?: 'sheet' | 'dialog';
+  navigationBarTranslucent?: boolean;
+  presentation?: 'sheet' | 'dialog' | 'drawer';
+  rootStyle?: StyleProp<ViewStyle>;
   role?: 'dialog' | 'alertdialog';
+  surfaceNativeID?: string;
+  surfaceStyle?: StyleProp<ViewStyle>;
+  statusBarTranslucent?: boolean;
   testID?: string;
   visible: boolean;
 }>;
@@ -24,13 +31,19 @@ export function ModalOverlay({
   accessibilityLabel,
   backdropAccessibilityLabel,
   backdropTestID,
+  onBackdropPress,
   children,
   dismissDisabled = false,
   onDismiss,
   onRequestClose,
   onShow,
+  navigationBarTranslucent,
   presentation = 'dialog',
+  rootStyle,
   role = 'dialog',
+  surfaceStyle,
+  surfaceNativeID,
+  statusBarTranslucent,
   testID,
   visible,
 }: ModalOverlayProps) {
@@ -51,6 +64,11 @@ export function ModalOverlay({
       onRequestClose();
     }
   }, [dismissDisabled, onRequestClose, visible]);
+  const pressBackdrop = useCallback(() => {
+    if (visible && !dismissDisabled) {
+      (onBackdropPress ?? onRequestClose)();
+    }
+  }, [dismissDisabled, onBackdropPress, onRequestClose, visible]);
   const hasBackdropLabel = Boolean(backdropAccessibilityLabel);
 
   return (
@@ -59,10 +77,12 @@ export function ModalOverlay({
       animationType="none"
       closeRequestDisabled={!visible || dismissDisabled}
       interactionDisabled={!visible}
+      navigationBarTranslucent={navigationBarTranslucent}
       onRequestClose={requestClose}
       onShow={onShow}
       onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
       role={role}
+      statusBarTranslucent={statusBarTranslucent}
       transparent
       visible={overlayMotion.mounted}
     >
@@ -70,7 +90,14 @@ export function ModalOverlay({
         accessibilityElementsHidden={!visible}
         importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
         pointerEvents={visible ? 'auto' : 'none'}
-        style={presentation === 'sheet' ? styles.sheetRoot : styles.dialogRoot}
+        style={[
+          presentation === 'sheet'
+            ? styles.sheetRoot
+            : presentation === 'drawer'
+              ? styles.drawerRoot
+              : styles.dialogRoot,
+          rootStyle,
+        ]}
         testID={testID}
       >
         <Animated.View
@@ -88,13 +115,19 @@ export function ModalOverlay({
           aria-hidden={!hasBackdropLabel}
           disabled={!visible || dismissDisabled}
           importantForAccessibility={hasBackdropLabel ? 'auto' : 'no'}
-          onPress={requestClose}
+          onPress={pressBackdrop}
           style={StyleSheet.absoluteFill}
           testID={backdropTestID}
         />
         <Animated.View
+          nativeID={surfaceNativeID}
           style={[
-            presentation === 'sheet' ? styles.sheetSurface : styles.dialogSurface,
+            presentation === 'sheet'
+              ? styles.sheetSurface
+              : presentation === 'drawer'
+                ? styles.drawerSurface
+                : styles.dialogSurface,
+            surfaceStyle,
             {
               opacity: overlayMotion.progress,
               transform:
@@ -107,20 +140,29 @@ export function ModalOverlay({
                         }),
                       },
                     ]
-                  : [
-                      {
-                        translateY: overlayMotion.progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [space[12], 0],
-                        }),
-                      },
-                      {
-                        scale: overlayMotion.progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.98, 1],
-                        }),
-                      },
-                    ],
+                  : presentation === 'drawer'
+                    ? [
+                        {
+                          translateX: overlayMotion.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-space[16], 0],
+                          }),
+                        },
+                      ]
+                    : [
+                        {
+                          translateY: overlayMotion.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [space[12], 0],
+                          }),
+                        },
+                        {
+                          scale: overlayMotion.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.98, 1],
+                          }),
+                        },
+                      ],
             },
           ]}
         >
@@ -139,6 +181,8 @@ const styles = StyleSheet.create({
     padding: space[16],
   },
   dialogSurface: { maxWidth: 420, width: '100%' },
+  drawerRoot: { flex: 1, flexDirection: 'row', minHeight: 0 },
+  drawerSurface: { height: '100%', maxWidth: '100%' },
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   sheetSurface: { width: '100%' },
 });

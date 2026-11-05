@@ -304,7 +304,6 @@ export function PostLayout({
           />
         </View>
         {!compact &&
-        replyBinding?.expanded &&
         replyAuthentication.execution.kind === 'enabled' &&
         replyBinding?.profile &&
         post.content &&

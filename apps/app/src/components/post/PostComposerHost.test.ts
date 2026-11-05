@@ -11,6 +11,8 @@ import type { PostComposerHost as PostComposerHostComponent } from './PostCompos
 
 const platform = { OS: 'web' };
 const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
+let exitMounted = false;
+let overlayExitComplete: (() => void) | undefined;
 let composerProps:
   | {
       body: string;
@@ -32,6 +34,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: 'Modal',
   Platform: platform,
@@ -83,6 +86,16 @@ mockModule('@/theme/ThemeProvider', {
     overlayScrim: '#scrim',
   }),
 });
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean, onExitComplete?: () => void) => {
+    overlayExitComplete = onExitComplete;
+    return {
+      entered: visible,
+      mounted: visible || exitMounted,
+      progress: { interpolate: () => 1 },
+    };
+  },
+});
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { lg: 16 },
@@ -104,6 +117,8 @@ afterEach(async () => {
   }
   composerProps = undefined;
   platform.OS = 'web';
+  exitMounted = false;
+  overlayExitComplete = undefined;
   safeAreaInsets.top = 0;
   mock.restoreAll();
 });
@@ -193,6 +208,125 @@ describe('PostComposerHost', () => {
     assert.equal(dialog?.props['aria-modal'], undefined);
     assert.equal(dialog?.props.role, undefined);
     assert.equal(modal?.props.visible, false);
+  });
+
+  it('닫힌 Web Overlay는 exit 동안 mounted 상태를 유지하되 입력과 접근성을 차단한다', async () => {
+    exitMounted = true;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onRequestClose: () => undefined,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const host = renderer?.root
+      .findAllByType('AnimatedView' as ElementType)
+      .find((view) => view.props.pointerEvents !== undefined);
+    assert.ok(host);
+    assert.equal(host?.props.pointerEvents, 'none');
+    assert.equal(host?.props.accessibilityElementsHidden, false);
+    assert.equal(host?.props['aria-hidden'], true);
+    assert.ok(host?.props.style.at(-1).opacity);
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    assert.equal(modal?.props.visible, true);
+    assert.ok(renderer?.root.findByProps({ interactionDisabled: true }));
+  });
+
+  it('처음 닫힌 Overlay는 exit 완료 dismiss를 호출하지 않는다', async () => {
+    let dismissCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => undefined,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    assert.equal(dismissCount, 0);
+  });
+
+  it('Overlay exit 완료는 semantic close와 분리된 dismiss 경계를 알린다', async () => {
+    let closeCount = 0;
+    let dismissCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    exitMounted = true;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    assert.equal(closeCount, 0);
+    assert.equal(dismissCount, 0);
+
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+    const reopenedHost = renderer?.root
+      .findAllByType('AnimatedView' as ElementType)
+      .find((view) => view.props.pointerEvents !== undefined);
+    assert.equal(reopenedHost?.props.pointerEvents, 'auto');
+    assert.equal(dismissCount, 0);
+
+    exitMounted = true;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    exitMounted = false;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposerHost, {
+          mode: 'overlay',
+          onDismiss: () => dismissCount++,
+          onRequestClose: () => closeCount++,
+          open: false,
+          profile: {} as never,
+        }),
+      );
+    });
+    await act(async () => overlayExitComplete?.());
+    assert.equal(closeCount, 0);
+    assert.equal(dismissCount, 1);
   });
 
   it('Rail, Overlay, Mobile 전환에서도 같은 Composer draft owner를 유지한다', async () => {
@@ -381,7 +515,7 @@ describe('PostComposerHost', () => {
     });
     await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
     const dialog = renderer?.root
-      .findAllByType('View' as ElementType)
+      .findAllByType('AnimatedView' as ElementType)
       .find((view) => view.props.role === 'dialog' && view.props.accessibilityLabel === '글쓰기');
     assert.ok(dialog);
     await act(async () => dialog.props.onAccessibilityEscape());

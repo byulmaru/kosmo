@@ -1528,8 +1528,9 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
         ),
       ).toBeNull(),
     );
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+    const closedTrigger = await canvas.findByRole('button', { name: '프로필 목록' });
+    expect(closedTrigger).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument());
   },
   render: () => <GuardedProfileSwitcherStory />,
 };
@@ -1831,17 +1832,9 @@ export const ProfileSwitcherEscapeContinueEditingPreservesDraft: Story = {
     await userEvent.type(input, 'kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
 
+    const discardDialog = await body.findByRole('dialog', { name: '변경사항을 버릴까요?' });
     await userEvent.keyboard('{Escape}');
-    expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
-    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
-
-    await body.findByRole('dialog', { name: '변경사항을 버릴까요?' });
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() =>
-      expect(
-        ownerDocument.querySelector('[aria-label="변경사항을 버릴까요?"][aria-modal="true"]'),
-      ).toBeNull(),
-    );
+    await waitFor(() => expect(discardDialog).not.toBeInTheDocument());
     expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
     expect(trackAnalytics).not.toHaveBeenCalled();
@@ -2145,7 +2138,7 @@ export const UniversalMobile: Story = {
     const page = within(ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
-    const drawerBackdrop = drawerSurface?.parentElement;
+    const drawerBackdrop = drawerSurface?.parentElement?.firstElementChild;
     const drawerNavigationSurface = page.getByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
@@ -3008,7 +3001,7 @@ export const UniversalCompactFeedbackOverlay: Story = {
     feedbackButton.focus();
     await userEvent.keyboard('{Enter}');
     const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = page.getByTestId('feedback-overlay-surface');
+    const surface = page.getByTestId('feedback-overlay-surface').parentElement!;
     const shellRoot = canvasElement.querySelector('[data-testid="universal-shell-root"]');
     const bounds = surface.getBoundingClientRect();
 
@@ -3062,7 +3055,7 @@ export const UniversalMobileFeedbackOverlay: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     await userEvent.click(page.getByRole('button', { name: '피드백 보내기' }));
     await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = await page.findByTestId('feedback-overlay-surface');
+    const surface = (await page.findByTestId('feedback-overlay-surface')).parentElement!;
     const bounds = surface.getBoundingClientRect();
 
     expect(bounds.width).toBeCloseTo(view?.innerWidth ?? 0, 0);

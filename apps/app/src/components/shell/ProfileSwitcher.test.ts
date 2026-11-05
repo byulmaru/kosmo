@@ -34,6 +34,7 @@ type MutationOptions = {
 type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode);
 
 const platform: { OS: PlatformName } = { OS: 'ios' };
+let exitMounted = false;
 const resetActorCalls: Array<string | null | undefined> = [];
 const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 const selectedProfileWrites: string[] = [];
@@ -163,12 +164,14 @@ function useMockMutation(mutation: unknown) {
 
 mockModule('expo-router', { usePathname: () => '/home' });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Image: 'Image',
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: MockModal,
   Platform: platform,
   Pressable: MockPressable,
   StyleSheet: {
+    absoluteFill: { position: 'absolute' },
     create: <T>(styles: T) => styles,
     flatten: (style: unknown) => style,
   },
@@ -212,6 +215,13 @@ mockModule('@/components/ui/TextField', {
 mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({ padding: 8 }),
 });
+mockModule('@/theme/useOverlayMotion', {
+  useOverlayMotion: (visible: boolean) => ({
+    entered: visible,
+    mounted: visible || exitMounted,
+    progress: { interpolate: () => 1 },
+  }),
+});
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast: () => undefined }),
 });
@@ -252,6 +262,7 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'ios';
+  exitMounted = false;
   fragmentData = queryData;
   pendingSelectMutation = null;
   pendingCreateMutation = null;
@@ -262,14 +273,57 @@ afterEach(async () => {
 });
 
 describe('ProfileSwitcher selection lifecycle', () => {
+  it('Web picker remains inert through exit and can reopen without duplicating content', async () => {
+    platform.OS = 'web';
+    await renderProfileSwitcher();
+    await openPicker();
+    assert.equal(renderer?.root.findAllByType(MockProfilePicker).length, 1);
+
+    exitMounted = true;
+    await closePicker();
+    const exitingPicker = renderer?.root.findByType('AnimatedView' as never);
+    assert.equal(exitingPicker?.props.pointerEvents, 'none');
+    assert.equal(exitingPicker?.props.accessibilityElementsHidden, true);
+    const exitingInteractionGate = renderer?.root.findByType('div' as never);
+    assert.equal(exitingInteractionGate?.props.inert, true);
+
+    await openPicker();
+    const reopenedPicker = renderer?.root.findByType('AnimatedView' as never);
+    assert.equal(reopenedPicker?.props.pointerEvents, 'auto');
+    const reopenedInteractionGate = renderer?.root.findByType('div' as never);
+    assert.equal(reopenedInteractionGate?.props.inert, false);
+    assert.equal(renderer?.root.findAllByType(MockProfilePicker).length, 1);
+  });
+
   it('Native picker modal은 긴 목록을 담을 수 있도록 메뉴 높이를 제한한다', async () => {
     await renderProfileSwitcher({ surface: 'drawer' });
     await openPicker();
 
     const nativeMenu = renderer?.root.findByProps({ accessibilityViewIsModal: true });
     assert.ok(nativeMenu);
-    assert.equal(nativeMenu.props.style.flexShrink, 1);
-    assert.equal(nativeMenu.props.style.maxHeight, '100%');
+    assert.equal(nativeMenu.props.style[0].flexShrink, 1);
+    assert.equal(nativeMenu.props.style[0].maxHeight, '100%');
+    assert.equal(nativeMenu.props.style[1].transform[0].translateY, 1);
+
+    const backdrop = renderer?.root
+      .findAllByType('Pressable' as never)
+      .find((pressable) => pressable.props.style?.position === 'absolute');
+    assert.ok(backdrop);
+    await act(async () => backdrop.props.onPress());
+    assert.equal(modal().props.visible, false);
+
+    await openPicker();
+    exitMounted = true;
+    await closePicker();
+    const exitingSurface = renderer?.root.findAllByType('AnimatedView' as never)[0];
+    assert.equal(modal().props.visible, true);
+    assert.equal(exitingSurface?.props.pointerEvents, 'none');
+    assert.equal(exitingSurface?.props.accessibilityElementsHidden, true);
+    assert.equal(exitingSurface?.props.importantForAccessibility, 'no-hide-descendants');
+    const exitingBackdrop = renderer?.root
+      .findAllByType('Pressable' as never)
+      .find((pressable) => pressable.props.style?.position === 'absolute');
+    assert.equal(exitingBackdrop?.props.disabled, true);
   });
 
   it('성공한 프로필 전환은 선택된 profile id로 actor를 즉시 reset한다', async () => {

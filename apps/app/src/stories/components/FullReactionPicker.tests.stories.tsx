@@ -14,6 +14,7 @@ import baseMeta, {
   RecentTwoRowsWebContract as recentTwoRowsWebContract,
   SearchScrollResetContract as searchScrollResetContract,
   SequentialKeyboardBrowseContract as sequentialKeyboardBrowseContract,
+  WebExitInertEscapeContract as webExitInertEscapeContract,
   WebGridGeometryContract as webGridGeometryContract,
   WebMobileGridGeometryContract as webMobileGridGeometryContract,
 } from './FullReactionPicker.stories';
@@ -43,6 +44,7 @@ export const RecentTwoRowsNativeContract: Story = recentTwoRowsNativeContract;
 export const SequentialKeyboardBrowseContract: Story = sequentialKeyboardBrowseContract;
 export const WebGridGeometryContract: Story = webGridGeometryContract;
 export const WebMobileGridGeometryContract: Story = webMobileGridGeometryContract;
+export const WebExitInertEscapeContract: Story = webExitInertEscapeContract;
 
 export const MobileWebSearchScrollResetContract: Story = mobileWebSearchScrollResetContract;
 export const MobileHandleRowTargetContract: Story = mobileHandleRowTargetContract;

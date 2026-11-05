@@ -44,7 +44,6 @@ export function usePostReplySurface(postKey: PostReplySurface_post$key) {
     : undefined;
   const replySurface =
     authentication.execution.kind === 'enabled' &&
-    binding?.expanded &&
     binding?.profile &&
     post.content &&
     post.replySurface ? (

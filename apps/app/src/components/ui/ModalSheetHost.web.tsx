@@ -100,7 +100,12 @@ export function ModalSheetHost({
       <div
         inert={interactionDisabled}
         onFocusCapture={(event) => handleViewportFocusCapture(event, visualViewportBounds)}
-        style={{ display: 'flex', flex: 1, ...getVisualViewportStyle(visualViewportBounds) }}
+        style={{
+          display: 'flex',
+          flex: 1,
+          minHeight: 0,
+          ...getVisualViewportStyle(visualViewportBounds),
+        }}
       >
         {children}
       </div>

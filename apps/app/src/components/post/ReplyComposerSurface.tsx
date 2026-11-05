@@ -25,6 +25,7 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { PostBody } from './PostBody';
 import { PostComposerController } from './PostComposerController';
 import { PostSourcePreview } from './PostSourcePresentationView';
@@ -98,42 +99,76 @@ export const ReplyComposerSurface = forwardRef<
   ReplyComposerSurfaceHandle,
   ReplyComposerSurfaceProps
 >(function ReplyComposerSurface(props, ref) {
+  const overlayMotion = useOverlayMotion(props.open);
+
+  if (!overlayMotion.mounted) {
+    return null;
+  }
+
+  return <ReplyComposerSurfaceBoundary {...props} overlayMotion={overlayMotion} surfaceRef={ref} />;
+});
+
+type ReplyComposerSurfaceMotion = ReturnType<typeof useOverlayMotion>;
+
+type ReplyComposerSurfaceBoundaryProps = ReplyComposerSurfaceProps & {
+  overlayMotion: ReplyComposerSurfaceMotion;
+  surfaceRef: ForwardedRef<ReplyComposerSurfaceHandle>;
+};
+
+function ReplyComposerSurfaceBoundary({
+  overlayMotion,
+  surfaceRef,
+  ...props
+}: ReplyComposerSurfaceBoundaryProps) {
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const environmentRef = useRef(environment);
   const identityRef = useRef(
     `${String(getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent))}:${String(
       getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile),
-    )}:${props.mode ?? 'reply'}:${props.open ? 'open' : 'closed'}`,
+    )}:${props.mode ?? 'reply'}`,
   );
+  const openRef = useRef(props.open);
   const contextGuard = useRef(0);
+  const contentKey = useRef(0);
   const identity = `${String(
     getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent),
   )}:${String(getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile))}:${
     props.mode ?? 'reply'
-  }:${props.open ? 'open' : 'closed'}`;
+  }`;
 
   if (!environmentGenerationRef && environmentRef.current !== environment) {
     environmentRef.current = environment;
     contextGuard.current += 1;
+    contentKey.current += 1;
   }
   if (identityRef.current !== identity) {
     identityRef.current = identity;
     contextGuard.current += 1;
+    contentKey.current += 1;
+  }
+  if (openRef.current !== props.open) {
+    openRef.current = props.open;
+    contextGuard.current += 1;
+    if (props.open) {
+      contentKey.current += 1;
+    }
   }
 
   return (
     <ReplyComposerSurfaceContents
       {...props}
       contextGuard={contextGuard}
-      key={`${contextGuard.current}:${environmentGenerationRef?.current ?? 0}`}
-      surfaceRef={ref}
+      key={`${contentKey.current}:${environmentGenerationRef?.current ?? 0}`}
+      overlayMotion={overlayMotion}
+      surfaceRef={surfaceRef}
     />
   );
-});
+}
 
 type ReplyComposerSurfaceContentsProps = ReplyComposerSurfaceProps & {
   contextGuard: RefObject<number>;
+  overlayMotion: ReplyComposerSurfaceMotion;
   surfaceRef: ForwardedRef<ReplyComposerSurfaceHandle>;
 };
 
@@ -143,6 +178,7 @@ function ReplyComposerSurfaceContents({
   onPostCreated,
   onRequestClose,
   open,
+  overlayMotion,
   parent: parentKey,
   profile: profileKey,
   surfaceRef,
@@ -180,6 +216,7 @@ function ReplyComposerSurfaceContents({
   const replyPlatform =
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(replyPlatform, width);
+  const [dismissImmediately, setDismissImmediately] = useState(false);
   const webOverlayOpen = open && Platform.OS === 'web';
   const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
 
@@ -188,6 +225,7 @@ function ReplyComposerSurfaceContents({
       setSubmitting(false);
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
+      setDismissImmediately(false);
     }
   }, [mode, open, parent.id]);
 
@@ -195,6 +233,7 @@ function ReplyComposerSurfaceContents({
     (onClosed?: () => void) => {
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
+      setDismissImmediately(onClosed !== undefined);
       restoreTriggerFocusRef.current = onClosed === undefined;
       onRequestClose(onClosed !== undefined);
       onClosed?.();
@@ -245,7 +284,7 @@ function ReplyComposerSurfaceContents({
   useImperativeHandle(surfaceRef, () => ({ requestClose }), [requestClose]);
 
   const requestNativeBack = useCallback(() => {
-    if (submitting) {
+    if (!open || submitting) {
       return;
     }
     if (discardConfirmOpen) {
@@ -257,19 +296,22 @@ function ReplyComposerSurfaceContents({
       return;
     }
     requestClose();
-  }, [continueEditing, discardConfirmOpen, requestClose, submitting]);
+  }, [continueEditing, discardConfirmOpen, open, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
+      if (!open) {
+        return;
+      }
       if (reason === 'escape' && discardConfirmOpen) {
         continueEditing();
         return;
       }
       requestClose();
     },
-    [continueEditing, discardConfirmOpen, requestClose],
+    [continueEditing, discardConfirmOpen, open, requestClose],
   );
   const { dialogRef } = useOverlayLifecycle({
     focusScopeRef: discardConfirmOpen ? discardConfirmRef : undefined,
@@ -310,7 +352,7 @@ function ReplyComposerSurfaceContents({
     return () => cancelAnimationFrame(frame);
   }, [discardConfirmOpen]);
 
-  if (!open) {
+  if (!overlayMotion.mounted || dismissImmediately) {
     return null;
   }
 
@@ -354,8 +396,10 @@ function ReplyComposerSurfaceContents({
   return (
     <ModalSheetHost
       accessibilityLabel={`${composerName} 쓰기`}
-      animationType={Platform.OS === 'web' ? 'none' : 'fade'}
-      interactionDisabled={false}
+      accessibilityElementsHidden={!open}
+      animationType="none"
+      aria-hidden={!open || undefined}
+      interactionDisabled={!open}
       navigationBarTranslucent
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
@@ -363,20 +407,25 @@ function ReplyComposerSurfaceContents({
         }
       }}
       onShow={() => requestAnimationFrame(() => editorRef.current?.focus())}
-      role="dialog"
+      role={open ? 'dialog' : undefined}
       statusBarTranslucent
       transparent
-      visible
+      visible={overlayMotion.mounted}
     >
       <ToastProvider>
         <View
+          {...(Platform.OS === 'web' ? ({ inert: !open || undefined } as never) : {})}
           accessible={false}
+          accessibilityElementsHidden={!open}
+          aria-hidden={!open || undefined}
+          importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={open ? 'auto' : 'none'}
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
             Platform.OS === 'web' && presentation === 'modal' ? styles.webModalBackdrop : null,
             safeAreaStyle,
-            { backgroundColor: theme.overlayScrim },
+            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
           ]}
         >
           <OverlayBackdrop
@@ -458,6 +507,16 @@ function ReplyComposerSurfaceContents({
                   mediaEditorOpen && Platform.OS === 'web' && presentation === 'modal'
                     ? styles.webMediaEditorDialog
                     : null,
+                  {
+                    transform: [
+                      {
+                        translateY: overlayMotion.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [spacing.sm, 0],
+                        }),
+                      },
+                    ],
+                  },
                   {
                     backgroundColor: theme.backgroundElevated,
                     borderColor: theme.borderDefault,
