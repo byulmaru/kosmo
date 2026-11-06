@@ -43,7 +43,6 @@ let sidebarNavigationProps:
   | undefined;
 let invitationProps:
   | {
-      canInstallFromPlayStore?: boolean;
       onDismiss?: () => void;
       onLayout?: (height: number) => void;
       pinToBottom?: boolean;
@@ -314,7 +313,6 @@ describe('UniversalShell screen fallback focus target', () => {
       await renderShell();
       assert.ok(bottomTabBarProps);
       assert.equal(invitationProps?.pinToBottom, false);
-      assert.equal(invitationProps?.canInstallFromPlayStore, false);
       await act(async () => renderer?.unmount());
       renderer = null;
     }
@@ -329,14 +327,12 @@ describe('UniversalShell screen fallback focus target', () => {
     await renderShell();
 
     assert.equal(invitationProps?.visible, true);
-    assert.equal(invitationProps?.canInstallFromPlayStore, true);
     assert.equal(sidebarNavigationProps?.guestPublicContent, true);
 
     pathname = '/hashtags/tag-id/posts';
     routeSegments = ['(tabs)', '(profile)', 'hashtags', '[hashtagId]', 'posts'];
     await act(async () => renderer?.update(createElement(UniversalShell)));
     assert.equal(invitationProps?.visible, true);
-    assert.equal(invitationProps?.canInstallFromPlayStore, false);
     assert.equal(sidebarNavigationProps?.guestPublicContent, true);
 
     await act(async () => invitationProps?.onDismiss?.());
@@ -346,7 +342,6 @@ describe('UniversalShell screen fallback focus target', () => {
     routeSegments = ['(tabs)', '(protected)', 'home'];
     await act(async () => renderer?.update(createElement(UniversalShell)));
     assert.equal(invitationProps?.visible, false);
-    assert.equal(invitationProps?.canInstallFromPlayStore, false);
     assert.equal(sidebarNavigationProps?.guestPublicContent, false);
   });
 

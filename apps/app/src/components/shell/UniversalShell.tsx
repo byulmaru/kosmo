@@ -416,7 +416,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             </RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
           <PublicContentInvitation
-            canInstallFromPlayStore={guestPublicContent && pathname === '/'}
             onDismiss={() => {
               try {
                 globalThis.sessionStorage?.setItem(invitationDismissedKey, '1');
