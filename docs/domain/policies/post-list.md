@@ -42,7 +42,8 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   tie와 DB/cache 전환 경계의 중복·누락 가능성은 유지한다.
 - Follow·Unfollow의 Home 보정이 겹치면 이전 관계 기준의 항목이 늦게 추가되는 경합을 수용한다. 이 항목은 cache가
   다시 구성되거나 후속 보정으로 제거될 때까지 남을 수 있고, Home 조회에 따른 만료 연장도 계속 적용된다.
-- Home 항목은 viewer Profile의 목록에 처음 추가된 시각 순으로 정렬한다. 파생 목록 조회는 추가 시각 cursor를,
+- 일반 fanout으로 추가한 Home 항목은 viewer Profile의 목록에 처음 추가된 시각 순으로 정렬한다. Follow·Unfollow 보정으로
+  새로 추가하는 Post는 저장된 작성 시각을 사용하며, 이미 cache에 있는 항목의 점수는 유지한다. 파생 목록 조회는 정렬값 cursor를,
   DB fallback은 Post ID cursor를 사용한다. 같은 시각이나 파생 목록과 DB 조회 사이의 전환 경계에서는 중복 또는
   누락이 생길 수 있다.
 - viewer Profile이 작성한 eligible Content Post 중 Reply Parent가 없는 Post를 포함한다.
