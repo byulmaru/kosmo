@@ -690,7 +690,9 @@ describe('Admin Profile read projections', () => {
       .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
       .from(Profiles)
       .where(eq(Profiles.id, suspendedProfileId));
-    expect(await updateDefaultPostVisibility(suspendedProfileId, PostVisibility.PUBLIC)).toBe(false);
+    expect(await updateDefaultPostVisibility(suspendedProfileId, PostVisibility.PUBLIC)).toBe(
+      false,
+    );
     expect(
       await updateDefaultPostVisibility(
         '00000000-0000-7000-8000-000000000000',
@@ -739,7 +741,9 @@ describe('Admin Profile read projections', () => {
         status: 400,
         data: { error: 'Invalid default post visibility' },
       });
-      expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(beforeInvalidRequests);
+      expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(
+        beforeInvalidRequests,
+      );
     }
 
     await expect(callAction('not-a-uuid', PostVisibility.PUBLIC)).rejects.toMatchObject({
@@ -755,6 +759,8 @@ describe('Admin Profile read projections', () => {
     });
 
     expect(await callAction(targetProfileId, PostVisibility.UNLISTED)).toEqual({ success: true });
-    expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(PostVisibility.UNLISTED);
+    expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(
+      PostVisibility.UNLISTED,
+    );
   });
 });

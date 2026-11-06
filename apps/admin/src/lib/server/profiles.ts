@@ -22,20 +22,7 @@ import {
   canonicalizePostContentDocument,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server-document';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  ilike,
-  inArray,
-  isNotNull,
-  lt,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const profileIdSchema = z.uuid();
@@ -151,12 +138,7 @@ const loadPostStats = async (profileIds: string[]) => {
       profileId: Posts.profileId,
     })
     .from(Posts)
-    .where(
-      and(
-        inArray(Posts.profileId, profileIds),
-        eq(Posts.state, PostState.ACTIVE),
-      ),
-    )
+    .where(and(inArray(Posts.profileId, profileIds), eq(Posts.state, PostState.ACTIVE)))
     .groupBy(Posts.profileId);
 
   return new Map(rows.map(({ profileId, ...stats }) => [profileId, stats]));

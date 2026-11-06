@@ -1,7 +1,7 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { error, fail } from '@sveltejs/kit';
-import { getProfile, profileIdSchema, updateDefaultPostVisibility } from '#lib/server/profiles.js';
 import { z } from 'zod';
+import { getProfile, profileIdSchema, updateDefaultPostVisibility } from '#lib/server/profiles.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const defaultPostVisibilitySchema = z.enum([
