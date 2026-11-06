@@ -22,7 +22,20 @@ import {
   canonicalizePostContentDocument,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server-document';
-import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, lt, max, or } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 export const profileIdSchema = z.uuid();
@@ -63,6 +76,7 @@ export interface ProfileListRow {
 export interface ProfileDetail extends ProfileListRow {
   qualifiedHandle: string;
   bio: string | null;
+  defaultPostVisibility: PostVisibility | null;
   headerUrl: string | null;
   remoteUrl: string | null;
   tags: string[];
@@ -129,7 +143,10 @@ const loadPostStats = async (profileIds: string[]) => {
 
   const rows = await db
     .select({
-      lastPostedAt: max(Posts.createdAt),
+      lastPostedAt: sql<Temporal.Instant | null>`
+        max(${Posts.createdAt})
+        filter (where ${inArray(Posts.visibility, publicVisibilities)})
+      `.mapWith(Posts.createdAt),
       postCount: count(),
       profileId: Posts.profileId,
     })
@@ -138,7 +155,6 @@ const loadPostStats = async (profileIds: string[]) => {
       and(
         inArray(Posts.profileId, profileIds),
         eq(Posts.state, PostState.ACTIVE),
-        inArray(Posts.visibility, publicVisibilities),
       ),
     )
     .groupBy(Posts.profileId);
@@ -321,6 +337,7 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
       handle: Profiles.handle,
       displayName: Profiles.displayName,
       bio: Profiles.bio,
+      defaultPostVisibility: Profiles.defaultPostVisibility,
       originKind: Instances.kind,
       instanceDomain: Instances.domain,
       state: Profiles.state,
@@ -353,12 +370,37 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
     ...profile,
     qualifiedHandle: qualifiedHandle(row.handle, row.instanceDomain),
     bio: row.bio,
+    defaultPostVisibility: row.defaultPostVisibility,
     headerUrl: media.get(id)?.headerUrl ?? null,
     remoteUrl: origin === 'REMOTE' ? (row.actorProfileUrl ?? row.actorUri) : null,
     tags,
     instanceDomain: row.instanceDomain,
     createdAt: row.createdAt.toString(),
   };
+};
+
+export const updateDefaultPostVisibility = async (
+  id: string,
+  visibility: Exclude<PostVisibility, typeof PostVisibility.DIRECT>,
+): Promise<boolean> => {
+  const rows = await db
+    .update(Profiles)
+    .set({ defaultPostVisibility: visibility })
+    .where(
+      and(
+        eq(Profiles.id, id),
+        inArray(
+          Profiles.instanceId,
+          db
+            .select({ id: Instances.id })
+            .from(Instances)
+            .where(eq(Instances.kind, InstanceKind.LOCAL)),
+        ),
+      ),
+    )
+    .returning({ id: Profiles.id });
+
+  return rows.length > 0;
 };
 
 export const getProfileSummary = async (id: string): Promise<ProfileSummary | undefined> => {

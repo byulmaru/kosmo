@@ -4,14 +4,16 @@
 
 Admin Console Read Policy는 durable 객체가 아니라 Tailscale 접근 제어를 통과한 Admin Console Viewer와
 Account, Profile, Account-Profile Membership, Profile authored Post를 함께 소비해 운영자용 읽기 결과의 노출
-필드를 결정하는 교차 객체 조회 정책이다. 이 정책은 객체를 변경하지 않으며 Admin Console Viewer를 Kosmo
-도메인의 Account 또는 `Account.Operator`로 만들지 않는다.
+필드를 결정하는 교차 객체 조회 정책이다. 유일한 변경 예외는 [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)가
+허용한 Local Profile 기본 게시 공개 범위이며, 이 정책은 Admin Console Viewer를 Kosmo 도메인의 Account 또는
+`Account.Operator`로 만들지 않는다.
 
 ## Admin Console Viewer
 
 Admin Console Viewer는 Tailscale 접근 정책에 따라 Admin Console 진입이 허용된 요청 주체다. 애플리케이션은
 별도의 app capability나 객체별 action을 계산하지 않는다. 진입이 허용된 Viewer는 v1의 Account, Profile,
-Account-Profile Membership, Profile authored Post 읽기 projection을 모두 사용할 수 있다.
+Account-Profile Membership, Profile authored Post 읽기 projection을 모두 사용할 수 있고, Local Profile의
+기본 게시 공개 범위만 변경할 수 있다.
 
 Tailscale proxy가 제공하는 login, display name과 같은 identity header는 현재 Viewer를 화면에 표시하기 위한
 선택적 metadata일 뿐이며 애플리케이션 인가의 근거가 아니다.
@@ -21,8 +23,8 @@ Tailscale proxy가 제공하는 login, display name과 같은 identity header는
 - Tailscale identity를 표시할 때는 login과 display name만 사용하며 profile picture header는 사용하지 않는다.
 - ingress 정규화에 실패한 identity metadata는 없는 것으로 취급하며 접근 결과를 바꾸지 않는다.
 - identity header의 Account 일치 여부나 표시 이름은 추가 권한을 부여하지 않는다.
-- Admin Console Viewer는 이 정책의 읽기 결과만 사용할 수 있으며 Account 인증, Profile Owner/Member 관계,
-  `Account.Operator` 사실을 획득하지 않는다.
+- Admin Console Viewer는 이 정책의 읽기 결과와 Local Profile 기본 게시 공개 범위 변경만 사용할 수 있으며,
+  Account 인증, Profile Owner/Member 관계, `Account.Operator` 사실을 획득하지 않는다.
 
 ## 접근 계약
 
@@ -79,10 +81,10 @@ Followers Count, Following Count, 작성한 Post의 수와 조회 대상 Post �
 `표시 handle`은 서로 다른 필드이며 둘 다 목록 projection에 포함한다. 검색어는 handle 또는 표시 이름을 대상으로
 하고 Origin과 State를 각각 필터링할 수 있다. 기본 목록은 모든 Origin과 State를 포함한다.
 
-`Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수와 가장 최근 시각은
-해당 Profile이 작성한 active Post 중 public 또는 unlisted인 결과에서 계산한다. Reply, Quote, Content 없는 Repost도
-포함하며 삭제되었거나 followers-only/direct Post는 제외한다. Lifecycle 또는 Suspension State는 해당 Post 목록과
-count의 필터가 아니므로 이 상태의 Profile이 작성한 위 조건에 해당하는 Post도 운영자가 조회할 수 있다.
+`Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수는 해당 Profile이
+작성한 모든 active Post에서 계산하며 Visibility와 무관하게 Reply, Quote, Content 없는 Repost도 포함하고 삭제된
+Post는 제외한다. 가장 최근 시각은 active public 또는 unlisted Post에서 계산한다. Lifecycle 또는 Suspension State는
+Post count, 가장 최근 시각 또는 Profile Posts 목록의 필터가 아니다.
 
 ### 상세
 
@@ -91,6 +93,7 @@ count의 필터가 아니므로 이 상태의 Profile이 작성한 위 조건에
 - Profile ID
 - handle, 표시 handle, qualified handle
 - 표시 이름, bio
+- Local Profile 기본 게시 공개 범위
 - avatar, header
 - Profile Link와 Remote URL
 - Profile Tag
@@ -113,12 +116,23 @@ Followers Count와 Following Count는 Profile의 소셜 관계 count이며 Membe
 공개 조회에서 숨겨지는 상태를 Admin Console이 반환할 수 있다는 사실은 일반 공개 Profile 정책을 변경하지
 않는다. Account와 Membership은 아래의 별도 projection으로만 제공한다.
 
+### Local Profile 기본 게시 공개 범위 변경
+
+Admin Console Viewer는 [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)에 따라 Local Profile의 기본 게시
+공개 범위만 변경할 수 있다. 허용 값은 `PUBLIC`, `UNLISTED`, `FOLLOWERS`이며 Remote Profile에는 이 control을
+제공하지 않는다. legacy `null` 값은 UI에서 `UNLISTED`로 표시한다. 변경은 이후 새 Post의 기본 공개 범위에만
+영향을 주며 이미 작성된 Post는 변경하지 않는다.
+
+이 변경은 기존 Tailscale 접근 경계만 사용한다. Profile Owner/Member 관계나 `Account.Operator` 사실을
+인가 근거로 삼거나 새로 만들지 않는다. 그 밖의 Account, Profile, Account-Profile Membership, Post 변경은
+허용하지 않는다.
+
 ### Profile Posts 조회
 
-Profile Posts 화면은 해당 Profile이 작성한 active public 또는 unlisted Post만 표시한다. 작성 Profile의 Lifecycle
-또는 Suspension State는 이 조건의 필터가 아니다. 현재 Post의 plain text, Content Warning, Sensitive Media 여부와
-Media 개수는 해당 Post의 Current Content에서만 읽는다. Reply Parent나 Repost Source의 ID 또는 내용은 projection에
-포함하지 않는다.
+Profile Posts 화면은 해당 Profile이 작성한 active public 또는 unlisted Post만 표시한다. 따라서 Post 수는 이 목록에
+포함되지 않는 active followers-only/direct Post를 포함할 수 있다. 작성 Profile의 Lifecycle 또는 Suspension State는
+목록 조건의 필터가 아니다. 현재 Post의 plain text, Content Warning, Sensitive Media 여부와 Media 개수는 해당 Post의
+Current Content에서만 읽는다. Reply Parent나 Repost Source의 ID 또는 내용은 projection에 포함하지 않는다.
 
 각 Post 결과는 Post ID, Visibility, 생성 시각, 유형, 현재 Content의 plain text, Content Warning, Sensitive Media
 여부와 Media 개수만 제공한다. 유형은 일반 Post, Reply, Quote, Repost 또는 Reply와 Quote 관계를 함께 가진 Post를
@@ -156,7 +170,8 @@ Membership 결과는 다음을 제공한다.
 ## 제외/보류
 
 - Admin Console Viewer의 Account 자동 매핑과 `Account.Operator` 승격
-- Admin Console을 통한 Account, Profile, Membership Mutation
+- Admin Console을 통한 Account, Local Profile 기본 게시 공개 범위를 제외한 Profile,
+  Account-Profile Membership, Post Mutation
 - 객체별 Admin Console action과 권한 위임
 - selected Profile, Session, credential 정보
 - Admin-specific audit, security-event, query logging과 별도 보존 정책
