@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Temporal } from 'temporal-polyfill';
 import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
@@ -363,59 +363,6 @@ export const listHomeTimelineRecipientPage = async ({
   }
 
   return listHomeTimelineCandidatePage({ postId, afterProfileId, limit });
-};
-
-export const insertHomeTimelinePostBatch = async ({
-  postId,
-  profileIds,
-}: {
-  readonly postId: string;
-  readonly profileIds: readonly string[];
-}): Promise<void> => {
-  if (profileIds.length > candidateBatchSize) {
-    throw new RangeError(
-      `Home timeline insertion batches cannot exceed ${candidateBatchSize} profiles`,
-    );
-  }
-  if (profileIds.length === 0 || !process.env.REDIS_URL?.trim()) {
-    return;
-  }
-
-  const viewers = await db
-    .select({ profileId: HomeFanoutViewers.id })
-    .from(HomeFanoutViewers)
-    .innerJoin(
-      HomeFanoutViewerInstances,
-      eq(HomeFanoutViewerInstances.id, HomeFanoutViewers.instanceId),
-    )
-    .innerJoin(Posts, eq(Posts.id, postId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(HomeFanoutViewers.id, profileIds),
-        homeTimelineCandidateWhere(),
-        homePostListWhere({ db, viewerProfileId: HomeFanoutViewers.id }),
-      ),
-    );
-  if (viewers.length === 0) {
-    return;
-  }
-
-  const score = String(Temporal.Now.instant().epochMilliseconds);
-  const result = await runRedisCommand((client) => {
-    const transaction = client.multi();
-    for (const { profileId } of viewers) {
-      transaction.eval(fanoutScript, {
-        keys: [feedKey(profileId)],
-        arguments: [score, postId, legacyReadyMember, String(keyLifetimeSeconds)],
-      });
-    }
-    return transaction.exec();
-  });
-  if (result === null) {
-    throw new Error('Redis unavailable while inserting Home timeline post batch');
-  }
 };
 
 export const insertHomeTimelinePost = async ({

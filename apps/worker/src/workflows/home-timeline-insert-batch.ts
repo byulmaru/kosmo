@@ -19,7 +19,7 @@ const inputSchema = z.object({
   profileIds: z.array(z.string().min(1)).min(1).max(homeTimelineInsertBatchSize),
 });
 
-const { insertHomeTimelinePostBatchActivity } =
+const { insertHomeTimelinePostActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function homeTimelineInsertBatchWorkflow(
@@ -33,12 +33,11 @@ export async function homeTimelineInsertBatchWorkflow(
     );
   }
 
-  await settleEffects([
-    insertHomeTimelinePostBatchActivity({
-      postId: parsed.data.postId,
-      profileIds: parsed.data.profileIds,
-    }),
-  ]);
+  await settleEffects(
+    parsed.data.profileIds.map((profileId) =>
+      insertHomeTimelinePostActivity({ postId: parsed.data.postId, profileId }),
+    ),
+  );
 }
 
 export const homeTimelineInsertBatchWorkflowDefinition: WorkflowDefinition<

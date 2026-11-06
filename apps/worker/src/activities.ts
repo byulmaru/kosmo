@@ -70,7 +70,6 @@ export {
 export {
   fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
   insertHomeTimelinePost as insertHomeTimelinePostActivity,
-  insertHomeTimelinePostBatch as insertHomeTimelinePostBatchActivity,
   invalidateHomeTimelines as invalidateHomeTimelinesActivity,
   listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
   reconcileHomeTimelineFollow as reconcileHomeTimelineFollowActivity,

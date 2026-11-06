@@ -22,7 +22,7 @@ const pageInput = (postId: string, afterProfileId?: string) => ({
 });
 
 test(
-  'Home batch fanout limits concurrent children, refills a slot, and drains each page',
+  'Home batch fanout settles batches sequentially while retrying individual profile inserts',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createTestWorkflowEnvironment();
@@ -30,147 +30,18 @@ test(
 
     const taskQueue = `${KOSMO_TASK_QUEUE}-home-timeline-fanout-${process.pid}`;
     const postId = '00000000-0000-8000-8000-000000001201';
-    const profileIds = Array.from({ length: 500 }, (_, index) => `profile-${index}`);
+    const profileIds = Array.from({ length: 150 }, (_, index) => `profile-${index}`);
+    const transientProfileId = 'profile-37';
     const firstCursor = '00000000-0000-8000-8000-000000001204';
     const pageCalls: Array<{ postId: string; afterProfileId?: string; limit?: number }> = [];
-    const firstFourBatchesStarted = Promise.withResolvers<void>();
-    const fifthBatchStarted = Promise.withResolvers<void>();
-    const batches: Array<{
-      readonly input: { postId: string; profileIds: readonly string[] };
-      readonly release: () => void;
-    }> = [];
-    let activeBatches = 0;
-    let maximumActiveBatches = 0;
-
-    const worker = await Worker.create({
-      activities: {
-        loadHomeTimelineRecipientPageActivity: async (input: {
-          postId: string;
-          afterProfileId?: string;
-          limit?: number;
-        }) => {
-          pageCalls.push(input);
-          return input.afterProfileId === undefined
-            ? { profileIds, nextCursor: firstCursor }
-            : { profileIds: [], nextCursor: null };
-        },
-        insertHomeTimelinePostBatchActivity: async (input: {
-          postId: string;
-          profileIds: readonly string[];
-        }) => {
-          activeBatches += 1;
-          maximumActiveBatches = Math.max(maximumActiveBatches, activeBatches);
-          let released = false;
-          let releaseActivity: (() => void) | undefined;
-          const activityReleased = new Promise<void>((resolve) => {
-            releaseActivity = resolve;
-          });
-          batches.push({
-            input,
-            release: () => {
-              if (!released) {
-                released = true;
-                activeBatches -= 1;
-                releaseActivity?.();
-              }
-            },
-          });
-          if (batches.length === 4) {
-            firstFourBatchesStarted.resolve();
-          }
-          if (batches.length === 5) {
-            fifthBatchStarted.resolve();
-          }
-          await activityReleased;
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      ...testWorkflowSource,
-    });
-
-    await worker.runUntil(async () => {
-      try {
-        const fanout = await environment.client.workflow.start('homeTimelineFanoutWorkflow', {
-          args: [{ postId }],
-          taskQueue,
-          workflowId: `home-timeline-fanout:${postId}`,
-        });
-        await firstFourBatchesStarted.promise;
-        assert.equal(maximumActiveBatches, 4);
-
-        const slowestBatch = batches.find(({ input }) => input.profileIds[0] === profileIds[0])!;
-        const completedBatch = batches.find(({ input }) => input.profileIds[0] !== profileIds[0])!;
-        completedBatch.release();
-
-        await fifthBatchStarted.promise;
-        assert.equal(batches.length, 5);
-        assert.equal(activeBatches, 4);
-        assert.equal(pageCalls.length, 1);
-        assert.equal(
-          (
-            await environment.client.workflow
-              .getHandle(
-                `home-timeline-insert-batch:${postId}:${fanout.firstExecutionRunId}:${slowestBatch.input.profileIds[0]}:${slowestBatch.input.profileIds.at(-1)}`,
-              )
-              .describe()
-          ).status.name,
-          'RUNNING',
-        );
-
-        for (const batch of batches) {
-          batch.release();
-        }
-        await fanout.result();
-
-        const firstRun = environment.client.workflow.getHandle(
-          fanout.workflowId,
-          fanout.firstExecutionRunId,
-        );
-        const history = await firstRun.fetchHistory();
-        await Worker.runReplayHistory({ workflowsPath }, history, fanout.workflowId);
-
-        assert.equal(maximumActiveBatches, 4);
-        assert.deepEqual(pageCalls, [
-          { postId, limit: 1_000 },
-          { postId, afterProfileId: firstCursor, limit: 1_000 },
-        ]);
-        assert.deepEqual(batches.map(({ input }) => input.profileIds[0]).toSorted(), [
-          'profile-0',
-          'profile-100',
-          'profile-200',
-          'profile-300',
-          'profile-400',
-        ]);
-        assert.deepEqual(
-          batches.flatMap(({ input }) => input.profileIds).toSorted(),
-          profileIds.toSorted(),
-        );
-      } finally {
-        for (const batch of batches) {
-          batch.release();
-        }
-      }
-    });
-  },
-);
-
-test(
-  'Home batch fanout isolates a terminal child failure, retries a transient failure, and continues remaining pages',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await createTestWorkflowEnvironment();
-    t.after(() => environment.teardown());
-
-    const taskQueue = `${KOSMO_TASK_QUEUE}-home-timeline-batch-failure-${process.pid}`;
-    const postId = '00000000-0000-8000-8000-000000001211';
-    const profileIds = Array.from({ length: 500 }, (_, index) => `profile-${index}`);
-    const firstCursor = '00000000-0000-8000-8000-000000001212';
-    const pageCalls: Array<{ postId: string; afterProfileId?: string; limit?: number }> = [];
-    const completedBatches: string[] = [];
-    let terminalBatchAttempts = 0;
-    let transientBatchAttempts = 0;
+    const attempts = new Map<string, number>();
+    const firstBatchInitialProfiles = new Set<string>();
+    const firstBatchCompletedProfiles = new Set<string>();
+    const firstBatchStarted = Promise.withResolvers<void>();
+    const releaseOtherProfiles = Promise.withResolvers<void>();
+    const other99Completed = Promise.withResolvers<void>();
+    const secondBatchActivityStarted = Promise.withResolvers<void>();
+    let firstBatchCompletionCountWhenSecondBatchStarted: number | undefined;
 
     const worker = await Worker.create({
       activities: {
@@ -184,79 +55,38 @@ test(
             ? { profileIds, nextCursor: firstCursor }
             : { profileIds: ['profile-next-page'], nextCursor: null };
         },
-        insertHomeTimelinePostBatchActivity: async (input: {
-          postId: string;
-          profileIds: readonly string[];
-        }) => {
-          if (input.profileIds[0] === profileIds[0]) {
-            terminalBatchAttempts += 1;
-            throw ApplicationFailure.nonRetryable('permanent Redis failure');
+        insertHomeTimelinePostActivity: async (input: { postId: string; profileId: string }) => {
+          const attempt = (attempts.get(input.profileId) ?? 0) + 1;
+          attempts.set(input.profileId, attempt);
+          const index = profileIds.indexOf(input.profileId);
+
+          if (index >= 0 && index < 100) {
+            if (attempt === 1) {
+              firstBatchInitialProfiles.add(input.profileId);
+              if (firstBatchInitialProfiles.size === 100) {
+                firstBatchStarted.resolve();
+              }
+            }
+
+            if (input.profileId === transientProfileId) {
+              if (attempt === 1) {
+                await other99Completed.promise;
+                throw new Error('temporary Redis failure');
+              }
+            } else {
+              await releaseOtherProfiles.promise;
+            }
+            firstBatchCompletedProfiles.add(input.profileId);
+            if (firstBatchCompletedProfiles.size === 99) {
+              other99Completed.resolve();
+            }
+            return;
           }
-          if (input.profileIds[0] === profileIds[100] && transientBatchAttempts++ === 0) {
-            throw new Error('temporary Redis failure');
+
+          if (input.profileId === profileIds[100]) {
+            firstBatchCompletionCountWhenSecondBatchStarted = firstBatchCompletedProfiles.size;
+            secondBatchActivityStarted.resolve();
           }
-          completedBatches.push(input.profileIds[0]!);
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      ...testWorkflowSource,
-    });
-
-    await worker.runUntil(async () => {
-      const fanout = await environment.client.workflow.start('homeTimelineFanoutWorkflow', {
-        args: [{ postId }],
-        taskQueue,
-        workflowId: `home-timeline-fanout:${postId}`,
-      });
-      await fanout.result();
-
-      assert.equal(terminalBatchAttempts, 1);
-      assert.equal(transientBatchAttempts, 2);
-      assert.deepEqual(completedBatches.toSorted(), [
-        'profile-100',
-        'profile-200',
-        'profile-300',
-        'profile-400',
-        'profile-next-page',
-      ]);
-      assert.deepEqual(pageCalls, [
-        { postId, limit: 1_000 },
-        { postId, afterProfileId: firstCursor, limit: 1_000 },
-      ]);
-    });
-  },
-);
-
-test(
-  'Home batch fanout propagates cancellation while leaving the handed-off batch running',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await createTestWorkflowEnvironment();
-    t.after(() => environment.teardown());
-
-    const taskQueue = `${KOSMO_TASK_QUEUE}-home-timeline-batch-cancel-${process.pid}`;
-    const postId = '00000000-0000-8000-8000-000000001213';
-    const profileIds = Array.from({ length: 100 }, (_, index) => `profile-${index}`);
-    const cursor = '00000000-0000-8000-8000-000000001214';
-    const pageCalls: Array<{ postId: string; afterProfileId?: string; limit?: number }> = [];
-    const batchStarted = Promise.withResolvers<void>();
-    const releaseBatch = Promise.withResolvers<void>();
-
-    const worker = await Worker.create({
-      activities: {
-        loadHomeTimelineRecipientPageActivity: async (input: {
-          postId: string;
-          afterProfileId?: string;
-          limit?: number;
-        }) => {
-          pageCalls.push(input);
-          return { profileIds, nextCursor: cursor };
-        },
-        insertHomeTimelinePostBatchActivity: async () => {
-          batchStarted.resolve();
-          await releaseBatch.promise;
         },
       },
       connection: environment.nativeConnection,
@@ -272,9 +102,221 @@ test(
           taskQueue,
           workflowId: `home-timeline-fanout:${postId}`,
         });
-        await batchStarted.promise;
+
+        await firstBatchStarted.promise;
+        assert.deepEqual(
+          [...firstBatchInitialProfiles].toSorted(),
+          profileIds.slice(0, 100).toSorted(),
+        );
+        assert.equal(firstBatchCompletedProfiles.size, 0);
+        assert.equal(attempts.has(profileIds[100]!), false);
+        assert.deepEqual(pageCalls, [{ postId, limit: 1_000 }]);
+
+        releaseOtherProfiles.resolve();
+        await other99Completed.promise;
+        await secondBatchActivityStarted.promise;
+        await fanout.result();
+
+        assert.equal(firstBatchCompletionCountWhenSecondBatchStarted, 100);
+        assert.equal(attempts.get(transientProfileId), 2);
+        for (const profileId of profileIds.filter((id) => id !== transientProfileId)) {
+          assert.equal(attempts.get(profileId), 1);
+        }
+        assert.equal(attempts.get('profile-next-page'), 1);
+        assert.deepEqual(pageCalls, [
+          { postId, limit: 1_000 },
+          { postId, afterProfileId: firstCursor, limit: 1_000 },
+        ]);
+
+        const firstRun = environment.client.workflow.getHandle(
+          fanout.workflowId,
+          fanout.firstExecutionRunId,
+        );
+        await Worker.runReplayHistory(
+          testWorkflowSource,
+          await firstRun.fetchHistory(),
+          fanout.workflowId,
+        );
+
+        const firstBatchWorkflowId =
+          `home-timeline-insert-batch:${postId}:${fanout.firstExecutionRunId}:` +
+          `${profileIds[0]}:${profileIds[99]}`;
+        const firstBatch = environment.client.workflow.getHandle(firstBatchWorkflowId);
+        await Worker.runReplayHistory(
+          testWorkflowSource,
+          await firstBatch.fetchHistory(),
+          firstBatchWorkflowId,
+        );
+      } finally {
+        releaseOtherProfiles.resolve();
+        other99Completed.resolve();
+      }
+    });
+  },
+);
+
+test(
+  'Home batch fanout waits for failed batch siblings, then continues the next batch and page',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-home-timeline-batch-failure-${process.pid}`;
+    const postId = '00000000-0000-8000-8000-000000001211';
+    const profileIds = Array.from({ length: 101 }, (_, index) => `profile-${index}`);
+    const firstCursor = '00000000-0000-8000-8000-000000001212';
+    const pageCalls: Array<{ postId: string; afterProfileId?: string; limit?: number }> = [];
+    const attempts = new Map<string, number>();
+    const completedSiblings = new Set<string>();
+    const firstBatchStarted = Promise.withResolvers<void>();
+    const terminalFailureObserved = Promise.withResolvers<void>();
+    const heldSiblingStarted = Promise.withResolvers<void>();
+    const otherSiblingsCompleted = Promise.withResolvers<void>();
+    const releaseHeldSibling = Promise.withResolvers<void>();
+    const secondBatchActivityStarted = Promise.withResolvers<void>();
+    const nextPageActivityStarted = Promise.withResolvers<void>();
+    const initialBatchProfiles = new Set<string>();
+    const otherCompletedProfiles = new Set<string>();
+
+    const worker = await Worker.create({
+      activities: {
+        loadHomeTimelineRecipientPageActivity: async (input: {
+          postId: string;
+          afterProfileId?: string;
+          limit?: number;
+        }) => {
+          pageCalls.push(input);
+          return input.afterProfileId === undefined
+            ? { profileIds, nextCursor: firstCursor }
+            : { profileIds: ['profile-next-page'], nextCursor: null };
+        },
+        insertHomeTimelinePostActivity: async (input: { postId: string; profileId: string }) => {
+          attempts.set(input.profileId, (attempts.get(input.profileId) ?? 0) + 1);
+          const index = profileIds.indexOf(input.profileId);
+
+          if (index >= 0 && index < 100) {
+            initialBatchProfiles.add(input.profileId);
+            if (initialBatchProfiles.size === 100) {
+              firstBatchStarted.resolve();
+            }
+
+            if (index === 0) {
+              terminalFailureObserved.resolve();
+              throw ApplicationFailure.nonRetryable('permanent Redis failure');
+            }
+            if (index === 1) {
+              heldSiblingStarted.resolve();
+              await releaseHeldSibling.promise;
+            } else {
+              otherCompletedProfiles.add(input.profileId);
+              if (otherCompletedProfiles.size === 98) {
+                otherSiblingsCompleted.resolve();
+              }
+            }
+            completedSiblings.add(input.profileId);
+            return;
+          }
+
+          if (input.profileId === profileIds[100]) {
+            secondBatchActivityStarted.resolve();
+          } else if (input.profileId === 'profile-next-page') {
+            nextPageActivityStarted.resolve();
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      ...testWorkflowSource,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const fanout = await environment.client.workflow.start('homeTimelineFanoutWorkflow', {
+          args: [{ postId }],
+          taskQueue,
+          workflowId: `home-timeline-fanout:${postId}`,
+        });
+
+        await Promise.all([
+          firstBatchStarted.promise,
+          terminalFailureObserved.promise,
+          heldSiblingStarted.promise,
+          otherSiblingsCompleted.promise,
+        ]);
+        assert.equal(completedSiblings.size, 98);
+        assert.equal(attempts.has(profileIds[100]!), false);
+        assert.deepEqual(pageCalls, [{ postId, limit: 1_000 }]);
+
+        releaseHeldSibling.resolve();
+        await Promise.all([secondBatchActivityStarted.promise, nextPageActivityStarted.promise]);
+        await fanout.result();
+
+        assert.equal(completedSiblings.size, 99);
+        assert.deepEqual(pageCalls, [
+          { postId, limit: 1_000 },
+          { postId, afterProfileId: firstCursor, limit: 1_000 },
+        ]);
+        assert.equal(attempts.get(profileIds[0]!), 1);
+        for (const profileId of profileIds.slice(1)) {
+          assert.equal(attempts.get(profileId), 1);
+        }
+        assert.equal(attempts.get(profileIds[100]!), 1);
+        assert.equal(attempts.get('profile-next-page'), 1);
+      } finally {
+        releaseHeldSibling.resolve();
+      }
+    });
+  },
+);
+
+test(
+  'Home batch fanout propagates cancellation while leaving the handed-off batch running',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    t.after(() => environment.teardown());
+
+    const taskQueue = `${KOSMO_TASK_QUEUE}-home-timeline-batch-cancel-${process.pid}`;
+    const postId = '00000000-0000-8000-8000-000000001213';
+    const profileIds = ['profile-0'];
+    const cursor = '00000000-0000-8000-8000-000000001214';
+    const pageCalls: Array<{ postId: string; afterProfileId?: string; limit?: number }> = [];
+    const activityStarted = Promise.withResolvers<void>();
+    const releaseActivity = Promise.withResolvers<void>();
+
+    const worker = await Worker.create({
+      activities: {
+        loadHomeTimelineRecipientPageActivity: async (input: {
+          postId: string;
+          afterProfileId?: string;
+          limit?: number;
+        }) => {
+          pageCalls.push(input);
+          return { profileIds, nextCursor: cursor };
+        },
+        insertHomeTimelinePostActivity: async () => {
+          activityStarted.resolve();
+          await releaseActivity.promise;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      ...testWorkflowSource,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const fanout = await environment.client.workflow.start('homeTimelineFanoutWorkflow', {
+          args: [{ postId }],
+          taskQueue,
+          workflowId: `home-timeline-fanout:${postId}`,
+        });
+        await activityStarted.promise;
         const batch = environment.client.workflow.getHandle(
-          `home-timeline-insert-batch:${postId}:${fanout.firstExecutionRunId}:profile-0:profile-99`,
+          `home-timeline-insert-batch:${postId}:${fanout.firstExecutionRunId}:profile-0:profile-0`,
         );
 
         await fanout.cancel();
@@ -287,10 +329,10 @@ test(
         assert.equal((await batch.describe()).status.name, 'RUNNING');
         assert.deepEqual(pageCalls, [{ postId, limit: 1_000 }]);
 
-        releaseBatch.resolve();
+        releaseActivity.resolve();
         await batch.result();
       } finally {
-        releaseBatch.resolve();
+        releaseActivity.resolve();
       }
     });
   },

@@ -34,7 +34,6 @@ const inputSchema = z.object({
 });
 
 const recipientPageSize = 1_000;
-const maximumConcurrentBatches = 4;
 
 const { loadHomeTimelineRecipientPageActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
@@ -92,52 +91,34 @@ export async function homeTimelineFanoutWorkflow(input: HomeTimelineFanoutInput)
       }),
     );
   } else {
-    const batches = Array.from(
-      { length: Math.ceil(page.profileIds.length / homeTimelineInsertBatchSize) },
-      (_, index) =>
-        page.profileIds.slice(
-          index * homeTimelineInsertBatchSize,
-          (index + 1) * homeTimelineInsertBatchSize,
-        ),
-    );
     const fanoutRunId = workflowInfo().firstExecutionRunId;
-    let nextBatchIndex = 0;
+    for (let index = 0; index < page.profileIds.length; index += homeTimelineInsertBatchSize) {
+      const profileIds = page.profileIds.slice(index, index + homeTimelineInsertBatchSize);
 
-    const processBatches = async (): Promise<void> => {
-      while (nextBatchIndex < batches.length) {
-        const profileIds = batches[nextBatchIndex]!;
-        nextBatchIndex += 1;
+      const child = await runChildWorkflow(homeTimelineInsertBatchWorkflowDefinition, {
+        args: [{ fanoutRunId, postId: parsed.data.postId, profileIds }],
+        cancellationType: ChildWorkflowCancellationType.ABANDON,
+        mode: 'start',
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      });
 
-        try {
-          const child = await runChildWorkflow(homeTimelineInsertBatchWorkflowDefinition, {
-            args: [{ fanoutRunId, postId: parsed.data.postId, profileIds }],
-            cancellationType: ChildWorkflowCancellationType.ABANDON,
-            mode: 'start',
-            parentClosePolicy: ParentClosePolicy.ABANDON,
-            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-          });
-          await child.result();
-        } catch (error: unknown) {
-          if (!(error instanceof ChildWorkflowFailure) || isCancellation(error)) {
-            throw error;
-          }
-
-          log.warn('Home timeline batch insertion failed', {
-            error: error.cause instanceof Error ? error.cause.message : error.message,
-            fanoutRunId,
-            postId: parsed.data.postId,
-            startProfileId: profileIds[0],
-            endProfileId: profileIds.at(-1),
-          });
+      try {
+        await child.result();
+      } catch (error: unknown) {
+        if (!(error instanceof ChildWorkflowFailure) || isCancellation(error)) {
+          throw error;
         }
-      }
-    };
 
-    await settleEffects(
-      Array.from({ length: Math.min(maximumConcurrentBatches, batches.length) }, () =>
-        processBatches(),
-      ),
-    );
+        log.warn('Home timeline batch insertion failed', {
+          error: error.cause instanceof Error ? error.cause.message : error.message,
+          fanoutRunId,
+          postId: parsed.data.postId,
+          startProfileId: profileIds[0],
+          endProfileId: profileIds.at(-1),
+        });
+      }
+    }
   }
 
   if (page.nextCursor !== null) {

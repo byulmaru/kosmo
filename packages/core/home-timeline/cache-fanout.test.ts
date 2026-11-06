@@ -229,7 +229,6 @@ mock.module(new URL('../db/index.ts', import.meta.url), {
 
 const {
   insertHomeTimelinePost,
-  insertHomeTimelinePostBatch,
   listHomeTimelineRecipientPage,
   reconcileHomeTimelineFollow,
   removeHomeTimelinePost,
@@ -240,16 +239,6 @@ process.env.REDIS_URL = 'redis://mock';
 const postId = '550e8400-e29b-41d4-a716-446655440000';
 const profileId = 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f';
 
-const callsBeforeEmptyBatch = redisCalls;
-const queriesBeforeEmptyBatch = selectQueries;
-await insertHomeTimelinePostBatch({ postId, profileIds: [] });
-assert.equal(redisCalls, callsBeforeEmptyBatch);
-assert.equal(selectQueries, queriesBeforeEmptyBatch);
-
-await assert.rejects(
-  insertHomeTimelinePostBatch({ postId, profileIds: Array.from({ length: 101 }, () => profileId) }),
-  RangeError,
-);
 for (const limit of [0, 1.5, 1_001]) {
   await assert.rejects(listHomeTimelineRecipientPage({ postId, limit }), RangeError);
 }
@@ -271,11 +260,6 @@ await retryAfterRedisFailure(() => insertHomeTimelinePost({
 }));
 
 candidateRows = [{ profileId }];
-await retryAfterRedisFailure(() => insertHomeTimelinePostBatch({
-  postId,
-  profileIds: [profileId, profileId],
-}));
-
 const callsBeforeRecipientPage = redisCalls;
 assert.deepEqual(await listHomeTimelineRecipientPage({
   postId,
@@ -305,11 +289,6 @@ await insertHomeTimelinePost({
   postId,
   profileId,
 });
-const callsBeforeUnconfiguredBatch = redisCalls;
-const queriesBeforeUnconfiguredBatch = selectQueries;
-await insertHomeTimelinePostBatch({ postId, profileIds: [profileId] });
-assert.equal(redisCalls, callsBeforeUnconfiguredBatch);
-assert.equal(selectQueries, queriesBeforeUnconfiguredBatch);
 await touchHomeTimeline({ profileId });
 assert.deepEqual(await listHomeTimelineRecipientPage({
   postId,
