@@ -258,9 +258,12 @@ const cards = () =>
   all('PostListItem').map((node) => [node.props.post.__id, Boolean(node.props.pinned)]);
 const profileContentOrder = () =>
   renderer!.root
-    .findAll((node) => node.type === 'ProfileHero' || node.type === 'PostListItem')
+    .findAll(
+      (node) =>
+        (node.type as unknown) === 'ProfileHero' || (node.type as unknown) === 'PostListItem',
+    )
     .map((node) =>
-      node.type === 'ProfileHero'
+      (node.type as unknown) === 'ProfileHero'
         ? 'hero'
         : `${node.props.post.__id}:${node.props.pinned ? 'pin' : 'chronology'}`,
     );
