@@ -5,7 +5,7 @@ import { createContext, createElement, forwardRef, useContext, useState } from '
 import { act, create } from 'react-test-renderer';
 import { ShellChromeProvider } from '../shell/ShellChromeContext';
 import type { ComponentType, ReactElement, ReactNode, Ref } from 'react';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { InfiniteListProps } from '../pagination/InfiniteList';
 import type { TabReselectionDestination } from '../shell/ShellChromeContext';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
@@ -655,6 +655,24 @@ function requireRendered(type: string) {
   return node;
 }
 
+function renderedInOrder(root: ReactTestInstance, types: readonly string[]) {
+  return root
+    .findAll((node) => types.some((type) => node.type === type))
+    .map((node) => {
+      const type = types.find((candidate) => node.type === candidate);
+      assert.ok(type);
+      return type;
+    });
+}
+
+function assertProfileChrome() {
+  assert.ok(renderer);
+  assert.deepEqual(renderedInOrder(renderer.root, ['PageHeader', 'ProfileHero']), [
+    'PageHeader',
+    'ProfileHero',
+  ]);
+}
+
 describe('profile route parameter lifecycle', () => {
   it('guest mobile Web Profile Home uses the drawer trigger in the route header', async () => {
     windowWidth = 390;
@@ -672,16 +690,9 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(header.props.titleLines, 1);
     const hero = requireRendered('ProfileHero');
     assert.equal(hero.props.heading, false);
-    assert.equal(rendered('ProfileHero').length, 1);
     assert.equal(rendered('PostList').length, 1);
+    assertProfileChrome();
     assert.equal(rendered('StateView').length, 0);
-    const tree = renderer?.toJSON();
-    const route = Array.isArray(tree) ? tree[0] : tree;
-    assert.ok(route);
-    assert.deepEqual(
-      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
-      ['PageHeader', 'ProfileHero', 'PostList'],
-    );
 
     const leading = header.props.leading;
     assert.ok(leading);
@@ -757,12 +768,10 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
     assert.equal(rendered('ProfileHero').length, 0);
     assert.equal(rendered('PostList').length, 0);
-    const route = renderer?.toJSON();
-    assert.ok(route && !Array.isArray(route));
-    assert.deepEqual(
-      route.children?.map((child) => (typeof child === 'string' ? child : child.type)),
-      ['PageHeader', 'StateView'],
-    );
+    assert.deepEqual(renderedInOrder(renderer!.root, ['PageHeader', 'StateView']), [
+      'PageHeader',
+      'StateView',
+    ]);
 
     const leading = requireRendered('PageHeader').props.leading;
     assert.ok(leading);
@@ -974,12 +983,10 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('PageHeader').props.title, '');
     assert.deepEqual(identities('ProfileHero'), ['loading']);
     assert.deepEqual(identities('PostList'), []);
-    const loadingRoute = renderer?.toJSON();
-    assert.ok(loadingRoute && !Array.isArray(loadingRoute));
-    assert.deepEqual(
-      loadingRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
-      ['PageHeader', 'ProfileHero'],
-    );
+    assert.deepEqual(renderedInOrder(renderer!.root, ['PageHeader', 'ProfileHero']), [
+      'PageHeader',
+      'ProfileHero',
+    ]);
 
     const loadingLeading = requireRendered('PageHeader').props.leading;
     assert.ok(loadingLeading);
@@ -1005,12 +1012,10 @@ describe('profile route parameter lifecycle', () => {
       assert.equal(requireRendered('StateView').props.actionLabel, '다시 시도');
       assert.equal(requireRendered('StateView').props.alert, true);
       assert.equal(requireRendered('StateView').props.description, '잠시 후 다시 시도해주세요.');
-      const errorRoute = renderer?.toJSON();
-      assert.ok(errorRoute && !Array.isArray(errorRoute));
-      assert.deepEqual(
-        errorRoute.children?.map((child) => (typeof child === 'string' ? child : child.type)),
-        ['PageHeader', 'StateView'],
-      );
+      assert.deepEqual(renderedInOrder(renderer!.root, ['PageHeader', 'StateView']), [
+        'PageHeader',
+        'StateView',
+      ]);
 
       const errorLeading = requireRendered('PageHeader').props.leading;
       assert.ok(errorLeading);
@@ -1088,46 +1093,54 @@ describe('profile route parameter lifecycle', () => {
     });
   }
 
-  it('Native list loading, error, and retry retain profile chrome and controls', async () => {
-    platform.OS = 'ios';
-    profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      queryModes.ProfilePostListPageQuery = 'loading';
-      await renderRoute('@local', '/@local');
-      assert.deepEqual(identities('PostList'), ['loading']);
-      assert.equal(requireRendered('PageHeader').props.title, 'Display local');
-      assert.equal(requireRendered('ProfileHero').props.heading, false);
-      assert.equal(rendered('NavigationLink').length, 1);
+  for (const [platformName, platformOS] of [
+    ['Web', 'web'],
+    ['Native', 'ios'],
+  ] as const) {
+    it(`${platformName} list loading, error, and retry retain profile chrome and controls`, async () => {
+      platform.OS = platformOS;
+      profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
+      const originalConsoleError = console.error;
+      console.error = () => undefined;
+      try {
+        queryModes.ProfilePostListPageQuery = 'loading';
+        await renderRoute('@local', '/@local');
+        assert.deepEqual(identities('PostList'), ['loading']);
+        assert.equal(requireRendered('PageHeader').props.title, 'Display local');
+        assert.equal(requireRendered('ProfileHero').props.heading, false);
+        assert.equal(rendered('NavigationLink').length, 1);
+        assertProfileChrome();
 
-      queryModes.ProfilePostListPageQuery = 'error';
-      await renderRoute('@local', '/@local');
-      assert.deepEqual(identities('ProfileHero'), ['local']);
-      assert.deepEqual(identities('PostList'), ['error']);
-      assert.equal(requireRendered('PageHeader').props.title, 'Display local');
-      assert.equal(rendered('NavigationLink').length, 1);
+        queryModes.ProfilePostListPageQuery = 'error';
+        await renderRoute('@local', '/@local');
+        assert.deepEqual(identities('ProfileHero'), ['local']);
+        assert.deepEqual(identities('PostList'), ['error']);
+        assert.equal(requireRendered('PageHeader').props.title, 'Display local');
+        assert.equal(rendered('NavigationLink').length, 1);
+        assertProfileChrome();
 
-      queryModes.ProfilePostListPageQuery = 'success';
-      const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
-      assert.ok(errorPostList);
-      const failedFetchKey = queryHistory.findLast(
-        ({ query }) => query === 'ProfilePostListPageQuery',
-      )?.fetchKey;
-      await act(async () => errorPostList.props.onRetry());
+        queryModes.ProfilePostListPageQuery = 'success';
+        const errorPostList = rendered('PostList').find((node) => node.props.identity === 'error');
+        assert.ok(errorPostList);
+        const failedFetchKey = queryHistory.findLast(
+          ({ query }) => query === 'ProfilePostListPageQuery',
+        )?.fetchKey;
+        await act(async () => errorPostList.props.onRetry());
 
-      assert.deepEqual(identities('PostList'), ['local']);
-      const latestPostQuery = queryHistory.findLast(
-        ({ query }) => query === 'ProfilePostListPageQuery',
-      );
-      assert.equal(latestPostQuery?.handle, 'local');
-      assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
-      assert.equal(requireRendered('PageHeader').props.title, 'Display local');
-      assert.equal(rendered('NavigationLink').length, 1);
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
+        assert.deepEqual(identities('PostList'), ['local']);
+        const latestPostQuery = queryHistory.findLast(
+          ({ query }) => query === 'ProfilePostListPageQuery',
+        );
+        assert.equal(latestPostQuery?.handle, 'local');
+        assert.notEqual(latestPostQuery?.fetchKey, failedFetchKey);
+        assert.equal(requireRendered('PageHeader').props.title, 'Display local');
+        assert.equal(rendered('NavigationLink').length, 1);
+        assertProfileChrome();
+      } finally {
+        console.error = originalConsoleError;
+      }
+    });
+  }
 
   it('Profile 자체가 조회 불가하면 별도 차단 관계 action을 합성하지 않는다', async () => {
     selectedProfileId = 'owner';
@@ -1148,48 +1161,59 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(changeBlockedCalls.length, 0);
   });
 
-  it('조회 가능한 blocking Profile은 ProfileHero와 확인 전 경고 뒤 Slot 콘텐츠를 유지한다', async () => {
-    platform.OS = 'ios';
-    selectedProfileId = 'owner';
-    profileViewerState = {
-      isSelf: false,
-      membership: { role: 'MEMBER' },
-      profileBlock: {
-        id: 'block-1',
-        targetProfile: {
-          displayName: 'Display blocked',
-          id: 'profile:blocked',
-          relativeHandle: '@blocked',
+  for (const [platformName, platformOS] of [
+    ['Web', 'web'],
+    ['Native', 'ios'],
+  ] as const) {
+    it(`${platformName} blocking Profile keeps chrome and controls through acknowledgment`, async () => {
+      platform.OS = platformOS;
+      selectedProfileId = 'owner';
+      profileViewerState = {
+        isSelf: false,
+        membership: { role: 'MEMBER' },
+        profileBlock: {
+          id: 'block-1',
+          targetProfile: {
+            displayName: 'Display blocked',
+            id: 'profile:blocked',
+            relativeHandle: '@blocked',
+          },
         },
-      },
-    };
-    postListProfileBlockId = 'block-1';
-    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+      };
+      postListProfileBlockId = 'block-1';
+      profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
 
-    await renderRoute('@blocked', '/@blocked');
+      await renderRoute('@blocked', '/@blocked');
 
-    assert.deepEqual(identities('ProfileHero'), ['blocked']);
-    assert.deepEqual(identities('PostList'), []);
-    assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
-    assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
-    assert.equal(requireRendered('PageHeader').props.title, 'Display blocked');
-    assert.deepEqual(identities('FollowButton'), ['blocked']);
-    const menu = requireRendered('ActionMenu');
-    assert.deepEqual(
-      menu.props.items.map((item: { label: string }) => item.label),
-      ['차단 해제'],
-    );
+      assert.deepEqual(identities('ProfileHero'), ['blocked']);
+      assert.deepEqual(identities('PostList'), []);
+      assert.equal(requireRendered('StateView').props.title, '차단한 프로필의 게시물입니다');
+      assert.equal(requireRendered('StateView').props.actionLabel, '게시물 보기');
+      assert.equal(requireRendered('PageHeader').props.title, 'Display blocked');
+      assert.deepEqual(identities('FollowButton'), ['blocked']);
+      assert.deepEqual(
+        renderedInOrder(renderer!.root, ['PageHeader', 'ProfileHero', 'StateView']),
+        ['PageHeader', 'ProfileHero', 'StateView'],
+      );
+      const menu = requireRendered('ActionMenu');
+      assert.deepEqual(
+        menu.props.items.map((item: { label: string }) => item.label),
+        ['차단 해제'],
+      );
 
-    await act(async () => menu.props.items[0].onSelect());
-    assert.equal(requireRendered('ConfirmationContent').props.confirmLabel, '차단 해제');
+      await act(async () => menu.props.items[0].onSelect());
+      assert.equal(requireRendered('ConfirmationContent').props.confirmLabel, '차단 해제');
 
-    await act(async () => requireRendered('StateView').props.onAction());
-    assert.deepEqual(identities('PostList'), ['blocked']);
-    assert.equal(requireRendered('PostList').props.ignoreBlock, true);
-    assert.equal(requireRendered('PageHeader').props.title, 'Display blocked');
-    assert.deepEqual(identities('ProfileHero'), ['blocked']);
-    assert.deepEqual(identities('FollowButton'), ['blocked']);
-  });
+      await act(async () => requireRendered('StateView').props.onAction());
+      assert.deepEqual(identities('PostList'), ['blocked']);
+      assert.equal(rendered('StateView').length, 0);
+      assert.equal(requireRendered('PostList').props.ignoreBlock, true);
+      assert.equal(requireRendered('PageHeader').props.title, 'Display blocked');
+      assert.deepEqual(identities('ProfileHero'), ['blocked']);
+      assert.deepEqual(identities('FollowButton'), ['blocked']);
+      assertProfileChrome();
+    });
+  }
 
   it('Profile viewerState에 own block이 없으면 일반 관계 상태를 유지한다', async () => {
     selectedProfileId = 'owner';
