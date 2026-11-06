@@ -50,6 +50,7 @@ stub('react-relay', {
 stub('react-native', {
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (value: unknown) => value },
   View: 'View',
   Text: 'Text',
