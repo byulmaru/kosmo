@@ -1,11 +1,13 @@
 import { useCurrentRouteInfo } from 'expo-router';
 import { useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
 import { ProfileRouteContainer, useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
+import type { ReactElement } from 'react';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
 
 const ProfilePostListPageQuery = graphql`
@@ -34,23 +36,41 @@ export default function ProfilePostListPage() {
   // A Web Slot remount can leave child-local params empty when returning to a profile.
   const handle = normalizeProfileHandle(useCurrentRouteInfo()?.params.profileHandle);
   const { chrome, scrollKey } = useProfileRoute();
+  const header = Platform.OS === 'web' ? null : <>{chrome}</>;
+  const content = (
+    <RouteBoundary
+      error={(retry) => (
+        <PostList error header={header} onRetry={retry} reselectDestination="profile" />
+      )}
+      key={handle}
+      loading={<PostList header={header} loading reselectDestination="profile" />}
+      title="게시글 목록을 불러오지 못했어요"
+    >
+      <ProfilePostListPageContent handle={handle} header={header} scrollKey={scrollKey} />
+    </RouteBoundary>
+  );
 
-  return (
+  return Platform.OS === 'web' ? (
     <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
       {chrome}
-      <RouteBoundary
-        error={(retry) => <PostList error onRetry={retry} />}
-        key={handle}
-        loading={<PostList loading />}
-        title="게시글 목록을 불러오지 못했어요"
-      >
-        <ProfilePostListPageContent handle={handle} />
-      </RouteBoundary>
+      {content}
     </ProfileRouteContainer>
+  ) : (
+    <View key={scrollKey} style={styles.nativeRoot}>
+      {content}
+    </View>
   );
 }
 
-function ProfilePostListPageContent({ handle }: { handle: string }) {
+function ProfilePostListPageContent({
+  handle,
+  header,
+  scrollKey,
+}: {
+  handle: string;
+  header: ReactElement | null;
+  scrollKey: string;
+}) {
   const { fetchKey } = useRouteBoundary();
   const [acknowledgedProfileBlockId, setAcknowledgedProfileBlockId] = useState<string | null>(null);
   const data = useLazyLoadQuery<ProfilePostListPageQueryType>(
@@ -61,21 +81,36 @@ function ProfilePostListPageContent({ handle }: { handle: string }) {
   const profileBlockId = data.profileByHandle?.viewerState?.profileBlock?.id ?? null;
 
   if (profileBlockId && profileBlockId !== acknowledgedProfileBlockId) {
-    return (
+    const state = (
       <StateView
         actionLabel="게시물 보기"
         onAction={() => setAcknowledgedProfileBlockId(profileBlockId)}
         title="차단한 프로필의 게시물입니다"
       />
     );
+
+    return Platform.OS === 'web' ? (
+      state
+    ) : (
+      <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
+        {header}
+        {state}
+      </ProfileRouteContainer>
+    );
   }
 
   return (
     <PostList
+      header={header}
       ignoreBlock={profileBlockId != null && acknowledgedProfileBlockId === profileBlockId}
       identityKey={`profile:${data.profileByHandle?.id ?? handle}`}
       profile={data.profileByHandle}
+      reselectDestination="profile"
       replyProfile={data.currentSession?.selectedProfile ?? null}
     />
   );
 }
+
+const styles = StyleSheet.create({
+  nativeRoot: { flex: 1, minHeight: 0 },
+});

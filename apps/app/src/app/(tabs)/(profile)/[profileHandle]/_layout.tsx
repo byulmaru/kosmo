@@ -258,7 +258,6 @@ function ProfileLayoutContent({
   );
   const chrome = (
     <>
-      <ProfileViewAnalytics key={profile.id} />
       {showPageHeader ? (
         <PageHeader
           leading={headerLeading}
@@ -288,6 +287,7 @@ function ProfileLayoutContent({
 
   return (
     <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+      <ProfileViewAnalytics key={profile.id} />
       {blockedProfileRoute ??
         (Platform.OS === 'web' ? (
           <Slot />

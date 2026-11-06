@@ -80,6 +80,7 @@ stub('@/components/ui/StateView', { Skeleton: 'Skeleton', StateView: 'StateView'
 stub('@/components/pagination/InfiniteList', {
   InfiniteList: ({
     data,
+    header,
     renderItem,
     empty,
     footer,
@@ -87,12 +88,14 @@ stub('@/components/pagination/InfiniteList', {
   }: {
     data: Array<{ node: { id: string } }>;
     renderItem: (input: { item: unknown }) => ReactNode;
+    header?: ReactNode;
     empty?: ReactNode;
     footer?: ReactNode;
   }) =>
     createElement(
       'InfiniteList',
       props,
+      header,
       data.length
         ? data.map((item) => createElement('Row', { key: item.node.id }, renderItem({ item })))
         : empty,
@@ -139,7 +142,11 @@ function Harness() {
   return createElement(
     Fragment,
     null,
-    createElement(PostList, { profile: data.profileByHandle }),
+    createElement(PostList, {
+      header: createElement('ProfileHero', { identity: 'owner' }),
+      profile: data.profileByHandle,
+      reselectDestination: 'profile',
+    }),
     activeActionPostId ? createElement(ActionHarness, { postId: activeActionPostId }) : null,
   );
 }
@@ -248,6 +255,14 @@ async function respondAt(index: number, data: Record<string, unknown>) {
 const all = (type: string) => renderer!.root.findAll((node) => node.type === type);
 const cards = () =>
   all('PostListItem').map((node) => [node.props.post.__id, Boolean(node.props.pinned)]);
+const profileContentOrder = () =>
+  renderer!.root
+    .findAll((node) => node.type === 'ProfileHero' || node.type === 'PostListItem')
+    .map((node) =>
+      node.type === 'ProfileHero'
+        ? 'hero'
+        : `${node.props.post.__id}:${node.props.pinned ? 'pin' : 'chronology'}`,
+    );
 it('Local shows every pin, permits chronology duplicates, and survives deleted records', async () => {
   const environment = await start();
   assert.deepEqual(
@@ -258,16 +273,25 @@ it('Local shows every pin, permits chronology duplicates, and survives deleted r
     currentSession: null,
     profileByHandle: profile('LOCAL', ['first', 'second'], ['first']),
   });
+  assert.equal(all('InfiniteList')[0]!.props.reselectDestination, 'profile');
   assert.deepEqual(cards(), [
     ['first', true],
     ['second', true],
     ['first', false],
   ]);
+  assert.deepEqual(profileContentOrder(), ['hero', 'first:pin', 'second:pin', 'first:chronology']);
   await act(async () => environment.commitUpdate((store) => store.delete('first')));
   assert.deepEqual(cards(), [['second', true]]);
   assert.equal(all('StateView').length, 0);
   assert.equal(all('InfiniteList').length, 1);
   assert.equal(all('Button').length, 0);
+});
+it('an empty profile keeps its header and empty state in the shared list', async () => {
+  await start();
+  await respond({ currentSession: null, profileByHandle: profile('LOCAL', [], []) });
+
+  assert.deepEqual(profileContentOrder(), ['hero']);
+  assert.equal(all('StateView')[0]!.props.title, '아직 게시글이 없어요');
 });
 it('pin and unpin immediately synchronize the pinned segment from the mutation response', async () => {
   activeActionPostId = 'first';
@@ -346,6 +370,11 @@ it('ActivityPub displays the returned pin list without a pinned pagination contr
   });
   assert.equal(all('InfiniteList').length, 1);
   assert.deepEqual(cards(), pins.map((id) => [id, true]).concat([['chronology', false]]));
+  assert.equal(profileContentOrder()[0], 'hero');
+  assert.deepEqual(profileContentOrder().slice(1), [
+    ...pins.map((id) => `${id}:pin`),
+    'chronology:chronology',
+  ]);
   assert.equal(all('Button').length, 0);
 });
 
@@ -411,6 +440,29 @@ for (const reduced of [false, true]) {
     );
   });
 }
+
+it('retains Relay rows after a failed next page and permits retry', async () => {
+  await start();
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('LOCAL', ['pin'], ['chronology-0'], true),
+  });
+  const initialRows = cards();
+  const list = all('InfiniteList')[0]!;
+
+  await act(async () => list.props.loadNext(20, { onComplete: () => undefined }));
+  const failedRequest = requests.at(-1)!;
+  assert.equal(failedRequest.name, 'PostListProfileNextPageQuery');
+  await act(async () => failedRequest.sink.error(new Error('offline')));
+  assert.deepEqual(cards(), initialRows);
+
+  const failedRequestCount = requests.length;
+  await act(async () => list.props.loadNext(20, { onComplete: () => undefined }));
+  assert.equal(requests.length, failedRequestCount + 1);
+  assert.notEqual(requests.at(-1), failedRequest);
+  assert.equal(requests.at(-1)!.name, 'PostListProfileNextPageQuery');
+  assert.deepEqual(cards(), initialRows);
+});
 
 it('moves pins immediately from the shared list action and retains chronology while pending and after response', async () => {
   const environment = await start();
