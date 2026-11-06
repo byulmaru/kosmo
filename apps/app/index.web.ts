@@ -1,4 +1,5 @@
 import '@expo/metro-runtime';
+import './src/components/shell/playStoreInstallPrompt';
 
 import { App } from 'expo-router/build/qualified-entry';
 import { renderRootComponent } from 'expo-router/build/renderRootComponent';

@@ -4,6 +4,14 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "moe.kos",
+      "url": "https://play.google.com/store/apps/details?id=moe.kos"
+    }
+  ],
   "background_color": "#FEFEFE",
   "theme_color": "#FEFEFE",
   "icons": [

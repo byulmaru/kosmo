@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { after, afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -9,12 +9,18 @@ import type { PublicContentInvitation as PublicContentInvitationExport } from '.
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const browserWindow = new EventTarget();
+Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
 let loginPressCount = 0;
+let installPromptCount = 0;
+let toastMessages: string[] = [];
 let dismissed = false;
 let measuredHeight = 0;
 let viewport = { height: 844, width: 390 };
 let renderer: ReactTestRenderer | undefined;
 let PublicContentInvitation: typeof PublicContentInvitationExport;
+let consumePlayStoreInstallPrompt: () => unknown;
 
 mockModule('@/auth/webLogin', {
   startWebLoginFromPress: () => loginPressCount++,
@@ -65,22 +71,42 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('IconButton', props, children as never),
 });
+mockModule('@/components/ui/ToastProvider', {
+  useToast: () => ({
+    showToast: (message: string) => {
+      toastMessages.push(message);
+      return () => undefined;
+    },
+  }),
+});
 
 before(async () => {
+  ({ consumePlayStoreInstallPrompt } = await import('./playStoreInstallPrompt'));
   ({ PublicContentInvitation } = await import('./PublicContentInvitation'));
+});
+
+after(() => {
+  if (previousWindow) {
+    Object.defineProperty(globalThis, 'window', previousWindow);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
 });
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
+  consumePlayStoreInstallPrompt();
   loginPressCount = 0;
+  installPromptCount = 0;
+  toastMessages = [];
   dismissed = false;
   measuredHeight = 0;
   viewport = { height: 844, width: 390 };
   mock.restoreAll();
 });
 
-async function renderInvitation(pinToBottom = false) {
+async function renderInvitation(pinToBottom = false, canInstallFromPlayStore = false) {
   await act(async () => {
     renderer = create(
       createElement(PublicContentInvitation, {
@@ -90,6 +116,7 @@ async function renderInvitation(pinToBottom = false) {
         onLayout: (height: number) => {
           measuredHeight = height;
         },
+        canInstallFromPlayStore,
         pinToBottom,
         visible: true,
       }),
@@ -97,6 +124,13 @@ async function renderInvitation(pinToBottom = false) {
   });
   assert.ok(renderer);
   return renderer;
+}
+
+function dispatchBeforeInstallPrompt(platforms: string[], prompt: () => Promise<void>) {
+  const event = new Event('beforeinstallprompt', { cancelable: true });
+  Object.assign(event, { platforms, prompt });
+  browserWindow.dispatchEvent(event);
+  return event;
 }
 
 describe('PublicContentInvitation', () => {
@@ -149,6 +183,56 @@ describe('PublicContentInvitation', () => {
 
     assert.equal(externalLink.props.href, 'https://byulmaru.co/about-us');
     assert.equal(privacyLink?.props.href, '/privacy');
+  });
+
+  it('offers an early Play install prompt only for the eligible root invitation', async () => {
+    const pwaEvent = dispatchBeforeInstallPrompt(['web'], async () => undefined);
+    const playEvent = dispatchBeforeInstallPrompt(['play'], async () => {
+      installPromptCount += 1;
+    });
+    assert.equal(pwaEvent.defaultPrevented, false);
+    assert.equal(playEvent.defaultPrevented, true);
+
+    const view = await renderInvitation();
+    const installButton = () =>
+      view.root
+        .findAllByType('Pressable' as never)
+        .find((pressable) => pressable.props.accessibilityRole === 'button');
+    assert.equal(installButton(), undefined);
+
+    await act(async () => {
+      view.update(
+        createElement(PublicContentInvitation, {
+          canInstallFromPlayStore: true,
+          onDismiss: () => undefined,
+          onLayout: () => undefined,
+          visible: true,
+        }),
+      );
+    });
+    const button = installButton();
+    assert.ok(button);
+    const onPress = button?.props.onPress;
+    await act(async () => onPress?.());
+    assert.equal(installButton(), undefined);
+    await act(async () => onPress?.());
+    assert.equal(installPromptCount, 1);
+    assert.equal(toastMessages.length, 0);
+  });
+
+  it('shows the existing danger toast when the browser prompt rejects', async () => {
+    dispatchBeforeInstallPrompt(['play'], () => Promise.reject(new Error('prompt rejected')));
+    const view = await renderInvitation(false, true);
+    const button = view.root
+      .findAllByType('Pressable' as never)
+      .find((pressable) => pressable.props.accessibilityRole === 'button');
+    assert.ok(button);
+
+    await act(async () => {
+      await button?.props.onPress();
+    });
+
+    assert.deepEqual(toastMessages, ['앱 설치 안내를 열지 못했어요.']);
   });
 
   it('reports measured height and dismisses with its accessible action', async () => {

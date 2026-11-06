@@ -1,11 +1,13 @@
 import { Link } from 'expo-router';
 import { X } from 'lucide-react-native';
+import { useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { startWebLoginFromPress } from '@/auth/webLogin';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   borderWidths,
@@ -16,12 +18,18 @@ import {
   spacing,
   textStyles,
 } from '@/theme/tokens';
+import {
+  consumePlayStoreInstallPrompt,
+  getPlayStoreInstallPrompt,
+  subscribePlayStoreInstallPrompt,
+} from './playStoreInstallPrompt';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import type { TextStyle, ViewStyle } from 'react-native';
 
 type Props = {
   onDismiss: () => void;
   onLayout: (height: number) => void;
+  canInstallFromPlayStore?: boolean;
   pinToBottom?: boolean;
   visible: boolean;
 };
@@ -29,12 +37,19 @@ type Props = {
 export function PublicContentInvitation({
   onDismiss,
   onLayout,
+  canInstallFromPlayStore,
   pinToBottom = false,
   visible,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
+  const { showToast } = useToast();
+  const installPrompt = useSyncExternalStore(
+    subscribePlayStoreInstallPrompt,
+    getPlayStoreInstallPrompt,
+    () => null,
+  );
   const mobile = width < breakpoints.compact;
   const placement = getPublicContentInvitationPlacement({
     height,
@@ -57,6 +72,18 @@ export function PublicContentInvitation({
           zIndex: 40,
         } as unknown as ViewStyle)
       : styles.flowRoot;
+  const handlePlayStoreInstall = async () => {
+    const prompt = consumePlayStoreInstallPrompt();
+    if (!prompt) {
+      return;
+    }
+
+    try {
+      await prompt.prompt();
+    } catch {
+      showToast('앱 설치 안내를 열지 못했어요.', { tone: 'danger' });
+    }
+  };
 
   return (
     <View
@@ -109,6 +136,17 @@ export function PublicContentInvitation({
             </Button>
           </Link>
           <View style={styles.links}>
+            {canInstallFromPlayStore && installPrompt ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={handlePlayStoreInstall}
+                style={styles.textLink}
+              >
+                <Text style={[textStyles.uiCopyS, { color: theme.textSecondary }]}>
+                  Google Play에서 다운로드
+                </Text>
+              </Pressable>
+            ) : null}
             <Link
               asChild
               href="https://byulmaru.co/about-us"
