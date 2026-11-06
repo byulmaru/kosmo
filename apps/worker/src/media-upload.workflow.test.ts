@@ -72,7 +72,9 @@ type Scenario = {
 const createScenario = (
   filter: boolean,
   options: {
+    readonly generateAltText?: boolean;
     readonly legacy?: boolean;
+    readonly noCaption?: boolean;
     readonly publication?: Publication;
     readonly failurePoint?: FailurePoint;
     readonly waitForHope?: boolean;
@@ -82,8 +84,18 @@ const createScenario = (
   const accountId = randomUUID();
   const uploadId = 'u_' + randomUUID();
   const input: MediaUploadWorkflowInput = options.legacy
-    ? { mediaId, accountId, applyNightshade: filter }
-    : { mediaId, accountId, applyAiProhibitFilter: filter };
+    ? {
+        mediaId,
+        accountId,
+        applyNightshade: filter,
+        ...(options.generateAltText ? { generateAltText: true } : {}),
+      }
+    : {
+        mediaId,
+        accountId,
+        applyAiProhibitFilter: filter,
+        ...(options.generateAltText ? { generateAltText: true } : {}),
+      };
   const prepared: PreparedUpload = {
     id: uploadId,
     sourceKey: 'uploads/' + uploadId + '/source',
@@ -93,6 +105,9 @@ const createScenario = (
     id: uploadId,
     url: 'https://source.example/' + uploadId + '.jpg',
     mediaType: 'image/jpeg',
+    ...(options.generateAltText
+      ? { altText: options.noCaption ? null : 'Uploaded caption ' + uploadId }
+      : {}),
   };
   const publishResult: MediaUploadPublishResult | undefined =
     options.publication === 'completed'
@@ -100,6 +115,9 @@ const createScenario = (
           id: uploadId,
           url: 'https://published.example/' + uploadId + '.webp',
           mediaType: 'image/webp',
+          ...(options.generateAltText
+            ? { altText: options.noCaption ? null : 'Published caption ' + uploadId }
+            : {}),
           status: 'completed',
         }
       : options.publication === 'processing'
@@ -131,6 +149,7 @@ const createScenario = (
 type MediaUploadStartInput = PreparedUpload & {
   readonly maxBytes: number;
   readonly maxDimension: number;
+  readonly generateAltText?: boolean;
 };
 
 type HopeInput = {
@@ -146,6 +165,7 @@ type NexusCall = {
   readonly name: 'startUpload' | 'applyHope' | 'publishUpload' | 'publishUploadV2';
   readonly id: string;
   readonly applyAiProhibitFilter?: boolean;
+  readonly generateAltText?: true;
 };
 
 const mediaUploadTestService = service('media', {
@@ -246,8 +266,19 @@ test(
       }
     });
 
-    const completed = createScenario(true, { publication: 'completed' });
-    const processing = createScenario(false, { publication: 'processing' });
+    const completed = createScenario(true, {
+      generateAltText: true,
+      publication: 'completed',
+    });
+    const noCaption = createScenario(false, {
+      generateAltText: true,
+      noCaption: true,
+      publication: 'completed',
+    });
+    const processing = createScenario(false, {
+      generateAltText: true,
+      publication: 'processing',
+    });
     const prepareFailure = createScenario(false, { failurePoint: 'prepare' });
     const startFailure = createScenario(false, { failurePoint: 'start' });
     const publicationFailure = createScenario(false, { failurePoint: 'publication' });
@@ -255,6 +286,7 @@ test(
     const legacyTrue = createScenario(true, { legacy: true, waitForHope: true });
     const scenarios = [
       completed,
+      noCaption,
       processing,
       prepareFailure,
       startFailure,
@@ -302,7 +334,11 @@ test(
         MediaUploadWorkflowResult
       >(async (context, input) => {
         const scenario = scenarioForUploadId(input.id);
-        nexusCalls.push({ name: 'startUpload', id: input.id });
+        nexusCalls.push({
+          name: 'startUpload',
+          id: input.id,
+          ...(input.generateAltText === true ? { generateAltText: true } : {}),
+        });
         events.push('nexus-start:' + input.id);
         if (scenario.failurePoint === 'start') {
           scenario.startEntered.resolve();
@@ -444,6 +480,7 @@ test(
           id: completed.prepared.id,
           url: 'https://published.example/' + completed.prepared.id + '.webp',
           mediaType: 'image/webp',
+          altText: 'Published caption ' + completed.prepared.id,
         });
         assert.ok(
           events.indexOf('activity-finalize:' + completed.input.mediaId) <
@@ -456,6 +493,18 @@ test(
           applyAiProhibitFilter: true,
         });
         assert.equal(finalizationsFor(completed).length, 1);
+
+        const noCaptionHandle = await startMediaUpload(noCaption);
+        await noCaption.publishEntered.promise;
+        assert.deepEqual(await update(noCaptionHandle, false), noCaption.publishResult);
+        assert.deepEqual(finalizationsFor(noCaption)[0]?.result, {
+          id: noCaption.prepared.id,
+          url: 'https://published.example/' + noCaption.prepared.id + '.webp',
+          mediaType: 'image/webp',
+          altText: null,
+        });
+        await completeSourceUpload(environment, noCaption, events);
+        assert.equal((await noCaptionHandle.result()).altText, null);
 
         const processingHandle = await startMediaUpload(processing);
         await processing.publishEntered.promise;
@@ -472,6 +521,10 @@ test(
           applyAiProhibitFilter: false,
         });
         assert.equal(finalizationsFor(processing).length, 1);
+        assert.equal(
+          finalizationsFor(processing)[0]?.result.altText,
+          'Uploaded caption ' + processing.prepared.id,
+        );
 
         const failureScenarios: Array<{
           readonly scenario: Scenario;
@@ -559,6 +612,7 @@ test(
         assert.equal('applyAiProhibitFilter' in (await legacyTrueHandle.result()), false);
 
         assert.deepEqual(operationNames(completed), ['startUpload', 'publishUploadV2']);
+        assert.deepEqual(operationNames(noCaption), ['startUpload', 'publishUploadV2']);
         assert.deepEqual(operationNames(processing), ['startUpload', 'publishUploadV2']);
         assert.deepEqual(
           nexusCalls
@@ -586,6 +640,11 @@ test(
         );
         for (const scenario of scenarios) {
           assert.equal(finalizationsFor(scenario).length, scenario.failurePoint ? 0 : 1);
+          assert.equal(
+            nexusCalls.find(({ id, name }) => id === scenario.prepared.id && name === 'startUpload')
+              ?.generateAltText,
+            scenario.input.generateAltText === true ? true : undefined,
+          );
         }
       });
     } catch (error) {

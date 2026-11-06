@@ -51,6 +51,7 @@ const workflowArgsSchema = z
           z.object({
             altText: z.string().nullable(),
             applyNightshade: z.boolean().optional(),
+            generateAltText: z.boolean().optional(),
             mediaId: z.uuid(),
           }),
         )
@@ -181,13 +182,14 @@ const parseInput = (
       ...(inputMedia === undefined
         ? {}
         : {
-            media: inputMedia.map(({ altText, applyNightshade, mediaId }) => ({
+            media: inputMedia.map(({ altText, applyNightshade, generateAltText, mediaId }) => ({
               altText,
               applyNightshade:
                 legacyMediaProcessing === undefined
                   ? (applyNightshade ?? false)
                   : (legacyNightshadeByMediaId.get(mediaId) ?? false),
               mediaId,
+              ...(generateAltText === undefined ? {} : { generateAltText }),
             })),
           }),
     },
@@ -304,6 +306,7 @@ const uploadMedia = async (
     const childArgs = {
       accountId: snapshot.input.accountId,
       applyNightshade: media.applyNightshade,
+      ...(media.generateAltText === true ? { generateAltText: true } : {}),
       mediaId,
     };
     try {
@@ -425,7 +428,13 @@ const createPost = async (
           ...snapshot.input,
           ...(media === undefined
             ? {}
-            : { media: media.map(({ altText, mediaId }) => ({ altText, mediaId })) }),
+            : {
+                media: media.map(({ altText, generateAltText, mediaId }) => ({
+                  altText,
+                  ...(generateAltText === undefined ? {} : { generateAltText }),
+                  mediaId,
+                })),
+              }),
         },
         ...(snapshot.analyticsPlatform !== undefined &&
         patched('post-request-create-analytics-platform-v1')

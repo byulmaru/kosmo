@@ -2823,6 +2823,75 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(retriedReady.state, MediaState.READY);
     assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+
+    const captioned = await createUploadingMedia();
+    const captionedResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: captioned.remoteUploadId,
+      url: 'https://media.example/captioned.webp',
+      altText: 'A generated caption',
+    };
+    const captionedInput = {
+      mediaId: captioned.mediaId,
+      accountId: fixture.account.id,
+      generateAltText: true,
+      remoteUploadId: captioned.remoteUploadId,
+      result: captionedResult,
+    };
+    assert.deepEqual(await finalizeMediaUploadActivity(captionedInput), captionedResult);
+    assert.deepEqual(
+      await db
+        .select({ altText: Media.altText })
+        .from(Media)
+        .where(eq(Media.id, captioned.mediaId))
+        .limit(1)
+        .then(firstOrThrow)
+        .then(({ altText }) => altText),
+      'A generated caption',
+    );
+    await db
+      .update(Media)
+      .set({ altText: 'A later manual description' })
+      .where(eq(Media.id, captioned.mediaId));
+    assert.deepEqual(await finalizeMediaUploadActivity(captionedInput), captionedResult);
+    assert.equal(
+      await db
+        .select({ altText: Media.altText })
+        .from(Media)
+        .where(eq(Media.id, captioned.mediaId))
+        .limit(1)
+        .then(firstOrThrow)
+        .then(({ altText }) => altText),
+      'A later manual description',
+    );
+
+    const unavailableCaption = await createUploadingMedia();
+    const unavailableCaptionResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: unavailableCaption.remoteUploadId,
+      url: 'https://media.example/no-caption.webp',
+      altText: null,
+    };
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({
+        mediaId: unavailableCaption.mediaId,
+        accountId: fixture.account.id,
+        generateAltText: true,
+        remoteUploadId: unavailableCaption.remoteUploadId,
+        result: unavailableCaptionResult,
+      }),
+      unavailableCaptionResult,
+    );
+    assert.deepEqual(
+      await db
+        .select({ state: Media.state, altText: Media.altText })
+        .from(Media)
+        .where(eq(Media.id, unavailableCaption.mediaId))
+        .limit(1)
+        .then(firstOrThrow)
+        .then(({ state, altText }) => ({ state, altText })),
+      { state: MediaState.READY, altText: null },
+    );
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,

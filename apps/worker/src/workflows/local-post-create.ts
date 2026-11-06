@@ -25,7 +25,15 @@ const postCreateInputSchema = z.object({
   accountId: z.uuid().optional(),
   bodyText: z.string(),
   contentWarning: z.string().nullable().optional(),
-  media: z.array(z.object({ altText: z.string().nullable(), mediaId: z.uuid() })).optional(),
+  media: z
+    .array(
+      z.object({
+        altText: z.string().nullable(),
+        generateAltText: z.boolean().optional(),
+        mediaId: z.uuid(),
+      }),
+    )
+    .optional(),
   mentions: z
     .array(
       z.object({

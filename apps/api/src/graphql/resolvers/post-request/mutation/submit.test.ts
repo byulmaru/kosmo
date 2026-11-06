@@ -44,6 +44,7 @@ type CreatePostResult = {
 const requestSubmit = (input: {
   bodyText: string;
   media?: readonly {
+    altText?: string | null;
     applyAiProhibitFilter?: boolean;
     mediaId: string;
   }[];
@@ -148,7 +149,11 @@ const setupPublishUpdate = (
   t: TestContext,
   results: ReadonlyMap<string, MediaUploadPublishResult>,
 ) => {
-  const calls: Array<{ input: MediaUploadPublishInput; mediaId: string }> = [];
+  const calls: Array<{
+    input: MediaUploadPublishInput;
+    mediaId: string;
+    generateAltText?: true;
+  }> = [];
   const mock = t.mock.method(
     temporalClient.workflow,
     'executeUpdateWithStart',
@@ -157,12 +162,17 @@ const setupPublishUpdate = (
       const request = options as {
         args: readonly [MediaUploadPublishInput];
         startWorkflowOperation: {
-          options: { args: readonly [{ mediaId: string }] };
+          options: { args: readonly [{ mediaId: string; generateAltText?: boolean }] };
         };
       };
       const input = request.args[0];
-      const mediaId = request.startWorkflowOperation.options.args[0].mediaId;
-      calls.push({ input, mediaId });
+      const startInput = request.startWorkflowOperation.options.args[0];
+      const mediaId = startInput.mediaId;
+      calls.push({
+        input,
+        mediaId,
+        ...(startInput.generateAltText ? { generateAltText: true } : {}),
+      });
       const result = results.get(mediaId);
       assert.ok(result);
       return result as never;
@@ -374,12 +384,16 @@ test('createPost creates a Post after a completed Media publication', async (t) 
   assert.deepEqual(result.errors, undefined);
   assert.equal(result.data?.createPost.post?.id, encodeGlobalId('Post', postId));
   assert.equal(result.data?.createPost.request, null);
-  assert.deepEqual(publish.calls, [{ input: { applyAiProhibitFilter: true }, mediaId }]);
+  assert.deepEqual(publish.calls, [
+    { input: { applyAiProhibitFilter: true }, mediaId, generateAltText: true },
+  ]);
   assert.equal(publish.mock.callCount(), 1);
   assert.equal(execute.mock.callCount(), 1);
   assert.equal(workflowArgs[0]?.revalidateAuthorization, true);
   assert.equal(workflowArgs[0]?.input.profileId, profileId);
-  assert.deepEqual(workflowArgs[0]?.input.media, [{ altText: null, mediaId }]);
+  assert.deepEqual(workflowArgs[0]?.input.media, [
+    { altText: null, generateAltText: true, mediaId },
+  ]);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(getHandle.mock.callCount(), 0);
   assert.equal(select.mock.callCount(), 2);
@@ -597,8 +611,12 @@ test('createPost queues a request for mixed Media when one publication is proces
   const result = await requestSubmit({
     bodyText: 'mixed uploads',
     media: [
-      { applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', completedMediaId) },
-      { mediaId: encodeGlobalId('Media', processingMediaId) },
+      {
+        altText: 'Human description',
+        applyAiProhibitFilter: true,
+        mediaId: encodeGlobalId('Media', completedMediaId),
+      },
+      { altText: '   ', mediaId: encodeGlobalId('Media', processingMediaId) },
     ],
     visibility: 'PUBLIC',
   });
@@ -608,7 +626,11 @@ test('createPost queues a request for mixed Media when one publication is proces
   assert.equal(result.data?.createPost.request?.status, PostRequestStatus.QUEUED);
   assert.deepEqual(publish.calls, [
     { input: { applyAiProhibitFilter: true }, mediaId: completedMediaId },
-    { input: { applyAiProhibitFilter: false }, mediaId: processingMediaId },
+    {
+      input: { applyAiProhibitFilter: false },
+      mediaId: processingMediaId,
+      generateAltText: true,
+    },
   ]);
   assert.equal(publish.mock.callCount(), 2);
   assert.equal(execute.mock.callCount(), 0);
@@ -623,8 +645,13 @@ test('createPost queues a request for mixed Media when one publication is proces
   assert.equal(started[0]?.workflowIdConflictPolicy, 'FAIL');
   assert.equal(started[0]?.workflowIdReusePolicy, 'REJECT_DUPLICATE');
   assert.deepEqual(snapshot.input.media, [
-    { altText: null, applyNightshade: true, mediaId: completedMediaId },
-    { altText: null, applyNightshade: false, mediaId: processingMediaId },
+    { altText: 'Human description', applyNightshade: true, mediaId: completedMediaId },
+    {
+      altText: '   ',
+      applyNightshade: false,
+      generateAltText: true,
+      mediaId: processingMediaId,
+    },
   ]);
   assert.deepEqual(started[0]?.typedSearchAttributes, [
     {
@@ -770,6 +797,13 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
   assert.equal(select.mock.callCount(), 6);
   assert.equal(execute.mock.callCount(), 2);
   assert.equal(workflowArgs.length, 2);
+  assert.deepEqual(
+    workflowArgs.map(({ input }) => input.media),
+    [
+      [{ altText: null, mediaId: matchingMediaId }],
+      [{ altText: null, mediaId: legacyUnknownMediaId }],
+    ],
+  );
   assert.equal(start.mock.callCount(), 0);
   assert.equal(publish.mock.callCount(), 0);
 });

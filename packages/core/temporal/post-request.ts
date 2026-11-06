@@ -29,6 +29,7 @@ export type PostRequestLocalPostInput = Omit<LocalPostInput, 'accountId' | 'medi
   readonly media?: readonly {
     readonly altText: string | null;
     readonly applyNightshade: boolean;
+    readonly generateAltText?: boolean;
     readonly mediaId: string;
   }[];
 };

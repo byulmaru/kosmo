@@ -276,6 +276,7 @@ const startLegacyPostRequest = (
 
 type MediaUploadTestStartInput = {
   readonly contentType: NexusMediaUploadContentType;
+  readonly generateAltText?: boolean;
   readonly id: string;
   readonly maxBytes: number;
   readonly maxDimension: number;
@@ -305,6 +306,7 @@ const createMediaUploadTestNexusWorker = async (
   options: {
     readonly beforePublish?: (uploadId: string) => Promise<void>;
     readonly onStartUpload?: (uploadId: string) => void;
+    readonly onGenerateAltText?: (input: MediaUploadTestStartInput) => void;
     readonly shouldFail?: boolean | ((uploadId: string) => boolean);
   } = {},
 ) => {
@@ -318,6 +320,9 @@ const createMediaUploadTestNexusWorker = async (
           MediaUploadWorkflowResult
         >(async (context, input) => {
           options.onStartUpload?.(input.id);
+          if (input.generateAltText === true) {
+            options.onGenerateAltText?.(input);
+          }
           return startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
             args: [
               {
@@ -325,6 +330,9 @@ const createMediaUploadTestNexusWorker = async (
                   id: input.id,
                   mediaType: 'image/jpeg',
                   url: 'https://media.example/' + input.id + '.jpg',
+                  ...(input.generateAltText === true
+                    ? { altText: 'Generated caption ' + input.id }
+                    : {}),
                 },
                 shouldFail:
                   typeof options.shouldFail === 'function'
@@ -379,6 +387,7 @@ const createMediaUploadNexusEndpoints = async (
 
 type PostRequestMediaRow = {
   readonly accountId: string;
+  readonly altText?: string | null;
   readonly id: string;
   readonly mediaType?: string | null;
   readonly source: MediaSource;
@@ -525,7 +534,11 @@ const createMockMediaUploadActivities = (
     onFinalize(input);
     const media = mediaRows.get(input.mediaId);
     assert.ok(media);
-    mediaRows.set(input.mediaId, { ...media, state: MediaState.READY });
+    mediaRows.set(input.mediaId, {
+      ...media,
+      ...(input.result.altText === undefined ? {} : { altText: input.result.altText }),
+      state: MediaState.READY,
+    });
     return input.result;
   },
 });
@@ -537,6 +550,7 @@ const createParallelMediaUploadHarness = async (
   options: {
     readonly beforePublish: (uploadId: string) => Promise<void>;
     readonly releaseGates: readonly (() => void)[];
+    readonly onGenerateAltText?: (input: MediaUploadTestStartInput) => void;
     readonly shouldFail?: boolean | ((uploadId: string) => boolean);
   },
 ) => {
@@ -555,6 +569,7 @@ const createParallelMediaUploadHarness = async (
     await createMediaUploadTestNexusWorker(environment, remoteTaskQueue, [], {
       beforePublish: options.beforePublish,
       onStartUpload: (uploadId) => startedUploadIds.push(uploadId),
+      onGenerateAltText: options.onGenerateAltText,
       shouldFail: options.shouldFail,
     }),
   );
@@ -594,7 +609,14 @@ test(
       resourceCleanups,
     );
 
-    const args = createPostRequest(true);
+    const originalArgs = createPostRequest(true);
+    const args: PostRequestWorkflowArgs = {
+      ...originalArgs,
+      input: {
+        ...originalArgs.input,
+        media: originalArgs.input.media?.map((media) => ({ ...media, generateAltText: true })),
+      },
+    };
     const mediaId = args.input.media![0]!.mediaId;
     const mediaRows = new Map<string, PostRequestMediaRow>([
       [
@@ -628,6 +650,7 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
+    const generatedUploadInputs: MediaUploadTestStartInput[] = [];
     const remoteTaskQueue = await createMediaUploadNexusEndpoints(
       environment,
       t.signal,
@@ -643,6 +666,7 @@ test(
             publishStarted.resolve();
             await releasePublish.promise;
           },
+          onGenerateAltText: (input) => generatedUploadInputs.push(input),
         },
       ),
     );
@@ -713,6 +737,7 @@ test(
           assert.equal(database.finalizationCount(), 0);
           assert.equal(mediaRows.get(mediaId)?.state, MediaState.UPLOADING);
           assert.deepEqual(appliedNightshadeUploadIds, [`u_${mediaId}`]);
+          assert.deepEqual(generatedUploadInputs, []);
 
           releasePublish.resolve();
           const [uploadResult, ...results] = await Promise.all([
@@ -746,7 +771,13 @@ test(
           }
           assert.equal(database.finalizationCount(), 1);
           assert.equal(mediaRows.get(mediaId)?.state, MediaState.READY);
+          assert.equal(mediaRows.get(mediaId)?.altText, undefined);
           assert.equal(postCreateInputs.length, 3);
+          assert.ok(
+            postCreateInputs.every(
+              ({ input }) => input.origin === 'LOCAL' && input.media?.[0]?.generateAltText === true,
+            ),
+          );
           assert.equal(new Set(postCreateInputs.map(({ postId }) => postId)).size, 3);
         } finally {
           releasePublish.resolve();
@@ -776,7 +807,16 @@ test(
     const firstMediaId = randomUUID();
     const readyMediaId = randomUUID();
     const secondMediaId = randomUUID();
-    const args = createPostRequestWithMedia([firstMediaId, readyMediaId, secondMediaId]);
+    const originalArgs = createPostRequestWithMedia([firstMediaId, readyMediaId, secondMediaId]);
+    const args: PostRequestWorkflowArgs = {
+      ...originalArgs,
+      input: {
+        ...originalArgs.input,
+        media: originalArgs.input.media?.map((media) =>
+          media.mediaId === firstMediaId ? { ...media, generateAltText: true } : media,
+        ),
+      },
+    };
     const pendingMediaIds = [firstMediaId, secondMediaId];
     const pendingUploadIds = pendingMediaIds.map((mediaId) => `u_${mediaId}`);
     const publishStarted = new Map<string, PromiseWithResolvers<void>>(
@@ -790,10 +830,12 @@ test(
       [readyMediaId, MediaState.READY],
       [secondMediaId, MediaState.UPLOADING],
     ]);
-    const expectedPostMedia = args.input.media?.map(({ altText, mediaId }) => ({
+    const expectedPostMedia = args.input.media?.map(({ altText, generateAltText, mediaId }) => ({
       altText,
+      ...(generateAltText === undefined ? {} : { generateAltText }),
       mediaId,
     }));
+    const generatedUploadInputs: MediaUploadTestStartInput[] = [];
     const { postCreateInputs, startedUploadIds, worker } = await createParallelMediaUploadHarness(
       t,
       environment,
@@ -808,6 +850,7 @@ test(
             () =>
               resolve(),
         ),
+        onGenerateAltText: (input) => generatedUploadInputs.push(input),
       },
     );
 
@@ -822,6 +865,10 @@ test(
       );
 
       assert.deepEqual(startedUploadIds.toSorted(), pendingUploadIds.toSorted());
+      assert.deepEqual(
+        generatedUploadInputs.map(({ id, generateAltText }) => ({ id, generateAltText })),
+        [{ id: `u_${firstMediaId}`, generateAltText: true }],
+      );
       assert.equal(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.PROCESSING,
@@ -869,8 +916,14 @@ test(
         [firstMediaId, readyMediaId, secondMediaId],
       );
       assert.equal(mediaRows.get(firstMediaId)?.state, MediaState.READY);
+      assert.equal(mediaRows.get(firstMediaId)?.altText, `Generated caption u_${firstMediaId}`);
       assert.equal(mediaRows.get(readyMediaId)?.state, MediaState.READY);
       assert.equal(mediaRows.get(secondMediaId)?.state, MediaState.READY);
+      assert.equal(
+        result.snapshot.input.media?.find(({ mediaId }) => mediaId === firstMediaId)
+          ?.generateAltText,
+        true,
+      );
     });
   },
 );
@@ -1582,6 +1635,7 @@ test(
     mockPostRequestMediaDatabase(t, mediaRows);
 
     const appliedNightshadeUploadIds: string[] = [];
+    const generatedUploadInputs: MediaUploadTestStartInput[] = [];
     const remoteTaskQueue = await createMediaUploadNexusEndpoints(
       environment,
       t.signal,
@@ -1592,6 +1646,7 @@ test(
         environment,
         remoteTaskQueue,
         appliedNightshadeUploadIds,
+        { onGenerateAltText: (input) => generatedUploadInputs.push(input) },
       ),
     );
     const preparedMedia: {
@@ -1642,6 +1697,7 @@ test(
         ].toSorted((left, right) => left.mediaId.localeCompare(right.mediaId)),
       );
       assert.deepEqual(appliedNightshadeUploadIds, [`u_${mediaIdA}`]);
+      assert.deepEqual(generatedUploadInputs, []);
       assert.deepEqual(postCreateInputs, [
         {
           input: args.input,

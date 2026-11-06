@@ -631,6 +631,55 @@ test('createPost는 같은 Upload Account의 Ready Local Media를 document 순�
   assert.deepEqual(result.content.document.body.attrs, { sensitiveMedia: true });
 });
 
+test('createPost은 opt-in된 생성 ALT를 빈 입력에만 보존하고 수동 입력을 우선한다', async () => {
+  const account = await createAccount();
+  const profile = await createProfile();
+  const generated = await createMedia({ accountId: account.id, profileId: profile.id });
+  const whitespace = await createMedia({ accountId: account.id, profileId: profile.id });
+  const manual = await createMedia({ accountId: account.id, profileId: profile.id });
+  const unflagged = await createMedia({ accountId: account.id, profileId: profile.id });
+  const media = [generated, whitespace, manual, unflagged];
+  const generatedCaptionById = new Map([
+    [generated.id, 'Generated caption'],
+    [whitespace.id, 'Whitespace fallback'],
+    [manual.id, 'Existing generated caption'],
+    [unflagged.id, 'Existing description'],
+  ]);
+  for (const [mediaId, altText] of generatedCaptionById) {
+    await db.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+  }
+
+  await createPost({
+    accountId: account.id,
+    bodyText: '',
+    media: [
+      { altText: null, generateAltText: true, mediaId: generated.id },
+      { altText: '   ', generateAltText: true, mediaId: whitespace.id },
+      { altText: 'Human description', generateAltText: true, mediaId: manual.id },
+      { altText: null, mediaId: unflagged.id },
+    ],
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  const persistedAltText = await db
+    .select({ altText: Media.altText, id: Media.id })
+    .from(Media)
+    .where(
+      inArray(
+        Media.id,
+        media.map(({ id }) => id),
+      ),
+    );
+  assert.deepEqual(Object.fromEntries(persistedAltText.map(({ altText, id }) => [id, altText])), {
+    [generated.id]: 'Generated caption',
+    [whitespace.id]: 'Whitespace fallback',
+    [manual.id]: 'Human description',
+    [unflagged.id]: null,
+  });
+});
+
 test('createPost는 사용할 수 없는 Media를 같은 오류로 거부하고 Post를 남기지 않는다', async () => {
   const account = await createAccount();
   const otherAccount = await createAccount();
