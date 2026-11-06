@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { usePathname, useSegments } from 'expo-router';
+import { useEffect } from 'react';
 import { useAnalyticsIdentityAccountId, useSession } from '@/session/SessionProvider';
 import {
   clearAnalytics,
