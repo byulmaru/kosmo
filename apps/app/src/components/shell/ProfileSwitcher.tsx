@@ -576,7 +576,7 @@ export function ProfileSwitcher({
   const profileDetails = active ? (
     <>
       <Text
-        accessibilityLabel="활성 프로필 핸들"
+        accessibilityLabel={Platform.OS === 'web' ? undefined : '활성 프로필 핸들'}
         numberOfLines={1}
         style={[styles.profileHandle, { color: theme.foregroundSecondary }]}
       >
@@ -633,6 +633,7 @@ export function ProfileSwitcher({
   const triggerSurface = !compact ? (
     <View
       accessibilityLabel="활성 프로필"
+      role={Platform.OS === 'web' ? 'group' : undefined}
       style={[
         styles.profileHeader,
         (fullWeb || nativeDrawerSurface) && styles.stretchedProfileHeader,

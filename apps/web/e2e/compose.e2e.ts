@@ -107,7 +107,7 @@ async function openComposer(page: Page) {
     await open.click();
   }
 
-  const composer = page.getByLabel('게시글 작성', { exact: true });
+  const composer = page.getByRole('form', { name: /^게시글 작성 \(@/ });
   await expect(composer).toBeVisible();
   return composer;
 }
@@ -844,14 +844,19 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   const profileSwitcher = page.getByLabel('프로필 전환');
   await expect(profileSwitcher).toBeVisible();
+  const selectedSessionResponse = waitForGraphQLOperation(page, 'SessionProviderQuery');
   await page
     .getByLabel('전환할 프로필 목록')
     .getByRole('button')
     .filter({ hasText: `@${selectedProfile.handle}` })
     .click();
 
+  const selectedSessionBody = await (await selectedSessionResponse).json();
+  expect(selectedSessionBody.data?.currentSession?.selectedProfile?.id).toBe(selectedProfileId);
   await expect(
-    page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${selectedProfile.handle}` }),
+    page
+      .getByRole('group', { name: '활성 프로필', exact: true })
+      .getByText(`@${selectedProfile.handle}`, { exact: true }),
   ).toBeVisible();
   await page.goto(`/@${selectedProfile.handle}`);
   const publishedPostRow = page
