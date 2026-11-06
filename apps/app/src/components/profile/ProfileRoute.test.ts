@@ -3,10 +3,10 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, forwardRef, useContext, useState } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ShellChromeProvider } from '../shell/ShellChromeContext';
 import type { ComponentType, ReactElement, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { InfiniteListProps } from '../pagination/InfiniteList';
-import { ShellChromeProvider } from '../shell/ShellChromeContext';
 import type { TabReselectionDestination } from '../shell/ShellChromeContext';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
 import type {
