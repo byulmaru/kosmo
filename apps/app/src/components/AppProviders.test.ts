@@ -289,6 +289,7 @@ mockModule(new URL('../analytics/client.ts', import.meta.url), {
     identifiedAnalyticsAccountId = accountId;
   },
   setAnalyticsSelectedProfile: () => undefined,
+  trackAnalyticsScreen: () => undefined,
   trackAnalytics,
 });
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
