@@ -15,6 +15,8 @@ export function Dropdown({
   zIndex = 30,
   anchorInset = 0,
   viewportInset = spacing.sm,
+  gap = spacing.sm,
+  maxWidth,
   maxHeight = 430,
   placement,
   horizontalPlacement = 'start',
@@ -22,7 +24,19 @@ export function Dropdown({
 }: DropdownProps) {
   // Geometry and event containment require the actual platform elements.
   const contentRef = useRef<View>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0, maxHeight });
+  const [position, setPosition] = useState<{
+    left: number;
+    maxHeight: number;
+    maxWidth: number;
+    placement: 'bottom' | 'top';
+    top: number;
+  }>({
+    left: 0,
+    top: 0,
+    maxHeight,
+    maxWidth: maxWidth ?? minWidth,
+    placement: 'bottom',
+  });
   // Observe browser-owned anchor/visual viewport changes, including keyboard and zoom.
   useLayoutEffect(() => {
     if (!open) {
@@ -41,44 +55,92 @@ export function Dropdown({
       const topEdge = viewport?.offsetTop ?? 0;
       const rightEdge = leftEdge + (viewport?.width ?? ownerWindow.innerWidth);
       const bottomEdge = topEdge + (viewport?.height ?? ownerWindow.innerHeight);
-      const width = content?.getBoundingClientRect().width || minWidth;
-      const height = content?.getBoundingClientRect().height || 0;
-      const inset = viewportInset;
+      const contentBounds = content?.getBoundingClientRect();
+      const width = contentBounds?.width || minWidth;
+      const height = contentBounds?.height || 0;
+      const insets =
+        typeof viewportInset === 'number'
+          ? {
+              bottom: viewportInset,
+              left: viewportInset,
+              right: viewportInset,
+              top: viewportInset,
+            }
+          : {
+              bottom: viewportInset.bottom ?? 0,
+              left: viewportInset.left ?? 0,
+              right: viewportInset.right ?? 0,
+              top: viewportInset.top ?? 0,
+            };
+      const availableWidth = Math.max(0, rightEdge - leftEdge - insets.left - insets.right);
+      const contentWidth = Math.min(maxWidth ?? width, availableWidth);
+      const availableHeight = Math.max(0, bottomEdge - topEdge - insets.top - insets.bottom);
+      const desiredHeight = Math.min(maxHeight, availableHeight);
+      const below = Math.max(0, bottomEdge - insets.bottom - rect.bottom - gap);
+      const above = Math.max(0, rect.top - topEdge - insets.top - gap);
+      const autoBottom = below >= desiredHeight || below >= above;
+      const autoPlacement = autoBottom ? 'bottom' : 'top';
+      const availablePlacementHeight = Math.min(
+        desiredHeight,
+        verticalPlacement === 'auto' ? (autoBottom ? below : above) : availableHeight,
+      );
       const anchoredLeft =
         placement === 'overlap-end'
-          ? rect.right - width
+          ? rect.right - contentWidth
           : horizontalPlacement === 'after'
-            ? rect.right + spacing.sm
+            ? rect.right + gap
             : horizontalPlacement === 'end'
-              ? rect.right + anchorInset - width
+              ? rect.right + anchorInset - contentWidth
               : rect.left - anchorInset;
       const anchoredTop =
         placement === 'overlap-end'
           ? rect.top + height > bottomEdge
             ? rect.bottom - height
             : rect.top
+          : verticalPlacement === 'auto'
+            ? autoBottom
+              ? rect.bottom + gap
+              : rect.top -
+                gap -
+                Math.min(height || availablePlacementHeight, availablePlacementHeight)
+            : verticalPlacement === 'after'
+              ? rect.bottom + gap
+              : verticalPlacement === 'end'
+                ? rect.bottom - height
+                : rect.top - anchorInset;
+      const selectedPlacement =
+        verticalPlacement === 'auto'
+          ? autoPlacement
           : verticalPlacement === 'after'
-            ? rect.bottom + spacing.sm
-            : verticalPlacement === 'end'
-              ? rect.bottom - height
-              : rect.top - anchorInset;
-      const availableHeight = Math.max(0, Math.min(maxHeight, bottomEdge - topEdge - inset * 2));
+            ? 'bottom'
+            : 'top';
+      const contentHeight = Math.min(height || availablePlacementHeight, availablePlacementHeight);
+      const topEdgeWithInset = topEdge + insets.top;
+      const bottomEdgeWithInset = bottomEdge - insets.bottom;
       const top = Math.max(
-        topEdge + inset,
-        Math.min(
-          anchoredTop,
-          bottomEdge - inset - Math.min(height || availableHeight, availableHeight),
-        ),
+        topEdgeWithInset,
+        Math.min(anchoredTop, bottomEdgeWithInset - contentHeight),
       );
+      const nextMaxHeight =
+        verticalPlacement === 'auto'
+          ? availablePlacementHeight
+          : Math.max(0, Math.min(maxHeight, bottomEdgeWithInset - top));
       const next = {
-        left: Math.max(leftEdge + inset, Math.min(anchoredLeft, rightEdge - inset - width)),
+        left: Math.max(
+          leftEdge + insets.left,
+          Math.min(anchoredLeft, rightEdge - insets.right - contentWidth),
+        ),
         top,
-        maxHeight: Math.max(0, Math.min(maxHeight, bottomEdge - inset - top)),
+        maxHeight: nextMaxHeight,
+        maxWidth: Math.max(0, contentWidth),
+        placement: selectedPlacement === 'bottom' ? ('bottom' as const) : ('top' as const),
       };
       setPosition((current) =>
         current.left === next.left &&
         current.top === next.top &&
-        current.maxHeight === next.maxHeight
+        current.maxHeight === next.maxHeight &&
+        current.maxWidth === next.maxWidth &&
+        current.placement === next.placement
           ? current
           : next,
       );
@@ -101,8 +163,10 @@ export function Dropdown({
     };
   }, [
     anchorInset,
+    gap,
     horizontalPlacement,
     maxHeight,
+    maxWidth,
     minWidth,
     open,
     placement,
@@ -157,11 +221,23 @@ export function Dropdown({
     <OverlayPortal>
       <View
         ref={contentRef}
-        {...{ dataSet: { dropdownOpen: active ? 'true' : undefined } }}
+        {...{
+          dataSet: {
+            dropdownOpen: active ? 'true' : undefined,
+            placement: position.placement,
+          },
+        }}
         testID={testID}
         style={[
           styles.layer,
-          { left: position.left, top: position.top, zIndex, opacity: position.maxHeight ? 1 : 0 },
+          {
+            left: position.left,
+            maxWidth: maxWidth === undefined ? undefined : position.maxWidth,
+            top: position.top,
+            width: maxWidth === undefined ? undefined : position.maxWidth,
+            zIndex,
+            opacity: position.maxHeight ? 1 : 0,
+          },
         ]}
       >
         {children(position.maxHeight)}
