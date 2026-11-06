@@ -470,6 +470,85 @@ test(
 );
 
 test(
+  'follow reconciliation orders backfilled posts by stored time across cache pages',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createProfile();
+    const author = await createProfile();
+    const historicalPosts = await Promise.all(
+      Array.from({ length: 25 }, () => createPost({ profileId: author.id })),
+    );
+    const recentPost = await createPost({ profileId: viewer.id });
+    const historicalCreatedAts = [...historicalPosts]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((post, index) => ({
+        id: post.id,
+        createdAt: recentPost.createdAt.subtract({ hours: 1, seconds: index }),
+      }));
+    await Promise.all(
+      historicalCreatedAts.map(({ id, createdAt }) =>
+        db.update(Posts).set({ createdAt }).where(eq(Posts.id, id)),
+      ),
+    );
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.id,
+      followeeProfileId: author.id,
+    });
+
+    const key = `kosmo:home-timeline:profile:${viewer.id}`;
+    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [recentPost.id] });
+    const recentScore = (await runRedisCommand((client) => client.zScore(key, recentPost.id)))
+      ?.value;
+    assert.ok(Number.isFinite(recentScore));
+
+    await reconcileHomeTimelineFollow({ profileId: viewer.id });
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, recentPost.id)))?.value,
+      recentScore,
+    );
+
+    const expectedPostIds = [recentPost.id, ...historicalCreatedAts.map(({ id }) => id)];
+    const firstPage = await readHomeTimelineCache({ profileId: viewer.id, limit: 20 });
+    assert.ok(firstPage);
+    assert.deepEqual(
+      firstPage.entries.map(({ postId }) => postId),
+      expectedPostIds.slice(0, 20),
+    );
+    const cursor = firstPage.entries.at(-1)?.score;
+    assert.ok(cursor !== undefined);
+    const secondPage = await readHomeTimelineCache({
+      profileId: viewer.id,
+      after: cursor,
+      limit: 20,
+    });
+    assert.ok(secondPage);
+    assert.deepEqual(
+      secondPage.entries.map(({ postId }) => postId),
+      expectedPostIds.slice(20),
+    );
+
+    for (const { id, createdAt } of historicalCreatedAts) {
+      const score = (await runRedisCommand((client) => client.zScore(key, id)))?.value;
+      assert.equal(score, createdAt.epochMilliseconds);
+    }
+
+    await reconcileHomeTimelineFollow({ profileId: viewer.id });
+
+    for (const { id, createdAt } of historicalCreatedAts) {
+      assert.equal(
+        (await runRedisCommand((client) => client.zScore(key, id)))?.value,
+        createdAt.epochMilliseconds,
+      );
+    }
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, recentPost.id)))?.value,
+      recentScore,
+    );
+  },
+);
+
+test(
   'follow reconciliation preserves the remaining TTL when replacing the last cached post',
   { skip: !testRedisUrl },
   async () => {

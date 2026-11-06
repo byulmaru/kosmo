@@ -425,18 +425,18 @@ local removeCount = tonumber(ARGV[1])
 for index = 1, removeCount do
   redis.call('ZREM', KEYS[1], ARGV[index + 1])
 end
-local scoreIndex = removeCount + 2
-local score = ARGV[scoreIndex]
-local addCount = tonumber(ARGV[scoreIndex + 1])
+local addCountIndex = removeCount + 2
+local addCount = tonumber(ARGV[addCountIndex])
 for index = 1, addCount do
-  redis.call('ZADD', KEYS[1], 'NX', score, ARGV[scoreIndex + index + 1])
+  local argumentIndex = addCountIndex + (index - 1) * 2 + 1
+  redis.call('ZADD', KEYS[1], 'NX', ARGV[argumentIndex], ARGV[argumentIndex + 1])
 end
 redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
 if redis.call('PTTL', KEYS[1]) == -1 then
   if previousTtl >= 0 then
     redis.call('PEXPIRE', KEYS[1], previousTtl)
   else
-    redis.call('EXPIRE', KEYS[1], ARGV[scoreIndex + addCount + 2])
+    redis.call('EXPIRE', KEYS[1], ARGV[addCountIndex + addCount * 2 + 1])
   end
 end
 return 1
@@ -485,9 +485,7 @@ export const reconcileHomeTimelineFollow = async ({
   const currentlyEligiblePostIds = new Set(currentlyEligiblePosts.map(({ id }) => id));
   const removePostIds = cachedPostIds.filter((postId) => !currentlyEligiblePostIds.has(postId));
   const latestEligiblePosts = await queryHomeTimeline({ profileId, limit: maximumEntries });
-  const addPostIds = latestEligiblePosts
-    .map(({ id }) => id)
-    .filter((postId) => !cachedPostIdSet.has(postId));
+  const addPosts = latestEligiblePosts.filter(({ id }) => !cachedPostIdSet.has(id));
 
   const result = await runRedisCommand((client) =>
     client.eval(reconcileScript, {
@@ -495,9 +493,8 @@ export const reconcileHomeTimelineFollow = async ({
       arguments: [
         String(removePostIds.length),
         ...removePostIds,
-        String(Temporal.Now.instant().epochMilliseconds),
-        String(addPostIds.length),
-        ...addPostIds,
+        String(addPosts.length),
+        ...addPosts.flatMap(({ createdAt, id }) => [String(createdAt.epochMilliseconds), id]),
         String(keyLifetimeSeconds),
       ],
     }),
