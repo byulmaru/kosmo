@@ -1,10 +1,21 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { History, X } from 'lucide-react-native';
-import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { CircleQuestionMark, History, X } from 'lucide-react-native';
+import {
+  cloneElement,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { useCoachmarkController } from '@/components/coachmark/CoachmarkController';
+import { CoachmarkGuide } from '@/components/coachmark/CoachmarkGuide';
 import { PageHeader } from '@/components/PageHeader';
 import {
   PaginationScrollView,
@@ -27,9 +38,11 @@ import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
-import type { TextInput } from 'react-native';
+import type { ReactElement, Ref } from 'react';
+import type { TextInput, View as NativeView } from 'react-native';
+import type { CoachmarkRequestHandle } from '@/components/coachmark/CoachmarkProvider';
 import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/SearchToolbar';
+import type { SearchCoachmarkQuery } from './__generated__/SearchCoachmarkQuery.graphql';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
@@ -45,6 +58,14 @@ const tabs = [
 const SearchPeopleQuery = graphql`
   query SearchPeopleByHandlePageQuery($query: String!) {
     ...SearchPeopleResults_query @arguments(query: $query)
+  }
+`;
+
+const SearchCoachmarkQuery = graphql`
+  query SearchCoachmarkQuery {
+    me {
+      ...CoachmarkController_account
+    }
   }
 `;
 
@@ -68,19 +89,25 @@ const SearchPeopleResultsFragment = graphql`
   }
 `;
 
-function PeopleResults({ handle }: { handle: string }) {
+function PeopleResults({ anchorRef, handle }: { anchorRef: Ref<NativeView>; handle: string }) {
   return (
     <RouteBoundary
       key={handle}
       loading={<StateView loading title="검색 결과를 불러오는 중입니다." />}
       title="검색 결과를 불러오지 못했어요"
     >
-      <PeopleResultsContent handle={handle} />
+      <PeopleResultsContent anchorRef={anchorRef} handle={handle} />
     </RouteBoundary>
   );
 }
 
-function PeopleResultsContent({ handle }: { handle: string }) {
+function PeopleResultsContent({
+  anchorRef,
+  handle,
+}: {
+  anchorRef: Ref<NativeView>;
+  handle: string;
+}) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
     SearchPeopleQuery,
@@ -90,6 +117,7 @@ function PeopleResultsContent({ handle }: { handle: string }) {
 
   return (
     <SearchPeopleResults
+      anchorRef={anchorRef}
       fetchKey={fetchKey}
       handle={handle}
       key={`${handle}:${fetchKey}`}
@@ -99,10 +127,12 @@ function PeopleResultsContent({ handle }: { handle: string }) {
 }
 
 function SearchPeopleResults({
+  anchorRef,
   fetchKey,
   handle,
   query,
 }: {
+  anchorRef: Ref<NativeView>;
   fetchKey: string;
   handle: string;
   query: SearchPeopleResults_query$key;
@@ -143,7 +173,7 @@ function SearchPeopleResults({
   }
 
   return (
-    <View>
+    <View ref={anchorRef}>
       {edges.map(({ cursor, node }) => (
         <SearchResultProfile key={cursor} profile={node} />
       ))}
@@ -221,6 +251,11 @@ export default function SearchScreen() {
   const theme = useTheme();
   const router = useRouter();
   const shellChrome = useShellChrome();
+  const coachmarkData = useLazyLoadQuery<SearchCoachmarkQuery>(
+    SearchCoachmarkQuery,
+    {},
+    { fetchPolicy: 'store-and-network' },
+  );
   const { width } = useWindowDimensions();
   const web = Platform.OS === 'web';
   const mobileWeb = web && getShellLayout(web, width) === 'mobile';
@@ -228,12 +263,30 @@ export default function SearchScreen() {
   const query = typeof params.q === 'string' ? params.q.trim() : '';
   const activeTab = parseSearchTab(params.tab ?? null);
   const inputRef = useRef<TextInput>(null);
+  const inputAnchorRef = useRef<NativeView>(null);
+  const resultsAnchorRef = useRef<NativeView>(null);
+  const coachmarkTriggerRef = useRef<NativeView>(null);
+  const coachmarkHandleRef = useRef<CoachmarkRequestHandle | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const [toolbarKey, setToolbarKey] = useState(0);
+  const [inputAnchorReady, setInputAnchorReady] = useState(false);
+  const [resultsReady, setResultsReady] = useState(false);
+  const [routeFocused, setRouteFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { clearQueryNavigation, getQueryNavigation, recordQueryNavigation } =
     usePrimaryNavigationScroll();
+
+  useFocusEffect(
+    useCallback(() => {
+      setRouteFocused(true);
+      return () => {
+        setRouteFocused(false);
+        coachmarkHandleRef.current?.cancel();
+        coachmarkHandleRef.current = null;
+      };
+    }, []),
+  );
 
   useLayoutEffect(() => {
     const navigation = getQueryNavigation();
@@ -340,14 +393,14 @@ export default function SearchScreen() {
       return next;
     });
   };
-  const keepSearchFocused = () => {
+  const keepSearchFocused = useCallback(() => {
     if (blurTimerRef.current) {
       clearTimeout(blurTimerRef.current);
       blurTimerRef.current = null;
     }
     setFocused(true);
-  };
-  const leaveSearchFocus = () => {
+  }, []);
+  const leaveSearchFocus = useCallback(() => {
     if (blurTimerRef.current) {
       clearTimeout(blurTimerRef.current);
     }
@@ -355,7 +408,96 @@ export default function SearchScreen() {
       blurTimerRef.current = null;
       setFocused(false);
     }, 0);
-  };
+  }, []);
+
+  const markInputAnchorReady = useCallback(() => {
+    setInputAnchorReady(true);
+  }, []);
+
+  const handleResultsAnchor = useCallback((anchor: NativeView | null) => {
+    resultsAnchorRef.current = anchor;
+    setResultsReady(anchor !== null);
+    if (anchor === null) {
+      coachmarkHandleRef.current?.cancel();
+      coachmarkHandleRef.current = null;
+    }
+  }, []);
+  const coachmarkSteps = useMemo(
+    () => [
+      {
+        anchorRef: inputAnchorRef,
+        description: '찾고 싶은 사람의 핸들을 입력하고 검색하세요.',
+        title: '핸들로 사람 찾기',
+      },
+      {
+        anchorRef: inputAnchorRef,
+        description: '@사용자명@서버주소를 입력하고 검색하세요. 예: @alice@mastodon.social',
+        title: '다른 서버의 사람 찾기',
+      },
+      {
+        anchorRef: resultsReady ? resultsAnchorRef : undefined,
+        description: '프로필을 열고 프로필의 태그를 선택해 탐색하세요.',
+        title: '검색 결과로 탐색하기',
+      },
+    ],
+    [resultsReady],
+  );
+  const { open: openCoachmark, requestAutoStart } = useCoachmarkController({
+    account: coachmarkData.me,
+    guide: CoachmarkGuide.SEARCH,
+    preferredFocusRef: coachmarkTriggerRef,
+    ready: inputAnchorReady,
+    steps: coachmarkSteps,
+  });
+  const requestAutoStartEvent = useEffectEvent(requestAutoStart);
+  const automaticCoachmarkReady = routeFocused && inputAnchorReady && !focused;
+
+  useEffect(() => {
+    if (!automaticCoachmarkReady) {
+      return;
+    }
+
+    const handle = requestAutoStartEvent();
+    if (!handle) {
+      return;
+    }
+    coachmarkHandleRef.current = handle;
+    return () => {
+      if (coachmarkHandleRef.current === handle) {
+        handle?.cancel();
+        coachmarkHandleRef.current = null;
+      }
+    };
+  }, [automaticCoachmarkReady]);
+
+  const openHelp = useCallback(() => {
+    if (focused) {
+      keepSearchFocused();
+    }
+    const handle = openCoachmark();
+    if (handle) {
+      coachmarkHandleRef.current = handle;
+    }
+  }, [focused, keepSearchFocused, openCoachmark]);
+
+  const searchHelpButton = (
+    <IconButton
+      accessibilityLabel="검색 도움말"
+      controlRef={coachmarkTriggerRef}
+      onFocus={(event) => {
+        event.stopPropagation();
+        if (focused) {
+          keepSearchFocused();
+        }
+      }}
+      onPress={openHelp}
+      style={styles.iconButton}
+      targetSize={44}
+      visualSize={44}
+    >
+      <CircleQuestionMark color={theme.textSecondary} size={20} strokeWidth={2} />
+    </IconButton>
+  );
 
   const preserveQueryNavigationPosition = (restoreFocus = focused) => {
     if (Platform.OS !== 'web') {
@@ -391,10 +533,10 @@ export default function SearchScreen() {
       preserveQueryNavigationPosition();
       router.setParams({ q: undefined });
     }
+    inputRef.current?.focus();
   };
 
   const phase = focused ? 'input' : query ? 'results' : 'before';
-  const leadingAction = phase === 'before' ? (web && !mobileWeb ? 'none' : 'menu') : 'back';
   const renderLeadingControl = ({ children }: SearchToolbarRenderLeadingControlProps) => {
     const linkControl = cloneElement(
       children as ReactElement<{
@@ -406,10 +548,12 @@ export default function SearchScreen() {
     return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
   };
 
+  const leadingAction = phase === 'before' ? (web && !mobileWeb ? 'none' : 'menu') : 'back';
   const searchToolbar = (
     <SearchToolbar
       key={toolbarKey}
       focused={focused}
+      inputAnchorRef={inputAnchorRef}
       inputRef={inputRef}
       leadingAction={leadingAction}
       leadingControlAriaControls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
@@ -422,11 +566,14 @@ export default function SearchScreen() {
       onBlur={leaveSearchFocus}
       onClear={clearSearch}
       onFocus={keepSearchFocused}
+      onInputAnchorLayout={markInputAnchorReady}
       onMenuPress={shellChrome?.openNavigationDrawer}
       onSubmit={navigate}
-      renderLeadingControl={renderLeadingControl}
       query={query}
-    />
+      renderLeadingControl={renderLeadingControl}
+    >
+      {searchHelpButton}
+    </SearchToolbar>
   );
   const nativeSearchHeader = !web ? <PageHeader>{searchToolbar}</PageHeader> : null;
 
@@ -536,7 +683,7 @@ export default function SearchScreen() {
             ))}
           </RouteTabList>
           {activeTab === SearchTab.PEOPLE ? (
-            <PeopleResults handle={query} />
+            <PeopleResults anchorRef={handleResultsAnchor} handle={query} />
           ) : (
             <StateView
               description={`${tabs.find((tab) => tab.value === activeTab)?.label} 검색은 곧 제공될 예정이에요.`}
@@ -571,6 +718,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
+  iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
   sectionTitle: {
     fontFamily: fontFamilies.ui,
