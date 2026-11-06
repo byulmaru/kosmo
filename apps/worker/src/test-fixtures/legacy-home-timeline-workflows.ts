@@ -1,14 +1,20 @@
 import { NotificationKind } from '@kosmo/core/enums';
 import {
   allHandlersFinished,
+  ChildWorkflowCancellationType,
   condition,
+  continueAsNew,
   defineUpdate,
+  ParentClosePolicy,
   patched,
   proxyActivities,
   setHandler,
+  WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from '../workflows/activity-options';
+import { runChildWorkflow } from '../workflows/child';
+import { homeTimelineInsertWorkflowDefinition } from '../workflows/home-timeline-insert';
 import { settleEffects } from '../workflows/settle-effects';
 import type {
   ProfileFollowPair,
@@ -36,6 +42,7 @@ const {
   executeProfileFollowRemovalActivity,
   fanoutHomeTimelinePostActivity,
   invalidateHomeTimelinesActivity,
+  loadHomeTimelineRecipientPageActivity,
   loadPendingFollowRequestIdActivity,
   sendLocalPostCreateActivity,
   sendLocalPostDeleteActivity,
@@ -45,6 +52,45 @@ const {
   sendRepostUndoActivity,
   verifyProfileFollowRemovalActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
+
+type HomeTimelineFanoutInput = {
+  readonly postId: string;
+  readonly afterProfileId?: string;
+};
+
+export { homeTimelineInsertWorkflow } from '../workflows/home-timeline-insert';
+
+export async function homeTimelineFanoutWorkflow(input: HomeTimelineFanoutInput): Promise<void> {
+  const page = await loadHomeTimelineRecipientPageActivity({
+    postId: input.postId,
+    ...(input.afterProfileId === undefined ? {} : { afterProfileId: input.afterProfileId }),
+  });
+
+  await settleEffects(
+    page.profileIds.map(async (profileId) => {
+      try {
+        await runChildWorkflow(homeTimelineInsertWorkflowDefinition, {
+          args: [{ postId: input.postId, profileId }],
+          cancellationType: ChildWorkflowCancellationType.ABANDON,
+          mode: 'start',
+          parentClosePolicy: ParentClosePolicy.ABANDON,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        });
+      } catch (error: unknown) {
+        if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+          throw error;
+        }
+      }
+    }),
+  );
+
+  if (page.nextCursor !== null) {
+    await continueAsNew<typeof homeTimelineFanoutWorkflow>({
+      afterProfileId: page.nextCursor,
+      postId: input.postId,
+    });
+  }
+}
 
 type PostEffectInput = {
   readonly postId: string;

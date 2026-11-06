@@ -221,6 +221,25 @@ test(
       profileIds: [sortedCandidates[100]!.id],
       nextCursor: null,
     });
+
+    const customFirst = await listHomeTimelineRecipientPage({ postId: post.id, limit: 2 });
+    assert.deepEqual(customFirst, {
+      profileIds: sortedCandidates.slice(0, 2).map(({ id }) => id),
+      nextCursor: sortedCandidates[1]!.id,
+    });
+    const customSecond = await listHomeTimelineRecipientPage({
+      postId: post.id,
+      afterProfileId: customFirst.nextCursor!,
+      limit: 2,
+    });
+    assert.deepEqual(customSecond, {
+      profileIds: sortedCandidates.slice(2, 4).map(({ id }) => id),
+      nextCursor: sortedCandidates[3]!.id,
+    });
+    assert.deepEqual(await listHomeTimelineRecipientPage({ postId: post.id, limit: 1_000 }), {
+      profileIds: sortedCandidates.map(({ id }) => id),
+      nextCursor: null,
+    });
   },
 );
 

@@ -320,9 +320,11 @@ export const touchHomeTimeline = async ({
 const listHomeTimelineCandidatePage = async ({
   postId,
   afterProfileId,
+  limit = candidateBatchSize,
 }: {
   readonly postId: string;
   readonly afterProfileId?: string;
+  readonly limit?: number;
 }): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
   const candidateRows = await db
     .select({ profileId: HomeFanoutViewers.id })
@@ -335,25 +337,32 @@ const listHomeTimelineCandidatePage = async ({
       ),
     )
     .orderBy(asc(HomeFanoutViewers.id))
-    .limit(candidateBatchSize + 1);
-  const candidates = candidateRows.slice(0, candidateBatchSize);
-  const nextCursor =
-    candidateRows.length > candidateBatchSize ? (candidates.at(-1)?.profileId ?? null) : null;
+    .limit(limit + 1);
+  const candidates = candidateRows.slice(0, limit);
+  const nextCursor = candidateRows.length > limit ? (candidates.at(-1)?.profileId ?? null) : null;
   return { profileIds: candidates.map(({ profileId }) => profileId), nextCursor };
 };
 
 export const listHomeTimelineRecipientPage = async ({
   postId,
   afterProfileId,
+  limit = candidateBatchSize,
 }: {
   readonly postId: string;
   readonly afterProfileId?: string;
+  readonly limit?: number;
 }): Promise<{ readonly profileIds: string[]; readonly nextCursor: string | null }> => {
+  if (!Number.isInteger(limit) || limit < 1 || limit > maximumEntries) {
+    throw new RangeError(
+      `Home timeline recipient page limit must be between 1 and ${maximumEntries}`,
+    );
+  }
+
   if (!process.env.REDIS_URL?.trim()) {
     return { profileIds: [], nextCursor: null };
   }
 
-  return listHomeTimelineCandidatePage({ postId, afterProfileId });
+  return listHomeTimelineCandidatePage({ postId, afterProfileId, limit });
 };
 
 export const insertHomeTimelinePost = async ({

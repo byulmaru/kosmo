@@ -236,6 +236,13 @@ const {
 } = await import('./cache.ts');
 process.env.REDIS_URL = 'redis://mock';
 
+const postId = '550e8400-e29b-41d4-a716-446655440000';
+const profileId = 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f';
+
+for (const limit of [0, 1.5, 1_001]) {
+  await assert.rejects(listHomeTimelineRecipientPage({ postId, limit }), RangeError);
+}
+
 const retryAfterRedisFailure = async (operation) => {
   failNextRedisCall = true;
   const callsBefore = redisCalls;
@@ -246,48 +253,48 @@ const retryAfterRedisFailure = async (operation) => {
   assert.ok(redisCalls > callsAfterFailure, 'the retry must attempt Redis again');
 };
 
-candidateRows = [{ id: '550e8400-e29b-41d4-a716-446655440000' }];
+candidateRows = [{ id: postId }];
 await retryAfterRedisFailure(() => insertHomeTimelinePost({
-  postId: '550e8400-e29b-41d4-a716-446655440000',
-  profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f',
+  postId,
+  profileId,
 }));
 
-candidateRows = [{ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' }];
+candidateRows = [{ profileId }];
 const callsBeforeRecipientPage = redisCalls;
 assert.deepEqual(await listHomeTimelineRecipientPage({
-  postId: '550e8400-e29b-41d4-a716-446655440000',
+  postId,
 }), {
-  profileIds: ['a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f'],
+  profileIds: [profileId],
   nextCursor: null,
 });
 assert.equal(redisCalls, callsBeforeRecipientPage);
 
 await retryAfterRedisFailure(() => removeHomeTimelinePost({
-  postId: '550e8400-e29b-41d4-a716-446655440000',
+  postId,
 }));
 
 candidateRows = [];
 const selectQueriesBeforeEmptyReconcile = selectQueries;
 await retryAfterRedisFailure(() => reconcileHomeTimelineFollow({
-  profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f',
+  profileId,
 }));
 assert.equal(selectQueries, selectQueriesBeforeEmptyReconcile);
 
 failNextRedisCall = true;
-await touchHomeTimeline({ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' });
+await touchHomeTimeline({ profileId });
 
 const callsBeforeUnconfigured = redisCalls;
 delete process.env.REDIS_URL;
 await insertHomeTimelinePost({
-  postId: '550e8400-e29b-41d4-a716-446655440000',
-  profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f',
+  postId,
+  profileId,
 });
-await touchHomeTimeline({ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' });
+await touchHomeTimeline({ profileId });
 assert.deepEqual(await listHomeTimelineRecipientPage({
-  postId: '550e8400-e29b-41d4-a716-446655440000',
+  postId,
 }), { profileIds: [], nextCursor: null });
-await removeHomeTimelinePost({ postId: '550e8400-e29b-41d4-a716-446655440000' });
-await reconcileHomeTimelineFollow({ profileId: 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f' });
+await removeHomeTimelinePost({ postId });
+await reconcileHomeTimelineFollow({ profileId });
 assert.equal(redisCalls, callsBeforeUnconfigured);
 `;
 

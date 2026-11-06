@@ -116,6 +116,19 @@
   transition effects는 domain contract가 정한 FIFO queue에 넣고, queue 순서를 보존해 drain한다.
 - `settleEffects` 같은 deterministic Workflow 전용 공통 로직은 `workflows` 아래 공용 모듈 한 곳에 둔다. 특정 domain Workflow 파일에 복사하거나 그 파일의 private helper로 두지 않는다.
 - Workflow effect는 개수와 관계없이 `settleEffects`로 정산해 종료와 실패 보고 경계를 일관되게 유지한다.
+- Home timeline fanout의 신규 history는 `patched('home-timeline-batch-fanout-v1')` 뒤에서 수신자 페이지를 최대
+  1,000개까지 읽고, 프로필 ID를 최대 100개씩 묶은 `homeTimelineInsertBatchWorkflow` child를 순차 실행한다.
+  각 batch child는 입력을 최대 100개로 검증한 뒤 기존 `insertHomeTimelinePostActivity`를 프로필별로 실행하고
+  `settleEffects`로 모두 정산한다. 각 프로필은 별도 Activity history와 기존 최대 10회 시도 정책을 가지므로 완료된
+  sibling은 Activity retry나 Workflow replay에서 다시 실행되지 않는다. 한 Activity의 지연은 해당 batch와 이후
+  batch를 지연시킨다. 실제 동시 Activity 실행은 기존 Worker slot이 제한하며, 새 전역 quota나 누적 호출 예산을
+  의미하지 않고 load-tested capacity 보장도 아니다. 현재 페이지의 모든 batch가 끝난 뒤에만 cursor로
+  `continueAsNew` 한다. Batch child ID에는 fanout chain의 `firstExecutionRunId`와 첫·마지막 profile ID를
+  포함해 identity를 구분한다. `firstExecutionRunId`는 Reset과 Continue-As-New 뒤에도 chain 시작 run을 가리켜,
+  현재 run ID와 달리 Reset 재실행에서도 child identity를 유지한다. 종료된 batch child 실패는 context와 함께
+  기록하고 나머지 batch/page를 진행하지만, cancellation과 child start 오류는 전파한다. Marker 이전 history는 기존
+  page Activity input과 프로필별 `homeTimelineInsertWorkflow` start/acknowledgement, Continue-As-New 순서를 그대로
+  재생한다. 두 Workflow와 legacy replay fixture는 해당 history가 drain될 때까지 유지한다.
 - origin이나 transition variant와 무관하게 실행하는 Activity는 match 바깥에서 선언한다. `ts-pattern`의 exhaustive match는 variant별 추가 Activity만 선택하고, 공통 Activity를 각 branch에 반복해서 나열하지 않는다.
 - notification과 effect 목록처럼 한 번만 소비하는 중간 변수는 만들지 않는다. 공통 Activity와 variant별 추가 Activity를 `settleEffects([...])` 호출에 함께 인라인해 실제 실행 조합을 한 위치에서 읽을 수 있게 한다.
 - Workflow code에서는 wall clock, network, database와 process-local state에 직접 접근하지 않고 Temporal이 허용하는 deterministic API와 proxied Activity만 사용한다.
