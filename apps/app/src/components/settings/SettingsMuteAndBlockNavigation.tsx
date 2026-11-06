@@ -1,12 +1,15 @@
 import { StyleSheet, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { layoutRecipes } from '@/theme/tokens';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
 export function SettingsMuteAndBlockNavigation({
   selected,
 }: {
-  selected?: 'blocked-profiles' | 'muted-profiles';
+  selected?: 'blocked-profiles' | 'muted-profiles' | 'natural-language-mute';
 }) {
+  const naturalLanguageMuteSettingsEnabled = useFeatureFlag('natural-language-mute-settings');
+
   return (
     <View
       accessibilityLabel="뮤트 및 차단 목록"
@@ -27,6 +30,15 @@ export function SettingsMuteAndBlockNavigation({
         primary
         selected={selected === 'blocked-profiles'}
       />
+      {naturalLanguageMuteSettingsEnabled ? (
+        <SettingsLinkRow
+          accessibilityLabel="자연어 뮤트 설정 열기"
+          href="/settings/natural-language-mute"
+          label="자연어 뮤트"
+          primary
+          selected={selected === 'natural-language-mute'}
+        />
+      ) : null}
     </View>
   );
 }

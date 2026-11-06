@@ -4,9 +4,11 @@ import { Temporal } from 'temporal-polyfill';
 import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
 import { runRedisCommand } from '../redis/client';
 import { homePostListWhere } from '../visibility/home-post-list';
+import { getCachedHomeTimelinePostIds, homeTimelineFeedKey as feedKey } from './membership';
+import { filterHomeTimelineMuteCandidates, filterHomeTimelinePosts } from './natural-language-mute';
 import { queryHomeTimeline } from './query';
 
-const feedKeyPrefix = 'kosmo:home-timeline:profile:';
+const feedKeyPrefix = feedKey('');
 const legacyReadyMember = '__ready__';
 const maximumEntries = 1_000;
 const keyLifetimeSeconds = 604_800;
@@ -51,8 +53,6 @@ export type HomeTimelineEntry = {
   readonly postId: string;
   readonly score: number;
 };
-
-const feedKey = (profileId: string) => `${feedKeyPrefix}${profileId}`;
 
 const parseEntries = (
   entries: readonly { value: string; score: number }[],
@@ -263,7 +263,15 @@ export const fanoutHomeTimelinePost = async ({
   }
 
   const viewers = await db
-    .select({ profileId: HomeFanoutViewers.id })
+    .select({
+      profileId: HomeFanoutViewers.id,
+      post: {
+        id: Posts.id,
+        currentContentId: Posts.currentContentId,
+        quoteConsentStatus: Posts.quoteConsentStatus,
+        repostSourceId: Posts.repostSourceId,
+      },
+    })
     .from(HomeFanoutViewers)
     .innerJoin(
       HomeFanoutViewerInstances,
@@ -285,9 +293,27 @@ export const fanoutHomeTimelinePost = async ({
   const score = Temporal.Now.instant().epochMilliseconds;
   for (let offset = 0; offset < viewers.length; offset += candidateBatchSize) {
     const batch = viewers.slice(offset, offset + candidateBatchSize);
+    const cachedMemberships = await Promise.all(
+      batch.map(async (viewer) => ({
+        viewer,
+        cached: (await getCachedHomeTimelinePostIds(viewer.profileId, [postId])).has(postId),
+      })),
+    );
+    const newCandidates = cachedMemberships
+      .filter(({ cached }) => !cached)
+      .map(({ viewer }) => ({ profileId: viewer.profileId, post: viewer.post }));
+    const includedCandidates = await filterHomeTimelineMuteCandidates(newCandidates);
+    const includedProfileIds = new Set(includedCandidates.map(({ profileId }) => profileId));
+    const writableProfileIds = cachedMemberships
+      .filter(({ cached, viewer }) => !cached && includedProfileIds.has(viewer.profileId))
+      .map(({ viewer }) => viewer.profileId);
+    if (writableProfileIds.length === 0) {
+      continue;
+    }
+
     const result = await runRedisCommand((client) => {
       const transaction = client.multi();
-      for (const { profileId } of batch) {
+      for (const profileId of writableProfileIds) {
         transaction.eval(fanoutScript, {
           keys: [feedKey(profileId)],
           arguments: [String(score), postId, legacyReadyMember, String(keyLifetimeSeconds)],
@@ -378,6 +404,12 @@ export const insertHomeTimelinePost = async ({
 
   const eligiblePosts = await queryHomeTimeline({ profileId, postIds: [postId], limit: 1 });
   if (eligiblePosts.length === 0) {
+    return;
+  }
+  if ((await getCachedHomeTimelinePostIds(profileId, [postId])).has(postId)) {
+    return;
+  }
+  if ((await filterHomeTimelinePosts({ profileId, posts: eligiblePosts })).length === 0) {
     return;
   }
 
@@ -494,7 +526,8 @@ export const reconcileHomeTimelineFollow = async ({
   const currentlyEligiblePostIds = new Set(currentlyEligiblePosts.map(({ id }) => id));
   const removePostIds = cachedPostIds.filter((postId) => !currentlyEligiblePostIds.has(postId));
   const latestEligiblePosts = await queryHomeTimeline({ profileId, limit: maximumEntries });
-  const addPosts = latestEligiblePosts.filter(({ id }) => !cachedPostIdSet.has(id));
+  const missingPosts = latestEligiblePosts.filter(({ id }) => !cachedPostIdSet.has(id));
+  const addPosts = await filterHomeTimelinePosts({ profileId, posts: missingPosts });
 
   const result = await runRedisCommand((client) =>
     client.eval(reconcileScript, {

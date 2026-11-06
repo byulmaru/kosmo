@@ -26,6 +26,9 @@ const client = {
         evalCalls += 1;
         return transaction;
       },
+      zScore() {
+        return transaction;
+      },
       async exec() {
         return transactionResults.shift() ?? [];
       },
@@ -79,6 +82,12 @@ mock.module(new URL('../db/index.ts', import.meta.url), {
 const { fanoutHomeTimelinePost } = await import('./cache.ts');
 const postId = '550e8400-e29b-41d4-a716-446655440000';
 const viewerId = 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f';
+const post = {
+  id: postId,
+  currentContentId: null,
+  quoteConsentStatus: null,
+  repostSourceId: null,
+};
 const reset = ({ rows = [], redis = [], transaction = [] } = {}) => {
   redisCalls = 0;
   candidateQueries = 0;
@@ -106,16 +115,28 @@ await assert.rejects(fanoutHomeTimelinePost({ postId }), Error);
 assert.equal(redisCalls, 1);
 assert.equal(candidateQueries, 0);
 
-reset({ rows: [{ profileId: viewerId }], redis: ['ready', 'unavailable'] });
+reset({ rows: [{ profileId: viewerId, post }], redis: ['ready', 'ready', 'unavailable'] });
 await assert.rejects(fanoutHomeTimelinePost({ postId }), Error);
-assert.equal(redisCalls, 2);
-assert.equal(candidateQueries, 1);
 
-redisResponses.push('ready', 'ready');
-transactionResults.push([0]);
+redisResponses.push('ready', 'ready', 'ready');
+transactionResults.push([null], [0]);
 await fanoutHomeTimelinePost({ postId });
-assert.equal(redisCalls, 4);
-assert.equal(candidateQueries, 2);
+assert.equal(evalCalls, 1);
+
+reset({
+  rows: [{ profileId: viewerId, post }],
+  redis: ['ready', 'ready'],
+  transaction: [[25]],
+});
+await fanoutHomeTimelinePost({ postId });
+assert.equal(evalCalls, 0);
+
+reset({
+  rows: [{ profileId: viewerId, post }],
+  redis: ['ready', 'ready', 'ready'],
+  transaction: [['invalid-score'], [0]],
+});
+await fanoutHomeTimelinePost({ postId });
 assert.equal(evalCalls, 1);
 
 reset({ redis: ['ready'] });
@@ -154,7 +175,7 @@ import { sql } from 'drizzle-orm';
 import * as tables from '../db/tables.ts';
 
 let redisCalls = 0;
-let failNextRedisCall = false;
+let failNextRedisCalls = 0;
 let candidateRows = [];
 let selectQueries = 0;
 
@@ -174,7 +195,7 @@ const client = {
         return transaction;
       },
       zScore() {
-        results.push(() => -1);
+        results.push(() => null);
         return transaction;
       },
       zRem() {
@@ -196,8 +217,8 @@ mock.module(new URL('../redis/client.ts', import.meta.url), {
   exports: {
     runRedisCommand: async (command) => {
       redisCalls += 1;
-      if (failNextRedisCall) {
-        failNextRedisCall = false;
+      if (failNextRedisCalls > 0) {
+        failNextRedisCalls -= 1;
         return null;
       }
       return { value: await command(client) };
@@ -243,8 +264,8 @@ for (const limit of [0, 1.5, 1_001]) {
   await assert.rejects(listHomeTimelineRecipientPage({ postId, limit }), RangeError);
 }
 
-const retryAfterRedisFailure = async (operation) => {
-  failNextRedisCall = true;
+const retryAfterRedisFailure = async (operation, failCount = 1) => {
+  failNextRedisCalls = failCount;
   const callsBefore = redisCalls;
   await assert.rejects(operation(), Error);
   assert.ok(redisCalls > callsBefore, 'the failed attempt must reach Redis');
@@ -257,7 +278,7 @@ candidateRows = [{ id: postId }];
 await retryAfterRedisFailure(() => insertHomeTimelinePost({
   postId,
   profileId,
-}));
+}), 2);
 
 candidateRows = [{ profileId }];
 const callsBeforeRecipientPage = redisCalls;
@@ -280,7 +301,7 @@ await retryAfterRedisFailure(() => reconcileHomeTimelineFollow({
 }));
 assert.equal(selectQueries, selectQueriesBeforeEmptyReconcile);
 
-failNextRedisCall = true;
+failNextRedisCalls = 1;
 await touchHomeTimeline({ profileId });
 
 const callsBeforeUnconfigured = redisCalls;

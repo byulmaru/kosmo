@@ -32,6 +32,14 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   Eligibility, Follow, Block, Mute 규칙을 판정한다. Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에
   몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부, 바깥 Post와 direct Source Post의 Author
   Profile ACTIVE 상태를 다시 확인한다.
+- Home GraphQL 페이지는 Natural Language Mute Rule을 적용하기 전의 bounded 후보 Post를 기준으로 나눈다. 요청한
+  후보 수와 최대 한 항목의 lookahead만 읽으며, 제외 후 반환 edge 수는 더 적거나 비어 있을 수 있다. `pageInfo`와
+  cursor는 소비한 후보 페이지를 나타내고 lookahead 후보는 다음 요청에 남으므로, edge가 비어 있어도 다음 페이지로
+  이어질 수 있다. 보이는 Post 수를 채우기 위해 추가 후보를 계속 읽지 않는다.
+- [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때만
+  기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. 일반 적재, Follow 보정과 Home
+  목록 cache 재구성에서 새로 추가할 때도 적용하며, 이미 Home에 있는 항목을 규칙 생성·변경·제거로 소급 변경하지
+  않는다. Local·Profile·Hashtag 목록, 검색, Notification, Bookmark, Post 직접 조회와 상호작용에는 적용하지 않는다.
 - Home 파생 목록은 언제든 사라질 수 있는 임시 cache이며, 영구 Home projection이나 별도 초기화 상태를 저장하지 않는다.
   인증된 Home 조회는 기존 cache의 7일 만료 시간을 연장하고, Post 삽입을 위한 background 처리는 기존 만료 시간을
   연장하지 않는다. cache가 없거나 요청한 범위에 유효한 항목이 없으면 그 페이지를 DB에서 현재 정책에 따라 조회하며,
@@ -92,18 +100,19 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## 제어 정책
 
-| Control              | Home                           | Local                      | Profile                                                   | Hashtag                    |
-| -------------------- | ------------------------------ | -------------------------- | --------------------------------------------------------- | -------------------------- |
-| Profile Block        | 상대 콘텐츠 양방향 Exclude     | 상대 콘텐츠 양방향 Exclude | 방향별 Post 조회 정책 적용                                | 상대 콘텐츠 양방향 Exclude |
-| Profile Mute         | Exclude                        | Exclude                    | 방문한 Profile만 예외                                     | Exclude                    |
-| Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
-| Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
-| Profile Domain Block | Exclude                        | Exclude                    | Exclude                                                   | Exclude                    |
-| Domain Limit         | Include                        | Include                    | Include                                                   | Exclude                    |
-| Sensitive Media      | Collapse                       | Collapse                   | Collapse                                                  | Collapse                   |
-| 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                                                   | Exclude                    |
-| Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | pinned segment이면 Include, 기존 chronology에서는 Exclude | Exclude                    |
-| Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include                                    | Exclude                    |
+| Control                    | Home                                   | Local                      | Profile                                                   | Hashtag                    |
+| -------------------------- | -------------------------------------- | -------------------------- | --------------------------------------------------------- | -------------------------- |
+| Profile Block              | 상대 콘텐츠 양방향 Exclude             | 상대 콘텐츠 양방향 Exclude | 방향별 Post 조회 정책 적용                                | 상대 콘텐츠 양방향 Exclude |
+| Profile Mute               | Exclude                                | Exclude                    | 방문한 Profile만 예외                                     | Exclude                    |
+| Word Mute Rule             | Scope와 Mute Decision 적용             | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
+| Hashtag Mute Rule          | Scope와 Mute Decision 적용             | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
+| Natural Language Mute Rule | 새 Home 항목 추가 때 의미 일치 Exclude | —                          | —                                                         | —                          |
+| Profile Domain Block       | Exclude                                | Exclude                    | Exclude                                                   | Exclude                    |
+| Domain Limit               | Include                                | Include                    | Include                                                   | Exclude                    |
+| Sensitive Media            | Collapse                               | Collapse                   | Collapse                                                  | Collapse                   |
+| 조회할 수 없는 Media       | Exclude                                | Exclude                    | Exclude                                                   | Exclude                    |
+| Reply Parent 있음          | Home 후보 정책 통과 시 Include         | Exclude                    | pinned segment이면 Include, 기존 chronology에서는 Exclude | Exclude                    |
+| Content 없는 Repost        | Home 후보 정책 통과 시 Include         | Exclude                    | Target 작성 시 Include                                    | Exclude                    |
 
 - Home Post Visibility와 Post Eligibility는 항목을 파생 목록에 넣을 때 적용한다. Local, Profile, Hashtag Post List는
   기존 조회 시점의 Visibility와 Eligibility 정책을 적용한다.

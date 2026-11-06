@@ -290,6 +290,20 @@ export const Media = pgTable(
   ],
 );
 
+export const NaturalLanguageMuteRules = pgTable(
+  'natural_language_mute_rule',
+  {
+    id: id(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    condition: text('condition').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index().on(table.ownerProfileId)],
+);
+
 export const Notifications = pgTable(
   'notification',
   {

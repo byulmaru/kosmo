@@ -5,6 +5,7 @@ import './follow';
 import './follow-request';
 import './following-accounts-import';
 import './mute';
+import './natural-language-mute-rule';
 import './migration';
 import './select';
 import './pin';

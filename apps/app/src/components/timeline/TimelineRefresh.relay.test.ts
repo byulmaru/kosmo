@@ -302,7 +302,12 @@ const profile = {
   private: { defaultPostVisibility: 'PUBLIC' },
   viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
 };
-function payload(field: string, ids: string[], hasNextPage = true) {
+function payload(
+  field: string,
+  ids: string[],
+  hasNextPage = true,
+  endCursor = `cursor-${ids.at(-1)}`,
+) {
   return {
     currentSession: { id: 'session', selectedProfile: profile },
     me: { id: 'account', name: 'Author', profiles: [{ id: profile.id }] },
@@ -335,7 +340,7 @@ function payload(field: string, ids: string[], hasNextPage = true) {
           repostCount: 0,
         },
       })),
-      pageInfo: { endCursor: `cursor-${ids.at(-1)}`, hasNextPage },
+      pageInfo: { endCursor, hasNextPage },
     },
   };
 }
@@ -359,6 +364,7 @@ function assertConnection(
   field: string,
   ids: string[],
   hasNextPage = true,
+  endCursor = `cursor-${ids.at(-1)}`,
 ) {
   assert.ok(renderer);
   assert.deepEqual(
@@ -382,7 +388,7 @@ function assertConnection(
     ids.map((id) => `cursor-${id}`),
   );
   const pageInfo = source.get((connection.pageInfo as { __ref: string }).__ref);
-  assert.equal(pageInfo?.endCursor, `cursor-${ids.at(-1)}`);
+  assert.equal(pageInfo?.endCursor, endCursor);
   assert.equal(pageInfo?.hasNextPage, hasNextPage);
 }
 
@@ -495,6 +501,52 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assert.equal(requests.length, 2, 'stale cached data should still trigger a request');
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh']));
     assertConnection(environment, 'homeTimeline', ['fresh']);
+  });
+
+  it('Home: continues through empty pages with each Relay cursor until a post is visible', async () => {
+    platform.OS = 'web';
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { documentElement: { scrollHeight: 100 } },
+    });
+    const environment = new Environment({
+      network: Network.create((operation, variables) =>
+        Observable.create<GraphQLResponse>((sink) => {
+          requests.push({ name: operation.name, variables, sink });
+        }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    const cursorA = 'db:00000000-0000-4000-8000-000000000001';
+    const cursorB = 'db:00000000-0000-4000-8000-000000000002';
+    const cursorC = 'db:00000000-0000-4000-8000-000000000003';
+
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', [], true, cursorA));
+    assertConnection(environment, 'homeTimeline', [], true, cursorA);
+    const firstNextPage = latest('PostListHomeNextPageQuery');
+    assert.equal(firstNextPage.variables.cursor, cursorA);
+    assert.equal(firstNextPage.variables.count, 20);
+
+    await respond(firstNextPage, payload('homeTimeline', [], true, cursorB));
+    assertConnection(environment, 'homeTimeline', [], true, cursorB);
+    await act(async () => mock.timers.tick(0));
+    const secondNextPage = latest('PostListHomeNextPageQuery');
+    assert.notEqual(secondNextPage, firstNextPage);
+    assert.equal(secondNextPage.variables.cursor, cursorB);
+    assert.equal(secondNextPage.variables.count, 20);
+
+    await respond(secondNextPage, payload('homeTimeline', ['visible'], false, cursorC));
+    assertConnection(environment, 'homeTimeline', ['visible'], false, cursorC);
+    await act(async () => mock.timers.tick(0));
+    assert.equal(requests.length, 3, 'pagination stops when the visible page has no successor');
   });
 
   for (const timeline of ['Home', 'Local'] as const) {

@@ -5,7 +5,7 @@ import {
   readHomeTimelineCache,
   touchHomeTimeline,
 } from '@kosmo/core/home-timeline/cache';
-import { queryHomeTimeline } from '@kosmo/core/home-timeline/query';
+import { queryHomeTimelineForInsertion } from '@kosmo/core/home-timeline/query';
 import { homePostProfileStateWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
@@ -104,10 +104,12 @@ const readCachedHomeTimeline = async ({
   readonly profileId: string;
 }): Promise<{
   readonly rows: PostRow[];
+  readonly includedPostIds: Set<string>;
   readonly scoresByRow: WeakMap<PostRow, number>;
 } | null> => {
   const scoresByRow = new WeakMap<PostRow, number>();
   const rows: PostRow[] = [];
+  const includedPostIds = new Set<string>();
   let readLimit = limit;
   let read = await readHomeTimelineCacheSafely({
     profileId,
@@ -127,6 +129,9 @@ const readCachedHomeTimeline = async ({
     const entries = read.entries;
     const cachedRows = await activeCachedPosts(entries, scoresByRow);
     rows.push(...cachedRows);
+    for (const { id } of cachedRows) {
+      includedPostIds.add(id);
+    }
 
     const remaining = limit - rows.length;
     if (remaining <= 0) {
@@ -160,23 +165,26 @@ const readCachedHomeTimeline = async ({
 
   const remaining = limit - rows.length;
   if (remaining > 0 && databaseBoundaryPostId) {
-    const boundaryRows = await queryHomeTimeline({
+    const boundary = await queryHomeTimelineForInsertion({
       profileId,
       ...(inverted ? { before: databaseBoundaryPostId } : { after: databaseBoundaryPostId }),
       limit: remaining,
       inverted,
     });
-    rows.push(...boundaryRows);
+    rows.push(...boundary.candidates);
+    for (const { id } of boundary.includedPosts) {
+      includedPostIds.add(id);
+    }
     if (!inverted) {
       void cacheHomeTimelinePage({
         profileId,
-        postIds: boundaryRows.map(({ id }) => id),
+        postIds: boundary.includedPosts.map(({ id }) => id),
         after: databaseBoundaryPostId,
       }).catch(() => {});
     }
   }
 
-  return { rows, scoresByRow };
+  return { rows, includedPostIds, scoresByRow };
 };
 
 const readHomeTimelineCacheSafely = async (options: {
@@ -199,10 +207,11 @@ builder.queryField('homeTimeline', (t) =>
       type: Post,
       nullable: true,
       unauthorizedResolver: () => null,
-      resolve: (_, args, ctx) => {
+      resolve: async (_, args, ctx) => {
         let scoresByRow = new WeakMap<PostRow, number>();
+        let includedPostIds = new Set<string>();
 
-        return resolveCursorConnection<Promise<PostRow[]>>(
+        const connection = await resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
             toCursor: (post) => {
@@ -235,6 +244,7 @@ builder.queryField('homeTimeline', (t) =>
               });
               if (cached !== null) {
                 scoresByRow = cached.scoresByRow;
+                includedPostIds = cached.includedPostIds;
                 return cached.rows;
               }
 
@@ -245,7 +255,7 @@ builder.queryField('homeTimeline', (t) =>
               await touchHomeTimeline({ profileId });
             }
 
-            const rows = await queryHomeTimeline({
+            const page = await queryHomeTimelineForInsertion({
               profileId,
               after:
                 compatibleCursors && after?.kind === 'db' && cursorKind === 'db'
@@ -258,6 +268,7 @@ builder.queryField('homeTimeline', (t) =>
               limit,
               inverted,
             });
+            includedPostIds = new Set(page.includedPosts.map(({ id }) => id));
             if (
               !inverted &&
               before === undefined &&
@@ -265,13 +276,18 @@ builder.queryField('homeTimeline', (t) =>
             ) {
               void cacheHomeTimelinePage({
                 profileId,
-                postIds: rows.map(({ id }) => id),
+                postIds: page.includedPosts.map(({ id }) => id),
                 after: after?.kind === 'db' ? after.postId : undefined,
               }).catch(() => {});
             }
-            return rows;
+            return page.candidates;
           },
         );
+        // Keep candidate cursors so fully filtered pages can still advance.
+        return {
+          ...connection,
+          edges: connection.edges.filter(({ node }) => includedPostIds.has(node.id)),
+        };
       },
     },
     PostConnection as never,

@@ -7,6 +7,8 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -14,7 +16,10 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
@@ -36,6 +41,8 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
+let NaturalLanguageMuteRules: typeof CoreDb.NaturalLanguageMuteRules;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
 let PostContents: typeof CoreDb.PostContents;
@@ -46,6 +53,8 @@ let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let cacheHomeTimelinePage: typeof HomeTimelineCache.cacheHomeTimelinePage;
 let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
+let insertHomeTimelinePost: typeof HomeTimelineCache.insertHomeTimelinePost;
+let reconcileHomeTimelineFollow: typeof HomeTimelineCache.reconcileHomeTimelineFollow;
 let invalidateHomeTimelines: typeof HomeTimelineCache.invalidateHomeTimelines;
 let removeHomeTimelinePost: typeof HomeTimelineCache.removeHomeTimelinePost;
 let readHomeTimelineCache: typeof HomeTimelineCache.readHomeTimelineCache;
@@ -59,6 +68,7 @@ const fixtureProfileIds: string[] = [];
 const fixtureAccountIds: string[] = [];
 const fixturePostIds: string[] = [];
 const fixtureContentIds: string[] = [];
+const fixtureMediaIds: string[] = [];
 
 type GraphQLResult<TData> = {
   readonly data?: TData | null;
@@ -78,6 +88,7 @@ type HomeConnection = {
     };
   }[];
   readonly pageInfo: {
+    readonly startCursor?: string | null;
     readonly endCursor: string | null;
     readonly hasNextPage: boolean;
     readonly hasPreviousPage: boolean;
@@ -89,6 +100,19 @@ type Auth = {
   readonly profile: { readonly id: string };
   readonly session: { readonly id: string };
   readonly token: string;
+};
+
+type NaturalMuteRequest = {
+  readonly input: readonly {
+    readonly content: readonly {
+      readonly image_url?: string;
+      readonly type: string;
+      readonly text?: string;
+    }[];
+  }[];
+  readonly questions: readonly {
+    readonly instructions: readonly { readonly text?: string }[];
+  }[];
 };
 
 before(async () => {
@@ -107,6 +131,8 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    Media,
+    NaturalLanguageMuteRules,
     pg,
     Posts,
     PostContents,
@@ -119,6 +145,8 @@ before(async () => {
   ({
     cacheHomeTimelinePage,
     fanoutHomeTimelinePost,
+    insertHomeTimelinePost,
+    reconcileHomeTimelineFollow,
     invalidateHomeTimelines,
     removeHomeTimelinePost,
     readHomeTimelineCache,
@@ -182,6 +210,10 @@ after(async () => {
     await db.delete(Sessions).where(inArray(Sessions.accountId, fixtureAccountIds));
     await db.delete(PostContents).where(inArray(PostContents.id, fixtureContentIds));
     await db.delete(Posts).where(inArray(Posts.id, fixturePostIds));
+    await db.delete(Media).where(inArray(Media.id, fixtureMediaIds));
+    await db
+      .delete(NaturalLanguageMuteRules)
+      .where(inArray(NaturalLanguageMuteRules.ownerProfileId, fixtureProfileIds));
     await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, fixtureAccountIds));
     await db.delete(Accounts).where(inArray(Accounts.id, fixtureAccountIds));
     await db.delete(Profiles).where(inArray(Profiles.id, fixtureProfileIds));
@@ -881,6 +913,425 @@ test(
   },
 );
 
+test('bounds Home DB candidate pages before natural-language filtering', async () => {
+  const viewer = await createAuth();
+  const hiddenAuthor = await createProfile('natural-mute-hidden-source');
+  const hiddenSource = await createContentfulPost(
+    hiddenAuthor.id,
+    'hidden source must not reach the model',
+    undefined,
+    PostVisibility.DIRECT,
+  );
+  const idPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const posts = [
+    await createQuote(
+      viewer.profile.id,
+      hiddenSource.id,
+      'exclude-me visible quote body',
+      `${idPrefix}000000000001`,
+    ),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 2', `${idPrefix}000000000002`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 3', `${idPrefix}000000000003`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 4', `${idPrefix}000000000004`),
+    await createContentfulPost(viewer.profile.id, 'exclude-me post 5', `${idPrefix}000000000005`),
+  ];
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: viewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const redisUrl = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+  const modelInputs: string[] = [];
+  const restoreModel = installNaturalMuteModel((request) => {
+    const text = naturalMuteInputText(request);
+    modelInputs.push(text);
+    return text.includes('exclude-me') ? 0.99 : 0.1;
+  });
+  try {
+    const zero = await requestHome(viewer.token, { first: 0 });
+    assert.equal(zero.errors, undefined, JSON.stringify(zero.errors));
+    assert.deepEqual(zero.data?.homeTimeline.edges, []);
+    assert.equal(zero.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.ok(
+      modelInputs.length <= 1,
+      `expected at most one lookahead decision, got ${modelInputs.length}`,
+    );
+
+    const callsAfterZero = modelInputs.length;
+    const first = await requestHome(viewer.token, { first: 2 });
+    assert.equal(first.errors, undefined, JSON.stringify(first.errors));
+    assert.deepEqual(first.data?.homeTimeline.edges, []);
+    assert.equal(first.data?.homeTimeline.pageInfo.startCursor, `db:${posts[4]!.id}`);
+    assert.equal(first.data?.homeTimeline.pageInfo.endCursor, `db:${posts[3]!.id}`);
+    assert.equal(first.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.equal(first.data?.homeTimeline.pageInfo.hasPreviousPage, false);
+    assert.ok(
+      modelInputs.length - callsAfterZero <= 3,
+      `expected at most three candidate decisions, got ${modelInputs.length - callsAfterZero}`,
+    );
+
+    const next = await requestHome(viewer.token, {
+      first: 1,
+      after: first.data!.homeTimeline.pageInfo.endCursor!,
+    });
+    assert.equal(next.errors, undefined, JSON.stringify(next.errors));
+    assert.deepEqual(next.data?.homeTimeline.edges, []);
+    assert.equal(next.data?.homeTimeline.pageInfo.endCursor, `db:${posts[2]!.id}`);
+    assert.equal(next.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const last = await requestHome(viewer.token, {
+      first: 2,
+      after: next.data!.homeTimeline.pageInfo.endCursor!,
+    });
+    assert.equal(last.errors, undefined, JSON.stringify(last.errors));
+    assert.deepEqual(last.data?.homeTimeline.edges, []);
+    assert.equal(last.data?.homeTimeline.pageInfo.endCursor, `db:${posts[0]!.id}`);
+    assert.equal(last.data?.homeTimeline.pageInfo.hasNextPage, false);
+
+    assert.ok(modelInputs.length > 0);
+    assert.ok(modelInputs.some((text) => text.includes('exclude-me visible quote body')));
+    assert.ok(
+      modelInputs.every((text) => !text.includes('hidden source must not reach the model')),
+    );
+  } finally {
+    restoreModel();
+    if (redisUrl === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = redisUrl;
+    }
+  }
+});
+
+test('keeps forward and backward Home lookahead candidates for the next page', async () => {
+  const forwardViewer = await createAuth();
+  const forwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const forwardPosts = [
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me oldest forward post',
+      `${forwardIdPrefix}000000000001`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'include forward lookahead',
+      `${forwardIdPrefix}000000000002`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me middle forward post',
+      `${forwardIdPrefix}000000000003`,
+    ),
+    await createContentfulPost(
+      forwardViewer.profile.id,
+      'exclude-me newest forward post',
+      `${forwardIdPrefix}000000000004`,
+    ),
+  ];
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: forwardViewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const backwardViewer = await createAuth();
+  const backwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const backwardPosts = [
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me oldest backward post',
+      `${backwardIdPrefix}000000000001`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me before boundary backward post',
+      `${backwardIdPrefix}000000000002`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me backward page post 1',
+      `${backwardIdPrefix}000000000003`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'exclude-me backward page post 2',
+      `${backwardIdPrefix}000000000004`,
+    ),
+    await createContentfulPost(
+      backwardViewer.profile.id,
+      'include backward lookahead',
+      `${backwardIdPrefix}000000000005`,
+    ),
+  ];
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: backwardViewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const restoreModel = installNaturalMuteModel((request) =>
+    naturalMuteInputText(request).includes('exclude-me') ? 0.99 : 0.1,
+  );
+  try {
+    const forwardEmpty = await requestHome(forwardViewer.token, { first: 2 });
+    assert.equal(forwardEmpty.errors, undefined, JSON.stringify(forwardEmpty.errors));
+    assert.deepEqual(forwardEmpty.data?.homeTimeline.edges, []);
+    assert.equal(forwardEmpty.data?.homeTimeline.pageInfo.endCursor, `db:${forwardPosts[2]!.id}`);
+    assert.equal(forwardEmpty.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const forwardNext = await requestHome(forwardViewer.token, {
+      first: 2,
+      after: forwardEmpty.data!.homeTimeline.pageInfo.endCursor!,
+    });
+    assert.equal(forwardNext.errors, undefined, JSON.stringify(forwardNext.errors));
+    assert.deepEqual(
+      forwardNext.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', forwardPosts[1]!.id)],
+    );
+    assert.equal(forwardNext.data?.homeTimeline.pageInfo.endCursor, `db:${forwardPosts[0]!.id}`);
+    assert.equal(forwardNext.data?.homeTimeline.pageInfo.hasNextPage, false);
+
+    const backwardEmpty = await requestHome(backwardViewer.token, {
+      last: 2,
+      before: `db:${backwardPosts[1]!.id}`,
+    });
+    assert.equal(backwardEmpty.errors, undefined, JSON.stringify(backwardEmpty.errors));
+    assert.deepEqual(backwardEmpty.data?.homeTimeline.edges, []);
+    assert.equal(
+      backwardEmpty.data?.homeTimeline.pageInfo.startCursor,
+      `db:${backwardPosts[3]!.id}`,
+    );
+    assert.equal(backwardEmpty.data?.homeTimeline.pageInfo.hasPreviousPage, true);
+
+    const backwardStartCursor = backwardEmpty.data!.homeTimeline.pageInfo.startCursor;
+    assert.ok(backwardStartCursor);
+    const backwardNext = await requestHome(backwardViewer.token, {
+      last: 2,
+      before: backwardStartCursor,
+    });
+    assert.equal(backwardNext.errors, undefined, JSON.stringify(backwardNext.errors));
+    assert.deepEqual(
+      backwardNext.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', backwardPosts[4]!.id)],
+    );
+    assert.equal(backwardNext.data?.homeTimeline.pageInfo.hasPreviousPage, false);
+  } finally {
+    restoreModel();
+  }
+});
+
+test('projects stored PostContent and accessible quote source images into natural-language mute input', async () => {
+  const viewer = await createAuth();
+  const sourceAuthor = await createProfile('natural-mute-accessible-source');
+  const sourceImage = await createRemoteImageMedia(sourceAuthor.id);
+  const quoteImage = await createRemoteImageMedia(viewer.profile.id);
+  const source = await createContentfulPost(sourceAuthor.id, 'source body');
+  await db
+    .update(PostContents)
+    .set({
+      document: postContentDocumentFromTextAndMedia(
+        'source body',
+        [{ mediaId: sourceImage.id }],
+        true,
+        'source warning',
+      ),
+    })
+    .where(eq(PostContents.id, source.contentId));
+  const quote = await createQuote(viewer.profile.id, source.id, 'outer body');
+  await db
+    .update(PostContents)
+    .set({
+      document: postContentDocumentFromTextAndMedia(
+        'outer body',
+        [{ mediaId: quoteImage.id }],
+        true,
+        'outer warning',
+      ),
+    })
+    .where(eq(PostContents.id, quote.contentId));
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: viewer.profile.id,
+    condition: 'EXCLUDE',
+  });
+
+  const modelRequests: NaturalMuteRequest[] = [];
+  const restoreModel = installNaturalMuteModel((request) => {
+    modelRequests.push(request);
+    return 0.1;
+  });
+  try {
+    const result = await requestHome(viewer.token, { first: 10 });
+    assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+    assert.deepEqual(
+      result.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', quote.id)],
+    );
+    assert.ok(
+      modelRequests.some((request) => {
+        const text = naturalMuteInputText(request);
+        return (
+          text.includes('outer body') &&
+          text.includes('outer warning') &&
+          text.includes('source body') &&
+          text.includes('source warning')
+        );
+      }),
+    );
+    const imageUrls = modelRequests.flatMap(naturalMuteInputImageUrls);
+    assert.ok(quoteImage.url);
+    assert.ok(sourceImage.url);
+    assert.ok(imageUrls.includes(quoteImage.url));
+    assert.ok(imageUrls.includes(sourceImage.url));
+  } finally {
+    restoreModel();
+  }
+});
+
+test(
+  'keeps existing Home membership without running natural-language inference',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const post = await createContentfulPost(viewer.profile.id, 'already present in Home');
+    await cacheHomeTimelinePage({ profileId: viewer.profile.id, postIds: [post.id] });
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude every post',
+    });
+
+    let calls = 0;
+    const restoreModel = installNaturalMuteModel(() => {
+      calls += 1;
+      return 0.99;
+    });
+    try {
+      const result = await requestHome(viewer.token, { first: 10 });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.deepEqual(
+        result.data?.homeTimeline.edges.map(({ node }) => [node.id, node.content?.bodyText]),
+        [[encodeGlobalId('Post', post.id), 'already present in Home']],
+      );
+
+      await insertHomeTimelinePost({ postId: post.id, profileId: viewer.profile.id });
+      await fanoutHomeTimelinePost({ postId: post.id });
+      await reconcileHomeTimelineFollow({ profileId: viewer.profile.id });
+      assert.equal(calls, 0);
+      assert.ok(
+        (await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 10 }))?.entries.some(
+          ({ postId }) => postId === post.id,
+        ),
+      );
+    } finally {
+      restoreModel();
+    }
+  },
+);
+
+test(
+  'keeps per-Profile verdicts across rule edits and bypasses the old verdict after rule deletion',
+  { skip: !testRedisUrl },
+  async () => {
+    const excludedViewer = await createAuth();
+    const includedViewer = await createAuth();
+    const author = await createProfile('natural-mute-shared-author');
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: excludedViewer.profile.id, followeeProfileId: author.id },
+      { followerProfileId: includedViewer.profile.id, followeeProfileId: author.id },
+    ]);
+    const post = await createContentfulPost(author.id, 'shared candidate');
+    const [excludedRule] = await db
+      .insert(NaturalLanguageMuteRules)
+      .values({ ownerProfileId: excludedViewer.profile.id, condition: 'EXCLUDE' })
+      .returning();
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: includedViewer.profile.id,
+      condition: 'INCLUDE',
+    });
+
+    let calls = 0;
+    const restoreModel = installNaturalMuteModel((request) => {
+      calls += 1;
+      const condition = request.questions[0]?.instructions.at(-1)?.text ?? '';
+      return condition.includes('EXCLUDE') ? 0.99 : 0.1;
+    });
+    try {
+      const excluded = await requestHome(excludedViewer.token, { first: 10 });
+      assert.equal(excluded.errors, undefined, JSON.stringify(excluded.errors));
+      assert.deepEqual(excluded.data?.homeTimeline.edges, []);
+
+      const included = await requestHome(includedViewer.token, { first: 10 });
+      assert.equal(included.errors, undefined, JSON.stringify(included.errors));
+      assert.deepEqual(
+        included.data?.homeTimeline.edges.map(({ node }) => node.id),
+        [encodeGlobalId('Post', post.id)],
+      );
+      assert.equal(calls, 2);
+
+      await db
+        .update(NaturalLanguageMuteRules)
+        .set({ condition: 'INCLUDE' })
+        .where(eq(NaturalLanguageMuteRules.id, excludedRule!.id));
+      const afterEdit = await requestHome(excludedViewer.token, { first: 10 });
+      assert.equal(afterEdit.errors, undefined, JSON.stringify(afterEdit.errors));
+      assert.deepEqual(afterEdit.data?.homeTimeline.edges, []);
+      assert.equal(calls, 2);
+
+      await db
+        .delete(NaturalLanguageMuteRules)
+        .where(eq(NaturalLanguageMuteRules.id, excludedRule!.id));
+      const afterDelete = await requestHome(excludedViewer.token, { first: 10 });
+      assert.equal(afterDelete.errors, undefined, JSON.stringify(afterDelete.errors));
+      assert.deepEqual(
+        afterDelete.data?.homeTimeline.edges.map(({ node }) => node.id),
+        [encodeGlobalId('Post', post.id)],
+      );
+      assert.equal(calls, 2);
+    } finally {
+      restoreModel();
+    }
+  },
+);
+
+test(
+  'includes classifier failures without storing a semantic verdict',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const post = await createContentfulPost(
+      viewer.profile.id,
+      'temporarily unavailable classifier',
+    );
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'EXCLUDE',
+    });
+
+    let calls = 0;
+    const restoreModel = installNaturalMuteModel(() => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error('model request failed');
+      }
+      return 0.99;
+    });
+    try {
+      const failedAttempt = await requestHome(viewer.token, { first: 10 });
+      assert.equal(failedAttempt.errors, undefined, JSON.stringify(failedAttempt.errors));
+      assert.deepEqual(
+        failedAttempt.data?.homeTimeline.edges.map(({ node }) => node.id),
+        [encodeGlobalId('Post', post.id)],
+      );
+
+      await invalidateHomeTimelines({ profileIds: [viewer.profile.id] });
+      const retry = await requestHome(viewer.token, { first: 10 });
+      assert.equal(retry.errors, undefined, JSON.stringify(retry.errors));
+      assert.deepEqual(retry.data?.homeTimeline.edges, []);
+      assert.equal(calls, 2);
+    } finally {
+      restoreModel();
+    }
+  },
+);
+
 test(
   'filters deleted cached rows and does not reuse a cache for another selected Profile',
   { skip: !testRedisUrl },
@@ -1020,8 +1471,24 @@ async function createContentfulPost(
   return { id: post.id, contentId: content.id };
 }
 
-async function createQuote(profileId: string, sourcePostId: string, bodyText: string) {
-  const quote = await createContentfulPost(profileId, bodyText);
+async function createRemoteImageMedia(profileId: string) {
+  const media = await db
+    .insert(Media)
+    .values({
+      mediaType: 'image/webp',
+      profileId,
+      source: MediaSource.REMOTE,
+      state: MediaState.READY,
+      url: `https://media.example/${crypto.randomUUID()}.webp`,
+    })
+    .returning()
+    .then(firstOrThrow);
+  fixtureMediaIds.push(media.id);
+  return media;
+}
+
+async function createQuote(profileId: string, sourcePostId: string, bodyText: string, id?: string) {
+  const quote = await createContentfulPost(profileId, bodyText, id);
   await db.update(Posts).set({ repostSourceId: sourcePostId }).where(eq(Posts.id, quote.id));
   return quote;
 }
@@ -1080,7 +1547,7 @@ async function requestHome(
     `query HomeTimeline($first: Int, $last: Int, $after: String, $before: String) {
       homeTimeline(first: $first, last: $last, after: $after, before: $before) {
         edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } } }
-        pageInfo { endCursor hasNextPage hasPreviousPage }
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
       }
     }`,
     pagination,
@@ -1103,4 +1570,47 @@ async function requestGraphQL<TData>(
   });
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
+}
+
+function naturalMuteInputText(request: NaturalMuteRequest): string {
+  return request.input
+    .flatMap(({ content }) =>
+      content.flatMap(({ text, type }) => (type === 'input_text' && text ? [text] : [])),
+    )
+    .join('\n');
+}
+
+function naturalMuteInputImageUrls(request: NaturalMuteRequest): string[] {
+  return request.input.flatMap(({ content }) =>
+    content.flatMap(({ image_url, type }) =>
+      type === 'input_image' && image_url ? [image_url] : [],
+    ),
+  );
+}
+
+function installNaturalMuteModel(decide: (request: NaturalMuteRequest) => number): () => void {
+  const previousFetch = globalThis.fetch;
+  const previousApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'test-natural-language-mute-key';
+  globalThis.fetch = (async (_input, init) => {
+    const request = JSON.parse(String(init?.body)) as NaturalMuteRequest;
+    return Response.json({
+      answers: [
+        {
+          type: 'predicate',
+          name: 'matches_mute_condition',
+          probability: decide(request),
+        },
+      ],
+    });
+  }) as typeof fetch;
+
+  return () => {
+    globalThis.fetch = previousFetch;
+    if (previousApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousApiKey;
+    }
+  };
 }
