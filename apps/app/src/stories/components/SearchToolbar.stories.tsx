@@ -1,7 +1,9 @@
+import { CircleQuestionMark } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useArgs } from 'storybook/preview-api';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { IconButton } from '@/components/ui/IconButton';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -10,6 +12,7 @@ import type { SearchToolbarLeadingAction, SearchToolbarProps } from '@/component
 type CatalogProps = SearchToolbarProps;
 
 function SearchToolbarCatalog({
+  children,
   disabled = false,
   focused: initialFocused = false,
   leadingAction = 'menu',
@@ -35,6 +38,7 @@ function SearchToolbarCatalog({
   return (
     <View style={{ width: 390 }}>
       <SearchToolbar
+        children={children}
         disabled={disabled}
         focused={focused}
         leadingAction={leadingAction}
@@ -418,5 +422,16 @@ export const DisabledInteractionContract: Story = {
     expect(args.onSubmit).not.toHaveBeenCalled();
     expect(args.onMenuPress).not.toHaveBeenCalled();
     expect(args.onClear).not.toHaveBeenCalled();
+  },
+};
+
+export const WithHelpAction: Story = {
+  args: {
+    query: '코스모',
+    children: (
+      <IconButton accessibilityLabel="검색 도움말" onPress={fn()} targetSize={44} visualSize={44}>
+        <CircleQuestionMark size={20} strokeWidth={2} />
+      </IconButton>
+    ),
   },
 };

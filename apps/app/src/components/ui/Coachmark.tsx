@@ -14,7 +14,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { Button } from './Button';
-import { getCoachmarkPosition } from './coachmarkPosition';
+import { getCenteredCoachmarkPosition, getCoachmarkPosition } from './coachmarkPosition';
 import { ModalSheetHost } from './ModalSheetHost';
 import { useOverlayLifecycle } from './Overlay';
 import type { RefObject } from 'react';
@@ -26,7 +26,7 @@ export type CoachmarkProgress = Readonly<{
 }>;
 
 export type CoachmarkProps = {
-  anchorRef: RefObject<NativeView | null>;
+  anchorRef?: RefObject<NativeView | null>;
   description: string;
   onClose: () => void;
   onComplete: () => void;
@@ -105,9 +105,9 @@ export function Coachmark({
   if (visible && !exitPending) {
     setExitPending(true);
   }
-  const targetReady = Boolean(
-    (!visible || anchorRef.current) && anchor && anchor.width > 0 && anchor.height > 0,
-  );
+  const targetReady =
+    anchorRef === undefined ||
+    Boolean((!visible || anchorRef.current) && anchor && anchor.width > 0 && anchor.height > 0);
   const overlayMotion = useOverlayMotion(visible && targetReady);
   const modalVisible = overlayMotion.mounted && targetReady;
   const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
@@ -141,7 +141,13 @@ export function Coachmark({
       return;
     }
 
-    if (!shown && overlayMotion.entered && targetReady && anchor && bubble.height > 0) {
+    if (
+      !shown &&
+      overlayMotion.entered &&
+      targetReady &&
+      (anchor || !anchorRef) &&
+      bubble.height > 0
+    ) {
       setShown(true);
       onShown?.();
     }
@@ -156,7 +162,7 @@ export function Coachmark({
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {
-    if (!visible) {
+    if (!visible || !anchorRef) {
       return;
     }
 
@@ -176,8 +182,8 @@ export function Coachmark({
     return () => cancelAnimationFrame(frame);
   });
 
-  const position =
-    targetReady && anchor
+  const position = targetReady
+    ? anchorRef && anchor
       ? getCoachmarkPosition({
           anchor,
           bubble,
@@ -190,7 +196,18 @@ export function Coachmark({
             width,
           },
         })
-      : null;
+      : getCenteredCoachmarkPosition({
+          bubble,
+          viewport: {
+            bottomInset: insets.bottom,
+            height,
+            leftInset: insets.left,
+            rightInset: insets.right,
+            topInset: insets.top,
+            width,
+          },
+        })
+    : null;
   const label = title?.trim() || description;
   const visibleProgress = isValidProgress(progress) ? progress : null;
   const maxWidth = Math.min(
@@ -249,19 +266,21 @@ export function Coachmark({
               },
             ]}
           >
-            <View
-              pointerEvents="none"
-              style={[
-                styles.arrow,
-                {
-                  backgroundColor: theme.backgroundElevated,
-                  borderColor: theme.borderDefault,
-                  left: position.arrowLeft - ARROW_HALF,
-                },
-                position.placement === 'bottom' ? styles.arrowAbove : styles.arrowBelow,
-              ]}
-              testID="coachmark-arrow"
-            />
+            {anchorRef ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.arrow,
+                  {
+                    backgroundColor: theme.backgroundElevated,
+                    borderColor: theme.borderDefault,
+                    left: position.arrowLeft - ARROW_HALF,
+                  },
+                  position.placement === 'bottom' ? styles.arrowAbove : styles.arrowBelow,
+                ]}
+                testID="coachmark-arrow"
+              />
+            ) : null}
             <View
               accessibilityElementsHidden={!presentationReady}
               accessible={false}
