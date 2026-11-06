@@ -22,7 +22,7 @@ import {
   canonicalizePostContentDocument,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server-document';
-import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, lt, max, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const profileIdSchema = z.uuid();
@@ -130,10 +130,7 @@ const loadPostStats = async (profileIds: string[]) => {
 
   const rows = await db
     .select({
-      lastPostedAt: sql<Temporal.Instant | null>`
-        max(${Posts.createdAt})
-        filter (where ${inArray(Posts.visibility, publicVisibilities)})
-      `.mapWith(Posts.createdAt),
+      lastPostedAt: max(Posts.createdAt),
       postCount: count(),
       profileId: Posts.profileId,
     })

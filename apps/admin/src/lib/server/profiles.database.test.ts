@@ -400,7 +400,7 @@ describe('Admin Profile read projections', () => {
     expect(secondPage.profiles.map(({ id }) => id)).toEqual([paginationProfileIds[0]]);
     expect(secondPage.profiles[0]).toMatchObject({
       postCount: 53,
-      lastPostedAt: postedAt(150).toString(),
+      lastPostedAt: postedAt(201).toString(),
     });
     expect(secondPage.previousCursor).toBe(paginationProfileIds[0]);
     expect(secondPage.nextCursor).toBeNull();
@@ -581,7 +581,7 @@ describe('Admin Profile read projections', () => {
 
     const profile = await getProfile(targetProfileId);
     expect(profile?.postCount).toBe(7);
-    expect(profile?.lastPostedAt).toBe(postedAt(14).toString());
+    expect(profile?.lastPostedAt).toBe(postedAt(16).toString());
 
     const disabledAuthorPosts = await listProfilePosts(disabledProfileId);
     expect(disabledAuthorPosts.posts).toMatchObject([
@@ -667,7 +667,7 @@ describe('Admin Profile read projections', () => {
 
     const profile = await getProfile(profileId);
     expect(profile?.postCount).toBe(53);
-    expect(profile?.lastPostedAt).toBe(postedAt(150).toString());
+    expect(profile?.lastPostedAt).toBe(postedAt(201).toString());
   });
 
   test('persists local Profile default visibility without changing Posts', async () => {

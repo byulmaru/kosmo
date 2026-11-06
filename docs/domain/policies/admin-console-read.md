@@ -81,10 +81,10 @@ Followers Count, Following Count, 작성한 Post의 수와 조회 대상 Post �
 `표시 handle`은 서로 다른 필드이며 둘 다 목록 projection에 포함한다. 검색어는 handle 또는 표시 이름을 대상으로
 하고 Origin과 State를 각각 필터링할 수 있다. 기본 목록은 모든 Origin과 State를 포함한다.
 
-`Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수는 해당 Profile이
-작성한 모든 active Post에서 계산하며 Visibility와 무관하게 Reply, Quote, Content 없는 Repost도 포함하고 삭제된
-Post는 제외한다. 가장 최근 시각은 active public 또는 unlisted Post에서 계산한다. Lifecycle 또는 Suspension State는
-Post count, 가장 최근 시각 또는 Profile Posts 목록의 필터가 아니다.
+`Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수와 가장 최근 시각
+(`lastPostedAt`)은 해당 Profile이 작성한 모든 active Post에서 계산하며 Visibility와 무관하게 Reply, Quote, Content
+없는 Repost도 포함하고 삭제된 Post는 제외한다. Lifecycle 또는 Suspension State는 Post count, 가장 최근 시각 또는
+Profile Posts 목록의 필터가 아니다.
 
 ### 상세
 
