@@ -1,6 +1,6 @@
 # PostHog 제품 분석 운영
 
-Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용한다. Web은 `disable_session_recording: true`와 Cloud Replay OFF로 Session Replay를 수집하지 않는다. Native는 명시적으로 호출된 앱 event만 전달하고 app lifecycle event와 Session Replay를 수집하지 않는다. Native는 기존 session bridge에서 로그인 Account를 identify하고, 성공한 로그아웃 또는 Account 삭제 뒤 local session 정리에서 reset한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
+Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용한다. Web은 `disable_session_recording: true`와 Cloud Replay OFF로 Session Replay를 수집하지 않는다. Native는 명시적으로 호출된 앱 event와 Expo Router 경로 template 기반 `$screen`, SDK 기본 app lifecycle event를 수집하며 Session Replay는 수집하지 않는다. Screen 이름은 route group을 제외한 `useSegments` template만 사용해 `/[profileHandle]`처럼 기록한다. 실제 pathname, query, dynamic route 값과 ID는 screen 이름에 넣지 않는다. Native의 `Application Opened` event는 `before_send`에서 SDK가 추가한 `url`만 제거해 OAuth 초기 URL의 code·state를 보내지 않으며, 나머지 SDK event property는 유지한다. Native session은 SDK의 기본 event 기반 수명을 따른다. 수집 event가 30분간 없거나 session이 24시간에 도달하면 만료되고, 앱 재시작 시 session ID를 이어 쓰지 않는다. 별도 체류 시간 timer나 heartbeat는 두지 않는다. Native는 기존 session bridge에서 로그인 Account를 identify하고, 성공한 로그아웃 또는 Account 삭제 뒤 local session 정리에서 reset한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
 
 ## Identity와 개인정보 경계
 
@@ -100,5 +100,8 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 4. 각 동작을 network error, 실패 응답, 필요한 payload 누락 상태에서 반복해 성공 event가 발생하지 않고 UI의 기존 오류 처리가 유지되는지 확인한다. Post 요청은 유효한 접수 ID가 없을 때만 event를 생략하며, 접수 뒤의 게시 실패나 취소는 event를 회수하지 않는다.
 5. 각 event allowlist 밖의 Post·Profile 식별자나 Reaction 원문이 추가되지 않는지 확인한다.
 6. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크·Post 요청 접수가 동일하게 완료되는지 확인한다.
+7. Native 개발 build에서 초기 화면을 열고 route를 이동해도 PostHog client가 초기화되지 않고 요청이 없는지 확인한다.
+8. Native production build에서 초기 route와 실제 이동마다 `$screen`이 발생하고, `$screen_name`은 route group을 제외한 template segment만 포함하는지 확인한다. `[profileHandle]` placeholder는 유지하고 실제 pathname, query, handle, 기타 dynamic value나 ID는 보내지 않는다. 기본 `Application Installed`, `Application Updated`, `Application Opened`, `Application Became Active`, `Application Backgrounded` event를 확인하고, `Application Opened`에는 초기 deep link `url`이 없으며 다른 SDK property는 유지되는지 확인한다. Session Replay event가 발생하지 않는지도 확인한다.
+9. Native에서 PostHog 초기화·전송 실패를 유발해도 route 이동과 화면 사용이 동일하게 완료되는지 확인한다.
 
 Web event의 집계 Dashboard·funnel 정의, Native event의 추가 집계·funnel 분석, emoji별 분석은 Worker 스냅샷과 별도 범위다. Native client의 명시적 event 수집과 Account identity/reset은 위 계약을 따른다. Web·Native 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.
