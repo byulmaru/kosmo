@@ -89,6 +89,13 @@ Post Composer 첨부는 파일 선택 시 `issueMediaUploadUrl`로 제한된 권
 참조 Media의 저장과 처리를 완료하고 모든 Media가 Ready가 된 뒤 Post를 저장한다. 제거했거나 제출하지 않은
 첨부는 처리하지 않으며, Profile avatar/header 업로드의 기존 명시적 `completeMediaUpload` 시점은 유지한다.
 
+Local Post·Reply·Quote 제출에서 Alt Text가 비어 있거나 공백뿐인 Uploading Local Media는 기존 Media 처리 중 짧은
+한국어 설명도 생성한다. 생성 결과는 같은 Media의 Alt Text로 저장되며 Post 작성은 이를 빈 입력의 대체값으로
+사용한다. 제출된 수동 Alt Text가 비어 있지 않으면 그대로 우선하고 생성하지 않는다. 이미 Ready인 Media는 이 제출에서
+다시 처리하거나 설명을 생성하지 않는다. 설명 생성이 실패하거나 결과가 없으면 Media는 null Alt Text로 Ready가 되고
+Post publication은 계속된다. 이 동작은 이미지 byte를 추가로 클라이언트에서 전송하지 않는다.
+같은 Media의 진행 중 업로드를 공유하면 최초 실행에서 정한 설명 생성 여부를 유지하며, 나중 요청이 재생성을 시작하지 않는다.
+
 Post Composer에서 새 Local Media마다 AI 학습 방지 필터 적용 여부를 선택할 수 있으며 기본값은 off다. 선택한 이미지는
 Media Storage Service가 긴 변 최대 1024px로 처리한 뒤 Ready가 된다. 이 선택은 기존 Ready Media를 바꾸지 않는다.
 처리가 실패하면 해당 Media는 Ready가 되지 않고 해당 PostRequest는 `FAILED`가 되며 Post를 만들지 않는다. 선택한 처리가

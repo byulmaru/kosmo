@@ -10,12 +10,14 @@ export type MediaUploadWorkflowInput = {
   readonly accountId: string;
   readonly applyAiProhibitFilter?: boolean;
   readonly applyNightshade?: boolean;
+  readonly generateAltText?: boolean;
 };
 
 export type MediaUploadResult = {
   readonly id: string;
   readonly url: string;
   readonly mediaType: string;
+  readonly altText?: string | null;
 };
 
 export type MediaUploadWorkflowResult = MediaUploadResult & {

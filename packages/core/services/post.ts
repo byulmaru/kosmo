@@ -56,6 +56,7 @@ export type LocalPostInput = {
   contentWarning?: string | null;
   media?: readonly {
     altText: string | null;
+    generateAltText?: boolean;
     mediaId: string;
   }[];
   mentions?: readonly PostContentMentionReference[];
@@ -741,7 +742,7 @@ export const createPostInTransaction = async (
         throw new ValidationError('Media cannot be attached', { field: 'media' });
       }
       const attachableMedia = await tx
-        .select({ id: Media.id })
+        .select({ altText: Media.altText, id: Media.id })
         .from(Media)
         .where(
           and(
@@ -754,8 +755,15 @@ export const createPostInTransaction = async (
       if (attachableMedia.length !== mediaIds.length) {
         throw new ValidationError('Media cannot be attached', { field: 'media' });
       }
-      for (const { altText, mediaId } of media) {
-        await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+      const storedAltTextByMediaId = new Map(
+        attachableMedia.map(({ altText, id }) => [id, altText]),
+      );
+      for (const { altText, generateAltText, mediaId } of media) {
+        const effectiveAltText =
+          generateAltText && (altText === null || altText.trim().length === 0)
+            ? (storedAltTextByMediaId.get(mediaId) ?? null)
+            : altText;
+        await tx.update(Media).set({ altText: effectiveAltText }).where(eq(Media.id, mediaId));
       }
     }
   }

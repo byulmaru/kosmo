@@ -31,6 +31,7 @@ type ProcessUploadInput = {
   readonly contentType: NexusMediaUploadContentType;
   readonly maxBytes: number;
   readonly maxDimension: number;
+  readonly generateAltText?: boolean;
 };
 
 const mediaService = service('media', {
@@ -61,15 +62,18 @@ const inputSchema = z.object({
   accountId: z.uuid(),
   applyAiProhibitFilter: z.boolean().optional(),
   applyNightshade: z.boolean().default(false),
+  generateAltText: z.boolean().optional(),
 });
 
 const publishInputSchema = z.object({ applyAiProhibitFilter: z.boolean() });
 
 const completedPublication = ({
+  altText,
   id,
   mediaType,
   url,
 }: MediaUploadResult): MediaUploadPublishResult => ({
+  ...(altText === undefined ? {} : { altText }),
   id,
   mediaType,
   status: 'completed',
@@ -128,6 +132,7 @@ export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
         ...prepared,
         maxBytes: MEDIA_UPLOAD_MAX_BYTES,
         maxDimension: MEDIA_UPLOAD_MAX_DIMENSION,
+        ...(parsed.data.generateAltText === true ? { generateAltText: true } : {}),
       },
       { scheduleToCloseTimeout: '25 hours' },
     );
@@ -149,6 +154,7 @@ export async function mediaUploadWorkflow(input: MediaUploadWorkflowInput) {
             id: publication.id,
             mediaType: publication.mediaType,
             url: publication.url,
+            ...(publication.altText === undefined ? {} : { altText: publication.altText }),
           },
         });
         finalizedResult = { ...finalized, applyAiProhibitFilter: selectedFilter };

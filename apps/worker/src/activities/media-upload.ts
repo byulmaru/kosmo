@@ -20,6 +20,7 @@ const resultSchema = z.strictObject({
   id: z.string().min(1),
   url: z.httpUrl(),
   mediaType: z.string().min(1),
+  altText: z.string().nullable().optional(),
 });
 
 const invalidSession = () =>
@@ -125,6 +126,7 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
   const completed = await db
     .update(MediaTable)
     .set({
+      ...(result.data.altText === undefined ? {} : { altText: result.data.altText }),
       mediaType: result.data.mediaType,
       url: result.data.url,
       readyAt: Temporal.Now.instant(),

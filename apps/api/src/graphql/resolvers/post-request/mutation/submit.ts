@@ -42,6 +42,7 @@ type SubmittedPostMedia = {
 };
 
 type VerifiedAttachedMedia = SubmittedPostMedia & {
+  readonly generateAltText: boolean;
   readonly state: MediaState;
   readonly storageReference: string | null;
 };
@@ -153,6 +154,7 @@ const verifyAttachedMedia = async (
       }
       verified.push({
         ...mediaInput,
+        generateAltText: false,
         state: media.state,
         storageReference: media.storageReference,
       });
@@ -176,7 +178,12 @@ const verifyAttachedMedia = async (
       throw unusableMedia(index, error.message);
     }
 
-    verified.push({ ...mediaInput, state: media.state, storageReference: media.storageReference });
+    verified.push({
+      ...mediaInput,
+      generateAltText: mediaInput.altText === null || mediaInput.altText.trim().length === 0,
+      state: media.state,
+      storageReference: media.storageReference,
+    });
   }
 
   return verified;
@@ -196,6 +203,7 @@ const publishUploadingMedia = async (
                   mediaId: item.mediaId,
                   accountId,
                   applyAiProhibitFilter: item.applyAiProhibitFilter,
+                  ...(item.generateAltText ? { generateAltText: true } : {}),
                 },
               ],
               updateArgs: [{ applyAiProhibitFilter: item.applyAiProhibitFilter }],
@@ -250,17 +258,18 @@ const publishUploadingMedia = async (
 
 const startPostRequest = async (
   preparedInput: Awaited<ReturnType<typeof prepareLocalPostInput>>,
-  submittedMedia: readonly SubmittedPostMedia[],
+  submittedMedia: readonly VerifiedAttachedMedia[],
   analyticsPlatform?: PostAnalyticsPlatform,
 ): Promise<PostRequestState> => {
   const requestId = randomUUID();
   const snapshot: PostRequestSnapshot = {
     input: {
       ...preparedInput,
-      media: submittedMedia.map(({ altText, applyAiProhibitFilter, mediaId }) => ({
+      media: submittedMedia.map(({ altText, applyAiProhibitFilter, generateAltText, mediaId }) => ({
         altText,
         applyNightshade: applyAiProhibitFilter,
         mediaId,
+        ...(generateAltText ? { generateAltText: true } : {}),
       })),
     },
     requestId,
@@ -324,17 +333,25 @@ export async function submitLocalPost(
   const preparedInput = await prepareLocalPostInput(input, ctx);
   const media = await verifyAttachedMedia(ctx.session.accountId, submittedMedia);
   const publications = await publishUploadingMedia(ctx.session.accountId, media);
+  const postInput = {
+    ...preparedInput,
+    media: media.map(({ altText, generateAltText, mediaId }) => ({
+      altText,
+      mediaId,
+      ...(generateAltText ? { generateAltText: true } : {}),
+    })),
+  };
 
   if (publications.some(({ status }) => status === 'processing')) {
     return {
       postId: null,
       profileId: null,
-      request: await startPostRequest(preparedInput, submittedMedia, analyticsPlatform),
+      request: await startPostRequest(postInput, media, analyticsPlatform),
     };
   }
 
   const args: PostCreateWorkflowArgs = {
-    input: preparedInput,
+    input: postInput,
     revalidateAuthorization: true,
     requestId: randomUUID(),
     ...(analyticsPlatform ? { analyticsPlatform } : {}),
@@ -351,7 +368,7 @@ export async function submitLocalPost(
     }
     return {
       postId: result.postId,
-      profileId: preparedInput.profileId,
+      profileId: postInput.profileId,
       request: null,
     };
   } catch (error) {

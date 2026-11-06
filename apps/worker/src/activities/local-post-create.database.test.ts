@@ -657,8 +657,18 @@ test('Post request rechecks current membership and reconciles an already committ
   const committedAuthor = await createAuthor('post-request-committed');
   const committedPostId = await generatePostIdActivity();
   postIds.add(committedPostId);
+  const committedMedia = await createReadyMedia(
+    committedAuthor.account.id,
+    committedAuthor.profile.id,
+  );
+  await db
+    .update(Media)
+    .set({ altText: 'Generated caption' })
+    .where(eq(Media.id, committedMedia.id));
   const committedInput: PostCreateActivityInput = {
-    input: localInput(committedAuthor),
+    input: localInput(committedAuthor, {
+      media: [{ altText: null, generateAltText: true, mediaId: committedMedia.id }],
+    }),
     postId: committedPostId,
     revalidateAuthorization: true,
   };
@@ -671,6 +681,15 @@ test('Post request rechecks current membership and reconciles an already committ
       status: 'created',
     },
   });
+  assert.equal(
+    await db
+      .select({ altText: Media.altText })
+      .from(Media)
+      .where(eq(Media.id, committedMedia.id))
+      .then(firstOrThrow)
+      .then(({ altText }) => altText),
+    'Generated caption',
+  );
 
   await db
     .delete(AccountProfiles)
@@ -682,6 +701,15 @@ test('Post request rechecks current membership and reconciles an already committ
     );
 
   assert.deepEqual(await createPostActivity(committedInput), committed);
+  assert.equal(
+    await db
+      .select({ altText: Media.altText })
+      .from(Media)
+      .where(eq(Media.id, committedMedia.id))
+      .then(firstOrThrow)
+      .then(({ altText }) => altText),
+    'Generated caption',
+  );
   assert.deepEqual(
     await reconcilePostRequestActivity({
       accountId: committedAuthor.account.id,
