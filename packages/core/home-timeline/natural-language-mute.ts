@@ -25,7 +25,7 @@ import type { NaturalLanguageMuteDecision, NaturalLanguageMutePost } from './dec
 type PostRow = typeof Posts.$inferSelect;
 type NaturalLanguageMutePostRow = Pick<
   PostRow,
-  'id' | 'currentContentId' | 'quoteConsentStatus' | 'repostSourceId'
+  'id' | 'profileId' | 'currentContentId' | 'quoteConsentStatus' | 'repostSourceId'
 >;
 type MuteMedia = Pick<typeof Media.$inferSelect, 'id' | 'mediaType' | 'state' | 'url'>;
 
@@ -39,6 +39,11 @@ type CandidateProjection = {
   readonly outerDocument: typeof PostContents.$inferSelect.document | null;
   readonly sourceAccessible: boolean;
   readonly sourceDocument: typeof PostContents.$inferSelect.document | null;
+};
+type CandidateSubjectGroup<T extends HomeTimelineMuteCandidate> = {
+  readonly subject: HomeTimelineMuteCandidate;
+  readonly candidates: T[];
+  isRepostSource: boolean;
 };
 
 const SourcePosts = alias(Posts, 'home_timeline_natural_mute_source');
@@ -93,6 +98,7 @@ const mediaIdsFromDocument = (value: unknown): string[] | null => {
 const projectCandidateInputs = async (
   profileId: string,
   candidates: readonly HomeTimelineMuteCandidate[],
+  repostSourceIds: ReadonlySet<string>,
 ): Promise<Map<string, CandidateProjection | null>> => {
   const projections = new Map<string, CandidateProjection | null>();
   if (candidates.length === 0) {
@@ -120,6 +126,24 @@ const projectCandidateInputs = async (
     quoteAllowsSource,
     sourceVisible,
   )!}`;
+  const candidateEligibility =
+    repostSourceIds.size === 0
+      ? homePostListWhere({ db, viewerProfileId: profileId })
+      : or(
+          homePostListWhere({ db, viewerProfileId: profileId }),
+          and(
+            inArray(Posts.id, [...repostSourceIds]),
+            visiblePostWhere({
+              post: Posts,
+              profileVisible: sql<boolean>`${visibleProfileWhere({
+                profile: Profiles,
+                instance: Instances,
+              })}`,
+              viewerProfileId: profileId,
+              db,
+            }),
+          ),
+        );
 
   const rows = await db
     .select({
@@ -147,7 +171,7 @@ const projectCandidateInputs = async (
         sourceAccessible,
       ),
     )
-    .where(and(inArray(Posts.id, postIds), homePostListWhere({ db, viewerProfileId: profileId })));
+    .where(and(inArray(Posts.id, postIds), candidateEligibility));
   const rowsById = new Map(rows.map((row) => [row.postId, row]));
   for (const candidate of candidates) {
     const row = rowsById.get(candidate.post.id);
@@ -219,40 +243,111 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
   }
 
   const included = new Set<string>();
-  const pending: HomeTimelineMuteCandidate[] = [];
   const candidateKey = ({ profileId, post }: HomeTimelineMuteCandidate) =>
     `${profileId}:${post.id}`;
+  const includeCandidates = (outerCandidates: readonly T[]) => {
+    for (const candidate of outerCandidates) {
+      included.add(candidateKey(candidate));
+    }
+  };
+  const eligibleCandidates = candidates.filter((candidate) => conditions.has(candidate.profileId));
+  const repostSourceIds = [
+    ...new Set(
+      eligibleCandidates.flatMap(({ post }) =>
+        post.currentContentId === null && post.repostSourceId !== null ? [post.repostSourceId] : [],
+      ),
+    ),
+  ];
+  const repostSourceRows =
+    repostSourceIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: Posts.id,
+            profileId: Posts.profileId,
+            currentContentId: Posts.currentContentId,
+            quoteConsentStatus: Posts.quoteConsentStatus,
+            repostSourceId: Posts.repostSourceId,
+          })
+          .from(Posts)
+          .where(inArray(Posts.id, repostSourceIds));
+  const repostSourceById = new Map(repostSourceRows.map((post) => [post.id, post]));
+
+  const subjectGroups = new Map<string, CandidateSubjectGroup<T>>();
+  for (const candidate of candidates) {
+    const condition = conditions.get(candidate.profileId);
+    if (condition === undefined) {
+      included.add(candidateKey(candidate));
+      continue;
+    }
+
+    if (candidate.post.currentContentId === null && candidate.post.repostSourceId === null) {
+      included.add(candidateKey(candidate));
+      continue;
+    }
+    const isPureRepost =
+      candidate.post.currentContentId === null && candidate.post.repostSourceId !== null;
+    const subject = isPureRepost
+      ? repostSourceById.get(candidate.post.repostSourceId!)
+      : candidate.post;
+    if (!subject || (isPureRepost && subject.currentContentId === null)) {
+      included.add(candidateKey(candidate));
+      continue;
+    }
+    if (subject.profileId === candidate.profileId) {
+      included.add(candidateKey(candidate));
+      continue;
+    }
+
+    const key = `${candidate.profileId}:${subject.id}`;
+    const group = subjectGroups.get(key) ?? {
+      subject: { profileId: candidate.profileId, post: subject },
+      candidates: [],
+      isRepostSource: false,
+    };
+    group.candidates.push(candidate);
+    group.isRepostSource ||= isPureRepost;
+    subjectGroups.set(key, group);
+  }
 
   const cacheDecisions = await Promise.all(
-    candidates.map(async (candidate) => ({
-      candidate,
-      decision: conditions.has(candidate.profileId)
-        ? await getNaturalLanguageMuteDecision(candidate.profileId, candidate.post.id)
-        : ('no-rule' as const),
+    [...subjectGroups.values()].map(async (group) => ({
+      group,
+      decision: await getNaturalLanguageMuteDecision(
+        group.subject.profileId,
+        group.subject.post.id,
+      ),
     })),
   );
-  for (const { candidate, decision } of cacheDecisions) {
-    const key = candidateKey(candidate);
-    if (decision === 'no-rule' || decision?.decision === 'include') {
-      included.add(key);
-    } else if (decision === null) {
-      pending.push(candidate);
+  const candidatesByProfile = new Map<string, CandidateSubjectGroup<T>[]>();
+  for (const entry of cacheDecisions) {
+    if (entry.decision === null) {
+      const profileId = entry.group.subject.profileId;
+      const groups = candidatesByProfile.get(profileId) ?? [];
+      groups.push(entry.group);
+      candidatesByProfile.set(profileId, groups);
+    } else if (entry.decision.decision === 'include') {
+      includeCandidates(entry.group.candidates);
     }
   }
 
-  const candidatesByProfile = new Map<string, HomeTimelineMuteCandidate[]>();
-  for (const candidate of pending) {
-    const group = candidatesByProfile.get(candidate.profileId) ?? [];
-    group.push(candidate);
-    candidatesByProfile.set(candidate.profileId, group);
-  }
-
   await Promise.all(
-    [...candidatesByProfile].map(async ([profileId, profileCandidates]) => {
-      const projections = await projectCandidateInputs(profileId, profileCandidates);
+    [...candidatesByProfile].map(async ([profileId, subjectGroups]) => {
+      const profileCandidates = subjectGroups.map(({ subject }) => subject);
+      const sourceSubjectIds = new Set(
+        subjectGroups.flatMap(({ subject, isRepostSource }) =>
+          isRepostSource ? [subject.post.id] : [],
+        ),
+      );
+      const projections = await projectCandidateInputs(
+        profileId,
+        profileCandidates,
+        sourceSubjectIds,
+      );
       const referencedMediaIds = new Set<string>();
       const invalidInputs = new Set<string>();
-      for (const candidate of profileCandidates) {
+      for (const group of subjectGroups) {
+        const candidate = group.subject;
         const projection = projections.get(candidate.post.id);
         if (projection === undefined || projection === null) {
           continue;
@@ -289,24 +384,24 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
       const mediaById = new Map(mediaRows.map((media) => [media.id, media]));
 
       await Promise.all(
-        profileCandidates.map(async (candidate) => {
-          const key = candidateKey(candidate);
+        subjectGroups.map(async (group) => {
+          const candidate = group.subject;
           const projection = projections.get(candidate.post.id);
           if (projection === undefined) {
             return;
           }
           if (projection === null) {
-            included.add(key);
+            includeCandidates(group.candidates);
             return;
           }
           if (invalidInputs.has(candidate.post.id)) {
-            included.add(key);
+            includeCandidates(group.candidates);
             return;
           }
 
           const input = toCandidateInput(projection, mediaById);
           if (input === null) {
-            included.add(key);
+            includeCandidates(group.candidates);
             return;
           }
 
@@ -322,7 +417,7 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
           }
 
           if (decision === null) {
-            included.add(key);
+            includeCandidates(group.candidates);
             return;
           }
 
@@ -332,7 +427,7 @@ export const filterHomeTimelineMuteCandidates = async <T extends HomeTimelineMut
             decision,
           );
           if (winningDecision.decision === 'include') {
-            included.add(key);
+            includeCandidates(group.candidates);
           }
         }),
       );

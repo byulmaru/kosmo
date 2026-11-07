@@ -50,17 +50,24 @@ Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
   추가, Home 목록의 cache 재구성에서 새로 추가하는 경우에도 같은 정책을 적용한다.
 - 기존 Post Visibility, Post Eligibility, Profile Block, Profile Mute와 조회할 수 없는 Media 정책을 먼저 적용한다.
   이 규칙은 기존 접근·제외 정책을 통과한 항목만 추가로 제외할 수 있으며 접근 범위를 넓히지 않는다.
-- 판정 입력은 바깥 Post의 Content, CW, 조회 가능한 이미지와, direct Quote/Repost Source가 있으면 그 Source의
+- 판정 대상은 Content가 있는 Post 자체다. Quote도 자체 판정 대상이며, viewer가 대상 Post의 작성자이면 의미 판정과
+  해당 판정 cache 조회·저장을 건너뛰고 기존 Home eligibility에 따라 포함한다. Content 없는 순수 Repost는 독립
+  판정하지 않고 Repost Author와 무관하게 direct Source Post를 판정 대상으로 쓴다. Source가 Quote이면 그 Quote의
+  판정을 공유하며, Quote가 가리키는 Source까지 판정 대상을 바꾸지 않는다.
+- cache miss의 판정 입력은 대상 Post의 Content, CW, 조회 가능한 이미지와, 대상이 Quote이면 그 direct Source의
   Content, CW, 조회 가능한 이미지로 제한한다. direct Source보다 안쪽의 Post, Reply Thread, 네트워크에서 추가로
   찾은 내용은 확장해 검사하지 않는다. viewer가 조회할 수 없는 내용은 외부 의미 판정에 전달하지 않는다.
 - 의미 일치 확률 추정값이 `0.8` 이상이면 해당 Home 추가를 Exclude하고, 그보다 낮으면 기존 정책에 따라 처리한다.
 - 의미 판정은 외부 판정 요청 한 번으로 최대 5초까지 수행한다. 요청 오류, 시간 초과, 거절, 잘못된 응답 또는 필요한
   이미지 입력 준비 실패가 있으면 이 규칙은 해당 항목을 Exclude하지 않는다. 기존 접근·Visibility·Eligibility 정책은
   계속 적용하며, 실패한 판정은 성공한 판정으로 저장하지 않는다.
-- 유효한 포함·제외 판정과 조건 일치 확률 추정값은 같은 Owner Profile과 Post에 대해 최대 7일간 함께 재사용한다. 확률
-  추정값은 판정 정확도를 뜻하지 않으며, 판정 시각은 보존하지 않는다. 자연어 조건, 판정 모델, 임계값, Post Content
-  수정은 기존 판정을 무효화하지 않는다. cache 만료나 유실 뒤에는 당시의 Rule과 Content로 다시 판정할 수 있다.
-- Rule 생성·변경·제거는 이미 Home에 추가된 Post를 소급 재판정하거나 제거하지 않으며, 기존 판정도 무효화하지 않는다.
+- 유효한 포함·제외 판정과 조건 일치 확률 추정값은 같은 Owner Profile과 판정 대상 Post ID에 대해 최대 7일간 함께
+  재사용한다. Content Post와 Quote는 각자의 ID를 사용하고, 순수 Repost는 direct Source Post ID의 판정을 재사용한다.
+  이전에 Repost 자체를 대상으로 저장한 판정은 재사용하지 않으며, 기존 만료 시각까지 유지된 뒤 만료한다. 확률 추정값은
+  판정 정확도를 뜻하지 않으며, 판정 시각은 보존하지 않는다. 자연어 조건, 판정 모델, 임계값, Post Content 수정은 기존
+  판정을 무효화하지 않는다. cache 만료나 유실 뒤에는 당시의 Rule과 Content로 다시 판정할 수 있다.
+- Rule 생성·변경·제거와 판정 대상 식별 방식 변경은 이미 Home에 추가된 Post를 소급 재판정하거나 제거하지 않으며,
+  기존 판정도 무효화하거나 다른 Post ID로 이전하지 않는다.
   현재 Rule이 없으면 이후 새 Home 추가는 기존 정책을 따른다. Rule을 다시 만들면 아직 유효한 이전 판정을 재사용할 수 있다.
 - Natural Language Mute Rule은 Local, Profile, Hashtag Post List, 검색, Notification, Bookmark, Post 직접 조회와
   상호작용에는 적용하지 않는다.
