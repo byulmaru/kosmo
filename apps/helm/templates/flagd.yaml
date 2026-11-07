@@ -35,17 +35,6 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
-      natural-language-mute-settings:
-        state: ENABLED
-        variants:
-          'on': true
-          'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
       post-composer-mention-search:
         state: ENABLED
         variants:

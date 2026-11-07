@@ -18,6 +18,7 @@ type SettingsDestination =
   | 'profile-migration'
   | 'mute-and-block'
   | 'theme'
+  | 'labs'
   | 'info'
   | 'account-deletion';
 
@@ -84,6 +85,14 @@ export function SettingsNavigationList({
         primary
         currentPage={pathname === '/settings/theme'}
         selected={selected === 'theme'}
+      />
+      <SettingsLinkRow
+        accessibilityLabel="실험실 열기"
+        href="/settings/labs"
+        label="실험실"
+        primary
+        currentPage={pathname === '/settings/labs'}
+        selected={selected === 'labs'}
       />
       <SettingsLinkRow
         accessibilityLabel="정보 설정 열기"

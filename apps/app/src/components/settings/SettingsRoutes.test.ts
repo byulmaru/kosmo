@@ -31,11 +31,6 @@ let muteHeadingFocusCalls = 0;
 let blockedHeadingFocusCalls = 0;
 const openNavigationDrawer = mock.fn();
 
-mock.module('@/components/FeatureFlagsContext', {
-  exports: {
-    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-router', {
   exports: {
     Link: ({ children, ...props }: Record<string, unknown>) =>
@@ -259,6 +254,7 @@ let SettingsProfileMigrationRoute: ComponentType;
 let SettingsFollowingImportRoute: ComponentType;
 let SettingsProfileRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
+let SettingsLabsRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
 let SettingsNaturalLanguageMuteRoute: ComponentType;
@@ -295,6 +291,7 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/profile'));
   ({ default: SettingsMuteAndBlockRoute } =
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
+  ({ default: SettingsLabsRoute } = await import('../../app/(tabs)/(protected)/settings/labs'));
   ({ default: SettingsMutedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
   ({ default: SettingsBlockedProfilesRoute } =
@@ -455,20 +452,40 @@ describe('Settings routes', () => {
     );
   });
 
-  it('full Web 스마트 뮤트 detail은 mute category를 선택하고 category parent로 돌아간다', async () => {
+  it('full Web Labs category는 Smart Filter를 연결하고 Labs master를 선택한다', async () => {
+    await renderRoute('/settings/labs', SettingsLabsRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '실험실'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'labs');
+
+    const smartFilter = rendered('SettingsLinkRow').find(
+      (node) => node.props.href === '/settings/natural-language-mute',
+    );
+    assert.ok(smartFilter);
+
+    const back = rendered('PageHeader')[1]?.props.leading;
+    assert.equal(back?.props.accessibilityLabel, '설정으로 돌아가기');
+    await act(async () => back?.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+  });
+
+  it('full Web 스마트 필터 detail은 Labs category를 선택하고 category parent로 돌아간다', async () => {
     await renderRoute('/settings/natural-language-mute', SettingsNaturalLanguageMuteRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '스마트 뮤트'],
+      ['설정', '스마트 필터'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'labs');
     assert.equal(rendered('SettingsNaturalLanguageMute').length, 1);
 
     const back = rendered('PageHeader')[1]?.props.leading;
-    assert.equal(back?.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
+    assert.equal(back?.props.accessibilityLabel, '실험실로 돌아가기');
     await act(async () => back?.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings/mute-and-block']);
+    assert.deepEqual(dismissedToPaths, ['/settings/labs']);
   });
 
   it('full Web 코스모 탈퇴 detail은 마지막 master entry와 route heading을 선택한다', async () => {
