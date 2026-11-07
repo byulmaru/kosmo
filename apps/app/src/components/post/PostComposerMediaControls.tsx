@@ -98,6 +98,7 @@ const mediaRemoveGeometry = getIconButtonOverlayGeometry(
 export function PostComposerMediaControls({
   actions,
   disabled,
+  dropTargetRef,
   editorRef,
   profileId,
   onValueChange,
@@ -105,6 +106,7 @@ export function PostComposerMediaControls({
 }: {
   readonly actions: ReactNode;
   readonly disabled: boolean;
+  readonly dropTargetRef?: RefObject<View | null>;
   readonly editorRef: RefObject<TextInput | null>;
   readonly profileId: string;
   readonly onValueChange: (value: PostComposerMediaValue) => void;
@@ -240,7 +242,10 @@ export function PostComposerMediaControls({
     }
 
     const editor = editorRef.current as unknown as HTMLElement | null;
-    if (!editor) {
+    const dropTarget = (dropTargetRef
+      ? dropTargetRef.current
+      : editorRef.current) as unknown as HTMLElement | null;
+    if (!editor && !dropTarget) {
       return;
     }
 
@@ -256,8 +261,41 @@ export function PostComposerMediaControls({
       addClipboardMediaFilesRef.current(files);
     };
 
-    editor.addEventListener('paste', onPaste);
-    return () => editor.removeEventListener('paste', onPaste);
+    const onDragOver = (event: DragEvent) => {
+      const hasImageFile = Array.from(event.dataTransfer?.items ?? []).some(
+        (item) => item.kind === 'file' && item.type.toLowerCase().startsWith('image/'),
+      );
+      if (!hasImageFile) {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const onDrop = (event: DragEvent) => {
+      const files = getClipboardImageFiles(
+        event.dataTransfer ? Array.from(event.dataTransfer.items) : null,
+      );
+      if (files.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      addClipboardMediaFilesRef.current(files);
+    };
+
+    // Browser drag events are outside React Native's View event props, so bind them to its Web DOM node.
+    editor?.addEventListener('paste', onPaste);
+    dropTarget?.addEventListener('dragover', onDragOver);
+    dropTarget?.addEventListener('drop', onDrop);
+    return () => {
+      editor?.removeEventListener('paste', onPaste);
+      dropTarget?.removeEventListener('dragover', onDragOver);
+      dropTarget?.removeEventListener('drop', onDrop);
+    };
   });
 
   const selectMedia = async () => {

@@ -300,6 +300,7 @@ function PostComposerContents({
   const resolvedPresentation = presentation ?? 'overlay';
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
+  const dropTargetRef = useRef<View | null>(null);
   const [draft, setDraft] = useState<PostComposerDraft>(() => {
     const initialBody = initialBodyText ?? '';
     const end = initialBody.length;
@@ -710,6 +711,7 @@ function PostComposerContents({
           <PostComposerMediaControls
             actions={null}
             disabled={submitting}
+            dropTargetRef={dropTargetRef}
             editorRef={editor}
             key={mediaGeneration}
             profileId={profile.id}
@@ -862,6 +864,7 @@ function PostComposerContents({
                     <View
                       accessibilityElementsHidden={mediaEditor !== null}
                       aria-hidden={mediaEditor !== null || undefined}
+                      ref={dropTargetRef}
                       style={[
                         presentation !== undefined ? styles.editorScroll : null,
                         resolvedPresentation === 'mobile' && styles.surfaceRoot,
