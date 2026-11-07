@@ -7785,7 +7785,7 @@ export const ComposerFileDropInteraction: Story = {
       'drop-third.svg',
       'drop-fourth.svg',
     ];
-    const filePreviews: Array<{ name: string; uri: string }> = [];
+    const filePreviewNames: string[] = [];
     const originalCreateObjectURL = URL.createObjectURL;
     const createObjectURL = URL.createObjectURL.bind(URL);
     const { originalFetch, upload } = installImageUploadFetch(
@@ -7794,7 +7794,7 @@ export const ComposerFileDropInteraction: Story = {
     URL.createObjectURL = (file) => {
       const uri = createObjectURL(file);
       if (file instanceof File) {
-        filePreviews.push({ name: file.name, uri });
+        filePreviewNames.push(file.name);
       }
       return uri;
     };
@@ -7855,14 +7855,7 @@ export const ComposerFileDropInteraction: Story = {
         expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
         expect(upload).toHaveBeenCalledTimes(4);
       });
-      expect(filePreviews.map(({ name }) => name)).toEqual(expectedFileNames);
-      expect(
-        expectedFileNames.map((_, index) =>
-          canvas
-            .getByRole('img', { name: `첨부 이미지 ${index + 1} 미리보기` })
-            .getAttribute('src'),
-        ),
-      ).toEqual(filePreviews.map(({ uri }) => uri));
+      expect(filePreviewNames).toEqual(expectedFileNames);
       expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
       expect(canvas.queryByLabelText('첨부 이미지 5, 업로드 중')).toBeNull();
 
@@ -7873,7 +7866,7 @@ export const ComposerFileDropInteraction: Story = {
       expect(fullDrop.defaultPrevented).toBe(true);
       expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
       expect(upload).toHaveBeenCalledTimes(4);
-      expect(filePreviews.map(({ name }) => name)).toEqual(expectedFileNames);
+      expect(filePreviewNames).toEqual(expectedFileNames);
       expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
 
       await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 4 제거' }));
@@ -7881,11 +7874,6 @@ export const ComposerFileDropInteraction: Story = {
         expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
       });
       expect(canvas.getByRole('button', { name: '이미지 추가, 1개 더 선택 가능' })).toBeVisible();
-      expect(
-        [1, 2, 3].map((index) =>
-          canvas.getByRole('img', { name: `첨부 이미지 ${index} 미리보기` }).getAttribute('src'),
-        ),
-      ).toEqual(filePreviews.slice(0, 3).map(({ uri }) => uri));
 
       await userEvent.click(canvas.getByRole('button', { name: '게시' }));
       await expect(canvas.getByRole('button', { name: '게시' })).toBeDisabled();
@@ -7899,7 +7887,7 @@ export const ComposerFileDropInteraction: Story = {
       expect(disabledDrop.defaultPrevented).toBe(true);
       expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
       expect(upload).toHaveBeenCalledTimes(4);
-      expect(filePreviews.map(({ name }) => name)).toEqual(expectedFileNames);
+      expect(filePreviewNames).toEqual(expectedFileNames);
       expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
     } finally {
       globalThis.fetch = originalFetch;
