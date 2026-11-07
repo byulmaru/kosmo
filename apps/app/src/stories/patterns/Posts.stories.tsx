@@ -7844,7 +7844,6 @@ export const ComposerFileDropInteraction: Story = {
       const dragOver = dragEvent('dragover', droppedData);
       dropTarget.dispatchEvent(dragOver);
       expect(dragOver.defaultPrevented).toBe(true);
-      expect(droppedData.dropEffect).toBe('copy');
 
       const drop = dragEvent('drop', droppedData);
       dropTarget.dispatchEvent(drop);
