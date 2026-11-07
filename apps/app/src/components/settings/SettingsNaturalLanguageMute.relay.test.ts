@@ -37,6 +37,7 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
+  Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
@@ -60,7 +61,11 @@ mockModule('@/components/ui/TextField', {
   TextArea: (props: Record<string, unknown>) => createElement('TextArea', props),
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ feedbackDangerBase: 'danger' }),
+  useTheme: () => ({
+    feedbackDangerBase: 'danger',
+    feedbackDangerOnSubtle: 'danger-subtle',
+    foregroundSecondary: 'secondary',
+  }),
 });
 mockModule('@/theme/tokens', {
   layoutRecipes: { formStack: {} },
@@ -163,6 +168,50 @@ function profileResult(rules: Array<{ condition: string; id: string }>) {
 }
 
 describe('SettingsNaturalLanguageMute with Relay', () => {
+  it('allows 250 code points and blocks saving 251 while keeping delete available', async () => {
+    await render(createEnvironment());
+    await respond(
+      latestRequest('SettingsNaturalLanguageMuteQuery'),
+      sessionData(profile(profileId, 'MEMBER')),
+    );
+
+    const acceptedCondition = '😀'.repeat(250);
+    await act(async () => one('TextArea').props.onChangeText(` ${acceptedCondition} `));
+    assert.equal(one('Text').props.accessibilityLabel, '남은 글자 수 0자');
+    assert.equal(button('저장').props.disabled, false);
+    await act(async () => button('저장').props.onPress());
+
+    const create = latestRequest('SettingsNaturalLanguageMuteCreateMutation');
+    assert.deepEqual(create.variables, { input: { condition: acceptedCondition } });
+    await respond(create, {
+      createNaturalLanguageMuteRule: {
+        profile: profileResult([{ condition: acceptedCondition, id: ruleId }]),
+      },
+    });
+
+    const overLimitCondition = '😀'.repeat(251);
+    await act(async () => one('TextArea').props.onChangeText(overLimitCondition));
+    assert.equal(one('TextArea').props.value, overLimitCondition);
+    assert.equal(one('Text').props.accessibilityLabel, '남은 글자 수 -1자');
+    assert.equal(button('저장').props.disabled, true);
+    assert.equal(button('삭제').props.disabled, false);
+    await act(async () => button('저장').props.onPress());
+    assert.equal(
+      requests.some(({ name }) => name === 'SettingsNaturalLanguageMuteUpdateMutation'),
+      false,
+    );
+
+    await act(async () => button('삭제').props.onPress());
+    const remove = latestRequest('SettingsNaturalLanguageMuteDeleteMutation');
+    await respond(remove, {
+      deleteNaturalLanguageMuteRule: {
+        naturalLanguageMuteRuleId: ruleId,
+        profile: profileResult([]),
+      },
+    });
+    assert.equal(one('TextArea').props.value, '');
+  });
+
   it('Member can create, update, and delete the selected Profile rule through normalized responses', async () => {
     const environment = createEnvironment();
     await render(environment);

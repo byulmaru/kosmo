@@ -1,4 +1,5 @@
 import { AccountProfileRole } from '@kosmo/core/enums';
+import { naturalLanguageMuteConditionMaxLength } from '@kosmo/core/temporal/natural-language-mute';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Profile } from '../../ref';
@@ -12,7 +13,13 @@ builder.mutationField('createNaturalLanguageMuteRule', (t) =>
     input: {
       condition: t.input.string({
         required: true,
-        validate: z.string().trim().min(1),
+        validate: z
+          .string()
+          .trim()
+          .min(1)
+          .refine((condition) => [...condition].length <= naturalLanguageMuteConditionMaxLength, {
+            message: `Condition must be at most ${naturalLanguageMuteConditionMaxLength} Unicode code points`,
+          }),
       }),
     },
     resolve: async (_, { input }, ctx) => {

@@ -35,6 +35,7 @@ const initialRule: StoryRule = {
     'Avoid posts that reveal character deaths, major plot twists, or endings from the books, films, games, and series I am following until I mark them as finished.',
   id: 'natural-language-mute-rule',
 };
+const overLimitRule: StoryRule = { ...initialRule, condition: '😀'.repeat(251) };
 const mutationResponses = {
   createNaturalLanguageMuteRule: {
     profile: { ...selectedProfile, naturalLanguageMuteRules: [] as StoryRule[] },
@@ -76,7 +77,7 @@ const meta = {
     router: { pathname: '/settings/natural-language-mute' },
   },
   render: () => <SettingsNaturalLanguageMute />,
-  title: 'KOSMO/Patterns/Natural Language Mute',
+  title: 'KOSMO/Patterns/Smart Mute',
 } satisfies Meta<typeof SettingsNaturalLanguageMute>;
 
 export default meta;
@@ -100,6 +101,18 @@ export const ExistingRule: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('textbox', { name: '제외 조건' })).toHaveValue(initialRule.condition);
+    expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '삭제' })).toBeEnabled();
+  },
+};
+
+export const ExistingOverLimitRule: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { relay: { data: profileData([overLimitRule]) } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('textbox', { name: '제외 조건' })).toHaveValue(overLimitRule.condition);
+    expect(canvas.getByLabelText('남은 글자 수 -1자')).toBeVisible();
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '삭제' })).toBeEnabled();
   },

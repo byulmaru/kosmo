@@ -7,7 +7,14 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
-import { ConflictError, KosmoError, NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import {
+  ConflictError,
+  KosmoError,
+  NotFoundError,
+  PermissionDeniedError,
+  ValidationError,
+} from '@kosmo/core/error';
+import { naturalLanguageMuteConditionMaxLength } from '@kosmo/core/temporal/natural-language-mute';
 import { and, eq, sql } from 'drizzle-orm';
 import type {
   NaturalLanguageMuteCommand,
@@ -31,6 +38,16 @@ export const executeNaturalLanguageMuteRuleActivity = async (
   input: NaturalLanguageMuteCommand,
 ): Promise<NaturalLanguageMuteExecution> => {
   try {
+    if (
+      input.action !== 'DELETE' &&
+      [...input.condition].length > naturalLanguageMuteConditionMaxLength
+    ) {
+      throw new ValidationError(
+        `Condition must be at most ${naturalLanguageMuteConditionMaxLength} Unicode code points`,
+        { field: 'condition' },
+      );
+    }
+
     const result = await db.transaction(
       async (tx): Promise<NaturalLanguageMuteResult> => {
         if (input.action === 'CREATE') {

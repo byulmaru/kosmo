@@ -1,5 +1,7 @@
 import type { WorkflowDefinition } from './client';
 
+export const naturalLanguageMuteConditionMaxLength = 250;
+
 type NaturalLanguageMuteCommandIdentity = {
   readonly commandId: string;
   readonly ownerProfileId: string;

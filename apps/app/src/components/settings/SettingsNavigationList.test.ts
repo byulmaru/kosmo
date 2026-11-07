@@ -198,7 +198,7 @@ describe('SettingsMuteAndBlockNavigation', () => {
       [
         { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
         { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
-        { label: '자연어 뮤트 설정 열기', href: '/settings/natural-language-mute' },
+        { label: '스마트 뮤트 설정 열기', href: '/settings/natural-language-mute' },
       ],
     );
   });

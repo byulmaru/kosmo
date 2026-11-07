@@ -77,7 +77,7 @@ after(async () => {
 });
 
 test(
-  'concurrent CREATE workflows serialize the one-rule-per-Profile cap through PostgreSQL retries',
+  'concurrent CREATE workflows preserve the one-rule-per-Profile cap, and oversized UPDATEs fail with VALIDATION',
   { timeout: 120_000 },
   async () => {
     const { owner } = await fixture();
@@ -135,6 +135,33 @@ test(
       assert.ok(winningRule);
       assert.equal(winningRule.id, rows[0]?.id);
       assert.equal(winningRule.condition, rows[0]?.condition);
+
+      const invalidUpdate: NaturalLanguageMuteCommand = {
+        action: 'UPDATE',
+        commandId: randomUUID(),
+        ownerProfileId: owner.id,
+        ruleId: winningRule.id,
+        condition: `${'가'.repeat(250)}😀`,
+      };
+      await assert.rejects(
+        environment.client.workflow.execute(naturalLanguageMuteRuleWorkflow.workflow, {
+          args: [invalidUpdate],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: naturalLanguageMuteRuleWorkflow.workflowIdFromArgs(invalidUpdate),
+          workflowIdConflictPolicy: 'FAIL',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ApplicationFailure &&
+          error.cause.type === 'VALIDATION',
+      );
+
+      const unchanged = await db
+        .select()
+        .from(NaturalLanguageMuteRules)
+        .where(eq(NaturalLanguageMuteRules.id, winningRule.id));
+      assert.deepEqual(unchanged, rows);
     }
   },
 );

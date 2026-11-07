@@ -455,12 +455,12 @@ describe('Settings routes', () => {
     );
   });
 
-  it('full Web 자연어 뮤트 detail은 mute category를 선택하고 category parent로 돌아간다', async () => {
+  it('full Web 스마트 뮤트 detail은 mute category를 선택하고 category parent로 돌아간다', async () => {
     await renderRoute('/settings/natural-language-mute', SettingsNaturalLanguageMuteRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '자연어 뮤트'],
+      ['설정', '스마트 뮤트'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
     assert.equal(rendered('SettingsNaturalLanguageMute').length, 1);
