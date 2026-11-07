@@ -30,6 +30,7 @@ import baseMeta, {
   ReplyFullscreenVisibleViewport as replyFullscreenVisibleViewport,
   ReplyModalBackdropDismissInteraction as replyModalBackdropDismissInteraction,
   ReplyModalComposerMediaEditorGeometry as replyModalComposerMediaEditorGeometry,
+  VisibilityListRows as visibilityListRows,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -165,6 +166,7 @@ export const ReplyFullscreenInitialAnchorInteraction: Story = {
   },
 };
 export const ReplyModalBackdropDismissInteraction: Story = replyModalBackdropDismissInteraction;
+export const VisibilityListRows: Story = visibilityListRows;
 export const ActionBarPostNavigation: Story = actionBarPostNavigation;
 export const ActionBarQuoteNavigation: Story = actionBarQuoteNavigation;
 export const ActionBarRepostNavigation: Story = actionBarRepostNavigation;

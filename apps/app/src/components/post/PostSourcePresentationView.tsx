@@ -10,6 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
+import { PostVisibilityIcon } from './PostVisibilityIcon';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -84,6 +85,7 @@ const PostSourcePresentationViewFragment = graphql`
   fragment PostSourcePresentationView_post on Post {
     id
     createdAt
+    visibility
     content {
       bodyText
       contentWarning
@@ -163,18 +165,23 @@ export function PostSourcePresentationView({
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
       </PostDetailBackground>
-      <PresentationLink
-        accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
-        href={postDetailHref}
-        style={{ paddingTop: authorTopInset }}
-      >
-        <Text
-          style={[styles.timestamp, { color: theme.foregroundSecondary }]}
-          testID="post-timestamp"
+      <View style={styles.timeMetadata}>
+        <PresentationLink
+          accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
+          href={postDetailHref}
+          style={{ paddingTop: authorTopInset }}
         >
-          {formatTimelineTimestamp(post.createdAt)}
-        </Text>
-      </PresentationLink>
+          <Text
+            style={[styles.timestamp, { color: theme.foregroundSecondary }]}
+            testID="post-timestamp"
+          >
+            {formatTimelineTimestamp(post.createdAt)}
+          </Text>
+        </PresentationLink>
+        <View style={{ paddingTop: authorTopInset }}>
+          <PostVisibilityIcon visibility={post.visibility} />
+        </View>
+      </View>
     </PostDetailBackground>
   );
 
@@ -459,6 +466,12 @@ const styles = StyleSheet.create({
   authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
+  timeMetadata: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: spacing.xs,
+  },
   timestamp: {
     fontFamily: fontFamilies.ui,
     minHeight: 44,
