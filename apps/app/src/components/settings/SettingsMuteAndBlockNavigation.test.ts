@@ -13,11 +13,6 @@ mock.module('react-native', {
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module('@/components/FeatureFlagsContext', {
-  exports: {
-    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/theme/tokens', {
   exports: { layoutRecipes: { listStack: {} } },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -40,11 +35,9 @@ afterEach(async () => {
 });
 
 describe('SettingsMuteAndBlockNavigation', () => {
-  it('provides separate links and marks the selected natural language mute destination', async () => {
+  it('뮤트 및 차단 category는 뮤트·차단 프로필만 연결한다', async () => {
     await act(async () => {
-      renderer = create(
-        createElement(SettingsMuteAndBlockNavigation, { selected: 'natural-language-mute' }),
-      );
+      renderer = create(createElement(SettingsMuteAndBlockNavigation));
     });
 
     assert.ok(renderer);
@@ -54,7 +47,6 @@ describe('SettingsMuteAndBlockNavigation', () => {
       [
         ['/settings/muted-profiles', false],
         ['/settings/blocked-profiles', false],
-        ['/settings/natural-language-mute', true],
       ],
     );
   });
