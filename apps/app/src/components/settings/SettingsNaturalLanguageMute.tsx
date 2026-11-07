@@ -1,6 +1,6 @@
 import { naturalLanguageMuteConditionMaxLength } from '@kosmo/core/temporal/natural-language-mute';
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useMutation } from 'react-relay';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -249,7 +249,7 @@ function SettingsNaturalLanguageMuteEditor({
         <Text
           accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
           accessibilityLiveRegion="polite"
-          role={Platform.OS === 'web' ? 'status' : undefined}
+          role="status"
           style={[
             styles.remaining,
             {

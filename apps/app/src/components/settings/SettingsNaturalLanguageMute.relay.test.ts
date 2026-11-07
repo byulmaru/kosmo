@@ -37,7 +37,6 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
-  Platform: { OS: 'web' },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
