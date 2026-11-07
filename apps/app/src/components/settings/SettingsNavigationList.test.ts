@@ -407,13 +407,15 @@ describe('SettingsNavigationList', () => {
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
+    const labsIndex = rows.findIndex((node) => node.props.href === '/settings/labs');
     const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
     const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
     assert.equal(themeIndex, notificationIndex + 1);
-    assert.equal(infoIndex, themeIndex + 1);
+    assert.equal(labsIndex, themeIndex + 1);
+    assert.equal(infoIndex, labsIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
