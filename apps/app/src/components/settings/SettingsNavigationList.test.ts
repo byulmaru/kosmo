@@ -38,11 +38,6 @@ let requestPermissionAndSync: () => Promise<void> = async () => {
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
 
-mock.module('@/components/FeatureFlagsContext', {
-  exports: {
-    useFeatureFlag: (key: string) => key === 'natural-language-mute-settings',
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-router', {
   exports: {
     Link: ({ children, href }: { children: ReactElement; href: string }) =>
@@ -172,36 +167,14 @@ let SettingsNavigationList: ComponentType<{
     | 'profile-migration'
     | 'mute-and-block'
     | 'theme'
+    | 'labs'
     | 'info'
     | 'account-deletion';
-}>;
-let SettingsMuteAndBlockNavigation: ComponentType<{
-  selected?: 'blocked-profiles' | 'muted-profiles';
 }>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ SettingsNavigationList } = await import('./SettingsNavigationList'));
-  ({ SettingsMuteAndBlockNavigation } = await import('./SettingsMuteAndBlockNavigation'));
-});
-
-describe('SettingsMuteAndBlockNavigation', () => {
-  it('뮤트 및 차단 설정 destination을 이 순서로 직접 연결한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(SettingsMuteAndBlockNavigation));
-    });
-    assert.ok(renderer);
-
-    const links = rendered('Pressable');
-    assert.deepEqual(
-      links.map((link) => ({ label: link.props.accessibilityLabel, href: link.props.href })),
-      [
-        { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
-        { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
-        { label: '스마트 뮤트 설정 열기', href: '/settings/natural-language-mute' },
-      ],
-    );
-  });
 });
 
 afterEach(async () => {
@@ -237,7 +210,7 @@ afterEach(async () => {
 
 describe('SettingsNavigationList', () => {
   it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
-    await render();
+    await render({ pathname: '/settings/natural-language-mute', selected: 'labs' });
 
     const links = rendered('Pressable');
     assert.equal(
@@ -257,10 +230,14 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[3].props.href, '/settings/mute-and-block');
     assert.equal(links[4].props.accessibilityLabel, '테마 설정 열기, 시스템');
     assert.equal(links[4].props.href, '/settings/theme');
-    assert.equal(links[5].props.accessibilityLabel, '정보 설정 열기');
-    assert.equal(links[5].props.href, '/settings/info');
-    assert.equal(links[6].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
-    assert.equal(links[6].props.href, '/settings/account-deletion');
+    assert.equal(links[5].props.accessibilityLabel, '실험실 열기');
+    assert.equal(links[5].props.href, '/settings/labs');
+    assert.equal(links[5].props['aria-current'], undefined);
+    assert.deepEqual(links[5].props.accessibilityState, { selected: true });
+    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[6].props.href, '/settings/info');
+    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[7].props.href, '/settings/account-deletion');
     assert.equal(
       links.filter((node) => node.props.href === '/settings/profile-migration').length,
       1,
@@ -275,7 +252,7 @@ describe('SettingsNavigationList', () => {
     );
   });
 
-  it('feature flag provider 없이도 통합 migration destination을 노출한다', async () => {
+  it('provider 없이도 통합 migration destination을 노출한다', async () => {
     await render();
 
     assert.equal(
@@ -430,13 +407,15 @@ describe('SettingsNavigationList', () => {
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
+    const labsIndex = rows.findIndex((node) => node.props.href === '/settings/labs');
     const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
     const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
     assert.equal(themeIndex, notificationIndex + 1);
-    assert.equal(infoIndex, themeIndex + 1);
+    assert.equal(labsIndex, themeIndex + 1);
+    assert.equal(infoIndex, labsIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -665,6 +644,7 @@ async function render(
       | 'profile-migration'
       | 'mute-and-block'
       | 'theme'
+      | 'labs'
       | 'info'
       | 'account-deletion';
   } = {},

@@ -6,8 +6,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 미리 노출하거나 구현하지 않는다.
 
 현재 Target 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, Kosmo가 소유한 Local
-Profile의 `프로필 설정`, `다른 서비스에서 이전`, `뮤트 및 차단`, 클라이언트 로컬의 `테마` **내부
-진입점**을 직접 배치한다. `다른 서비스에서 이전`은 하나의 destination이며, 본문에서 `계정 이전`과
+Profile의 `프로필 설정`, `다른 서비스에서 이전`, `뮤트 및 차단`, 클라이언트 로컬 설정인 `테마`, 그리고
+`실험실` **내부 진입점**을 직접 배치한다. `다른 서비스에서 이전`은 하나의 destination이며, 본문에서 `계정 이전`과
 `팔로잉 가져오기` section을 이 순서로 제공한다. entry는 항상 표시하고, control은 기존 Owner 권한과 Profile
 멤버십 조건에 따라 제공한다.
 실제 행의 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
@@ -43,8 +43,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   정보 화면에는 세 public policy link 다음, `개발 정보` 앞에 `오픈소스 라이선스` 진입점을 둔다.
 - Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
   `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
-- Natural Language Mute 설정의 canonical 내부 route는 `/settings/natural-language-mute`이며 parent는
-  `/settings/mute-and-block`이다.
+- `실험실`의 canonical Settings route는 `/settings/labs`이며 parent는 `/settings`다. `실험실`에는 항상
+  `스마트 필터` entry를 제공하며, 기존 canonical route `/settings/natural-language-mute`를 연다. 이 editor
+  route는 유지하며 parent는 `/settings/labs`다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -63,11 +64,11 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 뮤트 및 차단 → 테마 → 정보 → 코스모 탈퇴`
-  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `다른 서비스에서 이전`은
+- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 뮤트 및 차단 → 테마 → 실험실 → 정보 → 코스모 탈퇴`
+  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `실험실`은 항상 표시한다. `다른 서비스에서 이전`은
   항상 표시하며, 각 section의 control은 기존 권한 조건을 그대로 적용한다.
   `팔로잉 가져오기`는 이 destination의 본문에 둔다. `테마`는 현재
-  선택값을 함께 표시한다.
+  선택값을 함께 표시한다. `실험실` destination에는 항상 `스마트 필터` entry를 둔다.
   `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로 중복
   배치하지 않는다. `코스모 탈퇴`는 연결된 Profile 상태와 무관하게 항상 표시한다. 항목 하나만 가진 `계정`·
   `화면 설정` 대분류를 만들지 않는다.
@@ -84,12 +85,13 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `runtimeVersion`, `실행 유형`, `생성 시각`, `업데이트 상태`를 읽기 전용 진단 행으로 표시한다.
   `checkError`와 `downloadError`는 실제 값이 있을 때만 각각 optional 진단 행으로 표시하며 Web에서 Expo OTA
   값을 임의로 채우지 않는다.
-- 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
+- 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `테마` 앞에 `알림 설정` action을 제공한다.
   이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다.
-- `뮤트 및 차단`은 `뮤트한 프로필`, `차단한 프로필`, `스마트 뮤트`를 각각 별도 destination으로 제공한다.
+- `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 각각 별도 destination으로 제공한다.
   Profile 관계 두 상태를 하나의 혼합 목록으로 표시하지 않는다. Profile 간 세부 action과 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다. `/settings/natural-language-mute`는
-  route header와 한 개의 선택 Profile 편집기를 사용한다. 편집기는 `제외 조건` TextArea, `저장` action과 Rule이
+  `/settings/labs`의 `스마트 필터` entry가 여는 route이며 header도 `스마트 필터`로 표시한다. 한 개의 선택
+  Profile 편집기를 사용한다. 편집기는 `제외 조건` TextArea, `저장` action과 Rule이
   있을 때만 표시하는 `삭제` action으로 구성하며, 설명 문구나 추가 설정 control을 두지 않는다. 선택된 Local
   Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
   Rule이 없으면 생성하며 있으면 갱신한다. 조건은 trim한 문자열의 Unicode code point 수로 판단하며 최대 250자다.
@@ -97,8 +99,6 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   표시한다. 남은 글자 수가 0이어도 trim한 조건이 비어 있지 않으면 저장할 수 있으며, 음수에서는 저장할 수 없다.
   기존 값이 250자를 넘으면 그대로 표시하고 편집할 수 있으며, 입력을 자르거나 자동으로
   줄이지 않는다. 삭제는 현재 Rule만 제거한다.
-  `스마트 뮤트` 진입점과 `/settings/natural-language-mute` 편집기는 `natural-language-mute-settings` 기능
-  플래그로 제어하며, 일반 사용자에게는 기본 비활성화하고 기존 개발자·개발 채널 targeting을 따른다.
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
@@ -290,7 +290,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   약 `320px` master pane과 남은 폭을 채우는 detail pane으로 나누고 theme border로 경계를 표시한다.
 - master pane은 모든 내부 설정 경로에서 `설정` heading과 root 진입점 목록을 유지하고 현재 category를 선택한다.
   detail pane은 선택된 category의 하위 목록 또는 설정 화면과 그 heading을 소유한다. root 기본 detail을 제외한
-  내부 경로의 detail heading은 명시적인 부모로 돌아가는 action을 제공한다.
+  내부 경로의 detail heading은 명시적인 부모로 돌아가는 action을 제공한다. `/settings/labs`와
+  `/settings/natural-language-mute`에서는 master pane이 `실험실`을 선택한다.
 - 두 pane은 Web document scroll을 계속 사용한다. 중앙 content만의 별도 app-style internal scroller를
   만들거나 settings 때문에 전역 sidebar 폭과 `full=1280` breakpoint를 바꾸지 않는다.
 
@@ -348,18 +349,19 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
   `프로필 설정` → `다른 서비스에서 이전` → `뮤트 및 차단` →
-  `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
+  `테마`와 현재 선택값 → `실험실` → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
   link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
   `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
   expanded entry의 full text와 제공된 출처 link를 읽는다.
-  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필`, `스마트 뮤트` link를
-  이 순서로 읽는다. `/settings/natural-language-mute`에서는 detail heading 다음 `제외 조건` text area와
+  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필` link를 이 순서로
+  읽는다. `/settings/labs`에서는 `실험실` heading 다음 `스마트 필터` link를 읽고,
+  `/settings/natural-language-mute`에서는 `스마트 필터` heading 다음 `제외 조건` text area와
   `저장`·`삭제` action을 읽는다. 남은 글자 수는 `남은 글자 수 N자` 형식으로 polite live text에 노출하며,
   저장할 수 없는 입력에서는 `저장`이 disabled 상태임을 전달한다. 실패 상태는 alert로 전달한다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
-  Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.
+  Native Settings root에서는 `알림 설정` action을 `정보` 전에 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.

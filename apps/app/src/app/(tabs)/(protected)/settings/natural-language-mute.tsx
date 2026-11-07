@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsNaturalLanguageMute } from '@/components/settings/SettingsNaturalLanguageMute';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
@@ -12,14 +11,13 @@ import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SettingsNaturalLanguageMuteRoute() {
-  const naturalLanguageMuteSettingsEnabled = useFeatureFlag('natural-language-mute-settings');
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
-        accessibilityLabel="뮤트 및 차단으로 돌아가기"
+        accessibilityLabel="실험실로 돌아가기"
         onPress={() => returnToSettingsParent('/settings/natural-language-mute', router)}
         style={styles.backButton}
         targetSize={44}
@@ -37,9 +35,9 @@ export default function SettingsNaturalLanguageMuteRoute() {
       webStyle={styles.webRoot}
     >
       <MobileWebRouteChrome>
-        <PageHeader leading={backButton} title="스마트 뮤트" />
+        <PageHeader leading={backButton} title="스마트 필터" />
       </MobileWebRouteChrome>
-      {naturalLanguageMuteSettingsEnabled ? <SettingsNaturalLanguageMute /> : null}
+      <SettingsNaturalLanguageMute />
     </RouteScrollContainer>
   );
 }

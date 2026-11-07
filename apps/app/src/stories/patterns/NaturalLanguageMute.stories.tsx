@@ -77,7 +77,7 @@ const meta = {
     router: { pathname: '/settings/natural-language-mute' },
   },
   render: () => <SettingsNaturalLanguageMute />,
-  title: 'KOSMO/Patterns/Smart Mute',
+  title: 'KOSMO/Patterns/Smart Filter',
 } satisfies Meta<typeof SettingsNaturalLanguageMute>;
 
 export default meta;
