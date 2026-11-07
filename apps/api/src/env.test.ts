@@ -4,6 +4,27 @@ import { describe, it } from 'node:test';
 import { envSchema } from './env';
 
 describe('API startup environment', () => {
+  it('parses an absent or blank first-profile auto-follow target as disabled', () => {
+    for (const input of [
+      {},
+      { KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: '' },
+      { KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: ' \t\n ' },
+    ]) {
+      assert.equal(envSchema.parse(input).KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID, '');
+    }
+  });
+
+  it('trims the first-profile auto-follow target without validating its format', () => {
+    const targetProfileId = 'not-a-uuid';
+
+    assert.equal(
+      envSchema.parse({
+        KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: ` ${targetProfileId} `,
+      }).KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID,
+      targetProfileId,
+    );
+  });
+
   it('parses absent, empty, and blank CSV values as an empty list', () => {
     for (const input of [
       {},
