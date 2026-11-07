@@ -915,6 +915,11 @@ test(
 
 test('bounds Home DB candidate pages before natural-language filtering', async () => {
   const viewer = await createAuth();
+  const candidateAuthor = await createProfile('natural-mute-page-author');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: viewer.profile.id,
+    followeeProfileId: candidateAuthor.id,
+  });
   const hiddenAuthor = await createProfile('natural-mute-hidden-source');
   const hiddenSource = await createContentfulPost(
     hiddenAuthor.id,
@@ -925,15 +930,15 @@ test('bounds Home DB candidate pages before natural-language filtering', async (
   const idPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
   const posts = [
     await createQuote(
-      viewer.profile.id,
+      candidateAuthor.id,
       hiddenSource.id,
       'exclude-me visible quote body',
       `${idPrefix}000000000001`,
     ),
-    await createContentfulPost(viewer.profile.id, 'exclude-me post 2', `${idPrefix}000000000002`),
-    await createContentfulPost(viewer.profile.id, 'exclude-me post 3', `${idPrefix}000000000003`),
-    await createContentfulPost(viewer.profile.id, 'exclude-me post 4', `${idPrefix}000000000004`),
-    await createContentfulPost(viewer.profile.id, 'exclude-me post 5', `${idPrefix}000000000005`),
+    await createContentfulPost(candidateAuthor.id, 'exclude-me post 2', `${idPrefix}000000000002`),
+    await createContentfulPost(candidateAuthor.id, 'exclude-me post 3', `${idPrefix}000000000003`),
+    await createContentfulPost(candidateAuthor.id, 'exclude-me post 4', `${idPrefix}000000000004`),
+    await createContentfulPost(candidateAuthor.id, 'exclude-me post 5', `${idPrefix}000000000005`),
   ];
   await db.insert(NaturalLanguageMuteRules).values({
     ownerProfileId: viewer.profile.id,
@@ -1006,25 +1011,30 @@ test('bounds Home DB candidate pages before natural-language filtering', async (
 
 test('keeps forward and backward Home lookahead candidates for the next page', async () => {
   const forwardViewer = await createAuth();
+  const forwardAuthor = await createProfile('natural-mute-forward-author');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: forwardViewer.profile.id,
+    followeeProfileId: forwardAuthor.id,
+  });
   const forwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
   const forwardPosts = [
     await createContentfulPost(
-      forwardViewer.profile.id,
+      forwardAuthor.id,
       'exclude-me oldest forward post',
       `${forwardIdPrefix}000000000001`,
     ),
     await createContentfulPost(
-      forwardViewer.profile.id,
+      forwardAuthor.id,
       'include forward lookahead',
       `${forwardIdPrefix}000000000002`,
     ),
     await createContentfulPost(
-      forwardViewer.profile.id,
+      forwardAuthor.id,
       'exclude-me middle forward post',
       `${forwardIdPrefix}000000000003`,
     ),
     await createContentfulPost(
-      forwardViewer.profile.id,
+      forwardAuthor.id,
       'exclude-me newest forward post',
       `${forwardIdPrefix}000000000004`,
     ),
@@ -1035,30 +1045,35 @@ test('keeps forward and backward Home lookahead candidates for the next page', a
   });
 
   const backwardViewer = await createAuth();
+  const backwardAuthor = await createProfile('natural-mute-backward-author');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: backwardViewer.profile.id,
+    followeeProfileId: backwardAuthor.id,
+  });
   const backwardIdPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
   const backwardPosts = [
     await createContentfulPost(
-      backwardViewer.profile.id,
+      backwardAuthor.id,
       'exclude-me oldest backward post',
       `${backwardIdPrefix}000000000001`,
     ),
     await createContentfulPost(
-      backwardViewer.profile.id,
+      backwardAuthor.id,
       'exclude-me before boundary backward post',
       `${backwardIdPrefix}000000000002`,
     ),
     await createContentfulPost(
-      backwardViewer.profile.id,
+      backwardAuthor.id,
       'exclude-me backward page post 1',
       `${backwardIdPrefix}000000000003`,
     ),
     await createContentfulPost(
-      backwardViewer.profile.id,
+      backwardAuthor.id,
       'exclude-me backward page post 2',
       `${backwardIdPrefix}000000000004`,
     ),
     await createContentfulPost(
-      backwardViewer.profile.id,
+      backwardAuthor.id,
       'include backward lookahead',
       `${backwardIdPrefix}000000000005`,
     ),
@@ -1121,9 +1136,14 @@ test('keeps forward and backward Home lookahead candidates for the next page', a
 
 test('projects stored PostContent and accessible quote source images into natural-language mute input', async () => {
   const viewer = await createAuth();
+  const quoteAuthor = await createProfile('natural-mute-quote-author');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: viewer.profile.id,
+    followeeProfileId: quoteAuthor.id,
+  });
   const sourceAuthor = await createProfile('natural-mute-accessible-source');
   const sourceImage = await createRemoteImageMedia(sourceAuthor.id);
-  const quoteImage = await createRemoteImageMedia(viewer.profile.id);
+  const quoteImage = await createRemoteImageMedia(quoteAuthor.id);
   const source = await createContentfulPost(sourceAuthor.id, 'source body');
   await db
     .update(PostContents)
@@ -1136,7 +1156,7 @@ test('projects stored PostContent and accessible quote source images into natura
       ),
     })
     .where(eq(PostContents.id, source.contentId));
-  const quote = await createQuote(viewer.profile.id, source.id, 'outer body');
+  const quote = await createQuote(quoteAuthor.id, source.id, 'outer body');
   await db
     .update(PostContents)
     .set({
@@ -1292,14 +1312,278 @@ test(
 );
 
 test(
+  'uses one source verdict for a batch of Reposts while preserving viewer-authored content',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const sourceAuthor = await createProfile('natural-mute-unfollowed-source');
+    const firstReposter = await createProfile('natural-mute-first-reposter');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: firstReposter.id,
+    });
+    const source = await createContentfulPost(sourceAuthor.id, 'exclude-me shared source');
+    const ownPost = await createContentfulPost(viewer.profile.id, 'exclude-me own post');
+    const ownQuote = await createQuote(viewer.profile.id, source.id, 'exclude-me own quote');
+    const reposts = [
+      await createContentlessRepost(viewer.profile.id, source.id),
+      await createContentlessRepost(firstReposter.id, source.id),
+    ];
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude matching posts',
+    });
+
+    const decisionKeys = [ownPost.id, ownQuote.id, source.id, ...reposts.map(({ id }) => id)].map(
+      (postId) => naturalMuteDecisionKey(viewer.profile.id, postId),
+    );
+    const staleOwnDecision = JSON.stringify({ decision: 'exclude', probability: 0.99 });
+    const staleRepostDecision = JSON.stringify({ decision: 'include', probability: 0.1 });
+    await runRedisCommand((client) =>
+      client.set(naturalMuteDecisionKey(viewer.profile.id, ownPost.id), staleOwnDecision, {
+        EX: 604_800,
+      }),
+    );
+    await runRedisCommand((client) =>
+      client.set(naturalMuteDecisionKey(viewer.profile.id, reposts[0]!.id), staleRepostDecision, {
+        EX: 604_800,
+      }),
+    );
+
+    const modelRequests: NaturalMuteRequest[] = [];
+    const restoreModel = installNaturalMuteModel((request) => {
+      modelRequests.push(request);
+      return 0.99;
+    });
+    try {
+      const result = await requestHome(viewer.token, { first: 10 });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.deepEqual(
+        result.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+        [encodeGlobalId('Post', ownPost.id), encodeGlobalId('Post', ownQuote.id)].sort(),
+      );
+      assert.equal(modelRequests.length, 1);
+      const input = naturalMuteInputText(modelRequests[0]!);
+      assert.ok(input.includes('exclude-me shared source'));
+      assert.ok(!input.includes('exclude-me own post'));
+      assert.ok(!input.includes('exclude-me own quote'));
+      assert.equal(
+        (
+          await runRedisCommand((client) =>
+            client.get(naturalMuteDecisionKey(viewer.profile.id, ownPost.id)),
+          )
+        )?.value,
+        staleOwnDecision,
+      );
+      assert.equal(
+        (
+          await runRedisCommand((client) =>
+            client.get(naturalMuteDecisionKey(viewer.profile.id, ownQuote.id)),
+          )
+        )?.value,
+        null,
+      );
+      assert.equal(
+        (
+          await runRedisCommand((client) =>
+            client.get(naturalMuteDecisionKey(viewer.profile.id, source.id)),
+          )
+        )?.value,
+        JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+      );
+      assert.equal(
+        (
+          await runRedisCommand((client) =>
+            client.get(naturalMuteDecisionKey(viewer.profile.id, reposts[0]!.id)),
+          )
+        )?.value,
+        staleRepostDecision,
+      );
+      for (const repost of reposts.slice(1)) {
+        assert.equal(
+          (
+            await runRedisCommand((client) =>
+              client.get(naturalMuteDecisionKey(viewer.profile.id, repost.id)),
+            )
+          )?.value,
+          null,
+        );
+      }
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) => client.unlink(decisionKeys));
+    }
+  },
+);
+
+test(
+  "includes a Repost of the viewer's own source without a semantic decision",
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const reposter = await createProfile('natural-mute-own-source-reposter');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: reposter.id,
+    });
+    const source = await createContentfulPost(viewer.profile.id, 'exclude-me viewer source');
+    const repost = await createContentlessRepost(reposter.id, source.id);
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude matching posts',
+    });
+
+    const decisionKeys = [source.id, repost.id].map((postId) =>
+      naturalMuteDecisionKey(viewer.profile.id, postId),
+    );
+    let calls = 0;
+    const restoreModel = installNaturalMuteModel(() => {
+      calls += 1;
+      return 0.99;
+    });
+    try {
+      const result = await requestHome(viewer.token, { first: 10 });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.deepEqual(
+        result.data?.homeTimeline.edges.map(({ node }) => node.id).sort(),
+        [encodeGlobalId('Post', source.id), encodeGlobalId('Post', repost.id)].sort(),
+      );
+      assert.equal(calls, 0);
+      for (const key of decisionKeys) {
+        assert.equal((await runRedisCommand((client) => client.get(key)))?.value, null);
+      }
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) => client.unlink(decisionKeys));
+    }
+  },
+);
+
+test(
+  'classifies a Quote independently after its source verdict is cached for a Repost',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const sourceAuthor = await createProfile('natural-mute-quote-verdict-source');
+    const reposter = await createProfile('natural-mute-quote-verdict-reposter');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: reposter.id,
+    });
+    const source = await createContentfulPost(sourceAuthor.id, 'shared cached source');
+    const repost = await createContentlessRepost(reposter.id, source.id);
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'classify source and quote separately',
+    });
+
+    const quoteAuthor = await createProfile('natural-mute-independent-quote-author');
+    const quote = await createQuote(quoteAuthor.id, source.id, 'independent quote body');
+    const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
+    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
+    const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
+    const modelRequests: NaturalMuteRequest[] = [];
+    const restoreModel = installNaturalMuteModel((request) => {
+      modelRequests.push(request);
+      return naturalMuteInputText(request).includes('independent quote body') ? 0.1 : 0.99;
+    });
+    try {
+      const sourceResult = await requestHome(viewer.token, { first: 10 });
+      assert.equal(sourceResult.errors, undefined, JSON.stringify(sourceResult.errors));
+      assert.deepEqual(sourceResult.data?.homeTimeline.edges, []);
+      assert.equal(modelRequests.length, 1);
+      assert.ok(naturalMuteInputText(modelRequests[0]!).includes('shared cached source'));
+      assert.equal(
+        (await runRedisCommand((client) => client.get(sourceKey)))?.value,
+        JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+      );
+
+      await db.insert(ProfileFollows).values({
+        followerProfileId: viewer.profile.id,
+        followeeProfileId: quoteAuthor.id,
+      });
+      const quoteResult = await requestHome(viewer.token, { first: 10 });
+      assert.equal(quoteResult.errors, undefined, JSON.stringify(quoteResult.errors));
+      assert.deepEqual(
+        quoteResult.data?.homeTimeline.edges.map(({ node }) => node.id),
+        [encodeGlobalId('Post', quote.id)],
+      );
+      assert.equal(modelRequests.length, 2);
+      const quoteInput = naturalMuteInputText(modelRequests[1]!);
+      assert.ok(quoteInput.includes('independent quote body'));
+      assert.ok(quoteInput.includes('shared cached source'));
+      assert.equal(
+        (await runRedisCommand((client) => client.get(quoteKey)))?.value,
+        JSON.stringify({ decision: 'include', probability: 0.1 }),
+      );
+      assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) => client.unlink([quoteKey, sourceKey, repostKey]));
+    }
+  },
+);
+
+test(
+  'uses a Reposted Quote and its direct source as the independent verdict input',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const sourceAuthor = await createProfile('natural-mute-quoted-source-author');
+    const quoteAuthor = await createProfile('natural-mute-reposted-quote-author');
+    const reposter = await createProfile('natural-mute-quote-reposter');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: reposter.id,
+    });
+    const source = await createContentfulPost(sourceAuthor.id, 'direct source context');
+    const quote = await createQuote(quoteAuthor.id, source.id, 'direct Quote subject');
+    const repost = await createContentlessRepost(reposter.id, quote.id);
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude this Quote',
+    });
+
+    const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
+    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
+    const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
+    const modelRequests: NaturalMuteRequest[] = [];
+    const restoreModel = installNaturalMuteModel((request) => {
+      modelRequests.push(request);
+      return 0.99;
+    });
+    try {
+      const result = await requestHome(viewer.token, { first: 10 });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.deepEqual(result.data?.homeTimeline.edges, []);
+      assert.equal(modelRequests.length, 1);
+      const input = naturalMuteInputText(modelRequests[0]!);
+      assert.ok(input.includes('direct Quote subject'));
+      assert.ok(input.includes('direct source context'));
+      assert.equal(
+        (await runRedisCommand((client) => client.get(quoteKey)))?.value,
+        JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+      );
+      assert.equal((await runRedisCommand((client) => client.get(sourceKey)))?.value, null);
+      assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) => client.unlink([quoteKey, sourceKey, repostKey]));
+    }
+  },
+);
+
+test(
   'includes classifier failures without storing a semantic verdict',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
-    const post = await createContentfulPost(
-      viewer.profile.id,
-      'temporarily unavailable classifier',
-    );
+    const author = await createProfile('natural-mute-failing-author');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: author.id,
+    });
+    const post = await createContentfulPost(author.id, 'temporarily unavailable classifier');
     await db.insert(NaturalLanguageMuteRules).values({
       ownerProfileId: viewer.profile.id,
       condition: 'EXCLUDE',
@@ -1578,6 +1862,10 @@ function naturalMuteInputText(request: NaturalMuteRequest): string {
       content.flatMap(({ text, type }) => (type === 'input_text' && text ? [text] : [])),
     )
     .join('\n');
+}
+
+function naturalMuteDecisionKey(profileId: string, postId: string): string {
+  return `kosmo:home-timeline:natural-language-mute:profile:${profileId}:post:${postId}`;
 }
 
 function naturalMuteInputImageUrls(request: NaturalMuteRequest): string[] {

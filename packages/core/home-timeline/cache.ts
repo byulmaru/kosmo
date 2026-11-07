@@ -267,6 +267,7 @@ export const fanoutHomeTimelinePost = async ({
       profileId: HomeFanoutViewers.id,
       post: {
         id: Posts.id,
+        profileId: Posts.profileId,
         currentContentId: Posts.currentContentId,
         quoteConsentStatus: Posts.quoteConsentStatus,
         repostSourceId: Posts.repostSourceId,
