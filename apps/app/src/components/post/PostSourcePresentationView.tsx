@@ -5,6 +5,7 @@ import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
@@ -142,7 +143,6 @@ export function PostSourcePresentationView({
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
-  const theme = useTheme();
   const router = useRouter();
   const post = useFragment(PostSourcePresentationViewFragment, postKey);
   const kind = presentationKind(post);
@@ -165,22 +165,17 @@ export function PostSourcePresentationView({
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
       </PostDetailBackground>
-      <View style={styles.timeMetadata}>
+      <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
           href={postDetailHref}
-          style={{ paddingTop: authorTopInset }}
+          style={styles.timestampLink}
         >
-          <Text
-            style={[styles.timestamp, { color: theme.foregroundSecondary }]}
-            testID="post-timestamp"
-          >
+          <TimestampText testID="post-timestamp">
             {formatTimelineTimestamp(post.createdAt)}
-          </Text>
+          </TimestampText>
         </PresentationLink>
-        <View style={{ paddingTop: authorTopInset }}>
-          <PostVisibilityIcon visibility={post.visibility} />
-        </View>
+        <PostVisibilityIcon visibility={post.visibility} />
       </View>
     </PostDetailBackground>
   );
@@ -467,10 +462,18 @@ const styles = StyleSheet.create({
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
   timeMetadata: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 0,
     gap: spacing.xs,
+  },
+  timestampLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   timestamp: {
     fontFamily: fontFamilies.ui,

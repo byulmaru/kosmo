@@ -436,20 +436,15 @@ function PostListRow({
             profile={post.profile}
             style={[styles.authorText, { paddingTop: authorTopInset }]}
           />
-          <View style={styles.timeMetadata}>
+          <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
             <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
-              <Pressable
-                accessibilityRole="link"
-                style={{ ...styles.timeLink, paddingTop: authorTopInset }}
-              >
-                <TimestampText style={styles.time}>
+              <Pressable accessibilityRole="link" style={styles.timeLink}>
+                <TimestampText testID="post-timestamp">
                   {formatTimelineTimestamp(post.createdAt)}
                 </TimestampText>
               </Pressable>
             </Link>
-            <View style={{ paddingTop: authorTopInset }}>
-              <PostVisibilityIcon visibility={post.visibility} />
-            </View>
+            <PostVisibilityIcon visibility={post.visibility} />
           </View>
         </PostDetailBackground>
         {post.content ? (
@@ -511,17 +506,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   authorText: { flex: -1 },
-  timeLink: { borderRadius: radii.sm, flexShrink: 0 },
+  timeLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   timeMetadata: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 0,
     gap: spacing.xs,
-  },
-  time: {
-    minHeight: 44,
-    minWidth: 44,
-    paddingTop: 12,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },

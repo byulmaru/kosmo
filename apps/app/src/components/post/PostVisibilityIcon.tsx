@@ -1,7 +1,6 @@
 import { PostVisibility } from '@kosmo/core/enums';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 
 function getPresentation(visibility: string) {
@@ -25,15 +24,8 @@ export function PostVisibilityIcon({ visibility }: { visibility: string }) {
 
   const Icon = presentation.icon;
   return (
-    <View
-      accessible
-      accessibilityLabel={presentation.label}
-      accessibilityRole="image"
-      style={styles.root}
-    >
+    <View accessible accessibilityLabel={presentation.label} accessibilityRole="image">
       <Icon color={theme.foregroundSecondary} size={16} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({ root: { marginTop: spacing.md } });

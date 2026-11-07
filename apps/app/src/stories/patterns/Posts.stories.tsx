@@ -4834,7 +4834,6 @@ export const Quote: Story = {
     const outerTimestamp = canvas.getByTestId('post-timestamp');
     const outerTimestampLink = outerTimestamp.closest('[role="link"]');
     expect(outerTimestamp).toHaveTextContent(formatTimelineTimestamp(quotePost.createdAt));
-    expect(window.getComputedStyle(outerTimestamp).textAlign).toBe('right');
     expect(outerTimestampLink).not.toBeNull();
     expect(outerTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(outerTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -5171,16 +5170,25 @@ export const VisibilityListRows: Story = {
       const postFixture = visibilityPosts.find((postItem) => postItem.visibility === visibility)!;
       const row = canvas.getByTestId(`visibility-${visibility}`);
       const icon = within(row).getByRole('img', { name: label });
-      const timestampLink = row.querySelector<HTMLAnchorElement>(
-        `a[href="/${postFixture.profile.relativeHandle}/${postFixture.id}"]`,
-      );
+      const timestamp = within(row).getByTestId('post-timestamp');
+      const timestampLink = timestamp.closest<HTMLAnchorElement>('a[role="link"]');
 
-      expect(timestampLink).not.toBeNull();
+      expect(timestampLink).toHaveAttribute(
+        'href',
+        `/${postFixture.profile.relativeHandle}/${postFixture.id}`,
+      );
       expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
       expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-      expect(icon.getBoundingClientRect().left).toBeGreaterThanOrEqual(
-        timestampLink!.getBoundingClientRect().right,
-      );
+      const textRange = row.ownerDocument.createRange();
+      textRange.selectNodeContents(timestamp);
+      const textBounds = textRange.getBoundingClientRect();
+      const iconBounds = icon.getBoundingClientRect();
+      const textIconGap = iconBounds.left - textBounds.right;
+      expect(
+        Math.abs(textBounds.top + textBounds.height / 2 - (iconBounds.top + iconBounds.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(textIconGap).toBeGreaterThanOrEqual(3);
+      expect(textIconGap).toBeLessThanOrEqual(5);
       expect(
         timestampLink!.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).not.toBe(0);
@@ -5190,12 +5198,37 @@ export const VisibilityListRows: Story = {
     const quoteIcon = within(quoteRow).getByRole('img', { name: '팔로워만' });
     const quoteTimestamp = within(quoteRow).getByTestId('post-timestamp');
     const quoteTimestampLink = quoteTimestamp.closest<HTMLAnchorElement>('a[role="link"]');
+    const publicTimestamp = within(canvas.getByTestId('visibility-PUBLIC')).getByTestId(
+      'post-timestamp',
+    );
+    const publicTimestampStyle = window.getComputedStyle(publicTimestamp);
+    const quoteTimestampStyle = window.getComputedStyle(quoteTimestamp);
+    expect(publicTimestampStyle.fontSize).toBe('14px');
+    expect(publicTimestampStyle.lineHeight).toBe('20px');
+    expect(publicTimestampStyle.fontWeight).toBe('400');
+    expect(quoteTimestampStyle.fontSize).toBe(publicTimestampStyle.fontSize);
+    expect(quoteTimestampStyle.lineHeight).toBe(publicTimestampStyle.lineHeight);
+    expect(quoteTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
     expect(quoteTimestampLink).toHaveAttribute(
       'href',
       `/${visibilityOwnershipQuotePost.profile.relativeHandle}/${visibilityOwnershipQuotePost.id}`,
     );
     expect(quoteTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(quoteTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const quoteTextRange = quoteRow.ownerDocument.createRange();
+    quoteTextRange.selectNodeContents(quoteTimestamp);
+    const quoteTextBounds = quoteTextRange.getBoundingClientRect();
+    const quoteIconBounds = quoteIcon.getBoundingClientRect();
+    const quoteTextIconGap = quoteIconBounds.left - quoteTextBounds.right;
+    expect(
+      Math.abs(
+        quoteTextBounds.top +
+          quoteTextBounds.height / 2 -
+          (quoteIconBounds.top + quoteIconBounds.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(quoteTextIconGap).toBeGreaterThanOrEqual(3);
+    expect(quoteTextIconGap).toBeLessThanOrEqual(5);
     expect(
       quoteTimestampLink!.compareDocumentPosition(quoteIcon) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
