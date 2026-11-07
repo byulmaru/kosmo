@@ -2,6 +2,23 @@ import type { WorkflowDefinition } from './client';
 
 export const naturalLanguageMuteConditionMaxLength = 250;
 
+export const isNaturalLanguageMuteConditionWithinLimit = (condition: string): boolean => {
+  if (condition.length > naturalLanguageMuteConditionMaxLength * 2) {
+    return false;
+  }
+
+  const codePoints = condition[Symbol.iterator]();
+  let codePointCount = 0;
+  while (codePointCount <= naturalLanguageMuteConditionMaxLength) {
+    if (codePoints.next().done) {
+      return true;
+    }
+    codePointCount += 1;
+  }
+
+  return false;
+};
+
 type NaturalLanguageMuteCommandIdentity = {
   readonly commandId: string;
   readonly ownerProfileId: string;

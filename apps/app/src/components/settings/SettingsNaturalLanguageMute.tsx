@@ -145,7 +145,11 @@ function SettingsNaturalLanguageMuteEditor({
   const saving = creating || updating;
   const condition = draft ?? rule?.condition ?? '';
   const normalizedCondition = condition.trim();
-  const remaining = naturalLanguageMuteConditionMaxLength - [...normalizedCondition].length;
+  let remaining = naturalLanguageMuteConditionMaxLength;
+  const codePoints = normalizedCondition[Symbol.iterator]();
+  while (!codePoints.next().done) {
+    remaining -= 1;
+  }
   const validationError =
     draft !== null && !normalizedCondition ? '제외 조건을 입력해 주세요.' : undefined;
   const canSave =

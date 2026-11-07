@@ -14,7 +14,10 @@ import {
   PermissionDeniedError,
   ValidationError,
 } from '@kosmo/core/error';
-import { naturalLanguageMuteConditionMaxLength } from '@kosmo/core/temporal/natural-language-mute';
+import {
+  isNaturalLanguageMuteConditionWithinLimit,
+  naturalLanguageMuteConditionMaxLength,
+} from '@kosmo/core/temporal/natural-language-mute';
 import { and, eq, sql } from 'drizzle-orm';
 import type {
   NaturalLanguageMuteCommand,
@@ -38,10 +41,7 @@ export const executeNaturalLanguageMuteRuleActivity = async (
   input: NaturalLanguageMuteCommand,
 ): Promise<NaturalLanguageMuteExecution> => {
   try {
-    if (
-      input.action !== 'DELETE' &&
-      [...input.condition].length > naturalLanguageMuteConditionMaxLength
-    ) {
+    if (input.action !== 'DELETE' && !isNaturalLanguageMuteConditionWithinLimit(input.condition)) {
       throw new ValidationError(
         `Condition must be at most ${naturalLanguageMuteConditionMaxLength} Unicode code points`,
         { field: 'condition' },
