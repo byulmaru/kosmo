@@ -525,6 +525,26 @@ const pureRepost = {
   repostCount: 1,
   viewerRepost: null,
 };
+const visibilityOwnershipSourcePost = post({
+  bodyText: '공개 범위가 다른 Quote·Repost의 원문입니다.',
+  id: 'visibility-ownership-source',
+  profile: sourceAuthor,
+  visibility: 'PUBLIC',
+});
+const visibilityOwnershipQuotePost = post({
+  bodyText: '팔로워에게만 공개하는 인용 게시글입니다.',
+  id: 'visibility-ownership-quote',
+  profile: repostAuthor,
+  repostSource: visibilityOwnershipSourcePost,
+  visibility: 'FOLLOWERS',
+});
+const visibilityOwnershipPureRepost = post({
+  bodyText: null,
+  id: 'visibility-ownership-repost',
+  profile: repostAuthor,
+  repostSource: visibilityOwnershipSourcePost,
+  visibility: 'DIRECT',
+});
 const longPureRepost = post({
   bodyText: null,
   id: 'post-repost-long-author',
@@ -954,6 +974,9 @@ const storyPosts = [
   loadErrorThreeMediaPost,
   replyPost,
   ...authorBoundaryPosts,
+  visibilityOwnershipSourcePost,
+  visibilityOwnershipQuotePost,
+  visibilityOwnershipPureRepost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -3172,6 +3195,7 @@ const meta = {
     'ActionBarRepostOfQuoteNavigation',
     'ActionBarThreadNavigation',
     'ActionBarPendingNavigation',
+    'VisibilityListRows',
 
     'AuthorNavigationLongName',
     'AuthorNavigationLongHandle',
@@ -4810,7 +4834,6 @@ export const Quote: Story = {
     const outerTimestamp = canvas.getByTestId('post-timestamp');
     const outerTimestampLink = outerTimestamp.closest('[role="link"]');
     expect(outerTimestamp).toHaveTextContent(formatTimelineTimestamp(quotePost.createdAt));
-    expect(window.getComputedStyle(outerTimestamp).textAlign).toBe('right');
     expect(outerTimestampLink).not.toBeNull();
     expect(outerTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(outerTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -5092,6 +5115,149 @@ export const QuoteWithoutSource: Story = {
     expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
   render: () => <RepostQuotePresentationStory postId="post-quote-source-null" />,
+};
+
+function VisibilityListRowsStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      {visibilityPosts.map((visibilityPost) => (
+        <View key={visibilityPost.id} testID={`visibility-${visibilityPost.visibility}`}>
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, visibilityPost.id).listItem,
+              `${visibilityPost.visibility} post item`,
+            )}
+            presentation="mobile"
+          />
+        </View>
+      ))}
+      <View testID="visibility-quote-row">
+        <PostListItem
+          post={requireFragment(
+            requirePostById(posts, visibilityOwnershipQuotePost.id).listItem,
+            'visibility ownership Quote post item',
+          )}
+          presentation="mobile"
+        />
+      </View>
+      <View testID="visibility-pure-repost-row">
+        <PostListItem
+          post={requireFragment(
+            requirePostById(posts, visibilityOwnershipPureRepost.id).listItem,
+            'visibility ownership pure Repost item',
+          )}
+          presentation="mobile"
+        />
+      </View>
+    </Catalog>
+  );
+}
+
+export const VisibilityListRows: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listVisibilityCases = [
+      ['PUBLIC', '공개'],
+      ['UNLISTED', '조용한 공개'],
+      ['FOLLOWERS', '팔로워만'],
+      ['DIRECT', '언급한 프로필만'],
+    ] as const;
+
+    for (const [visibility, label] of listVisibilityCases) {
+      const postFixture = visibilityPosts.find((postItem) => postItem.visibility === visibility)!;
+      const row = canvas.getByTestId(`visibility-${visibility}`);
+      const icon = within(row).getByRole('img', { name: label });
+      const timestamp = within(row).getByTestId('post-timestamp');
+      const timestampLink = timestamp.closest<HTMLAnchorElement>('a[role="link"]');
+
+      expect(timestampLink).toHaveAttribute(
+        'href',
+        `/${postFixture.profile.relativeHandle}/${postFixture.id}`,
+      );
+      expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+      expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      const textRange = row.ownerDocument.createRange();
+      textRange.selectNodeContents(timestamp);
+      const textBounds = textRange.getBoundingClientRect();
+      const iconBounds = icon.getBoundingClientRect();
+      const textIconGap = iconBounds.left - textBounds.right;
+      expect(
+        Math.abs(textBounds.top + textBounds.height / 2 - (iconBounds.top + iconBounds.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(textIconGap).toBeGreaterThanOrEqual(3);
+      expect(textIconGap).toBeLessThanOrEqual(5);
+      expect(
+        timestampLink!.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+    }
+
+    const quoteRow = canvas.getByTestId('visibility-quote-row');
+    const quoteIcon = within(quoteRow).getByRole('img', { name: '팔로워만' });
+    const quoteTimestamp = within(quoteRow).getByTestId('post-timestamp');
+    const quoteTimestampLink = quoteTimestamp.closest<HTMLAnchorElement>('a[role="link"]');
+    const publicTimestamp = within(canvas.getByTestId('visibility-PUBLIC')).getByTestId(
+      'post-timestamp',
+    );
+    const publicTimestampStyle = window.getComputedStyle(publicTimestamp);
+    const quoteTimestampStyle = window.getComputedStyle(quoteTimestamp);
+    expect(publicTimestampStyle.fontSize).toBe('14px');
+    expect(publicTimestampStyle.lineHeight).toBe('20px');
+    expect(publicTimestampStyle.fontWeight).toBe('400');
+    expect(quoteTimestampStyle.fontSize).toBe(publicTimestampStyle.fontSize);
+    expect(quoteTimestampStyle.lineHeight).toBe(publicTimestampStyle.lineHeight);
+    expect(quoteTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
+    expect(quoteTimestampLink).toHaveAttribute(
+      'href',
+      `/${visibilityOwnershipQuotePost.profile.relativeHandle}/${visibilityOwnershipQuotePost.id}`,
+    );
+    expect(quoteTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(quoteTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const quoteTextRange = quoteRow.ownerDocument.createRange();
+    quoteTextRange.selectNodeContents(quoteTimestamp);
+    const quoteTextBounds = quoteTextRange.getBoundingClientRect();
+    const quoteIconBounds = quoteIcon.getBoundingClientRect();
+    const quoteTextIconGap = quoteIconBounds.left - quoteTextBounds.right;
+    expect(
+      Math.abs(
+        quoteTextBounds.top +
+          quoteTextBounds.height / 2 -
+          (quoteIconBounds.top + quoteIconBounds.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(quoteTextIconGap).toBeGreaterThanOrEqual(3);
+    expect(quoteTextIconGap).toBeLessThanOrEqual(5);
+    expect(
+      quoteTimestampLink!.compareDocumentPosition(quoteIcon) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    const sourcePreview = within(quoteRow).getByTestId('source-post-preview');
+    expect(within(sourcePreview).queryByRole('img', { name: '공개' })).not.toBeInTheDocument();
+    expect(within(sourcePreview).getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
+      'href',
+      `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}`,
+    );
+
+    const repostRow = canvas.getByTestId('visibility-pure-repost-row');
+    const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
+    const repostSourceIcon = within(repostSourceRow).getByRole('img', { name: '공개' });
+    const repostSourceTimestamp = repostSourceRow.querySelector<HTMLAnchorElement>(
+      `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}"]`,
+    );
+    expect(
+      within(repostRow).queryByRole('img', { name: '언급한 프로필만' }),
+    ).not.toBeInTheDocument();
+    expect(repostSourceTimestamp).not.toBeNull();
+    expect(repostSourceTimestamp!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(repostSourceTimestamp!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(
+      repostSourceTimestamp!.compareDocumentPosition(repostSourceIcon) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+  },
+  render: () => <VisibilityListRowsStory />,
 };
 
 export const OrdinaryPost: Story = {

@@ -17,6 +17,7 @@ import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
+import { PostVisibilityIcon } from './PostVisibilityIcon';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -29,6 +30,7 @@ const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
     id
     createdAt
+    visibility
     content {
       id
     }
@@ -434,16 +436,16 @@ function PostListRow({
             profile={post.profile}
             style={[styles.authorText, { paddingTop: authorTopInset }]}
           />
-          <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
-            <Pressable
-              accessibilityRole="link"
-              style={{ ...styles.timeLink, paddingTop: authorTopInset }}
-            >
-              <TimestampText style={styles.time}>
-                {formatTimelineTimestamp(post.createdAt)}
-              </TimestampText>
-            </Pressable>
-          </Link>
+          <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+            <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
+              <Pressable accessibilityRole="link" style={styles.timeLink}>
+                <TimestampText testID="post-timestamp">
+                  {formatTimelineTimestamp(post.createdAt)}
+                </TimestampText>
+              </Pressable>
+            </Link>
+            <PostVisibilityIcon visibility={post.visibility} />
+          </View>
         </PostDetailBackground>
         {post.content ? (
           <PostDetailBackground onBackgroundPress={openDetail} style={styles.bodyLink}>
@@ -504,11 +506,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   authorText: { flex: -1 },
-  timeLink: { borderRadius: radii.sm, flexShrink: 0 },
-  time: {
+  timeLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
     minHeight: 44,
     minWidth: 44,
-    paddingTop: 12,
+  },
+  timeMetadata: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: spacing.xs,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },

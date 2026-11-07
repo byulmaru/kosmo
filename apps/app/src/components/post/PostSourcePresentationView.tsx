@@ -5,11 +5,13 @@ import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
+import { PostVisibilityIcon } from './PostVisibilityIcon';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -84,6 +86,7 @@ const PostSourcePresentationViewFragment = graphql`
   fragment PostSourcePresentationView_post on Post {
     id
     createdAt
+    visibility
     content {
       bodyText
       contentWarning
@@ -140,7 +143,6 @@ export function PostSourcePresentationView({
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
-  const theme = useTheme();
   const router = useRouter();
   const post = useFragment(PostSourcePresentationViewFragment, postKey);
   const kind = presentationKind(post);
@@ -163,18 +165,18 @@ export function PostSourcePresentationView({
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
       </PostDetailBackground>
-      <PresentationLink
-        accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
-        href={postDetailHref}
-        style={{ paddingTop: authorTopInset }}
-      >
-        <Text
-          style={[styles.timestamp, { color: theme.foregroundSecondary }]}
-          testID="post-timestamp"
+      <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+        <PresentationLink
+          accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
+          href={postDetailHref}
+          style={styles.timestampLink}
         >
-          {formatTimelineTimestamp(post.createdAt)}
-        </Text>
-      </PresentationLink>
+          <TimestampText testID="post-timestamp">
+            {formatTimelineTimestamp(post.createdAt)}
+          </TimestampText>
+        </PresentationLink>
+        <PostVisibilityIcon visibility={post.visibility} />
+      </View>
     </PostDetailBackground>
   );
 
@@ -459,6 +461,20 @@ const styles = StyleSheet.create({
   authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
+  timeMetadata: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: spacing.xs,
+  },
+  timestampLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   timestamp: {
     fontFamily: fontFamilies.ui,
     minHeight: 44,

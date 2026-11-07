@@ -35,6 +35,12 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('lucide-react-native', {
+  AtSignIcon: 'AtSignIcon',
+  GlobeIcon: 'GlobeIcon',
+  LockIcon: 'LockIcon',
+  MoonIcon: 'MoonIcon',
+});
 mockModule('react-relay', {
   graphql: () => ({}),
   useFragment: (_fragment: unknown, key: unknown) => key,

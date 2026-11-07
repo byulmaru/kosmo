@@ -112,7 +112,11 @@ stub('expo-router', {
   useRouter: () => ({ push: () => undefined }),
 });
 stub('lucide-react-native', {
+  AtSignIcon: 'AtSignIcon',
+  GlobeIcon: 'GlobeIcon',
+  LockIcon: 'LockIcon',
   MessageCircle: 'MessageCircle',
+  MoonIcon: 'MoonIcon',
   Pin: 'Pin',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',
