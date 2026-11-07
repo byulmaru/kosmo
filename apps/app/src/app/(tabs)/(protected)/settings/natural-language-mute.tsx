@@ -37,7 +37,7 @@ export default function SettingsNaturalLanguageMuteRoute() {
       webStyle={styles.webRoot}
     >
       <MobileWebRouteChrome>
-        <PageHeader leading={backButton} title="자연어 뮤트" />
+        <PageHeader leading={backButton} title="스마트 뮤트" />
       </MobileWebRouteChrome>
       {naturalLanguageMuteSettingsEnabled ? <SettingsNaturalLanguageMute /> : null}
     </RouteScrollContainer>

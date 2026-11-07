@@ -86,14 +86,18 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   값을 임의로 채우지 않는다.
 - 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
   이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다.
-- `뮤트 및 차단`은 `뮤트한 프로필`, `차단한 프로필`, `자연어 뮤트`를 각각 별도 destination으로 제공한다.
+- `뮤트 및 차단`은 `뮤트한 프로필`, `차단한 프로필`, `스마트 뮤트`를 각각 별도 destination으로 제공한다.
   Profile 관계 두 상태를 하나의 혼합 목록으로 표시하지 않는다. Profile 간 세부 action과 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다. `/settings/natural-language-mute`는
   route header와 한 개의 선택 Profile 편집기를 사용한다. 편집기는 `제외 조건` TextArea, `저장` action과 Rule이
   있을 때만 표시하는 `삭제` action으로 구성하며, 설명 문구나 추가 설정 control을 두지 않는다. 선택된 Local
   Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
-  Rule이 없으면 생성하며 있으면 갱신한다. 삭제는 현재 Rule만 제거한다.
-  `자연어 뮤트` 진입점과 `/settings/natural-language-mute` 편집기는 `natural-language-mute-settings` 기능
+  Rule이 없으면 생성하며 있으면 갱신한다. 조건은 trim한 문자열의 Unicode code point 수로 판단하며 최대 250자다.
+  편집기는 남은 글자 수를 기존 composer 스타일의 오른쪽 정렬 counter로 표시하고, 음수는 기존 danger token으로
+  표시한다. 남은 글자 수가 0이어도 trim한 조건이 비어 있지 않으면 저장할 수 있으며, 음수에서는 저장할 수 없다.
+  기존 값이 250자를 넘으면 그대로 표시하고 편집할 수 있으며, 입력을 자르거나 자동으로
+  줄이지 않는다. 삭제는 현재 Rule만 제거한다.
+  `스마트 뮤트` 진입점과 `/settings/natural-language-mute` 편집기는 `natural-language-mute-settings` 기능
   플래그로 제어하며, 일반 사용자에게는 기본 비활성화하고 기존 개발자·개발 채널 targeting을 따른다.
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
@@ -349,9 +353,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
   `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
   expanded entry의 full text와 제공된 출처 link를 읽는다.
-  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필`, `자연어 뮤트` link를
-  이 순서로 읽는다. `/settings/natural-language-mute`에서는 detail heading 다음 `제외 조건` text area와 활성화된
-  `저장`·`삭제` action을 읽고, 실패 상태를 alert로 전달한다.
+  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필`, `스마트 뮤트` link를
+  이 순서로 읽는다. `/settings/natural-language-mute`에서는 detail heading 다음 `제외 조건` text area와
+  `저장`·`삭제` action을 읽는다. 남은 글자 수는 `남은 글자 수 N자` 형식으로 polite live text에 노출하며,
+  저장할 수 없는 입력에서는 `저장`이 disabled 상태임을 전달한다. 실패 상태는 alert로 전달한다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
   Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.

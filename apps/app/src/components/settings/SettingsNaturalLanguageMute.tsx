@@ -1,3 +1,4 @@
+import { naturalLanguageMuteConditionMaxLength } from '@kosmo/core/temporal/natural-language-mute';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, useMutation } from 'react-relay';
@@ -144,10 +145,18 @@ function SettingsNaturalLanguageMuteEditor({
   const saving = creating || updating;
   const condition = draft ?? rule?.condition ?? '';
   const normalizedCondition = condition.trim();
+  let remaining = naturalLanguageMuteConditionMaxLength;
+  const codePoints = normalizedCondition[Symbol.iterator]();
+  while (!codePoints.next().done) {
+    remaining -= 1;
+  }
   const validationError =
     draft !== null && !normalizedCondition ? '제외 조건을 입력해 주세요.' : undefined;
   const canSave =
-    !pending && normalizedCondition.length > 0 && normalizedCondition !== rule?.condition;
+    !pending &&
+    normalizedCondition.length > 0 &&
+    remaining >= 0 &&
+    normalizedCondition !== rule?.condition;
 
   const save = () => {
     if (!canSave) {
@@ -241,6 +250,19 @@ function SettingsNaturalLanguageMuteEditor({
             삭제
           </Button>
         ) : null}
+        <Text
+          accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
+          accessibilityLiveRegion="polite"
+          role="status"
+          style={[
+            styles.remaining,
+            {
+              color: remaining < 0 ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary,
+            },
+          ]}
+        >
+          {remaining.toLocaleString('ko-KR')}
+        </Text>
       </View>
       {feedback ? (
         <Text
@@ -259,6 +281,7 @@ function SettingsNaturalLanguageMuteEditor({
 
 const styles = StyleSheet.create({
   root: { ...layoutRecipes.formStack, padding: spacing.lg },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  actions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   error: textStyles.uiCopyM,
+  remaining: { flexGrow: 1, width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
 });

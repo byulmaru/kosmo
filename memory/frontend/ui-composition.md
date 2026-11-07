@@ -20,6 +20,7 @@ UI contract enforcement의 검사 범위, consumer와 feature PR의 경계, lega
 ## React Native Components And Styles
 
 - `View`, `Text`, `TextInput`, `Pressable`, `Modal`, `ScrollView` 등 React Native primitive를 기본으로 사용한다. browser-only element나 DOM API는 platform 경계 밖의 공용 컴포넌트에 넣지 않는다.
+- 프레임워크·라이브러리가 공통 prop을 플랫폼별로 처리하거나 안전하게 무시해 필요한 동작을 유지한다면, 컴포넌트에서 `Platform.OS` 분기를 덧붙이지 않고 동일한 prop을 사용한다. 필요한 분기의 기준과 경계는 [Frontend: Route And Platform](./route-platform.md#route-and-platform-boundaries)을 따른다.
 - system bar·viewport edge까지 backdrop을 확장하는 Web·iOS·Android overlay는 바깥 backdrop이 네 방향 safe area를 한 번만 소유한다. scrim은 끝까지 칠하고 interactive surface만 inset 안에 두며, fullscreen·centered·drawer 같은 presentation 분기는 기본 여백과 배치만 결정한다. Native `Modal`은 system bar 아래까지 backdrop을 확장한 뒤 같은 경계에서 inset을 소비하고, surface 안에 `SafeAreaView`를 중첩해 다시 소비하지 않는다.
 - 색상, spacing, radius, typography, breakpoint는 `apps/app/src/theme` token을 사용한다. 일회성 raw hex/숫자로 Foundation 값을 복제하지 않는다.
 - UI 텍스트는 `fontFamilies.ui`(`SUIT Variable`), 포스트 본문과 긴 입력은 `fontFamilies.content`(`Pretendard Variable`)를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다. `apps/app/src/app/_layout.tsx`는 Native에서 Variable TTF를, Web에서 Variable WOFF2를 `useFonts`에 제공한다. Android config plugin은 같은 패키지의 400/600/700/800 정적 face를 consumer family name에 등록하므로 Expo는 runtime load를 건너뛰고, 플러그인 전 바이너리는 기존 runtime fallback을 유지한다. iOS 등록 key(`SUIT`, `Pretendard`)는 consumer family name과 분리한다.

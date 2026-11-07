@@ -144,6 +144,44 @@ describe('GraphQL Natural Language Mute Rule', () => {
     }
   });
 
+  test('정규화한 조건은 250개 변경을 허용하고 251개 생성·변경을 거부한다', async () => {
+    const auth = await createAuthenticatedSession(AccountProfileRole.MEMBER);
+    const accepted = `${'가'.repeat(249)}😀`;
+    const acceptedUpdate = `${'나'.repeat(249)}😀`;
+    const rejected = `${'가'.repeat(250)}😀`;
+
+    const rejectedCreate = await createResult(auth.token, rejected);
+    assert.equal(rejectedCreate.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(
+      await db.$count(
+        NaturalLanguageMuteRules,
+        eq(NaturalLanguageMuteRules.ownerProfileId, auth.profile.id),
+      ),
+      0,
+    );
+
+    const created = await createResult(auth.token, `  ${accepted}  `);
+    assertNoGraphQLErrors(created);
+    const rule = created.data?.createNaturalLanguageMuteRule.profile.naturalLanguageMuteRules[0];
+    assert.ok(rule);
+    assert.equal(rule.condition, accepted);
+
+    const updated = await updateResult(auth.token, rule.id, acceptedUpdate);
+    assertNoGraphQLErrors(updated);
+    assert.deepEqual(updated.data?.updateNaturalLanguageMuteRule.profile.naturalLanguageMuteRules, [
+      { id: rule.id, condition: acceptedUpdate },
+    ]);
+
+    const rejectedUpdate = await updateResult(auth.token, rule.id, rejected);
+    assert.equal(rejectedUpdate.errors?.[0]?.extensions?.code, 'VALIDATION');
+    const rows = await db
+      .select()
+      .from(NaturalLanguageMuteRules)
+      .where(eq(NaturalLanguageMuteRules.ownerProfileId, auth.profile.id));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.condition, acceptedUpdate);
+  });
+
   test('guest와 다른 selected Profile에는 rule Node와 내용이 노출되지 않는다', async () => {
     const auth = await createAuthenticatedSession(AccountProfileRole.MEMBER);
     const created = await createResult(auth.token, 'hide spoilers');

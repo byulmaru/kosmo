@@ -32,9 +32,9 @@ export function SettingsMuteAndBlockNavigation({
       />
       {naturalLanguageMuteSettingsEnabled ? (
         <SettingsLinkRow
-          accessibilityLabel="자연어 뮤트 설정 열기"
+          accessibilityLabel="스마트 뮤트 설정 열기"
           href="/settings/natural-language-mute"
-          label="자연어 뮤트"
+          label="스마트 뮤트"
           primary
           selected={selected === 'natural-language-mute'}
         />
