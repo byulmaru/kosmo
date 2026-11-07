@@ -4043,7 +4043,7 @@ describe('GraphQL remote profile boundary', () => {
 
   test('auto-follows the configured Profile only when the Account has no visible Profile', async (t) => {
     const target = await createProfile({
-      handle: 'auto-follow-target',
+      handle: 'auto_follow_target',
       instanceId: localInstanceId,
     });
     const previousTargetId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
@@ -4064,7 +4064,7 @@ describe('GraphQL remote profile boundary', () => {
 
     const firstAuth = await createAuthenticatedSession({ selectedProfile: false });
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, firstAuth.account.id));
-    const first = await create('auto-follow-first', firstAuth.token);
+    const first = await create('auto_follow_first', firstAuth.token);
     assertNoGraphQLErrors(first);
     const firstProfileId = decodeGlobalId(first.data!.createProfile.profile.id).id;
     await db
@@ -4079,7 +4079,7 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
 
-    const additional = await create('auto-follow-additional', firstAuth.token);
+    const additional = await create('auto_follow_additional', firstAuth.token);
     assertNoGraphQLErrors(additional);
     const additionalProfileId = decodeGlobalId(additional.data!.createProfile.profile.id).id;
     assert.equal(
@@ -4095,7 +4095,7 @@ describe('GraphQL remote profile boundary', () => {
       role: AccountProfileRole.MEMBER,
       selectedProfile: false,
     });
-    const memberProfileCreate = await create('auto-follow-member-account', memberAuth.token);
+    const memberProfileCreate = await create('auto_follow_member_account', memberAuth.token);
     assertNoGraphQLErrors(memberProfileCreate);
     const memberCreatedId = decodeGlobalId(memberProfileCreate.data!.createProfile.profile.id).id;
     assert.equal(
@@ -4115,10 +4115,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, hiddenMemberAuth.profile.id));
-    const hiddenProfileCreate = await create(
-      'auto-follow-hidden-member-account',
-      hiddenMemberAuth.token,
-    );
+    const hiddenProfileCreate = await create('auto_follow_hidden_member', hiddenMemberAuth.token);
     assertNoGraphQLErrors(hiddenProfileCreate);
     const hiddenCreatedId = decodeGlobalId(hiddenProfileCreate.data!.createProfile.profile.id).id;
     await db
@@ -4137,7 +4134,7 @@ describe('GraphQL remote profile boundary', () => {
 
   test('preserves Profile creation and reports a failed first-profile Follow', async (t) => {
     const target = await createProfile({
-      handle: 'auto-follow-failure-target',
+      handle: 'auto_follow_failure_target',
       instanceId: localInstanceId,
     });
     const auth = await createAuthenticatedSession({ selectedProfile: false });
@@ -4166,7 +4163,7 @@ describe('GraphQL remote profile boundary', () => {
 
       const result = await requestGraphQL<{ createProfile: { profile: { id: string } } }>(
         `mutation CreateProfileAfterFollowFailure {
-          createProfile(input: { handle: "auto-follow-after-failure" }) { profile { id } }
+          createProfile(input: { handle: "auto_follow_after_failure" }) { profile { id } }
         }`,
         {},
         auth.token,
@@ -4202,7 +4199,7 @@ describe('GraphQL remote profile boundary', () => {
 
   test('auto-follows only one concurrent first Profile creation', async (t) => {
     const target = await createProfile({
-      handle: 'auto-follow-race-target',
+      handle: 'auto_follow_race_target',
       instanceId: localInstanceId,
     });
     const auth = await createAuthenticatedSession({ selectedProfile: false });
@@ -4213,7 +4210,7 @@ describe('GraphQL remote profile boundary', () => {
       env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = previousTargetId;
     });
 
-    const handles = ['auto-follow-race-first', 'auto-follow-race-second'];
+    const handles = ['auto_follow_race_first', 'auto_follow_race_second'];
     const results = await Promise.all(
       handles.map((handle) =>
         requestGraphQL<{ createProfile: { profile: { id: string } } }>(
