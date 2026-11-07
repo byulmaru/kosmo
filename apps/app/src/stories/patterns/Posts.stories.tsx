@@ -90,6 +90,12 @@ const postMediaImageUri = ogDefaultUrl;
 const storyShareOrigin = () => window.location.origin;
 const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
 const postComposerMutationRequestObserver = fn().mockName('Post composer mutation');
+const composerFileDropIssueMutationObserver = fn().mockName(
+  'Composer file drop issue upload mutation',
+);
+const composerFileDropCreatePostMutationObserver = fn().mockName(
+  'Composer file drop create post mutation',
+);
 const postDetailQueryRequestObserver = fn().mockName('Post detail query');
 const actionBarNavigationObserver = fn().mockName('Action Bar route request');
 
@@ -7898,6 +7904,163 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
     }
   },
   render: () => <ComposerClipboardScopeStory />,
+};
+
+export const ComposerFileDropInteraction: Story = {
+  parameters: {
+    relay: {
+      mutationLoading: true,
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
+        if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
+          composerFileDropIssueMutationObserver(request, variables);
+        } else if (request.name === 'PostComposerCreatePostMutation') {
+          composerFileDropCreatePostMutationObserver(request, variables);
+        }
+      },
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              completeMediaUpload: {
+                media: { id: `media-file-drop-${index}`, state: 'READY' },
+              },
+            },
+          })),
+        },
+        PostComposerCreatePostMutation: () => undefined,
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-file-drop-${index}` },
+                uploadUrl: `https://upload.example/file-drop/${index}`,
+              },
+            },
+          })),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const dropTarget = canvas.getByRole('button', { name: 'Composer 확장' });
+    const expectedFileNames = [
+      'drop-first.svg',
+      'drop-second.svg',
+      'drop-third.svg',
+      'drop-fourth.svg',
+    ];
+    const filePreviewNames: string[] = [];
+    const originalCreateObjectURL = URL.createObjectURL;
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    URL.createObjectURL = (file) => {
+      const uri = createObjectURL(file);
+      if (file instanceof File) {
+        filePreviewNames.push(file.name);
+      }
+      return uri;
+    };
+    const dragEvent = (type: 'dragover' | 'drop', dataTransfer: DataTransfer) =>
+      new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer });
+    composerFileDropIssueMutationObserver.mockClear();
+    composerFileDropCreatePostMutationObserver.mockClear();
+
+    try {
+      await userEvent.type(body, '드롭 뒤에도 유지할 본문');
+
+      const outside = document.createElement('div');
+      document.body.append(outside);
+      try {
+        const outsideData = new DataTransfer();
+        outsideData.items.add(createComposerMediaFile('outside-drop.svg'));
+        const outsideDragOver = dragEvent('dragover', outsideData);
+        outside.dispatchEvent(outsideDragOver);
+        const outsideDrop = dragEvent('drop', outsideData);
+        outside.dispatchEvent(outsideDrop);
+        expect(outsideDragOver.defaultPrevented).toBe(false);
+        expect(outsideDrop.defaultPrevented).toBe(false);
+        expect(composerFileDropIssueMutationObserver).not.toHaveBeenCalled();
+      } finally {
+        outside.remove();
+      }
+
+      const textData = new DataTransfer();
+      textData.items.add(new File(['plain file'], 'notes.txt', { type: 'text/plain' }));
+      textData.setData('text/plain', 'ordinary text');
+      const textDragOver = dragEvent('dragover', textData);
+      dropTarget.dispatchEvent(textDragOver);
+      const textDrop = dragEvent('drop', textData);
+      dropTarget.dispatchEvent(textDrop);
+      expect(textDragOver.defaultPrevented).toBe(false);
+      expect(textDrop.defaultPrevented).toBe(false);
+      expect(body).toHaveValue('드롭 뒤에도 유지할 본문');
+      expect(composerFileDropIssueMutationObserver).not.toHaveBeenCalled();
+
+      const droppedData = new DataTransfer();
+      expectedFileNames.forEach((fileName) =>
+        droppedData.items.add(createComposerMediaFile(fileName)),
+      );
+      droppedData.items.add(new File(['plain file'], 'ignored.txt', { type: 'text/plain' }));
+      droppedData.items.add(createComposerMediaFile('drop-overflow.svg'));
+      droppedData.setData('text/plain', 'ordinary text');
+      const dragOver = dragEvent('dragover', droppedData);
+      dropTarget.dispatchEvent(dragOver);
+      expect(dragOver.defaultPrevented).toBe(true);
+
+      const drop = dragEvent('drop', droppedData);
+      dropTarget.dispatchEvent(drop);
+      expect(drop.defaultPrevented).toBe(true);
+      expect(body).toHaveValue('드롭 뒤에도 유지할 본문');
+
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+        expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+        expect(upload).toHaveBeenCalledTimes(4);
+      });
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+      expect(canvas.queryByLabelText('첨부 이미지 5, 업로드 중')).toBeNull();
+
+      const fullDropData = new DataTransfer();
+      fullDropData.items.add(createComposerMediaFile('full-drop.svg'));
+      const fullDrop = dragEvent('drop', fullDropData);
+      dropTarget.dispatchEvent(fullDrop);
+      expect(fullDrop.defaultPrevented).toBe(true);
+      expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 4 제거' }));
+      await waitFor(() => {
+        expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
+      });
+      expect(canvas.getByRole('button', { name: '이미지 추가, 1개 더 선택 가능' })).toBeVisible();
+
+      await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+      await expect(canvas.getByRole('button', { name: '게시' })).toBeDisabled();
+      await expect(canvas.findByLabelText('게시 처리 중')).resolves.toBeVisible();
+      expect(composerFileDropCreatePostMutationObserver).toHaveBeenCalledTimes(1);
+
+      const disabledDropData = new DataTransfer();
+      disabledDropData.items.add(createComposerMediaFile('disabled-drop.svg'));
+      const disabledDrop = dragEvent('drop', disabledDropData);
+      dropTarget.dispatchEvent(disabledDrop);
+      expect(disabledDrop.defaultPrevented).toBe(true);
+      expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+      URL.createObjectURL = originalCreateObjectURL;
+    }
+  },
+  render: () => <ComposerStory />,
 };
 
 export const ComposerPickerResultAfterUnmount: Story = {
