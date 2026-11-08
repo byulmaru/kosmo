@@ -16,7 +16,7 @@ case "${1:-web}" in
     ;;
   worker)
     cd /app/apps/worker
-    exec node --import tsx src/index.ts
+    exec node --import tsx --import ./src/sentry.ts src/index.ts
     ;;
   fedify-queue)
     cd /app/apps/fedify-consumer

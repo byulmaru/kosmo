@@ -49,6 +49,7 @@
     "@graphql-yoga/subscription": "5.1.1",
     "@kosmo/fedify": "workspace:*",
     "@redis/client": "^6.3.0",
+    "@sentry/node": "^10.66.0",
     "@temporalio/client": "^1.22.0",
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",

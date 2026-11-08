@@ -1,26 +1,26 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 적용 범위는 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계와 Web Push 권한·Firebase 초기화·등록 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 이 설정의 범위가 아니다. API와 Web BFF HTTP 요청 trace의 별도 범위와 운영 조건은 아래 Request tracing 정책을 따른다.
+Kosmo는 API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. Worker는 스마트 필터 (Home Natural Language Mute) Decision provider에 대해서만 명시적 telemetry를 보고한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 적용 범위는 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계와 Web Push 권한·Firebase 초기화·등록 경계다. BFF의 login/session 예외 보고 경로에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 이 설정의 범위가 아니다. API와 Web BFF HTTP 요청 trace의 별도 범위와 운영 조건은 아래 Request tracing 정책을 따른다.
 
 피드백 본문·선택적 이미지도 기존 SDK를 통해 User Feedback으로 접수한다. 제출 결과와 Slack 알림의 운영 조건은 [피드백 Sentry 접수 운영](./feedback-sentry.md)을 따른다.
 
 ## Project와 자격 증명
 
-브라우저의 공개 Sentry DSN은 코드 공개 설정표로 관리하고, 선택된 `dev`·`prod` 채널의 Sentry environment와 함께 사용한다. API, Web BFF와 Fedify consumer의 server runtime은 기존 일반 Vault 객체와 `env` Kubernetes Secret의 `EXPO_PUBLIC_SENTRY_DSN`을 계속 사용한다. 두 경계는 같은 공개 ingest DSN을 사용할 수 있지만 client bundle 설정과 server runtime Secret의 수명·전달 경계는 분리한다. API, Web BFF, Fedify consumer, Web browser와 Android·iOS Native는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분하며 Native platform context를 함께 기록한다. `main` push의 canonical Docker Build가 `sha-<full SHA>` tag와 동일한 full commit SHA release의 Web image와 source map을 한 번 생성·업로드한다. Native Store release workflow는 build의 full `GITHUB_SHA`를 release로 사용해 JavaScript source map과 native debug symbol을 업로드한다. Native OTA는 caller가 승인한 bare full source SHA를 release로 사용해 각 platform export job의 전용 uploader step에서 JavaScript source map을 업로드한다. `byulmaru/kosmo`의 `main` ref `workflow_dispatch` production release는 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 preflight에서 조회·고정하고, `prod` Environment 승인 뒤 그 digest만 배포한다. Production release에서 target image를 다시 build하거나 Web source map을 다시 upload·tag/digest를 재조회하지 않는다. SHA tag가 재빌드되면 Dev와 Production의 조회 digest가 달라질 수 있지만, Production은 preflight digest를 유지한다. `target_sha`를 입력하면 해당 SHA를, 비워 두면 preflight가 확정한 최신 `main` SHA를 target으로 사용한다. 승인 전에는 production source checkout·credential 접근·build를 하지 않으며, tag push와 `production` branch push는 production release를 선택하지 않는다. Web source map upload metadata와 token은 canonical Docker Build에, Native Store source map/debug symbol metadata와 token은 Android·iOS Release build에, Native OTA source map metadata는 platform export job에, token은 전용 uploader step에 workflow가 접근할 수 있는 GitHub Actions variables와 repository secret으로 주입한다.
+브라우저의 공개 Sentry DSN은 코드 공개 설정표로 관리하고, 선택된 `dev`·`prod` 채널의 Sentry environment와 함께 사용한다. API, Web BFF, Fedify consumer와 Worker의 server runtime은 기존 일반 Vault 객체와 `env` Kubernetes Secret의 `EXPO_PUBLIC_SENTRY_DSN`을 사용한다. 두 경계는 같은 공개 ingest DSN을 사용할 수 있지만 client bundle 설정과 server runtime Secret의 수명·전달 경계는 분리한다. API, Web BFF, Fedify consumer, Worker, Web browser와 Android·iOS Native는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분하며 Native platform context를 함께 기록한다. `main` push의 canonical Docker Build가 `sha-<full SHA>` tag와 동일한 full commit SHA release의 Web image와 source map을 한 번 생성·업로드한다. Native Store release workflow는 build의 full `GITHUB_SHA`를 release로 사용해 JavaScript source map과 native debug symbol을 업로드한다. Native OTA는 caller가 승인한 bare full source SHA를 release로 사용해 각 platform export job의 전용 uploader step에서 JavaScript source map을 업로드한다. `byulmaru/kosmo`의 `main` ref `workflow_dispatch` production release는 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 preflight에서 조회·고정하고, `prod` Environment 승인 뒤 그 digest만 배포한다. Production release에서 target image를 다시 build하거나 Web source map을 다시 upload·tag/digest를 재조회하지 않는다. SHA tag가 재빌드되면 Dev와 Production의 조회 digest가 달라질 수 있지만, Production은 preflight digest를 유지한다. `target_sha`를 입력하면 해당 SHA를, 비워 두면 preflight가 확정한 최신 `main` SHA를 target으로 사용한다. 승인 전에는 production source checkout·credential 접근·build를 하지 않으며, tag push와 `production` branch push는 production release를 선택하지 않는다. Web source map upload metadata와 token은 canonical Docker Build에, Native Store source map/debug symbol metadata와 token은 Android·iOS Release build에, Native OTA source map metadata는 platform export job에, token은 전용 uploader step에 workflow가 접근할 수 있는 GitHub Actions variables와 repository secret으로 주입한다.
 
-| 이름                     | 저장 위치                             | 용도                                                  |
-| ------------------------ | ------------------------------------- | ----------------------------------------------------- |
-| `SENTRY_ORG`             | GitHub Actions variable               | Sentry organization slug                              |
-| `SENTRY_PROJECT`         | GitHub repository variable            | Web·Native source map/debug symbol project slug       |
-| browser Sentry DSN       | 코드 공개 설정표의 공용값             | Web bundle의 공개 ingest DSN                          |
-| `EXPO_PUBLIC_SENTRY_DSN` | 기존 환경별 Vault 객체와 `env` Secret | API/Web BFF/Fedify consumer server runtime ingest DSN |
-| `SENTRY_AUTH_TOKEN`      | GitHub repository secret              | Web·Native map/debug symbol 업로드 token              |
+| 이름                     | 저장 위치                             | 용도                                                         |
+| ------------------------ | ------------------------------------- | ------------------------------------------------------------ |
+| `SENTRY_ORG`             | GitHub Actions variable               | Sentry organization slug                                     |
+| `SENTRY_PROJECT`         | GitHub repository variable            | Web·Native source map/debug symbol project slug              |
+| browser Sentry DSN       | 코드 공개 설정표의 공용값             | Web bundle의 공개 ingest DSN                                 |
+| `EXPO_PUBLIC_SENTRY_DSN` | 기존 환경별 Vault 객체와 `env` Secret | API/Web BFF/Fedify consumer/Worker server runtime ingest DSN |
+| `SENTRY_AUTH_TOKEN`      | GitHub repository secret              | Web·Native map/debug symbol 업로드 token                     |
 
 Canonical Docker Build와 Native Store Release workflow는 공개 client 설정을 Vault나 GitHub Variables에서 읽거나 Docker build arg로 주입하지 않는다. 코드 설정표가 Web bundle과 Native bundle에 포함되고, GitHub Actions variables의 `SENTRY_ORG`·`SENTRY_PROJECT`는 source map/debug symbol upload metadata로 사용한다. `SENTRY_PROJECT`는 repository variable이며, `SENTRY_ORG`의 GitHub Actions variable scope는 확인되지 않았다. Web Docker build의 `SENTRY_AUTH_TOKEN`은 canonical `secret-envs`를 통한 BuildKit secret으로, Native Store token은 실제 Release build step에서만 전달하며, OTA token은 platform export job의 전용 uploader step에서만 전달한다. 브라우저·Native DSN은 공개 ingest endpoint이므로 bundle에 포함될 수 있지만 client secret이나 upload credential은 포함하지 않는다.
 
 GitHub repository secret `SENTRY_AUTH_TOKEN`에는 source map/debug symbol 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. Web token은 canonical artifact build의 해당 `RUN`에서 환경 변수 secret mount로만 보이며 layer에 복사하지 않는다. Native Store token은 Android Gradle 또는 iOS Xcode Release build step의 환경 변수로만 보이고 generated `android/`·`ios/` 프로젝트와 bundle/artifact에 기록하지 않는다. OTA upload token은 platform export job의 Sentry uploader step에서만 보인다. Organization·project slug는 공개 build metadata이지만 token과 함께 runtime image·Native artifact에는 포함하지 않는다.
 
-Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernetes Secret으로 변환하고, API, Web BFF와 Fedify consumer server runtime은 여기서 기존 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. Web rollout은 Helm의 `dev`·`prod` 환경값을 `ENVIRONMENT`로 전달하고, BFF의 same-origin `/channel.js`가 이를 검증해 client가 코드 설정표의 채널을 선택하게 한다. Event의 dev/prod 구분은 선택된 채널에서 파생한 browser environment와 server의 `ENVIRONMENT`가 담당한다. `Docker Build`의 `SENTRY_RELEASE`는 canonical main build run의 target full 40-character commit SHA를 그대로 사용한다. Production release는 GHCR SHA tag에서 preflight가 조회·고정한 digest를 승격한다. Android·iOS Native release workflow는 `SENTRY_RELEASE`와 `EXPO_PUBLIC_SENTRY_RELEASE`에 build의 full `GITHUB_SHA`를 사용한다. 각 release 값은 event를 Web·Native OTA source map 또는 Native debug symbol에 연결한다. DSN, environment와 release가 모두 있으면 해당 runtime은 Sentry를 활성화한다. 로컬·테스트에는 production build metadata를 기본 주입하지 않는다.
+Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernetes Secret으로 변환하고, API, Web BFF, Fedify consumer와 Worker server runtime은 여기서 기존 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. Worker의 Decision telemetry도 `ENVIRONMENT`와 `SENTRY_RELEASE`를 포함해 같은 세 metadata가 모두 있을 때만 활성화한다. Web rollout은 Helm의 `dev`·`prod` 환경값을 `ENVIRONMENT`로 전달하고, BFF의 same-origin `/channel.js`가 이를 검증해 client가 코드 설정표의 채널을 선택하게 한다. Event의 dev/prod 구분은 선택된 채널에서 파생한 browser environment와 server의 `ENVIRONMENT`가 담당한다. `Docker Build`의 `SENTRY_RELEASE`는 canonical main build run의 target full 40-character commit SHA를 그대로 사용한다. Production release는 GHCR SHA tag에서 preflight가 조회·고정한 digest를 승격한다. Android·iOS Native release workflow는 `SENTRY_RELEASE`와 `EXPO_PUBLIC_SENTRY_RELEASE`에 build의 full `GITHUB_SHA`를 사용한다. 각 release 값은 event를 Web·Native OTA source map 또는 Native debug symbol에 연결한다. DSN, environment와 release가 모두 있으면 해당 runtime은 Sentry를 활성화한다. 로컬·테스트에는 production build metadata를 기본 주입하지 않는다.
 
 ### Channel 공개 설정과 production 전환
 
@@ -40,7 +40,7 @@ API와 Web BFF의 HTTP 요청은 Sentry Performance에서 trace로 관측한다.
 
 API와 Web BFF의 Performance trace는 Sentry로 전송하기 전에 대소문자를 구분하지 않고 `Authorization`, `Proxy-Authorization`, `Cookie` 요청 헤더와 파싱된 `request.cookies`를 제거한다. 이 제거는 trace transaction에만 적용하며 URL, 그 밖의 요청 헤더, span 등 나머지 trace 정보를 유지한다. 기존 error event는 이 제거 대상이 아니며 기존 event 전달 정책을 따른다.
 
-Background Worker와 별도 queue consumer의 DB 작업, Fedify consumer runtime, Web·Native client tracing, profiling과 query optimization은 이 범위에 포함하지 않는다.
+Worker의 background HTTP/DB 작업 trace, 별도 queue consumer, Fedify consumer runtime, Web·Native client tracing, profiling과 query optimization은 이 범위에 포함하지 않는다. Worker의 수동 Decision span만 관측하며, `prod`에서는 root span의 10%, 그 밖의 환경에서는 100%를 표본 수집한다. API와 Web BFF의 기존 production sampling은 변경하지 않는다.
 
 ## Event 전달 정책
 
@@ -49,7 +49,7 @@ Sentry SDK가 만든 error event는 `beforeSend`에서 재구성하거나 제거
 - Sentry SDK가 만든 exception 전체(values, type, message, mechanism, stack frame과 frame metadata)
 - Web event의 source map debug ID
 - 각 runtime event의 environment와 full commit SHA release
-- `api`, `web-bff`, `fedify-consumer`, `web`, `native` runtime tag와 Native platform context
+- `api`, `web-bff`, `fedify-consumer`, `worker`, `web`, `native` runtime tag와 Native platform context
 - SDK가 수집한 request, user, extra와 context
 
 자동 breadcrumb는 `beforeBreadcrumb`에서 모두 제거한다.
@@ -127,6 +127,14 @@ Web BFF inbound reporter가 기존과 같이 1회 capture하고, committed React
 않는다. 반면 accepted Reaction Effects Workflow의 terminal Activity 실패와 retry/restart 이력은 Temporal
 history와 Worker runtime 경계가 소유한다. 이 Worker 경계는 Web BFF inbound reporter의 중복 Sentry capture
 대상이 아니다.
+
+### 스마트 필터 Decision telemetry
+
+Core의 공통 스마트 필터 Decision provider는 API와 Worker에서 같은 제한 telemetry를 기록한다. 직접 계측하는 값은 `runtime` (`api` 또는 `worker`), `success`, `timeout`, `rate_limited`, `http_error`, `network_error`, `invalid_response` 중 하나의 outcome, 제한된 provider/model 식별자와 숫자 HTTP status다. Worker는 스마트 필터의 수동 관측만 활성화하며, API의 기존 global Sentry 설정은 변경하지 않는다. Raw input, 요청·응답 body, 사용자 condition과 원본 error cause를 기록하지 않는다.
+
+Decision span은 request 정보 없이 별도 isolation context에서 생성·종료되어 자동 HTTP span hook이 원본 request를 붙이지 않는다. 각 Decision error event에서는 request, user, extra, 기타 context와 attachments를 제거하고 검증된 trace 식별자(`trace_id`, `span_id`), 고정 operation `ai.decision`과 `ok`·`internal_error` 중 하나의 status만 허용한다. 이 per-event 정제는 API의 기존 request 수집과 다른 runtime의 전역 Sentry event 정책을 바꾸지 않는다.
+
+이 telemetry는 기존 5초 provider timeout, fail-open 결과와 Redis cache 동작을 변경하지 않는다. Worker 전체 오류, 일반 DB 작업, HTTP 요청이나 Temporal Activity 실패를 자동 수집하지 않으며, accepted Activity terminal failure와 retry/restart 이력은 Temporal history에 남는다.
 
 Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 

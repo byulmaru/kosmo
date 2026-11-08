@@ -1,3 +1,6 @@
+import * as Sentry from '@sentry/node';
+import type { Event, EventHint, Span } from '@sentry/node';
+
 export type NaturalLanguageMutePost = {
   readonly bodyText: string;
   readonly contentWarning: string | null;
@@ -19,6 +22,13 @@ const endpoint = 'https://api.openai.com/v1/decisions';
 const model = 'gpt-6-luna';
 const answerName = 'matches_mute_condition';
 const exclusionProbability = 0.8;
+type DecisionOutcome =
+  | 'success'
+  | 'timeout'
+  | 'rate_limited'
+  | 'http_error'
+  | 'network_error'
+  | 'invalid_response';
 
 type InputPart =
   | { readonly type: 'input_text'; readonly text: string }
@@ -86,6 +96,79 @@ function parseProbabilityAnswer(value: unknown): number | null {
   return probability;
 }
 
+function sanitizeDecisionEvent(
+  event: Event,
+  hint: EventHint,
+  outcome: DecisionOutcome,
+  httpStatus: number | undefined,
+): Event {
+  const runtime = event.tags?.runtime;
+  const trace = event.contexts?.trace;
+  const traceId =
+    typeof trace?.trace_id === 'string' && /^[a-f0-9]{32}$/i.test(trace.trace_id)
+      ? trace.trace_id
+      : undefined;
+  const spanId =
+    typeof trace?.span_id === 'string' && /^[a-f0-9]{16}$/i.test(trace.span_id)
+      ? trace.span_id
+      : undefined;
+  const traceContext:
+    | { trace_id: string; span_id: string; op?: string; status?: string }
+    | undefined =
+    traceId !== undefined && spanId !== undefined
+      ? { trace_id: traceId, span_id: spanId }
+      : undefined;
+
+  if (traceContext !== undefined && trace?.op === 'ai.decision') {
+    traceContext.op = 'ai.decision';
+  }
+  if (
+    traceContext !== undefined &&
+    (trace?.status === 'ok' || trace?.status === 'internal_error')
+  ) {
+    traceContext.status = trace.status;
+  }
+
+  delete event.request;
+  delete event.user;
+  delete event.extra;
+  delete event.breadcrumbs;
+  delete event.sdkProcessingMetadata;
+  if (traceContext !== undefined) {
+    event.contexts = { trace: traceContext };
+  } else {
+    delete event.contexts;
+  }
+  event.tags = {
+    outcome,
+    provider: 'openai',
+    model,
+    ...(httpStatus === undefined ? {} : { status: httpStatus }),
+    ...(runtime === 'api' || runtime === 'worker' ? { runtime } : {}),
+  };
+  hint.attachments = [];
+
+  return event;
+}
+
+function captureDecisionFailure(outcome: DecisionOutcome, httpStatus: number | undefined): void {
+  try {
+    Sentry.withIsolationScope((isolationScope) => {
+      isolationScope.setSDKProcessingMetadata({ normalizedRequest: undefined });
+      Sentry.withScope((scope) => {
+        scope.setSDKProcessingMetadata({ normalizedRequest: undefined });
+        scope.clearAttachments();
+        scope.addEventProcessor((event, hint) =>
+          sanitizeDecisionEvent(event, hint, outcome, httpStatus),
+        );
+        Sentry.captureException(new Error(`Smart Filter Decision request failed: ${outcome}`));
+      });
+    });
+  } catch {
+    // Sentry failures must not change the provider's fail-open behavior.
+  }
+}
+
 export async function evaluateNaturalLanguageMute({
   condition,
   post,
@@ -112,7 +195,47 @@ export async function evaluateNaturalLanguageMute({
   const conditionText = JSON.stringify(condition)!;
   const questionCondition = `User-defined mute condition to evaluate (JSON string): ${conditionText}`;
 
+  let outcome: DecisionOutcome = 'network_error';
+  let httpStatus: number | undefined;
+  let requestSignal: AbortSignal | undefined;
+  let span: Span | undefined;
+
   try {
+    Sentry.withIsolationScope((isolationScope) => {
+      isolationScope.setSDKProcessingMetadata({ normalizedRequest: undefined });
+      Sentry.withScope((scope) => {
+        scope.setSDKProcessingMetadata({ normalizedRequest: undefined });
+        scope.clearAttachments();
+        scope.addEventProcessor((event, hint) =>
+          sanitizeDecisionEvent(event, hint, outcome, httpStatus),
+        );
+
+        const currentRuntime = scope.getScopeData().tags.runtime;
+        const isolationRuntime = isolationScope.getScopeData().tags.runtime;
+        const runtime =
+          currentRuntime === 'api' || currentRuntime === 'worker'
+            ? currentRuntime
+            : isolationRuntime === 'api' || isolationRuntime === 'worker'
+              ? isolationRuntime
+              : undefined;
+
+        span = Sentry.startInactiveSpan({
+          name: 'smart-filter.decision',
+          op: 'ai.decision',
+          attributes: {
+            provider: 'openai',
+            model,
+            ...(runtime === undefined ? {} : { runtime }),
+          },
+        });
+      });
+    });
+  } catch {
+    // Sentry failures must not change the provider request.
+  }
+
+  try {
+    requestSignal = AbortSignal.timeout(5_000);
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -144,28 +267,62 @@ export async function evaluateNaturalLanguageMute({
           },
         ],
       })!,
-      signal: AbortSignal.timeout(5_000),
+      signal: requestSignal,
     });
 
+    httpStatus = response.status;
     if (!response.ok) {
+      outcome = httpStatus === 429 ? 'rate_limited' : 'http_error';
       return null;
     }
 
-    const result: unknown = await response.json();
+    let result: unknown;
+    try {
+      result = await response.json();
+    } catch {
+      outcome = requestSignal.aborted ? 'timeout' : 'invalid_response';
+      return null;
+    }
+
     if (!isRecord(result) || !Array.isArray(result.answers) || result.answers.length !== 1) {
+      outcome = 'invalid_response';
       return null;
     }
 
     const probability = parseProbabilityAnswer(result.answers[0]);
     if (probability === null) {
+      outcome = 'invalid_response';
       return null;
     }
 
+    outcome = 'success';
     return {
       decision: probability >= exclusionProbability ? 'exclude' : 'include',
       probability,
     };
   } catch {
+    outcome = requestSignal?.aborted === true ? 'timeout' : 'network_error';
     return null;
+  } finally {
+    if (span !== undefined) {
+      const decisionSpan = span;
+      try {
+        Sentry.withIsolationScope((isolationScope) => {
+          isolationScope.setSDKProcessingMetadata({ normalizedRequest: undefined });
+          decisionSpan.setAttribute('outcome', outcome);
+          if (httpStatus !== undefined) {
+            decisionSpan.setAttribute('status', httpStatus);
+          }
+          decisionSpan.setStatus({ code: outcome === 'success' ? 1 : 2 });
+          decisionSpan.end();
+        });
+      } catch {
+        // Sentry failures must not change the provider result.
+      }
+    }
+
+    if (outcome !== 'success') {
+      captureDecisionFailure(outcome, httpStatus);
+    }
   }
 }
