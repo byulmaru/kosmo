@@ -59,6 +59,9 @@ const PostMediaViewerFragment = graphql`
       media {
         id
         altText
+        rights {
+          licenseUrl
+        }
         url
       }
     }
@@ -264,9 +267,10 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
   const content = post.content;
   const media = useMemo<readonly PostMediaItem[]>(
     () =>
-      content?.media?.map(({ altText, id, url }) => ({
+      content?.media?.map(({ altText, id, rights, url }) => ({
         altText: altText ?? null,
         id,
+        licenseUrl: rights?.licenseUrl ?? null,
         url: url ?? null,
       })) ?? [],
     [content?.media],

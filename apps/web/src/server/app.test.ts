@@ -720,6 +720,18 @@ describe('runtime routing', () => {
     }
   });
 
+  test('serves the selected image-use terms page before the SPA fallback', async () => {
+    const response = await app.request(
+      'https://kos.moe/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY',
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(body).toContain('<title>KOSMO 이미지 이용 조건 v1</title>');
+    expect(body).not.toBe('<html>expo app</html>');
+  });
+
   test.each(['/child-safety', '/privacy/changes/2026-10-13'])(
     'keeps non-document policy representations out of the SPA for %s',
     async (path) => {

@@ -13,6 +13,7 @@
     "./home-timeline/cache": "./home-timeline/cache.ts",
     "./home-timeline/query": "./home-timeline/query.ts",
     "./local-instance": "./local-instance.ts",
+    "./media-metadata": "./media-metadata.ts",
     "./media-upload": "./media-upload.ts",
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
@@ -73,7 +74,7 @@
     "test:migrate:smoke": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core exec node --import tsx db/migrate.smoke.test.ts",
     "test:services": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core exec node --import tsx --import ./temporal/test-client.ts --test --test-concurrency=1 'services/*.test.ts' 'home-timeline/*.test.ts'",
-    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' 'validation/*.test.ts' db/index.test.ts 'redis/*.test.ts'"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts media-metadata.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' 'validation/*.test.ts' db/index.test.ts 'redis/*.test.ts'"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",

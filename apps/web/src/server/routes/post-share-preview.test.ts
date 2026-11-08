@@ -126,6 +126,9 @@ test.each([
     expect(html).toContain('attachment alt');
     expect(html).not.toContain('#fragment');
   }
+  expect(parseJsonLd(html)['@graph']).toEqual([
+    { '@type': 'ImageObject', contentUrl: expectedImage },
+  ]);
 });
 
 test.each([
@@ -205,3 +208,113 @@ test.each([
     }
   },
 );
+
+test('uses stored Media attribution metadata for every visible image on a repost preview', async () => {
+  vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+  vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+  const sourcePostId = '00000000-0000-8000-8000-000000000003';
+  const repostPostId = '00000000-0000-8000-8000-000000000004';
+  const secondMediaId = '00000000-0000-8000-8000-000000000005';
+  const originalImageUrl = 'https://media.example/original.png';
+  const secondImageUrl = 'https://media.example/second.png';
+  const attributionUrl = 'https://profiles.example/@first-author?profile=public&view=full';
+  const attributionName = 'First Author </script><script>alert("owned")</script>';
+  const repostPath = `/@reposter/${encodeGlobalId('Post', repostPostId)}`;
+  const rows = [
+    [
+      {
+        authorDisplayName: 'Reposter',
+        authorHandle: 'reposter',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: null,
+        currentContentId: null,
+        postId: repostPostId,
+        replyParentId: null,
+        repostSourceId: sourcePostId,
+      },
+    ],
+    [
+      {
+        authorDisplayName: 'Source author',
+        authorHandle: 'source',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: postContentDocumentFromTextAndMedia('source body', [
+          { mediaId },
+          { mediaId: secondMediaId },
+        ]),
+        currentContentId: 'source-content',
+        postId: sourcePostId,
+        replyParentId: null,
+        repostSourceId: null,
+      },
+    ],
+    [
+      {
+        id: mediaId,
+        altText: null,
+        mediaType: 'image/png',
+        state: 'READY',
+        url: originalImageUrl,
+        publicationMetadata: {
+          attributionName,
+          attributionUrl,
+          rights: { personal: 'ORIGINAL', noncommercial: 'DENY', commercial: 'DENY' },
+        },
+      },
+      {
+        id: secondMediaId,
+        altText: null,
+        mediaType: 'image/png',
+        state: 'READY',
+        url: secondImageUrl,
+        publicationMetadata: null,
+      },
+    ],
+  ];
+  vi.spyOn(db, 'select').mockImplementation(() => {
+    const result = Promise.resolve(rows.shift());
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      leftJoin: () => query,
+      where: () => query,
+      limit: () => result,
+      then: result.then.bind(result),
+    };
+    return query as unknown as ReturnType<typeof db.select>;
+  });
+
+  const response = await routes.request(repostPath);
+  const html = await response.text();
+  const structuredData = parseJsonLd(html);
+  const imageObjects = structuredData['@graph'] as Record<string, unknown>[];
+
+  expect(response.status).toBe(200);
+  expect(imageObjects).toEqual([
+    {
+      '@type': 'ImageObject',
+      contentUrl: originalImageUrl,
+      creditText: `${attributionName} (${attributionUrl})`,
+      license:
+        'https://profiles.example/terms/image-use/v1?personal=ORIGINAL&noncommercial=DENY&commercial=DENY',
+    },
+    { '@type': 'ImageObject', contentUrl: secondImageUrl },
+  ]);
+  expect(html).toContain('\\u003c/script\\u003e\\u003cscript\\u003e');
+  expect(html.match(/<script/g) ?? []).toHaveLength(1);
+  expect(html).not.toContain('<script>alert("owned")</script>');
+  expect(structuredData).not.toHaveProperty('creator');
+  expect(html).not.toContain('Reposter');
+});
+
+function parseJsonLd(html: string): Record<string, unknown> {
+  const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  if (!match?.[1]) {
+    throw new Error('Share preview did not include JSON-LD.');
+  }
+  return JSON.parse(match[1]) as Record<string, unknown>;
+}

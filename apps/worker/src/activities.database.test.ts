@@ -12,6 +12,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  MediaUsePermission,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -2490,7 +2491,7 @@ test('Push Notification Activity는 등록되지 않은 FID만 제거하고 inva
   }
 });
 
-test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+test('Media Upload preparation은 출처를 고정하고 finalization receipt를 검증한다', async () => {
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   const mediaIds: string[] = [];
   const requests: { authorization: string | undefined; method: string; url: string }[] = [];
@@ -2564,6 +2565,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .select({
         accountId: Media.accountId,
         mediaType: Media.mediaType,
+        publicationMetadata: Media.publicationMetadata,
         readyAt: Media.readyAt,
         source: Media.source,
         state: Media.state,
@@ -2588,6 +2590,10 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
 
   try {
+    const publicationMetadata = {
+      attributionName: 'Creator',
+      attributionUrl: 'https://kosmo.example/@creator',
+    };
     const uploading = await createUploadingMedia();
     const uploadingState = await readMediaState(uploading.mediaId);
     const uuid = uploading.storageReference.slice('nexus:v1:'.length);
@@ -2608,7 +2614,11 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     assert.deepEqual(preparedState, { ...uploadingState, thumbhash: thumbhashHeader });
 
     await assert.rejects(
-      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      prepareMediaUploadActivity({
+        ...uploading,
+        accountId: crypto.randomUUID(),
+        publicationMetadata,
+      }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
     assert.deepEqual(await readMediaState(uploading.mediaId), preparedState);
@@ -2650,6 +2660,151 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     assert.deepEqual(await readMediaState(invalidMetadata.mediaId), invalidMetadataState);
     headResponseContentType = 'image/jpeg';
 
+    const metadataUpload = await createUploadingMedia();
+    const metadataInput = { ...metadataUpload, publicationMetadata };
+    const metadataUuid = metadataUpload.storageReference.slice('nexus:v1:'.length);
+    const metadataUploadId = `u_${metadataUuid}`;
+    const metadataPrepared = {
+      id: metadataUploadId,
+      sourceKey: `uploads/${metadataUploadId}/${metadataUuid}`,
+      contentType: 'image/jpeg',
+      publicationMetadata,
+    };
+    const metadataStateBeforePrepare = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    const frozenMetadataState = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(frozenMetadataState, {
+      ...metadataStateBeforePrepare,
+      publicationMetadata,
+      thumbhash: thumbhashHeader,
+    });
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const checkedRights = {
+      personal: MediaUsePermission.EDIT,
+      noncommercial: MediaUsePermission.ORIGINAL,
+      commercial: MediaUsePermission.DENY,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...metadataUpload,
+        publicationMetadata: { ...publicationMetadata, rights: checkedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const rightsMetadata = {
+      ...publicationMetadata,
+      rights: checkedRights,
+    };
+    const rightsUpload = await createUploadingMedia();
+    const rightsInput = { ...rightsUpload, publicationMetadata: rightsMetadata };
+    const preparedRights = await prepareMediaUploadActivity(rightsInput);
+    assert.deepEqual(preparedRights.publicationMetadata, rightsMetadata);
+    const frozenRightsState = await readMediaState(rightsUpload.mediaId);
+    const changedRights = {
+      ...checkedRights,
+      noncommercial: MediaUsePermission.EDIT,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsInput,
+        publicationMetadata: { ...rightsMetadata, rights: changedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsUpload,
+        publicationMetadata,
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+
+    const expectedPublicationMetadata = {
+      credit: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+    };
+    const publicationResult = {
+      id: metadataUploadId,
+      url: 'https://media.example/metadata.webp',
+      mediaType: 'image/webp',
+      metadata: expectedPublicationMetadata,
+    };
+    const publicationFinalizeInput = {
+      ...metadataInput,
+      remoteUploadId: metadataUploadId,
+      expectedPublicationMetadata,
+      result: publicationResult,
+    };
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          id: metadataUploadId,
+          url: publicationResult.url,
+          mediaType: publicationResult.mediaType,
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          ...publicationResult,
+          metadata: { ...expectedPublicationMetadata, credit: 'Different credit' },
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const changedStoredMetadata = {
+      ...publicationMetadata,
+      attributionName: 'Changed Creator',
+    };
+    await db
+      .update(Media)
+      .set({ publicationMetadata: changedStoredMetadata })
+      .where(eq(Media.id, metadataUpload.mediaId));
+    await assert.rejects(
+      finalizeMediaUploadActivity(publicationFinalizeInput),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), {
+      ...frozenMetadataState,
+      publicationMetadata: changedStoredMetadata,
+    });
+    await db.update(Media).set({ publicationMetadata }).where(eq(Media.id, metadataUpload.mediaId));
+
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    const metadataReadyState = await readMediaState(metadataUpload.mediaId);
+    assert.equal(metadataReadyState.state, MediaState.READY);
+    assert.equal(metadataReadyState.url, publicationResult.url);
+    assert.deepEqual(metadataReadyState.publicationMetadata, publicationMetadata);
+    assert.ok(metadataReadyState.readyAt);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: { ...publicationResult, url: 'https://media.example/different.webp' },
+      }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+
     const storedThumbhash = await createUploadingMedia();
     const existingThumbhash = 'ZXhpc3Rpbmc=';
     await db
@@ -2680,7 +2835,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .where(eq(Media.id, ready.mediaId));
     const readyState = await readMediaState(ready.mediaId);
     await assert.rejects(
-      prepareMediaUploadActivity(ready),
+      prepareMediaUploadActivity({ ...ready, publicationMetadata }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
     assert.deepEqual(await readMediaState(ready.mediaId), readyState);
@@ -2689,7 +2844,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     const invalidSourceState = await readMediaState(invalidSource.mediaId);
     const requestsBeforeInvalidSource = requests.length;
     await assert.rejects(
-      prepareMediaUploadActivity(invalidSource),
+      prepareMediaUploadActivity({ ...invalidSource, publicationMetadata }),
       hasFailureType('NexusMediaUploadSourceError'),
     );
     assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);

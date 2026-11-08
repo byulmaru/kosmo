@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
+import { MediaUsePermission } from '@kosmo/core/media-metadata';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { MediaPublicationRights } from '@kosmo/core/media-metadata';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type {
@@ -199,14 +201,25 @@ describe('PostComposerMediaControls post request media', () => {
     assert.ok(second);
     const initialIssueCount = issueCalls.length;
     const initialUploadCount = uploadCalls;
+    const rights: MediaPublicationRights = {
+      personal: MediaUsePermission.EDIT,
+      noncommercial: MediaUsePermission.ORIGINAL,
+      commercial: MediaUsePermission.DENY,
+    };
     await act(async () => {
       mediaRenderProps?.onAltTextChange(first.key, '  First image  ');
       mediaRenderProps?.onAltTextChange(second.key, 'Second image');
       mediaRenderProps?.onApplyAiProhibitFilterChange(second.key, true);
+      mediaRenderProps?.onRightsChange(first.key, rights);
       mediaRenderProps?.onSensitiveMediaChange(true);
     });
     await flush();
 
+    assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
+      { altText: 'First image', applyAiProhibitFilter: false, mediaId: 'media-1', rights },
+      { altText: 'Second image', applyAiProhibitFilter: true, mediaId: 'media-2' },
+    ]);
+    await act(async () => mediaRenderProps?.onRightsChange(first.key, undefined));
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
       { altText: 'First image', applyAiProhibitFilter: false, mediaId: 'media-1' },
       { altText: 'Second image', applyAiProhibitFilter: true, mediaId: 'media-2' },
@@ -240,6 +253,11 @@ describe('PostComposerMediaControls post request media', () => {
     await act(async () => {
       mediaRenderProps?.onAltTextChange(first.key, 'Replace this ALT');
       mediaRenderProps?.onApplyAiProhibitFilterChange(first.key, true);
+      mediaRenderProps?.onRightsChange(first.key, {
+        personal: MediaUsePermission.EDIT,
+        noncommercial: MediaUsePermission.ORIGINAL,
+        commercial: MediaUsePermission.DENY,
+      });
       mediaRenderProps?.onAltTextChange(second.key, 'Keep sibling ALT');
     });
     mediaValues.at(-1)?.requirePostRequestMediaReselection(first.mediaId!);
@@ -258,7 +276,16 @@ describe('PostComposerMediaControls post request media', () => {
     assert.equal(uploadCalls, 3);
     assert.equal(issueCalls.length, 3);
     assert.deepEqual(mediaValues.at(-1)?.getPostRequestMedia(), [
-      { altText: 'Replace this ALT', applyAiProhibitFilter: true, mediaId: 'media-3' },
+      {
+        altText: 'Replace this ALT',
+        applyAiProhibitFilter: true,
+        mediaId: 'media-3',
+        rights: {
+          personal: MediaUsePermission.EDIT,
+          noncommercial: MediaUsePermission.ORIGINAL,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
       { altText: 'Keep sibling ALT', applyAiProhibitFilter: false, mediaId: 'media-2' },
     ]);
     assert.equal(mediaRenderProps?.items[0]?.asset?.uri, 'file:///local/image.jpg');

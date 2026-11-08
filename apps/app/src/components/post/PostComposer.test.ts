@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
+import { MediaUsePermission } from '@kosmo/core/media-metadata';
 import { createElement, forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
@@ -31,6 +32,7 @@ import type {
   MobileFullscreenComposerShellCandidateProps,
 } from './PostComposer';
 import type { PostComposerController as PostComposerComponent } from './PostComposerController';
+import type { PostRequestMediaItem } from './PostComposerMediaControls';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type {
@@ -68,7 +70,7 @@ const mediaValue = {
   requirePostRequestMediaReselection: (mediaId: string) => reselectionMediaIds.push(mediaId),
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
-let submittedMediaItems = [
+let submittedMediaItems: PostRequestMediaItem[] = [
   { altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' },
 ];
 let reselectionMediaIds: string[] = [];
@@ -487,6 +489,8 @@ mockModule('./PostComposerMediaControls', {
       error: null,
       items: [item],
       onAltTextChange: () => undefined,
+      onApplyAiProhibitFilterChange: () => undefined,
+      onRightsChange: () => undefined,
       onMediaAction: () => undefined,
       onMediaRemove: () => undefined,
       onMediaRetry: () => undefined,
@@ -1168,6 +1172,63 @@ describe('PostComposer media submission', () => {
 
     assert.equal(mutationCalls.length, 1);
     assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.getPostRequestMedia());
+  });
+
+  it('submits checked media publication rights with the image metadata', async () => {
+    submittedMediaItems = [
+      {
+        altText: '대체 텍스트',
+        applyAiProhibitFilter: true,
+        mediaId: 'media-1',
+        rights: {
+          personal: MediaUsePermission.EDIT,
+          noncommercial: MediaUsePermission.ORIGINAL,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ];
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('본문을 보존합니다'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, [
+      {
+        altText: '대체 텍스트',
+        applyAiProhibitFilter: true,
+        mediaId: 'media-1',
+        rights: {
+          personal: MediaUsePermission.EDIT,
+          noncommercial: MediaUsePermission.ORIGINAL,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ]);
+  });
+
+  it('omits media publication rights from create input when the checkbox is off', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('본문을 보존합니다'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, [
+      { altText: '대체 텍스트', applyAiProhibitFilter: false, mediaId: 'media-1' },
+    ]);
   });
 
   it('keeps the draft when media references cannot be submitted', async () => {

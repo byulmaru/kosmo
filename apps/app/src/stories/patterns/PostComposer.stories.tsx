@@ -595,6 +595,13 @@ function InteractiveComposer({
               ),
             );
           }}
+          onRightsChange={(key, rights) =>
+            setItems((current) =>
+              current.map((item) =>
+                item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
+              ),
+            )
+          }
           onAltTextChange={(key, altText) => {
             setItems((current) =>
               current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -729,6 +736,15 @@ function InteractiveComposer({
                   ),
                 );
               }}
+              onRightsChange={(key, rights) =>
+                setItems((current) =>
+                  current.map((item) =>
+                    item.key === key
+                      ? { ...item, rights: rights ? { ...rights } : undefined }
+                      : item,
+                  ),
+                )
+              }
               onAltTextChange={(key, altText) => {
                 setItems((current) =>
                   current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -1181,6 +1197,7 @@ export const MobileRuntimeAltEditorContract: Story = {
         mobileState="alt"
         onAltTextChange={fn()}
         onApplyAiProhibitFilterChange={fn()}
+        onRightsChange={fn()}
         onBack={fn()}
         onClose={fn()}
         onDone={fn()}

@@ -9,6 +9,7 @@ import type { GestureResponderEvent, ImageLoadEvent, View as NativeView } from '
 export type PostMediaItem = {
   readonly altText: string | null;
   readonly id: string;
+  readonly licenseUrl?: string | null;
   readonly url: string | null;
 };
 

@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
+import imageUseTermsRoutes from './routes/image-use-terms';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
 import postSharePreviewRoutes from './routes/post-share-preview';
@@ -108,6 +109,7 @@ app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
 app.route('/', postSharePreviewRoutes);
+app.route('/', imageUseTermsRoutes);
 app.route('/', staticRoutes);
 
 export default app;

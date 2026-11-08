@@ -1,8 +1,13 @@
 import '@kosmo/core/polyfill';
 
 import { db, first, Media as MediaTable } from '@kosmo/core/db';
-import { MediaSource, MediaState } from '@kosmo/core/enums';
+import { MediaSource, MediaState, MediaUsePermission } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
+import {
+  isValidMediaPublicationRights,
+  matchesMediaProviderPublicationMetadata,
+  mediaProviderPublicationMetadata,
+} from '@kosmo/core/media-metadata';
 import {
   headNexusMediaUploadSource,
   isNexusMediaUpload,
@@ -12,14 +17,58 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type {
+  MediaProviderPublicationMetadata,
+  MediaPublicationMetadata,
+  MediaPublicationRights,
+} from '@kosmo/core/media-metadata';
+import type {
+  MediaUploadPreparationInput,
   MediaUploadResult,
-  MediaUploadWorkflowInput,
 } from '@kosmo/core/temporal/media-upload';
 
 const resultSchema = z.strictObject({
   id: z.string().min(1),
   url: z.httpUrl(),
   mediaType: z.string().min(1),
+  metadata: z
+    .object({
+      credit: z.string().min(1),
+      copyright: z.string().min(1).optional(),
+      usageTerms: z.string().min(1).optional(),
+      webStatement: z.httpUrl().optional(),
+    })
+    .superRefine((metadata, context) => {
+      const rightsFields = [metadata.copyright, metadata.usageTerms, metadata.webStatement].filter(
+        (value) => value !== undefined,
+      ).length;
+      if (rightsFields !== 0 && rightsFields !== 3) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Media publication rights metadata must be complete',
+        });
+      }
+    })
+    .optional(),
+});
+
+const publicationMetadataSchema = z.object({
+  attributionName: z.string().min(1),
+  attributionUrl: z.httpUrl(),
+  rights: z
+    .object({
+      personal: z.enum(MediaUsePermission),
+      noncommercial: z.enum(MediaUsePermission),
+      commercial: z.enum(MediaUsePermission),
+    })
+    .superRefine((rights, context) => {
+      if (!isValidMediaPublicationRights(rights as MediaPublicationRights)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Media publication rights are not monotone by use scope',
+        });
+      }
+    })
+    .optional(),
 });
 
 const invalidSession = () =>
@@ -28,10 +77,49 @@ const invalidSession = () =>
     'MediaUploadSessionInvalid',
   );
 
-export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUploadWorkflowInput) {
+const publicationMetadataConflict = () =>
+  ApplicationFailure.nonRetryable(
+    'Media already has different publication rights; attach it again',
+    'MediaUploadMetadataConflict',
+  );
+
+const parsePublicationMetadata = (value: unknown): MediaPublicationMetadata => {
+  const parsed = publicationMetadataSchema.safeParse(value);
+  if (!parsed.success) {
+    throw publicationMetadataConflict();
+  }
+  return parsed.data as MediaPublicationMetadata;
+};
+
+const samePublicationRights = (
+  left: MediaPublicationRights | undefined,
+  right: MediaPublicationRights | undefined,
+): boolean =>
+  left === undefined
+    ? right === undefined
+    : right !== undefined &&
+      left.personal === right.personal &&
+      left.noncommercial === right.noncommercial &&
+      left.commercial === right.commercial;
+
+const ensureRetainedRightsCompatible = (
+  retained: MediaPublicationMetadata,
+  requested: MediaPublicationMetadata,
+): void => {
+  if (!samePublicationRights(retained.rights, requested.rights)) {
+    throw publicationMetadataConflict();
+  }
+};
+
+export async function prepareMediaUploadActivity(input: MediaUploadPreparationInput) {
+  const { mediaId, accountId } = input;
+  const requestedValue = 'publicationMetadata' in input ? input.publicationMetadata : undefined;
+  const requestedMetadata =
+    requestedValue === undefined ? undefined : parsePublicationMetadata(requestedValue);
   const media = await db
     .select({
       accountId: MediaTable.accountId,
+      publicationMetadata: MediaTable.publicationMetadata,
       source: MediaTable.source,
       state: MediaTable.state,
       storageReference: MediaTable.storageReference,
@@ -56,6 +144,62 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
   const storageReference = media.storageReference;
   try {
     const source = await headNexusMediaUploadSource(storageReference);
+
+    let appliedMetadata =
+      media.publicationMetadata === null
+        ? undefined
+        : parsePublicationMetadata(media.publicationMetadata);
+    if (appliedMetadata !== undefined && requestedMetadata !== undefined) {
+      ensureRetainedRightsCompatible(appliedMetadata, requestedMetadata);
+    }
+    if (appliedMetadata === undefined && requestedMetadata !== undefined) {
+      const stored = await db
+        .update(MediaTable)
+        .set({ publicationMetadata: requestedMetadata })
+        .where(
+          and(
+            eq(MediaTable.id, mediaId),
+            eq(MediaTable.accountId, accountId),
+            eq(MediaTable.source, MediaSource.LOCAL),
+            eq(MediaTable.state, MediaState.UPLOADING),
+            eq(MediaTable.storageReference, storageReference),
+            isNull(MediaTable.publicationMetadata),
+          ),
+        )
+        .returning({ publicationMetadata: MediaTable.publicationMetadata })
+        .then(first);
+      if (stored?.publicationMetadata) {
+        appliedMetadata = parsePublicationMetadata(stored.publicationMetadata);
+      } else {
+        const current = await db
+          .select({
+            accountId: MediaTable.accountId,
+            publicationMetadata: MediaTable.publicationMetadata,
+            source: MediaTable.source,
+            state: MediaTable.state,
+            storageReference: MediaTable.storageReference,
+          })
+          .from(MediaTable)
+          .where(eq(MediaTable.id, mediaId))
+          .limit(1)
+          .then(first);
+        if (
+          !current ||
+          current.accountId !== accountId ||
+          current.source !== MediaSource.LOCAL ||
+          current.state !== MediaState.UPLOADING ||
+          current.storageReference !== storageReference
+        ) {
+          throw invalidSession();
+        }
+        if (current.publicationMetadata === null) {
+          throw publicationMetadataConflict();
+        }
+        appliedMetadata = parsePublicationMetadata(current.publicationMetadata);
+        ensureRetainedRightsCompatible(appliedMetadata, requestedMetadata);
+      }
+    }
+
     if (media.thumbhash === null && source.thumbhash !== undefined) {
       await db
         .update(MediaTable)
@@ -71,7 +215,14 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
           ),
         );
     }
-    return { id: source.id, sourceKey: source.sourceKey, contentType: source.contentType };
+    return {
+      id: source.id,
+      sourceKey: source.sourceKey,
+      contentType: source.contentType,
+      ...(requestedMetadata === undefined || appliedMetadata === undefined
+        ? {}
+        : { publicationMetadata: appliedMetadata }),
+    };
   } catch (error) {
     if (error instanceof ValidationError) {
       throw ApplicationFailure.nonRetryable(error.message, 'NexusMediaUploadSourceError');
@@ -80,9 +231,22 @@ export async function prepareMediaUploadActivity({ mediaId, accountId }: MediaUp
   }
 }
 
-type FinalizeMediaUploadInput = MediaUploadWorkflowInput & {
+type FinalizeMediaUploadInput = MediaUploadPreparationInput & {
+  readonly expectedPublicationMetadata?: MediaProviderPublicationMetadata;
   readonly remoteUploadId: string;
   readonly result: MediaUploadResult;
+};
+
+const requirePublicationMetadata = (
+  actual: MediaProviderPublicationMetadata | undefined,
+  expected: MediaProviderPublicationMetadata,
+): void => {
+  if (!matchesMediaProviderPublicationMetadata(actual, expected)) {
+    throw ApplicationFailure.nonRetryable(
+      'Media publication metadata receipt does not match the applied metadata',
+      'MediaUploadMetadataConflict',
+    );
+  }
 };
 
 export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInput) {
@@ -109,6 +273,18 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
     parseNexusMediaUploadReference(media.storageReference)?.id !== input.remoteUploadId
   ) {
     throw invalidSession();
+  }
+
+  if (input.expectedPublicationMetadata !== undefined) {
+    requirePublicationMetadata(result.data.metadata, input.expectedPublicationMetadata);
+    if (media.publicationMetadata === null) {
+      throw publicationMetadataConflict();
+    }
+    const currentMetadata = parsePublicationMetadata(media.publicationMetadata);
+    requirePublicationMetadata(
+      mediaProviderPublicationMetadata(currentMetadata),
+      input.expectedPublicationMetadata,
+    );
   }
 
   if (media.state === MediaState.READY) {

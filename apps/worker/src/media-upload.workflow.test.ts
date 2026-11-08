@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { MediaUsePermission, mediaUseTermsText } from '@kosmo/core/media-metadata';
 import {
+  MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME,
   MEDIA_UPLOAD_PUBLISH_UPDATE_NAME,
+  mediaUploadWithMetadataWorkflow,
   mediaUploadWorkflow,
 } from '@kosmo/core/temporal/media-upload';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
@@ -17,9 +20,11 @@ import {
   MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL,
   mockMediaUploadNexusOperationWorkflow,
 } from './test-fixtures/media-upload-nexus-operation';
+import type { MediaProviderPublicationMetadata } from '@kosmo/core/media-metadata';
 import type {
   MediaUploadPublishResult,
   MediaUploadResult,
+  MediaUploadWithMetadataWorkflowInput,
   MediaUploadWorkflowInput,
   MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
@@ -153,7 +158,11 @@ const mediaUploadTestService = service('media', {
   applyHope: operation<HopeInput, { readonly id: string }>(),
   publishUpload: operation<{ readonly id: string }, { readonly id: string }>(),
   publishUploadV2: operation<
-    { readonly id: string; readonly applyAiProhibitFilter: boolean },
+    {
+      readonly id: string;
+      readonly applyAiProhibitFilter: boolean;
+      readonly metadata?: MediaProviderPublicationMetadata;
+    },
     MediaUploadPublishResult
   >(),
 });
@@ -634,5 +643,540 @@ test(
     if (cleanupFailures.length > 1) {
       throw new AggregateError(cleanupFailures, 'Media Upload workflow test cleanup failed.');
     }
+  },
+);
+
+test(
+  'metadata-required Media Upload rejects invalid input and missing frozen metadata before provider operations',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    t.after(async () => environment.teardown());
+
+    const mediaId = randomUUID();
+    const accountId = randomUUID();
+    const publicationMetadata = {
+      attributionName: 'Author',
+      attributionUrl: 'https://kosmo.example/@author',
+    };
+    let preparations = 0;
+    let finalizations = 0;
+    const taskQueue = 'media-upload-metadata-missing-' + process.pid;
+    const worker = await Worker.create({
+      activities: {
+        prepareMediaUploadActivity: async () => {
+          preparations += 1;
+          return {
+            id: 'upload-' + mediaId,
+            sourceKey: 'uploads/' + mediaId,
+            contentType: 'image/jpeg' as const,
+          };
+        },
+        finalizeMediaUploadActivity: async () => {
+          finalizations += 1;
+          throw new Error('A missing metadata receipt must not finalize Media');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      ...testWorkflowSource,
+    });
+
+    await worker.runUntil(async () => {
+      const malformedInput = {
+        mediaId: randomUUID(),
+        accountId,
+        applyAiProhibitFilter: false,
+        publicationMetadata: { ...publicationMetadata, attributionUrl: 'invalid-url' },
+      } as unknown as MediaUploadWithMetadataWorkflowInput;
+      const malformedHandle = await environment.client.workflow.start(
+        mediaUploadWithMetadataWorkflow.workflow,
+        {
+          args: [malformedInput],
+          taskQueue,
+          workflowId: mediaUploadWithMetadataWorkflow.workflowIdFromArgs(malformedInput),
+        },
+      );
+      await assert.rejects(malformedHandle.result(), (error) =>
+        hasFailureType(error, 'MediaUploadWorkflowInputInvalid'),
+      );
+      assert.equal(preparations, 0);
+      assert.equal(finalizations, 0);
+
+      const input = { mediaId, accountId, applyAiProhibitFilter: false, publicationMetadata };
+      const handle = await environment.client.workflow.start(
+        mediaUploadWithMetadataWorkflow.workflow,
+        {
+          args: [input],
+          taskQueue,
+          workflowId: mediaUploadWithMetadataWorkflow.workflowIdFromArgs(input),
+        },
+      );
+
+      await assert.rejects(handle.result(), (error) =>
+        hasFailureType(error, 'MediaUploadMetadataConflict'),
+      );
+      assert.equal(preparations, 1);
+      assert.equal(finalizations, 0);
+    });
+  },
+);
+
+test(
+  'metadata-required Media Upload waits for the final receipt and rejects missing or mismatched metadata before finalization',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    let endpointCleanup = () => Promise.resolve();
+    const nexusWorkerState: { worker?: Worker; run?: Promise<void> } = {};
+    t.after(async () => {
+      const failures: unknown[] = [];
+      try {
+        nexusWorkerState.worker?.shutdown();
+        await nexusWorkerState.run;
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await endpointCleanup();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await environment.teardown();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) {
+        throw failures[0];
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(failures, 'Media Upload receipt workflow cleanup failed.');
+      }
+    });
+
+    type ReceiptCase = {
+      readonly input: MediaUploadWithMetadataWorkflowInput;
+      readonly expectedMetadata: MediaProviderPublicationMetadata;
+      readonly uploadResult: MediaUploadResult;
+      readonly publicationResult: MediaUploadPublishResult;
+      sourceStarted: boolean;
+      sourceCompleted: boolean;
+    };
+    const createReceiptCase = (
+      publicationStatus: 'completed' | 'processing',
+      receipt: 'valid' | 'missing' | 'mismatched',
+    ): ReceiptCase => {
+      const mediaId = randomUUID();
+      const uploadId = 'u_' + randomUUID();
+      const publicationMetadata = {
+        attributionName: 'Author',
+        attributionUrl: 'https://kosmo.example/@author',
+      };
+      const expectedMetadata = {
+        credit: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+      };
+      const receiptMetadata =
+        receipt === 'valid'
+          ? expectedMetadata
+          : receipt === 'mismatched'
+            ? { ...expectedMetadata, credit: 'Another author (https://other.example/@author)' }
+            : undefined;
+      const uploadResult: MediaUploadResult = {
+        id: uploadId,
+        mediaType: 'image/webp',
+        ...(receiptMetadata === undefined ? {} : { metadata: receiptMetadata }),
+        url: 'https://source.example/' + uploadId + '.webp',
+      };
+      const publicationResult: MediaUploadPublishResult =
+        publicationStatus === 'processing'
+          ? { id: uploadId, status: 'processing' }
+          : {
+              ...uploadResult,
+              status: 'completed',
+              url: 'https://published.example/' + uploadId + '.webp',
+            };
+
+      return {
+        input: {
+          mediaId,
+          accountId: randomUUID(),
+          applyAiProhibitFilter: false,
+          publicationMetadata,
+        },
+        expectedMetadata,
+        uploadResult,
+        publicationResult,
+        sourceStarted: false,
+        sourceCompleted: false,
+      };
+    };
+
+    const completedMissing = createReceiptCase('completed', 'missing');
+    const processingValid = createReceiptCase('processing', 'valid');
+    const processingMismatched = createReceiptCase('processing', 'mismatched');
+    const cases = [completedMissing, processingValid, processingMismatched];
+    const byUploadId = new Map(cases.map((scenario) => [scenario.uploadResult.id, scenario]));
+    const byMediaId = new Map(cases.map((scenario) => [scenario.input.mediaId, scenario]));
+    const providerInputs: Array<{
+      readonly applyAiProhibitFilter: boolean;
+      readonly id: string;
+      readonly metadata?: MediaProviderPublicationMetadata;
+    }> = [];
+    const finalizations: FinalizeInput[] = [];
+    const taskQueue = 'media-upload-metadata-receipt-caller-' + process.pid;
+    const nexusTaskQueue = 'media-upload-metadata-receipt-nexus-' + process.pid;
+    const endpoint = await createMediaUploadTestEndpoint(environment, nexusTaskQueue, t.signal);
+    endpointCleanup = endpoint.dispose;
+
+    const nexusServiceHandler = serviceHandler(mediaUploadTestService, {
+      startUpload: new WorkflowRunOperationHandler<MediaUploadStartInput, MediaUploadResult>(
+        async (context, input) => {
+          const scenario = byUploadId.get(input.id);
+          if (!scenario) {
+            throw new Error('Unexpected upload ID: ' + input.id);
+          }
+          const handle = await startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
+            workflowId: 'mock-media-upload:' + input.id,
+            workflowExecutionTimeout: '25 hours',
+            args: [{ result: scenario.uploadResult, shouldFail: false }],
+          });
+          scenario.sourceStarted = true;
+          return handle;
+        },
+      ),
+      applyHope: async (_context, { id }) => ({ id }),
+      publishUpload: async (_context, { id }) => ({ id }),
+      publishUploadV2: async (_context, input) => {
+        const scenario = byUploadId.get(input.id);
+        if (!scenario) {
+          throw new Error('Unexpected upload ID: ' + input.id);
+        }
+        providerInputs.push(input);
+        await getClient()
+          .workflow.getHandle('mock-media-upload:' + input.id)
+          .signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
+        return scenario.publicationResult;
+      },
+    });
+    const nexusWorker = await Worker.create({
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      nexusServices: [nexusServiceHandler],
+      taskQueue: nexusTaskQueue,
+      workflowsPath: new URL('./test-fixtures/media-upload-nexus-operation.ts', import.meta.url)
+        .pathname,
+    });
+    nexusWorkerState.worker = nexusWorker;
+    const nexusWorkerRun = nexusWorker.run();
+    nexusWorkerState.run = nexusWorkerRun;
+    void nexusWorkerRun.catch(() => undefined);
+
+    const callerWorker = await Worker.create({
+      activities: {
+        prepareMediaUploadActivity: async (input: MediaUploadWithMetadataWorkflowInput) => {
+          const scenario = byMediaId.get(input.mediaId);
+          if (!scenario) {
+            throw new Error('Unexpected Media ID: ' + input.mediaId);
+          }
+          return {
+            id: scenario.uploadResult.id,
+            sourceKey: 'uploads/' + scenario.uploadResult.id,
+            contentType: 'image/jpeg' as const,
+            publicationMetadata: input.publicationMetadata,
+          };
+        },
+        finalizeMediaUploadActivity: async (input: FinalizeInput) => {
+          finalizations.push(input);
+          return input.result;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      ...testWorkflowSource,
+    });
+    const completeSource = async (scenario: ReceiptCase) => {
+      if (!scenario.sourceStarted || scenario.sourceCompleted) {
+        return;
+      }
+      await environment.client.workflow
+        .getHandle('mock-media-upload:' + scenario.uploadResult.id)
+        .signal(MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL);
+      scenario.sourceCompleted = true;
+    };
+
+    await callerWorker.runUntil(async () => {
+      const start = (scenario: ReceiptCase) =>
+        environment.client.workflow.start(mediaUploadWithMetadataWorkflow.workflow, {
+          args: [scenario.input],
+          taskQueue,
+          workflowId: mediaUploadWithMetadataWorkflow.workflowIdFromArgs(scenario.input),
+        });
+      const update = (handle: Awaited<ReturnType<typeof start>>) =>
+        handle.executeUpdate(MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME, {
+          args: [{ applyAiProhibitFilter: false }],
+          updateId: randomUUID(),
+        });
+
+      const completedHandle = await start(completedMissing);
+      await assert.rejects(update(completedHandle), (error) =>
+        hasFailureType(error, 'MediaUploadMetadataConflict'),
+      );
+      await assert.rejects(completedHandle.result(), (error) =>
+        hasFailureType(error, 'MediaUploadMetadataConflict'),
+      );
+      assert.equal(finalizations.length, 0);
+
+      const processingHandle = await start(processingValid);
+      let processingResultSettled = false;
+      const processingResult = processingHandle.result().then((result) => {
+        processingResultSettled = true;
+        return result;
+      });
+      assert.deepEqual(await update(processingHandle), {
+        id: processingValid.uploadResult.id,
+        status: 'processing',
+      });
+      assert.equal(processingResultSettled, false);
+      await completeSource(processingValid);
+      assert.deepEqual(await processingResult, {
+        ...processingValid.uploadResult,
+        applyAiProhibitFilter: false,
+      });
+      assert.equal(finalizations.length, 1);
+      assert.deepEqual(
+        finalizations[0]?.expectedPublicationMetadata,
+        processingValid.expectedMetadata,
+      );
+      assert.deepEqual(finalizations[0]?.result, processingValid.uploadResult);
+
+      const mismatchHandle = await start(processingMismatched);
+      assert.deepEqual(await update(mismatchHandle), {
+        id: processingMismatched.uploadResult.id,
+        status: 'processing',
+      });
+      await completeSource(processingMismatched);
+      await assert.rejects(mismatchHandle.result(), (error) =>
+        hasFailureType(error, 'MediaUploadMetadataConflict'),
+      );
+      assert.equal(finalizations.length, 1);
+
+      assert.deepEqual(
+        providerInputs,
+        cases.map((scenario) => ({
+          id: scenario.uploadResult.id,
+          applyAiProhibitFilter: false,
+          metadata: scenario.expectedMetadata,
+        })),
+      );
+      await completeSource(completedMissing);
+    });
+  },
+);
+
+test(
+  'metadata-required Media Upload resolves completed updates before upload cleanup and waits for the upload result',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    let endpointCleanup = () => Promise.resolve();
+    const nexusWorkerState: { worker?: Worker; run?: Promise<void> } = {};
+    t.after(async () => {
+      const failures: unknown[] = [];
+      try {
+        nexusWorkerState.worker?.shutdown();
+        await nexusWorkerState.run;
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await endpointCleanup();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await environment.teardown();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) {
+        throw failures[0];
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(failures, 'Media Upload metadata workflow cleanup failed.');
+      }
+    });
+
+    const mediaId = randomUUID();
+    const accountId = randomUUID();
+    const uploadId = 'u_' + randomUUID();
+    const publicationMetadata = {
+      attributionName: 'Author',
+      attributionUrl: 'https://kosmo.example/@author',
+      rights: {
+        personal: MediaUsePermission.EDIT,
+        noncommercial: MediaUsePermission.ORIGINAL,
+        commercial: MediaUsePermission.DENY,
+      },
+    };
+    const providerMetadata: MediaProviderPublicationMetadata = {
+      credit: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+      copyright: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+      usageTerms: mediaUseTermsText(publicationMetadata.rights),
+      webStatement:
+        'https://kosmo.example/terms/image-use/v1?personal=EDIT&noncommercial=ORIGINAL&commercial=DENY',
+    };
+    const uploadResult: MediaUploadResult = {
+      id: uploadId,
+      mediaType: 'image/webp',
+      url: 'https://source.example/' + uploadId + '.webp',
+    };
+    const publicationResult: MediaUploadPublishResult = {
+      ...uploadResult,
+      metadata: providerMetadata,
+      status: 'completed',
+      url: 'https://published.example/' + uploadId + '.webp',
+    };
+    const input: MediaUploadWithMetadataWorkflowInput = {
+      mediaId,
+      accountId,
+      applyAiProhibitFilter: false,
+      publicationMetadata,
+    };
+    const preparationInputs: MediaUploadWithMetadataWorkflowInput[] = [];
+    const providerInputs: Array<{
+      readonly applyAiProhibitFilter: boolean;
+      readonly id: string;
+      readonly metadata?: typeof providerMetadata;
+    }> = [];
+    const finalizations: FinalizeInput[] = [];
+    const taskQueue = 'media-upload-metadata-gated-caller-' + process.pid;
+    const nexusTaskQueue = 'media-upload-metadata-gated-nexus-' + process.pid;
+    const endpoint = await createMediaUploadTestEndpoint(environment, nexusTaskQueue, t.signal);
+    endpointCleanup = endpoint.dispose;
+
+    const nexusServiceHandler = serviceHandler(mediaUploadTestService, {
+      startUpload: new WorkflowRunOperationHandler<MediaUploadStartInput, MediaUploadResult>(
+        async (context, startInput) => {
+          const handle = await startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
+            workflowId: 'mock-media-upload:' + uploadId,
+            workflowExecutionTimeout: '25 hours',
+            args: [{ result: uploadResult, shouldFail: false }],
+          });
+          assert.equal(startInput.id, uploadId);
+          return handle;
+        },
+      ),
+      applyHope: async (_context, { id }) => ({ id }),
+      publishUpload: async (_context, { id }) => ({ id }),
+      publishUploadV2: async (_context, publicationInput) => {
+        providerInputs.push(publicationInput);
+        await getClient()
+          .workflow.getHandle('mock-media-upload:' + uploadId)
+          .signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
+        return publicationResult;
+      },
+    });
+    const nexusWorker = await Worker.create({
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      nexusServices: [nexusServiceHandler],
+      taskQueue: nexusTaskQueue,
+      workflowsPath: new URL('./test-fixtures/media-upload-nexus-operation.ts', import.meta.url)
+        .pathname,
+    });
+    nexusWorkerState.worker = nexusWorker;
+    const nexusWorkerRun = nexusWorker.run();
+    nexusWorkerState.run = nexusWorkerRun;
+    void nexusWorkerRun.catch(() => undefined);
+
+    const callerWorker = await Worker.create({
+      activities: {
+        prepareMediaUploadActivity: async (activityInput: MediaUploadWithMetadataWorkflowInput) => {
+          preparationInputs.push(activityInput);
+          return {
+            id: uploadId,
+            sourceKey: 'uploads/' + uploadId,
+            contentType: 'image/jpeg' as const,
+            publicationMetadata: activityInput.publicationMetadata,
+          };
+        },
+        finalizeMediaUploadActivity: async (activityInput: FinalizeInput) => {
+          finalizations.push(activityInput);
+          return activityInput.result;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      ...testWorkflowSource,
+    });
+
+    await callerWorker.runUntil(async () => {
+      const handle = await environment.client.workflow.start(
+        mediaUploadWithMetadataWorkflow.workflow,
+        {
+          args: [input],
+          taskQueue,
+          workflowId: mediaUploadWithMetadataWorkflow.workflowIdFromArgs(input),
+        },
+      );
+      let workflowResultSettled = false;
+      const workflowResult = handle.result().then((result) => {
+        workflowResultSettled = true;
+        return result;
+      });
+
+      const expectedUpdateResult = {
+        id: uploadId,
+        mediaType: publicationResult.mediaType,
+        metadata: providerMetadata,
+        status: 'completed',
+        url: publicationResult.url,
+      };
+      assert.deepEqual(
+        await handle.executeUpdate(MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME, {
+          args: [{ applyAiProhibitFilter: false }],
+          updateId: randomUUID(),
+        }),
+        expectedUpdateResult,
+      );
+      assert.equal(workflowResultSettled, false);
+
+      assert.deepEqual(
+        await handle.executeUpdate(MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME, {
+          args: [{ applyAiProhibitFilter: false }],
+          updateId: randomUUID(),
+        }),
+        expectedUpdateResult,
+      );
+      assert.equal(workflowResultSettled, false);
+      assert.deepEqual(preparationInputs, [input]);
+      assert.deepEqual(providerInputs, [
+        { id: uploadId, applyAiProhibitFilter: false, metadata: providerMetadata },
+      ]);
+      assert.equal(finalizations.length, 1);
+      assert.deepEqual(finalizations[0]?.expectedPublicationMetadata, providerMetadata);
+      assert.deepEqual(finalizations[0]?.result, {
+        id: uploadId,
+        mediaType: publicationResult.mediaType,
+        metadata: providerMetadata,
+        url: publicationResult.url,
+      });
+
+      await environment.client.workflow
+        .getHandle('mock-media-upload:' + uploadId)
+        .signal(MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL);
+      assert.deepEqual(await workflowResult, {
+        id: uploadId,
+        mediaType: publicationResult.mediaType,
+        metadata: providerMetadata,
+        url: publicationResult.url,
+        applyAiProhibitFilter: false,
+      });
+      assert.equal(workflowResultSettled, true);
+    });
   },
 );
