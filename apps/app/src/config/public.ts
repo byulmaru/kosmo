@@ -13,6 +13,7 @@ export type PublicWebPushConfig = {
 export type PublicConfig = {
   apiOrigin: string;
   channel: DeploymentChannel;
+  firstProfileAutoFollowProfileId: string | undefined;
   oidcClientId: string;
   oidcIssuer: string;
   posthogHost: string | undefined;
@@ -42,6 +43,7 @@ const publicConfigByChannel: Record<DeploymentChannel, PublicConfig> = {
     ...commonPublicConfig,
     apiOrigin: 'https://dev-api.kos.moe',
     channel: 'dev',
+    firstProfileAutoFollowProfileId: undefined,
     posthogHost: undefined,
     posthogKey: undefined,
     webOrigin: 'https://dev.kos.moe',
@@ -50,6 +52,7 @@ const publicConfigByChannel: Record<DeploymentChannel, PublicConfig> = {
     ...commonPublicConfig,
     apiOrigin: 'https://api.kos.moe',
     channel: 'prod',
+    firstProfileAutoFollowProfileId: 'AZ-3YxIdfz2WSjjntTzIgFByb2ZpbGU',
     posthogHost: 'https://eu.i.posthog.com',
     posthogKey: 'phc_wtHL2JZViyDBizGfTYXqjHwejEwJiEwHoEzPZ3DtUmDS',
     webOrigin: 'https://kos.moe',

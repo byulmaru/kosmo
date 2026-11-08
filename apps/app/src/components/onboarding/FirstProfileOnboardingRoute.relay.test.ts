@@ -4,18 +4,33 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, Suspense, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  createOperationDescriptor,
+  Environment,
+  getSelector,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import followButtonProfileFragment from '../profile/__generated__/FollowButton_profile.graphql';
+import profileHeroFragment from '../profile/__generated__/ProfileHero_profile.graphql';
+import autoFollowMutation from './__generated__/FirstProfileOnboardingFollowMutation.graphql';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type {
   RelayActorProvider as RelayActorProviderExport,
   useRelayActor as useRelayActorExport,
 } from '@/relay/RelayActorProvider';
+import type { FollowButton_profile$data } from '../profile/__generated__/FollowButton_profile.graphql';
+import type { ProfileHero_profile$data } from '../profile/__generated__/ProfileHero_profile.graphql';
 import type * as Feature from './FirstProfileOnboardingRoute';
 import type { FirstProfileStep } from './firstProfileOnboardingState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const initialAutoFollowProfileId = process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
+const globals = globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown };
+const originalChannel = globals.__KOSMO_CHANNEL__;
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
 const require = createRequire(import.meta.url);
 const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -37,6 +52,10 @@ let pickerResult: object;
 let RelayActorProvider: typeof RelayActorProviderExport;
 let actorControls: ReturnType<typeof useRelayActorExport>;
 let useRelayActor: typeof useRelayActorExport;
+type FollowPolicy = 'OPEN' | 'APPROVAL_REQUIRED';
+const autoFollowTargetId = 'AZ-3YxIdfz2WSjjntTzIgFByb2ZpbGU';
+let cachedAutoFollowPolicy: FollowPolicy | null = null;
+let autoFollowEnvironment: Environment | null = null;
 let navigate: (step: FirstProfileStep | 'complete') => void;
 let sessionValue = {
   accountId: 'account-1' as string | null,
@@ -135,7 +154,7 @@ function displayedActor() {
     .selectedProfileId;
 }
 function environment(_token: string | null, actor: string | null) {
-  return new Environment({
+  const environment = new Environment({
     network: Network.create((request, variables) =>
       Observable.create((sink) => {
         requests.push({
@@ -148,6 +167,34 @@ function environment(_token: string | null, actor: string | null) {
     ),
     store: new Store(new RecordSource()),
   });
+  if (actor === 'profile-1') {
+    autoFollowEnvironment = environment;
+  }
+  if (actor === 'profile-1' && cachedAutoFollowPolicy) {
+    environment.commitUpdate((store) => {
+      const target = store.create(autoFollowTargetId, 'Profile');
+      target.setValue(autoFollowTargetId, 'id');
+      target.setValue('target', 'displayName');
+      target.setValue('target', 'handle');
+      target.setValue('@target', 'relativeHandle');
+      target.setValue(cachedAutoFollowPolicy, 'followPolicy');
+      target.setValue(4, 'followersCount');
+      const viewerState = store.create(
+        `client:${autoFollowTargetId}:viewerState`,
+        'ProfileViewerState',
+      );
+      viewerState.setValue(false, 'isSelf');
+      viewerState.setValue(null, 'follow');
+      viewerState.setValue(null, 'followRequest');
+      viewerState.setValue(null, 'profileBlock');
+      target.setLinkedRecord(viewerState, 'viewerState');
+
+      const follower = store.create('profile-1', 'Profile');
+      follower.setValue('profile-1', 'id');
+      follower.setValue(0, 'followingCount');
+    });
+  }
+  return environment;
 }
 function profile(overrides: Record<string, unknown> = {}) {
   return {
@@ -206,6 +253,53 @@ async function reject(name: string, error: Error) {
 function autoFollowRequests() {
   return requests.filter((request) => request.name === 'FirstProfileOnboardingFollowMutation');
 }
+function followPayload(followPolicy: FollowPolicy) {
+  const isRequest = followPolicy === 'APPROVAL_REQUIRED';
+  const relationshipId = isRequest ? 'request-1' : 'follow-1';
+  return {
+    followProfile: {
+      result: {
+        __typename: isRequest ? 'ProfileFollowRequest' : 'ProfileFollow',
+        id: relationshipId,
+      },
+      followerProfile: { id: 'profile-1', followingCount: isRequest ? 0 : 1 },
+      followeeProfile: {
+        id: autoFollowTargetId,
+        displayName: 'target',
+        handle: 'target',
+        relativeHandle: '@target',
+        followPolicy,
+        followersCount: isRequest ? 4 : 5,
+        viewerState: {
+          isSelf: false,
+          follow: isRequest
+            ? null
+            : { id: relationshipId, follower: { id: 'profile-1', followingCount: 1 } },
+          followRequest: isRequest ? { id: relationshipId } : null,
+          profileBlock: null,
+        },
+      },
+    },
+  };
+}
+function followButtonProfile(environment: Environment, owner: object): FollowButton_profile$data {
+  const selector = getSelector(followButtonProfileFragment, {
+    __id: autoFollowTargetId,
+    __fragments: { FollowButton_profile: {} },
+    __fragmentOwner: owner,
+  });
+  assert.ok(selector.kind === 'SingularReaderSelector');
+  return environment.lookup(selector).data as FollowButton_profile$data;
+}
+function profileHeroProfile(environment: Environment, profileId: string, owner: object) {
+  const selector = getSelector(profileHeroFragment, {
+    __id: profileId,
+    __fragments: { ProfileHero_profile: {} },
+    __fragmentOwner: owner,
+  });
+  assert.ok(selector.kind === 'SingularReaderSelector');
+  return environment.lookup(selector).data as ProfileHero_profile$data;
+}
 async function change(input: Partial<typeof flow.draft>) {
   await act(async () => flow.setDraft({ ...flow.draft, ...input }));
 }
@@ -250,8 +344,14 @@ before(async () => {
 });
 beforeEach(async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {},
+  });
+  globals.__KOSMO_CHANNEL__ = 'dev';
   requests = [];
-  delete process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
+  autoFollowEnvironment = null;
+  cachedAutoFollowPolicy = null;
   storedProfileId = null;
   transferFailure = false;
   transferCount = 0;
@@ -267,15 +367,23 @@ beforeEach(async () => {
   await resolve('FirstProfileOnboardingQuery', query());
 });
 afterEach(async () => {
-  await act(async () => renderer?.unmount());
-  await act(async () => mock.timers.tick(300_001));
-  mock.timers.reset();
-  if (initialAutoFollowProfileId === undefined) {
-    delete process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
-  } else {
-    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = initialAutoFollowProfileId;
+  try {
+    await act(async () => renderer?.unmount());
+    await act(async () => mock.timers.tick(300_001));
+  } finally {
+    mock.timers.reset();
+    if (originalDocument) {
+      Object.defineProperty(globalThis, 'document', originalDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, 'document');
+    }
+    if (originalChannel === undefined) {
+      delete globals.__KOSMO_CHANNEL__;
+    } else {
+      globals.__KOSMO_CHANNEL__ = originalChannel;
+    }
+    renderer = null;
   }
-  renderer = null;
 });
 
 describe('first profile step mutations', () => {
@@ -349,7 +457,7 @@ describe('first profile step mutations', () => {
   });
 
   it('starts the configured follow in the selected actor before immediate completion navigates', async () => {
-    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = ' target-profile ';
+    globals.__KOSMO_CHANNEL__ = 'prod';
     await change({ handle: 'spring' });
     await finish();
     await resolve('FirstProfileOnboardingCreateMutation', {
@@ -363,14 +471,10 @@ describe('first profile step mutations', () => {
     assert.equal(actorControls.selectedProfileId, 'profile-1');
     assert.deepEqual(
       autoFollowRequests().map(({ actor, variables }) => ({ actor, variables })),
-      [{ actor: 'profile-1', variables: { id: 'target-profile' } }],
+      [{ actor: 'profile-1', variables: { id: 'AZ-3YxIdfz2WSjjntTzIgFByb2ZpbGU' } }],
     );
 
-    await resolve('FirstProfileOnboardingFollowMutation', {
-      followProfile: {
-        result: { __typename: 'ProfileFollowRequest', id: 'request-1' },
-      },
-    });
+    await resolve('FirstProfileOnboardingFollowMutation', followPayload('APPROVAL_REQUIRED'));
     assert.equal(actorControls.selectedProfileId, 'profile-1');
     assert.equal(displayedStep(), 'complete');
     assert.deepEqual(handledErrors, []);
@@ -378,12 +482,11 @@ describe('first profile step mutations', () => {
   });
 
   it('keeps actor B after a rerender and late actor A follow response', async () => {
-    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
+    globals.__KOSMO_CHANNEL__ = 'prod';
     await createFirst();
     await selected();
 
     assert.equal(displayedStep(), 'details');
-    assert.equal(autoFollowRequests().length, 1);
     assert.deepEqual(
       autoFollowRequests().map((request) => request.actor),
       ['profile-1'],
@@ -408,11 +511,10 @@ describe('first profile step mutations', () => {
     assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 1);
     assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
 
-    const profileAFollow = await resolve('FirstProfileOnboardingFollowMutation', {
-      followProfile: {
-        result: { __typename: 'ProfileFollow', id: 'follow-1' },
-      },
-    });
+    const profileAFollow = await resolve(
+      'FirstProfileOnboardingFollowMutation',
+      followPayload('OPEN'),
+    );
     assert.equal(profileAFollow.actor, 'profile-1');
     assert.equal(displayedActor(), 'profile-2');
     assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 1);
@@ -421,17 +523,54 @@ describe('first profile step mutations', () => {
     assert.equal(requests.length, 0);
   });
 
-  for (const targetProfileId of ['', '   ']) {
-    it(`keeps a blank auto-follow profile disabled (${JSON.stringify(targetProfileId)})`, async () => {
-      process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = targetProfileId;
+  for (const followPolicy of ['OPEN', 'APPROVAL_REQUIRED'] as const) {
+    it(`normalizes the ${followPolicy} auto-follow into an already loaded FollowButton profile`, async () => {
+      globals.__KOSMO_CHANNEL__ = 'prod';
+      cachedAutoFollowPolicy = followPolicy;
       await createFirst();
       await selected();
 
-      assert.equal(displayedStep(), 'details');
-      assert.equal(autoFollowRequests().length, 0);
-      assert.equal(requests.length, 0);
+      const environment = autoFollowEnvironment;
+      assert.ok(environment);
+      assert.equal(autoFollowRequests().length, 1);
+      const operation = createOperationDescriptor(autoFollowMutation, {
+        id: autoFollowTargetId,
+      }).request;
+      const before = followButtonProfile(environment, operation);
+      assert.equal(before.viewerState?.isSelf, false);
+      assert.equal(Boolean(before.viewerState?.follow), false);
+      assert.equal(Boolean(before.viewerState?.followRequest), false);
+      assert.equal(before.followersCount, 4);
+      assert.equal(profileHeroProfile(environment, 'profile-1', operation).followingCount, 0);
+
+      await resolve('FirstProfileOnboardingFollowMutation', followPayload(followPolicy));
+
+      const after = followButtonProfile(environment, operation);
+      const isRequest = followPolicy === 'APPROVAL_REQUIRED';
+      assert.equal(Boolean(after.viewerState?.follow), !isRequest);
+      assert.equal(Boolean(after.viewerState?.followRequest), isRequest);
+      assert.equal(after.followersCount, isRequest ? 4 : 5);
+      assert.equal(
+        profileHeroProfile(environment, 'profile-1', operation).followingCount,
+        isRequest ? 0 : 1,
+      );
+      if (!isRequest) {
+        assert.equal(after.viewerState?.follow?.follower?.id, 'profile-1');
+        assert.equal(after.viewerState?.follow?.follower?.followingCount, 1);
+      }
+      assert.equal(handledErrors.length, 0);
     });
   }
+
+  it('does not start the automatic follow in the dev channel', async () => {
+    globals.__KOSMO_CHANNEL__ = 'dev';
+    await createFirst();
+    await selected();
+
+    assert.equal(displayedStep(), 'details');
+    assert.equal(autoFollowRequests().length, 0);
+    assert.equal(requests.length, 0);
+  });
 
   it('retains the handle after create failure and retries without a recovery query', async () => {
     await change({ handle: 'spring' });
@@ -468,7 +607,7 @@ describe('first profile step mutations', () => {
   });
 
   it('retains the created identity on selection failure and retries selection without recreating', async () => {
-    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
+    globals.__KOSMO_CHANNEL__ = 'prod';
     await createFirst();
     await resolve('FirstProfileOnboardingSelectMutation', null, [
       { message: 'selection unavailable' },
@@ -486,21 +625,24 @@ describe('first profile step mutations', () => {
     assert.equal(displayedStep(), 'details');
     assert.equal(storedProfileId, 'profile-1');
     assert.deepEqual(
-      autoFollowRequests().map(({ actor, variables }) => ({ actor, variables })),
-      [{ actor: 'profile-1', variables: { id: 'target-profile' } }],
+      autoFollowRequests().map((request) => request.actor),
+      ['profile-1'],
     );
   });
 
   for (const failureKind of ['graphql', 'network'] as const) {
     it(`logs a ${failureKind} auto-follow failure and continues onboarding`, async () => {
-      process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
+      globals.__KOSMO_CHANNEL__ = 'prod';
       await createFirst();
       await selected();
 
       assert.equal(displayedStep(), 'details');
       assert.equal(flow.result.kind, 'idle');
       assert.equal(actorControls.selectedProfileId, 'profile-1');
-      assert.equal(autoFollowRequests().length, 1);
+      assert.deepEqual(
+        autoFollowRequests().map((request) => request.actor),
+        ['profile-1'],
+      );
       if (failureKind === 'graphql') {
         await resolve('FirstProfileOnboardingFollowMutation', null, [
           { message: 'follow unavailable', path: ['followProfile'] },

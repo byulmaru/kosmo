@@ -25,6 +25,7 @@ import {
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { StateView } from '@/components/ui/StateView';
+import { getPublicConfig } from '@/config/public';
 import { captureHandledError } from '@/observability/sentry';
 import { useRelayActor, useRelayAuthLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -125,6 +126,13 @@ const followMutation = graphql`
         ... on ProfileFollowRequest {
           id
         }
+      }
+      followerProfile {
+        id
+        followingCount
+      }
+      followeeProfile {
+        ...FollowButton_profile
       }
     }
   }
@@ -331,7 +339,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       return;
     }
 
-    const targetProfileId = process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID?.trim();
+    const targetProfileId = getPublicConfig('firstProfileAutoFollowProfileId');
     if (targetProfileId) {
       const reportFollowFailure = (cause: unknown) =>
         captureHandledError(new Error('First profile automatic follow failed', { cause }), {

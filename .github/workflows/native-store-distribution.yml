@@ -59,7 +59,6 @@ jobs:
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}
       EXPO_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
-      EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: ${{ vars.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID }}
 
     steps:
       - name: Checkout repository
@@ -388,7 +387,6 @@ jobs:
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       SENTRY_RELEASE: ${{ github.sha }}
       EXPO_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
-      EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: ${{ vars.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID }}
 
     steps:
       - name: Checkout repository
