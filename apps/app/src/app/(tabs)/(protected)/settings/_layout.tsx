@@ -1,6 +1,7 @@
 import { Slot, Stack, usePathname } from 'expo-router';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { getSettingsMenuSelection } from '@/components/settings/settingsNavigation';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsRouteProvider } from '@/components/settings/SettingsRouteContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -27,26 +28,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
-  const selected =
-    root || pathname === '/settings/profile' || pathname === '/settings/default-post-visibility'
-      ? 'profile'
-      : pathname === '/settings/profile-migration' || pathname === '/settings/following-import'
-        ? 'profile-migration'
-        : pathname === '/settings/labs' || pathname === '/settings/natural-language-mute'
-          ? 'labs'
-          : pathname === '/settings/info' ||
-              pathname === '/settings/developer' ||
-              pathname === '/settings/licenses'
-            ? 'info'
-            : pathname === '/settings/mute-and-block' ||
-                pathname === '/settings/muted-profiles' ||
-                pathname === '/settings/blocked-profiles'
-              ? 'mute-and-block'
-              : pathname === '/settings/theme'
-                ? 'theme'
-                : pathname === '/settings/account-deletion'
-                  ? 'account-deletion'
-                  : undefined;
+  const selected = getSettingsMenuSelection(pathname);
   const detailHeaderMode: SettingsDetailHeaderMode = root ? 'plain' : 'back';
 
   if (layout === 'full') {
