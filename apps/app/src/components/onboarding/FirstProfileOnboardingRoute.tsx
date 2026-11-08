@@ -1,7 +1,7 @@
 import { localProfileHandleSchema } from '@kosmo/core/validation';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useLazyLoadQuery, useMutation } from 'react-relay';
 import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import {
@@ -25,6 +25,8 @@ import {
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { StateView } from '@/components/ui/StateView';
+import { getPublicConfig } from '@/config/public';
+import { captureHandledError } from '@/observability/sentry';
 import { useRelayActor, useRelayAuthLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { initialFirstProfileDraft, prepareFirstProfileStep } from './firstProfileOnboardingState';
@@ -33,6 +35,7 @@ import type { ImageUploadStage } from '@/components/media/imageUploadErrors';
 import type { ProfileEditRouteImage } from '@/components/profile/profileEditMedia';
 import type { FirstProfileOnboardingCompleteMediaMutation } from './__generated__/FirstProfileOnboardingCompleteMediaMutation.graphql';
 import type { FirstProfileOnboardingCreateMutation } from './__generated__/FirstProfileOnboardingCreateMutation.graphql';
+import type { FirstProfileOnboardingFollowMutation } from './__generated__/FirstProfileOnboardingFollowMutation.graphql';
 import type { FirstProfileOnboardingIssueMediaMutation } from './__generated__/FirstProfileOnboardingIssueMediaMutation.graphql';
 import type { FirstProfileOnboardingProfile_profile$key } from './__generated__/FirstProfileOnboardingProfile_profile.graphql';
 import type { FirstProfileOnboardingQuery } from './__generated__/FirstProfileOnboardingQuery.graphql';
@@ -108,6 +111,28 @@ const selectMutation = graphql`
     selectProfile(input: { id: $profileId }) {
       profile {
         id
+      }
+    }
+  }
+`;
+const followMutation = graphql`
+  mutation FirstProfileOnboardingFollowMutation($id: ID!) {
+    followProfile(input: { id: $id }) {
+      result {
+        __typename
+        ... on ProfileFollow {
+          id
+        }
+        ... on ProfileFollowRequest {
+          id
+        }
+      }
+      followerProfile {
+        id
+        followingCount
+      }
+      followeeProfile {
+        ...FollowButton_profile
       }
     }
   }
@@ -262,6 +287,7 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
 
 function FirstProfileFlow({ children }: PropsWithChildren) {
   const { resetCurrentActor, selectedProfileId } = useRelayActor();
+  const pendingSelection = useRef<{ profileId: string; onSelected: () => void } | null>(null);
   const [draft, setDraft] = useState(initialFirstProfileDraft);
   const [images, setImages] = useState<Images>(() => ({
     avatar: createProfileEditRouteImage(),
@@ -276,6 +302,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     useMutation<FirstProfileOnboardingCreateMutation>(createMutation);
   const [commitSelect, selecting] =
     useMutation<FirstProfileOnboardingSelectMutation>(selectMutation);
+  const [commitFollow] = useMutation<FirstProfileOnboardingFollowMutation>(followMutation);
   const [commitSave, saving] = useMutation<FirstProfileOnboardingSaveMutation>(saveMutation);
   const [commitIssue, issuing] =
     useMutation<FirstProfileOnboardingIssueMediaMutation>(issueMediaMutation);
@@ -301,6 +328,41 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     },
     [headerUri],
   );
+
+  useEffect(() => {
+    const pending = pendingSelection.current;
+    if (!pending) {
+      return;
+    }
+    pendingSelection.current = null;
+    if (selectedProfileId !== pending.profileId) {
+      return;
+    }
+
+    const targetProfileId = getPublicConfig('firstProfileAutoFollowProfileId');
+    if (targetProfileId) {
+      const reportFollowFailure = (cause: unknown) =>
+        captureHandledError(new Error('First profile automatic follow failed', { cause }), {
+          operation: 'first_profile_auto_follow',
+        });
+      try {
+        commitFollow({
+          variables: { id: targetProfileId },
+          onCompleted: (response, errors) => {
+            if (!response?.followProfile?.result) {
+              reportFollowFailure(
+                errors?.length ? errors : new Error('Follow returned no relationship'),
+              );
+            }
+          },
+          onError: reportFollowFailure,
+        });
+      } catch (error) {
+        reportFollowFailure(error);
+      }
+    }
+    pending.onSelected();
+  }, [commitFollow, selectedProfileId]);
 
   const fail = (message: string) => setResult({ kind: 'error', message });
   const uploadField = (
@@ -473,8 +535,8 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
             return;
           }
           if (resetCurrentActor(identity.id)) {
+            pendingSelection.current = { profileId: identity.id, onSelected };
             void writeSelectedProfile(identity.id);
-            onSelected();
           }
         },
         onError: () => fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.'),
