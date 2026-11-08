@@ -38,6 +38,7 @@ import {
   mockMediaUploadNexusOperationWorkflow,
 } from './test-fixtures/media-upload-nexus-operation';
 import type { TestContext } from 'node:test';
+import type { MediaPublicationMetadata } from '@kosmo/core/media-metadata';
 import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
 import type {
   MediaUploadWorkflowInput,
@@ -384,6 +385,7 @@ type PostRequestMediaRow = {
   readonly accountId: string;
   readonly id: string;
   readonly mediaType?: string | null;
+  readonly publicationMetadata?: MediaPublicationMetadata | null;
   readonly source: MediaSource;
   readonly state: MediaState;
   readonly storageReference?: string | null;
@@ -433,11 +435,13 @@ const mockPostRequestMediaDatabase = (
         reject?: (reason: unknown) => unknown,
       ) =>
         Promise.resolve(
-          [...mediaRows.values()].filter(
-            ({ accountId, id }) =>
-              queriedMediaIds.includes(id) &&
-              (!requiresAccountScope || queriedAccountIds.includes(accountId)),
-          ),
+          [...mediaRows.values()]
+            .filter(
+              ({ accountId, id }) =>
+                queriedMediaIds.includes(id) &&
+                (!requiresAccountScope || queriedAccountIds.includes(accountId)),
+            )
+            .map((row) => ({ ...row, publicationMetadata: row.publicationMetadata ?? null })),
         ).then(resolve, reject),
     };
     return query as never;
