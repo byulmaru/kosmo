@@ -84,17 +84,23 @@ test('exports manual spans and errors with Worker runtime metadata', () => {
         };
 
         Sentry.startInactiveSpan({
-          name: 'decision-provider-test',
+          name: 'smart-filter.decision',
           op: 'decision.provider',
+          forceTransaction: true,
+        }).end();
+        Sentry.startInactiveSpan({
+          name: 'activitypub.outbox',
+          op: 'activitypub.outbox',
           forceTransaction: true,
         }).end();
         Sentry.captureException(new Error('worker Sentry runtime test'));
         if (!(await Sentry.flush(1_000))) throw new Error('Worker Sentry did not flush');
 
         const event = events[0];
-        const span = spans.find(({ name }) => name === 'decision-provider-test');
+        const span = spans.find(({ name }) => name === 'smart-filter.decision');
+        const hasOutboxSpan = spans.some(({ name }) => name === 'activitypub.outbox');
         await Sentry.close(0);
-        console.log(JSON.stringify({ event, span }));
+        console.log(JSON.stringify({ event, span, hasOutboxSpan }));
       `,
     ],
     {
@@ -110,14 +116,16 @@ test('exports manual spans and errors with Worker runtime metadata', () => {
   );
 
   assert.equal(result.status, 0, result.stderr);
-  const { event, span } = JSON.parse(result.stdout.trim()) as {
+  const { event, span, hasOutboxSpan } = JSON.parse(result.stdout.trim()) as {
     event?: { environment?: string; release?: string; tags?: Record<string, string> };
     span?: { name?: string; environment?: string; release?: string };
+    hasOutboxSpan?: boolean;
   };
   assert.equal(event?.environment, 'dev');
   assert.equal(event?.release, 'worker-test-release');
   assert.equal(event?.tags?.runtime, 'worker');
-  assert.equal(span?.name, 'decision-provider-test');
+  assert.equal(span?.name, 'smart-filter.decision');
   assert.equal(span?.environment, 'dev');
   assert.equal(span?.release, 'worker-test-release');
+  assert.equal(hasOutboxSpan, false);
 });

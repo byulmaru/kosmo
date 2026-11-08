@@ -132,7 +132,7 @@ history와 Worker runtime 경계가 소유한다. 이 Worker 경계는 Web BFF i
 
 Core의 공통 스마트 필터 Decision provider는 API와 Worker에서 같은 제한 telemetry를 기록한다. 직접 계측하는 값은 `runtime` (`api` 또는 `worker`), `success`, `timeout`, `rate_limited`, `http_error`, `network_error`, `invalid_response` 중 하나의 outcome, 제한된 provider/model 식별자와 숫자 HTTP status다. Worker는 스마트 필터의 수동 관측만 활성화하며, API의 기존 global Sentry 설정은 변경하지 않는다. Raw input, 요청·응답 body, 사용자 condition과 원본 error cause를 기록하지 않는다.
 
-Decision span은 request 정보 없이 별도 isolation context에서 생성·종료되어 자동 HTTP span hook이 원본 request를 붙이지 않는다. 각 Decision error event에서는 request, user, extra, 기타 context와 attachments를 제거하고 검증된 trace 식별자(`trace_id`, `span_id`), 고정 operation `ai.decision`과 `ok`·`internal_error` 중 하나의 status만 허용한다. 이 per-event 정제는 API의 기존 request 수집과 다른 runtime의 전역 Sentry event 정책을 바꾸지 않는다.
+Worker가 Sentry에 내보내는 root span은 이름이 `smart-filter.decision`인 Decision span만이며, `dev` 등 `prod` 이외 환경에서는 100%, `prod`에서는 10% 표본 기록한다. Fedify vendor span 등 다른 수동 root span은 Worker Sentry trace에서 제외한다. API의 기존 span sampling과 Fedify consumer의 LogTape/Sentry Logs 정책은 바뀌지 않는다. Decision span은 request 정보 없이 별도 isolation context에서 생성·종료되어 자동 HTTP span hook이 원본 request를 붙이지 않는다. 각 Decision error event에서는 request, user, extra, 기타 context와 attachments를 제거하고 검증된 trace 식별자(`trace_id`, `span_id`), 고정 operation `ai.decision`과 `ok`·`internal_error` 중 하나의 status만 허용한다. 이 per-event 정제는 API의 기존 request 수집과 다른 runtime의 전역 Sentry event 정책을 바꾸지 않는다.
 
 이 telemetry는 기존 5초 provider timeout, fail-open 결과와 Redis cache 동작을 변경하지 않는다. Worker 전체 오류, 일반 DB 작업, HTTP 요청이나 Temporal Activity 실패를 자동 수집하지 않으며, accepted Activity terminal failure와 retry/restart 이력은 Temporal history에 남는다.
 

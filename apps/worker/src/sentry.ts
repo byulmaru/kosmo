@@ -13,6 +13,7 @@ if (dsn && environment && release) {
     initialScope: { tags: { runtime: 'worker' } },
     release,
     sendDefaultPii: false,
-    tracesSampleRate: environment === 'prod' ? 0.1 : 1,
+    tracesSampler: ({ name, inheritOrSampleWith }) =>
+      name === 'smart-filter.decision' ? inheritOrSampleWith(environment === 'prod' ? 0.1 : 1) : 0,
   });
 }
