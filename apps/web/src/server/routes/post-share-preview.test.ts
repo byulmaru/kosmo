@@ -71,17 +71,41 @@ test.each([
 });
 
 test.each([
-  ['https://media.example/image.png', 'https://media.example/image.png'],
-  ['http://localhost/image.png', 'http://localhost/image.png'],
-  ['http://192.168.0.1/image.png', 'http://192.168.0.1/image.png'],
-  ['https://media.example/image.png#fragment', 'https://media.example/image.png'],
-  ['https://media.example/image.png?a=1&b=2', 'https://media.example/image.png?a=1&amp;b=2'],
-  ['not a URL', 'https://kos.moe/og-default.png'],
-  ['data:image/png;base64,AAAA', 'https://kos.moe/og-default.png'],
-  ['file:///image.png', 'https://kos.moe/og-default.png'],
-  ['https://user@media.example/image.png', 'https://kos.moe/og-default.png'],
-  ['https://:secret@media.example/image.png', 'https://kos.moe/og-default.png'],
-])('projects attachment URL %s as %s', async (url, expectedImage) => {
+  [
+    'https://media.example/image.png',
+    'https://media.example/image.png',
+    'https://media.example/image.png',
+  ],
+  ['http://localhost/image.png', 'http://localhost/image.png', 'http://localhost/image.png'],
+  ['http://192.168.0.1/image.png', 'http://192.168.0.1/image.png', 'http://192.168.0.1/image.png'],
+  [
+    'https://media.example/image.png#fragment',
+    'https://media.example/image.png',
+    'https://media.example/image.png',
+  ],
+  [
+    'https://media.example/image.png?a=1&b=2',
+    'https://media.example/image.png?a=1&amp;b=2',
+    'https://media.example/image.png?a=1&b=2',
+  ],
+  ['not a URL', 'https://kos.moe/og-default.png', 'https://kos.moe/og-default.png'],
+  [
+    'data:image/png;base64,AAAA',
+    'https://kos.moe/og-default.png',
+    'https://kos.moe/og-default.png',
+  ],
+  ['file:///image.png', 'https://kos.moe/og-default.png', 'https://kos.moe/og-default.png'],
+  [
+    'https://user@media.example/image.png',
+    'https://kos.moe/og-default.png',
+    'https://kos.moe/og-default.png',
+  ],
+  [
+    'https://:secret@media.example/image.png',
+    'https://kos.moe/og-default.png',
+    'https://kos.moe/og-default.png',
+  ],
+])('projects attachment URL %s', async (url, expectedHtmlImage, expectedJsonLdImage) => {
   vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
   vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
   const rows = [
@@ -117,9 +141,9 @@ test.each([
   const html = await response.text();
   expect(response.status).toBe(200);
   expect(html).toContain('public body');
-  expect(html).toContain(`property="og:image" content="${expectedImage}"`);
-  expect(html).toContain(`name="twitter:image" content="${expectedImage}"`);
-  if (expectedImage === 'https://kos.moe/og-default.png') {
+  expect(html).toContain(`property="og:image" content="${expectedHtmlImage}"`);
+  expect(html).toContain(`name="twitter:image" content="${expectedHtmlImage}"`);
+  if (expectedHtmlImage === 'https://kos.moe/og-default.png') {
     expect(html).not.toContain('attachment alt');
     expect(html).not.toContain(url);
   } else {
@@ -127,7 +151,7 @@ test.each([
     expect(html).not.toContain('#fragment');
   }
   expect(parseJsonLd(html)['@graph']).toEqual([
-    { '@type': 'ImageObject', contentUrl: expectedImage },
+    { '@type': 'ImageObject', contentUrl: expectedJsonLdImage },
   ]);
 });
 

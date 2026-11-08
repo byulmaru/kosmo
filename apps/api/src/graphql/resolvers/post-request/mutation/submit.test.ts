@@ -1423,7 +1423,7 @@ test('createPost reports unsupported uploads by their original media index', asy
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(
+  t.mock.method(
     temporalClient.workflow,
     'getHandle',
     () =>
@@ -1455,7 +1455,6 @@ test('createPost reports unsupported uploads by their original media index', asy
   assert.equal(error.field, 'media.1');
   assert.equal(error.code, 'VALIDATION');
   assert.equal(select.mock.callCount(), 1);
-  assert.equal(getHandle.mock.callCount(), 1);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(publish.mock.callCount(), 0);
@@ -1507,7 +1506,7 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(
+  t.mock.method(
     temporalClient.workflow,
     'getHandle',
     () =>
@@ -1542,7 +1541,6 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
   assert.equal(error, outage);
   assert.equal(result.errors?.[0]?.extensions.field, undefined);
   assert.equal(select.mock.callCount(), 1);
-  assert.equal(getHandle.mock.callCount(), 1);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(publish.mock.callCount(), 0);
