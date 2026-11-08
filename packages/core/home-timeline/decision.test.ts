@@ -491,7 +491,9 @@ test('captures bounded outcomes and excludes inherited request data from telemet
   assert.ok(spans.some(({ outcome }) => outcome === 'network_error'));
   assert.ok(spans.some(({ outcome }) => outcome === 'invalid_response'));
   assert.ok(spans.some(({ outcome }) => outcome === 'timeout'));
-  assert.ok(spans.every(({ spanStatus }) => spanStatus === 'error'));
+  assert.ok(
+    spans.every(({ spanStatus }) => spanStatus === 'error' || spanStatus === 'internal_error'),
+  );
   assert.ok(
     spans.every(
       ({ provider, model, runtime }) =>

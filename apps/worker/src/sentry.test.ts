@@ -64,8 +64,20 @@ test('exports manual spans and errors with Worker runtime metadata', () => {
           for (const [headers, payload] of envelope[1]) {
             if (headers.type === 'event') {
               events.push(payload);
+            } else if (headers.type === 'transaction') {
+              spans.push({
+                name: payload.transaction,
+                environment: payload.environment,
+                release: payload.release,
+              });
             } else if (headers.type === 'span') {
-              spans.push(...payload.items);
+              spans.push(
+                ...payload.items.map(({ name, attributes }) => ({
+                  name,
+                  environment: attributes?.['sentry.environment']?.value,
+                  release: attributes?.['sentry.release']?.value,
+                })),
+              );
             }
           }
           return { statusCode: 200 };
@@ -100,15 +112,12 @@ test('exports manual spans and errors with Worker runtime metadata', () => {
   assert.equal(result.status, 0, result.stderr);
   const { event, span } = JSON.parse(result.stdout.trim()) as {
     event?: { environment?: string; release?: string; tags?: Record<string, string> };
-    span?: {
-      name?: string;
-      attributes?: Record<string, { value?: unknown }>;
-    };
+    span?: { name?: string; environment?: string; release?: string };
   };
   assert.equal(event?.environment, 'dev');
   assert.equal(event?.release, 'worker-test-release');
   assert.equal(event?.tags?.runtime, 'worker');
   assert.equal(span?.name, 'decision-provider-test');
-  assert.equal(span?.attributes?.['sentry.environment']?.value, 'dev');
-  assert.equal(span?.attributes?.['sentry.release']?.value, 'worker-test-release');
+  assert.equal(span?.environment, 'dev');
+  assert.equal(span?.release, 'worker-test-release');
 });
