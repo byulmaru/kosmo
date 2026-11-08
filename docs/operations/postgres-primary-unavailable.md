@@ -2,16 +2,15 @@
 
 Owner: Platform/SRE.
 
-`KosmoDatabasePrimaryUnavailable` fires when Prometheus has no observed primary in `kosmo-prod/kosmo-postgres` with `cnpg_pg_replication_in_recovery = 0`, a healthy CNPG collector and scrape, and a replication sample less than 60 seconds old for 2 minutes. The CNPG metrics scrape every 30 seconds, so the freshness window allows two scrape intervals.
+The `KosmoDatabasePrimaryUnavailable` Grafana-managed rule is provisioned from the app-owned `kosmo-database-alerts` ConfigMap. It queries the Prometheus datasource UID `prometheus`, in Grafana organization `1` and folder `KOSMO`, with rule UID `kosmo-db-primary`. The group evaluates every 30 seconds. A healthy result is `0`; it becomes `1` when Prometheus has no fresh sample showing a primary in `kosmo-prod/kosmo-postgres` with `cnpg_pg_replication_in_recovery = 0`, a healthy CNPG collector and scrape, and a sample less than 60 seconds old. It fires after 2 minutes. The CNPG metrics scrape every 30 seconds, so the freshness window allows two scrape intervals. Grafana query errors and no-data results are also configured to alert after 2 minutes.
 
-This is a primary observability signal. Missing or stale metrics can indicate a scrape or exporter problem as well as a database primary problem. The rule does not verify application database transactions and does not detect a Pooler-only failure. If Prometheus itself is unavailable, this rule cannot evaluate or notify; check Prometheus and Alertmanager availability separately because in-cluster alerts may not cover a total outage.
+This is a primary observability signal. Missing or stale metrics can indicate a scrape or exporter problem as well as a database primary problem, and a query error can indicate a datasource or expression problem. The rule does not verify application database transactions and does not detect a Pooler-only failure. If Grafana itself is unavailable, this rule cannot evaluate or notify.
 
-The alert uses the existing `#monitoring` route. For shared receiver and delivery troubleshooting, see the [infrastructure Alertmanager Slack operations](https://github.com/byulmaru/kubernetes/blob/main/docs/operations.md#alertmanager-slack-notifications).
+The rule sends to the platform-provisioned Grafana contact point `platform-slack-monitoring`, whose configuration and delivery troubleshooting are platform-owned. See the infrastructure [Grafana Alerting provisioning operations](https://github.com/byulmaru/kubernetes/blob/main/docs/operations.md#grafana-alerting-provisioning). The app-owned ConfigMap is read by the Grafana provisioning sidecar at Pod startup; deploy the ConfigMap before the Grafana platform rollout. Later ConfigMap edits require a Grafana restart to load and evaluate the updated rule.
 
-Check the alert and its source metrics in the [Prometheus UI](https://prometheus-aws.tail1fdd55.ts.net):
+Inspect the `kosmo-db-primary` rule in the `KOSMO` folder using [Grafana](https://grafana-aws.tail1fdd55.ts.net/), including its state and query evaluation. To check the source metrics, use the [Prometheus UI](https://prometheus-aws.tail1fdd55.ts.net):
 
 ```promql
-ALERTS{alertname="KosmoDatabasePrimaryUnavailable"}
 cnpg_pg_replication_in_recovery{namespace="kosmo-prod", cnpg_cluster="kosmo-postgres", cnpg_role="primary"}
 cnpg_collector_up{namespace="kosmo-prod", cnpg_cluster="kosmo-postgres"}
 up{namespace="kosmo-prod", cnpg_cluster="kosmo-postgres"}
