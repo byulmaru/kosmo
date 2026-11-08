@@ -1213,7 +1213,7 @@ describe('PostComposer media submission', () => {
     ]);
   });
 
-  it('omits media publication rights from create input when the checkbox is off', async () => {
+  it('omits media publication rights from create input when the license switch is off', async () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {

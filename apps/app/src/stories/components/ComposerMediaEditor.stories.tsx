@@ -442,13 +442,13 @@ export const RightsInteractionContract: Story = {
     );
     await userEvent.click(canvas.getByRole('tab', { name: '이용조건' }));
 
-    const checkbox = canvas.getByRole('checkbox', { name: '내가 저작권을 보유한 이미지' });
-    expect(checkbox).not.toBeChecked();
+    const rightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(rightsSwitch).not.toBeChecked();
     expect(canvas.queryByRole('radiogroup', { name: '개인적 이용' })).toBeNull();
-    await userEvent.click(checkbox);
+    await userEvent.click(rightsSwitch);
 
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', deniedRights);
-    expect(canvas.getByText('게시 후 이용조건을 변경할 수 없습니다.')).toBeVisible();
+    expect(canvas.getByText('저작권을 보유한 이미지에만 설정하세요.')).toBeVisible();
     expect(canvas.getByRole('link', { name: '이용조건 보기' }).getAttribute('href')).toContain(
       '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY',
     );
@@ -490,11 +490,9 @@ export const RightsInteractionContract: Story = {
     );
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
-    const secondImageCheckbox = canvas.getByRole('checkbox', {
-      name: '내가 저작권을 보유한 이미지',
-    });
-    expect(secondImageCheckbox).not.toBeChecked();
-    await userEvent.click(secondImageCheckbox);
+    const secondImageRightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(secondImageRightsSwitch).not.toBeChecked();
+    await userEvent.click(secondImageRightsSwitch);
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-2', deniedRights);
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
     await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
@@ -508,11 +506,11 @@ export const RightsInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: '이용조건' }));
     expect(personal().getByRole('radio', { name: '수정 가능' })).toBeChecked();
 
-    await userEvent.click(canvas.getByRole('checkbox', { name: '내가 저작권을 보유한 이미지' }));
+    await userEvent.click(canvas.getByRole('switch', { name: '라이센스 설정' }));
     expect(canvas.queryByRole('radiogroup', { name: '개인적 이용' })).toBeNull();
     expect(canvas.queryByRole('link', { name: '이용조건 보기' })).toBeNull();
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', undefined);
-    await userEvent.click(canvas.getByRole('checkbox', { name: '내가 저작권을 보유한 이미지' }));
+    await userEvent.click(canvas.getByRole('switch', { name: '라이센스 설정' }));
     expect(personal().getByRole('radio', { name: '사용 금지' })).toBeChecked();
   },
   render: (args) => <WebEditorStory {...args} />,
@@ -530,13 +528,28 @@ export const MobileRightsInteractionContract: Story = {
     };
 
     await userEvent.click(canvas.getByRole('button', { name: '이용조건' }));
-    const checkbox = canvas.getByRole('checkbox', { name: '내가 저작권을 보유한 이미지' });
-    expect(checkbox).not.toBeChecked();
-    await userEvent.click(checkbox);
+    const rightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(rightsSwitch).not.toBeChecked();
+    await userEvent.click(rightsSwitch);
 
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', deniedRights);
     expect(canvas.getByRole('radiogroup', { name: '개인적 이용' })).toBeVisible();
     expect(canvas.getByRole('link', { name: '이용조건 보기' })).toBeVisible();
+
+    const rightsRows = ['개인적 이용', '비상업적 이용', '상업적 이용'].map((name) =>
+      within(canvas.getByRole('radiogroup', { name })).getAllByRole('radio'),
+    );
+    expect(rightsRows.map((row) => row.length)).toEqual([3, 3, 3]);
+    const rowRects = rightsRows.map((row) => row.map((option) => option.getBoundingClientRect()));
+    for (let column = 0; column < 3; column += 1) {
+      const lefts = rowRects.map((row) => row[column]!.left);
+      expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThan(1);
+    }
+    for (const row of rowRects) {
+      const tops = row.map(({ top }) => top);
+      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
+    }
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
   },
 };
 

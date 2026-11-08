@@ -26,7 +26,6 @@ import {
 } from 'react-native';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { IconButton } from '@/components/ui/IconButton';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { Tab, TabList } from '@/components/ui/Tabs';
@@ -84,10 +83,14 @@ const mediaPublicationRightOptions = [
   { label: MEDIA_USE_PERMISSION_LABELS[MediaUsePermission.EDIT], value: MediaUsePermission.EDIT },
 ] as const;
 const mediaPublicationRightPurposes = [
-  { label: '개인적 이용', scope: 'personal' },
-  { label: '비상업적 이용', scope: 'noncommercial' },
-  { label: '상업적 이용', scope: 'commercial' },
-] as const satisfies readonly { label: string; scope: keyof MediaPublicationRights }[];
+  { label: '개인적 이용', rowLabel: '개인', scope: 'personal' },
+  { label: '비상업적 이용', rowLabel: '비상업', scope: 'noncommercial' },
+  { label: '상업적 이용', rowLabel: '상업', scope: 'commercial' },
+] as const satisfies readonly {
+  label: string;
+  rowLabel: string;
+  scope: keyof MediaPublicationRights;
+}[];
 const composerFieldFocusStyle = {
   borderWidth: borderWidths[1],
   outlineWidth: 0,
@@ -789,15 +792,15 @@ function RightsToolContent({
       >
         <View style={styles.sensitiveCopy}>
           <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
-            내가 저작권을 보유한 이미지
+            라이센스 설정
           </Text>
         </View>
-        <Checkbox
-          accessibilityLabel="내가 저작권을 보유한 이미지"
-          checked={rights !== undefined}
-          onCheckedChange={(checked) =>
-            onRightsChange(checked ? { ...defaultMediaPublicationRights } : undefined)
+        <Switch
+          accessibilityLabel="라이센스 설정"
+          onValueChange={(enabled) =>
+            onRightsChange(enabled ? { ...defaultMediaPublicationRights } : undefined)
           }
+          value={rights !== undefined}
         />
       </View>
       <View style={styles.rightsNotice}>
@@ -805,16 +808,35 @@ function RightsToolContent({
           <InfoIcon color={theme.foregroundSecondary} size={iconSizes[16]} />
         </View>
         <Text style={[styles.rightsNoticeText, { color: theme.foregroundSecondary }]}>
-          게시 후 이용조건을 변경할 수 없습니다.
+          저작권을 보유한 이미지에만 설정하세요.
         </Text>
       </View>
       {rights ? (
         <>
-          <View style={styles.rightsGroups}>
-            {mediaPublicationRightPurposes.map(({ label, scope }) => (
-              <View key={scope} style={styles.rightsGroup}>
-                <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
-                  {label}
+          <View style={styles.rightsMatrix}>
+            <View style={styles.rightsMatrixHeader}>
+              <View style={styles.rightsRowLabelColumn} />
+              <View style={styles.rightsMatrixOptions}>
+                {mediaPublicationRightOptions.map((option) => (
+                  <Text
+                    key={option.value}
+                    style={[styles.rightsColumnHeader, { color: theme.foregroundSecondary }]}
+                  >
+                    {option.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
+            {mediaPublicationRightPurposes.map(({ label, rowLabel, scope }) => (
+              <View key={scope} style={styles.rightsMatrixRow}>
+                <Text
+                  style={[
+                    styles.rightsRowLabelColumn,
+                    styles.rightsRowLabel,
+                    { color: theme.foregroundPrimary },
+                  ]}
+                >
+                  {rowLabel}
                 </Text>
                 <RadioGroup
                   accessibilityLabel={label}
@@ -824,17 +846,21 @@ function RightsToolContent({
                       onRightsChange(nextRights);
                     }
                   }}
+                  style={styles.rightsMatrixOptions}
                   value={rights[scope]}
                 >
                   {mediaPublicationRightOptions.map((option) => {
                     const nextRights = { ...rights, [scope]: option.value };
+                    // The column headers provide visible labels; each radio keeps its canonical accessible label.
                     return (
                       <RadioOption
                         key={option.value}
+                        children={false}
                         option={{
                           ...option,
                           disabled: !isValidMediaPublicationRights(nextRights),
                         }}
+                        style={styles.rightsMatrixOption}
                       />
                     );
                   })}
@@ -994,9 +1020,21 @@ const styles = StyleSheet.create({
   sensitiveCopy: { flex: 1, gap: space[4] },
   sensitiveLabel: textStyles.uiLabelM,
   rightsNotice: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
-  rightsNoticeText: textStyles.uiCopyS,
-  rightsGroups: { gap: space[12] },
-  rightsGroup: { gap: space[4] },
+  rightsNoticeText: { flex: 1, ...textStyles.uiCopyS },
+  rightsMatrix: { gap: space[4] },
+  rightsMatrixHeader: { alignItems: 'center', flexDirection: 'row' },
+  rightsColumnHeader: { flex: 1, textAlign: 'center', ...textStyles.uiCopyS },
+  rightsMatrixRow: { alignItems: 'center', flexDirection: 'row' },
+  rightsRowLabelColumn: { width: space[48] },
+  rightsRowLabel: textStyles.uiLabelS,
+  rightsMatrixOptions: { flex: 1, flexDirection: 'row' },
+  rightsMatrixOption: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: space[48],
+    minWidth: space[48],
+    padding: 0,
+  },
   rightsTermsLink: {
     alignItems: 'center',
     alignSelf: 'flex-start',
