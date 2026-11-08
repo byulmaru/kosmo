@@ -1,12 +1,4 @@
-import {
-  AccountProfiles,
-  db,
-  first,
-  firstOrThrow,
-  Instances,
-  isUniqueViolation,
-  Profiles,
-} from '@kosmo/core/db';
+import { AccountProfiles, db, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
 import {
   AccountProfileRole,
   PostVisibility,
@@ -15,15 +7,11 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, ProfileLimitExceededError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { followProfile } from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { localProfileHandleSchema } from '@kosmo/core/validation';
 import { and, count, eq, inArray } from 'drizzle-orm';
-import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { Account } from '@/graphql/resolvers/account';
-import { visibleProfileWhere } from '@/profile/visibility';
-import { reportError } from '@/sentry';
 import { Profile } from '../ref';
 
 const MAX_ACCOUNT_OWNED_PROFILES = 10;
@@ -50,28 +38,10 @@ builder.mutationField('createProfile', (t) =>
       handle: t.input.string({ validate: localProfileHandleSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const autoFollowProfileId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
       const localInstance = await resolveConfiguredLocalInstance();
       const createProfile = () =>
         db.transaction(
           async (tx) => {
-            const priorVisibleProfile = autoFollowProfileId
-              ? await tx
-                  .select({ id: Profiles.id })
-                  .from(Profiles)
-                  .innerJoin(
-                    AccountProfiles,
-                    and(
-                      eq(AccountProfiles.profileId, Profiles.id),
-                      eq(AccountProfiles.accountId, ctx.session.accountId),
-                    ),
-                  )
-                  .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-                  .where(visibleProfileWhere({ profile: Profiles, instance: Instances }))
-                  .limit(1)
-                  .then(first)
-              : undefined;
-
             const [ownedProfileCount] = await tx
               .select({ value: count() })
               .from(AccountProfiles)
@@ -117,20 +87,17 @@ builder.mutationField('createProfile', (t) =>
               role: AccountProfileRole.OWNER,
             });
 
-            return {
-              isFirstProfile: autoFollowProfileId !== '' && priorVisibleProfile === undefined,
-              profile,
-            };
+            return profile;
           },
           { isolationLevel: 'serializable' },
         );
 
       let retriesRemaining = MAX_SERIALIZATION_RETRIES;
-      let created: Awaited<ReturnType<typeof createProfile>>;
+      let profile: Awaited<ReturnType<typeof createProfile>>;
 
       while (true) {
         try {
-          created = await createProfile();
+          profile = await createProfile();
           break;
         } catch (error) {
           if (!isSerializationFailure(error) || retriesRemaining === 0) {
@@ -141,23 +108,7 @@ builder.mutationField('createProfile', (t) =>
         }
       }
 
-      if (autoFollowProfileId && created.isFirstProfile) {
-        try {
-          await followProfile({
-            actorAccountId: ctx.session.accountId,
-            followerProfileId: created.profile.id,
-            followeeProfileId: autoFollowProfileId,
-          });
-        } catch (error) {
-          try {
-            reportError(error);
-          } catch {
-            // A reporting failure must not undo the committed Profile creation.
-          }
-        }
-      }
-
-      return { account: ctx.session.accountId, profile: created.profile };
+      return { account: ctx.session.accountId, profile };
     },
   }),
 );

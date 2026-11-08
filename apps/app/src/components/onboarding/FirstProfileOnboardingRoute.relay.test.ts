@@ -15,6 +15,7 @@ import type * as Feature from './FirstProfileOnboardingRoute';
 import type { FirstProfileStep } from './firstProfileOnboardingState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const initialAutoFollowProfileId = process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
 const require = createRequire(import.meta.url);
 const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -31,6 +32,7 @@ let flow: ReturnType<typeof Feature.useFirstProfileOnboarding>;
 let storedProfileId: string | null = null;
 let transferFailure = false;
 let transferCount = 0;
+let handledErrors: Array<{ error: unknown; context?: Record<string, string | number> }> = [];
 let pickerResult: object;
 let RelayActorProvider: typeof RelayActorProviderExport;
 let actorControls: ReturnType<typeof useRelayActorExport>;
@@ -65,6 +67,10 @@ mockModule('@/auth/selectedProfileStorage', {
     storedProfileId = null;
   },
 });
+mockModule('@/observability/sentry', {
+  captureHandledError: (error: unknown, context?: Record<string, string | number>) =>
+    handledErrors.push({ error, context }),
+});
 mockModule('@/auth/tokenStorage', {
   readSessionToken: async () => null,
   writeSessionToken: async () => undefined,
@@ -92,7 +98,6 @@ mockModule('@/components/media/imageUpload', {
 
 function Probe({ step }: { step: FirstProfileStep | 'complete' }) {
   flow = feature.useFirstProfileOnboarding();
-  actorControls = useRelayActor();
   return createElement('Draft', {
     handle: flow.draft.handle,
     profile: flow.createdProfile?.id,
@@ -101,12 +106,17 @@ function Probe({ step }: { step: FirstProfileStep | 'complete' }) {
     step,
   });
 }
+function ActorProbe() {
+  actorControls = useRelayActor();
+  return createElement('Actor', { selectedProfileId: actorControls.selectedProfileId });
+}
 function TestApp() {
   const [step, setStep] = useState<FirstProfileStep | 'complete'>('handle');
   navigate = setStep;
   return createElement(
     RelayActorProvider,
     { createEnvironment: environment },
+    createElement(ActorProbe),
     createElement(
       Suspense,
       { fallback: createElement('Loading') },
@@ -119,6 +129,10 @@ function renderTree() {
 }
 function displayedStep() {
   return renderer!.root.findAll((node) => String(node.type) === 'Draft')[0]!.props.step;
+}
+function displayedActor() {
+  return renderer!.root.findAll((node) => String(node.type) === 'Actor')[0]!.props
+    .selectedProfileId;
 }
 function environment(_token: string | null, actor: string | null) {
   return new Environment({
@@ -178,6 +192,20 @@ async function resolve(name: string, data: object | null, errors?: ReadonlyArray
   });
   return request!;
 }
+async function reject(name: string, error: Error) {
+  const index = requests.findIndex((request) => request.name === name);
+  assert.notEqual(
+    index,
+    -1,
+    `missing ${name}; pending ${requests.map((request) => request.name).join(', ')}`,
+  );
+  const [request] = requests.splice(index, 1);
+  await act(async () => request!.sink.error(error));
+  return request!;
+}
+function autoFollowRequests() {
+  return requests.filter((request) => request.name === 'FirstProfileOnboardingFollowMutation');
+}
 async function change(input: Partial<typeof flow.draft>) {
   await act(async () => flow.setDraft({ ...flow.draft, ...input }));
 }
@@ -223,9 +251,11 @@ before(async () => {
 beforeEach(async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   requests = [];
+  delete process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
   storedProfileId = null;
   transferFailure = false;
   transferCount = 0;
+  handledErrors = [];
   sessionValue = { accountId: 'account-1', sessionId: 'session-1', status: 'valid' };
   pickerResult = {
     canceled: false,
@@ -240,6 +270,11 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   await act(async () => mock.timers.tick(300_001));
   mock.timers.reset();
+  if (initialAutoFollowProfileId === undefined) {
+    delete process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
+  } else {
+    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = initialAutoFollowProfileId;
+  }
   renderer = null;
 });
 
@@ -313,6 +348,91 @@ describe('first profile step mutations', () => {
     assert.equal(requests.length, 0);
   });
 
+  it('starts the configured follow in the selected actor before immediate completion navigates', async () => {
+    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = ' target-profile ';
+    await change({ handle: 'spring' });
+    await finish();
+    await resolve('FirstProfileOnboardingCreateMutation', {
+      createProfile: { profile: profile() },
+    });
+    await selected();
+
+    assert.equal(displayedStep(), 'complete');
+    assert.equal(flow.result.kind, 'success');
+    assert.equal(storedProfileId, 'profile-1');
+    assert.equal(actorControls.selectedProfileId, 'profile-1');
+    assert.deepEqual(
+      autoFollowRequests().map(({ actor, variables }) => ({ actor, variables })),
+      [{ actor: 'profile-1', variables: { id: 'target-profile' } }],
+    );
+
+    await resolve('FirstProfileOnboardingFollowMutation', {
+      followProfile: {
+        result: { __typename: 'ProfileFollowRequest', id: 'request-1' },
+      },
+    });
+    assert.equal(actorControls.selectedProfileId, 'profile-1');
+    assert.equal(displayedStep(), 'complete');
+    assert.deepEqual(handledErrors, []);
+    assert.equal(requests.length, 0);
+  });
+
+  it('keeps actor B after a rerender and late actor A follow response', async () => {
+    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
+    await createFirst();
+    await selected();
+
+    assert.equal(displayedStep(), 'details');
+    assert.equal(autoFollowRequests().length, 1);
+    assert.deepEqual(
+      autoFollowRequests().map((request) => request.actor),
+      ['profile-1'],
+    );
+    await change({ bio: '다시 렌더링' });
+    assert.equal(autoFollowRequests().length, 1);
+    await act(async () => {
+      assert.equal(actorControls.resetCurrentActor('profile-2'), true);
+    });
+    assert.equal(displayedActor(), 'profile-2');
+    assert.deepEqual(
+      autoFollowRequests().map((request) => request.actor),
+      ['profile-1'],
+    );
+
+    const profileBQuery = await resolve(
+      'FirstProfileOnboardingQuery',
+      query('account-1', 'profile-2'),
+    );
+    assert.equal(profileBQuery.actor, 'profile-2');
+    assert.equal(displayedActor(), 'profile-2');
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
+
+    const profileAFollow = await resolve('FirstProfileOnboardingFollowMutation', {
+      followProfile: {
+        result: { __typename: 'ProfileFollow', id: 'follow-1' },
+      },
+    });
+    assert.equal(profileAFollow.actor, 'profile-1');
+    assert.equal(displayedActor(), 'profile-2');
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 1);
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'Draft').length, 0);
+    assert.equal(autoFollowRequests().length, 0);
+    assert.equal(requests.length, 0);
+  });
+
+  for (const targetProfileId of ['', '   ']) {
+    it(`keeps a blank auto-follow profile disabled (${JSON.stringify(targetProfileId)})`, async () => {
+      process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = targetProfileId;
+      await createFirst();
+      await selected();
+
+      assert.equal(displayedStep(), 'details');
+      assert.equal(autoFollowRequests().length, 0);
+      assert.equal(requests.length, 0);
+    });
+  }
+
   it('retains the handle after create failure and retries without a recovery query', async () => {
     await change({ handle: 'spring' });
     await next();
@@ -348,6 +468,7 @@ describe('first profile step mutations', () => {
   });
 
   it('retains the created identity on selection failure and retries selection without recreating', async () => {
+    process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
     await createFirst();
     await resolve('FirstProfileOnboardingSelectMutation', null, [
       { message: 'selection unavailable' },
@@ -355,6 +476,7 @@ describe('first profile step mutations', () => {
     assert.equal(displayedStep(), 'handle');
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(flow.result.kind, 'error');
+    assert.equal(autoFollowRequests().length, 0);
     await next();
     assert.deepEqual(
       requests.map((request) => request.name),
@@ -363,7 +485,41 @@ describe('first profile step mutations', () => {
     await selected();
     assert.equal(displayedStep(), 'details');
     assert.equal(storedProfileId, 'profile-1');
+    assert.deepEqual(
+      autoFollowRequests().map(({ actor, variables }) => ({ actor, variables })),
+      [{ actor: 'profile-1', variables: { id: 'target-profile' } }],
+    );
   });
+
+  for (const failureKind of ['graphql', 'network'] as const) {
+    it(`logs a ${failureKind} auto-follow failure and continues onboarding`, async () => {
+      process.env.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = 'target-profile';
+      await createFirst();
+      await selected();
+
+      assert.equal(displayedStep(), 'details');
+      assert.equal(flow.result.kind, 'idle');
+      assert.equal(actorControls.selectedProfileId, 'profile-1');
+      assert.equal(autoFollowRequests().length, 1);
+      if (failureKind === 'graphql') {
+        await resolve('FirstProfileOnboardingFollowMutation', null, [
+          { message: 'follow unavailable', path: ['followProfile'] },
+        ]);
+      } else {
+        await reject('FirstProfileOnboardingFollowMutation', new Error('network unavailable'));
+      }
+
+      assert.equal(handledErrors.length, 1);
+      assert.ok(handledErrors[0]!.error instanceof Error);
+      assert.equal(handledErrors[0]!.context?.operation, 'first_profile_auto_follow');
+      assert.equal(displayedStep(), 'details');
+      assert.equal(flow.result.kind, 'idle');
+      assert.equal(flow.busy, false);
+      assert.equal(actorControls.selectedProfileId, 'profile-1');
+      assert.equal(autoFollowRequests().length, 0);
+      assert.equal(requests.length, 0);
+    });
+  }
 
   it('saves only the current step and does not select the actor again for optional updates', async () => {
     await createFirst();

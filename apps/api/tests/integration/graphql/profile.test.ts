@@ -40,7 +40,6 @@ import type * as CoreServices from '@kosmo/core/services';
 import type { handleInboundCreate as HandleInboundCreate } from '../../../../../packages/fedify/src/inbound-create';
 import type { handleInboundDelete as HandleInboundDelete } from '../../../../../packages/fedify/src/inbound-delete';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
-import type { env as ApiEnv } from '../../../src/env';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -72,7 +71,6 @@ let PostMentions: typeof CoreDb.PostMentions;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
-let env: typeof ApiEnv;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let createPost: typeof CoreServices.createPost;
 let generateProfilePinKey: typeof CoreServices.generateProfilePinKey;
@@ -138,7 +136,6 @@ describe('GraphQL remote profile boundary', () => {
     localInstanceId = localInstance.id;
 
     ({ deriveContext } = await import('../../../src/context'));
-    ({ env } = await import('../../../src/env'));
     ({ yoga } = await import('../../../src/graphql'));
 
     const sentryTransport = Sentry.getClient()?.getTransport();
@@ -4041,208 +4038,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(followee.followersCount, 3);
   });
 
-  test('auto-follows the configured Profile only when the Account has no visible Profile', async (t) => {
-    const target = await createProfile({
-      handle: 'auto_follow_target',
-      instanceId: localInstanceId,
-    });
-    const previousTargetId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
-    env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = target.id;
-    t.after(() => {
-      env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = previousTargetId;
-    });
-
-    const createProfileMutation = `mutation CreateForFirstProfileAutoFollow($handle: String!) {
-      createProfile(input: { handle: $handle }) { profile { id } }
-    }`;
-    const create = (handle: string, token: string) =>
-      requestGraphQL<{ createProfile: { profile: { id: string } } }>(
-        createProfileMutation,
-        { handle },
-        token,
-      );
-
-    const firstAuth = await createAuthenticatedSession({ selectedProfile: false });
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, firstAuth.account.id));
-    const first = await create('auto_follow_first', firstAuth.token);
-    assertNoGraphQLErrors(first);
-    const firstProfileId = decodeGlobalId(first.data!.createProfile.profile.id).id;
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, firstProfileId),
-          eq(ProfileFollows.followeeProfileId, target.id),
-        ),
-      )
-      .limit(1)
-      .then(firstOrThrow);
-
-    const additional = await create('auto_follow_additional', firstAuth.token);
-    assertNoGraphQLErrors(additional);
-    const additionalProfileId = decodeGlobalId(additional.data!.createProfile.profile.id).id;
-    assert.equal(
-      await db
-        .select()
-        .from(ProfileFollows)
-        .where(eq(ProfileFollows.followerProfileId, additionalProfileId))
-        .then((rows) => rows.length),
-      0,
-    );
-
-    const memberAuth = await createAuthenticatedSession({
-      role: AccountProfileRole.MEMBER,
-      selectedProfile: false,
-    });
-    const memberProfileCreate = await create('auto_follow_member_account', memberAuth.token);
-    assertNoGraphQLErrors(memberProfileCreate);
-    const memberCreatedId = decodeGlobalId(memberProfileCreate.data!.createProfile.profile.id).id;
-    assert.equal(
-      await db
-        .select()
-        .from(ProfileFollows)
-        .where(eq(ProfileFollows.followerProfileId, memberCreatedId))
-        .then((rows) => rows.length),
-      0,
-    );
-
-    const hiddenMemberAuth = await createAuthenticatedSession({
-      role: AccountProfileRole.MEMBER,
-      selectedProfile: false,
-    });
-    await db
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(eq(Profiles.id, hiddenMemberAuth.profile.id));
-    const hiddenProfileCreate = await create('auto_follow_hidden_member', hiddenMemberAuth.token);
-    assertNoGraphQLErrors(hiddenProfileCreate);
-    const hiddenCreatedId = decodeGlobalId(hiddenProfileCreate.data!.createProfile.profile.id).id;
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, hiddenCreatedId),
-          eq(ProfileFollows.followeeProfileId, target.id),
-        ),
-      )
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(await countRows(ProfileFollows), 2);
-  });
-
-  test('preserves Profile creation and reports a failed first-profile Follow', async (t) => {
-    const target = await createProfile({
-      handle: 'auto_follow_failure_target',
-      instanceId: localInstanceId,
-    });
-    const auth = await createAuthenticatedSession({ selectedProfile: false });
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
-    const previousTargetId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
-    env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = target.id;
-    t.after(() => {
-      env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = previousTargetId;
-    });
-
-    const followError = new Error('Temporal unavailable');
-    const executeUpdateWithStart = t.mock.method(
-      temporalClient.workflow,
-      'executeUpdateWithStart',
-      async () => {
-        throw followError;
-      },
-    );
-    const capturedErrors: unknown[] = [];
-
-    await Sentry.withScope(async (scope) => {
-      scope.addEventProcessor((event, hint) => {
-        capturedErrors.push(hint.originalException);
-        return event;
-      });
-
-      const result = await requestGraphQL<{ createProfile: { profile: { id: string } } }>(
-        `mutation CreateProfileAfterFollowFailure {
-          createProfile(input: { handle: "auto_follow_after_failure" }) { profile { id } }
-        }`,
-        {},
-        auth.token,
-      );
-
-      assertNoGraphQLErrors(result);
-      const profileId = decodeGlobalId(result.data!.createProfile.profile.id).id;
-      await db
-        .select({ id: Profiles.id })
-        .from(Profiles)
-        .where(eq(Profiles.id, profileId))
-        .then(firstOrThrow);
-      assert.equal(
-        await db
-          .select()
-          .from(AccountProfiles)
-          .where(
-            and(
-              eq(AccountProfiles.accountId, auth.account.id),
-              eq(AccountProfiles.profileId, profileId),
-            ),
-          )
-          .then((rows) => rows.length),
-        1,
-      );
-    });
-
-    assert.equal(await Sentry.flush(1_000), true);
-    assert.equal(executeUpdateWithStart.mock.calls.length, 1);
-    assert.deepEqual(capturedErrors, [followError]);
-    assert.equal(await countRows(ProfileFollows), 0);
-  });
-
-  test('auto-follows only one concurrent first Profile creation', async (t) => {
-    const target = await createProfile({
-      handle: 'auto_follow_race_target',
-      instanceId: localInstanceId,
-    });
-    const auth = await createAuthenticatedSession({ selectedProfile: false });
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
-    const previousTargetId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
-    env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = target.id;
-    t.after(() => {
-      env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = previousTargetId;
-    });
-
-    const handles = ['auto_follow_race_first', 'auto_follow_race_second'];
-    const results = await Promise.all(
-      handles.map((handle) =>
-        requestGraphQL<{ createProfile: { profile: { id: string } } }>(
-          `mutation CreateConcurrentFirstProfile($handle: String!) {
-            createProfile(input: { handle: $handle }) { profile { id } }
-          }`,
-          { handle },
-          auth.token,
-        ),
-      ),
-    );
-    for (const result of results) {
-      assertNoGraphQLErrors(result);
-    }
-
-    const createdProfileIds = results.map(
-      (result) => decodeGlobalId(result.data!.createProfile.profile.id).id,
-    );
-    assert.equal(await countAccountProfileMemberships(auth.account.id), 2);
-    assert.equal(await countRows(ProfileFollows), 1);
-    const follow = await db.select().from(ProfileFollows).then(firstOrThrow);
-    assert.ok(createdProfileIds.includes(follow.followerProfileId));
-    assert.equal(follow.followeeProfileId, target.id);
-  });
-
-  test('starts first and additional profiles as Public while preserving saved defaults', async (t) => {
-    const previousTargetId = env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID;
-    env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = '';
-    t.after(() => {
-      env.KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID = previousTargetId;
-    });
-
+  test('starts first and additional profiles as Public while preserving saved defaults', async () => {
     const auth = await createAuthenticatedSession({ selectedProfile: false });
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
     assert.equal(await countAccountProfileMemberships(auth.account.id), 0);
@@ -4286,7 +4082,6 @@ describe('GraphQL remote profile boundary', () => {
       .where(eq(Profiles.id, firstProfileId!))
       .then(firstOrThrow);
     assert.equal(preserved.defaultPostVisibility, PostVisibility.FOLLOWERS);
-    assert.equal(await countRows(ProfileFollows), 0);
   });
 
   test('allows creating a local profile when only a remote profile has the same handle', async () => {

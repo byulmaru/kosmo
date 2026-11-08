@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const envSchema = z.object({
-  KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID: z.string().trim().default(''),
   KOSMO_LOCAL_TIMELINE_INSTANCE_IDS: z
     .string()
     .default('')

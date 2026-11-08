@@ -65,6 +65,7 @@ jobs:
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
+            EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID=${{ vars.EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID }}
             SENTRY_UPLOAD_REQUIRED=1
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN

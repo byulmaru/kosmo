@@ -48,10 +48,12 @@
 
 - 첫 핸들 단계에서 첫 Local Profile 하나와 Owner Membership을 준비하고, 생성한 Profile을 현재 활동
   Profile로 선택한다. 선택 단계의 진행·생략과 확인·완료는 추가 생성 action이 아니다.
-- Profile이 0개인 Account가 이 온보딩의 첫 핸들 단계에서 첫 Profile을 생성할 때, 서버 환경
-  `KOSMO_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID`에 설정된 원시 DB Profile UUID가 있으면 해당 Profile 하나를
-  자동 팔로우한다. 미설정 또는 공백 값이면 실행하지 않으며, 기존 팔로우 자격·승인·알림 정책을 따른다. 자동
-  팔로우가 실패하면 기록만 하고 Profile 생성과 온보딩 성공을 유지한다. 기존 Profile이나 추가 Profile 생성에는 적용하지 않는다.
+- 첫 핸들 단계에서 첫 Profile을 생성·선택한 뒤, 클라이언트 환경
+  `EXPO_PUBLIC_FIRST_PROFILE_AUTO_FOLLOW_PROFILE_ID`에 설정된 GraphQL Profile ID로 클라이언트가 일반 팔로우
+  action을 실행한다. 미설정 또는 공백 값이면 실행하지 않으며, 일반 팔로우의 기존 인증·자격·승인·알림 정책을
+  따른다. 팔로우가 실패하면 기록만 하고 Profile 생성과 온보딩 성공을 유지한다. 기존 Profile이나 추가 Profile
+  생성에는 적용하지 않는다. 설정 변경은 앱 빌드 또는 OTA 배포 시 반영되며, 앱 종료 뒤의 복구나 자동 재시도는
+  제공하지 않는다.
 - 프로필 입력 뒤 실제 저장 태그가 있으면 사람 찾기로 이어지고, 태그가 없으면 이를 생략한다. 사람 찾기의 `계속하기`로 홈에 진입한다. 별도의 프로필 완료 화면은 표시하지 않는다.
 - 진행 중인 같은 흐름에서는 생성한 Profile과 그 식별자를 유지한다. 생성 전의 Profile 0개 상태로
   되돌리거나 새 Profile을 추가로 만들지 않는다. 완료 후 입력 단계로 복귀하는 별도 동선은 제공하지 않는다.
