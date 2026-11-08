@@ -453,8 +453,14 @@ export const RightsInteractionContract: Story = {
       '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY',
     );
     expect(personal().getByRole('radio', { name: '사용 금지' })).toBeChecked();
-    expect(noncommercial().getByRole('radio', { name: '무수정 사용' })).toBeDisabled();
-    expect(commercial().getByRole('radio', { name: '수정 가능' })).toBeDisabled();
+    expect(noncommercial().getByRole('radio', { name: '무수정 사용' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(commercial().getByRole('radio', { name: '수정 가능' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
 
     await userEvent.click(personal().getByRole('radio', { name: '수정 가능' }));
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', {
@@ -467,9 +473,18 @@ export const RightsInteractionContract: Story = {
     expect(personal().getByRole('radio', { name: '수정 가능' })).toBeChecked();
     expect(noncommercial().getByRole('radio', { name: '무수정 사용' })).toBeChecked();
     expect(commercial().getByRole('radio', { name: '무수정 사용' })).toBeChecked();
-    expect(personal().getByRole('radio', { name: '사용 금지' })).toBeDisabled();
-    expect(noncommercial().getByRole('radio', { name: '사용 금지' })).toBeDisabled();
-    expect(commercial().getByRole('radio', { name: '수정 가능' })).toBeDisabled();
+    expect(personal().getByRole('radio', { name: '사용 금지' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(noncommercial().getByRole('radio', { name: '사용 금지' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(commercial().getByRole('radio', { name: '수정 가능' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(canvas.getByRole('link', { name: '이용조건 보기' }).getAttribute('href')).toContain(
       '/terms/image-use/v1?personal=EDIT&noncommercial=ORIGINAL&commercial=ORIGINAL',
     );
@@ -493,7 +508,7 @@ export const RightsInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: '이용조건' }));
     expect(personal().getByRole('radio', { name: '수정 가능' })).toBeChecked();
 
-    await userEvent.click(checkbox);
+    await userEvent.click(canvas.getByRole('checkbox', { name: '내가 저작권을 보유한 이미지' }));
     expect(canvas.queryByRole('radiogroup', { name: '개인적 이용' })).toBeNull();
     expect(canvas.queryByRole('link', { name: '이용조건 보기' })).toBeNull();
     expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', undefined);
