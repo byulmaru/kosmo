@@ -31,6 +31,8 @@ env:
   AWS_REGION: ap-northeast-2
   TF_IN_AUTOMATION: 'true'
   TF_PLAN_ARTIFACT: terraform-plan
+  TF_REGISTRY_CLIENT_TIMEOUT: '60'
+  TF_REGISTRY_DISCOVERY_RETRY: '3'
   TF_ROOT: apps/terraform
   TF_STATE_BUCKET: byulmaru-terraform-state
   TF_STATE_KEY: kosmo/terraform.tfstate
