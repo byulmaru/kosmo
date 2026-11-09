@@ -142,6 +142,7 @@ export type StoryPost = {
       version: 1;
     };
     id: string;
+    linkPreview: null;
     media: StoryMedia[] | null;
     mentionedProfiles: StoryProfile[];
   } | null;
@@ -208,6 +209,7 @@ export function post({
             bodyText,
             contentWarning,
             id: `content-${id}`,
+            linkPreview: null,
             media,
             mentionedProfiles: [],
           },
