@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
@@ -17,6 +17,18 @@ const require = createRequire(import.meta.url);
 
 const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const browserWindow = {
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  scrollTo: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = { addEventListener: () => ({ remove: () => undefined }) };
 let activeProfileId = 'profile-a';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
@@ -114,6 +126,7 @@ mockModule(require.resolve('lucide-react-native'), {
   UserRoundPlus: 'UserRoundPlus',
 });
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
@@ -187,6 +200,11 @@ before(async () => {
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
+});
+
 afterEach(async () => {
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -203,6 +221,11 @@ afterEach(async () => {
     Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
   } else {
     Reflect.deleteProperty(globalThis, 'window');
+  }
+  if (originalDocumentDescriptor) {
+    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
   }
 });
 
@@ -255,7 +278,7 @@ describe('Timeline refresh', () => {
       if (os === 'web') {
         Object.defineProperty(globalThis, 'window', {
           configurable: true,
-          value: { scrollTo: () => undefined },
+          value: { ...browserWindow, scrollTo: () => undefined },
         });
       }
 
