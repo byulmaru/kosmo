@@ -40,6 +40,7 @@ mockModule('react-relay', {
 mockModule('expo-router', {
   useLocalSearchParams: () => routeParams,
   useRouter: () => ({ back: () => undefined, canGoBack: () => false, replace: () => undefined }),
+  useIsFocused: () => true,
 });
 mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon', Menu: 'Menu' });
 mockModule(require.resolve('lucide-react-native'), {

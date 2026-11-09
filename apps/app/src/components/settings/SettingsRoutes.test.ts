@@ -49,6 +49,7 @@ mock.module('expo-router', {
         return effect();
       }, [effect, focused]);
     },
+    useIsFocused: () => routeFocused,
     usePathname: () => pathname,
     useRouter: () => ({
       dismissTo: (href: string) => dismissedToPaths.push(href),

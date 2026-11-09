@@ -28,12 +28,14 @@ const reactionProfileConnectionFragment = graphql`
 `;
 
 type ReactionProfileConnectionProps = {
+  active?: boolean;
   post: ReactionProfileConnection_post$key;
   presentation?: 'modal' | 'route';
   reactionType: string;
 };
 
 export function ReactionProfileConnection({
+  active = true,
   post,
   presentation,
   reactionType,
@@ -52,6 +54,7 @@ export function ReactionProfileConnection({
     itemCount: items.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
+    webDocumentActive: active,
   });
   usePaginationScrollRegistration(nativeScrollProps);
 

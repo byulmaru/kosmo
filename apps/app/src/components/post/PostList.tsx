@@ -202,6 +202,7 @@ const PostListHashtagFragment = graphql`
 `;
 
 type Props = {
+  active?: boolean;
   error?: boolean;
   header?: ReactElement | null;
   hashtag?: PostList_hashtag$key | null;
@@ -219,6 +220,7 @@ type Props = {
 };
 
 export const PostList = memo(function PostList({
+  active = true,
   error = false,
   header,
   hashtag: hashtagKey,
@@ -378,6 +380,7 @@ export const PostList = memo(function PostList({
         <PostMediaViewerHostProvider>
           <View style={listContainerStyle}>
             <InfiniteList
+              active={active}
               data={visibleEdges}
               empty={pinnedPosts.length === 0 ? emptyContent : null}
               hasNext={hasNext}

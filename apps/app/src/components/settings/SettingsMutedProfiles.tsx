@@ -46,19 +46,31 @@ const SettingsMutedProfilesFragment = graphql`
   }
 `;
 
-export function SettingsMutedProfiles({ onUnmuteSuccess }: { onUnmuteSuccess?: () => void }) {
+export function SettingsMutedProfiles({
+  active = true,
+  onUnmuteSuccess,
+}: {
+  active?: boolean;
+  onUnmuteSuccess?: () => void;
+}) {
   return (
     <RouteBoundary
       error={(retry) => <MutedProfileList state={{ onRetry: retry, status: 'error' }} />}
       loading={<MutedProfileList state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
-      <SettingsMutedProfilesContent onUnmuteSuccess={onUnmuteSuccess} />
+      <SettingsMutedProfilesContent active={active} onUnmuteSuccess={onUnmuteSuccess} />
     </RouteBoundary>
   );
 }
 
-function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: () => void }) {
+function SettingsMutedProfilesContent({
+  active,
+  onUnmuteSuccess,
+}: {
+  active: boolean;
+  onUnmuteSuccess?: () => void;
+}) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
@@ -79,6 +91,7 @@ function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: (
     itemCount: edges.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
+    webDocumentActive: active,
   });
   usePaginationScrollRegistration(nativeScrollProps);
   if (!profile || profile.instance?.kind !== 'LOCAL' || !profileMutes) {

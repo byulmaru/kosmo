@@ -12,6 +12,7 @@ import type { TabReselectionDestination } from '@/components/shell/ShellChromeCo
 import type { LoadNext } from './useAutomaticPagination';
 
 export type InfiniteListProps<Item> = Readonly<{
+  active?: boolean;
   data: ReadonlyArray<Item>;
   hasNext: boolean;
   isLoadingNext: boolean;
@@ -30,6 +31,7 @@ export type InfiniteListProps<Item> = Readonly<{
 }>;
 
 export function InfiniteList<Item>({
+  active = true,
   data,
   empty,
   hasNext,
@@ -57,6 +59,7 @@ export function InfiniteList<Item>({
     loadNext,
     nativePagination: hasNativeScrollParent ? 'metrics' : 'endReached',
     pageSize,
+    webDocumentActive: active,
   });
   usePaginationScrollRegistration(hasNativeScrollParent ? nativeScrollProps : null);
   const scrollToTop = useCallback(() => {

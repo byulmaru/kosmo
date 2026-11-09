@@ -104,6 +104,7 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 
 mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
+  useIsFocused: () => true,
 });
 mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), {

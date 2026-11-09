@@ -21,6 +21,7 @@ mockModule('expo-router', {
   usePathname: () => '/@writer/post',
   useRouter: () => router,
   useSegments: () => ['(tabs)', '(post)', '[profileHandle]', '[postId]'],
+  useIsFocused: () => true,
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },

@@ -112,6 +112,7 @@ export function PostDetailFrame({
 }
 
 export function PostDetailThread({
+  active = true,
   onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
@@ -125,6 +126,7 @@ export function PostDetailThread({
   preserveScrollPosition,
   replyProfile,
 }: {
+  active?: boolean;
   onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
@@ -140,6 +142,7 @@ export function PostDetailThread({
 }) {
   return (
     <PostDetailThreadContent
+      active={active}
       onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
@@ -157,6 +160,7 @@ export function PostDetailThread({
 }
 
 function PostDetailThreadContent({
+  active,
   onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
@@ -169,6 +173,7 @@ function PostDetailThreadContent({
   preserveScrollPosition,
   replyProfile,
 }: {
+  active: boolean;
   onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
@@ -205,6 +210,7 @@ function PostDetailThreadContent({
     itemCount: data.replyDescendants.edges.length,
     loadNext,
     pageSize: 20,
+    webDocumentActive: active,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
   const cancelInitialScroll = useCallback(() => {

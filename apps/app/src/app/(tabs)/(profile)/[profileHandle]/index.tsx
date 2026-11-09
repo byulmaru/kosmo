@@ -1,4 +1,4 @@
-import { useCurrentRouteInfo } from 'expo-router';
+import { useCurrentRouteInfo, useIsFocused } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -33,6 +33,7 @@ const ProfilePostListPageQuery = graphql`
 `;
 
 export default function ProfilePostListPage() {
+  const active = useIsFocused();
   // A Web Slot remount can leave child-local params empty when returning to a profile.
   const handle = normalizeProfileHandle(useCurrentRouteInfo()?.params.profileHandle);
   const { chrome, scrollKey } = useProfileRoute();
@@ -42,23 +43,36 @@ export default function ProfilePostListPage() {
     <View key={scrollKey} style={styles.root}>
       <RouteBoundary
         error={(retry) => (
-          <PostList error header={header} onRetry={retry} reselectDestination="profile" />
+          <PostList
+            active={active}
+            error
+            header={header}
+            onRetry={retry}
+            reselectDestination="profile"
+          />
         )}
         key={handle}
-        loading={<PostList header={header} loading reselectDestination="profile" />}
+        loading={<PostList active={active} header={header} loading reselectDestination="profile" />}
         title="게시글 목록을 불러오지 못했어요"
       >
-        <ProfilePostListPageContent handle={handle} header={header} scrollKey={scrollKey} />
+        <ProfilePostListPageContent
+          active={active}
+          handle={handle}
+          header={header}
+          scrollKey={scrollKey}
+        />
       </RouteBoundary>
     </View>
   );
 }
 
 function ProfilePostListPageContent({
+  active,
   handle,
   header,
   scrollKey,
 }: {
+  active: boolean;
   handle: string;
   header: ReactElement;
   scrollKey: string;
@@ -87,6 +101,7 @@ function ProfilePostListPageContent({
 
   return (
     <PostList
+      active={active}
       header={header}
       ignoreBlock={profileBlockId != null && acknowledgedProfileBlockId === profileBlockId}
       identityKey={`profile:${data.profileByHandle?.id ?? handle}`}

@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useErrorBoundary } from 'react-error-boundary';
@@ -56,6 +57,7 @@ const LocalFragment = graphql`
 `;
 
 export default function LocalTimelineScreen({ publicEntry = false }: { publicEntry?: boolean }) {
+  const active = useIsFocused();
   const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
@@ -130,6 +132,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           title="로컬 타임라인을 불러오지 못했어요"
         >
           <LocalContent
+            active={active}
             hasSuccessfulLocalRef={hasSuccessfulLocalRef}
             onRefresh={refresh}
             onRefreshComplete={completeRefresh}
@@ -171,12 +174,14 @@ function LocalHeader({ width }: { width: number }) {
 }
 
 function LocalContent({
+  active,
   hasSuccessfulLocalRef,
   onRefresh,
   onRefreshComplete,
   refreshVersion,
   refreshing,
 }: {
+  active: boolean;
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
   onRefresh: () => void;
   onRefreshComplete: () => void;
@@ -197,7 +202,7 @@ function LocalContent({
 
   return (
     <>
-      <LocalContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />
+      <LocalContentView active={active} data={data} onRefresh={onRefresh} refreshing={refreshing} />
       <RelayFailOpenBoundary
         fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
         reportUnexpectedErrors={false}
@@ -269,10 +274,12 @@ function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
 }
 
 function LocalContentView({
+  active,
   data,
   onRefresh,
   refreshing,
 }: {
+  active: boolean;
   data: LocalContent_query$data;
   onRefresh: () => void;
   refreshing: boolean;
@@ -308,6 +315,7 @@ function LocalContentView({
   return (
     <View style={styles.timeline}>
       <PostList
+        active={active}
         identityKey={`local:${selectedProfile?.id ?? 'guest'}`}
         local={data}
         onRefresh={onRefresh}

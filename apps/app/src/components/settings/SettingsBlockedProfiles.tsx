@@ -73,19 +73,31 @@ type BlockedProfilesState =
       paginationEndRef?: ReturnType<typeof useAutomaticPagination>['endRef'];
     };
 
-export function SettingsBlockedProfiles({ onUnblockSuccess }: { onUnblockSuccess?: () => void }) {
+export function SettingsBlockedProfiles({
+  active = true,
+  onUnblockSuccess,
+}: {
+  active?: boolean;
+  onUnblockSuccess?: () => void;
+}) {
   return (
     <RouteBoundary
       error={(retry) => <BlockedProfilesView state={{ onRetry: retry, status: 'error' }} />}
       loading={<BlockedProfilesView state={{ status: 'loading' }} />}
       title="차단한 프로필을 불러오지 못했어요"
     >
-      <SettingsBlockedProfilesContent onUnblockSuccess={onUnblockSuccess} />
+      <SettingsBlockedProfilesContent active={active} onUnblockSuccess={onUnblockSuccess} />
     </RouteBoundary>
   );
 }
 
-function SettingsBlockedProfilesContent({ onUnblockSuccess }: { onUnblockSuccess?: () => void }) {
+function SettingsBlockedProfilesContent({
+  active,
+  onUnblockSuccess,
+}: {
+  active: boolean;
+  onUnblockSuccess?: () => void;
+}) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsBlockedProfilesQuery>(
@@ -105,6 +117,7 @@ function SettingsBlockedProfilesContent({ onUnblockSuccess }: { onUnblockSuccess
     itemCount: edges.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
+    webDocumentActive: active,
   });
   usePaginationScrollRegistration(nativeScrollProps);
 

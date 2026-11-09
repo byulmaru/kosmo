@@ -31,6 +31,7 @@ const reactionPeopleScreenQuery = graphql`
 `;
 
 export type ReactionPeopleScreenProps = Readonly<{
+  active?: boolean;
   onTypeChange: (reactionType: string) => void;
   postId: string;
   reactionCounts: ReadonlyArray<ReactionSummaryEntry>;
@@ -38,6 +39,7 @@ export type ReactionPeopleScreenProps = Readonly<{
 }>;
 
 export function ReactionPeopleScreen({
+  active = true,
   onTypeChange,
   postId,
   reactionCounts,
@@ -63,7 +65,7 @@ export function ReactionPeopleScreen({
         loading={<ReactionProfileList loading presentation="route" reactionType={reactionType} />}
         title="반응한 프로필을 불러오지 못했어요"
       >
-        <ReactionPeopleContent postId={postId} reactionType={reactionType} />
+        <ReactionPeopleContent active={active} postId={postId} reactionType={reactionType} />
       </RouteBoundary>
     </View>
   );
@@ -126,7 +128,15 @@ export function ReactionPeopleRouteFrame({
   );
 }
 
-function ReactionPeopleContent({ postId, reactionType }: { postId: string; reactionType: string }) {
+function ReactionPeopleContent({
+  active,
+  postId,
+  reactionType,
+}: {
+  active: boolean;
+  postId: string;
+  reactionType: string;
+}) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ReactionPeopleScreenQuery>(
     reactionPeopleScreenQuery,
@@ -136,6 +146,7 @@ function ReactionPeopleContent({ postId, reactionType }: { postId: string; react
 
   return data.node?.__typename === 'Post' && data.node.reactionProfileConnection ? (
     <ReactionProfileConnection
+      active={active}
       post={data.node.reactionProfileConnection}
       presentation="route"
       reactionType={reactionType}

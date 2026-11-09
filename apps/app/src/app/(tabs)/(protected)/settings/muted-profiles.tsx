@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import type { Text } from 'react-native';
 
 export default function SettingsMutedProfilesRoute() {
+  const active = useIsFocused();
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
@@ -40,7 +41,7 @@ export default function SettingsMutedProfilesRoute() {
       <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="뮤트한 프로필" titleRef={headingRef} />
       </MobileWebRouteChrome>
-      <SettingsMutedProfiles onUnmuteSuccess={() => headingRef.current?.focus()} />
+      <SettingsMutedProfiles active={active} onUnmuteSuccess={() => headingRef.current?.focus()} />
     </PaginationScrollView>
   );
 }
