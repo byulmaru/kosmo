@@ -6,9 +6,9 @@ import {
   getLinkPreviewUrlHash,
   normalizeLinkPreviewUrl,
 } from '@kosmo/core/link-preview';
-import { getFirstPostContentLink, readPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { getPostContentLinkPreviewUrl } from '@kosmo/core/post-content';
 import { and, eq, sql } from 'drizzle-orm';
-import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
+import type { LinkPreviewCollectionInput } from '../workflows/link-preview';
 
 const refreshTtl = Temporal.Duration.from({ hours: 168 });
 const failureBackoff = Temporal.Duration.from({ minutes: 10 });
@@ -110,13 +110,8 @@ export const collectPostLinkPreviewActivity = async ({
     return;
   }
 
-  const document = readPostContentDocumentV1(post.document);
-  if (document === null || document.body.content.some((block) => block.type === 'media')) {
-    return;
-  }
-
-  const firstUrl = getFirstPostContentLink(document);
-  if (firstUrl !== null) {
-    await refreshLinkPreview(firstUrl);
+  const url = getPostContentLinkPreviewUrl(post.document);
+  if (url !== null) {
+    await refreshLinkPreview(url);
   }
 };

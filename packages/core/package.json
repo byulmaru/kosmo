@@ -27,7 +27,6 @@
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
     "./temporal/follow-command": "./temporal/follow-command.ts",
-    "./temporal/link-preview": "./temporal/link-preview.ts",
     "./temporal/local-post-create": "./temporal/local-post-create.ts",
     "./temporal/media-upload": "./temporal/media-upload.ts",
     "./temporal/operational-notification": "./temporal/operational-notification.ts",

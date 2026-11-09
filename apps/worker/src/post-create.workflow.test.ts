@@ -5,10 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { NotificationKind, PostVisibility } from '@kosmo/core/enums';
 import {
-  LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
-  linkPreviewCollectionWorkflow,
-} from '@kosmo/core/temporal/link-preview';
-import {
   POST_CREATE_WORKFLOW_TYPE,
   POST_CREATE_WORKFLOW_V2_TYPE,
   postCreateWorkflow,
@@ -18,8 +14,11 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { Worker } from '@temporalio/worker';
 import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
+import {
+  LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+  linkPreviewCollectionWorkflowDefinition,
+} from './workflows/link-preview';
 import type { LocalPostInput } from '@kosmo/core/services';
-import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
 import type {
   ActivityPubPostCreateInput,
   PostCreateActivityInput,
@@ -30,6 +29,7 @@ import type {
 import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities/notification';
 import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
+import type { LinkPreviewCollectionInput } from './workflows/link-preview';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
 type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
@@ -316,7 +316,7 @@ test(
           assert.equal(childWorkflowTypes.includes('postCreateEffectsWorkflow'), hasEffects);
 
           const collectionHandle = environment.client.workflow.getHandle(
-            linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId: item.postId }),
+            linkPreviewCollectionWorkflowDefinition.workflowIdFromArgs({ postId: item.postId }),
           );
           if (item.postId === blockedCollectionPostId) {
             assert.equal((await collectionHandle.describe()).status.name, 'RUNNING');
@@ -618,7 +618,9 @@ test(
     await worker.runUntil(async () => {
       try {
         const effectsWorkflowId = 'post-create-effects:' + postId;
-        const collectionWorkflowId = linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId });
+        const collectionWorkflowId = linkPreviewCollectionWorkflowDefinition.workflowIdFromArgs({
+          postId,
+        });
         const existingCollection = await environment.client.workflow.start(
           LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
           { args: [{ postId }], taskQueue, workflowId: collectionWorkflowId },
@@ -767,7 +769,7 @@ test(
       });
       assert.deepEqual(childWorkflowTypes, [LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE]);
       await environment.client.workflow
-        .getHandle(linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId }))
+        .getHandle(linkPreviewCollectionWorkflowDefinition.workflowIdFromArgs({ postId }))
         .result();
       assert.deepEqual(collectionCalls, [postId]);
       assert.deepEqual(effectCalls, []);

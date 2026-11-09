@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getFirstPostContentLink } from './index';
+import { getPostContentLinkPreviewUrl } from './index';
 import type { PostContentDocumentV1, PostContentLinkMark } from './index';
 
 const link = (href: string): PostContentLinkMark => ({
@@ -31,7 +31,7 @@ test('returns the first link mark in document order', () => {
     },
   };
 
-  assert.equal(getFirstPostContentLink(document), 'https://example.com/first');
+  assert.equal(getPostContentLinkPreviewUrl(document), 'https://example.com/first');
 });
 
 test('returns null when the document has no link marks', () => {
@@ -42,10 +42,32 @@ test('returns null when the document has no link marks', () => {
       type: 'doc',
       content: [
         { type: 'paragraph', content: [{ type: 'text', text: 'https://example.com/plain text' }] },
-        { type: 'media', attrs: { mediaId: 'media-id' } },
       ],
     },
   };
 
-  assert.equal(getFirstPostContentLink(document), null);
+  assert.equal(getPostContentLinkPreviewUrl(document), null);
+});
+
+test('returns null when the body contains media, even when it has a link', () => {
+  const document: PostContentDocumentV1 = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'link', marks: [link('https://example.com/first')] }],
+        },
+        { type: 'media', attrs: { mediaId: '019f6678-86fa-709b-984e-1520766b8447' } },
+      ],
+    },
+  };
+
+  assert.equal(getPostContentLinkPreviewUrl(document), null);
+});
+
+test('returns null for an invalid document', () => {
+  assert.equal(getPostContentLinkPreviewUrl({ version: 2 }), null);
 });

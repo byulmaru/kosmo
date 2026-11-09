@@ -16,11 +16,15 @@ import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/cli
 import { Worker } from '@temporalio/worker';
 import { eq, inArray } from 'drizzle-orm';
 import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
+import {
+  LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+  linkPreviewCollectionWorkflowDefinition,
+} from './workflows/link-preview';
 import type * as CoreDb from '@kosmo/core/db';
 import type { LinkPreview } from '@kosmo/core/link-preview';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
-import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
 import type * as WorkerActivities from './activities';
+import type { LinkPreviewCollectionInput } from './workflows/link-preview';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -182,8 +186,6 @@ test(
   'Link Preview Workflow uses the production registry and persists success, failure, and backoff state',
   { timeout: 120_000 },
   async (t) => {
-    const { LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE, linkPreviewCollectionWorkflow } =
-      await import('@kosmo/core/temporal/link-preview');
     const firstUrl = 'https://preview.example/article?source=post&keep=1#summary';
     const laterUrl = 'https://preview.example/later';
     const staleUrl = 'https://preview.example/stale';
@@ -210,7 +212,7 @@ test(
       environment.client.workflow.execute(LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE, {
         args: [input],
         taskQueue,
-        workflowId: linkPreviewCollectionWorkflow.workflowIdFromArgs(input),
+        workflowId: linkPreviewCollectionWorkflowDefinition.workflowIdFromArgs(input),
         workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
         workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
       });

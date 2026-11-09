@@ -222,6 +222,15 @@ export function getFirstPostContentLink(document: PostContentDocumentV1): string
   return null;
 }
 
+export function getPostContentLinkPreviewUrl(value: unknown): string | null {
+  const document = readPostContentDocumentV1(value);
+  if (document === null || document.body.content.some((block) => block.type === 'media')) {
+    return null;
+  }
+
+  return getFirstPostContentLink(document);
+}
+
 export function normalizePostContentHashtagId(value: unknown): string {
   const result = postContentHashtagIdSchema.safeParse(value);
   if (!result.success) {

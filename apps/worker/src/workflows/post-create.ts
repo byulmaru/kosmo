@@ -1,6 +1,5 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
-import { linkPreviewCollectionWorkflow } from '@kosmo/core/temporal/link-preview';
 import {
   ApplicationFailure,
   ChildWorkflowCancellationType,
@@ -14,6 +13,7 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import { postCreateEffectsDefinition } from './create';
+import { linkPreviewCollectionWorkflowDefinition } from './link-preview';
 import type {
   ActivityPubPostCreateInput,
   PostAnalyticsPlatform,
@@ -131,7 +131,7 @@ export const startPostCreateEffects = async (
 
 const startPostLinkPreviewCollection = async (postId: string): Promise<void> => {
   try {
-    await runChildWorkflow(linkPreviewCollectionWorkflow, {
+    await runChildWorkflow(linkPreviewCollectionWorkflowDefinition, {
       args: [{ postId }],
       cancellationType: ChildWorkflowCancellationType.ABANDON,
       mode: 'start',

@@ -1,6 +1,6 @@
 import { db, first, LinkPreviews } from '@kosmo/core/db';
 import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
-import { getFirstPostContentLink, readPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { getPostContentLinkPreviewUrl } from '@kosmo/core/post-content';
 import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { reportError } from '@/sentry';
@@ -21,12 +21,7 @@ builder.objectField(PostContent, 'linkPreview', (t) =>
     nullable: true,
     resolve: async (content) => {
       try {
-        const document = readPostContentDocumentV1(content.document);
-        if (document === null || document.body.content.some((block) => block.type === 'media')) {
-          return null;
-        }
-
-        const firstUrl = getFirstPostContentLink(document);
+        const firstUrl = getPostContentLinkPreviewUrl(content.document);
         if (firstUrl === null) {
           return null;
         }

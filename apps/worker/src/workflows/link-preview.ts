@@ -1,7 +1,13 @@
 import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
 import { z } from 'zod';
-import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
+import type { WorkflowDefinition } from '@kosmo/core/temporal/client';
 import type * as activities from '../activities';
+
+export const LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE = 'linkPreviewCollectionWorkflow';
+
+export type LinkPreviewCollectionInput = {
+  readonly postId: string;
+};
 
 const inputSchema = z.object({ postId: z.uuid() }) satisfies z.ZodType<LinkPreviewCollectionInput>;
 
@@ -23,3 +29,10 @@ export async function linkPreviewCollectionWorkflow(
 
   return collectPostLinkPreviewActivity(parsed.data);
 }
+
+export const linkPreviewCollectionWorkflowDefinition: WorkflowDefinition<
+  typeof linkPreviewCollectionWorkflow
+> = {
+  workflow: LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+  workflowIdFromArgs: ({ postId }) => `post-link-preview:${postId}`,
+};
