@@ -15,10 +15,79 @@ export interface PostContentLinkMark {
   };
 }
 
+export interface PostContentCustomEmoji {
+  readonly shortcode: string;
+  readonly url: string;
+}
+
+export type PostContentCustomEmojiMap = readonly PostContentCustomEmoji[];
+
+export type PostContentTextMark = PostContentLinkMark;
+
+export interface PostContentBodyAttrs {
+  readonly customEmojis?: PostContentCustomEmojiMap;
+  readonly sensitiveMedia?: boolean;
+}
+
+/* Kept in the native-safe schema module so callers do not need ProseMirror. */
+export function normalizePostContentCustomEmojiShortcode(value: unknown): string {
+  if (typeof value !== 'string' || !/^:[^:\s]+:$/u.test(value)) {
+    throw new TypeError('Custom Emoji shortcode must be colon-delimited');
+  }
+  return value;
+}
+
+export function normalizePostContentCustomEmojiUrl(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new TypeError('Custom Emoji URL must be a string');
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new TypeError('Custom Emoji URL must be an absolute URL');
+  }
+  if (url.protocol !== 'https:') {
+    throw new TypeError('Custom Emoji URL must use https');
+  }
+  if (url.username || url.password) {
+    throw new TypeError('Custom Emoji URL must not contain credentials');
+  }
+  return url.href;
+}
+
+export function normalizePostContentCustomEmoji(value: unknown): PostContentCustomEmoji {
+  if (!isRecord(value)) {
+    throw new TypeError('Custom Emoji must be an object');
+  }
+  return {
+    shortcode: normalizePostContentCustomEmojiShortcode(value.shortcode),
+    url: normalizePostContentCustomEmojiUrl(value.url),
+  };
+}
+
+export function normalizePostContentCustomEmojis(value: unknown): PostContentCustomEmojiMap {
+  if (!Array.isArray(value)) {
+    throw new TypeError('Custom Emojis must be an array');
+  }
+
+  const byShortcode = new Map<string, string>();
+  for (const item of value) {
+    const emoji = normalizePostContentCustomEmoji(item);
+    const previous = byShortcode.get(emoji.shortcode);
+    if (previous !== undefined && previous !== emoji.url) {
+      throw new TypeError('Custom Emoji shortcode mappings must be unambiguous');
+    }
+    byShortcode.set(emoji.shortcode, emoji.url);
+  }
+  return [...byShortcode].map(([shortcode, url]) => ({ shortcode, url }));
+}
+
 export interface PostContentTextNode {
   readonly type: 'text';
   readonly text: string;
-  readonly marks?: readonly PostContentLinkMark[];
+  readonly marks?: readonly PostContentTextMark[];
 }
 
 export interface PostContentHardBreakNode {
@@ -67,9 +136,7 @@ export type PostContentBlockNode = PostContentParagraphNode | PostContentMediaNo
 
 export interface PostContentBodyDocumentV1 {
   readonly type: 'doc';
-  readonly attrs?: {
-    readonly sensitiveMedia?: boolean;
-  };
+  readonly attrs?: PostContentBodyAttrs;
   readonly content: readonly PostContentBlockNode[];
 }
 
@@ -297,7 +364,60 @@ function readPostContentBodyDocumentV1(value: unknown): PostContentBodyDocumentV
     return null;
   }
 
+  const attrs = readPostContentBodyAttrs(value.attrs);
+  if (attrs !== undefined) {
+    return { ...value, attrs, content };
+  }
+  if (value.attrs !== undefined) {
+    const bodyWithoutAttrs = { ...value };
+    delete bodyWithoutAttrs.attrs;
+    return { ...bodyWithoutAttrs, content };
+  }
   return { ...value, content };
+}
+
+function readPostContentBodyAttrs(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const attrs = { ...value };
+  if ('customEmojis' in attrs) {
+    const customEmojis = readPostContentCustomEmojis(attrs.customEmojis);
+    if (customEmojis.length === 0) {
+      delete attrs.customEmojis;
+    } else {
+      attrs.customEmojis = customEmojis;
+    }
+  }
+  return Object.keys(attrs).length === 0 ? undefined : attrs;
+}
+
+function readPostContentCustomEmojis(value: unknown): PostContentCustomEmojiMap {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const byShortcode = new Map<string, string>();
+  const conflicted = new Set<string>();
+  for (const item of value) {
+    let emoji: PostContentCustomEmoji;
+    try {
+      emoji = normalizePostContentCustomEmoji(item);
+    } catch {
+      continue;
+    }
+    if (conflicted.has(emoji.shortcode)) {
+      continue;
+    }
+    const previous = byShortcode.get(emoji.shortcode);
+    if (previous !== undefined && previous !== emoji.url) {
+      byShortcode.delete(emoji.shortcode);
+      conflicted.add(emoji.shortcode);
+      continue;
+    }
+    byShortcode.set(emoji.shortcode, emoji.url);
+  }
+  return [...byShortcode].map(([shortcode, url]) => ({ shortcode, url }));
 }
 
 function readPostContentParagraphNode(value: unknown): PostContentParagraphNode | null {
@@ -383,11 +503,17 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
     return true;
   }
 
-  if (!Array.isArray(value.marks) || !value.marks.every(isLinkMark)) {
+  if (!Array.isArray(value.marks) || !value.marks.every(isPostContentTextMark)) {
     return false;
   }
-  const hrefs = new Set(value.marks.map((mark) => new URL(mark.attrs.href).href));
+  const hrefs = new Set(
+    value.marks.filter(isLinkMark).map((mark) => new URL(mark.attrs.href).href),
+  );
   return hrefs.size <= 1;
+}
+
+function isPostContentTextMark(value: unknown): value is PostContentTextMark {
+  return isLinkMark(value);
 }
 
 function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'] {
