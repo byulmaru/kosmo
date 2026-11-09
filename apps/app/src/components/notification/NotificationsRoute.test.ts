@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement, useCallback, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
+import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { useNotificationReadAll as ReadAllHook } from './NotificationReadAllContext';
 
@@ -11,17 +11,15 @@ import type { useNotificationReadAll as ReadAllHook } from './NotificationReadAl
 const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
-let state: 'loading' | 'error' | 'content' | 'profileRequired' = 'loading';
 let isFocused = false;
+let selectedProfileRequired = false;
+const failedQueryProfiles = new Set<string>();
 const unreadIds = ['loaded-unread'];
 const commits: Array<{ variables: { ids: string[] }; onError: (error: Error) => void }> = [];
 const queryFetchPolicies: Array<'store-and-network' | 'network-only'> = [];
 let renderer: ReactTestRenderer | undefined;
 let useNotificationReadAll: typeof ReadAllHook;
 const openNavigationDrawer = mock.fn();
-const resetRouteBoundary = () => {
-  state = 'content';
-};
 mockModule('react-native', {
   Platform: { OS: 'web' },
   StyleSheet: { create: (styles: object) => styles },
@@ -59,11 +57,16 @@ mockModule('react-relay', {
     );
     return [queryReference, loadQuery];
   },
-  usePreloadedQuery: (_query: unknown, queryReference: { profileId: string }) => ({
-    currentSession: {
-      selectedProfile: state === 'profileRequired' ? null : { id: queryReference.profileId },
-    },
-  }),
+  usePreloadedQuery: (_query: unknown, queryReference: { profileId: string }) => {
+    if (failedQueryProfiles.has(queryReference.profileId)) {
+      throw new Error('notifications query failed');
+    }
+    return {
+      currentSession: {
+        selectedProfile: selectedProfileRequired ? null : { id: queryReference.profileId },
+      },
+    };
+  },
   useMutation: () => {
     const [pending, setPending] = useState(false);
     return [
@@ -74,14 +77,6 @@ mockModule('react-relay', {
       pending,
     ];
   },
-});
-mockModule('@/components/RouteBoundary', {
-  RouteBoundary: ({
-    children,
-    loading,
-    error,
-  }: PropsWithChildren<{ loading: ReactNode; error: (reset: () => void) => ReactNode }>) =>
-    state === 'loading' ? loading : state === 'error' ? error(resetRouteBoundary) : children,
 });
 mockModule('@/components/notification/NotificationList', {
   NotificationList: ({ active = true, profile }: { active?: boolean; profile: { id: string } }) => {
@@ -121,6 +116,12 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/relay/RelayActorProvider', { useRelayActorLifecycleKey: () => 'actor-a' });
 mockModule('@/theme/ThemeProvider', { useTheme: () => ({ text: '#111' }) });
+mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
+  StateView: (props: object) => createElement('StateView', props),
+});
+mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
+  useUnexpectedErrorReporter: () => undefined,
+});
 
 let Screen: ComponentType;
 let Provider: ComponentType<PropsWithChildren>;
@@ -133,6 +134,8 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
   isFocused = false;
+  selectedProfileRequired = false;
+  failedQueryProfiles.clear();
   commits.length = 0;
   queryFetchPolicies.length = 0;
   openNavigationDrawer.mock.resetCalls();
@@ -142,89 +145,125 @@ const readAllButton = () =>
   renderer!.root
     .findAll((node) => (node.type as unknown) === 'Pressable')
     .find((node) => node.props.accessibilityLabel === '모두 읽음')!;
+const assertHeaderAndMenu = () => {
+  assert.equal(
+    renderer!.root
+      .findAll((node) => (node.type as unknown) === 'Text')
+      .filter((node) => node.props.accessibilityRole === 'header' && node.props.children === '알림')
+      .length,
+    1,
+  );
+  assert.equal(
+    renderer!.root
+      .findAll((node) => (node.type as unknown) === 'Pressable')
+      .filter((node) => node.props.accessibilityLabel === '메뉴 열기').length,
+    1,
+  );
+};
+const assertProfile = (profileId: string) => {
+  assert.ok(
+    renderer!.root.findAll(
+      (node) => (node.type as unknown) === 'Text' && node.props.children === profileId,
+    ).length,
+  );
+};
+const setFocused = async (focused: boolean) => {
+  isFocused = focused;
+  await act(async () => renderer!.update(tree()));
+};
 
-test('알림 route는 모든 목록 상태에서 헤더와 메뉴를 유지하고 로드된 unread만 읽음 처리한다', async () => {
-  isFocused = true;
-  state = 'loading';
+test('알림 route는 로딩 및 프로필 상태에서도 헤더를 유지하고 로드된 unread만 읽음 처리한다', async () => {
+  isFocused = false;
   await act(async () => {
     renderer = create(tree());
   });
-  for (const next of ['loading', 'error', 'profileRequired', 'content'] as const) {
-    state = next;
-    await act(async () => renderer!.update(tree()));
-    assert.equal(
-      renderer!.root
-        .findAll((node) => (node.type as unknown) === 'Text')
-        .filter(
-          (node) => node.props.accessibilityRole === 'header' && node.props.children === '알림',
-        ).length,
-      1,
-    );
-    const menus = renderer!.root
-      .findAll((node) => (node.type as unknown) === 'Pressable')
-      .filter((node) => node.props.accessibilityLabel === '메뉴 열기');
-    assert.equal(menus.length, 1);
-    await act(async () => menus[0]!.props.onPress());
-    assert.equal(readAllButton().props.disabled, next !== 'content');
-  }
+  assertHeaderAndMenu();
+  assert.ok(
+    renderer!.root.findAll(
+      (node) => (node.type as unknown) === 'Text' && node.props.children === 'loading',
+    ).length,
+  );
+  assert.equal(readAllButton().props.disabled, true);
+
+  await setFocused(true);
+  assertHeaderAndMenu();
+  assertProfile('profile-1');
+  assert.equal(readAllButton().props.disabled, false);
+  const menu = renderer!.root.findByProps({ accessibilityLabel: '메뉴 열기' });
+  await act(async () => menu.props.onPress());
   await act(async () => readAllButton().props.onPress());
   assert.deepEqual(
     commits.map((commit) => commit.variables),
     [{ ids: ['loaded-unread'] }],
   );
   assert.equal(readAllButton().props.disabled, true);
-  state = 'loading';
-  await act(async () => renderer!.update(tree()));
-  state = 'content';
-  await act(async () => renderer!.update(tree()));
+
+  selectedProfileRequired = true;
+  await setFocused(false);
+  await setFocused(true);
+  assertHeaderAndMenu();
+  assert.ok(
+    renderer!.root.findAll(
+      (node) => (node.type as unknown) === 'Text' && node.props.children === 'profileRequired',
+    ).length,
+  );
   assert.equal(readAllButton().props.disabled, true);
   assert.equal(commits.length, 1);
 });
 
-test('알림 route는 focus 진입 때 새 데이터를 불러오고 오류 재시도 뒤 목록을 복구한다', async () => {
-  state = 'content';
+test('알림 route는 실패 뒤 재진입과 명시적 재시도로 목록을 복구한다', async () => {
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
   isFocused = false;
-  await act(async () => {
-    renderer = create(tree());
-  });
-  assert.equal(queryFetchPolicies.length, 0);
+  try {
+    await act(async () => {
+      renderer = create(tree());
+    });
+    assert.equal(queryFetchPolicies.length, 0);
 
-  isFocused = true;
-  await act(async () => renderer!.update(tree()));
-  assert.deepEqual(queryFetchPolicies, ['store-and-network']);
-  assert.ok(
-    renderer!.root.findAll(
-      (node) => (node.type as unknown) === 'Text' && node.props.children === 'profile-1',
-    ).length,
-  );
-  assert.equal(readAllButton().props.disabled, false);
+    await setFocused(true);
+    assert.deepEqual(queryFetchPolicies, ['store-and-network']);
+    assertProfile('profile-1');
+    assert.equal(readAllButton().props.disabled, false);
 
-  isFocused = false;
-  await act(async () => renderer!.update(tree()));
-  assert.equal(queryFetchPolicies.length, 1);
-  assert.equal(readAllButton().props.disabled, true);
+    failedQueryProfiles.add('profile-2');
+    await setFocused(false);
+    await setFocused(true);
+    assert.deepEqual(queryFetchPolicies, ['store-and-network', 'store-and-network']);
+    assertHeaderAndMenu();
+    assert.ok(renderer!.root.findByProps({ accessibilityLabel: 'route-retry' }));
+    assert.equal(readAllButton().props.disabled, true);
 
-  isFocused = true;
-  await act(async () => renderer!.update(tree()));
-  assert.deepEqual(queryFetchPolicies, ['store-and-network', 'store-and-network']);
-  assert.ok(
-    renderer!.root.findAll(
-      (node) => (node.type as unknown) === 'Text' && node.props.children === 'profile-2',
-    ).length,
-  );
+    failedQueryProfiles.delete('profile-2');
+    await setFocused(false);
+    await setFocused(true);
+    assert.deepEqual(queryFetchPolicies, [
+      'store-and-network',
+      'store-and-network',
+      'store-and-network',
+    ]);
+    assertProfile('profile-3');
+    assert.equal(readAllButton().props.disabled, false);
 
-  state = 'error';
-  await act(async () => renderer!.update(tree()));
-  const retry = renderer!.root.find(
-    (node) =>
-      (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'route-retry',
-  );
-  await act(async () => retry.props.onPress());
+    failedQueryProfiles.add('profile-4');
+    await setFocused(false);
+    await setFocused(true);
+    assertHeaderAndMenu();
+    assert.ok(renderer!.root.findByProps({ accessibilityLabel: 'route-retry' }));
+    failedQueryProfiles.delete('profile-4');
+    const retry = renderer!.root.findByProps({ accessibilityLabel: 'route-retry' });
+    await act(async () => retry.props.onPress());
 
-  assert.deepEqual(queryFetchPolicies, ['store-and-network', 'store-and-network', 'network-only']);
-  assert.ok(
-    renderer!.root.findAll(
-      (node) => (node.type as unknown) === 'Text' && node.props.children === 'profile-3',
-    ).length,
-  );
+    assert.deepEqual(queryFetchPolicies, [
+      'store-and-network',
+      'store-and-network',
+      'store-and-network',
+      'store-and-network',
+      'network-only',
+    ]);
+    assertProfile('profile-5');
+    assert.equal(readAllButton().props.disabled, false);
+  } finally {
+    console.error = originalConsoleError;
+  }
 });

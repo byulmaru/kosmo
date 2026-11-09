@@ -1,5 +1,5 @@
 import { useFocusEffect, useIsFocused } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { graphql, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import {
   NotificationList,
@@ -8,6 +8,7 @@ import {
 import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import type { PreloadedQuery } from 'react-relay';
+import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { NotificationsPageQuery } from './__generated__/NotificationsPageQuery.graphql';
 
 const NotificationsQuery = graphql`
@@ -24,11 +25,14 @@ const NotificationsQuery = graphql`
 
 export default function NotificationsScreen() {
   const [queryReference, loadQuery] = useQueryLoader<NotificationsPageQuery>(NotificationsQuery);
+  const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const isFocused = useIsFocused();
 
   useFocusEffect(
     useCallback(() => {
       loadQuery({}, { fetchPolicy: 'store-and-network' });
+      // Advance the reset key after failures without remounting the retained list on refocus.
+      routeBoundaryRef.current?.refetch();
     }, [loadQuery]),
   );
 
@@ -45,6 +49,7 @@ export default function NotificationsScreen() {
           />
         )}
         loading={<NotificationListState state="loading" />}
+        ref={routeBoundaryRef}
         title="알림을 불러오지 못했어요"
       >
         {queryReference ? (
