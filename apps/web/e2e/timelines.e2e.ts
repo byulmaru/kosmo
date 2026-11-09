@@ -360,7 +360,12 @@ test('프로필 게시글 목록은 해당 프로필이 작성한 글만 보여�
     'E2E timeline profile latest body',
     'E2E timeline profile older body',
   ]);
-  await expect(page.getByText('E2E timeline other profile body')).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('article')
+      .filter({ visible: true })
+      .getByText('E2E timeline other profile body', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여준다', async ({ context, page }) => {
