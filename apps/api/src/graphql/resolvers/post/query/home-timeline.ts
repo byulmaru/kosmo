@@ -227,6 +227,14 @@ builder.queryField('homeTimeline', (t) =>
               before !== null &&
               (after === undefined || before === undefined || after.kind === before.kind);
             const cursorKind = after?.kind ?? before?.kind;
+            const databaseAfter =
+              compatibleCursors && after?.kind === 'db' && cursorKind === 'db'
+                ? after.postId
+                : undefined;
+            const databaseBefore =
+              compatibleCursors && before?.kind === 'db' && cursorKind === 'db'
+                ? before.postId
+                : undefined;
             const profileId = ctx.session.profile.id;
             let databaseFallbackAfterCacheMiss = false;
 
@@ -257,14 +265,8 @@ builder.queryField('homeTimeline', (t) =>
 
             const page = await queryHomeTimelineForInsertion({
               profileId,
-              after:
-                compatibleCursors && after?.kind === 'db' && cursorKind === 'db'
-                  ? after.postId
-                  : undefined,
-              before:
-                compatibleCursors && before?.kind === 'db' && cursorKind === 'db'
-                  ? before.postId
-                  : undefined,
+              after: databaseAfter,
+              before: databaseBefore,
               limit,
               inverted,
             });

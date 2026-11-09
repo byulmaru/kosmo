@@ -68,6 +68,9 @@ Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
   이전에 Repost 자체를 대상으로 저장한 판정은 재사용하지 않으며, 기존 만료 시각까지 유지된 뒤 만료한다. 확률 추정값은
   판정 정확도를 뜻하지 않으며, 판정 시각은 보존하지 않는다. 자연어 조건, 판정 모델, 임계값, Post Content 수정은 기존
   판정을 무효화하지 않는다. cache 만료나 유실 뒤에는 당시의 Rule과 Content로 다시 판정할 수 있다.
+- Smart Filter 결과 목록의 대상·접근 권한·시점은 [Home Post List 정책](../policies/post-list.md#home-post-list)을
+  따른다. 단일 Post의 `smartFilterProbability`는 기존 cache 값을 fallback으로 조회할 수 있으며, 이 조회는 Rule을 재평가하거나
+  cache 만료 시간을 연장하지 않는다.
 - Rule 생성·변경·제거와 판정 대상 식별 방식 변경은 이미 Home에 추가된 Post를 소급 재판정하거나 제거하지 않으며,
   기존 판정도 무효화하거나 다른 Post ID로 이전하지 않는다.
   현재 Rule이 없으면 이후 새 Home 추가는 기존 정책을 따른다. Rule을 다시 만들면 아직 유효한 이전 판정을 재사용할 수 있다.

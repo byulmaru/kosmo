@@ -367,7 +367,7 @@ test(
 
     naturalLanguageMuteDecisionKeys.push(
       ...[excludedViewer, includedViewer, cachedViewer, unavailableViewer].map(
-        ({ id }) => `kosmo:home-timeline:natural-language-mute:profile:${id}:post:${quote.id}`,
+        ({ id }) => `kosmo:home-timeline:natural-language-mute:profile:${id}`,
       ),
     );
 

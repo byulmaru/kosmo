@@ -9,6 +9,7 @@ import { StateView } from '@/components/ui/StateView';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, spacing, textStyles } from '@/theme/tokens';
+import { SettingsSmartFilterResults } from './SettingsSmartFilterResults';
 import type {
   SettingsNaturalLanguageMute_profile$data,
   SettingsNaturalLanguageMute_profile$key,
@@ -121,7 +122,12 @@ function SettingsNaturalLanguageMuteContent() {
     return <StateView title="이 Profile의 멤버만 제외 조건을 관리할 수 있어요." />;
   }
 
-  return <SettingsNaturalLanguageMuteEditor key={`${profile.id}:${role}`} profile={profile} />;
+  return (
+    <>
+      <SettingsNaturalLanguageMuteEditor key={`${profile.id}:${role}`} profile={profile} />
+      <SettingsSmartFilterResults />
+    </>
+  );
 }
 
 function SettingsNaturalLanguageMuteEditor({

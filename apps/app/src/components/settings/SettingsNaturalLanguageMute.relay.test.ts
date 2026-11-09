@@ -46,6 +46,9 @@ mockModule('@/components/RouteBoundary', {
     createElement(Suspense, { fallback: loading }, children),
   useRouteBoundary: () => ({ fetchKey: 0 }),
 });
+mockModule('./SettingsSmartFilterResults', {
+  SettingsSmartFilterResults: () => null,
+});
 mockModule('@/components/shell/ShellChromeContext', {
   useShellChrome: () => ({ openProfileSwitcher: () => undefined }),
 });

@@ -516,6 +516,7 @@ type Post implements Node {
   replyParent: Post
   repostCount: Int!
   repostSource: Post
+  smartFilterProbability: Float
   state: PostState!
   viewerBookmark: Bookmark
   viewerReactions: [Reaction!]!
@@ -775,6 +776,12 @@ type Query {
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
+  smartFilterResults(
+    after: String
+
+    """Page-size hint; the number of returned posts may be higher or lower."""
+    first: Int = 20
+  ): PostConnection!
 }
 
 type QuoteNotification implements Node & Notification {
