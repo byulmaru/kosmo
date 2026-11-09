@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ValidationError } from '@kosmo/core/error';
-import { buildSchema, execute, GraphQLError, parse } from 'graphql';
+import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
+import { buildSchema, execute, GraphQLError, parse, subscribe } from 'graphql';
+import { isAsyncIterable } from 'graphql-yoga';
 import { useError } from './error';
 import type { ExecutionResult } from 'graphql';
 
@@ -19,6 +20,50 @@ const transform = async (result: ExecutionResult): Promise<ExecutionResult> => {
       transformed = next;
     },
   } as never);
+  return transformed;
+};
+
+const subscriptionSchema = buildSchema(`
+  type Query { unused: Boolean }
+  type Subscription { value: String! }
+`);
+const subscriptionDocument = parse('subscription { value }');
+
+const transformSubscription = async (
+  result: ExecutionResult | AsyncIterable<ExecutionResult>,
+): Promise<ExecutionResult> => {
+  const hooks = await useError().onSubscribe?.({} as never);
+  assert.ok(hooks && typeof hooks === 'object' && 'onSubscribeResult' in hooks);
+
+  let transformed = result;
+  const resultHooks = await hooks.onSubscribeResult?.({
+    args: {} as never,
+    result,
+    setResult: (next: ExecutionResult | AsyncIterable<ExecutionResult>) => {
+      transformed = next;
+    },
+  } as never);
+
+  if (isAsyncIterable(transformed)) {
+    assert.ok(resultHooks && 'onNext' in resultHooks);
+    const iterator = transformed[Symbol.asyncIterator]();
+    try {
+      const next = await iterator.next();
+      assert.equal(next.done, false);
+      let eventResult = next.value;
+      await resultHooks.onNext?.({
+        args: {} as never,
+        result: eventResult,
+        setResult: (nextResult: ExecutionResult) => {
+          eventResult = nextResult;
+        },
+      } as never);
+      return eventResult;
+    } finally {
+      await iterator.return?.();
+    }
+  }
+
   return transformed;
 };
 
@@ -58,5 +103,37 @@ describe('GraphQL error collection', () => {
       code: 'VALIDATION',
       field: 'handle',
     });
+  });
+
+  it('transforms authorization errors returned by subscription setup and event execution', async () => {
+    const setupError = new PermissionDeniedError('Subscription denied');
+    const deniedSubscription = await subscribe({
+      schema: subscriptionSchema,
+      document: subscriptionDocument,
+      subscribeFieldResolver: () => {
+        throw setupError;
+      },
+    });
+    const transformedSetup = await transformSubscription(deniedSubscription);
+
+    assert.equal(transformedSetup.errors?.[0]?.message, 'Subscription denied');
+    assert.equal(transformedSetup.errors?.[0]?.extensions.code, 'PERMISSION_DENIED');
+
+    const eventSubscription = await subscribe({
+      schema: subscriptionSchema,
+      document: subscriptionDocument,
+      subscribeFieldResolver: () =>
+        (async function* () {
+          yield {
+            value: () => {
+              throw new PermissionDeniedError('Subscription event denied');
+            },
+          };
+        })(),
+    });
+    const transformedEvent = await transformSubscription(eventSubscription);
+
+    assert.equal(transformedEvent.errors?.[0]?.message, 'Subscription event denied');
+    assert.equal(transformedEvent.errors?.[0]?.extensions.code, 'PERMISSION_DENIED');
   });
 });

@@ -11,7 +11,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import { isGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Locator, Page } from '@playwright/test';
 
 const recentSearchesKey = 'kosmo:recent-searches';
@@ -825,16 +825,53 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
       profileId: session.profile!.id,
     });
   }
+  const refreshMarkerBody = 'E2E Home reselection refresh marker';
+  const refreshMarker = await createE2EPost({
+    body: refreshMarkerBody,
+    profileId: session.profile!.id,
+  });
 
   await page.setViewportSize({ height: 360, width: 1440 });
   // Enter Home from a mounted shell so initial-document cached revalidation cannot overlap this refresh.
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
   const entry = await homeEntry(page, 'navigation');
+  let initialHomeQueryCount = 0;
+  let initialHomeQueryInFlightCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+    initialHomeQueryCount += 1;
+    initialHomeQueryInFlightCount += 1;
+    try {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data?: {
+          homeTimeline?: {
+            edges?: Array<{ node?: { id: string } | null } | null> | null;
+          } | null;
+        };
+      };
+      if (initialHomeQueryCount === 1 && body.data?.homeTimeline?.edges) {
+        body.data.homeTimeline.edges = body.data.homeTimeline.edges.filter(
+          (edge) => edge?.node?.id !== toGlobalId('Post', refreshMarker.id),
+        );
+      }
+      await route.fulfill({ response, body: JSON.stringify(body) });
+    } finally {
+      initialHomeQueryInFlightCount -= 1;
+    }
+  });
+
   const initialHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
   await entry.click();
   const initialHome = await initialHomeResponse;
   await initialHome.finished();
+  await expect(page.getByRole('article').filter({ hasText: refreshMarkerBody })).toBeVisible();
+  await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+  await page.unroute('**/graphql');
   await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
   await scrollDocument(page);
 

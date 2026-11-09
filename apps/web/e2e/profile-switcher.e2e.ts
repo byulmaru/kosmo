@@ -166,7 +166,6 @@ test('home route active profile query refetches after switching profiles', async
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
-  await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
 
   const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
@@ -277,16 +276,22 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await page.goto('/login');
   await page.waitForURL('**/first-profile/handle');
 
-  await createProfileFromSwitcher(page, 'revisionalpha');
+  const alphaProfileId = await createProfileFromSwitcher(page, 'revisionalpha');
   const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
 
-  await selectProfileFromSwitcher(page, 'revisionalpha');
+  const alphaSelectionResponse = await selectProfileFromSwitcher(page, 'revisionalpha');
+  const selectedAlphaProfileId = alphaSelectionResponse.data?.selectProfile?.profile?.id;
+  expect(selectedAlphaProfileId).toBe(alphaProfileId);
+  const alphaHomeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
   await page.goto('/home');
+  const alphaHomeQueryBody = (await (await alphaHomeQueryResponse).json()) as {
+    data?: { currentSession?: { selectedProfile?: { id?: string | null } | null } | null };
+  };
+  expect(alphaHomeQueryBody.data?.currentSession?.selectedProfile?.id).toBe(selectedAlphaProfileId);
   await expect(page.getByRole('progressbar')).toHaveCount(0);
-  await page.waitForLoadState('networkidle');
 
   let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {

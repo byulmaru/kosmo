@@ -40,7 +40,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function installHomePostEventRoute(page: Page, postId: string) {
+async function installHomePostEventRoute(page: Page, postId: string, refreshMarkerId: string) {
   // Hold only this subscription's body; the 200 SSE response headers arrive immediately.
   await page.addInitScript((operationName) => {
     const nativeFetch = window.fetch.bind(window);
@@ -111,7 +111,6 @@ async function installHomePostEventRoute(page: Page, postId: string) {
 
   const eventPostReady = deferred<HomePostNode | null>();
   let homePageQueryCount = 0;
-  let homePageQueryCompletedCount = 0;
   let homePageQueryInFlightCount = 0;
   let capturedEventPost: HomePostNode | null = null;
 
@@ -135,11 +134,16 @@ async function installHomePostEventRoute(page: Page, postId: string) {
 
         // Keep the fixture Post out of every canonical response; only the SSE frame may insert it.
         if (edges) {
-          body.data!.homeTimeline!.edges = edges.filter((edge) => edge?.node?.id !== postId);
+          const withheldPostIds = new Set([postId]);
+          if (homePageQueryCount === 1) {
+            withheldPostIds.add(refreshMarkerId);
+          }
+          body.data!.homeTimeline!.edges = edges.filter(
+            (edge) => !withheldPostIds.has(edge?.node?.id ?? ''),
+          );
         }
 
         await route.fulfill({ response, body: JSON.stringify(body) });
-        homePageQueryCompletedCount += 1;
       } finally {
         homePageQueryInFlightCount -= 1;
       }
@@ -185,7 +189,7 @@ async function installHomePostEventRoute(page: Page, postId: string) {
         [nextEvent, nextEvent],
       );
     },
-    async waitForInitialBackgroundRead() {
+    async waitForInitialBackgroundRead(refreshMarkerBody: string) {
       await page.evaluate(async () => {
         const controller = (window as Window & { __homePostSseTest?: HomePostSseTestController })
           .__homePostSseTest;
@@ -194,8 +198,7 @@ async function installHomePostEventRoute(page: Page, postId: string) {
         }
         await controller.ready;
       });
-      // Initial Home data plus the connected background revalidation must finish before delivery.
-      await expect.poll(() => homePageQueryCompletedCount).toBeGreaterThanOrEqual(2);
+      await expect(page.getByRole('article').filter({ hasText: refreshMarkerBody })).toHaveCount(1);
       await expect.poll(() => homePageQueryInFlightCount).toBe(0);
     },
     async waitForSubscriptionRequest() {
@@ -234,6 +237,8 @@ async function createHomeFixture(width: number) {
     });
   }
 
+  const refreshMarkerBody = `E2E Home live refresh marker ${width}`;
+  const refreshMarker = await createE2EPost({ body: refreshMarkerBody, profileId: author.id });
   const eventPostBody = `E2E Home live event ${width}`;
   const eventPost = await createE2EPost({ body: eventPostBody, profileId: author.id });
   return {
@@ -241,6 +246,8 @@ async function createHomeFixture(width: number) {
     eventPostBody,
     eventPostId: toGlobalId('Post', eventPost.id),
     oldestBody,
+    refreshMarkerBody,
+    refreshMarkerId: toGlobalId('Post', refreshMarker.id),
     viewer,
   };
 }
@@ -265,7 +272,11 @@ for (const width of [390, 1440]) {
       test.setTimeout(90_000);
       const fixture = await createHomeFixture(width);
       await setE2ESessionCookie(context, fixture.viewer.token);
-      const eventRoute = await installHomePostEventRoute(page, fixture.eventPostId);
+      const eventRoute = await installHomePostEventRoute(
+        page,
+        fixture.eventPostId,
+        fixture.refreshMarkerId,
+      );
 
       try {
         await page.goto('/home');
@@ -275,7 +286,7 @@ for (const width of [390, 1440]) {
         expect(subscription?.extensions?.selectedProfileId).toBe(
           toGlobalId('Profile', fixture.viewer.profile!.id),
         );
-        await eventRoute.waitForInitialBackgroundRead();
+        await eventRoute.waitForInitialBackgroundRead(fixture.refreshMarkerBody);
         const eventCard = page.getByRole('article').filter({ hasText: fixture.eventPostBody });
         await expect(eventCard).toHaveCount(0);
 
@@ -306,7 +317,11 @@ for (const width of [390, 1440]) {
       test.setTimeout(90_000);
       const fixture = await createHomeFixture(width);
       await setE2ESessionCookie(context, fixture.viewer.token);
-      const eventRoute = await installHomePostEventRoute(page, fixture.eventPostId);
+      const eventRoute = await installHomePostEventRoute(
+        page,
+        fixture.eventPostId,
+        fixture.refreshMarkerId,
+      );
 
       try {
         await page.goto('/home');
@@ -316,7 +331,7 @@ for (const width of [390, 1440]) {
           toGlobalId('Profile', fixture.viewer.profile!.id),
         );
         expect(await eventRoute.eventPostReady).not.toBeNull();
-        await eventRoute.waitForInitialBackgroundRead();
+        await eventRoute.waitForInitialBackgroundRead(fixture.refreshMarkerBody);
 
         const anchor = page.getByRole('article').filter({ hasText: fixture.anchorBody });
         await anchor.scrollIntoViewIfNeeded();

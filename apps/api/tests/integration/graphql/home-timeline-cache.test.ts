@@ -129,7 +129,7 @@ type SmartFilterResultsConnection = {
 
 type Auth = {
   readonly account: { readonly id: string };
-  readonly profile: { readonly id: string };
+  readonly profile: { readonly id: string; readonly displayName: string };
   readonly session: { readonly id: string };
   readonly token: string;
 };
@@ -2280,6 +2280,10 @@ test(
       followeeProfileId: author.id,
     });
     const post = await createContentfulPost(author.id, 'live Home subscription body');
+    const updatedProfilePost = await createContentfulPost(
+      author.id,
+      'post after author profile update',
+    );
     const defaultProfileMarker = await createContentfulPost(
       viewer.profile.id,
       'default Home subscription marker',
@@ -2309,7 +2313,7 @@ test(
             ? {}
             : { extensions: { selectedProfileId: encodeGlobalId('Profile', selectedProfileId) } }),
           query:
-            'subscription HomeTimelinePostAdded { homeTimelinePostAdded { id content { bodyText } } }',
+            'subscription HomeTimelinePostAdded { homeTimelinePostAdded { id profile { displayName } content { bodyText } } }',
         }),
         headers: {
           accept: 'text/event-stream',
@@ -2395,10 +2399,32 @@ test(
         data: {
           homeTimelinePostAdded: {
             id: encodeGlobalId('Post', post.id),
+            profile: { displayName: author.displayName },
             content: { bodyText: 'live Home subscription body' },
           },
         },
       });
+
+      const updatedAuthorDisplayName = 'Updated Home subscription author';
+      await db
+        .update(Profiles)
+        .set({ displayName: updatedAuthorDisplayName })
+        .where(eq(Profiles.id, author.id));
+      await fanoutHomeTimelinePost({ postId: updatedProfilePost.id });
+      const updatedProfileEvent = await withTimeout(
+        selectedProfileSubscription.readEvent(),
+        'Selected Profile did not receive the Post after its author profile update',
+      );
+      assert.deepEqual(getSseData(updatedProfileEvent), {
+        data: {
+          homeTimelinePostAdded: {
+            id: encodeGlobalId('Post', updatedProfilePost.id),
+            profile: { displayName: updatedAuthorDisplayName },
+            content: { bodyText: 'post after author profile update' },
+          },
+        },
+      });
+
       homeTimelinePubSub.publish('homeTimelinePostAdded', viewer.profile.id, {
         postId: defaultProfileMarker.id,
       });
@@ -2410,6 +2436,7 @@ test(
         data: {
           homeTimelinePostAdded: {
             id: encodeGlobalId('Post', defaultProfileMarker.id),
+            profile: { displayName: viewer.profile.displayName },
             content: { bodyText: 'default Home subscription marker' },
           },
         },

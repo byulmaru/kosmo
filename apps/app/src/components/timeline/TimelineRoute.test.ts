@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -24,6 +25,7 @@ const shellChrome = {
 
 mockModule('expo-router', {
   Redirect: () => null,
+  useFocusEffect: () => undefined,
   useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
   useIsFocused: () => true,
@@ -59,8 +61,11 @@ mockModule('react-relay', {
     check: () => ({ status: 'missing' }),
     retain: () => ({ dispose: () => undefined }),
   }),
+  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
+  ConnectionHandler,
+  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
   getRequest: () => ({}),

@@ -56,6 +56,9 @@ stub('react-native', {
   Text: 'Text',
   useWindowDimensions: () => ({ width: 390, height: 844 }),
 });
+stub('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 stub('react-native-svg', {
   Defs: 'Defs',
   LinearGradient: 'LinearGradient',

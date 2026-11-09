@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -105,6 +106,7 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
   useIsFocused: () => true,
+  useFocusEffect: () => undefined,
 });
 mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), {
@@ -125,8 +127,11 @@ mockModule('react-relay', {
     options.fetchPolicy === 'store-or-network' ? homeData : localData(),
   useRefetchableFragment: () => [null, localRefetch],
   useRelayEnvironment: () => environment,
+  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
+  ConnectionHandler,
+  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({
     subscribe: (observer: { complete?: () => void; error?: (error: Error) => void }) => {
