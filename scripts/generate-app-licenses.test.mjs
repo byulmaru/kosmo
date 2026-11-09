@@ -6,11 +6,9 @@ import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  buildLicenseData,
   buildLicenseEntries,
-  checkLicenseArtifact,
   normalizeRepositoryUrl,
-  packageKeysForLicenseCheck,
-  sourceSha256,
   writeLicenseArtifact,
 } from './generate-app-licenses.mjs';
 
@@ -55,14 +53,6 @@ function reportRow(name, versions, paths, license = 'MIT') {
   return { name, versions, paths, license };
 }
 
-function updateManifest(packagePath, updates) {
-  const manifestPath = join(packagePath, 'package.json');
-  writeFileSync(
-    manifestPath,
-    `${JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, 'utf8')), ...updates })}\n`,
-  );
-}
-
 test('reports pnpm license failures written to stdout and stderr', (t) => {
   const binDirectory = mkdtempSync(join(tmpdir(), 'kosmo-app-licenses-pnpm-'));
   t.after(() => rmSync(binDirectory, { recursive: true, force: true }));
@@ -81,7 +71,7 @@ exit 1
 
   const result = spawnSync(
     process.execPath,
-    [fileURLToPath(new URL('./generate-app-licenses.mjs', import.meta.url)), '--check'],
+    [fileURLToPath(new URL('./generate-app-licenses.mjs', import.meta.url))],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
@@ -277,14 +267,6 @@ test('keeps only exact pending package versions with an empty original text', (t
       sourceUrl: 'https://www.npmjs.com/package/pending/v/1.0.0',
     },
   );
-  const outputPath = join(root, 'open-source-licenses.json');
-  const pendingData = {
-    sourceSha256: 'a'.repeat(64),
-    notices: [entries.find((entry) => entry.name === 'pending')],
-  };
-  writeLicenseArtifact(pendingData, outputPath);
-  assert.doesNotThrow(() => checkLicenseArtifact(pendingData, outputPath, pendingFile));
-
   writeFileSync(
     pendingFile,
     `${JSON.stringify([
@@ -295,10 +277,6 @@ test('keeps only exact pending package versions with an empty original text', (t
         evidenceUrls: ['https://www.npmjs.com/package/pending/v/1.0.0'],
       },
     ])}\n`,
-  );
-  assert.throws(
-    () => checkLicenseArtifact(pendingData, outputPath, pendingFile),
-    /contains an invalid notice/,
   );
   assert.throws(
     () => buildLicenseEntries(report, { root, notice, supplementalFiles: [supplemental] }),
@@ -340,129 +318,21 @@ test('rejects mismatched version paths and conflicting supplement duplicates', (
   );
 });
 
-test('checks the exact generated package set and notice records', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-output-'));
+test('serializes generated license notices as JSON', (t) => {
+  const { root, notice, supplemental } = fixture(t);
+  const packagePath = addPackage(root, 'pkg', '1.0.0', 'owner/pkg', {
+    LICENSE: 'Full license text\n',
+  });
+  const data = buildLicenseData(
+    { MIT: [reportRow('pkg', ['1.0.0'], [packagePath])] },
+    { root, notice, supplementalFiles: [supplemental] },
+  );
   const outputPath = join(root, 'data/licenses.json');
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const entry = {
-    name: 'pkg',
-    version: '1.0.0',
-    license: 'MIT',
-    text: 'Full text',
-    sourceUrl: 'https://github.com/example/pkg',
-  };
-  const current = {
-    sourceSha256: 'a'.repeat(64),
-    notices: [entry],
-  };
-  const generatedData = {
-    sourceSha256: current.sourceSha256,
-    notices: [entry],
-  };
-  writeLicenseArtifact(generatedData, outputPath);
-  const generated = readFileSync(outputPath, 'utf8');
-  assert.deepEqual(JSON.parse(generated), generatedData);
-  assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
-  assert.throws(
-    () =>
-      checkLicenseArtifact(
-        { ...current, notices: [entry, { ...entry, name: 'new-package' }] },
-        outputPath,
-      ),
-    /stale package set:[\s\S]*missing from generated data: new-package@1\.0\.0/,
-  );
-  assert.throws(
-    () => checkLicenseArtifact({ ...current, sourceSha256: 'b'.repeat(64) }, outputPath),
-    /stale for pnpm-lock\.yaml/,
-  );
-  assert.throws(
-    () =>
-      checkLicenseArtifact({ ...current, notices: [{ ...entry, text: 'changed' }] }, outputPath),
-    /stale for pkg@1\.0\.0/,
-  );
-  assert.equal(readFileSync(outputPath, 'utf8'), generated);
 
-  writeLicenseArtifact(
-    { ...generatedData, notices: [entry, { ...entry, name: 'pkg-linux' }] },
-    outputPath,
-  );
-  assert.throws(
-    () => checkLicenseArtifact(current, outputPath),
-    /stale package set:[\s\S]*no longer distributed: pkg-linux/,
-  );
-});
+  writeLicenseArtifact(data, outputPath);
 
-test('keeps static license notices out of the npm package check scope', () => {
-  const keys = packageKeysForLicenseCheck([
-    { name: '반응 이모지', version: '', license: 'MIT · Unicode' },
-    { name: 'Hope:RE', version: '', license: 'MIT' },
-    { name: 'runtime', version: '1.0.0', license: 'MIT' },
-  ]);
-
-  assert.deepEqual([...keys], ['runtime@1.0.0']);
-});
-
-test('allows blank versions only for the known static license notices', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-static-notices-'));
-  const outputPath = join(root, 'licenses.json');
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const hopeReNotice = {
-    name: 'Hope:RE',
-    version: '',
-    license: 'MIT',
-    text: 'Complete Hope:RE MIT license\n',
-    sourceUrl:
-      'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
-  };
-  const current = { sourceSha256: 'a'.repeat(64), notices: [hopeReNotice] };
-  writeLicenseArtifact(current, outputPath);
-  assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
-
-  const unknownNotice = { ...hopeReNotice, name: 'Unknown' };
-  writeLicenseArtifact({ ...current, notices: [unknownNotice] }, outputPath);
-  assert.throws(
-    () => checkLicenseArtifact({ ...current, notices: [unknownNotice] }, outputPath),
-    /contains an invalid notice/,
-  );
-
-  const wrongLicense = { ...hopeReNotice, license: 'Apache-2.0' };
-  writeLicenseArtifact({ ...current, notices: [wrongLicense] }, outputPath);
-  assert.throws(
-    () => checkLicenseArtifact({ ...current, notices: [wrongLicense] }, outputPath),
-    /contains an invalid notice/,
-  );
-});
-
-test('checks one checksum over lock, supplemental, pending, and static license notice sources', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-sources-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const sources = [
-    'pnpm-lock.yaml',
-    'apps/app/licenses/supplemental-families.json',
-    'apps/app/licenses/supplemental-other.json',
-    'apps/app/licenses/pending-notices.json',
-    'apps/app/public/reaction-emoji/NOTICE.md',
-    'apps/app/licenses/hope-re.LICENSE',
-  ];
-  for (const path of sources) {
-    const filePath = join(root, path);
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `${path}\n`);
-  }
-
-  const initial = sourceSha256(root);
-  writeFileSync(join(root, 'apps/app/licenses/hope-re.LICENSE'), 'changed Hope:RE license\n');
-  const changedHopeReLicense = sourceSha256(root);
-  assert.notEqual(changedHopeReLicense, initial);
-  writeFileSync(
-    join(root, 'apps/app/licenses/supplemental-other.json'),
-    'changed supplemental content\n',
-  );
-  const changedSupplement = sourceSha256(root);
-  assert.notEqual(changedSupplement, changedHopeReLicense);
-  writeFileSync(join(root, 'apps/app/licenses/pending-notices.json'), 'changed pending content\n');
-  assert.notEqual(sourceSha256(root), changedSupplement);
+  assert.deepEqual(JSON.parse(readFileSync(outputPath, 'utf8')), data);
+  assert.ok(data.notices.some((entry) => entry.name === 'pkg'));
 });
 
 test('NOTICE-only packages require a full license supplement', (t) => {
@@ -496,55 +366,34 @@ test('NOTICE-only packages require a full license supplement', (t) => {
   );
 });
 
-test('includes selected transitive packages and excludes unshipped build tools', (t) => {
+test('includes every production report package and deduplicates duplicate rows', (t) => {
   const { root, notice, supplemental } = fixture(t);
   const runtime = addPackage(root, 'runtime', '1.0.0', 'owner/runtime', {
     LICENSE: 'Runtime license\n',
   });
-  const transitive = addPackage(root, 'runtime-transitive', '2.0.0', 'owner/transitive', {
-    COPYING: 'Transitive license\n',
-  });
-  const buildTool = addPackage(root, 'build-tool', '3.0.0', 'owner/build-tool');
-  updateManifest(runtime, {
-    dependencies: { 'runtime-transitive': '^2.0.0' },
-  });
-  updateManifest(transitive, {
-    dependencies: { 'build-tool': '^3.0.0' },
+  const reportOnly = addPackage(root, 'report-only', '2.0.0', 'owner/report-only', {
+    LICENSE: 'Report-only license\n',
   });
 
   const entries = buildLicenseEntries(
     {
       MIT: [
         reportRow('runtime', ['1.0.0'], [runtime]),
-        reportRow('runtime-transitive', ['2.0.0'], [transitive]),
-        reportRow('build-tool', ['3.0.0'], [buildTool]),
+        reportRow('runtime', ['1.0.0'], [runtime]),
+        reportRow('report-only', ['2.0.0'], [reportOnly]),
       ],
     },
     {
       root,
       notice,
       supplementalFiles: [supplemental],
-      packageKeys: new Set(['runtime@1.0.0', 'runtime-transitive@2.0.0']),
     },
   );
   assert.deepEqual(
     entries.map(({ name, version }) => `${name}@${version}`),
-    ['Hope:RE@', 'runtime@1.0.0', 'runtime-transitive@2.0.0', '반응 이모지@'],
+    ['Hope:RE@', 'report-only@2.0.0', 'runtime@1.0.0', '반응 이모지@'],
   );
-
-  assert.throws(
-    () =>
-      buildLicenseEntries(
-        { MIT: [reportRow('runtime', ['1.0.0'], [runtime])] },
-        {
-          root,
-          notice,
-          supplementalFiles: [supplemental],
-          packageKeys: new Set(['runtime@1.0.0', 'missing-transitive@4.0.0']),
-        },
-      ),
-    /Selected distribution packages are missing from pnpm production metadata:[\s\S]*missing-transitive@4\.0\.0/,
-  );
+  assert.equal(entries.filter(({ name }) => name === 'runtime').length, 1);
 });
 
 test('normalizes repository links and falls back to the npm version page', () => {

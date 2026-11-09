@@ -101,7 +101,6 @@ mock.module(require.resolve('lucide-react-native'), {
 mock.module(new URL('../../data/open-source-licenses.json', import.meta.url), {
   exports: {
     default: {
-      sourceSha256: 'fixture-source-sha256',
       notices: [
         {
           license: 'MIT',
