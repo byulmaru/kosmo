@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { Platform, Text } from 'react-native';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { EffectCallback, PropsWithChildren, ReactNode } from 'react';
 
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
@@ -110,7 +110,7 @@ export function useIsFocused() {
   return true;
 }
 
-export function useFocusEffect(effect: () => void | (() => void)) {
+export function useFocusEffect(effect: EffectCallback) {
   useEffect(effect, [effect]);
 }
 

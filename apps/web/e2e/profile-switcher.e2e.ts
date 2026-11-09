@@ -168,17 +168,35 @@ test('home route active profile query refetches after switching profiles', async
   await expect(page.getByText(betaPostBody)).toBeVisible();
   graphQLRequests.clear();
 
-  const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const homeQueryResponse = page.waitForResponse((response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const requestBody = JSON.parse(response.request().postData() ?? '{}') as {
+      extensions?: { selectedProfileId?: string | null } | null;
+      operationName?: string | null;
+    };
+    return (
+      requestBody.operationName === 'HomePageQuery' &&
+      requestBody.extensions?.selectedProfileId === alphaHomeProfileId
+    );
+  });
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
   expect(responseBody.data?.selectProfile?.profile?.id).toBe(alphaHomeProfileId);
   const homeQueryBody = (await (await homeQueryResponse).json()) as {
-    data?: { homeTimeline?: { edges?: unknown[] | null } | null };
+    data?: {
+      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+      homeTimeline?: { edges?: unknown[] | null } | null;
+    };
   };
+  expect(homeQueryBody.data?.currentSession?.selectedProfile?.id).toBe(alphaHomeProfileId);
   expect(homeQueryBody.data?.homeTimeline?.edges).toEqual([]);
 
-  await page.waitForLoadState('networkidle');
+  await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
+  await expect(page.getByText(betaPostBody)).toBeHidden();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');

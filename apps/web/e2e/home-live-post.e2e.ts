@@ -113,6 +113,7 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
   let homePageQueryCount = 0;
   let homePageQueryInFlightCount = 0;
   let capturedEventPost: HomePostNode | null = null;
+  let allowEventPostInCanonicalReads = false;
 
   await page.route('**/graphql', async (route) => {
     const request = route.request();
@@ -132,9 +133,12 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
           eventPostReady.resolve(capturedEventPost);
         }
 
-        // Keep the fixture Post out of every canonical response; only the SSE frame may insert it.
+        // Keep the fixture Post out of canonical responses until the stream assertion is complete.
         if (edges) {
-          const withheldPostIds = new Set([postId]);
+          const withheldPostIds = new Set<string>();
+          if (!allowEventPostInCanonicalReads) {
+            withheldPostIds.add(postId);
+          }
           if (homePageQueryCount === 1) {
             withheldPostIds.add(refreshMarkerId);
           }
@@ -154,6 +158,9 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
   });
 
   return {
+    allowEventPostInCanonicalReads() {
+      allowEventPostInCanonicalReads = true;
+    },
     async close() {
       await page
         .evaluate(() => {
@@ -352,11 +359,12 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole('button', { name: '새 글 보기' })).toBeVisible();
         expect(eventRoute.homePageQueryCount()).toBe(homeQueryCountBeforeEvent);
 
+        // Let an independently queued lifecycle read see the real Post after the stream proof.
+        eventRoute.allowEventPostInCanonicalReads();
         await page.getByRole('button', { name: '새 글 보기' }).click();
         await expect(eventCard).toHaveCount(1);
         await expect(page.getByRole('article').first()).toContainText(fixture.eventPostBody);
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-        expect(eventRoute.homePageQueryCount()).toBe(homeQueryCountBeforeEvent);
       } finally {
         await eventRoute.close();
       }
