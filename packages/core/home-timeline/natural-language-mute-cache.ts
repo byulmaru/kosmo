@@ -4,7 +4,8 @@ import type { NaturalLanguageMuteDecision } from './decision';
 const cacheKeyPrefix = 'kosmo:home-timeline:natural-language-mute:profile:';
 const keyLifetimeSeconds = 604_800;
 
-const cacheKey = (profileId: string, postId: string) =>
+const hashKey = (profileId: string) => `${cacheKeyPrefix}${profileId}`;
+const legacyCacheKey = (profileId: string, postId: string) =>
   `${cacheKeyPrefix}${profileId}:post:${postId}`;
 
 function parseNaturalLanguageMuteDecision(value: unknown): NaturalLanguageMuteDecision | null {
@@ -40,8 +41,17 @@ export async function getNaturalLanguageMuteDecision(
   postId: string,
 ): Promise<NaturalLanguageMuteDecision | null> {
   try {
-    const result = await runRedisCommand((client) => client.get(cacheKey(profileId, postId)));
-    return parseNaturalLanguageMuteDecision(result?.value);
+    const result = await runRedisCommand(async (client) => {
+      const cachedDecision = parseNaturalLanguageMuteDecision(
+        await client.hGet(hashKey(profileId), postId),
+      );
+      if (cachedDecision !== null) {
+        return cachedDecision;
+      }
+
+      return parseNaturalLanguageMuteDecision(await client.get(legacyCacheKey(profileId, postId)));
+    });
+    return result?.value ?? null;
   } catch {
     return null;
   }
@@ -53,21 +63,48 @@ export async function cacheNaturalLanguageMuteDecision(
   decision: NaturalLanguageMuteDecision,
 ): Promise<NaturalLanguageMuteDecision> {
   try {
-    const result = await runRedisCommand((client) =>
-      client.set(cacheKey(profileId, postId), JSON.stringify(decision), {
-        EX: keyLifetimeSeconds,
-        GET: true,
-        NX: true,
-      }),
-    );
+    const result = await runRedisCommand(async (client) => {
+      const inserted = await client.hSetEx(
+        hashKey(profileId),
+        { [postId]: JSON.stringify(decision) },
+        { mode: 'FNX', expiration: { type: 'EX', value: keyLifetimeSeconds } },
+      );
+      if (inserted === 1) {
+        return decision;
+      }
 
-    const cachedDecision = parseNaturalLanguageMuteDecision(result?.value);
-    if (cachedDecision !== null) {
-      return cachedDecision;
+      return parseNaturalLanguageMuteDecision(await client.hGet(hashKey(profileId), postId));
+    });
+
+    if (result?.value !== null && result?.value !== undefined) {
+      return result.value;
     }
   } catch {
     // Redis is disposable; cache failures do not change the decision.
   }
 
   return decision;
+}
+
+export async function readNaturalLanguageMuteDecisionBatch(
+  profileId: string,
+  cursor: string,
+): Promise<{
+  cursor: string;
+  entries: Array<{ postId: string; decision: NaturalLanguageMuteDecision | null }>;
+} | null> {
+  const result = await runRedisCommand((client) =>
+    client.hScan(hashKey(profileId), cursor, { COUNT: 20 }),
+  );
+  if (result === null) {
+    return null;
+  }
+
+  return {
+    cursor: result.value.cursor,
+    entries: result.value.entries.map(({ field, value }) => ({
+      postId: field,
+      decision: parseNaturalLanguageMuteDecision(value),
+    })),
+  };
 }

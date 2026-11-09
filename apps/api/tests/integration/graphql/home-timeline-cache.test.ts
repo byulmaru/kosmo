@@ -24,6 +24,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
+import type * as NaturalLanguageMuteCache from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import type * as CoreRedis from '../../../../../packages/core/redis/client';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
@@ -52,6 +53,7 @@ let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let cacheHomeTimelinePage: typeof HomeTimelineCache.cacheHomeTimelinePage;
+let cacheNaturalLanguageMuteDecision: typeof NaturalLanguageMuteCache.cacheNaturalLanguageMuteDecision;
 let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
 let insertHomeTimelinePost: typeof HomeTimelineCache.insertHomeTimelinePost;
 let reconcileHomeTimelineFollow: typeof HomeTimelineCache.reconcileHomeTimelineFollow;
@@ -90,6 +92,24 @@ type HomeConnection = {
   }[];
   readonly pageInfo: {
     readonly startCursor?: string | null;
+    readonly endCursor: string | null;
+    readonly hasNextPage: boolean;
+    readonly hasPreviousPage: boolean;
+  };
+};
+
+type SmartFilterResultConnection = {
+  readonly edges: readonly {
+    readonly cursor: string;
+    readonly node: {
+      readonly posts: readonly {
+        readonly id: string;
+        readonly smartFilterProbability: number | null;
+      }[];
+    };
+  }[];
+  readonly pageInfo: {
+    readonly startCursor: string | null;
     readonly endCursor: string | null;
     readonly hasNextPage: boolean;
     readonly hasPreviousPage: boolean;
@@ -152,6 +172,8 @@ before(async () => {
     removeHomeTimelinePost,
     readHomeTimelineCache,
   } = await import('@kosmo/core/home-timeline/cache'));
+  ({ cacheNaturalLanguageMuteDecision } =
+    await import('@kosmo/core/home-timeline/natural-language-mute-cache'));
   ({ runRedisCommand } = await import('../../../../../packages/core/redis/client'));
   if (testRedisUrl) {
     await waitForRedis();
@@ -1010,120 +1032,299 @@ test('bounds Home DB candidate pages before natural-language filtering', async (
   }
 });
 
-test('reads all Home candidates without natural-language filtering when requested', async () => {
-  const viewer = await createAuth();
-  const candidateAuthor = await createProfile('smart-filter-results-candidate-author');
-  const blockedAuthor = await createProfile('smart-filter-results-blocked-author');
-  const mutedAuthor = await createProfile('smart-filter-results-muted-author');
-  await db.insert(ProfileFollows).values([
-    { followerProfileId: viewer.profile.id, followeeProfileId: candidateAuthor.id },
-    { followerProfileId: viewer.profile.id, followeeProfileId: blockedAuthor.id },
-    { followerProfileId: viewer.profile.id, followeeProfileId: mutedAuthor.id },
-  ]);
-
-  const idPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
-  const candidates = [
-    await createContentfulPost(
-      candidateAuthor.id,
-      'exclude-me newest eligible candidate',
-      `${idPrefix}000000000004`,
-    ),
-    await createContentfulPost(
-      candidateAuthor.id,
-      'eligible candidate without a decision yet',
-      `${idPrefix}000000000003`,
-    ),
-    await createContentfulPost(
-      candidateAuthor.id,
-      'another eligible candidate without a decision yet',
-      `${idPrefix}000000000002`,
-    ),
-  ];
-  await createContentfulPost(
-    blockedAuthor.id,
-    'exclude-me blocked candidate must stay hidden',
-    `${idPrefix}000000000006`,
-  );
-  await createContentfulPost(
-    mutedAuthor.id,
-    'exclude-me muted candidate must stay hidden',
-    `${idPrefix}000000000005`,
-  );
-  await db.insert(ProfileBlocks).values({
-    ownerProfileId: viewer.profile.id,
-    targetProfileId: blockedAuthor.id,
-  });
-  await db.insert(ProfileMutes).values({
-    ownerProfileId: viewer.profile.id,
-    targetProfileId: mutedAuthor.id,
-  });
-  await db.insert(NaturalLanguageMuteRules).values({
-    ownerProfileId: viewer.profile.id,
-    condition: 'exclude matching posts',
-  });
-
-  const redisUrl = process.env.REDIS_URL;
-  delete process.env.REDIS_URL;
-  const modelInputs: string[] = [];
-  const restoreModel = installNaturalMuteModel((request) => {
-    const text = naturalMuteInputText(request);
-    modelInputs.push(text);
-    return text.includes('exclude-me') ? 0.99 : 0.1;
-  });
-  try {
-    const filtered = await requestHome(viewer.token, { first: 1 });
-    assert.equal(filtered.errors, undefined, JSON.stringify(filtered.errors));
-    assert.deepEqual(filtered.data?.homeTimeline.edges, []);
-    assert.equal(filtered.data?.homeTimeline.pageInfo.hasNextPage, true);
-    assert.ok(modelInputs.some((text) => text.includes('exclude-me newest eligible candidate')));
-
-    const callsBeforeResults = modelInputs.length;
-    const expectedPostIds = candidates
-      .map(({ id }) => id)
-      .sort((left, right) => right.localeCompare(left));
-    const firstResultsPage = await requestHome(viewer.token, {
-      first: 1,
-      ignoreSmartFilter: true,
+test(
+  'lists existing selected-profile Smart Filter decisions independently of Home filtering',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const followedAuthor = await createProfile('smart-filter-results-followed-author');
+    const mutedAuthor = await createProfile('smart-filter-results-muted-author');
+    const unrelatedAuthor = await createProfile('smart-filter-results-unfollowed-author');
+    const followerOnlyAuthor = await createProfile('smart-filter-results-follower-only-author');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: followedAuthor.id,
     });
-    assert.equal(firstResultsPage.errors, undefined, JSON.stringify(firstResultsPage.errors));
-    assert.deepEqual(
-      firstResultsPage.data?.homeTimeline.edges.map(({ node }) => node.id),
-      [encodeGlobalId('Post', expectedPostIds[0]!)],
-    );
-    assert.equal(firstResultsPage.data?.homeTimeline.pageInfo.hasNextPage, true);
-
-    const nextResultsPage = await requestHome(viewer.token, {
-      first: 2,
-      after: firstResultsPage.data!.homeTimeline.pageInfo.endCursor!,
-      ignoreSmartFilter: true,
+    await db.insert(ProfileMutes).values({
+      ownerProfileId: viewer.profile.id,
+      targetProfileId: mutedAuthor.id,
     });
-    assert.equal(nextResultsPage.errors, undefined, JSON.stringify(nextResultsPage.errors));
-    assert.deepEqual(
-      nextResultsPage.data?.homeTimeline.edges.map(({ node }) => node.id),
-      expectedPostIds.slice(1).map((id) => encodeGlobalId('Post', id)),
+
+    const classified = await createContentfulPost(followedAuthor.id, 'classified by Home');
+    const mutedPublic = await createContentfulPost(mutedAuthor.id, 'generally muted public post');
+    const unrelatedPublic = await createContentfulPost(
+      unrelatedAuthor.id,
+      'unfollowed public post',
     );
-    assert.equal(nextResultsPage.data?.homeTimeline.pageInfo.hasNextPage, false);
-    assert.equal(nextResultsPage.data?.homeTimeline.pageInfo.hasPreviousPage, true);
-    assert.equal(modelInputs.length, callsBeforeResults);
-    assert.ok(
-      modelInputs.every(
-        (text) =>
-          !text.includes('blocked candidate must stay hidden') &&
-          !text.includes('muted candidate must stay hidden'),
-      ),
+    const inaccessible = await createContentfulPost(
+      followerOnlyAuthor.id,
+      'unfollowed followers-only post',
+      undefined,
+      PostVisibility.FOLLOWERS,
     );
-  } finally {
-    restoreModel();
-    if (redisUrl === undefined) {
+    const ownPost = await createContentfulPost(viewer.profile.id, 'viewer authored post');
+    const deletedPost = await createContentfulPost(followedAuthor.id, 'deleted public post');
+    const contentlessPost = await createContentlessRepost(followedAuthor.id, classified.id);
+    const invalidDecisionPost = await createContentfulPost(
+      unrelatedAuthor.id,
+      'malformed decision value',
+    );
+    const legacyOnly = await createContentfulPost(unrelatedAuthor.id, 'legacy-only decision');
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, deletedPost.id));
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude matching posts',
+    });
+
+    const modelInputs: string[] = [];
+    const restoreModel = installNaturalMuteModel((request) => {
+      modelInputs.push(naturalMuteInputText(request));
+      return 0.99;
+    });
+    const hashKey = naturalMuteDecisionHashKey(viewer.profile.id);
+    const legacyKey = naturalMuteDecisionKey(viewer.profile.id, legacyOnly.id);
+    const homeTimelineKey = `kosmo:home-timeline:profile:${viewer.profile.id}`;
+    const decisionHashKeys = [hashKey];
+    try {
+      const home = await requestHome(viewer.token, { first: 10 });
+      assert.equal(home.errors, undefined, JSON.stringify(home.errors));
+      assert.ok(
+        home.data?.homeTimeline.edges.every(
+          ({ node }) => node.id !== encodeGlobalId('Post', classified.id),
+        ),
+      );
+      assert.ok(modelInputs.some((text) => text.includes('classified by Home')));
+
+      const seededDecisions = [
+        { postId: mutedPublic.id, decision: { decision: 'exclude' as const, probability: 0.91 } },
+        {
+          postId: unrelatedPublic.id,
+          decision: { decision: 'include' as const, probability: 0.43 },
+        },
+        { postId: inaccessible.id, decision: { decision: 'include' as const, probability: 0.61 } },
+        { postId: ownPost.id, decision: { decision: 'exclude' as const, probability: 0.99 } },
+        { postId: deletedPost.id, decision: { decision: 'include' as const, probability: 0.72 } },
+        {
+          postId: contentlessPost.id,
+          decision: { decision: 'include' as const, probability: 0.22 },
+        },
+      ];
+      await Promise.all(
+        seededDecisions.map(({ postId, decision }) =>
+          cacheNaturalLanguageMuteDecision(viewer.profile.id, postId, decision),
+        ),
+      );
+      await runRedisCommand((client) =>
+        client.hSetEx(
+          hashKey,
+          {
+            [invalidDecisionPost.id]: '{',
+            'not-a-uuid': JSON.stringify({ decision: 'include', probability: 0.25 }),
+          },
+          { expiration: { type: 'EX', value: 604_800 } },
+        ),
+      );
+      await runRedisCommand((client) =>
+        client.set(legacyKey, JSON.stringify({ decision: 'include', probability: 0.68 }), {
+          EX: 60,
+        }),
+      );
+
+      await runRedisCommand((client) =>
+        client.zAdd(homeTimelineKey, { score: 123, value: classified.id }),
+      );
+      await runRedisCommand((client) => client.expire(homeTimelineKey, 60));
+      const homeCacheBefore = (
+        await runRedisCommand((client) => client.zRangeWithScores(homeTimelineKey, 0, -1))
+      )?.value;
+      const homeCacheTtlBefore = (await runRedisCommand((client) => client.ttl(homeTimelineKey)))
+        ?.value;
+      const hashTtlBefore = (
+        await runRedisCommand((client) => client.hTTL(hashKey, [unrelatedPublic.id]))
+      )?.value?.[0];
+      assert.deepEqual(homeCacheBefore, [{ value: classified.id, score: 123 }]);
+      assert.ok(homeCacheTtlBefore !== undefined && homeCacheTtlBefore > 50);
+      assert.ok(hashTtlBefore !== undefined && hashTtlBefore > 50);
+
+      const modelCallsBeforeResults = modelInputs.length;
+      const result = await requestSmartFilterResults(viewer.token, { first: null });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      const connection = result.data?.smartFilterResultBatches;
+      assert.ok(connection);
+      assert.equal(connection.edges.length, 1);
+      assert.equal(connection.pageInfo.hasPreviousPage, false);
+      const posts = connection.edges[0]!.node.posts;
+      const postIds = posts.map(({ id }) => id);
+      assert.deepEqual(
+        new Set(postIds),
+        new Set([
+          encodeGlobalId('Post', classified.id),
+          encodeGlobalId('Post', mutedPublic.id),
+          encodeGlobalId('Post', unrelatedPublic.id),
+        ]),
+      );
+      assert.equal(modelInputs.length, modelCallsBeforeResults);
+
+      const homeCacheAfter = (
+        await runRedisCommand((client) => client.zRangeWithScores(homeTimelineKey, 0, -1))
+      )?.value;
+      const homeCacheTtlAfter = (await runRedisCommand((client) => client.ttl(homeTimelineKey)))
+        ?.value;
+      const hashTtlAfter = (
+        await runRedisCommand((client) => client.hTTL(hashKey, [unrelatedPublic.id]))
+      )?.value?.[0];
+      assert.deepEqual(homeCacheAfter, homeCacheBefore);
+      assert.ok(
+        homeCacheTtlAfter !== undefined &&
+          homeCacheTtlAfter > 0 &&
+          homeCacheTtlAfter <= homeCacheTtlBefore,
+      );
+      assert.ok(hashTtlAfter !== undefined && hashTtlAfter > 0 && hashTtlAfter <= hashTtlBefore);
+
+      const legacyProbability = await requestGraphQL<{
+        readonly node: { readonly smartFilterProbability: number | null } | null;
+      }>(
+        `query LegacyPostProbability($id: ID!) { node(id: $id) { ... on Post { smartFilterProbability } } }`,
+        { id: encodeGlobalId('Post', legacyOnly.id) },
+        viewer.token,
+      );
+      assert.equal(legacyProbability.errors, undefined, JSON.stringify(legacyProbability.errors));
+      assert.equal(legacyProbability.data?.node?.smartFilterProbability, 0.68);
+
+      const invalidFirst = await requestSmartFilterResults(viewer.token, { first: 2 });
+      assert.ok(invalidFirst.errors?.length);
+      const malformedCursor = await requestSmartFilterResults(viewer.token, {
+        after: 'not-a-cursor',
+      });
+      assert.ok(malformedCursor.errors?.length);
+      const oversizedCursor = await requestSmartFilterResults(viewer.token, {
+        after: '18446744073709551616',
+      });
+      assert.ok(oversizedCursor.errors?.length);
+
+      const unauthenticated = await requestSmartFilterResults();
+      assert.equal(unauthenticated.errors, undefined, JSON.stringify(unauthenticated.errors));
+      assert.equal(unauthenticated.data?.smartFilterResultBatches, null);
+
+      const previousRedisUrl = process.env.REDIS_URL;
       delete process.env.REDIS_URL;
-    } else {
-      process.env.REDIS_URL = redisUrl;
+      try {
+        const unavailableRedis = await requestSmartFilterResults(viewer.token);
+        assert.equal(unavailableRedis.errors, undefined, JSON.stringify(unavailableRedis.errors));
+        assert.equal(unavailableRedis.data?.smartFilterResultBatches, null);
+      } finally {
+        if (previousRedisUrl === undefined) {
+          delete process.env.REDIS_URL;
+        } else {
+          process.env.REDIS_URL = previousRedisUrl;
+        }
+      }
+
+      const secondProfile = await createProfile('smart-filter-results-second-profile');
+      decisionHashKeys.push(naturalMuteDecisionHashKey(secondProfile.id));
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: secondProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      await cacheNaturalLanguageMuteDecision(secondProfile.id, unrelatedPublic.id, {
+        decision: 'include',
+        probability: 0.42,
+      });
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: secondProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+      const secondProfileResult = await requestSmartFilterResults(viewer.token);
+      assert.equal(
+        secondProfileResult.errors,
+        undefined,
+        JSON.stringify(secondProfileResult.errors),
+      );
+      assert.deepEqual(
+        secondProfileResult.data?.smartFilterResultBatches?.edges[0]?.node.posts.map(
+          ({ id }) => id,
+        ),
+        [encodeGlobalId('Post', unrelatedPublic.id)],
+      );
+
+      const emptyProfile = await createProfile('smart-filter-results-empty-profile');
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: emptyProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: emptyProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+      const emptyResult = await requestSmartFilterResults(viewer.token);
+      assert.equal(emptyResult.errors, undefined, JSON.stringify(emptyResult.errors));
+      assert.deepEqual(
+        emptyResult.data?.smartFilterResultBatches?.edges.map(({ node }) => node.posts),
+        [[]],
+      );
+      assert.equal(emptyResult.data?.smartFilterResultBatches?.pageInfo.endCursor, '0');
+      assert.equal(emptyResult.data?.smartFilterResultBatches?.pageInfo.hasNextPage, false);
+      const terminalResult = await requestSmartFilterResults(viewer.token, {
+        after: emptyResult.data?.smartFilterResultBatches?.pageInfo.endCursor,
+      });
+      assert.equal(terminalResult.errors, undefined, JSON.stringify(terminalResult.errors));
+      assert.deepEqual(terminalResult.data?.smartFilterResultBatches?.edges, []);
+      assert.equal(terminalResult.data?.smartFilterResultBatches?.pageInfo.hasPreviousPage, true);
+      assert.equal(terminalResult.data?.smartFilterResultBatches?.pageInfo.hasNextPage, false);
+
+      const pagedProfile = await createProfile('smart-filter-results-paged-profile');
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: pagedProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      const pagedHashKey = naturalMuteDecisionHashKey(pagedProfile.id);
+      decisionHashKeys.push(pagedHashKey);
+      const manyDecisions = Object.fromEntries(
+        Array.from({ length: 600 }, () => [
+          crypto.randomUUID(),
+          JSON.stringify({ decision: 'include', probability: 0.42 }),
+        ]),
+      );
+      await runRedisCommand((client) =>
+        client.hSetEx(pagedHashKey, manyDecisions, {
+          expiration: { type: 'EX', value: 604_800 },
+        }),
+      );
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: pagedProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+      const firstNativePage = await requestSmartFilterResults(viewer.token);
+      assert.equal(firstNativePage.errors, undefined, JSON.stringify(firstNativePage.errors));
+      assert.equal(firstNativePage.data?.smartFilterResultBatches?.edges.length, 1);
+      assert.deepEqual(firstNativePage.data?.smartFilterResultBatches?.edges[0]?.node.posts, []);
+      const firstNativeCursor = firstNativePage.data?.smartFilterResultBatches?.pageInfo.endCursor;
+      assert.ok(firstNativeCursor);
+      assert.equal(firstNativePage.data?.smartFilterResultBatches?.pageInfo.hasNextPage, true);
+      const secondNativePage = await requestSmartFilterResults(viewer.token, {
+        after: firstNativeCursor,
+      });
+      assert.equal(secondNativePage.errors, undefined, JSON.stringify(secondNativePage.errors));
+      assert.equal(secondNativePage.data?.smartFilterResultBatches?.edges.length, 1);
+      assert.equal(secondNativePage.data?.smartFilterResultBatches?.pageInfo.hasPreviousPage, true);
+      assert.notEqual(
+        secondNativePage.data?.smartFilterResultBatches?.pageInfo.endCursor,
+        firstNativeCursor,
+      );
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) =>
+        client.unlink([...decisionHashKeys, legacyKey, homeTimelineKey]),
+      );
     }
-  }
-});
+  },
+);
 
 test(
-  'reads only existing selected-profile Smart Filter probabilities without extending cache expiry',
+  'reads legacy selected-profile Smart Filter probabilities without extending cache expiry',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
@@ -1206,14 +1407,24 @@ test(
       return 0.99;
     });
     try {
-      const result = await requestHome(viewer.token, {
-        first: 20,
-        ignoreSmartFilter: true,
-        includeSmartFilterProbability: true,
-      });
-      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      const queriedPosts = [
+        source,
+        quote,
+        repost,
+        ownPost,
+        ownQuote,
+        ownSource,
+        ownRepost,
+        unjudged,
+      ];
+      const postResults = await Promise.all(
+        queriedPosts.map(({ id }) => requestPostProbability(viewer.token, id)),
+      );
+      for (const result of postResults) {
+        assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      }
       const probabilityById = new Map(
-        result.data?.homeTimeline.edges.map(({ node }) => [node.id, node.smartFilterProbability]),
+        postResults.map(({ data }) => [data?.node?.id, data?.node?.smartFilterProbability]),
       );
       const probabilityFor = (postId: string) =>
         probabilityById.get(encodeGlobalId('Post', postId));
@@ -1263,20 +1474,13 @@ test(
         .set({ activeProfileId: secondProfile.id })
         .where(eq(Sessions.id, viewer.session.id));
 
-      const secondProfileResult = await requestHome(viewer.token, {
-        first: 20,
-        ignoreSmartFilter: true,
-        includeSmartFilterProbability: true,
-      });
+      const secondProfileResult = await requestPostProbability(viewer.token, source.id);
       assert.equal(
         secondProfileResult.errors,
         undefined,
         JSON.stringify(secondProfileResult.errors),
       );
-      const secondProfileSource = secondProfileResult.data?.homeTimeline.edges.find(
-        ({ node }) => node.id === encodeGlobalId('Post', source.id),
-      );
-      assert.equal(secondProfileSource?.node.smartFilterProbability, 0.42);
+      assert.equal(secondProfileResult.data?.node?.smartFilterProbability, 0.42);
 
       const unauthenticated = await requestGraphQL<{
         readonly node: { readonly smartFilterProbability: number | null } | null;
@@ -1618,9 +1822,14 @@ test(
       condition: 'exclude matching posts',
     });
 
-    const decisionKeys = [ownPost.id, ownQuote.id, source.id, ...reposts.map(({ id }) => id)].map(
-      (postId) => naturalMuteDecisionKey(viewer.profile.id, postId),
-    );
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
+    const legacyDecisionKeys = [
+      ownPost.id,
+      ownQuote.id,
+      source.id,
+      ...reposts.map(({ id }) => id),
+    ].map((postId) => naturalMuteDecisionKey(viewer.profile.id, postId));
+    const decisionKeys = [decisionHashKey, ...legacyDecisionKeys];
     const staleOwnDecision = JSON.stringify({ decision: 'exclude', probability: 0.99 });
     const staleRepostDecision = JSON.stringify({ decision: 'include', probability: 0.1 });
     await runRedisCommand((client) =>
@@ -1668,12 +1877,16 @@ test(
         null,
       );
       assert.equal(
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, source.id)))?.value,
+        JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+      );
+      assert.equal(
         (
           await runRedisCommand((client) =>
             client.get(naturalMuteDecisionKey(viewer.profile.id, source.id)),
           )
         )?.value,
-        JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+        null,
       );
       assert.equal(
         (
@@ -1717,9 +1930,11 @@ test(
       condition: 'exclude matching posts',
     });
 
-    const decisionKeys = [source.id, repost.id].map((postId) =>
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
+    const legacyDecisionKeys = [source.id, repost.id].map((postId) =>
       naturalMuteDecisionKey(viewer.profile.id, postId),
     );
+    const decisionKeys = [decisionHashKey, ...legacyDecisionKeys];
     let calls = 0;
     const restoreModel = installNaturalMuteModel(() => {
       calls += 1;
@@ -1733,8 +1948,14 @@ test(
         [encodeGlobalId('Post', source.id), encodeGlobalId('Post', repost.id)].sort(),
       );
       assert.equal(calls, 0);
-      for (const key of decisionKeys) {
+      for (const key of legacyDecisionKeys) {
         assert.equal((await runRedisCommand((client) => client.get(key)))?.value, null);
+      }
+      for (const postId of [source.id, repost.id]) {
+        assert.equal(
+          (await runRedisCommand((client) => client.hGet(decisionHashKey, postId)))?.value,
+          null,
+        );
       }
     } finally {
       restoreModel();
@@ -1766,6 +1987,7 @@ test(
     const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
     const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
     const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const modelRequests: NaturalMuteRequest[] = [];
     const restoreModel = installNaturalMuteModel((request) => {
       modelRequests.push(request);
@@ -1778,9 +2000,10 @@ test(
       assert.equal(modelRequests.length, 1);
       assert.ok(naturalMuteInputText(modelRequests[0]!).includes('shared cached source'));
       assert.equal(
-        (await runRedisCommand((client) => client.get(sourceKey)))?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, source.id)))?.value,
         JSON.stringify({ decision: 'exclude', probability: 0.99 }),
       );
+      assert.equal((await runRedisCommand((client) => client.get(sourceKey)))?.value, null);
 
       await db.insert(ProfileFollows).values({
         followerProfileId: viewer.profile.id,
@@ -1797,13 +2020,20 @@ test(
       assert.ok(quoteInput.includes('independent quote body'));
       assert.ok(quoteInput.includes('shared cached source'));
       assert.equal(
-        (await runRedisCommand((client) => client.get(quoteKey)))?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, quote.id)))?.value,
         JSON.stringify({ decision: 'include', probability: 0.1 }),
+      );
+      assert.equal((await runRedisCommand((client) => client.get(quoteKey)))?.value, null);
+      assert.equal(
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, repost.id)))?.value,
+        null,
       );
       assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
     } finally {
       restoreModel();
-      await runRedisCommand((client) => client.unlink([quoteKey, sourceKey, repostKey]));
+      await runRedisCommand((client) =>
+        client.unlink([decisionHashKey, quoteKey, sourceKey, repostKey]),
+      );
     }
   },
 );
@@ -1831,6 +2061,7 @@ test(
     const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
     const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
     const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const modelRequests: NaturalMuteRequest[] = [];
     const restoreModel = installNaturalMuteModel((request) => {
       modelRequests.push(request);
@@ -1845,14 +2076,25 @@ test(
       assert.ok(input.includes('direct Quote subject'));
       assert.ok(input.includes('direct source context'));
       assert.equal(
-        (await runRedisCommand((client) => client.get(quoteKey)))?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, quote.id)))?.value,
         JSON.stringify({ decision: 'exclude', probability: 0.99 }),
+      );
+      assert.equal((await runRedisCommand((client) => client.get(quoteKey)))?.value, null);
+      assert.equal(
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, source.id)))?.value,
+        null,
+      );
+      assert.equal(
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, repost.id)))?.value,
+        null,
       );
       assert.equal((await runRedisCommand((client) => client.get(sourceKey)))?.value, null);
       assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
     } finally {
       restoreModel();
-      await runRedisCommand((client) => client.unlink([quoteKey, sourceKey, repostKey]));
+      await runRedisCommand((client) =>
+        client.unlink([decisionHashKey, quoteKey, sourceKey, repostKey]),
+      );
     }
   },
 );
@@ -2109,7 +2351,6 @@ async function requestHome(
     readonly last?: number;
     readonly after?: string;
     readonly before?: string;
-    readonly ignoreSmartFilter?: boolean;
     readonly includeSmartFilterProbability?: boolean;
   },
 ) {
@@ -2119,15 +2360,40 @@ async function requestHome(
       $last: Int,
       $after: String,
       $before: String,
-      $ignoreSmartFilter: Boolean,
       $includeSmartFilterProbability: Boolean = false
     ) {
-      homeTimeline(first: $first, last: $last, after: $after, before: $before, ignoreSmartFilter: $ignoreSmartFilter) {
+      homeTimeline(first: $first, last: $last, after: $after, before: $before) {
         edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } smartFilterProbability @include(if: $includeSmartFilterProbability) } }
         pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
       }
     }`,
     pagination,
+    token,
+  );
+}
+
+async function requestSmartFilterResults(
+  token?: string,
+  pagination: { readonly first?: number | null; readonly after?: string | null } = {},
+) {
+  return requestGraphQL<{ smartFilterResultBatches: SmartFilterResultConnection | null }>(
+    `query SmartFilterResultBatches($first: Int, $after: String) {
+      smartFilterResultBatches(first: $first, after: $after) {
+        edges { cursor node { posts { id smartFilterProbability } } }
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+      }
+    }`,
+    pagination,
+    token,
+  );
+}
+
+async function requestPostProbability(token: string, postId: string) {
+  return requestGraphQL<{
+    readonly node: { readonly id: string; readonly smartFilterProbability: number | null } | null;
+  }>(
+    `query PostProbability($id: ID!) { node(id: $id) { ... on Post { id smartFilterProbability } } }`,
+    { id: encodeGlobalId('Post', postId) },
     token,
   );
 }
@@ -2159,6 +2425,10 @@ function naturalMuteInputText(request: NaturalMuteRequest): string {
 
 function naturalMuteDecisionKey(profileId: string, postId: string): string {
   return `kosmo:home-timeline:natural-language-mute:profile:${profileId}:post:${postId}`;
+}
+
+function naturalMuteDecisionHashKey(profileId: string): string {
+  return `kosmo:home-timeline:natural-language-mute:profile:${profileId}`;
 }
 
 function naturalMuteInputImageUrls(request: NaturalMuteRequest): string[] {

@@ -170,15 +170,20 @@ function resultsData(
 ) {
   return {
     ...sessionData(profile(profileId)),
-    homeTimeline: {
-      edges: rows.map(({ id, probability }, index) => ({
-        cursor: index === rows.length - 1 ? endCursor : `cursor:${id}:${index}`,
-        node: {
-          __typename: 'Post',
-          id,
-          smartFilterProbability: probability,
+    smartFilterResultBatches: {
+      edges: [
+        {
+          cursor: endCursor,
+          node: {
+            __typename: 'SmartFilterResultBatch',
+            posts: rows.map(({ id, probability }) => ({
+              __typename: 'Post',
+              id,
+              smartFilterProbability: probability,
+            })),
+          },
         },
-      })),
+      ],
       pageInfo: { endCursor, hasNextPage },
     },
   };
@@ -241,29 +246,19 @@ describe('SettingsSmartFilterResults with Relay', () => {
     );
 
     assert.deepEqual(
-      textValues().filter((text) => text === '제외' || text === '통과'),
-      ['통과', '제외'],
+      new Set(textValues().filter((text) => text === '제외' || text === '통과')),
+      new Set(['통과', '제외']),
     );
     assert.ok(textValues().includes('79.9%'));
     assert.ok(textValues().includes('80%'));
-    assert.deepEqual(postIds(), ['post:below-threshold', 'post:at-threshold']);
+    assert.deepEqual(postIds().sort(), ['post:at-threshold', 'post:below-threshold']);
   });
 
-  it('keeps the manual next-page action when a page has no probabilities and continues its cursor', async () => {
+  it('keeps More for an empty batch and continues its cursor only after the user asks', async () => {
     const environment = createEnvironment();
     await loadSelectedProfile(environment);
     const results = await revealResults();
-    await respond(
-      results,
-      resultsData(
-        [
-          { id: 'post:null-a', probability: null },
-          { id: 'post:null-b', probability: null },
-        ],
-        true,
-        'cursor:null-b',
-      ),
-    );
+    await respond(results, resultsData([], true, 'cursor:empty-batch'));
 
     assert.deepEqual(postIds(), []);
     assert.equal(button('더 보기').props.disabled, false);
@@ -274,7 +269,7 @@ describe('SettingsSmartFilterResults with Relay', () => {
 
     await act(async () => button('더 보기').props.onPress());
     const nextPage = latestRequest('SettingsSmartFilterResultsNextPageQuery');
-    assert.deepEqual(nextPage.variables, { count: 20, cursor: 'cursor:null-b' });
+    assert.deepEqual(nextPage.variables, { count: 1, cursor: 'cursor:empty-batch' });
     await respond(
       nextPage,
       resultsData([{ id: 'post:visible-next-page', probability: 0.51 }], false, 'cursor:visible'),
@@ -282,6 +277,36 @@ describe('SettingsSmartFilterResults with Relay', () => {
 
     assert.deepEqual(postIds(), ['post:visible-next-page']);
     assert.ok(textValues().includes('통과'));
+  });
+
+  it('renders a Post only once when Redis scan batches repeat it', async () => {
+    const environment = createEnvironment();
+    await loadSelectedProfile(environment);
+    const results = await revealResults();
+    await respond(
+      results,
+      resultsData([{ id: 'post:repeated', probability: 0.9 }], true, 'cursor:first'),
+    );
+
+    await act(async () => button('더 보기').props.onPress());
+    const nextPage = latestRequest('SettingsSmartFilterResultsNextPageQuery');
+    await respond(
+      nextPage,
+      resultsData(
+        [
+          { id: 'post:repeated', probability: 0.9 },
+          { id: 'post:unique', probability: 0.1 },
+        ],
+        false,
+        'cursor:second',
+      ),
+    );
+
+    assert.deepEqual(postIds().sort(), ['post:repeated', 'post:unique']);
+    assert.deepEqual(
+      new Set(textValues().filter((text) => text === '제외' || text === '통과')),
+      new Set(['제외', '통과']),
+    );
   });
 
   it('preserves visible rows after a next-page error and retries the same cursor', async () => {
@@ -306,13 +331,13 @@ describe('SettingsSmartFilterResults with Relay', () => {
 
     const retry = latestRequest('SettingsSmartFilterResultsNextPageQuery');
     assert.notEqual(retry, failedPage);
-    assert.deepEqual(retry.variables, { count: 20, cursor: 'cursor:visible' });
+    assert.deepEqual(retry.variables, { count: 1, cursor: 'cursor:visible' });
     await respond(
       retry,
       resultsData([{ id: 'post:next', probability: 0.1 }], false, 'cursor:next'),
     );
 
-    assert.deepEqual(postIds(), ['post:visible', 'post:next']);
+    assert.deepEqual(postIds().sort(), ['post:next', 'post:visible']);
     assert.equal(
       all('StateView').some((node) => String(node.props.title).includes('더 불러오지 못했어요')),
       false,

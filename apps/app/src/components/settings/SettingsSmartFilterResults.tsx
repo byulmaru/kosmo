@@ -18,7 +18,7 @@ import type { SettingsSmartFilterResults_query$key } from './__generated__/Setti
 import type { SettingsSmartFilterResultsNextPageQuery } from './__generated__/SettingsSmartFilterResultsNextPageQuery.graphql';
 import type { SettingsSmartFilterResultsQuery } from './__generated__/SettingsSmartFilterResultsQuery.graphql';
 
-const PAGE_SIZE = 20;
+const BATCH_SIZE = 1;
 const exclusionThreshold = 0.8;
 
 const query = graphql`
@@ -28,22 +28,24 @@ const query = graphql`
         ...ReplyComposerSurface_profile
       }
     }
-    ...SettingsSmartFilterResults_query @arguments(count: 20)
+    ...SettingsSmartFilterResults_query @arguments(count: 1)
   }
 `;
 
 const resultsFragment = graphql`
   fragment SettingsSmartFilterResults_query on Query
-  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
+  @argumentDefinitions(count: { type: "Int", defaultValue: 1 }, cursor: { type: "String" })
   @refetchable(queryName: "SettingsSmartFilterResultsNextPageQuery") {
-    homeTimeline(first: $count, after: $cursor, ignoreSmartFilter: true)
-      @connection(key: "SettingsSmartFilterResults_homeTimeline", filters: ["ignoreSmartFilter"]) {
+    smartFilterResultBatches(first: $count, after: $cursor)
+      @connection(key: "SettingsSmartFilterResults_smartFilterResultBatches") {
       edges {
         cursor
         node {
-          id
-          smartFilterProbability
-          ...PostListItem_post
+          posts {
+            id
+            smartFilterProbability
+            ...PostListItem_post
+          }
         }
       }
     }
@@ -116,12 +118,19 @@ function SettingsSmartFilterResultsList({
     SettingsSmartFilterResults_query$key
   >(resultsFragment, queryKey);
   const [loadError, setLoadError] = useState(false);
-  const edges = pagination.data.homeTimeline?.edges ?? [];
-  const visibleResults = edges.flatMap((edge) => {
-    const post = edge.node;
-    const probability = post?.smartFilterProbability;
-    return post && probability != null ? [{ cursor: edge.cursor, post, probability }] : [];
-  });
+  const edges = pagination.data.smartFilterResultBatches?.edges ?? [];
+  const visibleResults = new Map<
+    string,
+    { post: (typeof edges)[number]['node']['posts'][number]; probability: number }
+  >();
+  for (const edge of edges) {
+    for (const post of edge.node.posts) {
+      const probability = post.smartFilterProbability;
+      if (probability != null && !visibleResults.has(post.id)) {
+        visibleResults.set(post.id, { post, probability });
+      }
+    }
+  }
 
   const loadNextPage = () => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
@@ -129,19 +138,19 @@ function SettingsSmartFilterResultsList({
     }
 
     setLoadError(false);
-    pagination.loadNext(PAGE_SIZE, {
+    pagination.loadNext(BATCH_SIZE, {
       onComplete: (error) => setLoadError(Boolean(error)),
     });
   };
 
   return (
     <View style={styles.results}>
-      {visibleResults.map(({ cursor, post, probability }) => {
+      {Array.from(visibleResults.values()).map(({ post, probability }) => {
         const excluded = probability >= exclusionThreshold;
         const percentage = `${Math.floor(probability * 1000) / 10}%`;
 
         return (
-          <View key={cursor}>
+          <View key={post.id}>
             <View
               style={[
                 styles.metadata,
@@ -162,7 +171,7 @@ function SettingsSmartFilterResultsList({
           </View>
         );
       })}
-      {visibleResults.length === 0 &&
+      {visibleResults.size === 0 &&
       !pagination.hasNext &&
       !pagination.isLoadingNext &&
       !loadError ? (

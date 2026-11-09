@@ -36,8 +36,11 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   후보 수와 최대 한 항목의 lookahead만 읽으며, 제외 후 반환 edge 수는 더 적거나 비어 있을 수 있다. `pageInfo`와
   cursor는 소비한 후보 페이지를 나타내고 lookahead 후보는 다음 요청에 남으므로, edge가 비어 있어도 다음 페이지로
   이어질 수 있다. 보이는 Post 수를 채우기 위해 추가 후보를 계속 읽지 않는다.
-- Smart Filter 결과 확인은 현재 Home 후보 중 기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을
-  판정 전 페이지로 보여준다. 이 조회는 누락된 판정을 계산하거나 Home 목록 cache를 변경하지 않는다.
+- Smart Filter 결과 조회는 선택한 Profile의 저장된 Include·Exclude 판정이 있는 Post를 Home 목록과 독립적으로 보여준다.
+  배포 후 새로 기록된 판정만 목록에 포함하며, 기존 판정을 소급해 목록화하지 않는다. Follow나 일반 Profile Mute로 Post를 다시
+  제외하지 않지만 현재 직접 Post 조회의 Visibility·Eligibility·Block 경계는 적용한다.
+  비활성·Content 없는·viewer 작성 Post와 직접 조회할 수 없는 Post는 숨긴다. 조회는 판정을 새로 계산하거나 Home 목록 cache를
+  변경하지 않으며, 결과 batch의 Post 개수와 순서는 고정하지 않는다.
 - [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때만
   기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. Content가 있는 Post는 Quote를
   포함해 그 Post 자체가 판정 대상이며, 작성자가 viewer이면 판정과 판정 cache 재사용을 건너뛰고 기존 eligibility에

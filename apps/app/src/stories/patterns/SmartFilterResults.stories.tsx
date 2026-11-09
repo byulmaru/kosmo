@@ -51,13 +51,18 @@ const meta = {
         SettingsSmartFilterResultsQuery: {
           data: {
             ...queryData,
-            homeTimeline: {
-              edges: resultPosts.map((node, index) => ({
-                cursor: `smart-filter-result-${index}`,
-                node,
-              })),
+            smartFilterResultBatches: {
+              edges: [
+                {
+                  cursor: 'smart-filter-result-batch',
+                  node: {
+                    __typename: 'SmartFilterResultBatch',
+                    posts: resultPosts,
+                  },
+                },
+              ],
               pageInfo: {
-                endCursor: 'smart-filter-result-1',
+                endCursor: 'smart-filter-result-batch',
                 hasNextPage: false,
               },
             },

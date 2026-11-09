@@ -761,13 +761,14 @@ enum PushInstallationPlatform {
 
 type Query {
   currentSession: Session
-  homeTimeline(after: String, before: String, first: Int, ignoreSmartFilter: Boolean = false, last: Int): PostConnection
+  homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   localTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
+  smartFilterResultBatches(after: String, first: Int = 1): SmartFilterResultBatchConnection
 }
 
 type QuoteNotification implements Node & Notification {
@@ -886,6 +887,20 @@ type SetAccountMetadataPayload {
   account: Account!
   key: String!
   value: String!
+}
+
+type SmartFilterResultBatch {
+  posts: [Post!]!
+}
+
+type SmartFilterResultBatchConnection {
+  edges: [SmartFilterResultBatchConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type SmartFilterResultBatchConnectionEdge {
+  cursor: String!
+  node: SmartFilterResultBatch!
 }
 
 input SubmitContentReportInput {

@@ -64,8 +64,15 @@ mockModule('react-relay', {
   useLazyLoadQuery: () => ({ currentSession: { selectedProfile: profile } }),
   usePaginationFragment: () => ({
     data: {
-      homeTimeline: {
-        edges: [{ cursor: 'cursor:one', node: { __id: 'post:one', smartFilterProbability: 0.93 } }],
+      smartFilterResultBatches: {
+        edges: [
+          {
+            cursor: 'cursor:one',
+            node: {
+              posts: [{ __id: 'post:one', id: post.id, smartFilterProbability: 0.93 }],
+            },
+          },
+        ],
       },
     },
     hasNext: false,
