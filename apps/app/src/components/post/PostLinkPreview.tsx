@@ -1,11 +1,8 @@
-import { Suspense, useState } from 'react';
-import { ErrorBoundary } from 'react-error-boundary';
+import { useState } from 'react';
 import { Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import type { ViewStyle } from 'react-native';
-import type { PostLinkPreviewQuery as PostLinkPreviewQueryType } from './__generated__/PostLinkPreviewQuery.graphql';
 
 export type PostLinkPreviewData = Readonly<{
   description: string | null | undefined;
@@ -13,56 +10,6 @@ export type PostLinkPreviewData = Readonly<{
   title: string;
   url: string;
 }>;
-
-const PostLinkPreviewOperation = graphql`
-  query PostLinkPreviewQuery($contentId: ID!) {
-    node(id: $contentId) {
-      __typename
-      ... on PostContent {
-        id
-        linkPreview {
-          url
-          title
-          description
-          imageUrl
-        }
-      }
-    }
-  }
-`;
-
-export function PostLinkPreview({
-  contentId,
-  interactive,
-}: {
-  contentId: string;
-  interactive: boolean;
-}) {
-  return (
-    <ErrorBoundary fallback={null} resetKeys={[contentId]}>
-      <Suspense fallback={null}>
-        <PostLinkPreviewQuery contentId={contentId} interactive={interactive} />
-      </Suspense>
-    </ErrorBoundary>
-  );
-}
-
-function PostLinkPreviewQuery({
-  contentId,
-  interactive,
-}: {
-  contentId: string;
-  interactive: boolean;
-}) {
-  const data = useLazyLoadQuery<PostLinkPreviewQueryType>(
-    PostLinkPreviewOperation,
-    { contentId },
-    { fetchPolicy: 'store-or-network' },
-  );
-  const preview = data.node?.__typename === 'PostContent' ? (data.node.linkPreview ?? null) : null;
-
-  return preview ? <PostLinkPreviewCard interactive={interactive} preview={preview} /> : null;
-}
 
 export function PostLinkPreviewCard({
   interactive = true,

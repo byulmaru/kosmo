@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -65,16 +66,17 @@ mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
   PostMediaGallery: (props: Record<string, unknown>) => createElement('PostMediaGallery', props),
 });
 mockModule(new URL('./PostLinkPreview.tsx', import.meta.url), {
-  PostLinkPreview: (props: Record<string, unknown>) => createElement('PostLinkPreview', props),
+  PostLinkPreviewCard: (props: Record<string, unknown>) =>
+    createElement('PostLinkPreviewCard', props),
 });
 
 type RendererProps = {
   bodyText: string;
-  contentId?: string | null;
   contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
   interactive?: boolean;
+  linkPreview?: PostLinkPreviewData | null;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
   mentionedProfiles: ReadonlyArray<{
@@ -108,11 +110,15 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
-  it('mounts one preview boundary when a visible document contains links', async () => {
-    const contentId = 'content-link-preview';
+  it('renders inline metadata for a visible linked document', async () => {
+    const linkPreview: PostLinkPreviewData = {
+      description: 'Article summary',
+      imageUrl: 'https://example.com/card.png',
+      title: 'Article title',
+      url: 'https://example.com/first',
+    };
     await render({
       bodyText: '첫 링크와 두 번째 링크',
-      contentId,
       contentWarning: null,
       document: {
         version: 1,
@@ -139,21 +145,21 @@ describe('PostContentRenderer', () => {
           ],
         },
       },
+      linkPreview,
       media: [],
       mentionedProfiles: [],
       postId: 'post-link-preview',
     });
 
     assert.deepEqual(
-      rendered('PostLinkPreview').map(({ props }) => props),
-      [{ contentId, interactive: true }],
+      rendered('PostLinkPreviewCard').map(({ props }) => props),
+      [{ interactive: true, preview: linkPreview }],
     );
   });
 
-  it('does not mount a preview for a plain-text URL without a link mark', async () => {
+  it('does not render a card when inline metadata is absent', async () => {
     await render({
       bodyText: 'https://example.com/plain-text',
-      contentId: 'content-plain-url',
       contentWarning: null,
       document: {
         version: 1,
@@ -173,37 +179,48 @@ describe('PostContentRenderer', () => {
       postId: 'post-plain-url',
     });
 
-    assert.equal(rendered('PostLinkPreview').length, 0);
+    assert.equal(rendered('PostLinkPreviewCard').length, 0);
   });
 
   it('does not mount a preview while Content Warning hides the body', async () => {
     const document = linkDocument();
     await render({
       bodyText: '원문 본문',
-      contentId: 'content-warning-link',
       contentWarning: '민감한 내용',
       document,
+      linkPreview: {
+        description: null,
+        imageUrl: null,
+        title: '링크 미리보기',
+        url: 'https://example.com/article',
+      },
       media: [],
       mentionedProfiles: [],
       postId: 'post-warning-link-preview',
     });
 
-    assert.equal(rendered('PostLinkPreview').length, 0);
+    assert.equal(rendered('PostLinkPreviewCard').length, 0);
     const warning = rendered('Pressable').find(
       (node) => node.props.testID === 'post-content-warning',
     );
     assert.ok(warning);
     await act(async () => warning.props.onPress({ stopPropagation: () => undefined }));
     assert.deepEqual(
-      rendered('PostLinkPreview').map(({ props }) => props.contentId),
-      ['content-warning-link'],
+      rendered('PostLinkPreviewCard').map(({ props }) => props.preview),
+      [
+        {
+          description: null,
+          imageUrl: null,
+          title: '링크 미리보기',
+          url: 'https://example.com/article',
+        },
+      ],
     );
   });
 
   it('hides preview when canonical Media nodes exist and the gallery is unavailable', async () => {
     await render({
       bodyText: '원문 본문',
-      contentId: 'content-unavailable-media',
       contentWarning: null,
       document: {
         version: 1,
@@ -225,6 +242,12 @@ describe('PostContentRenderer', () => {
           ],
         },
       },
+      linkPreview: {
+        description: null,
+        imageUrl: null,
+        title: '링크 미리보기',
+        url: 'https://example.com/article',
+      },
       media: null,
       mediaPresentation: 'hidden',
       mentionedProfiles: [],
@@ -232,7 +255,7 @@ describe('PostContentRenderer', () => {
     });
 
     assert.equal(rendered('PostMediaGallery').length, 0);
-    assert.equal(rendered('PostLinkPreview').length, 0);
+    assert.equal(rendered('PostLinkPreviewCard').length, 0);
   });
 
   it('일반 링크는 외부 URL을 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {

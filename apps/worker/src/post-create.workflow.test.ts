@@ -5,6 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { NotificationKind, PostVisibility } from '@kosmo/core/enums';
 import {
+  LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+  linkPreviewCollectionWorkflow,
+} from '@kosmo/core/temporal/link-preview';
+import {
   POST_CREATE_WORKFLOW_TYPE,
   POST_CREATE_WORKFLOW_V2_TYPE,
   postCreateWorkflow,
@@ -15,6 +19,7 @@ import { ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
 import { Worker } from '@temporalio/worker';
 import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { LocalPostInput } from '@kosmo/core/services';
+import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
 import type {
   ActivityPubPostCreateInput,
   PostCreateActivityInput,
@@ -96,6 +101,11 @@ test(
     const effectCalls: string[] = [];
     const notificationCalls: CreateNotificationInput[] = [];
     const analyticsCalls: CapturePostCreatedInput[] = [];
+    const collectionCalls: string[] = [];
+    const blockedCollectionPostId = postIds[0]!;
+    const failedCollectionPostId = postIds[3]!;
+    const collectionStarted = Promise.withResolvers<void>();
+    const collectionReleased = Promise.withResolvers<void>();
     let retryFirstLocalActivity = true;
     let blockedPostId = '';
     let effectStarted = Promise.withResolvers<void>();
@@ -134,6 +144,18 @@ test(
           if (input.sourceId === blockedPostId) {
             effectStarted.resolve();
             await effectReleased.promise;
+          }
+        },
+        collectPostLinkPreviewActivity: async ({
+          postId,
+        }: LinkPreviewCollectionInput): Promise<void> => {
+          collectionCalls.push(postId);
+          if (postId === blockedCollectionPostId) {
+            collectionStarted.resolve();
+            await collectionReleased.promise;
+          }
+          if (postId === failedCollectionPostId) {
+            throw new Error('Link preview fetch failed');
           }
         },
         fanoutHomeTimelinePostActivity: async () => {},
@@ -261,7 +283,9 @@ test(
           effectStarted = Promise.withResolvers<void>();
           effectReleased = Promise.withResolvers<void>();
           const resultPromise = runPostCreate(environment, taskQueue, item.args);
-          if (item.expectedNotificationKinds.length > 0) {
+          if (item.postId === blockedCollectionPostId) {
+            await Promise.all([collectionStarted.promise, effectStarted.promise]);
+          } else if (item.expectedNotificationKinds.length > 0) {
             await effectStarted.promise;
           }
 
@@ -279,14 +303,33 @@ test(
           const workflowHandle = environment.client.workflow.getHandle(workflowId);
           assert.equal((await workflowHandle.describe()).status.name, 'COMPLETED');
           const history = await workflowHandle.fetchHistory();
-          const effectsChildStarted = (history.events ?? []).some((event) =>
-            Boolean(event.startChildWorkflowExecutionInitiatedEventAttributes),
-          );
+          const childWorkflowTypes = (history.events ?? []).flatMap((event) => {
+            const workflowType =
+              event.startChildWorkflowExecutionInitiatedEventAttributes?.workflowType?.name;
+            return workflowType === undefined ? [] : [workflowType];
+          });
           const hasEffects =
             item.expectedNotificationKinds.length > 0 ||
             item.expectedLocalSend ||
             item.expectedAnalytics.length > 0;
-          assert.equal(effectsChildStarted, hasEffects);
+          assert.ok(childWorkflowTypes.includes(LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE));
+          assert.equal(childWorkflowTypes.includes('postCreateEffectsWorkflow'), hasEffects);
+
+          const collectionHandle = environment.client.workflow.getHandle(
+            linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId: item.postId }),
+          );
+          if (item.postId === blockedCollectionPostId) {
+            assert.equal((await collectionHandle.describe()).status.name, 'RUNNING');
+            collectionReleased.resolve();
+            await collectionHandle.result();
+            assert.equal((await collectionHandle.describe()).status.name, 'COMPLETED');
+          } else if (item.postId === failedCollectionPostId) {
+            await assert.rejects(collectionHandle.result());
+            assert.equal((await collectionHandle.describe()).status.name, 'FAILED');
+          } else {
+            await collectionHandle.result();
+            assert.equal((await collectionHandle.describe()).status.name, 'COMPLETED');
+          }
 
           const attemptsForPost = createAttempts.filter(
             (attempt) => attempt.postId === item.postId,
@@ -326,8 +369,10 @@ test(
         }
 
         assert.deepEqual(generatedIds, postIds);
+        assert.deepEqual(collectionCalls.toSorted(), postIds.toSorted());
         assert.ok(effectCalls.length > 0);
       } finally {
+        collectionReleased.resolve();
         effectReleased.resolve();
       }
     });
@@ -529,12 +574,18 @@ test(
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-child-reuse-' + process.pid;
     const postId = randomUUID();
     const effectCalls: string[] = [];
+    const collectionCalls: string[] = [];
     let blockEffectActivities = false;
     const effectReleased = Promise.withResolvers<void>();
 
     const worker = await Worker.create({
       activities: {
         generatePostIdActivity: async () => postId,
+        collectPostLinkPreviewActivity: async ({
+          postId: collectedPostId,
+        }: LinkPreviewCollectionInput) => {
+          collectionCalls.push(collectedPostId);
+        },
         createPostActivity: async ({
           input,
           postId: createdPostId,
@@ -567,6 +618,12 @@ test(
     await worker.runUntil(async () => {
       try {
         const effectsWorkflowId = 'post-create-effects:' + postId;
+        const collectionWorkflowId = linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId });
+        const existingCollection = await environment.client.workflow.start(
+          LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+          { args: [{ postId }], taskQueue, workflowId: collectionWorkflowId },
+        );
+        await existingCollection.result();
         const existingChild = await environment.client.workflow.start('postCreateEffectsWorkflow', {
           args: [{ origin: 'ACTIVITYPUB', postId }],
           taskQueue,
@@ -577,10 +634,11 @@ test(
         blockEffectActivities = true;
 
         const input = activityPubPostInput('https://remote.example/notes/reused-child');
-        const result = await runPostCreate(environment, taskQueue, {
+        const args: PostCreateWorkflowArgs = {
           input,
           requestId: randomUUID(),
-        });
+        };
+        const result = await runPostCreate(environment, taskQueue, args);
 
         assert.deepEqual(result, {
           authorProfileId: input.profileId,
@@ -591,6 +649,22 @@ test(
           (await environment.client.workflow.getHandle(effectsWorkflowId).describe()).status.name,
           'COMPLETED',
         );
+        assert.equal(
+          (await environment.client.workflow.getHandle(collectionWorkflowId).describe()).status
+            .name,
+          'COMPLETED',
+        );
+        const history = await environment.client.workflow
+          .getHandle(postCreateWorkflow.workflowIdFromArgs(args))
+          .fetchHistory();
+        assert.ok(
+          (history.events ?? []).some(
+            (event) =>
+              event.startChildWorkflowExecutionFailedEventAttributes?.workflowType?.name ===
+              LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+          ),
+        );
+        assert.deepEqual(collectionCalls, [postId]);
         assert.equal(effectCalls.length, effectCallsAfterExistingChild);
       } finally {
         effectReleased.resolve();
@@ -612,6 +686,7 @@ test(
     const activityInputs: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
     const analyticsCalls: CapturePostCreatedInput[] = [];
+    const collectionCalls: string[] = [];
     const createPostActivityStub = async (
       activityInput: PostCreateActivityInput,
     ): Promise<PostCreateActivityResult> => {
@@ -633,6 +708,11 @@ test(
         },
         createPostActivity: createPostActivityStub,
         createPostActivityV2: createPostActivityStub,
+        collectPostLinkPreviewActivity: async ({
+          postId: collectedPostId,
+        }: LinkPreviewCollectionInput) => {
+          collectionCalls.push(collectedPostId);
+        },
         createNotificationActivity: async ({ sourceId }: CreateNotificationInput) => {
           effectCalls.push('notification:' + sourceId);
         },
@@ -680,12 +760,16 @@ test(
       const history = await environment.client.workflow
         .getHandle(postCreateWorkflowV2.workflowIdFromArgs(args))
         .fetchHistory();
-      assert.equal(
-        (history.events ?? []).some((event) =>
-          Boolean(event.startChildWorkflowExecutionInitiatedEventAttributes),
-        ),
-        false,
-      );
+      const childWorkflowTypes = (history.events ?? []).flatMap((event) => {
+        const workflowType =
+          event.startChildWorkflowExecutionInitiatedEventAttributes?.workflowType?.name;
+        return workflowType === undefined ? [] : [workflowType];
+      });
+      assert.deepEqual(childWorkflowTypes, [LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE]);
+      await environment.client.workflow
+        .getHandle(linkPreviewCollectionWorkflow.workflowIdFromArgs({ postId }))
+        .result();
+      assert.deepEqual(collectionCalls, [postId]);
       assert.deepEqual(effectCalls, []);
       assert.deepEqual(analyticsCalls, []);
     });

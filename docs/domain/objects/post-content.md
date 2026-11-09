@@ -229,18 +229,22 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 ## Link Preview
 
-발행된 Local·Remote Post의 현재 Content Document body에서 처음 등장하는 유효 HTTP(S) 링크를 Link Preview 후보로
-사용한다. 기존 발행 게시물에도 같은 규칙을 적용하며, 뒤의 링크로 fallback하지 않는다. 표시 가능한 metadata가 있으면
-본문 뒤에 카드 하나를 표시한다. Open Graph title을 우선 사용하고 없으면 HTML `<title>`을 사용하며, 어느 쪽에서도 제목을
-얻지 못하면 카드를 표시하지 않는다. Description과 HTTP(S) image는 선택 값이며 원문 body와 링크는 유지한다.
+발행된 Local·Remote Post 본문의 첫 HTTP(S) 링크를 Link Preview 후보로 사용한다. 뒤의 링크로 fallback하지 않는다. 표시 가능한 metadata가 있으면 본문 뒤에 카드 하나를 표시한다. Open Graph title을
+우선 사용하고 없으면 HTML `<title>`을 사용하며, 어느 쪽에서도 제목을 얻지 못하면 카드를 표시하지 않는다. Description과
+HTTP(S) image는 선택 값이며 원문 body와 링크는 유지한다.
+
+Local 게시물 생성, Federated Post 수신, 게시물 가져오기는 모두 Post 생성 완료 뒤 공통 비동기 처리로 metadata를 가져온다.
+PostContent 조회는 해당 URL에 이미 저장된 metadata만 읽으며 새 조회나 갱신을 시작하지 않는다. 이전 게시물을 대상으로 일괄
+backfill하지 않는다. 따라서 기존 게시물도 같은 정규화 URL의 metadata가 이미 저장되어 있거나, 다른 게시물의 정상적인 생성 후 처리로 그 URL의 metadata가
+저장되면 카드를 표시할 수 있다.
 
 Post에 Media가 하나라도 있으면 Link Preview 카드를 표시하지 않는다. Content Warning으로 본문이 숨겨진 동안 카드도
 함께 숨겨 기존 reveal 경계를 따른다. Metadata를 읽거나 갱신하지 못해도 원문 Post와 본문은 계속 조회·표시할 수 있고,
 첫 조회에 성공 값이 없으면 카드만 생략한다. 이 규칙은 Local·Remote Post에 동일하게 적용한다.
 
-성공한 metadata는 KOSMO 데이터베이스에 보관한다. 7일 freshness가 지나면 새 조회 대상이 되지만 기존 값은 만료만으로
-삭제하지 않는다. 재조회가 실패하면 마지막 성공 metadata를 계속 표시하고, 실패 뒤 10분 동안 반복 재조회를 억제한다.
-마지막 성공 값은 다음 성공한 갱신으로 대체될 때까지 표시할 수 있다.
+성공한 metadata는 정규화 URL을 기준으로 KOSMO 데이터베이스에 보관한다. 생성 후 metadata 처리에서 성공 값은 7일 동안
+fresh로 보며, 이후 갱신 대상이 될 수 있다. 최근 실패 뒤에는 10분 동안 재조회를 억제한다. 기존 성공 값은 freshness 만료나
+갱신 실패만으로 삭제하지 않으며, 다음 성공한 갱신으로 대체될 때까지 표시할 수 있다.
 
 Metadata를 가져오는 URL은 공개 HTTP(S) 주소만 허용한다. 인증정보(user:password)가 포함된 URL, 비기본 포트와
 사설·예약·loopback 주소는 허용하지 않으며, redirect에도 같은 주소 제한을 적용한다. 별도 공용 메타데이터 서비스,

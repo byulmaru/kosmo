@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { lookup as dnsLookup } from 'node:dns';
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -56,6 +57,9 @@ function parseHttpUrl(value: string, base?: URL): URL | null {
 export function normalizeLinkPreviewUrl(value: string): string | null {
   return parseHttpUrl(value)?.href ?? null;
 }
+
+export const getLinkPreviewUrlHash = (url: string): string =>
+  createHash('sha256').update(url).digest('hex');
 
 function networkHostname(value: URL | string): string {
   const hostname = typeof value === 'string' ? value : value.hostname;

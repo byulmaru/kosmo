@@ -505,6 +505,7 @@ const committedPost = (input: PostCreateActivityInput): PostCreateActivityResult
 });
 
 const postCreateEffectsActivities = {
+  collectPostLinkPreviewActivity: async () => {},
   createNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => [],
   fanoutHomeTimelinePostActivity: async () => {},

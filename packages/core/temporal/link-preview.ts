@@ -1,21 +1,14 @@
-import { createHash } from 'node:crypto';
-import type { LinkPreview } from '@kosmo/core/link-preview';
 import type { WorkflowDefinition } from './client';
 
-export const LINK_PREVIEW_REFRESH_WORKFLOW_TYPE = 'linkPreviewRefreshWorkflow';
+export const LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE = 'linkPreviewCollectionWorkflow';
 
-export type LinkPreviewRefreshInput = {
-  readonly url: string;
+export type LinkPreviewCollectionInput = {
+  readonly postId: string;
 };
 
-export const getLinkPreviewUrlHash = (url: string): string =>
-  createHash('sha256').update(url).digest('hex');
-
-export const linkPreviewRefreshWorkflow: WorkflowDefinition<
-  (input: LinkPreviewRefreshInput) => Promise<LinkPreview | null>
+export const linkPreviewCollectionWorkflow: WorkflowDefinition<
+  (input: LinkPreviewCollectionInput) => Promise<void>
 > = {
-  workflow: LINK_PREVIEW_REFRESH_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ url }) =>
-    `${LINK_PREVIEW_REFRESH_WORKFLOW_TYPE}:${getLinkPreviewUrlHash(url)}`,
-  timeoutMs: 5_000,
+  workflow: LINK_PREVIEW_COLLECTION_WORKFLOW_TYPE,
+  workflowIdFromArgs: ({ postId }) => `post-link-preview:${postId}`,
 };

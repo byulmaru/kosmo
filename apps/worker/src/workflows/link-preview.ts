@@ -1,33 +1,18 @@
 import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
 import { z } from 'zod';
-import type { LinkPreview } from '@kosmo/core/link-preview';
-import type { LinkPreviewRefreshInput } from '@kosmo/core/temporal/link-preview';
+import type { LinkPreviewCollectionInput } from '@kosmo/core/temporal/link-preview';
 import type * as activities from '../activities';
 
-const httpUrlSchema = z
-  .url()
-  .refine((value) => {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      url.hostname !== '' &&
-      url.username === '' &&
-      url.password === '' &&
-      url.port === ''
-    );
-  })
-  .transform((value) => new URL(value).href);
+const inputSchema = z.object({ postId: z.uuid() }) satisfies z.ZodType<LinkPreviewCollectionInput>;
 
-const inputSchema = z.object({ url: httpUrlSchema }) satisfies z.ZodType<LinkPreviewRefreshInput>;
-
-const { refreshLinkPreviewActivity } = proxyActivities<typeof activities>({
+const { collectPostLinkPreviewActivity } = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 1 },
   startToCloseTimeout: '8 seconds',
 });
 
-export async function linkPreviewRefreshWorkflow(
-  input: LinkPreviewRefreshInput,
-): Promise<LinkPreview | null> {
+export async function linkPreviewCollectionWorkflow(
+  input: LinkPreviewCollectionInput,
+): Promise<void> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
     throw ApplicationFailure.nonRetryable(
@@ -36,5 +21,5 @@ export async function linkPreviewRefreshWorkflow(
     );
   }
 
-  return refreshLinkPreviewActivity(parsed.data);
+  return collectPostLinkPreviewActivity(parsed.data);
 }

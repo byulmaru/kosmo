@@ -19,6 +19,7 @@ import type { ProfileNameBlock_profile$key } from '@/components/profile/__genera
 import type { PostContentMention_profile$key } from './__generated__/PostContentMention_profile.graphql';
 import type { PostSourcePresentationView_post$key } from './__generated__/PostSourcePresentationView_post.graphql';
 import type { PostSourcePreview_source$key } from './__generated__/PostSourcePreview_source.graphql';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 type AuthorProfile = ProfileNameBlock_profile$key & {
@@ -38,10 +39,10 @@ type MentionedProfile = PostContentMention_profile$key & {
 };
 
 type PresentationContent = {
-  readonly id: string;
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly linkPreview: PostLinkPreviewData | null | undefined;
   readonly media:
     | ReadonlyArray<{
         readonly altText: string | null | undefined;
@@ -58,10 +59,15 @@ const PostSourcePreviewFragment = graphql`
     id
     createdAt
     content {
-      id
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageUrl
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -90,10 +96,15 @@ const PostSourcePresentationViewFragment = graphql`
     createdAt
     visibility
     content {
-      id
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageUrl
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -299,10 +310,10 @@ export function PostSourcePreview({
         <View style={styles.sourceBody} testID="source-post-body">
           <PostContentRenderer
             bodyText={source.content.bodyText}
-            contentId={source.content.id}
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
+            linkPreview={source.content.linkPreview}
             media={presentationMedia(source.content.media)}
             mentionedProfiles={source.content.mentionedProfiles}
             postId={source.id}
@@ -413,9 +424,9 @@ function PostBodyPressTarget({
     >
       <PostContentRenderer
         bodyText={content.bodyText}
-        contentId={content.id}
         contentWarning={content.contentWarning}
         document={content.document}
+        linkPreview={content.linkPreview}
         media={presentationMedia(content.media)}
         mentionedProfiles={content.mentionedProfiles}
         onMediaOpen={onMediaOpen}

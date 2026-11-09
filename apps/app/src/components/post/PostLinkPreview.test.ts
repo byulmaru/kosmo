@@ -36,13 +36,6 @@ mockModule('@/theme/ThemeProvider', {
     foregroundSecondary: '#64646f',
   }),
 });
-mockModule('react-relay', {
-  graphql: () => ({}),
-  useLazyLoadQuery: () => {
-    throw new Error('The card presentation test must not run its Relay query.');
-  },
-});
-
 let PostLinkPreviewCard: ComponentType<{
   interactive?: boolean;
   preview: PostLinkPreviewData;
