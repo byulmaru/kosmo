@@ -15,17 +15,12 @@
 - `apps/api`의 `lint:schema`는 runtime GraphQL schema를 사전식으로 정렬한 결과와 committed
   `schema.graphql`이 완전히 같은지 검사한다. `apps/api`의 aggregate `test`가 이를 먼저 실행하므로 schema를
   변경하면 generated SDL도 같은 변경에서 정렬해야 CI를 통과한다.
-- `pnpm --filter @kosmo/app licenses:generate`는 Relay 뒤 Web·Android·iOS production Expo export,
-  source/asset map, native Expo·React Native autolinking, evaluated Expo font config로 배포 npm 버전 집합을
-  수집한다. 설치된 manifest dependency graph나 강제 optional platform install로 범위를 만들지 않는다.
-  집합을 pnpm production license report에 대조한 다음에만 원본·NOTICE·supplement 텍스트를 읽는다.
-  검증된 upstream supplemental text는 source commit을 확인해 `apps/app/licenses/`에 기록한다.
-- `apps/app`의 `licenses:check`는 install이나 export를 수행하지 않는다. committed artifact의 shape와
-  `pnpm-lock.yaml`, 두 supplemental JSON, `pending-notices.json`, emoji `NOTICE.md`의 combined
-  `sourceSha256`을 확인한 뒤 artifact의 npm key 전체를 현재 pnpm production metadata에 대조한다.
-  `licenses:verify`는 fresh 3-platform scope와 모든 notice record, exact key set, source checksum을 확인한다.
-  앱 `check`는 `licenses:check` → Relay → `licenses:verify` → TypeScript 순서이며, install-time `prepare`는
-  가벼운 check와 Relay만 실행한다. License data는 앱에서 offline으로 읽는다.
+- `pnpm --filter @kosmo/app licenses:generate`는 Relay나 Expo export 없이 pnpm production license report의
+  전체 `@kosmo/app` production package 버전을 사용한다. export에 들어가지 않는 production dependency도
+  포함하며, 이것은 실제 bundle 구성 목록을 뜻하지 않는다. production dependency가 바뀐 뒤 수동으로
+  실행한다. 생성 중 원본·NOTICE·supplement 텍스트를 확인하고, 검증된 upstream supplemental text는 source
+  commit을 확인해 `apps/app/licenses/`에 기록한다. 자동 freshness check는 없다. License data는 앱에서
+  offline으로 읽는다.
 - `apps/app`의 `prepare`, `dev`, `check`, `build`는 필요한 Relay generated artifact보다 먼저 `relay-compiler`를 실행한다. `__generated__`는 commit하지 않으므로 clean checkout과 CI에서도 compiler 선행을 생략하지 않는다.
 - universal client 검증은 `pnpm --filter @kosmo/app relay`, `check`, `export:web`을 분리해 실패 경계를 확인한다. `export:web`은 이전 환경의 `EXPO_PUBLIC_*` inline 값을 Metro cache에서 재사용하지 않도록 `expo export --clear`를 사용한다. Expo web export 산출물은 `apps/app/dist`이며 UI source를 소유하지 않는 `apps/web` Hono BFF가 이를 제공한다.
 - BFF 검증은 federation-first 전역 전달과 공식 미처리 callback, federation 표현의 404 보존, `/health`, browser 로그인/callback, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 응답, SPA deep-link fallback을 포함한다. Native session exchange는 API GraphQL mutation의 별도 API E2E로 검증한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.

@@ -1,4 +1,6 @@
-# App distribution license inventory
+# Historical three-platform distribution license inventory
+
+> This analysis describes the former Expo export and native autolinking package scope. The current generated artifact uses the complete `@kosmo/app` pnpm production license report, which also includes production dependencies that may not appear in app exports. The counts and reproduction behavior below are historical and do not describe the current artifact.
 
 ## Captured package set
 
@@ -20,17 +22,15 @@ The exact union of 162 npm package versions was verified again on `cdaff941609dc
 
 The [npm version record](https://registry.npmjs.org/standard-navigation/0.0.5) declares MIT and points to upstream commit `0016fae7800b9f27bab91326697b740a6d2266dc`. The [published npm tarball](https://registry.npmjs.org/standard-navigation/-/standard-navigation-0.0.5.tgz) matched the registry SHA-1 and SRI. Neither that exact tarball nor the [linked immutable source commit](https://github.com/react-navigation/standard-navigation/tree/0016fae7800b9f27bab91326697b740a6d2266dc) contained a nonempty license or notice file or copyright/license text in the inspected text files. There is no authentic original text to add. The artifact preserves the empty pending row; the UI omits blank-text rows, which does not resolve this evidence gap.
 
-## Reproduction
+## Current artifact generation
 
-Use the repository-pinned Node `26.12.1` and pnpm `11.28.8` toolchain:
+After changing `@kosmo/app` production dependencies, manually regenerate the current artifact with the repository-pinned Node `26.12.1` and pnpm `11.28.8` toolchain:
 
 ```sh
 pnpm --filter @kosmo/app licenses:generate
-pnpm --filter @kosmo/app licenses:verify
-pnpm --filter @kosmo/app licenses:check
 ```
 
-`licenses:generate` runs Relay, performs fresh production exports with `--no-bytecode`, and writes the exact union. These temporary exports retain the source and asset maps used for package collection; they are analysis inputs, not release artifacts. `licenses:verify` repeats scope collection and checks the exact package set, full notice records, and source checksum without writing. `licenses:check` performs no exports or installs; it checks the committed artifact and its selected records against installed production metadata. The app `check` runs that light check, Relay, `licenses:verify`, then TypeScript. Install-time `prepare` does not run exports.
+The generator reads the complete pnpm production license report for `@kosmo/app`. It includes dependencies that may not appear in Expo exports. The generator itself does not invoke Relay, Expo exports, or optional-package installation, and does not compare the result with the committed artifact automatically.
 
 ## Audit boundary
 

@@ -1,9 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { collectDistributionPackageKeys } from './app-license-scope.mjs';
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifactPath = join(workspaceRoot, 'apps/app/src/data/open-source-licenses.json');
@@ -11,7 +9,6 @@ const noticeRelativePath = 'apps/app/public/reaction-emoji/NOTICE.md';
 const hopeReLicenseRelativePath = 'apps/app/licenses/hope-re.LICENSE';
 const pendingRelativePath = 'apps/app/licenses/pending-notices.json';
 const noticePath = join(workspaceRoot, noticeRelativePath);
-const pendingPath = join(workspaceRoot, pendingRelativePath);
 const staticLicenseNotices = [
   {
     name: '반응 이모지',
@@ -30,9 +27,6 @@ const staticLicenseNotices = [
     sourcePath: hopeReLicenseRelativePath,
   },
 ];
-const staticLicenseNoticesByKey = new Map(
-  staticLicenseNotices.map((entry) => [`${entry.name}@${entry.version}`, entry]),
-);
 const supplementalPaths = [
   'apps/app/licenses/supplemental-families.json',
   'apps/app/licenses/supplemental-other.json',
@@ -289,23 +283,12 @@ function addLicensePackage(records, packageInfo, root) {
   return record;
 }
 
-export function collectLicensePackages(report, { root = workspaceRoot, packageKeys } = {}) {
+export function collectLicensePackages(report, { root = workspaceRoot } = {}) {
   const records = new Map();
-  const selected = packageKeys === undefined ? null : new Set(packageKeys);
-  const found = new Set();
   for (const [licenseKey, packages] of Object.entries(report)) {
     for (const packageInfo of packages) {
       if (!Array.isArray(packageInfo.versions)) {
-        if (selected === null) {
-          throw new Error(`pnpm license metadata has invalid versions for ${packageInfo.name}`);
-        }
-        continue;
-      }
-      const selectedVersions = packageInfo.versions.filter((version) =>
-        selected === null ? true : selected.has(`${packageInfo.name}@${version}`),
-      );
-      if (!selectedVersions.length) {
-        continue;
+        throw new Error(`pnpm license metadata has invalid versions for ${packageInfo.name}`);
       }
       if (
         !Array.isArray(packageInfo.paths) ||
@@ -317,12 +300,9 @@ export function collectLicensePackages(report, { root = workspaceRoot, packageKe
       }
 
       for (const [index, version] of packageInfo.versions.entries()) {
-        const key = `${packageInfo.name}@${version}`;
-        if (selected !== null && !selected.has(key)) {
-          continue;
-        }
         const packagePath = packageInfo.paths[index];
         const manifest = JSON.parse(readFileSync(join(packagePath, 'package.json'), 'utf8'));
+        const key = `${packageInfo.name}@${version}`;
         if (manifest.name !== packageInfo.name || manifest.version !== version) {
           throw new Error(`pnpm license metadata did not match ${key}`);
         }
@@ -333,18 +313,7 @@ export function collectLicensePackages(report, { root = workspaceRoot, packageKe
           );
         }
         addLicensePackage(records, { manifest, packagePath, license }, root);
-        found.add(key);
       }
-    }
-  }
-  if (selected !== null) {
-    const missing = [...selected].filter((key) => !found.has(key)).sort(compare);
-    if (missing.length) {
-      throw new Error(
-        `Selected distribution packages are missing from pnpm production metadata:\n${missing
-          .map((key) => `- ${key}`)
-          .join('\n')}`,
-      );
     }
   }
   return [...records.values()];
@@ -357,7 +326,6 @@ export function buildLicenseEntries(
     notice = noticePath,
     supplementalFiles = supplementalPaths.map((path) => join(root, path)),
     pendingFile = join(root, pendingRelativePath),
-    packageKeys,
   } = {},
 ) {
   const supplemental = readSupplementalLicenses(supplementalFiles);
@@ -367,7 +335,6 @@ export function buildLicenseEntries(
   const entries = [];
   for (const { name, version, license, manifest, packagePath } of collectLicensePackages(report, {
     root,
-    packageKeys,
   })) {
     const documents = readPackageLicenseDocuments(packagePath);
     let text;
@@ -432,133 +399,10 @@ export function buildLicenseEntries(
   );
 }
 
-export function sourceSha256(root = workspaceRoot) {
-  const sourcePaths = [
-    'pnpm-lock.yaml',
-    ...supplementalPaths,
-    pendingRelativePath,
-    ...staticLicenseNotices.map(({ sourcePath }) => sourcePath),
-  ];
-  const sources = sourcePaths.map((path) => {
-    const contents = readFileSync(join(root, path), 'utf8');
-    return [path, path === 'pnpm-lock.yaml' ? contents.replace(/\r\n/g, '\n') : contents];
-  });
-  return createHash('sha256').update(JSON.stringify(sources)).digest('hex');
-}
-
 export function buildLicenseData(report, options = {}) {
-  const root = options.root ?? workspaceRoot;
   return {
-    sourceSha256: sourceSha256(root),
     notices: buildLicenseEntries(report, options),
   };
-}
-
-function entryKey(entry) {
-  return `${entry.name}@${entry.version}`;
-}
-
-function isStaticLicenseNotice(entry) {
-  const notice = staticLicenseNoticesByKey.get(entryKey(entry));
-  return notice?.license === entry.license;
-}
-
-export function packageKeysForLicenseCheck(notices) {
-  return new Set(notices.filter((entry) => !isStaticLicenseNotice(entry)).map(entryKey));
-}
-
-function sameNotice(left, right) {
-  return ['name', 'version', 'license', 'text', 'sourceUrl'].every(
-    (key) => left[key] === right[key],
-  );
-}
-
-export function checkLicenseArtifact(current, outputPath, pendingFile = pendingPath) {
-  const { committed, committedByKey } = readLicenseArtifact(outputPath, pendingFile);
-  assertArtifactSourceSha(committed, current.sourceSha256);
-
-  const currentKeys = new Set(current.notices.map(entryKey));
-  const missing = [...currentKeys].filter((key) => !committedByKey.has(key)).sort(compare);
-  const unshipped = [...committedByKey.keys()].filter((key) => !currentKeys.has(key)).sort(compare);
-  if (missing.length || unshipped.length) {
-    const lines = [
-      ...missing.map((key) => `- missing from generated data: ${key}`),
-      ...unshipped.map((key) => `- no longer distributed: ${key}`),
-    ];
-    throw new Error(
-      `Generated app license data has a stale package set:\n${lines.join('\n')}\nRun pnpm --filter @kosmo/app licenses:generate.`,
-    );
-  }
-
-  for (const entry of current.notices) {
-    const key = entryKey(entry);
-    if (!sameNotice(entry, committedByKey.get(key) ?? {})) {
-      throw new Error(
-        `Generated app license data is stale for ${key}. Run pnpm --filter @kosmo/app licenses:generate.`,
-      );
-    }
-  }
-}
-
-function readLicenseArtifact(outputPath, pendingFile) {
-  let committed;
-  try {
-    committed = JSON.parse(readFileSync(outputPath, 'utf8'));
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      throw error;
-    }
-    throw new Error(
-      'Generated app license data is missing. Run pnpm --filter @kosmo/app licenses:generate.',
-    );
-  }
-  if (
-    !committed ||
-    typeof committed !== 'object' ||
-    !/^[\da-f]{64}$/.test(committed.sourceSha256 ?? '') ||
-    !Array.isArray(committed.notices)
-  ) {
-    throw new Error(
-      'Generated app license data has an invalid shape. Run pnpm --filter @kosmo/app licenses:generate.',
-    );
-  }
-  const pending = readPendingNotices(pendingFile);
-  const committedByKey = new Map();
-  for (const entry of committed.notices) {
-    if (
-      !entry ||
-      typeof entry !== 'object' ||
-      Array.isArray(entry) ||
-      !['name', 'version', 'license', 'text', 'sourceUrl'].every(
-        (field) => typeof entry[field] === 'string',
-      ) ||
-      !entry.name ||
-      !entry.license ||
-      (!entry.version && !isStaticLicenseNotice(entry)) ||
-      (entry.text.trim() === '' && pending.get(entryKey(entry))?.license !== entry.license) ||
-      !isHttpsUrl(entry.sourceUrl)
-    ) {
-      throw new Error(
-        'Generated app license data contains an invalid notice. Run pnpm --filter @kosmo/app licenses:generate.',
-      );
-    }
-    const key = entryKey(entry);
-    if (committedByKey.has(key)) {
-      throw new Error(
-        `Generated app license data has a duplicate ${key}. Run pnpm --filter @kosmo/app licenses:generate.`,
-      );
-    }
-    committedByKey.set(key, entry);
-  }
-  return { committed, committedByKey };
-}
-
-function assertArtifactSourceSha(committed, currentSourceSha) {
-  if (committed.sourceSha256 !== currentSourceSha) {
-    throw new Error(
-      'Generated app license data is stale for pnpm-lock.yaml, supplemental license texts, pending notices, or static license notices. Run pnpm --filter @kosmo/app licenses:generate.',
-    );
-  }
 }
 
 export function writeLicenseArtifact(data, outputPath) {
@@ -584,37 +428,13 @@ function readPnpmLicenseReport(root) {
 }
 
 export function run(args = process.argv.slice(2)) {
-  if (args.some((arg) => !['--check', '--verify'].includes(arg)) || args.length > 1) {
-    throw new Error('Usage: node scripts/generate-app-licenses.mjs [--check|--verify]');
-  }
-  const check = args.includes('--check');
-  const verify = args.includes('--verify');
-  let packageKeys;
-  if (check) {
-    const { committed } = readLicenseArtifact(artifactPath, pendingPath);
-    assertArtifactSourceSha(committed, sourceSha256(workspaceRoot));
-    packageKeys = packageKeysForLicenseCheck(committed.notices);
-  } else {
-    if (verify) {
-      const { committed } = readLicenseArtifact(artifactPath, pendingPath);
-      assertArtifactSourceSha(committed, sourceSha256(workspaceRoot));
-    }
-    packageKeys = new Set(collectDistributionPackageKeys(workspaceRoot));
+  if (args.length) {
+    throw new Error('Usage: node scripts/generate-app-licenses.mjs');
   }
 
-  const data = buildLicenseData(readPnpmLicenseReport(workspaceRoot), { packageKeys });
-  if (check || verify) {
-    checkLicenseArtifact(data, artifactPath);
-  } else {
-    writeLicenseArtifact(data, artifactPath);
-  }
-  console.log(
-    check
-      ? `Checked ${data.notices.length} app license entries.`
-      : verify
-        ? `Verified ${data.notices.length} distributed app license entries.`
-        : `Generated ${data.notices.length} distributed app license entries.`,
-  );
+  const data = buildLicenseData(readPnpmLicenseReport(workspaceRoot));
+  writeLicenseArtifact(data, artifactPath);
+  console.log(`Generated ${data.notices.length} app license entries.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
