@@ -31,7 +31,7 @@ test('SDK Worker 상태를 health 응답에 그대로 반영한다', () => {
   assert.equal(healthStatus('/unknown', 'RUNNING'), 404);
 });
 
-test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout: 5_000 }, async (t) => {
+test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout: 20_000 }, async (t) => {
   const temporal = createServer();
   const sockets = new Set<Socket>();
   temporal.on('connection', (socket) => {
@@ -75,8 +75,10 @@ test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout
   if (child.connected) {
     child.disconnect();
   }
+  // Keep the SIGTERM exit deadline independent from the cold-start budget.
+  const exitPromise = once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
   child.kill('SIGTERM');
-  const [code, signal] = await once(child, 'exit');
+  const [code, signal] = await exitPromise;
 
   assert.equal(code, null);
   assert.equal(signal, 'SIGTERM');
