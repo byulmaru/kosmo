@@ -80,6 +80,7 @@ type HomeConnection = {
     readonly cursor: string;
     readonly node: {
       readonly id: string;
+      readonly smartFilterProbability?: number | null;
       readonly content: { readonly bodyText: string } | null;
       readonly repostSource?: {
         readonly id: string;
@@ -1009,6 +1010,289 @@ test('bounds Home DB candidate pages before natural-language filtering', async (
   }
 });
 
+test('reads all Home candidates without natural-language filtering when requested', async () => {
+  const viewer = await createAuth();
+  const candidateAuthor = await createProfile('smart-filter-results-candidate-author');
+  const blockedAuthor = await createProfile('smart-filter-results-blocked-author');
+  const mutedAuthor = await createProfile('smart-filter-results-muted-author');
+  await db.insert(ProfileFollows).values([
+    { followerProfileId: viewer.profile.id, followeeProfileId: candidateAuthor.id },
+    { followerProfileId: viewer.profile.id, followeeProfileId: blockedAuthor.id },
+    { followerProfileId: viewer.profile.id, followeeProfileId: mutedAuthor.id },
+  ]);
+
+  const idPrefix = crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+  const candidates = [
+    await createContentfulPost(
+      candidateAuthor.id,
+      'exclude-me newest eligible candidate',
+      `${idPrefix}000000000004`,
+    ),
+    await createContentfulPost(
+      candidateAuthor.id,
+      'eligible candidate without a decision yet',
+      `${idPrefix}000000000003`,
+    ),
+    await createContentfulPost(
+      candidateAuthor.id,
+      'another eligible candidate without a decision yet',
+      `${idPrefix}000000000002`,
+    ),
+  ];
+  await createContentfulPost(
+    blockedAuthor.id,
+    'exclude-me blocked candidate must stay hidden',
+    `${idPrefix}000000000006`,
+  );
+  await createContentfulPost(
+    mutedAuthor.id,
+    'exclude-me muted candidate must stay hidden',
+    `${idPrefix}000000000005`,
+  );
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: viewer.profile.id,
+    targetProfileId: blockedAuthor.id,
+  });
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: viewer.profile.id,
+    targetProfileId: mutedAuthor.id,
+  });
+  await db.insert(NaturalLanguageMuteRules).values({
+    ownerProfileId: viewer.profile.id,
+    condition: 'exclude matching posts',
+  });
+
+  const redisUrl = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+  const modelInputs: string[] = [];
+  const restoreModel = installNaturalMuteModel((request) => {
+    const text = naturalMuteInputText(request);
+    modelInputs.push(text);
+    return text.includes('exclude-me') ? 0.99 : 0.1;
+  });
+  try {
+    const filtered = await requestHome(viewer.token, { first: 1 });
+    assert.equal(filtered.errors, undefined, JSON.stringify(filtered.errors));
+    assert.deepEqual(filtered.data?.homeTimeline.edges, []);
+    assert.equal(filtered.data?.homeTimeline.pageInfo.hasNextPage, true);
+    assert.ok(modelInputs.some((text) => text.includes('exclude-me newest eligible candidate')));
+
+    const callsBeforeResults = modelInputs.length;
+    const expectedPostIds = candidates
+      .map(({ id }) => id)
+      .sort((left, right) => right.localeCompare(left));
+    const firstResultsPage = await requestHome(viewer.token, {
+      first: 1,
+      ignoreSmartFilter: true,
+    });
+    assert.equal(firstResultsPage.errors, undefined, JSON.stringify(firstResultsPage.errors));
+    assert.deepEqual(
+      firstResultsPage.data?.homeTimeline.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Post', expectedPostIds[0]!)],
+    );
+    assert.equal(firstResultsPage.data?.homeTimeline.pageInfo.hasNextPage, true);
+
+    const nextResultsPage = await requestHome(viewer.token, {
+      first: 2,
+      after: firstResultsPage.data!.homeTimeline.pageInfo.endCursor!,
+      ignoreSmartFilter: true,
+    });
+    assert.equal(nextResultsPage.errors, undefined, JSON.stringify(nextResultsPage.errors));
+    assert.deepEqual(
+      nextResultsPage.data?.homeTimeline.edges.map(({ node }) => node.id),
+      expectedPostIds.slice(1).map((id) => encodeGlobalId('Post', id)),
+    );
+    assert.equal(nextResultsPage.data?.homeTimeline.pageInfo.hasNextPage, false);
+    assert.equal(nextResultsPage.data?.homeTimeline.pageInfo.hasPreviousPage, true);
+    assert.equal(modelInputs.length, callsBeforeResults);
+    assert.ok(
+      modelInputs.every(
+        (text) =>
+          !text.includes('blocked candidate must stay hidden') &&
+          !text.includes('muted candidate must stay hidden'),
+      ),
+    );
+  } finally {
+    restoreModel();
+    if (redisUrl === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = redisUrl;
+    }
+  }
+});
+
+test(
+  'reads only existing selected-profile Smart Filter probabilities without extending cache expiry',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth();
+    const sourceAuthor = await createProfile('smart-filter-results-source-author');
+    const quoteAuthor = await createProfile('smart-filter-results-quote-author');
+    const repostAuthor = await createProfile('smart-filter-results-repost-author');
+    const unjudgedAuthor = await createProfile('smart-filter-results-unjudged-author');
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.profile.id, followeeProfileId: sourceAuthor.id },
+      { followerProfileId: viewer.profile.id, followeeProfileId: quoteAuthor.id },
+      { followerProfileId: viewer.profile.id, followeeProfileId: repostAuthor.id },
+      { followerProfileId: viewer.profile.id, followeeProfileId: unjudgedAuthor.id },
+    ]);
+
+    const source = await createContentfulPost(sourceAuthor.id, 'cached result source');
+    const quote = await createQuote(quoteAuthor.id, source.id, 'cached result quote');
+    const repost = await createContentlessRepost(repostAuthor.id, source.id);
+    const ownPost = await createContentfulPost(viewer.profile.id, 'viewer authored post');
+    const ownQuote = await createQuote(viewer.profile.id, source.id, 'viewer authored quote');
+    const ownSource = await createContentfulPost(viewer.profile.id, 'viewer authored source');
+    const ownRepost = await createContentlessRepost(repostAuthor.id, ownSource.id);
+    const unjudged = await createContentfulPost(unjudgedAuthor.id, 'no cached result yet');
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.profile.id,
+      condition: 'exclude cached result misses',
+    });
+
+    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
+    const homeTimelineKey = `kosmo:home-timeline:profile:${viewer.profile.id}`;
+    const values = [
+      [sourceKey, { decision: 'exclude', probability: 0.91 }],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, quote.id),
+        { decision: 'include', probability: 0.37 },
+      ],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, repost.id),
+        { decision: 'include', probability: 0.14 },
+      ],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, ownPost.id),
+        { decision: 'exclude', probability: 0.99 },
+      ],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, ownQuote.id),
+        { decision: 'include', probability: 0.72 },
+      ],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, ownSource.id),
+        { decision: 'exclude', probability: 0.83 },
+      ],
+      [
+        naturalMuteDecisionKey(viewer.profile.id, ownRepost.id),
+        { decision: 'include', probability: 0.22 },
+      ],
+    ] as const;
+    const cacheKeys = values.map(([key]) => key);
+    for (const [key, value] of values) {
+      await runRedisCommand((client) =>
+        client.set(key, JSON.stringify(value), { EX: key === sourceKey ? 60 : 604_800 }),
+      );
+    }
+    await runRedisCommand((client) =>
+      client.zAdd(homeTimelineKey, { score: 123, value: source.id }),
+    );
+    await runRedisCommand((client) => client.expire(homeTimelineKey, 60));
+    const homeCacheBefore = (
+      await runRedisCommand((client) => client.zRangeWithScores(homeTimelineKey, 0, -1))
+    )?.value;
+    const homeCacheTtlBefore = (await runRedisCommand((client) => client.ttl(homeTimelineKey)))
+      ?.value;
+    assert.deepEqual(homeCacheBefore, [{ value: source.id, score: 123 }]);
+    assert.ok(homeCacheTtlBefore !== undefined && homeCacheTtlBefore > 50);
+    const ttlBefore = (await runRedisCommand((client) => client.ttl(sourceKey)))?.value;
+    assert.ok(ttlBefore !== undefined && ttlBefore > 50);
+
+    const modelRequests: NaturalMuteRequest[] = [];
+    const restoreModel = installNaturalMuteModel((request) => {
+      modelRequests.push(request);
+      return 0.99;
+    });
+    try {
+      const result = await requestHome(viewer.token, {
+        first: 20,
+        ignoreSmartFilter: true,
+        includeSmartFilterProbability: true,
+      });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      const probabilityById = new Map(
+        result.data?.homeTimeline.edges.map(({ node }) => [node.id, node.smartFilterProbability]),
+      );
+      const probabilityFor = (postId: string) =>
+        probabilityById.get(encodeGlobalId('Post', postId));
+      assert.equal(probabilityFor(source.id), 0.91);
+      assert.equal(probabilityFor(quote.id), 0.37);
+      assert.equal(probabilityFor(repost.id), 0.91);
+      assert.equal(probabilityFor(ownPost.id), null);
+      assert.equal(probabilityFor(ownQuote.id), null);
+      assert.equal(probabilityFor(ownSource.id), null);
+      assert.equal(probabilityFor(ownRepost.id), null);
+      assert.equal(probabilityFor(unjudged.id), null);
+      assert.equal(modelRequests.length, 0);
+
+      const homeCacheAfter = (
+        await runRedisCommand((client) => client.zRangeWithScores(homeTimelineKey, 0, -1))
+      )?.value;
+      const homeCacheTtlAfter = (await runRedisCommand((client) => client.ttl(homeTimelineKey)))
+        ?.value;
+      assert.deepEqual(homeCacheAfter, homeCacheBefore);
+      assert.ok(
+        homeCacheTtlAfter !== undefined &&
+          homeCacheTtlAfter > 0 &&
+          homeCacheTtlAfter <= homeCacheTtlBefore,
+      );
+      const ttlAfter = (await runRedisCommand((client) => client.ttl(sourceKey)))?.value;
+      assert.ok(ttlAfter !== undefined && ttlAfter > 0 && ttlAfter <= ttlBefore);
+
+      const secondProfile = await createProfile('smart-filter-results-second-profile');
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: secondProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      await db.insert(ProfileFollows).values({
+        followerProfileId: secondProfile.id,
+        followeeProfileId: sourceAuthor.id,
+      });
+      const secondProfileKey = naturalMuteDecisionKey(secondProfile.id, source.id);
+      cacheKeys.push(secondProfileKey);
+      await runRedisCommand((client) =>
+        client.set(secondProfileKey, JSON.stringify({ decision: 'include', probability: 0.42 }), {
+          EX: 60,
+        }),
+      );
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: secondProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+
+      const secondProfileResult = await requestHome(viewer.token, {
+        first: 20,
+        ignoreSmartFilter: true,
+        includeSmartFilterProbability: true,
+      });
+      assert.equal(
+        secondProfileResult.errors,
+        undefined,
+        JSON.stringify(secondProfileResult.errors),
+      );
+      const secondProfileSource = secondProfileResult.data?.homeTimeline.edges.find(
+        ({ node }) => node.id === encodeGlobalId('Post', source.id),
+      );
+      assert.equal(secondProfileSource?.node.smartFilterProbability, 0.42);
+
+      const unauthenticated = await requestGraphQL<{
+        readonly node: { readonly smartFilterProbability: number | null } | null;
+      }>(
+        `query PublicPostProbability($id: ID!) { node(id: $id) { ... on Post { smartFilterProbability } } }`,
+        { id: encodeGlobalId('Post', source.id) },
+      );
+      assert.equal(unauthenticated.errors, undefined, JSON.stringify(unauthenticated.errors));
+      assert.equal(unauthenticated.data?.node?.smartFilterProbability, null);
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) => client.unlink([...cacheKeys, homeTimelineKey]));
+    }
+  },
+);
+
 test('keeps forward and backward Home lookahead candidates for the next page', async () => {
   const forwardViewer = await createAuth();
   const forwardAuthor = await createProfile('natural-mute-forward-author');
@@ -1825,12 +2109,21 @@ async function requestHome(
     readonly last?: number;
     readonly after?: string;
     readonly before?: string;
+    readonly ignoreSmartFilter?: boolean;
+    readonly includeSmartFilterProbability?: boolean;
   },
 ) {
   return requestGraphQL<{ homeTimeline: HomeConnection }>(
-    `query HomeTimeline($first: Int, $last: Int, $after: String, $before: String) {
-      homeTimeline(first: $first, last: $last, after: $after, before: $before) {
-        edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } } }
+    `query HomeTimeline(
+      $first: Int,
+      $last: Int,
+      $after: String,
+      $before: String,
+      $ignoreSmartFilter: Boolean,
+      $includeSmartFilterProbability: Boolean = false
+    ) {
+      homeTimeline(first: $first, last: $last, after: $after, before: $before, ignoreSmartFilter: $ignoreSmartFilter) {
+        edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } smartFilterProbability @include(if: $includeSmartFilterProbability) } }
         pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
       }
     }`,
@@ -1842,12 +2135,12 @@ async function requestHome(
 async function requestGraphQL<TData>(
   query: string,
   variables: Record<string, unknown>,
-  token: string,
+  token?: string,
 ): Promise<GraphQLResult<TData>> {
   const response = await app.request('/graphql', {
     body: JSON.stringify({ query, variables }),
     headers: {
-      authorization: `Bearer ${token}`,
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       'content-type': 'application/json',
     },
     method: 'POST',

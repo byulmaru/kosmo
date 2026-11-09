@@ -516,6 +516,7 @@ type Post implements Node {
   replyParent: Post
   repostCount: Int!
   repostSource: Post
+  smartFilterProbability: Float
   state: PostState!
   viewerBookmark: Bookmark
   viewerReactions: [Reaction!]!
@@ -760,7 +761,7 @@ enum PushInstallationPlatform {
 
 type Query {
   currentSession: Session
-  homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
+  homeTimeline(after: String, before: String, first: Int, ignoreSmartFilter: Boolean = false, last: Int): PostConnection
   localTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   me: Account
   node(id: ID!): Node

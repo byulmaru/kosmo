@@ -11,6 +11,7 @@
     "./enums": "./enums.ts",
     "./global-id": "./global-id.ts",
     "./home-timeline/cache": "./home-timeline/cache.ts",
+    "./home-timeline/natural-language-mute-cache": "./home-timeline/natural-language-mute-cache.ts",
     "./home-timeline/query": "./home-timeline/query.ts",
     "./local-instance": "./local-instance.ts",
     "./media-metadata": "./media-metadata.ts",

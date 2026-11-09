@@ -9,6 +9,7 @@ import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { replyCountLoader } from '../loader/reply-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
+import { smartFilterProbabilityLoader } from '../loader/smart-filter-probability';
 import { isCachedHomeTimelinePost, Post, PostContent } from '../ref';
 
 const ReactionCount = builder.simpleObject('ReactionCount', {
@@ -83,5 +84,14 @@ builder.objectFields(Post, (t) => ({
     type: Post,
     nullable: true,
     resolve: (post, _, ctx) => viewerRepostLoader(ctx).load(post.id),
+  }),
+  smartFilterProbability: t.float({
+    nullable: true,
+    resolve: async (post, _, ctx) => {
+      const subjectPostId = post.currentContentId !== null ? post.id : post.repostSourceId;
+      return subjectPostId
+        ? ((await smartFilterProbabilityLoader(ctx).load(subjectPostId))?.probability ?? null)
+        : null;
+    },
   }),
 }));

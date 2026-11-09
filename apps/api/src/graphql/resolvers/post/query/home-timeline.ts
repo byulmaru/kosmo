@@ -5,7 +5,7 @@ import {
   readHomeTimelineCache,
   touchHomeTimeline,
 } from '@kosmo/core/home-timeline/cache';
-import { queryHomeTimelineForInsertion } from '@kosmo/core/home-timeline/query';
+import { queryHomeTimeline, queryHomeTimelineForInsertion } from '@kosmo/core/home-timeline/query';
 import { homePostProfileStateWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
@@ -205,6 +205,9 @@ builder.queryField('homeTimeline', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).connection(
     {
       type: Post,
+      args: {
+        ignoreSmartFilter: t.arg.boolean({ required: false, defaultValue: false }),
+      },
       nullable: true,
       unauthorizedResolver: () => null,
       resolve: async (_, args, ctx) => {
@@ -227,8 +230,28 @@ builder.queryField('homeTimeline', (t) =>
               before !== null &&
               (after === undefined || before === undefined || after.kind === before.kind);
             const cursorKind = after?.kind ?? before?.kind;
+            const databaseAfter =
+              compatibleCursors && after?.kind === 'db' && cursorKind === 'db'
+                ? after.postId
+                : undefined;
+            const databaseBefore =
+              compatibleCursors && before?.kind === 'db' && cursorKind === 'db'
+                ? before.postId
+                : undefined;
             const profileId = ctx.session.profile.id;
             let databaseFallbackAfterCacheMiss = false;
+
+            if (args.ignoreSmartFilter) {
+              const candidates = await queryHomeTimeline({
+                profileId,
+                after: databaseAfter,
+                before: databaseBefore,
+                limit,
+                inverted,
+              });
+              includedPostIds = new Set(candidates.map(({ id }) => id));
+              return candidates;
+            }
 
             if (
               compatibleCursors &&
@@ -257,14 +280,8 @@ builder.queryField('homeTimeline', (t) =>
 
             const page = await queryHomeTimelineForInsertion({
               profileId,
-              after:
-                compatibleCursors && after?.kind === 'db' && cursorKind === 'db'
-                  ? after.postId
-                  : undefined,
-              before:
-                compatibleCursors && before?.kind === 'db' && cursorKind === 'db'
-                  ? before.postId
-                  : undefined,
+              after: databaseAfter,
+              before: databaseBefore,
               limit,
               inverted,
             });
