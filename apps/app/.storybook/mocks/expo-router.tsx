@@ -4,6 +4,7 @@ import {
   Fragment,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -115,6 +116,10 @@ export function useLocalSearchParams<T extends Record<string, string | undefined
 
 export function useGlobalSearchParams<T extends Record<string, string | undefined>>() {
   return useContext(RouterContext).params as T;
+}
+
+export function useFocusEffect(effect: () => void | (() => void)) {
+  useEffect(effect, [effect]);
 }
 
 export function useRouter() {

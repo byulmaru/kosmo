@@ -8,6 +8,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
 import { useOptionalPostComposerBinding } from './PostComposerCoordinator';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
+import type { Ref } from 'react';
+import type { View } from 'react-native';
 import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
 import type { RepostActionDeletePostMutation } from './__generated__/RepostActionDeletePostMutation.graphql';
 import type { RepostActionRepostPostMutation } from './__generated__/RepostActionRepostPostMutation.graphql';
@@ -21,6 +23,7 @@ export type RepostActionFailure = Readonly<{
 }>;
 
 type Props = {
+  controlRef?: Ref<View>;
   execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
@@ -74,6 +77,7 @@ const deletePostMutation = graphql`
 `;
 
 export function RepostAction({
+  controlRef,
   execution = { kind: 'enabled' },
   onError,
   onResolutionRequired,
@@ -204,7 +208,14 @@ export function RepostAction({
               accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
               active={Boolean(data.viewerRepost)}
               activeColor={theme.actionRepostBase}
-              controlRef={ref}
+              controlRef={(node) => {
+                ref.current = node;
+                if (typeof controlRef === 'function') {
+                  controlRef(!processing && execution.kind !== 'disabled' ? node : null);
+                } else if (controlRef) {
+                  controlRef.current = !processing && execution.kind !== 'disabled' ? node : null;
+                }
+              }}
               count={data.repostCount}
               hoverColor={theme.actionRepostBase}
               hoverDisabled={execution.kind === 'resolution-required'}
