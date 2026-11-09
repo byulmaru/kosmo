@@ -8,6 +8,7 @@ export { hashtagMuteRuleWorkflow } from './hashtag-mute-rule';
 export { homeTimelineFanoutWorkflow } from './home-timeline-fanout';
 export { homeTimelineInsertWorkflow } from './home-timeline-insert';
 export { homeTimelineInsertBatchWorkflow } from './home-timeline-insert-batch';
+export { linkPreviewCollectionWorkflow } from './link-preview';
 export { localPostCreateWorkflow } from './local-post-create';
 export { mediaUploadWorkflow } from './media-upload';
 export { mediaUploadWithMetadataWorkflow } from './media-upload-with-metadata';

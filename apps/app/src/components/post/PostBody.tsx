@@ -8,10 +8,15 @@ const PostBodyFragment = graphql`
   fragment PostBody_post on Post {
     id
     content {
-      id
       document
       bodyText
       contentWarning
+      linkPreview {
+        description
+        imageUrl
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -58,6 +63,7 @@ export function PostBody({
       contentWarningPresentation={contentWarningPresentation}
       document={content.document}
       interactive={interactive}
+      linkPreview={content.linkPreview}
       media={
         mediaPresentation === 'hidden'
           ? null

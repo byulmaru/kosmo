@@ -100,6 +100,12 @@
   `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
+- 공통 `postCreateWorkflow`와 V2 registry alias는 create Activity가 `created`를 반환한 뒤
+  `patched('post-create-link-preview-collection-v1')`로 `linkPreviewCollectionWorkflow`를 `ABANDON` start한다.
+  이 post-ID keyed collection child는 `publish`와 `import` 모두에서 child Workflow start acknowledgement만 기다리고,
+  start 오류를 기록해도 committed create 결과와 기존 effects child를 바꾸지 않는다. `created` 이외 결과에는
+  시작하지 않는다. Collection Activity는 primary DB의 Post current content에서 canonical document를 읽어 Media가
+  없을 때 첫 HTTP(S) 링크만 refresh하며, 기존 URL-keyed cache와 fetch safety 경계를 유지한다.
 - Shared `PostCreateWorkflowArgs`의 optional mode는 `publish` 또는 `import`를 허용하며, 생략은 `publish`와 같다.
   V1/V2 공통 Workflow가 mode를 검증하지만 두 mode 모두 같은 Post persistence Activity와 인자를 사용한다. `created`
   결과이며 mode가 `publish`이거나 생략된 경우에만 post-create effects child를 시작한다. `import`는 결과 상태와 관계없이

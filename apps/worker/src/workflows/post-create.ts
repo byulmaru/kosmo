@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import { postCreateEffectsDefinition } from './create';
+import { linkPreviewCollectionWorkflowDefinition } from './link-preview';
 import type {
   ActivityPubPostCreateInput,
   PostAnalyticsPlatform,
@@ -128,6 +129,25 @@ export const startPostCreateEffects = async (
   }
 };
 
+const startPostLinkPreviewCollection = async (postId: string): Promise<void> => {
+  try {
+    await runChildWorkflow(linkPreviewCollectionWorkflowDefinition, {
+      args: [{ postId }],
+      cancellationType: ChildWorkflowCancellationType.ABANDON,
+      mode: 'start',
+      parentClosePolicy: ParentClosePolicy.ABANDON,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+    });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+      log.error('Post Link Preview collection child failed to start', {
+        error: error instanceof Error ? error.message : String(error),
+        postId,
+      });
+    }
+  }
+};
+
 export async function postCreateWorkflow(
   input: PostCreateWorkflowArgs,
 ): Promise<PostCreateWorkflowResult> {
@@ -161,6 +181,10 @@ export async function postCreateWorkflow(
       execution.error.code,
       ...(execution.error.field === undefined ? [] : [execution.error.field]),
     );
+  }
+
+  if (execution.result.status === 'created' && patched('post-create-link-preview-collection-v1')) {
+    await startPostLinkPreviewCollection(execution.result.postId);
   }
 
   if (execution.result.status === 'created' && parsed.mode !== 'import') {

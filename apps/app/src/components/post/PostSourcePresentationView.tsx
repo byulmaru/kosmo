@@ -19,6 +19,7 @@ import type { ProfileNameBlock_profile$key } from '@/components/profile/__genera
 import type { PostContentMention_profile$key } from './__generated__/PostContentMention_profile.graphql';
 import type { PostSourcePresentationView_post$key } from './__generated__/PostSourcePresentationView_post.graphql';
 import type { PostSourcePreview_source$key } from './__generated__/PostSourcePreview_source.graphql';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 type AuthorProfile = ProfileNameBlock_profile$key & {
@@ -41,6 +42,7 @@ type PresentationContent = {
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly linkPreview: PostLinkPreviewData | null | undefined;
   readonly media:
     | ReadonlyArray<{
         readonly altText: string | null | undefined;
@@ -60,6 +62,12 @@ const PostSourcePreviewFragment = graphql`
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageUrl
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -91,6 +99,12 @@ const PostSourcePresentationViewFragment = graphql`
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageUrl
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -299,6 +313,7 @@ export function PostSourcePreview({
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
+            linkPreview={source.content.linkPreview}
             media={presentationMedia(source.content.media)}
             mentionedProfiles={source.content.mentionedProfiles}
             postId={source.id}
@@ -411,6 +426,7 @@ function PostBodyPressTarget({
         bodyText={content.bodyText}
         contentWarning={content.contentWarning}
         document={content.document}
+        linkPreview={content.linkPreview}
         media={presentationMedia(content.media)}
         mentionedProfiles={content.mentionedProfiles}
         onMediaOpen={onMediaOpen}

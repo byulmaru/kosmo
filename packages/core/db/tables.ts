@@ -12,6 +12,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { datetime } from './types';
@@ -230,6 +231,23 @@ export const Instances = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [index().on(table.kind, table.state)],
+);
+
+export const LinkPreviews = pgTable(
+  'link_preview',
+  {
+    id: id(),
+    urlHash: varchar('url_hash', { length: 64 }).notNull(),
+    url: text('url').notNull(),
+    title: text('title'),
+    description: text('description'),
+    imageUrl: text('image_url'),
+    lastSuccessfulFetchAt: datetime('last_successful_fetch_at'),
+    lastFailureAt: datetime('last_failure_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [uniqueIndex('link_preview_url_hash_unique').on(table.urlHash)],
 );
 
 export const Media = pgTable(

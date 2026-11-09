@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type {
   PostSourcePresentationView as PostSourcePresentationViewComponent,
   PostSourcePreview as PostSourcePreviewComponent,
@@ -98,11 +99,17 @@ describe('PostSourcePresentationView mention relation wiring', () => {
 
   it('forwards mentionedProfiles through the non-interactive source preview path', async () => {
     const mentionedProfiles = [mentionedProfile('profile-source-mentioned')];
+    const linkPreview: PostLinkPreviewData = {
+      description: 'Source summary',
+      imageUrl: null,
+      title: 'Source title',
+      url: 'https://example.com/source',
+    };
 
     await render(
       createElement(PostSourcePreview, {
         interactive: false,
-        source: postWithContent(mentionedProfiles) as never,
+        source: postWithContent(mentionedProfiles, linkPreview) as never,
       }),
     );
 
@@ -111,6 +118,7 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     )[0];
     assert.equal(contentRenderer?.props.interactive, false);
     assert.equal(contentRenderer?.props.mentionedProfiles, mentionedProfiles);
+    assert.equal(contentRenderer?.props.linkPreview, linkPreview);
   });
 
   it('uses a Pressable only for interactive Web hover feedback', async () => {
@@ -255,12 +263,16 @@ function mentionedProfile(id: string) {
   };
 }
 
-function postWithContent(mentionedProfiles: ReturnType<typeof mentionedProfile>[]) {
+function postWithContent(
+  mentionedProfiles: ReturnType<typeof mentionedProfile>[],
+  linkPreview: PostLinkPreviewData | null = null,
+) {
   return {
     content: {
       bodyText: '@mentioned-profile',
       contentWarning: null,
       document: null,
+      linkPreview,
       media: [],
       mentionedProfiles,
     },

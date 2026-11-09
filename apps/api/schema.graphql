@@ -539,12 +539,20 @@ type PostContent implements Node {
   createdAt: DateTime!
   document: PostContentDocument!
   id: ID!
+  linkPreview: PostContentLinkPreview
   media: [Media!]
   mentionedProfiles: [Profile!]!
 }
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+type PostContentLinkPreview {
+  description: String
+  imageUrl: String
+  title: String!
+  url: String!
+}
 
 type PostRequest implements Node {
   authorProfile: Profile

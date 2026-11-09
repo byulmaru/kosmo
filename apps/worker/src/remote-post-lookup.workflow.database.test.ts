@@ -287,6 +287,7 @@ test(
     let effectActivityCalls = 0;
     const worker = await Worker.create({
       activities: {
+        collectPostLinkPreviewActivity: async () => {},
         lookupRemotePostActivity: async (input: Parameters<typeof lookupRemotePostActivity>[0]) => {
           activityInputs.push(input);
           return lookupRemotePostActivity(input);

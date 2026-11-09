@@ -19,6 +19,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
 import {
   headNexusMediaUploadSource,
   parseNexusMediaUploadReference,
@@ -62,6 +63,7 @@ let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
+let LinkPreviews: typeof CoreDb.LinkPreviews;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
@@ -99,6 +101,7 @@ describe('Post Reply GraphQL 경계', () => {
       firstOrThrow,
       Hashtags,
       Instances,
+      LinkPreviews,
       Media,
       pg,
       PostContents,
@@ -1090,6 +1093,224 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(unavailableDocument.body.content[0]?.content?.[1]?.attrs, {
       profileId: encodeGlobalId('Profile', mentionedProfile.id),
     });
+  });
+
+  test('PostContent linkPreview는 첫 링크의 저장 metadata를 읽고 stale success도 유지한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    const firstUrl = 'https://preview.example/article?source=post&keep=1#summary';
+    const laterUrl = 'https://later.example/ignored';
+    const normalizedFirstUrl = normalizeLinkPreviewUrl(firstUrl);
+    const normalizedLaterUrl = normalizeLinkPreviewUrl(laterUrl);
+    assert.ok(normalizedFirstUrl);
+    assert.ok(normalizedLaterUrl);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([firstUrl, laterUrl]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const firstPreview = {
+      url: normalizedFirstUrl,
+      title: 'Article title',
+      description: 'Article summary',
+      imageUrl: 'https://preview.example/card.png',
+    };
+    const laterPreview = {
+      url: normalizedLaterUrl,
+      title: 'Later title',
+      description: null,
+      imageUrl: null,
+    };
+    const now = Temporal.Now.instant();
+    await db.insert(LinkPreviews).values([
+      {
+        ...firstPreview,
+        urlHash: getLinkPreviewUrlHash(normalizedFirstUrl),
+        lastSuccessfulFetchAt: now.subtract({ hours: 192 }),
+      },
+      {
+        ...laterPreview,
+        urlHash: getLinkPreviewUrlHash(normalizedLaterUrl),
+        lastSuccessfulFetchAt: now,
+      },
+    ]);
+
+    let executions = 0;
+    t.mock.method(temporalClient.workflow, 'execute', async () => {
+      executions += 1;
+      throw new Error('Reading a Link Preview must not start a workflow');
+    });
+
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.content?.linkPreview, firstPreview);
+    assert.equal(executions, 0);
+  });
+
+  test('PostContent linkPreview does not fall back to a later link without first-link metadata', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const firstUrl = `https://preview.example/no-metadata-${crypto.randomUUID()}`;
+    const laterUrl = `https://preview.example/has-metadata-${crypto.randomUUID()}`;
+    const normalizedLaterUrl = normalizeLinkPreviewUrl(laterUrl);
+    assert.ok(normalizedLaterUrl);
+    const laterPreview = {
+      url: normalizedLaterUrl,
+      title: 'Later title',
+      description: 'Later description',
+      imageUrl: null,
+    };
+    await db.insert(LinkPreviews).values({
+      ...laterPreview,
+      urlHash: getLinkPreviewUrlHash(normalizedLaterUrl),
+      lastSuccessfulFetchAt: Temporal.Now.instant(),
+    });
+
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([firstUrl, laterUrl]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    let executions = 0;
+    t.mock.method(temporalClient.workflow, 'execute', async () => {
+      executions += 1;
+      throw new Error('Reading a Link Preview must not start a workflow');
+    });
+
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.content?.linkPreview, null);
+    assert.equal(executions, 0);
+  });
+
+  test('PostContent linkPreview returns null for plain-text URLs and content with Media', async () => {
+    const auth = await createAuthenticatedSession();
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const mediaUrl = `https://preview.example/media-${crypto.randomUUID()}`;
+    const plainTextUrl = `https://preview.example/plain-${crypto.randomUUID()}`;
+    const normalizedMediaUrl = normalizeLinkPreviewUrl(mediaUrl);
+    const normalizedPlainTextUrl = normalizeLinkPreviewUrl(plainTextUrl);
+    assert.ok(normalizedMediaUrl);
+    assert.ok(normalizedPlainTextUrl);
+    const plainTextPost = await createContentfulPost(auth.profile.id, {
+      bodyText: 'plain URL fixture',
+    });
+    const mediaPost = await createContentfulPost(auth.profile.id);
+    assert.ok(plainTextPost.currentContentId);
+    assert.ok(mediaPost.currentContentId);
+    await Promise.all([
+      db
+        .update(PostContents)
+        .set({
+          document: canonicalizePostContentDocument({
+            version: 1,
+            summary: null,
+            body: {
+              type: 'doc',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: plainTextUrl }] }],
+            },
+          }),
+        })
+        .where(eq(PostContents.id, plainTextPost.currentContentId)),
+      db
+        .update(PostContents)
+        .set({ document: postContentDocumentWithLinks([mediaUrl], media.id) })
+        .where(eq(PostContents.id, mediaPost.currentContentId)),
+    ]);
+    await db.insert(LinkPreviews).values([
+      {
+        url: normalizedPlainTextUrl,
+        title: 'Plain text URL title',
+        description: null,
+        imageUrl: null,
+        urlHash: getLinkPreviewUrlHash(normalizedPlainTextUrl),
+        lastSuccessfulFetchAt: Temporal.Now.instant(),
+      },
+      {
+        url: normalizedMediaUrl,
+        title: 'Media post URL title',
+        description: null,
+        imageUrl: null,
+        urlHash: getLinkPreviewUrlHash(normalizedMediaUrl),
+        lastSuccessfulFetchAt: Temporal.Now.instant(),
+      },
+    ]);
+
+    const [plainTextResult, mediaResult] = await Promise.all([
+      requestPostContentLinkPreview(encodeGlobalId('Post', plainTextPost.id), auth.token),
+      requestPostContentLinkPreview(encodeGlobalId('Post', mediaPost.id), auth.token),
+    ]);
+
+    assertNoGraphQLErrors(plainTextResult);
+    assertNoGraphQLErrors(mediaResult);
+    assert.equal(plainTextResult.data?.node?.content?.linkPreview, null);
+    assert.equal(mediaResult.data?.node?.content?.linkPreview, null);
+  });
+
+  test('PostContent linkPreview preserves Post visibility and is optional on cache read failure', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    const url = `https://preview.example/database-${crypto.randomUUID()}`;
+    const normalizedUrl = normalizeLinkPreviewUrl(url);
+    assert.ok(normalizedUrl);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([url]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const privatePost = await createContentfulPost(auth.profile.id, {
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(privatePost.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([url]) })
+      .where(eq(PostContents.id, privatePost.currentContentId));
+    await db.insert(LinkPreviews).values({
+      url,
+      title: 'Private link title',
+      description: null,
+      imageUrl: null,
+      urlHash: getLinkPreviewUrlHash(normalizedUrl),
+      lastSuccessfulFetchAt: Temporal.Now.instant(),
+    });
+
+    const stranger = await createAuthenticatedSession();
+    const denied = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', privatePost.id),
+      stranger.token,
+    );
+    assertNoGraphQLErrors(denied);
+    assert.equal(denied.data?.node, null);
+
+    const originalSelect = db.select.bind(db);
+    t.mock.method(db, 'select', (...args: Parameters<typeof db.select>) => {
+      const query = originalSelect(...args);
+      return new Proxy(query as object, {
+        get(target, property) {
+          if (property === 'from') {
+            return (table: unknown) => {
+              if (table === LinkPreviews) {
+                throw new Error('Link preview cache database is unavailable');
+              }
+              const from = Reflect.get(target, 'from', target) as (table: unknown) => unknown;
+              return from.call(target, table);
+            };
+          }
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as typeof query;
+    });
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.content?.linkPreview, null);
   });
 
   test('여러 PostContent의 Media를 함께 조회한다', async () => {
@@ -2484,6 +2705,50 @@ const requestPostContent = (postId: string, token?: string) =>
     { postId },
     token,
   );
+
+const requestPostContentLinkPreview = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      content: {
+        linkPreview: {
+          description: string | null;
+          imageUrl: string | null;
+          title: string;
+          url: string;
+        } | null;
+      } | null;
+    } | null;
+  }>(
+    `query PostContentLinkPreview($postId: ID!) {
+      node(id: $postId) {
+        ... on Post {
+          content { linkPreview { description imageUrl title url } }
+        }
+      }
+    }`,
+    { postId },
+    token,
+  );
+
+const postContentDocumentWithLinks = (urls: readonly string[], mediaId?: string) =>
+  canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: urls.map((url, index) => ({
+            type: 'text',
+            text: `link ${index}`,
+            marks: [{ type: 'link', attrs: { href: url } }],
+          })),
+        },
+        ...(mediaId ? [{ type: 'media', attrs: { mediaId } }] : []),
+      ],
+    },
+  });
 
 const requestPostContents = (postIds: string[]) =>
   requestGraphQL<{ nodes: Array<PostContentNode | null> }>(
