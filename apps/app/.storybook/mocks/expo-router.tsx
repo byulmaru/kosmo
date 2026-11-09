@@ -4,6 +4,7 @@ import {
   Fragment,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -107,6 +108,10 @@ export function useSegments() {
 
 export function useIsFocused() {
   return true;
+}
+
+export function useFocusEffect(effect: () => void | (() => void)) {
+  useEffect(effect, [effect]);
 }
 
 export function useLocalSearchParams<T extends Record<string, string | undefined>>() {

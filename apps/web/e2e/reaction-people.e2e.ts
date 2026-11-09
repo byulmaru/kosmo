@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { db, Reactions } from '@kosmo/core/db';
 import { Temporal } from 'temporal-polyfill';
 import {
@@ -197,8 +198,10 @@ test('로컬에서 게시글·반응 상세를 왕복하면 목록과 위치를 
     }
   } finally {
     await captureNavigationState('finally');
+    const snapshotPath = testInfo.outputPath('reaction-people-navigation-state.json');
+    await writeFile(snapshotPath, JSON.stringify(navigationSnapshots, null, 2));
     await testInfo.attach('reaction-people-navigation-state.json', {
-      body: Buffer.from(JSON.stringify(navigationSnapshots, null, 2)),
+      path: snapshotPath,
       contentType: 'application/json',
     });
   }

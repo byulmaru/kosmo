@@ -218,7 +218,7 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   expect(await preservedState()).toEqual(before);
   await page.goto(`/@${target.profile!.handle}`);
   await expect(page.getByRole('button', { name: '팔로우', exact: true })).toBeVisible();
-  await expect(page.getByText('E2E target revealed content', { exact: true })).toBeVisible();
+  await expect(targetPostContent).toBeVisible();
 });
 
 test('Remote Target의 직접 route·Settings 차단 상태는 selected Profile 전환과 해제에 따라 격리된다', async ({

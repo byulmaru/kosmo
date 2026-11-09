@@ -101,8 +101,12 @@ test('Web 프로필 타임라인을 내려도 풀 사이드바가 화면에 고�
   }
 
   await page.setViewportSize({ height: 720, width: 1440 });
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
   await page.goto('/@e2e-profile-sticky-sidebar');
-  await expect(page.getByText('Profile sticky sidebar post 0', { exact: false })).toBeVisible();
+  await (await profilePostsResponse).finished();
+  await expect(
+    page.getByText('Profile sticky sidebar post 15', { exact: false }).filter({ visible: true }),
+  ).toBeVisible();
   const navigation = await visiblePrimaryNavigation(page);
   const sidebarTop = () =>
     navigation.evaluate((element) => {
@@ -155,8 +159,12 @@ test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 
       await page.goto('/settings');
       await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
     } else {
+      const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
       await page.goto('/@e2e-home-reselection-forward');
-      await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+      await (await profilePostsResponse).finished();
+      await expect(
+        page.getByText('E2E Home reselection post 15').filter({ visible: true }),
+      ).toBeVisible();
     }
     await scrollDocument(page);
 
@@ -168,7 +176,9 @@ test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 
       await entry.click();
     }
     await expect(page).toHaveURL(/\/home$/);
-    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await expect(
+      page.getByText('E2E Home reselection post 0').filter({ visible: true }),
+    ).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   }
 });
