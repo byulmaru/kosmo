@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useFragment, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
+import { usePaginationScrollContext } from '@/components/pagination/PaginationScrollView';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -15,6 +16,7 @@ import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { useProfilePinOrder } from './ProfilePinOrder';
 import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import type { ReactElement } from 'react';
+import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
@@ -211,6 +213,7 @@ type Props = {
   onRetry?: () => void;
   onRefresh?: () => void;
   profile?: (PostList_profile$key & PostList_profile_pinned$key) | null;
+  reselectDestination?: TabReselectionDestination;
   replyProfile?: ReplyComposerSurface_profile$key | null;
   refreshing?: boolean;
 };
@@ -227,11 +230,13 @@ export const PostList = memo(function PostList({
   onRetry,
   onRefresh,
   profile: profileKey,
+  reselectDestination,
   replyProfile,
   refreshing = false,
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  const hasPaginationScrollContext = usePaginationScrollContext();
   const postListPresentation: PostListPresentation =
     getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
   const homePagination = usePaginationFragment<PostListHomeNextPageQuery, PostList_home$key>(
@@ -327,23 +332,8 @@ export const PostList = memo(function PostList({
 
   const listIdentityKey =
     identityKey ?? (isHome ? 'home' : isLocal ? 'local' : isHashtag ? 'hashtag' : 'profile');
-  const listContainerStyle = profileKey || Platform.OS === 'web' ? styles.root : styles.flexRoot;
-
-  if (loading && !hasData) {
-    return <PostListSkeleton />;
-  }
-
-  if (error && !hasData) {
-    const state = (
-      <PostListState
-        alert
-        description="잠시 후 다시 시도해주세요."
-        onRetry={onRetry}
-        title="게시글 목록을 불러오지 못했어요"
-      />
-    );
-    return state;
-  }
+  const listContainerStyle =
+    Platform.OS === 'web' || hasPaginationScrollContext ? styles.root : styles.flexRoot;
 
   const emptyState = (
     <PostListState
@@ -351,31 +341,45 @@ export const PostList = memo(function PostList({
       title={isHashtag ? '게시글이 없어요' : '아직 게시글이 없어요'}
     />
   );
-
-  if (visibleEdges.length === 0 && !hasData) {
-    return emptyState;
-  }
+  const emptyContent =
+    loading && !hasData ? (
+      <PostListSkeleton />
+    ) : error && !hasData ? (
+      <PostListState
+        alert
+        description="잠시 후 다시 시도해주세요."
+        onRetry={onRetry}
+        title="게시글 목록을 불러오지 못했어요"
+      />
+    ) : visibleEdges.length === 0 && pinnedPosts.length === 0 ? (
+      emptyState
+    ) : null;
+  const pinnedList = profileKey ? (
+    <View style={styles.root}>
+      {pinnedPosts.map((post) => (
+        <ProfilePinOrderContext.Provider key={`pinned:${post.id}`} value={pinOrderMenu(post.id)}>
+          <PostListItem pinned post={post} presentation={postListPresentation} />
+        </ProfilePinOrderContext.Provider>
+      ))}
+    </View>
+  ) : null;
+  const listHeader = profileKey ? (
+    <>
+      {header}
+      {pinnedList}
+    </>
+  ) : (
+    header
+  );
 
   return (
     <PostActionAuthenticationProvider>
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
           <View style={listContainerStyle}>
-            {profileKey ? (
-              <View style={styles.root}>
-                {pinnedPosts.map((post) => (
-                  <ProfilePinOrderContext.Provider
-                    key={`pinned:${post.id}`}
-                    value={pinOrderMenu(post.id)}
-                  >
-                    <PostListItem pinned post={post} presentation={postListPresentation} />
-                  </ProfilePinOrderContext.Provider>
-                ))}
-              </View>
-            ) : null}
             <InfiniteList
               data={visibleEdges}
-              empty={visibleEdges.length === 0 && pinnedPosts.length === 0 ? emptyState : null}
+              empty={pinnedPosts.length === 0 ? emptyContent : null}
               hasNext={hasNext}
               isLoadingNext={isLoadingNext}
               key={listIdentityKey}
@@ -397,11 +401,11 @@ export const PostList = memo(function PostList({
                   </View>
                 ) : null
               }
-              header={header}
+              header={listHeader}
               renderItem={({ item }) => (
                 <PostListItem post={item.node} presentation={postListPresentation} />
               )}
-              reselectDestination={isHome || isLocal ? 'home' : undefined}
+              reselectDestination={reselectDestination ?? (isHome || isLocal ? 'home' : undefined)}
               refreshing={refreshing}
               style={listContainerStyle}
             />

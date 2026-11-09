@@ -405,6 +405,42 @@ describe('PostContentRenderer', () => {
     );
   });
 
+  it('keeps revealed content when a virtualized post row unmounts and remounts', async () => {
+    const props: RendererProps = {
+      bodyText: '원문 본문',
+      contentWarning: '민감한 내용',
+      document: null,
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-virtualized',
+    };
+    function VirtualizedRow({ mounted }: { mounted: boolean }) {
+      return mounted ? createElement(PostContentRenderer, props) : null;
+    }
+    const postRow = (mounted: boolean) =>
+      createElement(
+        PostContentWarningRevealProvider,
+        null,
+        createElement(VirtualizedRow, { mounted }),
+      );
+
+    await act(async () => {
+      renderer = create(postRow(true));
+    });
+    const toggle = byTestId('post-content-warning');
+    await act(async () => toggle.props.onPress({ stopPropagation: () => undefined }));
+    assert.equal(byTestId('post-content-warning').props.accessibilityState.expanded, true);
+
+    await act(async () => renderer?.update(postRow(false)));
+    await act(async () => renderer?.update(postRow(true)));
+
+    assert.equal(byTestId('post-content-warning').props.accessibilityState.expanded, true);
+    assert.ok(
+      rendered('Text').some((node) => renderedText(node) === '원문 본문'),
+      'revealed body content is visible again after the row remounts',
+    );
+  });
+
   it('Viewer 공개 표현은 warning control 없이 원문을 표시하고 Media는 숨긴다', async () => {
     await render({
       bodyText: '원문 본문',
