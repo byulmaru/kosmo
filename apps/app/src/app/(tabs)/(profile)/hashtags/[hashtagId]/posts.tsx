@@ -115,7 +115,7 @@ function HashtagPostsContent({
   const hashtag = data.node?.__typename === 'Hashtag' && data.node.postList ? data.node : null;
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   if (!hashtag) {
-    return <HashtagPostsState backButton={backButton} state="notFound" />;
+    return <HashtagPostsState active={active} backButton={backButton} state="notFound" />;
   }
 
   const identityKey = `hashtag:${hashtag.id}:${selectedProfile?.id ?? 'guest'}`;
