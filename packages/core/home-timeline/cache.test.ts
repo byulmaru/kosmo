@@ -366,10 +366,9 @@ test(
     assert.ok(cachedTtlBefore !== undefined && cachedTtlBefore <= 60 && cachedTtlBefore > 50);
 
     naturalLanguageMuteDecisionKeys.push(
-      ...[excludedViewer, includedViewer, cachedViewer, unavailableViewer].flatMap(({ id }) => {
-        const key = `kosmo:home-timeline:natural-language-mute:profile:${id}`;
-        return [key, `${key}:results`];
-      }),
+      ...[excludedViewer, includedViewer, cachedViewer, unavailableViewer].map(
+        ({ id }) => `kosmo:home-timeline:natural-language-mute:profile:${id}`,
+      ),
     );
 
     const previousApiKey = process.env.OPENAI_API_KEY;

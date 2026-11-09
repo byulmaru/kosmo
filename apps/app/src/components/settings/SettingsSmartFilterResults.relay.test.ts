@@ -174,7 +174,7 @@ function resultsData(
     ...sessionData(profile(profileId)),
     smartFilterResults: {
       edges: rows.map(({ id, probability }) => ({
-        cursor: `cursor:${id}`,
+        cursor: endCursor,
         node: {
           __typename: 'Post',
           id,
@@ -265,6 +265,19 @@ describe('SettingsSmartFilterResults with Relay', () => {
     assert.ok(textValues().includes('79.9%'));
     assert.ok(textValues().includes('80%'));
     assert.deepEqual(postIds().sort(), ['post:at-threshold', 'post:below-threshold']);
+  });
+
+  it('renders every Post from a page larger than the requested count', async () => {
+    const environment = createEnvironment();
+    await loadSelectedProfile(environment);
+    const results = await revealResults();
+    const rows = Array.from({ length: 21 }, (_, index) => ({
+      id: `post:oversized-${index}`,
+      probability: 0.5,
+    }));
+    await respond(results, resultsData(rows, false, '0'));
+
+    assert.deepEqual(postIds().sort(), rows.map(({ id }) => id).sort());
   });
 
   it('keeps More for an empty page and continues its cursor only after the user asks', async () => {

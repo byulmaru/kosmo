@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
-test('keeps first hash-field decisions and pages indexed candidates without extending TTLs', () => {
+test('scans hash pages and preserves first decisions without refreshing TTLs', () => {
   const childScript = String.raw`
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
@@ -11,11 +11,9 @@ import { mock } from 'node:test';
 const hashValues = new Map();
 const hashExpirations = new Map();
 const scalarValues = new Map();
-const indexValues = new Map();
 let now = 1_000;
 let redisAvailable = true;
 let commandFails = false;
-Date.now = () => now;
 
 const expiryKey = (key, field) => key + '\u0000' + field;
 const currentHashValue = (key, field) => {
@@ -28,20 +26,6 @@ const currentHashValue = (key, field) => {
   return hashValues.get(key)?.get(field) ?? null;
 };
 const currentScalarValue = (key) => scalarValues.get(key) ?? null;
-const matchesLexBoundary = (value, boundary, isMinimum) => {
-  if (boundary === '-') return isMinimum;
-  if (boundary === '+') return !isMinimum;
-  const inclusive = boundary[0] === '[';
-  const other = boundary.slice(1);
-  return isMinimum
-    ? inclusive ? value >= other : value > other
-    : inclusive ? value <= other : value < other;
-};
-const inLexRange = (value, min, max) =>
-  matchesLexBoundary(value, min, true) && matchesLexBoundary(value, max, false);
-const indexMembers = (key) => [...(indexValues.get(key)?.keys() ?? [])].sort((a, b) =>
-  a < b ? -1 : a > b ? 1 : 0,
-);
 
 const client = {
   async hGet(key, field) {
@@ -66,44 +50,22 @@ const client = {
     }
     return 1;
   },
-  async hmGet(key, fields) {
+  async hScan(key, cursor) {
     if (commandFails) throw new Error('Redis unavailable');
-    return fields.map((field) => currentHashValue(key, field));
-  },
-  async zRemRangeByLex(key, min, max) {
-    if (commandFails) throw new Error('Redis unavailable');
-    const index = indexValues.get(key);
-    if (!index) return 0;
-    let removed = 0;
-    for (const member of index.keys()) {
-      if (inLexRange(member, min, max)) {
-        index.delete(member);
-        removed += 1;
-      }
+    if (cursor === '0') {
+      const entries = [...(hashValues.get(key)?.keys() ?? [])].flatMap((field) => {
+        const value = currentHashValue(key, field);
+        return value === null ? [] : [{ field, value }];
+      });
+      return { cursor: '23', entries };
     }
-    if (index.size === 0) {
-      indexValues.delete(key);
+    if (cursor === '23') {
+      return { cursor: '0', entries: [] };
     }
-    return removed;
-  },
-  async zAdd(key, member, options) {
-    if (commandFails) throw new Error('Redis unavailable');
-    const index = indexValues.get(key) ?? new Map();
-    if (options?.NX && index.has(member.value)) return 0;
-    index.set(member.value, member.score);
-    indexValues.set(key, index);
-    return 1;
-  },
-  async expire(key) {
-    if (commandFails) throw new Error('Redis unavailable');
-    if (!indexValues.has(key)) return false;
-    return true;
-  },
-  async zRangeByLex(key, min, max, options) {
-    if (commandFails) throw new Error('Redis unavailable');
-    const offset = options?.LIMIT?.offset ?? 0;
-    const count = options?.LIMIT?.count ?? Infinity;
-    return indexMembers(key).filter((member) => inLexRange(member, min, max)).slice(offset, offset + count);
+    if (cursor === '17') {
+      return { cursor: '29', entries: [] };
+    }
+    return { cursor: '0', entries: [] };
   },
 };
 
@@ -123,7 +85,7 @@ mock.module(new URL('../redis/client.ts', import.meta.url), {
 const {
   cacheNaturalLanguageMuteDecision,
   getNaturalLanguageMuteDecision,
-  readNaturalLanguageMuteDecisionCandidates,
+  scanNaturalLanguageMuteDecisions,
 } = await import('./natural-language-mute-cache.ts');
 
 const cachePrefix = 'kosmo:home-timeline:natural-language-mute:profile:';
@@ -138,12 +100,6 @@ const [firstConcurrent, secondConcurrent] = await Promise.all([
 ]);
 assert.deepEqual([firstConcurrent, secondConcurrent], [firstDecision, firstDecision]);
 assert.deepEqual(await getNaturalLanguageMuteDecision('profile-a', firstPostId), firstDecision);
-const ttlBeforeCandidateReads = hashExpirations.get(expiryKey(profileHashKey, firstPostId));
-const firstPage = await readNaturalLanguageMuteDecisionCandidates('profile-a', { limit: 1 });
-assert.deepEqual(firstPage?.map(({ postId, decision }) => ({ postId, decision })), [
-  { postId: firstPostId, decision: firstDecision },
-]);
-assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), ttlBeforeCandidateReads);
 scalarValues.set(profileHashKey + ':post:' + firstPostId, JSON.stringify(conflictingDecision));
 assert.deepEqual(await getNaturalLanguageMuteDecision('profile-a', firstPostId), firstDecision);
 scalarValues.delete(profileHashKey + ':post:' + firstPostId);
@@ -160,66 +116,26 @@ now += 1_000;
 assert.deepEqual(await cacheNaturalLanguageMuteDecision('profile-a', firstPostId, conflictingDecision), firstDecision);
 assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), firstExpiry);
 
-const secondPage = await readNaturalLanguageMuteDecisionCandidates('profile-a', {
-  after: firstPage?.[0]?.cursor,
-  limit: 1,
+hashValues.get(profileHashKey).set('post-invalid-json', '{');
+hashValues.get(profileHashKey).set('post-missing-json', '');
+const firstPage = await scanNaturalLanguageMuteDecisions('profile-a', '0', 1);
+assert.ok(firstPage !== null);
+assert.equal(firstPage.cursor, '23');
+assert.deepEqual(Object.fromEntries(firstPage.entries.map(({ postId, decision }) => [postId, decision])), {
+  [firstPostId]: firstDecision,
+  'post-b': secondDecision,
+  'post-invalid-json': null,
+  'post-missing-json': null,
 });
-assert.deepEqual(secondPage?.map(({ postId, decision }) => ({ postId, decision })), [
-  { postId: 'post-b', decision: secondDecision },
-]);
-assert.deepEqual(
-  await readNaturalLanguageMuteDecisionCandidates('profile-a', {
-    after: secondPage?.[0]?.cursor,
-    limit: 1,
-  }),
-  [],
+assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), firstExpiry);
+const emptyContinuation = await scanNaturalLanguageMuteDecisions(
+  'profile-a',
+  '17',
+  1,
 );
-assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), ttlBeforeCandidateReads);
-
-const batchProfileId = 'profile-batch';
-const batchPostIds = Array.from({ length: 23 }, (_, index) => 'post-batch-' + String(index).padStart(2, '0'));
-for (const postId of batchPostIds) {
-  await cacheNaturalLanguageMuteDecision(batchProfileId, postId, secondDecision);
-}
-const allCandidates = [];
-let after;
-while (true) {
-  const page = await readNaturalLanguageMuteDecisionCandidates(batchProfileId, { after, limit: 4 });
-  assert.notEqual(page, null);
-  if (page.length === 0) break;
-  allCandidates.push(...page);
-  after = page.at(-1).cursor;
-}
-assert.equal(allCandidates.length, batchPostIds.length);
-assert.deepEqual(
-  new Set(allCandidates.map(({ postId }) => postId)),
-  new Set(batchPostIds),
-);
-
-const damagedProfileId = 'profile-damaged';
-await cacheNaturalLanguageMuteDecision(damagedProfileId, 'post-a-missing', firstDecision);
-await cacheNaturalLanguageMuteDecision(damagedProfileId, 'post-b-invalid', secondDecision);
-const damagedHash = hashValues.get(cachePrefix + damagedProfileId);
-damagedHash.delete('post-a-missing');
-damagedHash.set('post-b-invalid', '{');
-const missingPage = await readNaturalLanguageMuteDecisionCandidates(damagedProfileId, { limit: 1 });
-assert.deepEqual(missingPage?.map(({ postId, decision }) => ({ postId, decision })), [
-  { postId: 'post-a-missing', decision: null },
-]);
-const invalidPage = await readNaturalLanguageMuteDecisionCandidates(damagedProfileId, {
-  after: missingPage?.[0]?.cursor,
-  limit: 1,
-});
-assert.deepEqual(invalidPage?.map(({ postId, decision }) => ({ postId, decision })), [
-  { postId: 'post-b-invalid', decision: null },
-]);
-assert.deepEqual(
-  await readNaturalLanguageMuteDecisionCandidates(damagedProfileId, {
-    after: invalidPage?.[0]?.cursor,
-    limit: 1,
-  }),
-  [],
-);
+assert.deepEqual(emptyContinuation, { cursor: '29', entries: [] });
+const finishedPage = await scanNaturalLanguageMuteDecisions('profile-a', firstPage.cursor, 1);
+assert.deepEqual(finishedPage, { cursor: '0', entries: [] });
 
 const legacyProfileId = 'profile-legacy';
 const legacyHashKey = cachePrefix + legacyProfileId;
@@ -240,8 +156,17 @@ assert.deepEqual(await getNaturalLanguageMuteDecision(legacyProfileId, 'post-inv
   decision: 'include',
   probability: 0.25,
 });
-assert.equal(hashValues.get(legacyHashKey).get('post-invalid-hash'), 'not JSON');
-assert.deepEqual(await readNaturalLanguageMuteDecisionCandidates(legacyProfileId, { limit: 20 }), []);
+scalarValues.set(
+  legacyHashKey + ':post:post-hash-only',
+  JSON.stringify({ decision: 'include', probability: 0.25 }),
+);
+assert.deepEqual(await getNaturalLanguageMuteDecision(legacyProfileId, 'post-hash-only'), legacyDecision);
+const legacyScan = await scanNaturalLanguageMuteDecisions(legacyProfileId, '0', 20);
+assert.ok(legacyScan !== null);
+assert.deepEqual(
+  new Set(legacyScan.entries.map(({ postId }) => postId)),
+  new Set(['post-invalid-hash', 'post-hash-only']),
+);
 for (const [postId, value] of [
   ['post-malformed', 'not JSON'],
   ['post-missing-probability', JSON.stringify({ decision: 'exclude' })],
@@ -252,28 +177,10 @@ for (const [postId, value] of [
   assert.equal(await getNaturalLanguageMuteDecision(legacyProfileId, postId), null);
 }
 
-const pruneProfileId = 'profile-prune';
-await cacheNaturalLanguageMuteDecision(pruneProfileId, 'post-a-expired', firstDecision);
-const expiredAt = hashExpirations.get(expiryKey(cachePrefix + pruneProfileId, 'post-a-expired'));
-now += 4 * 24 * 60 * 60 * 1_000;
-await cacheNaturalLanguageMuteDecision(pruneProfileId, 'post-b-fresh', secondDecision);
-const freshExpiry = hashExpirations.get(expiryKey(cachePrefix + pruneProfileId, 'post-b-fresh'));
-now = expiredAt;
-const beforePruneReadTtl = hashExpirations.get(expiryKey(cachePrefix + pruneProfileId, 'post-b-fresh'));
-const prunedCandidates = await readNaturalLanguageMuteDecisionCandidates(pruneProfileId, { limit: 10 });
-assert.deepEqual(prunedCandidates?.map(({ postId, decision }) => ({ postId, decision })), [
-  { postId: 'post-b-fresh', decision: secondDecision },
-]);
-assert.equal(beforePruneReadTtl, freshExpiry);
-assert.equal(hashExpirations.get(expiryKey(cachePrefix + pruneProfileId, 'post-b-fresh')), freshExpiry);
-
 const unavailableDecision = { decision: 'include', probability: 0.4 };
 redisAvailable = false;
 assert.equal(await getNaturalLanguageMuteDecision('profile-unavailable', 'post-a'), null);
-assert.equal(
-  await readNaturalLanguageMuteDecisionCandidates('profile-unavailable', { limit: 20 }),
-  null,
-);
+assert.equal(await scanNaturalLanguageMuteDecisions('profile-unavailable', '0', 20), null);
 assert.deepEqual(
   await cacheNaturalLanguageMuteDecision('profile-unavailable', 'post-unavailable', unavailableDecision),
   unavailableDecision,
@@ -286,7 +193,7 @@ scalarValues.set(
 );
 commandFails = true;
 assert.equal(await getNaturalLanguageMuteDecision('profile-error', 'post-a'), null);
-assert.equal(await readNaturalLanguageMuteDecisionCandidates('profile-error', { limit: 20 }), null);
+assert.equal(await scanNaturalLanguageMuteDecisions('profile-error', '0', 20), null);
 const errorDecision = { decision: 'exclude', probability: 0.9 };
 assert.deepEqual(await cacheNaturalLanguageMuteDecision('profile-error', 'post-error', errorDecision), errorDecision);
 `;
@@ -313,7 +220,7 @@ assert.deepEqual(await cacheNaturalLanguageMuteDecision('profile-error', 'post-e
 });
 
 test(
-  'stores indexed decisions in a lexicographically paged Redis set with independent hash expiration',
+  'scans every hash decision with Redis cursors and leaves scalar fallbacks unlisted',
   { skip: !process.env.KOSMO_TEST_REDIS_URL },
   async () => {
     const previousRedisUrl = process.env.REDIS_URL;
@@ -322,14 +229,13 @@ test(
     const {
       cacheNaturalLanguageMuteDecision,
       getNaturalLanguageMuteDecision,
-      readNaturalLanguageMuteDecisionCandidates,
+      scanNaturalLanguageMuteDecisions,
     } = await import('./natural-language-mute-cache.ts');
     const profileId = randomUUID();
     const firstPostId = randomUUID();
     const secondPostId = randomUUID();
     const legacyPostId = randomUUID();
     const key = `kosmo:home-timeline:natural-language-mute:profile:${profileId}`;
-    const indexKey = `${key}:results`;
     const legacyKey = `${key}:post:${legacyPostId}`;
 
     try {
@@ -367,42 +273,18 @@ test(
       );
 
       await cacheNaturalLanguageMuteDecision(profileId, secondPostId, secondDecision);
-      const firstTtlBeforeRead = (
+      const firstTtlBeforeScan = (
         await runRedisCommand((client) => client.hTTL(key, [firstPostId]))
       )?.value?.[0];
       const secondTtl = (await runRedisCommand((client) => client.hTTL(key, [secondPostId])))
         ?.value?.[0];
       assert.ok(
         firstTtlBeforeConflict !== undefined &&
-          firstTtlBeforeRead !== undefined &&
-          firstTtlBeforeRead <= firstTtlBeforeConflict &&
-          firstTtlBeforeRead > 50,
+          firstTtlBeforeScan !== undefined &&
+          firstTtlBeforeScan <= firstTtlBeforeConflict &&
+          firstTtlBeforeScan > 50,
       );
       assert.ok(secondTtl !== undefined && secondTtl > 604_790 && secondTtl <= 604_800);
-
-      const firstPage = await readNaturalLanguageMuteDecisionCandidates(profileId, { limit: 1 });
-      assert.ok(firstPage !== null && firstPage.length === 1);
-      const secondPage = await readNaturalLanguageMuteDecisionCandidates(profileId, {
-        after: firstPage[0]!.cursor,
-        limit: 1,
-      });
-      assert.ok(secondPage !== null && secondPage.length === 1);
-      assert.deepEqual(
-        new Set([firstPage[0]!.postId, secondPage[0]!.postId]),
-        new Set([firstPostId, secondPostId]),
-      );
-      assert.deepEqual(
-        new Set([firstPage[0]!.decision, secondPage[0]!.decision]),
-        new Set([firstDecision, secondDecision]),
-      );
-      const firstTtlAfterRead = (await runRedisCommand((client) => client.hTTL(key, [firstPostId])))
-        ?.value?.[0];
-      assert.ok(
-        firstTtlBeforeRead !== undefined &&
-          firstTtlAfterRead !== undefined &&
-          firstTtlAfterRead <= firstTtlBeforeRead &&
-          firstTtlAfterRead > 50,
-      );
 
       const legacyDecision = { decision: 'include', probability: 0.3 };
       await runRedisCommand((client) =>
@@ -412,12 +294,29 @@ test(
         await getNaturalLanguageMuteDecision(profileId, legacyPostId),
         legacyDecision,
       );
-      assert.equal(
-        (await runRedisCommand((client) => client.hGet(key, legacyPostId)))?.value,
-        null,
+
+      const entries = [];
+      let cursor = '0';
+      do {
+        const page = await scanNaturalLanguageMuteDecisions(profileId, cursor, 1);
+        assert.ok(page !== null);
+        entries.push(...page.entries);
+        cursor = page.cursor;
+      } while (cursor !== '0');
+      assert.deepEqual(
+        Object.fromEntries(entries.map(({ postId, decision }) => [postId, decision])),
+        { [firstPostId]: firstDecision, [secondPostId]: secondDecision },
+      );
+      const firstTtlAfterScan = (await runRedisCommand((client) => client.hTTL(key, [firstPostId])))
+        ?.value?.[0];
+      assert.ok(
+        firstTtlBeforeScan !== undefined &&
+          firstTtlAfterScan !== undefined &&
+          firstTtlAfterScan <= firstTtlBeforeScan &&
+          firstTtlAfterScan > 50,
       );
     } finally {
-      await runRedisCommand((client) => client.unlink([key, indexKey, legacyKey]));
+      await runRedisCommand((client) => client.unlink([key, legacyKey]));
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {
