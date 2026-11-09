@@ -82,6 +82,8 @@ const deleteMutation = graphql`
 
 type Feedback = 'save-error' | 'delete-error' | null;
 
+const conditionHelperText = '타임라인에서 보고 싶지 않은 내용을 입력하세요.';
+
 export function SettingsNaturalLanguageMute() {
   return (
     <RouteBoundary
@@ -219,11 +221,16 @@ function SettingsNaturalLanguageMuteEditor({
 
   return (
     <View style={styles.root}>
+      <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+        {conditionHelperText}
+      </Text>
       <TextArea
+        accessibilityHint={conditionHelperText}
         editable={!pending}
         error={validationError}
         label="제외 조건"
         onChangeText={(value) => setDraft(value)}
+        placeholder="예시) 코스모를 싫어하는 내용"
         value={condition}
       />
       <View style={styles.actions}>

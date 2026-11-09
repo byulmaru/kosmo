@@ -91,8 +91,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   Profile 관계 두 상태를 하나의 혼합 목록으로 표시하지 않는다. Profile 간 세부 action과 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다. `/settings/natural-language-mute`는
   `/settings/labs`의 `스마트 필터` entry가 여는 route이며 header도 `스마트 필터`로 표시한다. 한 개의 선택
-  Profile 편집기를 사용한다. 편집기는 `제외 조건` TextArea, `저장` action과 Rule이
-  있을 때만 표시하는 `삭제` action으로 구성하며, 설명 문구나 추가 설정 control을 두지 않는다. 선택된 Local
+  Profile 편집기를 사용한다. 편집기에는 `타임라인에서 보고 싶지 않은 내용을 입력하세요.` 보조 문구와
+  `제외 조건` TextArea를 표시하고 placeholder는 `예시) 코스모를 싫어하는 내용`으로 한다. 편집기는
+  `저장` action과 Rule이 있을 때만 표시하는 `삭제` action으로 구성하며, 추가 설정 control을 두지 않는다. 선택된 Local
   Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
   Rule이 없으면 생성하며 있으면 갱신한다. 조건은 trim한 문자열의 Unicode code point 수로 판단하며 최대 250자다.
   편집기는 남은 글자 수를 기존 composer 스타일의 오른쪽 정렬 counter로 표시하고, 음수는 기존 danger token으로
@@ -356,7 +357,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   expanded entry의 full text와 제공된 출처 link를 읽는다.
   `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필` link를 이 순서로
   읽는다. `/settings/labs`에서는 `실험실` heading 다음 `스마트 필터` link를 읽고,
-  `/settings/natural-language-mute`에서는 `스마트 필터` heading 다음 `제외 조건` text area와
+  `/settings/natural-language-mute`에서는 `스마트 필터` heading 다음 `타임라인에서 보고 싶지 않은 내용을 입력하세요.`
+  보조 문구, `제외 조건` text area와
   `저장`·`삭제` action을 읽는다. 남은 글자 수는 `남은 글자 수 N자` 형식으로 polite live text에 노출하며,
   저장할 수 없는 입력에서는 `저장`이 disabled 상태임을 전달한다. 실패 상태는 alert로 전달한다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
