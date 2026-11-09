@@ -194,7 +194,17 @@ describe('SettingsLinkRow', () => {
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
+    assert.deepEqual(
+      [
+        feedbackStyle.borderWidth,
+        feedbackStyle.borderRadius,
+        feedbackStyle.top,
+        feedbackStyle.right,
+        feedbackStyle.bottom,
+        feedbackStyle.left,
+      ],
+      [1, 8, 2, 2, 2, 2],
+    );
     assert.equal(rowStyle.borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
