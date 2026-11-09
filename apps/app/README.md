@@ -29,13 +29,13 @@ Store rating uses an optional native module; see [OTA compatibility](../../docs/
 
 Use Ruby 3.4 (the CI version) and the CocoaPods 1.17.0 version locked in `Gemfile.lock` via `bundle exec pod install`. macOS's system Ruby is not the CI toolchain. Run `xcodebuild -version` and `swift --version` when reporting a native build failure: the `macos-26` CI runner does not pin an Xcode version.
 
-Expo SDK 56's `expo-modules-jsi` is locked to 56.0.13, which includes the [explicit C setter pointer fix](https://github.com/expo/expo/pull/46736) needed for the observed Xcode 27 / Swift 6.4 compilation failure. Install with `pnpm install --frozen-lockfile`; do not patch generated iOS files or `node_modules` to apply that fix.
+Expo SDK 56's `expo-modules-jsi` is locked to 56.0.14, which includes the [explicit C setter pointer fix](https://github.com/expo/expo/pull/46736) needed for the observed Xcode 27 / Swift 6.4 compilation failure. Install with `pnpm install --frozen-lockfile`; do not patch generated iOS files or `node_modules` to apply that fix.
 
 The local `withIosResourceBundleDeploymentTarget` config plugin raises explicitly lower Pod resource bundle deployment targets to the existing Expo SDK 56 minimum, iOS 16.4. Xcode 27 rejects the old iOS 12–13 targets left by some Pods; the app's deployment target alone does not update those resource bundles. Higher, inherited, and unset values remain unchanged.
 
 Run its focused regression check with `pnpm --filter @kosmo/app test:config-plugins` (Ruby must be on `PATH`, or set `KOSMO_RUBY`). The app's `test` command also runs it in CI. It executes the generated Podfile hook and checks repeat application and target preservation.
 
-For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.23 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
+For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.14 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
 
 A normal iOS prebuild also requires `KOSMO_IOS_GOOGLE_SERVICES_FILE` to point to the Firebase plist. A build that temporarily excludes Firebase only validates that reduced configuration, not the production app. The successful 2026-09-22 [Release/device CI build](https://github.com/byulmaru/kosmo/actions/runs/35740298451/job/106787998544) used Xcode 26.6; it does not establish Xcode 27 Debug/simulator compatibility.
 
