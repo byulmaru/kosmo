@@ -438,9 +438,13 @@ function renderMetadata(metadata: ShareMetadata) {
     <meta property="og:site_name" content="KOSMO" />
     <meta property="og:title" content="${metadata.title}" />
     <meta property="og:description" content="${metadata.description}" />
-    ${imageTags}
+    ${
+      imageTags /* nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag -- Hono html escapes these generated metadata tags. */
+    }
     <script type="application/ld+json">
-      ${raw(structuredData)}
+      ${raw(
+        structuredData /* nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag -- serializeJsonLd escapes script delimiters before raw insertion. */,
+      )}
     </script>
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${metadata.title}" />
