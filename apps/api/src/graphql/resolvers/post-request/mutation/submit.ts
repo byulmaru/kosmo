@@ -130,7 +130,6 @@ const getPublicationAuthor = async (profileId: string): Promise<PublicationAutho
   const profile = await withPrimaryDatabase(async () =>
     db
       .select({
-        displayName: Profiles.displayName,
         domain: Instances.domain,
         handle: Profiles.handle,
         instanceId: Profiles.instanceId,
@@ -155,7 +154,7 @@ const getPublicationAuthor = async (profileId: string): Promise<PublicationAutho
   );
   const profileSegment = encodeURIComponent(relativeHandle).replace(/%40/gi, '@');
   return {
-    attributionName: profile.displayName.trim() || relativeHandle,
+    attributionName: `@${profile.handle}@${profile.domain}`,
     attributionUrl: new URL(profileSegment, `${configuredLocalInstance.canonicalOrigin}/`).href,
   };
 };

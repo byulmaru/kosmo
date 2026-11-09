@@ -40,7 +40,7 @@
   입력을 준비한다. Post 대상 UPLOADING Media의 `mediaUploadWithMetadataWorkflow` type과
   `mediaUploadMetadataPublish` Update-with-Start는 기존 `media-upload:${mediaId}` logical Workflow ID를 대상으로 하며,
   generic `runWorkflow`에서 `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse policy를 사용한다.
-  `prepareMediaUploadActivity`는 provider 호출 전에 해당 posting Profile의 공개 이름과 Profile URL, optional rights를
+  `prepareMediaUploadActivity`는 provider 호출 전에 해당 posting Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, optional rights를
   `Media.publicationMetadata`로 한 번 고정한다. 이 snapshot에는 Post ID나 Post URL이 없다. 이미 snapshot이 있는
   UPLOADING retry는 rights 값과 rights 입력 여부가 같아야 하며 원래 attribution을 유지한다. READY Media 재사용은
   snapshot을 수정하거나 backfill하지 않고 새 rights 입력도 적용하지 않는다. Sync/async Post ID는 모든 대상 Media가

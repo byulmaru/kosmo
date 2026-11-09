@@ -524,7 +524,7 @@ test('createPost creates a Post after a completed Media publication', async (t) 
   assert.equal(workflowArgs[0]?.input.profileId, profileId);
   assert.deepEqual(workflowArgs[0]?.input.media, [{ altText: null, mediaId }]);
   assert.deepEqual(publish.metadataCalls[0]?.publicationMetadata, {
-    attributionName: 'Public author',
+    attributionName: '@author@kosmo.example',
     attributionUrl: 'https://kosmo.example/@author',
   });
   assert.equal(start.mock.callCount(), 0);
@@ -908,11 +908,11 @@ test('createPost queues a request for mixed Media when one publication is proces
     publish.metadataCalls.map(({ mediaId, publicationMetadata }) => [mediaId, publicationMetadata]),
   );
   assert.deepEqual(publicationByMediaId.get(completedMediaId), {
-    attributionName: 'Public author',
+    attributionName: '@author@kosmo.example',
     attributionUrl: 'https://kosmo.example/@author',
   });
   assert.deepEqual(publicationByMediaId.get(processingMediaId), {
-    attributionName: 'Public author',
+    attributionName: '@author@kosmo.example',
     attributionUrl: 'https://kosmo.example/@author',
     rights,
   });

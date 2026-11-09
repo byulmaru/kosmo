@@ -28,17 +28,17 @@ Remote Media는 등록 시 Ready다.
 
 ## 속성
 
-| 속성                 | 타입/nullability            | 검증 정책                                                                | 존재 조건                                  | 조회 조건                    | 조회 권한             |
-| -------------------- | --------------------------- | ------------------------------------------------------------------------ | ------------------------------------------ | ---------------------------- | --------------------- |
-| Upload Expires At    | 시각, 필수                  | 제한된 업로드 권한의 만료 시각                                           | Source가 Local                             | Upload Account 조회          | `Media.UploadAccount` |
-| Ready At             | 시각, 필수                  | 저장 성공을 확인한 시각                                                  | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| URL                  | URL, 필수                   | 저장 서비스가 확정한 공개 표현                                           | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| Media Type           | 문자열, 필수                | 저장 서비스가 확정한 표현 형식                                           | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| Alt Text             | 문자열, nullable            | 사람이 읽을 수 있는 이미지 이름                                          | 항상                                       | Media 조회 정책 통과         | 없음                  |
-| Publication Metadata | nullable immutable snapshot | Post 작성 Profile의 공개 이름과 Profile URL, 선택적 self-declared rights | Local Media의 첫 Post 준비                 | Media 조회 정책 통과         | `readMedia`           |
-| ThumbHash            | Base64 문자열, nullable     | 이미지 placeholder metadata                                              | Media Storage Service가 생성한 Local Media | 권한이 있는 Media projection | 없음                  |
-| Remote URL           | URL, 필수                   | 원격 Media 원본 위치                                                     | Source가 Remote                            | Media 조회 정책 통과         | 없음                  |
-| Remote Fetched At    | 시각, nullable              | 마지막 성공 fetch 결과로 갱신                                            | Source가 Remote                            | 운영 조회                    | `Account.Operator`    |
+| 속성                 | 타입/nullability            | 검증 정책                                                                                                  | 존재 조건                                  | 조회 조건                    | 조회 권한             |
+| -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------- | --------------------- |
+| Upload Expires At    | 시각, 필수                  | 제한된 업로드 권한의 만료 시각                                                                             | Source가 Local                             | Upload Account 조회          | `Media.UploadAccount` |
+| Ready At             | 시각, 필수                  | 저장 성공을 확인한 시각                                                                                    | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| URL                  | URL, 필수                   | 저장 서비스가 확정한 공개 표현                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Media Type           | 문자열, 필수                | 저장 서비스가 확정한 표현 형식                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Alt Text             | 문자열, nullable            | 사람이 읽을 수 있는 이미지 이름                                                                            | 항상                                       | Media 조회 정책 통과         | 없음                  |
+| Publication Metadata | nullable immutable snapshot | Post 작성 Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, 선택적 self-declared rights | Local Media의 첫 Post 준비                 | Media 조회 정책 통과         | `readMedia`           |
+| ThumbHash            | Base64 문자열, nullable     | 이미지 placeholder metadata                                                                                | Media Storage Service가 생성한 Local Media | 권한이 있는 Media projection | 없음                  |
+| Remote URL           | URL, 필수                   | 원격 Media 원본 위치                                                                                       | Source가 Remote                            | Media 조회 정책 통과         | 없음                  |
+| Remote Fetched At    | 시각, nullable              | 마지막 성공 fetch 결과로 갱신                                                                              | Source가 Remote                            | 운영 조회                    | `Account.Operator`    |
 
 Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 결과와 연결하는 persistence 정보다. 저장
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
@@ -55,8 +55,8 @@ Media Storage Service는 private staging `PUT`에서 받은 이미지로 ThumbHa
 metadata로 유지하고 `createPost` 입력이나 PostRequest snapshot에는 넣지 않는다. 기존 Media나 ThumbHash가 생성되지 않은
 upload에는 값이 없을 수 있다.
 
-Post를 위해 처음 준비하는 UPLOADING Local Media에는 해당 Post를 작성하는 Profile의 공개 이름과 Profile URL, 선택한
-Use Rights를 `publicationMetadata`로 한 번 snapshot 한다. 업로드를 시작한 Profile과 Post 작성 Profile은 다를 수 있다.
+Post를 위해 처음 준비하는 UPLOADING Local Media에는 해당 Post를 작성하는 Profile의 전체 핸들(`@username@instance.domain`)과
+공개 Profile URL, 선택한 Use Rights를 `publicationMetadata`로 한 번 snapshot 한다. 업로드를 시작한 Profile과 Post 작성 Profile은 다를 수 있다.
 이 metadata에는 Post ID나 Post URL을 저장하지 않으며, Post ID는 모든 대상 Media가 Ready가 된 뒤 기존 Post 생성
 시점에 할당한다. Use Rights는 선택적인 self-declaration이며, 생략은 권한 부여로 간주하지 않는다. 기존 READY Media에
 출처나 권리를 소급해 만들지 않고, snapshot을 공개 뒤 수정하지 않는다. READY Media를 다른 Post에 재사용해도 snapshot은

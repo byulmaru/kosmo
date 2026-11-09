@@ -52,10 +52,10 @@
 - Metadata-required `mediaUploadWithMetadataWorkflow` uses the existing `prepareMediaUploadActivity` before any provider
   operation. The Activity validates the same Account-owned Local UPLOADING session and staging reference, preserves existing
   `publicationMetadata`, and writes a first snapshot only with `publication_metadata IS NULL` plus the current identity/state
-  predicates. The snapshot contains the posting Profile's public name and Profile URL plus optional self-declared rights; it has
+  predicates. The snapshot contains the posting Profile's full handle (`@username@instance.domain`) and public Profile URL plus optional self-declared rights; it has
   no Post ID or Post URL. If an UPLOADING retry finds a snapshot, rights values and whether rights were supplied must match, and
   the original attribution is retained. The Activity returns the persisted frozen metadata to this Workflow. The provider DTO
-  sets `credit` to `publicName (profileURL)` and includes the optional `copyright`, `usageTerms`, and `webStatement` trio only
+  sets `credit` to `@username@instance.domain (profileURL)` and includes the optional `copyright`, `usageTerms`, and `webStatement` trio only
   when rights are present; the `webStatement` origin comes from the attribution Profile URL. If an older Activity
   implementation ignores the new input and returns no metadata, the Workflow fails non-retryably before `startUpload` or
   public provider publication.

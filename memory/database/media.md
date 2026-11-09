@@ -35,12 +35,12 @@ Current media direction:
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
 Do not expose a stored original image URL without the owning Post/Profile viewer policy. A publication-metadata projection
-containing the posting Profile's public name and Profile URL, plus optional self-declared rights, follows the Media read policy
+containing the posting Profile's full handle (`@username@instance.domain`) and public Profile URL, plus optional self-declared rights, follows the Media read policy
 below. It contains no Post ID or Post URL. Timelines can use thumbnail/compressed variants, detail views can use high-resolution
 variants, and original image access remains a product/cost policy decision.
 
 Local Media may keep one nullable `publication_metadata` JSON snapshot on the existing `media` row: the posting Profile's
-public name and Profile URL, plus optional self-declared rights for personal, noncommercial and commercial use. This is
+full handle (`@username@instance.domain`) and public Profile URL, plus optional self-declared rights for personal, noncommercial and commercial use. This is
 publication metadata, not another stored image representation or a separate file/relationship table; it has no Post ID or
 Post URL. Freeze the snapshot while preparing an UPLOADING Local Media for its first Post use, before the provider operation.
 Do not backfill existing READY Media or edit a snapshot after it is set. Reusing READY Media preserves the snapshot and ignores
