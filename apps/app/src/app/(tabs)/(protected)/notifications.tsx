@@ -1,12 +1,13 @@
-import { useIsFocused } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useFocusEffect, useIsFocused } from 'expo-router';
+import { useCallback } from 'react';
+import { graphql, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import {
   NotificationList,
   NotificationListState,
 } from '@/components/notification/NotificationList';
 import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
-import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary } from '@/components/RouteBoundary';
+import type { PreloadedQuery } from 'react-relay';
 import type { NotificationsPageQuery } from './__generated__/NotificationsPageQuery.graphql';
 
 const NotificationsQuery = graphql`
@@ -22,39 +23,48 @@ const NotificationsQuery = graphql`
 `;
 
 export default function NotificationsScreen() {
+  const [queryReference, loadQuery] = useQueryLoader<NotificationsPageQuery>(NotificationsQuery);
+  const isFocused = useIsFocused();
+
+  useFocusEffect(
+    useCallback(() => {
+      loadQuery({}, { fetchPolicy: 'store-and-network' });
+    }, [loadQuery]),
+  );
+
   return (
     <NotificationRouteFrame>
       <RouteBoundary
-        error={(retry) => <NotificationListState onRetry={retry} state="error" />}
+        error={(resetErrorBoundary) => (
+          <NotificationListState
+            onRetry={() => {
+              loadQuery({}, { fetchPolicy: 'network-only' });
+              resetErrorBoundary();
+            }}
+            state="error"
+          />
+        )}
         loading={<NotificationListState state="loading" />}
         title="알림을 불러오지 못했어요"
       >
-        <NotificationsContent />
+        {queryReference ? (
+          <NotificationsContent isFocused={isFocused} queryReference={queryReference} />
+        ) : (
+          <NotificationListState state="loading" />
+        )}
       </RouteBoundary>
     </NotificationRouteFrame>
   );
 }
 
-function NotificationsContent() {
-  const { fetchKey, refetch } = useRouteBoundary();
-  const isFocused = useIsFocused();
-  const hasBeenFocused = useRef(false);
-  useEffect(() => {
-    if (!isFocused) {
-      return;
-    }
-    if (hasBeenFocused.current) {
-      refetch();
-    } else {
-      hasBeenFocused.current = true;
-    }
-  }, [isFocused, refetch]);
-
-  const data = useLazyLoadQuery<NotificationsPageQuery>(
-    NotificationsQuery,
-    {},
-    { fetchKey, fetchPolicy: 'store-and-network' },
-  );
+function NotificationsContent({
+  isFocused,
+  queryReference,
+}: {
+  isFocused: boolean;
+  queryReference: PreloadedQuery<NotificationsPageQuery>;
+}) {
+  const data = usePreloadedQuery<NotificationsPageQuery>(NotificationsQuery, queryReference);
   const profile = data.currentSession?.selectedProfile ?? null;
 
   return profile ? (

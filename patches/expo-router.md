@@ -104,18 +104,18 @@ Expo Router's Web memory-history implementation; native navigation and history
 behavior are unchanged.
 
 [`WebMemoryHistory.test.ts`](../apps/app/src/components/shell/WebMemoryHistory.test.ts)
-loads the patched Expo Router module and checks actual browser Back, Forward,
-state restoration, and branch truncation. CI has not yet passed for this patch
-update; the existing Web E2E history and route-state cases remain runtime
-coverage to verify on the PR head.
+loads the patched Expo Router module and covers browser Back, Forward,
+route-state restoration, and branch truncation after Back. Existing Web E2E
+cases cover document scroll, link/click navigation, and route headers including
+bookmarks:
 
-Keep runtime verification in the existing Web E2E cases for document scroll,
-link/click navigation, and route headers including bookmarks:
+[`reaction-people.e2e.ts`](../apps/web/e2e/reaction-people.e2e.ts) covers post
+and reaction navigation, app Back, browser Back/Forward, and Local list position
+restoration.
+
 [`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts),
 [`search.e2e.ts`](../apps/web/e2e/search.e2e.ts), and
 [`mobile-route-headers.e2e.ts`](../apps/web/e2e/mobile-route-headers.e2e.ts).
-CI has not yet passed for this patch update; source inspection and patch
-generation do not establish Web runtime behavior.
 
 ## Invariants and current caveat
 
