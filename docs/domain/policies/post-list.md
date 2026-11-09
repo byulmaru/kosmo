@@ -40,7 +40,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   배포 후 새로 기록된 판정만 목록에 포함하며, 기존 판정을 소급해 목록화하지 않는다. Follow나 일반 Profile Mute로 Post를 다시
   제외하지 않지만 현재 직접 Post 조회의 Visibility·Eligibility·Block 경계는 적용한다.
   비활성·Content 없는·viewer 작성 Post와 직접 조회할 수 없는 Post는 숨긴다. 조회는 판정을 새로 계산하거나 Home 목록 cache를
-  변경하지 않으며, 결과 batch의 Post 개수와 순서는 고정하지 않는다.
+  변경하지 않으며, 표시 순서는 보장하지 않는다.
 - [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때만
   기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. Content가 있는 Post는 Quote를
   포함해 그 Post 자체가 판정 대상이며, 작성자가 viewer이면 판정과 판정 cache 재사용을 건너뛰고 기존 eligibility에

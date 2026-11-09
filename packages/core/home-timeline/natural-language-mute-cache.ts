@@ -5,8 +5,11 @@ const cacheKeyPrefix = 'kosmo:home-timeline:natural-language-mute:profile:';
 const keyLifetimeSeconds = 604_800;
 
 const hashKey = (profileId: string) => `${cacheKeyPrefix}${profileId}`;
+const resultsKey = (profileId: string) => `${hashKey(profileId)}:results`;
 const legacyCacheKey = (profileId: string, postId: string) =>
   `${cacheKeyPrefix}${profileId}:post:${postId}`;
+const expiryCursor = (expiresAtMs: number) => String(expiresAtMs).padStart(16, '0');
+const expiredResultsMax = (now: number) => `(${expiryCursor(now + 1)}:`;
 
 function parseNaturalLanguageMuteDecision(value: unknown): NaturalLanguageMuteDecision | null {
   if (typeof value !== 'string') {
@@ -70,6 +73,12 @@ export async function cacheNaturalLanguageMuteDecision(
         { mode: 'FNX', expiration: { type: 'EX', value: keyLifetimeSeconds } },
       );
       if (inserted === 1) {
+        const now = Date.now();
+        const cursor = `${expiryCursor(now + keyLifetimeSeconds * 1_000)}:${postId}`;
+        const indexKey = resultsKey(profileId);
+        await client.zRemRangeByLex(indexKey, '-', expiredResultsMax(now));
+        await client.zAdd(indexKey, { score: 0, value: cursor }, { NX: true });
+        await client.expire(indexKey, keyLifetimeSeconds);
         return decision;
       }
 
@@ -86,25 +95,35 @@ export async function cacheNaturalLanguageMuteDecision(
   return decision;
 }
 
-export async function readNaturalLanguageMuteDecisionBatch(
+export async function readNaturalLanguageMuteDecisionCandidates(
   profileId: string,
-  cursor: string,
-): Promise<{
+  options: { after?: string; limit: number },
+): Promise<Array<{
   cursor: string;
-  entries: Array<{ postId: string; decision: NaturalLanguageMuteDecision | null }>;
-} | null> {
-  const result = await runRedisCommand((client) =>
-    client.hScan(hashKey(profileId), cursor, { COUNT: 20 }),
-  );
-  if (result === null) {
-    return null;
-  }
+  postId: string;
+  decision: NaturalLanguageMuteDecision | null;
+}> | null> {
+  const result = await runRedisCommand(async (client) => {
+    const now = Date.now();
+    const indexKey = resultsKey(profileId);
+    await client.zRemRangeByLex(indexKey, '-', expiredResultsMax(now));
+    const cursors = await client.zRangeByLex(
+      indexKey,
+      options.after === undefined ? '-' : `(${options.after}`,
+      '+',
+      { LIMIT: { offset: 0, count: options.limit } },
+    );
+    if (cursors.length === 0) {
+      return [];
+    }
 
-  return {
-    cursor: result.value.cursor,
-    entries: result.value.entries.map(({ field, value }) => ({
-      postId: field,
-      decision: parseNaturalLanguageMuteDecision(value),
-    })),
-  };
+    const postIds = cursors.map((cursor) => cursor.slice(17));
+    const decisions = await client.hmGet(hashKey(profileId), postIds);
+    return cursors.map((cursor, index) => ({
+      cursor,
+      postId: postIds[index]!,
+      decision: parseNaturalLanguageMuteDecision(decisions[index]),
+    }));
+  });
+  return result?.value ?? null;
 }

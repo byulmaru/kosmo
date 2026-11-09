@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
@@ -44,11 +44,6 @@ mockModule('react-native', {
   View: 'View',
   useWindowDimensions: () => ({ width: 390 }),
 });
-mockModule('@/components/RouteBoundary', {
-  RouteBoundary: ({ children, loading }: { children: ReactNode; loading: ReactNode }) =>
-    createElement(Suspense, { fallback: loading }, children),
-  useRouteBoundary: () => ({ fetchKey: 0, fetchPolicy: 'store-or-network' }),
-});
 mockModule('@/components/post/PostActionAuthentication', {
   PostActionAuthenticationProvider: ({ children }: { children: ReactNode }) => children,
 });
@@ -71,7 +66,14 @@ mockModule('@/components/ui/Button', {
     createElement('Button', props, children),
 });
 mockModule('@/components/ui/StateView', {
-  StateView: (props: Record<string, unknown>) => createElement('StateView', props),
+  StateView: ({ actionLabel, onAction, ...props }: Record<string, unknown>) =>
+    createElement(
+      'StateView',
+      props,
+      typeof actionLabel === 'string' && typeof onAction === 'function'
+        ? createElement('Button', { onPress: onAction }, actionLabel)
+        : null,
+    ),
 });
 mockModule('@/components/ui/TextField', {
   TextArea: (props: Record<string, unknown>) => createElement('TextArea', props),
@@ -170,20 +172,15 @@ function resultsData(
 ) {
   return {
     ...sessionData(profile(profileId)),
-    smartFilterResultBatches: {
-      edges: [
-        {
-          cursor: endCursor,
-          node: {
-            __typename: 'SmartFilterResultBatch',
-            posts: rows.map(({ id, probability }) => ({
-              __typename: 'Post',
-              id,
-              smartFilterProbability: probability,
-            })),
-          },
+    smartFilterResults: {
+      edges: rows.map(({ id, probability }) => ({
+        cursor: `cursor:${id}`,
+        node: {
+          __typename: 'Post',
+          id,
+          smartFilterProbability: probability,
         },
-      ],
+      })),
       pageInfo: { endCursor, hasNextPage },
     },
   };
@@ -192,6 +189,22 @@ function resultsData(
 async function respond(request: Request, data: Record<string, unknown>) {
   await act(async () => {
     request.sink.next({ data });
+    request.sink.complete();
+  });
+}
+
+async function respondSmartFilterUnavailable(request: Request) {
+  await act(async () => {
+    request.sink.next({
+      data: null,
+      errors: [
+        {
+          message: 'Smart-filter results are unavailable',
+          path: ['smartFilterResults'],
+          extensions: { code: 'SERVICE_UNAVAILABLE' },
+        },
+      ],
+    } as unknown as GraphQLResponse);
     request.sink.complete();
   });
 }
@@ -254,11 +267,11 @@ describe('SettingsSmartFilterResults with Relay', () => {
     assert.deepEqual(postIds().sort(), ['post:at-threshold', 'post:below-threshold']);
   });
 
-  it('keeps More for an empty batch and continues its cursor only after the user asks', async () => {
+  it('keeps More for an empty page and continues its cursor only after the user asks', async () => {
     const environment = createEnvironment();
     await loadSelectedProfile(environment);
     const results = await revealResults();
-    await respond(results, resultsData([], true, 'cursor:empty-batch'));
+    await respond(results, resultsData([], true, 'cursor:empty-page'));
 
     assert.deepEqual(postIds(), []);
     assert.equal(button('더 보기').props.disabled, false);
@@ -269,7 +282,7 @@ describe('SettingsSmartFilterResults with Relay', () => {
 
     await act(async () => button('더 보기').props.onPress());
     const nextPage = latestRequest('SettingsSmartFilterResultsNextPageQuery');
-    assert.deepEqual(nextPage.variables, { count: 1, cursor: 'cursor:empty-batch' });
+    assert.deepEqual(nextPage.variables, { count: 20, cursor: 'cursor:empty-page' });
     await respond(
       nextPage,
       resultsData([{ id: 'post:visible-next-page', probability: 0.51 }], false, 'cursor:visible'),
@@ -279,7 +292,7 @@ describe('SettingsSmartFilterResults with Relay', () => {
     assert.ok(textValues().includes('통과'));
   });
 
-  it('renders a Post only once when Redis scan batches repeat it', async () => {
+  it('renders a Post only once when later pages repeat it', async () => {
     const environment = createEnvironment();
     await loadSelectedProfile(environment);
     const results = await revealResults();
@@ -327,11 +340,11 @@ describe('SettingsSmartFilterResults with Relay', () => {
       String(node.props.title).includes('더 불러오지 못했어요'),
     );
     assert.ok(retryState);
-    await act(async () => (retryState.props.onAction as () => void)());
+    await act(async () => button('다시 시도').props.onPress());
 
     const retry = latestRequest('SettingsSmartFilterResultsNextPageQuery');
     assert.notEqual(retry, failedPage);
-    assert.deepEqual(retry.variables, { count: 1, cursor: 'cursor:visible' });
+    assert.deepEqual(retry.variables, { count: 20, cursor: 'cursor:visible' });
     await respond(
       retry,
       resultsData([{ id: 'post:next', probability: 0.1 }], false, 'cursor:next'),
@@ -340,6 +353,59 @@ describe('SettingsSmartFilterResults with Relay', () => {
     assert.deepEqual(postIds().sort(), ['post:next', 'post:visible']);
     assert.equal(
       all('StateView').some((node) => String(node.props.title).includes('더 불러오지 못했어요')),
+      false,
+    );
+  });
+
+  it('shows an initial GraphQL error and retries the query through RouteBoundary', async () => {
+    const environment = createEnvironment();
+    await loadSelectedProfile(environment);
+    const initialRequest = await revealResults();
+    await respondSmartFilterUnavailable(initialRequest);
+
+    assert.ok(all('StateView').some((node) => node.props.alert === true));
+    const retryButton = button('다시 시도');
+    await act(async () => retryButton.props.onPress());
+
+    const retriedRequest = latestRequest('SettingsSmartFilterResultsQuery');
+    assert.notEqual(retriedRequest, initialRequest);
+    await respond(
+      retriedRequest,
+      resultsData([{ id: 'post:retried', probability: 0.4 }], false, 'cursor:retried'),
+    );
+
+    assert.deepEqual(postIds(), ['post:retried']);
+  });
+
+  it('preserves visible rows after a GraphQL page error and retries the same cursor', async () => {
+    const environment = createEnvironment();
+    await loadSelectedProfile(environment);
+    const results = await revealResults();
+    await respond(
+      results,
+      resultsData([{ id: 'post:visible', probability: 0.9 }], true, 'cursor:visible'),
+    );
+
+    await act(async () => button('더 보기').props.onPress());
+    const failedPage = latestRequest('SettingsSmartFilterResultsNextPageQuery');
+    await respondSmartFilterUnavailable(failedPage);
+
+    assert.deepEqual(postIds(), ['post:visible']);
+    const retryState = all('StateView').find((node) => node.props.alert === true);
+    assert.ok(retryState);
+    await act(async () => button('다시 시도').props.onPress());
+
+    const retry = latestRequest('SettingsSmartFilterResultsNextPageQuery');
+    assert.notEqual(retry, failedPage);
+    assert.equal(retry.variables.cursor, 'cursor:visible');
+    await respond(
+      retry,
+      resultsData([{ id: 'post:next', probability: 0.1 }], false, 'cursor:next'),
+    );
+
+    assert.deepEqual(postIds().sort(), ['post:next', 'post:visible']);
+    assert.equal(
+      all('StateView').some((node) => node.props.alert === true),
       false,
     );
   });

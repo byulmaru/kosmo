@@ -74,7 +74,11 @@ const fixtureMediaIds: string[] = [];
 
 type GraphQLResult<TData> = {
   readonly data?: TData | null;
-  readonly errors?: readonly { readonly message: string }[];
+  readonly errors?: readonly {
+    readonly message: string;
+    readonly path?: readonly (string | number)[];
+    readonly extensions?: { readonly field?: string; readonly code?: string };
+  }[];
 };
 
 type HomeConnection = {
@@ -98,14 +102,12 @@ type HomeConnection = {
   };
 };
 
-type SmartFilterResultConnection = {
+type SmartFilterResultsConnection = {
   readonly edges: readonly {
     readonly cursor: string;
     readonly node: {
-      readonly posts: readonly {
-        readonly id: string;
-        readonly smartFilterProbability: number | null;
-      }[];
+      readonly id: string;
+      readonly smartFilterProbability: number | null;
     };
   }[];
   readonly pageInfo: {
@@ -1084,7 +1086,7 @@ test(
     const hashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const legacyKey = naturalMuteDecisionKey(viewer.profile.id, legacyOnly.id);
     const homeTimelineKey = `kosmo:home-timeline:profile:${viewer.profile.id}`;
-    const decisionHashKeys = [hashKey];
+    const decisionCacheKeys = [hashKey, naturalMuteDecisionResultsKey(viewer.profile.id)];
     try {
       const home = await requestHome(viewer.token, { first: 10 });
       assert.equal(home.errors, undefined, JSON.stringify(home.errors));
@@ -1124,6 +1126,14 @@ test(
           { expiration: { type: 'EX', value: 604_800 } },
         ),
       );
+      const invalidDecisionCursorExpiry = Date.now() + 604_800_000;
+      const resultsKey = naturalMuteDecisionResultsKey(viewer.profile.id);
+      await runRedisCommand(async (client) => {
+        await client.zAdd(resultsKey, {
+          score: 0,
+          value: naturalMuteDecisionCursor(invalidDecisionCursorExpiry, invalidDecisionPost.id),
+        });
+      });
       await runRedisCommand((client) =>
         client.set(legacyKey, JSON.stringify({ decision: 'include', probability: 0.68 }), {
           EX: 60,
@@ -1148,12 +1158,10 @@ test(
       const modelCallsBeforeResults = modelInputs.length;
       const result = await requestSmartFilterResults(viewer.token, { first: null });
       assert.equal(result.errors, undefined, JSON.stringify(result.errors));
-      const connection = result.data?.smartFilterResultBatches;
+      const connection = result.data?.smartFilterResults;
       assert.ok(connection);
-      assert.equal(connection.edges.length, 1);
       assert.equal(connection.pageInfo.hasPreviousPage, false);
-      const posts = connection.edges[0]!.node.posts;
-      const postIds = posts.map(({ id }) => id);
+      const postIds = connection.edges.map(({ node }) => node.id);
       assert.deepEqual(
         new Set(postIds),
         new Set([
@@ -1162,6 +1170,7 @@ test(
           encodeGlobalId('Post', unrelatedPublic.id),
         ]),
       );
+      assert.equal(postIds.length, new Set(postIds).size);
       assert.equal(modelInputs.length, modelCallsBeforeResults);
 
       const homeCacheAfter = (
@@ -1190,27 +1199,30 @@ test(
       assert.equal(legacyProbability.errors, undefined, JSON.stringify(legacyProbability.errors));
       assert.equal(legacyProbability.data?.node?.smartFilterProbability, 0.68);
 
-      const invalidFirst = await requestSmartFilterResults(viewer.token, { first: 2 });
-      assert.ok(invalidFirst.errors?.length);
+      const negativeFirst = await requestSmartFilterResults(viewer.token, { first: -1 });
+      assert.ok(negativeFirst.errors?.length);
       const malformedCursor = await requestSmartFilterResults(viewer.token, {
         after: 'not-a-cursor',
       });
       assert.ok(malformedCursor.errors?.length);
-      const oversizedCursor = await requestSmartFilterResults(viewer.token, {
-        after: '18446744073709551616',
+      assert.equal(malformedCursor.errors?.[0]?.extensions?.field, 'after');
+      const invalidPostCursor = await requestSmartFilterResults(viewer.token, {
+        after: '0000000000000000:not-a-uuid',
       });
-      assert.ok(oversizedCursor.errors?.length);
+      assert.ok(invalidPostCursor.errors?.length);
 
       const unauthenticated = await requestSmartFilterResults();
-      assert.equal(unauthenticated.errors, undefined, JSON.stringify(unauthenticated.errors));
-      assert.equal(unauthenticated.data?.smartFilterResultBatches, null);
+      assert.equal(unauthenticated.data, null);
+      assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+      assert.deepEqual(unauthenticated.errors?.[0]?.path, ['smartFilterResults']);
 
       const previousRedisUrl = process.env.REDIS_URL;
       delete process.env.REDIS_URL;
       try {
         const unavailableRedis = await requestSmartFilterResults(viewer.token);
-        assert.equal(unavailableRedis.errors, undefined, JSON.stringify(unavailableRedis.errors));
-        assert.equal(unavailableRedis.data?.smartFilterResultBatches, null);
+        assert.equal(unavailableRedis.data, null);
+        assert.equal(unavailableRedis.errors?.[0]?.extensions?.code, 'SERVICE_UNAVAILABLE');
+        assert.deepEqual(unavailableRedis.errors?.[0]?.path, ['smartFilterResults']);
       } finally {
         if (previousRedisUrl === undefined) {
           delete process.env.REDIS_URL;
@@ -1220,7 +1232,10 @@ test(
       }
 
       const secondProfile = await createProfile('smart-filter-results-second-profile');
-      decisionHashKeys.push(naturalMuteDecisionHashKey(secondProfile.id));
+      decisionCacheKeys.push(
+        naturalMuteDecisionHashKey(secondProfile.id),
+        naturalMuteDecisionResultsKey(secondProfile.id),
+      );
       await db.insert(AccountProfiles).values({
         accountId: viewer.account.id,
         profileId: secondProfile.id,
@@ -1241,9 +1256,7 @@ test(
         JSON.stringify(secondProfileResult.errors),
       );
       assert.deepEqual(
-        secondProfileResult.data?.smartFilterResultBatches?.edges[0]?.node.posts.map(
-          ({ id }) => id,
-        ),
+        secondProfileResult.data?.smartFilterResults?.edges.map(({ node }) => node.id),
         [encodeGlobalId('Post', unrelatedPublic.id)],
       );
 
@@ -1253,25 +1266,88 @@ test(
         profileId: emptyProfile.id,
         role: AccountProfileRole.MEMBER,
       });
+      decisionCacheKeys.push(
+        naturalMuteDecisionHashKey(emptyProfile.id),
+        naturalMuteDecisionResultsKey(emptyProfile.id),
+      );
+      const emptyOwnPost = await createContentfulPost(emptyProfile.id, 'empty result own post');
+      const emptyInaccessiblePost = await createContentfulPost(
+        followerOnlyAuthor.id,
+        'empty result inaccessible post',
+        undefined,
+        PostVisibility.FOLLOWERS,
+      );
+      const emptyDeletedPost = await createContentfulPost(
+        unrelatedAuthor.id,
+        'empty result deleted post',
+      );
+      await db
+        .update(Posts)
+        .set({ state: PostState.DELETED })
+        .where(eq(Posts.id, emptyDeletedPost.id));
+      await Promise.all(
+        [emptyOwnPost, emptyInaccessiblePost, emptyDeletedPost].map(({ id }) =>
+          cacheNaturalLanguageMuteDecision(emptyProfile.id, id, {
+            decision: 'include',
+            probability: 0.42,
+          }),
+        ),
+      );
       await db
         .update(Sessions)
         .set({ activeProfileId: emptyProfile.id })
         .where(eq(Sessions.id, viewer.session.id));
-      const emptyResult = await requestSmartFilterResults(viewer.token);
-      assert.equal(emptyResult.errors, undefined, JSON.stringify(emptyResult.errors));
-      assert.deepEqual(
-        emptyResult.data?.smartFilterResultBatches?.edges.map(({ node }) => node.posts),
-        [[]],
-      );
-      assert.equal(emptyResult.data?.smartFilterResultBatches?.pageInfo.endCursor, '0');
-      assert.equal(emptyResult.data?.smartFilterResultBatches?.pageInfo.hasNextPage, false);
-      const terminalResult = await requestSmartFilterResults(viewer.token, {
-        after: emptyResult.data?.smartFilterResultBatches?.pageInfo.endCursor,
+      const emptyFirstPage = await requestSmartFilterResults(viewer.token, { first: 1 });
+      assert.equal(emptyFirstPage.errors, undefined, JSON.stringify(emptyFirstPage.errors));
+      assert.deepEqual(emptyFirstPage.data?.smartFilterResults?.edges, []);
+      const emptyFirstCursor = emptyFirstPage.data?.smartFilterResults?.pageInfo.endCursor;
+      assert.ok(emptyFirstCursor);
+      assert.equal(emptyFirstPage.data?.smartFilterResults?.pageInfo.hasNextPage, true);
+      const emptySecondPage = await requestSmartFilterResults(viewer.token, {
+        first: 1,
+        after: emptyFirstCursor,
       });
-      assert.equal(terminalResult.errors, undefined, JSON.stringify(terminalResult.errors));
-      assert.deepEqual(terminalResult.data?.smartFilterResultBatches?.edges, []);
-      assert.equal(terminalResult.data?.smartFilterResultBatches?.pageInfo.hasPreviousPage, true);
-      assert.equal(terminalResult.data?.smartFilterResultBatches?.pageInfo.hasNextPage, false);
+      assert.equal(emptySecondPage.errors, undefined, JSON.stringify(emptySecondPage.errors));
+      assert.deepEqual(emptySecondPage.data?.smartFilterResults?.edges, []);
+      const emptySecondCursor = emptySecondPage.data?.smartFilterResults?.pageInfo.endCursor;
+      assert.ok(emptySecondCursor);
+      assert.notEqual(emptySecondCursor, emptyFirstCursor);
+      assert.equal(emptySecondPage.data?.smartFilterResults?.pageInfo.hasPreviousPage, true);
+      assert.equal(emptySecondPage.data?.smartFilterResults?.pageInfo.hasNextPage, true);
+      const emptyLastPage = await requestSmartFilterResults(viewer.token, {
+        first: 1,
+        after: emptySecondCursor,
+      });
+      assert.equal(emptyLastPage.errors, undefined, JSON.stringify(emptyLastPage.errors));
+      assert.deepEqual(emptyLastPage.data?.smartFilterResults?.edges, []);
+      assert.equal(emptyLastPage.data?.smartFilterResults?.pageInfo.hasPreviousPage, true);
+      assert.equal(emptyLastPage.data?.smartFilterResults?.pageInfo.hasNextPage, false);
+
+      const oldHashProfile = await createProfile('smart-filter-results-old-hash-profile');
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: oldHashProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      const oldHashKey = naturalMuteDecisionHashKey(oldHashProfile.id);
+      decisionCacheKeys.push(oldHashKey);
+      await runRedisCommand((client) =>
+        client.hSetEx(
+          oldHashKey,
+          {
+            [unrelatedPublic.id]: JSON.stringify({ decision: 'include', probability: 0.42 }),
+          },
+          { expiration: { type: 'EX', value: 604_800 } },
+        ),
+      );
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: oldHashProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+      const oldHashResult = await requestSmartFilterResults(viewer.token);
+      assert.equal(oldHashResult.errors, undefined, JSON.stringify(oldHashResult.errors));
+      assert.deepEqual(oldHashResult.data?.smartFilterResults?.edges, []);
+      assert.equal(oldHashResult.data?.smartFilterResults?.pageInfo.hasNextPage, false);
 
       const pagedProfile = await createProfile('smart-filter-results-paged-profile');
       await db.insert(AccountProfiles).values({
@@ -1279,44 +1355,103 @@ test(
         profileId: pagedProfile.id,
         role: AccountProfileRole.MEMBER,
       });
-      const pagedHashKey = naturalMuteDecisionHashKey(pagedProfile.id);
-      decisionHashKeys.push(pagedHashKey);
-      const manyDecisions = Object.fromEntries(
-        Array.from({ length: 600 }, () => [
-          crypto.randomUUID(),
-          JSON.stringify({ decision: 'include', probability: 0.42 }),
-        ]),
+      decisionCacheKeys.push(
+        naturalMuteDecisionHashKey(pagedProfile.id),
+        naturalMuteDecisionResultsKey(pagedProfile.id),
       );
-      await runRedisCommand((client) =>
-        client.hSetEx(pagedHashKey, manyDecisions, {
-          expiration: { type: 'EX', value: 604_800 },
-        }),
-      );
+      const pagedPosts: { readonly id: string }[] = [];
+      for (let index = 0; index < 27; index += 1) {
+        const post = await createContentfulPost(
+          unrelatedAuthor.id,
+          `indexed Smart Filter result ${index}`,
+        );
+        pagedPosts.push(post);
+        await cacheNaturalLanguageMuteDecision(pagedProfile.id, post.id, {
+          decision: 'include',
+          probability: 0.42,
+        });
+      }
       await db
         .update(Sessions)
         .set({ activeProfileId: pagedProfile.id })
         .where(eq(Sessions.id, viewer.session.id));
-      const firstNativePage = await requestSmartFilterResults(viewer.token);
-      assert.equal(firstNativePage.errors, undefined, JSON.stringify(firstNativePage.errors));
-      assert.equal(firstNativePage.data?.smartFilterResultBatches?.edges.length, 1);
-      assert.deepEqual(firstNativePage.data?.smartFilterResultBatches?.edges[0]?.node.posts, []);
-      const firstNativeCursor = firstNativePage.data?.smartFilterResultBatches?.pageInfo.endCursor;
-      assert.ok(firstNativeCursor);
-      assert.equal(firstNativePage.data?.smartFilterResultBatches?.pageInfo.hasNextPage, true);
-      const secondNativePage = await requestSmartFilterResults(viewer.token, {
-        after: firstNativeCursor,
-      });
-      assert.equal(secondNativePage.errors, undefined, JSON.stringify(secondNativePage.errors));
-      assert.equal(secondNativePage.data?.smartFilterResultBatches?.edges.length, 1);
-      assert.equal(secondNativePage.data?.smartFilterResultBatches?.pageInfo.hasPreviousPage, true);
-      assert.notEqual(
-        secondNativePage.data?.smartFilterResultBatches?.pageInfo.endCursor,
-        firstNativeCursor,
+
+      const defaultPage = await requestSmartFilterResults(viewer.token);
+      assert.equal(defaultPage.errors, undefined, JSON.stringify(defaultPage.errors));
+      assert.equal(defaultPage.data?.smartFilterResults?.edges.length, 20);
+      assert.equal(defaultPage.data?.smartFilterResults?.pageInfo.hasNextPage, true);
+
+      const pagedIds: string[] = [];
+      const seenCursors = new Set<string>();
+      let after: string | undefined;
+      for (let page = 0; page < 5; page += 1) {
+        const pagedResult = await requestSmartFilterResults(viewer.token, {
+          first: 7,
+          after,
+        });
+        assert.equal(pagedResult.errors, undefined, JSON.stringify(pagedResult.errors));
+        const pageConnection = pagedResult.data?.smartFilterResults;
+        assert.ok(pageConnection);
+        assert.ok(pageConnection.edges.length <= 7);
+        pagedIds.push(...pageConnection.edges.map(({ node }) => node.id));
+        if (!pageConnection.pageInfo.hasNextPage) {
+          break;
+        }
+
+        const cursor = pageConnection.pageInfo.endCursor;
+        assert.ok(cursor);
+        assert.ok(!seenCursors.has(cursor));
+        seenCursors.add(cursor);
+        after = cursor;
+        assert.ok(page < 4, 'cursor pagination should finish within five pages');
+      }
+      assert.equal(pagedIds.length, new Set(pagedIds).size);
+      assert.deepEqual(
+        new Set(pagedIds),
+        new Set(pagedPosts.map(({ id }) => encodeGlobalId('Post', id))),
       );
+
+      const maxProfile = await createProfile('smart-filter-results-max-profile');
+      await db.insert(AccountProfiles).values({
+        accountId: viewer.account.id,
+        profileId: maxProfile.id,
+        role: AccountProfileRole.MEMBER,
+      });
+      decisionCacheKeys.push(
+        naturalMuteDecisionHashKey(maxProfile.id),
+        naturalMuteDecisionResultsKey(maxProfile.id),
+      );
+      await Promise.all(
+        Array.from({ length: 101 }, () =>
+          cacheNaturalLanguageMuteDecision(maxProfile.id, crypto.randomUUID(), {
+            decision: 'include',
+            probability: 0.42,
+          }),
+        ),
+      );
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: maxProfile.id })
+        .where(eq(Sessions.id, viewer.session.id));
+      const maxFirstPage = await requestSmartFilterResults(viewer.token, { first: 101 });
+      assert.equal(maxFirstPage.errors, undefined, JSON.stringify(maxFirstPage.errors));
+      assert.deepEqual(maxFirstPage.data?.smartFilterResults?.edges, []);
+      const maxFirstCursor = maxFirstPage.data?.smartFilterResults?.pageInfo.endCursor;
+      assert.ok(maxFirstCursor);
+      assert.equal(maxFirstPage.data?.smartFilterResults?.pageInfo.hasNextPage, true);
+      const maxLastPage = await requestSmartFilterResults(viewer.token, {
+        first: 101,
+        after: maxFirstCursor,
+      });
+      assert.equal(maxLastPage.errors, undefined, JSON.stringify(maxLastPage.errors));
+      assert.deepEqual(maxLastPage.data?.smartFilterResults?.edges, []);
+      assert.notEqual(maxLastPage.data?.smartFilterResults?.pageInfo.endCursor, maxFirstCursor);
+      assert.equal(maxLastPage.data?.smartFilterResults?.pageInfo.hasPreviousPage, true);
+      assert.equal(maxLastPage.data?.smartFilterResults?.pageInfo.hasNextPage, false);
     } finally {
       restoreModel();
       await runRedisCommand((client) =>
-        client.unlink([...decisionHashKeys, legacyKey, homeTimelineKey]),
+        client.unlink([...decisionCacheKeys, legacyKey, homeTimelineKey]),
       );
     }
   },
@@ -2375,10 +2510,10 @@ async function requestSmartFilterResults(
   token?: string,
   pagination: { readonly first?: number | null; readonly after?: string | null } = {},
 ) {
-  return requestGraphQL<{ smartFilterResultBatches: SmartFilterResultConnection | null }>(
-    `query SmartFilterResultBatches($first: Int, $after: String) {
-      smartFilterResultBatches(first: $first, after: $after) {
-        edges { cursor node { posts { id smartFilterProbability } } }
+  return requestGraphQL<{ smartFilterResults: SmartFilterResultsConnection }>(
+    `query SmartFilterResults($first: Int, $after: String) {
+      smartFilterResults(first: $first, after: $after) {
+        edges { cursor node { id smartFilterProbability } }
         pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
       }
     }`,
@@ -2428,6 +2563,14 @@ function naturalMuteDecisionKey(profileId: string, postId: string): string {
 
 function naturalMuteDecisionHashKey(profileId: string): string {
   return `kosmo:home-timeline:natural-language-mute:profile:${profileId}`;
+}
+
+function naturalMuteDecisionResultsKey(profileId: string): string {
+  return `${naturalMuteDecisionHashKey(profileId)}:results`;
+}
+
+function naturalMuteDecisionCursor(expiresAtMs: number, postId: string): string {
+  return `${String(expiresAtMs).padStart(16, '0')}:${postId}`;
 }
 
 function naturalMuteInputImageUrls(request: NaturalMuteRequest): string[] {

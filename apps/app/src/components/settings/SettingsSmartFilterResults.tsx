@@ -18,7 +18,7 @@ import type { SettingsSmartFilterResults_query$key } from './__generated__/Setti
 import type { SettingsSmartFilterResultsNextPageQuery } from './__generated__/SettingsSmartFilterResultsNextPageQuery.graphql';
 import type { SettingsSmartFilterResultsQuery } from './__generated__/SettingsSmartFilterResultsQuery.graphql';
 
-const BATCH_SIZE = 1;
+const PAGE_SIZE = 20;
 const exclusionThreshold = 0.8;
 
 const query = graphql`
@@ -28,24 +28,22 @@ const query = graphql`
         ...ReplyComposerSurface_profile
       }
     }
-    ...SettingsSmartFilterResults_query @arguments(count: 1)
+    ...SettingsSmartFilterResults_query @arguments(count: 20)
   }
 `;
 
 const resultsFragment = graphql`
   fragment SettingsSmartFilterResults_query on Query
-  @argumentDefinitions(count: { type: "Int", defaultValue: 1 }, cursor: { type: "String" })
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "SettingsSmartFilterResultsNextPageQuery") {
-    smartFilterResultBatches(first: $count, after: $cursor)
-      @connection(key: "SettingsSmartFilterResults_smartFilterResultBatches") {
+    smartFilterResults(first: $count, after: $cursor)
+      @connection(key: "SettingsSmartFilterResults_smartFilterResults") {
       edges {
         cursor
         node {
-          posts {
-            id
-            smartFilterProbability
-            ...PostListItem_post
-          }
+          id
+          smartFilterProbability
+          ...PostListItem_post
         }
       }
     }
@@ -118,17 +116,16 @@ function SettingsSmartFilterResultsList({
     SettingsSmartFilterResults_query$key
   >(resultsFragment, queryKey);
   const [loadError, setLoadError] = useState(false);
-  const edges = pagination.data.smartFilterResultBatches?.edges ?? [];
+  const edges = pagination.data.smartFilterResults.edges;
   const visibleResults = new Map<
     string,
-    { post: (typeof edges)[number]['node']['posts'][number]; probability: number }
+    { post: (typeof edges)[number]['node']; probability: number }
   >();
   for (const edge of edges) {
-    for (const post of edge.node.posts) {
-      const probability = post.smartFilterProbability;
-      if (probability != null && !visibleResults.has(post.id)) {
-        visibleResults.set(post.id, { post, probability });
-      }
+    const post = edge.node;
+    const probability = post.smartFilterProbability;
+    if (probability != null && !visibleResults.has(post.id)) {
+      visibleResults.set(post.id, { post, probability });
     }
   }
 
@@ -138,7 +135,7 @@ function SettingsSmartFilterResultsList({
     }
 
     setLoadError(false);
-    pagination.loadNext(BATCH_SIZE, {
+    pagination.loadNext(PAGE_SIZE, {
       onComplete: (error) => setLoadError(Boolean(error)),
     });
   };
