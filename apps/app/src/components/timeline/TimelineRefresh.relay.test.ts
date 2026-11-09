@@ -323,6 +323,7 @@ function payload(
             id: `content-${id}`,
             bodyText: id,
             contentWarning: null,
+            linkPreview: null,
             document: null,
             media: [],
             mentionedProfiles: [],

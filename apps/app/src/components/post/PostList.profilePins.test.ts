@@ -184,6 +184,7 @@ const postNode = (id: string, isPinned: boolean, kind = 'LOCAL') => ({
     id: `${id}:content`,
     bodyText: '',
     contentWarning: null,
+    linkPreview: null,
     document: {
       version: 1,
       summary: null,
