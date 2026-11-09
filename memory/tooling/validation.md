@@ -10,6 +10,12 @@
 - security scanner나 CI step에 `continue-on-error`를 쓰는 경우, 후속 step에서 실패 여부를 명시적으로 판정해 workflow가 조용히 성공하지 않게 한다.
 - dependency, tooling, CI 명령이 바뀌면 변경 이유와 platform 제약을 리뷰에서 확인한다.
 
+## Mise Cache Warming
+
+- `.github/workflows/mise-cache.yml`은 mise 설정 또는 현재 consumer workflow 변경을 main에 push했을 때 세 profile을 데우며, 수동 실행도 지원한다. Profile은 Test의 ARM64 기본 설정, Lint의 x64 기본 설정, Semgrep의 x64 inline Python 3.12 설정과 맞춘다.
+- `jdx/mise-action` 기본 캐시를 사용한다. PR과 merge queue workflow는 GitHub Actions의 기본 branch 캐시를 읽을 수 있으므로 공유용 수동 warmup은 main ref에서 실행한다. 캐시는 키마다 불변이며, 설정이나 실행 환경에 맞는 기본 키만 재사용된다. 캐시 hit는 보장되지 않고 tool 다운로드의 HTTP 장애도 막지 않는다.
+- consumer의 mise action 버전이나 inline 설정이 바뀌면 해당 workflow를 warmup path filter에 포함하고 일치하는 profile을 유지한다.
+
 ## Expo, Relay, Web BFF
 
 - `apps/api`의 `lint:schema`는 runtime GraphQL schema를 사전식으로 정렬한 결과와 committed

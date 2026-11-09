@@ -1,0 +1,56 @@
+name: Mise Cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/mise.toml'
+      - '**/mise.lock'
+      - '**/mise.*.toml'
+      - '**/mise.*.lock'
+      - '**/.mise.toml'
+      - '**/.mise.lock'
+      - '**/.mise.*.toml'
+      - '**/.mise.*.lock'
+      - '**/.tool-versions'
+      - .config/mise/**
+      - .mise/**
+      - mise/**
+      - .github/workflows/mise-cache.yml
+      - .github/workflows/test.yml
+      - .github/workflows/lint.yml
+      - .github/workflows/semgrep.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cache:
+    name: Cache ${{ matrix.profile }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: ARM64 default
+            runner: ubuntu-24.04-arm
+            mise_toml: ''
+          - profile: x64 default
+            runner: ubuntu-latest
+            mise_toml: ''
+          - profile: Semgrep x64
+            runner: ubuntu-latest
+            mise_toml: |
+              [tools]
+              python = "3.12"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up mise
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+        with:
+          version: '2026.9.2'
+          mise_toml: ${{ matrix.mise_toml }}
