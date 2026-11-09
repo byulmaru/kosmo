@@ -54,6 +54,7 @@ export function PostBody({
   return (
     <PostContentRenderer
       bodyText={content.bodyText}
+      contentId={content.id}
       contentWarning={content.contentWarning}
       contentWarningPresentation={contentWarningPresentation}
       document={content.document}

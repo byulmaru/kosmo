@@ -64,9 +64,13 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
   PostMediaGallery: (props: Record<string, unknown>) => createElement('PostMediaGallery', props),
 });
+mockModule(new URL('./PostLinkPreview.tsx', import.meta.url), {
+  PostLinkPreview: (props: Record<string, unknown>) => createElement('PostLinkPreview', props),
+});
 
 type RendererProps = {
   bodyText: string;
+  contentId?: string | null;
   contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
@@ -104,6 +108,133 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
+  it('mounts one preview boundary when a visible document contains links', async () => {
+    const contentId = 'content-link-preview';
+    await render({
+      bodyText: '첫 링크와 두 번째 링크',
+      contentId,
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: '첫 링크',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/first' } }],
+                },
+                { type: 'text', text: '와 ' },
+                {
+                  type: 'text',
+                  text: '두 번째 링크',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/second' } }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-link-preview',
+    });
+
+    assert.deepEqual(
+      rendered('PostLinkPreview').map(({ props }) => props),
+      [{ contentId, interactive: true }],
+    );
+  });
+
+  it('does not mount a preview for a plain-text URL without a link mark', async () => {
+    await render({
+      bodyText: 'https://example.com/plain-text',
+      contentId: 'content-plain-url',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'https://example.com/plain-text' }],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-plain-url',
+    });
+
+    assert.equal(rendered('PostLinkPreview').length, 0);
+  });
+
+  it('does not mount a preview while Content Warning hides the body', async () => {
+    const document = linkDocument();
+    await render({
+      bodyText: '원문 본문',
+      contentId: 'content-warning-link',
+      contentWarning: '민감한 내용',
+      document,
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-warning-link-preview',
+    });
+
+    assert.equal(rendered('PostLinkPreview').length, 0);
+    const warning = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning',
+    );
+    assert.ok(warning);
+    await act(async () => warning.props.onPress({ stopPropagation: () => undefined }));
+    assert.deepEqual(
+      rendered('PostLinkPreview').map(({ props }) => props.contentId),
+      ['content-warning-link'],
+    );
+  });
+
+  it('hides preview when canonical Media nodes exist and the gallery is unavailable', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentId: 'content-unavailable-media',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: '첫 링크',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/first' } }],
+                },
+              ],
+            },
+            { type: 'media', attrs: { mediaId: 'media-1' } },
+          ],
+        },
+      },
+      media: null,
+      mediaPresentation: 'hidden',
+      mentionedProfiles: [],
+      postId: 'post-unavailable-media-link-preview',
+    });
+
+    assert.equal(rendered('PostMediaGallery').length, 0);
+    assert.equal(rendered('PostLinkPreview').length, 0);
+  });
+
   it('일반 링크는 외부 URL을 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
     await render({
       bodyText: '외부 링크',
@@ -751,6 +882,28 @@ async function render(props: RendererProps) {
     }
   });
   assert.ok(renderer);
+}
+
+function linkDocument() {
+  return {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: '첫 링크',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/first' } }],
+            },
+          ],
+        },
+      ],
+    },
+  };
 }
 
 function rendered(type: string): ReactTestInstance[] {

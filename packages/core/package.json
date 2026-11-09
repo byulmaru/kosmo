@@ -12,6 +12,7 @@
     "./global-id": "./global-id.ts",
     "./home-timeline/cache": "./home-timeline/cache.ts",
     "./home-timeline/query": "./home-timeline/query.ts",
+    "./link-preview": "./link-preview.ts",
     "./local-instance": "./local-instance.ts",
     "./media-metadata": "./media-metadata.ts",
     "./media-upload": "./media-upload.ts",
@@ -26,6 +27,7 @@
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
     "./temporal/follow-command": "./temporal/follow-command.ts",
+    "./temporal/link-preview": "./temporal/link-preview.ts",
     "./temporal/local-post-create": "./temporal/local-post-create.ts",
     "./temporal/media-upload": "./temporal/media-upload.ts",
     "./temporal/operational-notification": "./temporal/operational-notification.ts",
@@ -56,6 +58,7 @@
     "drizzle-orm": "1.0.0-beta.22",
     "emoji-datasource-google": "16.0.0",
     "fraci": "0.19.0",
+    "ipaddr.js": "^2.5.0",
     "jsdom": "^29.1.1",
     "linkify-it": "6.1.0",
     "postgres": "^3.4.9",
@@ -75,7 +78,7 @@
     "test:migrate:smoke": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core exec node --import tsx db/migrate.smoke.test.ts",
     "test:services": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core exec node --import tsx --import ./temporal/test-client.ts --test --test-concurrency=1 'services/*.test.ts' 'home-timeline/*.test.ts'",
-    "test:unit": "node --import tsx --test activitypub-note-content.test.ts media-metadata.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' 'validation/*.test.ts' db/index.test.ts 'redis/*.test.ts'"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts media-metadata.test.ts link-preview.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' 'validation/*.test.ts' db/index.test.ts 'redis/*.test.ts'"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",

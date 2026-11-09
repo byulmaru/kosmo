@@ -38,6 +38,7 @@ type MentionedProfile = PostContentMention_profile$key & {
 };
 
 type PresentationContent = {
+  readonly id: string;
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
@@ -57,6 +58,7 @@ const PostSourcePreviewFragment = graphql`
     id
     createdAt
     content {
+      id
       bodyText
       contentWarning
       document
@@ -88,6 +90,7 @@ const PostSourcePresentationViewFragment = graphql`
     createdAt
     visibility
     content {
+      id
       bodyText
       contentWarning
       document
@@ -296,6 +299,7 @@ export function PostSourcePreview({
         <View style={styles.sourceBody} testID="source-post-body">
           <PostContentRenderer
             bodyText={source.content.bodyText}
+            contentId={source.content.id}
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
@@ -409,6 +413,7 @@ function PostBodyPressTarget({
     >
       <PostContentRenderer
         bodyText={content.bodyText}
+        contentId={content.id}
         contentWarning={content.contentWarning}
         document={content.document}
         media={presentationMedia(content.media)}

@@ -1,4 +1,4 @@
-import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { getFirstPostContentLink, readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
@@ -9,6 +9,7 @@ import { PostContentMention } from './PostContentMention';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { PostContentWarning } from './PostContentWarning';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
+import { PostLinkPreview } from './PostLinkPreview';
 import { PostMediaGallery } from './PostMediaGallery';
 import type {
   PostContentBlockNode,
@@ -36,6 +37,7 @@ export type PostContentWarningPresentation = 'default' | 'revealed';
 
 export function PostContentRenderer({
   bodyText,
+  contentId,
   contentWarning,
   contentWarningPresentation = 'default',
   document: value,
@@ -50,6 +52,7 @@ export function PostContentRenderer({
   size = 'md',
 }: {
   bodyText: string;
+  contentId?: string | null;
   contentWarning: string | null | undefined;
   contentWarningPresentation?: PostContentWarningPresentation;
   document: unknown;
@@ -64,12 +67,18 @@ export function PostContentRenderer({
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
-  const document = readPostContentDocumentV1(value)?.body ?? null;
+  const contentDocument = readPostContentDocumentV1(value);
+  const document = contentDocument?.body ?? null;
+  const hasFirstLink = Boolean(contentDocument && getFirstPostContentLink(contentDocument));
   const isProtected = Boolean(contentWarning);
   const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
   const forcedRevealed = contentWarningPresentation === 'revealed';
   const contentVisible = forcedRevealed || !isProtected || revealed;
   const showContentWarning = Boolean(contentWarning) && !forcedRevealed;
+  const hasMedia = Boolean(
+    media?.length || contentDocument?.body.content.some((block) => block.type === 'media'),
+  );
+  const linkPreviewContentId = contentVisible && !hasMedia && hasFirstLink ? contentId : null;
   const bodyStyle = [
     styles.body,
     size === 'lg' ? typography.lg : typography.md,
@@ -109,7 +118,8 @@ export function PostContentRenderer({
   if (
     !showContentWarning &&
     !bodyContent &&
-    (!showMedia || (media !== null && media.length === 0))
+    (!showMedia || (media !== null && media.length === 0)) &&
+    !linkPreviewContentId
   ) {
     return null;
   }
@@ -124,6 +134,9 @@ export function PostContentRenderer({
         />
       ) : null}
       {bodyContent}
+      {linkPreviewContentId ? (
+        <PostLinkPreview contentId={linkPreviewContentId} interactive={interactive} />
+      ) : null}
       {contentVisible && showMedia ? (
         <PostMediaGallery
           interactive={interactive}

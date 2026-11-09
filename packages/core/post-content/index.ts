@@ -201,6 +201,27 @@ export function readPostContentDocumentV1(value: unknown): PostContentDocumentV1
   return body === null ? null : ({ ...value, body } as PostContentDocumentV1);
 }
 
+export function getFirstPostContentLink(document: PostContentDocumentV1): string | null {
+  for (const block of document.body.content) {
+    if (block.type !== 'paragraph') {
+      continue;
+    }
+
+    for (const node of block.content ?? []) {
+      if (node.type !== 'text') {
+        continue;
+      }
+
+      const link = node.marks?.find((mark) => mark.type === 'link');
+      if (link) {
+        return link.attrs.href;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function normalizePostContentHashtagId(value: unknown): string {
   const result = postContentHashtagIdSchema.safeParse(value);
   if (!result.success) {
