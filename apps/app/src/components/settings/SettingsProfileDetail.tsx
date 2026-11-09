@@ -22,9 +22,9 @@ const query = graphql`
   query SettingsProfileDetailQuery {
     currentSession {
       selectedProfile {
+        ...ProfileSettingsScreen_profile
         id
         displayName
-        relativeHandle
         followPolicy
         instance {
           kind
