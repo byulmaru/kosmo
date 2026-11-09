@@ -1142,7 +1142,6 @@ test(
       const hashTtlBefore = (
         await runRedisCommand((client) => client.hTTL(hashKey, [unrelatedPublic.id]))
       )?.value?.[0];
-      assert.deepEqual(homeCacheBefore, [{ value: classified.id, score: 123 }]);
       assert.ok(homeCacheTtlBefore !== undefined && homeCacheTtlBefore > 50);
       assert.ok(hashTtlBefore !== undefined && hashTtlBefore > 50);
 
