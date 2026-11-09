@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "170fc16c-d3cf-44ec-98ef-b5c904bb0227",
-  "prevIds": ["506472ce-b9a4-4ad0-a236-f7e816425209"],
+  "id": "b09addd2-e5cc-446c-a571-1bbf74de5bc9",
+  "prevIds": ["74607f07-5b4c-4a2e-adcf-d95f79bca69f"],
   "ddl": [
     {
       "values": ["OWNER", "MEMBER"],
@@ -1618,6 +1618,19 @@
       "generated": null,
       "identity": null,
       "name": "alt_text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "media"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "publication_metadata",
       "entityType": "columns",
       "schema": "public",
       "table": "media"
