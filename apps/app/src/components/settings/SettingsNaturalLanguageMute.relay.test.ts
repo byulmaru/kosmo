@@ -176,7 +176,10 @@ describe('SettingsNaturalLanguageMute with Relay', () => {
 
     const acceptedCondition = '😀'.repeat(250);
     await act(async () => one('TextArea').props.onChangeText(` ${acceptedCondition} `));
-    assert.equal(one('Text').props.accessibilityLabel, '남은 글자 수 0자');
+    assert.equal(
+      all('Text').find((node) => node.props.role === 'status')?.props.accessibilityLabel,
+      '남은 글자 수 0자',
+    );
     assert.equal(button('저장').props.disabled, false);
     await act(async () => button('저장').props.onPress());
 
@@ -191,7 +194,10 @@ describe('SettingsNaturalLanguageMute with Relay', () => {
     const overLimitCondition = '😀'.repeat(251);
     await act(async () => one('TextArea').props.onChangeText(overLimitCondition));
     assert.equal(one('TextArea').props.value, overLimitCondition);
-    assert.equal(one('Text').props.accessibilityLabel, '남은 글자 수 -1자');
+    assert.equal(
+      all('Text').find((node) => node.props.role === 'status')?.props.accessibilityLabel,
+      '남은 글자 수 -1자',
+    );
     assert.equal(button('저장').props.disabled, true);
     assert.equal(button('삭제').props.disabled, false);
     await act(async () => button('저장').props.onPress());
