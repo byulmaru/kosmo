@@ -14,6 +14,76 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+test('로컬에서 게시글·반응 상세를 왕복하면 목록과 위치를 복원한다', async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  const viewer = await createE2ESession({ handle: 'e2e-local-navigation-viewer' });
+  const reactor = await createE2EProfile({ handle: 'e2e-local-navigation-reactor' });
+  const postBody = 'Local navigation restore target';
+  const post = await createE2EPost({ body: postBody, profileId: viewer.profile!.id });
+  await db.insert(Reactions).values({ postId: post.id, profileId: reactor.id, type: '❤️' });
+  for (let index = 0; index < 6; index += 1) {
+    await createE2EPost({
+      body: `Local navigation filler ${index}`,
+      profileId: viewer.profile!.id,
+    });
+  }
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+
+  const timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  const localTab = timelineTabs.getByRole('tab', { name: '로컬', exact: true });
+  await localTab.click();
+  await expect(page).toHaveURL('/local');
+  await expect(localTab).toHaveAttribute('aria-selected', 'true');
+
+  const postPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}`;
+  const localPost = page.getByRole('article').filter({ hasText: postBody });
+  await expect(localPost).toBeVisible();
+  await localPost.scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const localScroll = await page.evaluate(() => window.scrollY);
+
+  for (let roundTrip = 0; roundTrip < 2; roundTrip += 1) {
+    await localPost.getByText(postBody, { exact: true }).click();
+    await expect(page).toHaveURL(postPath);
+    const currentPost = page.getByTestId(`post-thread-current-${toGlobalId('Post', post.id)}`);
+    await expect(currentPost).toBeInViewport();
+
+    if (roundTrip === 0) {
+      await page.goBack();
+      await expect(page).toHaveURL('/local');
+      await expect(localTab).toHaveAttribute('aria-selected', 'true');
+      await expect(localPost).toBeInViewport();
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
+
+      await page.goForward();
+      await expect(page).toHaveURL(postPath);
+      await expect(currentPost).toBeInViewport();
+    }
+
+    await page.getByRole('button', { name: '뒤로 가기' }).click();
+    await expect(page).toHaveURL('/local');
+    await expect(localTab).toHaveAttribute('aria-selected', 'true');
+    await expect(localPost).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
+
+    const peoplePath = `${postPath}/reactions`;
+    await localPost.locator(`a[href="${peoplePath}"]`).click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(peoplePath);
+    await expect(
+      page.getByRole('heading', { name: '반응한 사람', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '뒤로 가기' }).click();
+    await expect(page).toHaveURL('/local');
+    await expect(localTab).toHaveAttribute('aria-selected', 'true');
+    await expect(localPost).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
+  }
+});
+
 test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 목록 위치를 복원한다', async ({
   context,
   page,
