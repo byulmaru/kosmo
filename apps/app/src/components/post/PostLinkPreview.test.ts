@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -13,23 +12,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
-const require = createRequire(import.meta.url);
 const openedURLs: string[] = [];
 
 mockModule('react-native', {
-  Image: 'Image',
-  Linking: {
-    openURL: async (url: string) => {
-      openedURLs.push(url);
-    },
-  },
-  Platform: { OS: 'web' },
-  Pressable: 'Pressable',
-  StyleSheet: { create: (styles: object) => styles },
-  Text: 'Text',
-  View: 'View',
-});
-mockModule(require.resolve('react-native'), {
   Image: 'Image',
   Linking: {
     openURL: async (url: string) => {
