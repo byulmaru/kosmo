@@ -4,6 +4,7 @@ import { Temporal } from 'temporal-polyfill';
 import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
 import { runRedisCommand } from '../redis/client';
 import { homePostListWhere } from '../visibility/home-post-list';
+import { publishHomeTimelinePostAdded } from './events';
 import { getCachedHomeTimelinePostIds, homeTimelineFeedKey as feedKey } from './membership';
 import { filterHomeTimelineMuteCandidates, filterHomeTimelinePosts } from './natural-language-mute';
 import { queryHomeTimeline } from './query';
@@ -325,6 +326,13 @@ export const fanoutHomeTimelinePost = async ({
     if (result === null) {
       throw new Error('Redis unavailable while fanning out Home timeline post');
     }
+
+    const insertResults: readonly unknown[] = Array.isArray(result.value) ? result.value : [];
+    writableProfileIds.forEach((profileId, index) => {
+      if (insertResults[index] === 1) {
+        publishHomeTimelinePostAdded({ postId, profileId });
+      }
+    });
   }
 };
 
@@ -427,6 +435,9 @@ export const insertHomeTimelinePost = async ({
   );
   if (result === null) {
     throw new Error('Redis unavailable while inserting Home timeline post');
+  }
+  if (result.value === 1) {
+    publishHomeTimelinePostAdded({ postId, profileId });
   }
 };
 

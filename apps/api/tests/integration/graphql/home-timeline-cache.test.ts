@@ -16,12 +16,21 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
+import { homeTimelinePubSub } from '@kosmo/core/home-timeline/events';
 import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
+import { disposeRedisPubSub } from '@kosmo/core/redis/pubsub';
+import { createClient } from '@redis/client';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
+import {
+  createSseEventReader,
+  getSseData,
+  waitForSubscriberCount,
+  withTimeout,
+} from '../../../src/graphql/subscription-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
 import type * as NaturalLanguageMuteCache from '@kosmo/core/home-timeline/natural-language-mute-cache';
@@ -249,6 +258,7 @@ after(async () => {
   if (configuredLocalInstanceId) {
     await db.delete(Instances).where(eq(Instances.id, configuredLocalInstanceId));
   }
+  disposeRedisPubSub();
   await pg.end();
   if (previousPublicOrigin === undefined) {
     delete process.env.PUBLIC_ORIGIN;
@@ -2251,6 +2261,181 @@ test('falls back to the DB Home policy when Redis is unconfigured', async () => 
     }
   }
 });
+
+test(
+  'streams new Home Posts to the selected Profile and returns null when a Post is no longer readable',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createAuth();
+    const selectedProfile = await createProfile('selected-home-subscription');
+    await db.insert(AccountProfiles).values({
+      accountId: viewer.account.id,
+      profileId: selectedProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const author = await createProfile('home-subscription-author');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: selectedProfile.id,
+      followeeProfileId: author.id,
+    });
+    const post = await createContentfulPost(author.id, 'live Home subscription body');
+    const defaultProfileMarker = await createContentfulPost(
+      viewer.profile.id,
+      'default Home subscription marker',
+    );
+    const redis = createClient({ url: testRedisUrl! });
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+    redis.on('error', () => undefined);
+    await redis.connect();
+    const waitForProfileSubscribers = (profileId: string, count: number) => {
+      const channel = `homeTimelinePostAdded:${profileId}`;
+      return waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(channel))[channel] ?? 0,
+        count,
+      );
+    };
+
+    const requestSubscription = async ({
+      token,
+      selectedProfileId,
+    }: {
+      readonly token?: string;
+      readonly selectedProfileId?: string;
+    } = {}) =>
+      app.request('/graphql', {
+        body: JSON.stringify({
+          ...(selectedProfileId === undefined
+            ? {}
+            : { extensions: { selectedProfileId: encodeGlobalId('Profile', selectedProfileId) } }),
+          query:
+            'subscription HomeTimelinePostAdded { homeTimelinePostAdded { id content { bodyText } } }',
+        }),
+        headers: {
+          accept: 'text/event-stream',
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+
+    const subscribe = async (options: {
+      readonly token: string;
+      readonly selectedProfileId?: string;
+    }) => {
+      const response = await requestSubscription(options);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+      assert.ok(response.body);
+      const reader = response.body.getReader();
+      readers.push(reader);
+      return { readEvent: createSseEventReader(reader), reader };
+    };
+
+    const expectPermissionDenied = async (token?: string) => {
+      const response = await requestSubscription({ token });
+      let result: unknown;
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        assert.ok(response.body);
+        const reader = response.body.getReader();
+        try {
+          result = getSseData(
+            await withTimeout(
+              createSseEventReader(reader)(),
+              'Unauthorized Home subscription did not return a GraphQL error',
+            ),
+          );
+        } finally {
+          await reader.cancel().catch(() => undefined);
+        }
+      } else {
+        result = await response.json();
+      }
+
+      assert.ok(typeof result === 'object' && result !== null && 'errors' in result);
+      const errors = (result as { errors?: readonly { extensions?: { code?: string } }[] }).errors;
+      assert.ok(errors?.length);
+      assert.equal(errors[0]?.extensions?.code, 'PERMISSION_DENIED');
+    };
+
+    try {
+      const noProfileViewer = await createAuth();
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: null })
+        .where(eq(Sessions.id, noProfileViewer.session.id));
+      await expectPermissionDenied();
+      await expectPermissionDenied(noProfileViewer.token);
+      const defaultProfileChannel = `homeTimelinePostAdded:${viewer.profile.id}`;
+      assert.equal(
+        (await redis.pubSubNumSub(defaultProfileChannel))[defaultProfileChannel] ?? 0,
+        0,
+      );
+
+      const defaultProfileSubscription = await subscribe({ token: viewer.token });
+      const selectedProfileSubscription = await subscribe({
+        token: viewer.token,
+        selectedProfileId: selectedProfile.id,
+      });
+      const defaultProfileEvent = defaultProfileSubscription.readEvent();
+      const selectedProfileEvent = selectedProfileSubscription.readEvent();
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 1),
+        waitForProfileSubscribers(selectedProfile.id, 1),
+      ]);
+
+      await fanoutHomeTimelinePost({ postId: post.id });
+      const liveEvent = await withTimeout(
+        selectedProfileEvent,
+        'Selected Profile did not receive the Home Post subscription event',
+      );
+      assert.ok(liveEvent);
+      assert.match(liveEvent, /event: next/);
+      assert.deepEqual(getSseData(liveEvent), {
+        data: {
+          homeTimelinePostAdded: {
+            id: encodeGlobalId('Post', post.id),
+            content: { bodyText: 'live Home subscription body' },
+          },
+        },
+      });
+      homeTimelinePubSub.publish('homeTimelinePostAdded', viewer.profile.id, {
+        postId: defaultProfileMarker.id,
+      });
+      const defaultProfileLiveEvent = await withTimeout(
+        defaultProfileEvent,
+        'Default Profile did not receive its Home Post subscription marker',
+      );
+      assert.deepEqual(getSseData(defaultProfileLiveEvent), {
+        data: {
+          homeTimelinePostAdded: {
+            id: encodeGlobalId('Post', defaultProfileMarker.id),
+            content: { bodyText: 'default Home subscription marker' },
+          },
+        },
+      });
+
+      await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+      homeTimelinePubSub.publish('homeTimelinePostAdded', selectedProfile.id, { postId: post.id });
+      const missingPostEvent = await withTimeout(
+        selectedProfileSubscription.readEvent(),
+        'Deleted Post subscription event was not delivered',
+      );
+      assert.deepEqual(getSseData(missingPostEvent), {
+        data: { homeTimelinePostAdded: null },
+      });
+
+      await Promise.all(readers.map((reader) => reader.cancel()));
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 0),
+        waitForProfileSubscribers(selectedProfile.id, 0),
+      ]);
+    } finally {
+      await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
+      await redis.close();
+    }
+  },
+);
 
 async function createAuth(): Promise<Auth> {
   const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);

@@ -7,72 +7,18 @@ import { disposeRedisPubSub, redisEventTarget } from '@kosmo/core/redis/pubsub';
 import { createClient } from '@redis/client';
 import { GraphQLNonNull, GraphQLObjectType, GraphQLSchema, GraphQLString } from 'graphql';
 import { createPubSub, createYoga, useExecutionCancellation } from 'graphql-yoga';
+import {
+  createSseEventReader,
+  getSseData,
+  waitForSubscriberCount,
+  withTimeout,
+} from './subscription-test-helpers';
 
 type Events = {
   'test:api:sse': [id: string, payload: { value: string }];
 };
 
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
-
-async function waitForSubscriberCount(
-  readCount: () => Promise<number>,
-  count: number,
-): Promise<void> {
-  const deadline = performance.now() + 5_000;
-  while (performance.now() < deadline) {
-    if ((await readCount()) === count) {
-      return;
-    }
-    await delay(25);
-  }
-  assert.equal(await readCount(), count);
-}
-
-function createSseEventReader(reader: ReadableStreamDefaultReader<Uint8Array>) {
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  return async function readEvent(): Promise<string | null> {
-    while (true) {
-      const separator = buffer.indexOf('\n\n');
-      if (separator >= 0) {
-        const event = buffer.slice(0, separator);
-        buffer = buffer.slice(separator + 2);
-        if (event.trim() !== '' && !event.startsWith(':')) {
-          return event;
-        }
-        continue;
-      }
-
-      const result = await reader.read();
-      if (result.done) {
-        return null;
-      }
-      buffer += decoder.decode(result.value, { stream: true }).replaceAll('\r\n', '\n');
-    }
-  };
-}
-
-function getSseData(event: string): unknown {
-  const data = event
-    .split('\n')
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice('data:'.length).trimStart())
-    .join('\n');
-  return JSON.parse(data);
-}
-
-async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), 5_000);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer!);
-  }
-}
 
 test(
   'streams Redis Pub/Sub events over Yoga SSE and unsubscribes when the response body is cancelled',

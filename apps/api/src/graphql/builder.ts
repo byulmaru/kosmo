@@ -66,6 +66,7 @@ export const builder = new SchemaBuilder<{
     encodeGlobalID: encodeGlobalId,
   },
   scopeAuth: {
+    authorizeOnSubscribe: true,
     authScopes: async (ctx) => ({
       login: !!ctx.session,
       profileRole: (minimumRole) => {
@@ -94,6 +95,7 @@ export const builder = new SchemaBuilder<{
 
 builder.queryType({});
 builder.mutationType({});
+builder.subscriptionType({});
 
 builder.scalarType('DateTime', {
   description: 'RFC9557 formatted string',

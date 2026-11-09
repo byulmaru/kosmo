@@ -12,6 +12,7 @@
     "./global-id": "./global-id.ts",
     "./home-timeline/cache": "./home-timeline/cache.ts",
     "./home-timeline/natural-language-mute-cache": "./home-timeline/natural-language-mute-cache.ts",
+    "./home-timeline/events": "./home-timeline/events.ts",
     "./home-timeline/query": "./home-timeline/query.ts",
     "./link-preview": "./link-preview.ts",
     "./local-instance": "./local-instance.ts",

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, Fragment } from 'react';
+import { createElement, Fragment, useEffect } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -38,7 +38,13 @@ const browserScrollCalls: unknown[] = [];
 const browserWindow = {
   scrollY: 0,
   innerHeight: 600,
-  scrollTo: (options: unknown) => browserScrollCalls.push(options),
+  scrollTo: (options: unknown) => {
+    browserScrollCalls.push(options);
+    if (typeof options === 'object' && options !== null && 'top' in options) {
+      browserWindow.scrollY = Number(options.top);
+      browserListeners.get('scroll')?.();
+    }
+  },
   addEventListener: (type: string, listener: () => void) => browserListeners.set(type, listener),
   removeEventListener: (type: string) => browserListeners.delete(type),
   requestAnimationFrame: (callback: () => void) => {
@@ -46,6 +52,15 @@ const browserWindow = {
     return 1;
   },
   cancelAnimationFrame: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  documentElement: { scrollHeight: 10000 },
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = {
+  addEventListener: () => ({ remove: () => undefined }),
 };
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -55,6 +70,11 @@ type Request = {
   sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 };
 const requests: Request[] = [];
+type Subscription = Request & {
+  connected?: (reconnected: boolean) => void;
+  disposed: boolean;
+};
+const subscriptions: Subscription[] = [];
 const toasts: Array<{
   message: string;
   options: { action?: { onPress: () => void }; persistent?: boolean };
@@ -70,6 +90,8 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 const navigations: unknown[] = [];
 const tabRegistry = createTabReselectionRegistry();
 let homeReselectionHandler: (() => void) | null = null;
+let homeFocusEffect: (() => void | (() => void)) | null = null;
+let homeFocusCleanup: (() => void) | null = null;
 const registerHomeReselection = (handler: () => void) => {
   homeReselectionHandler = handler;
   return () => {
@@ -122,7 +144,7 @@ class AnimatedColorMock {
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|fragment|mutation|subscription) (\w+)/)?.[1];
     assert.ok(name);
     return require(
       `${name.startsWith('PostList') || name.startsWith('ProfilePinOrder') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
@@ -130,6 +152,18 @@ mockModule('react-relay', {
   },
 });
 mockModule('expo-router', {
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    useEffect(() => {
+      homeFocusEffect = effect;
+      return () => {
+        homeFocusCleanup?.();
+        homeFocusCleanup = null;
+        if (homeFocusEffect === effect) {
+          homeFocusEffect = null;
+        }
+      };
+    }, [effect]);
+  },
   useRouter: () => ({
     replace: (href: string) => navigations.push(href),
     setParams: (params: object) => navigations.push(params),
@@ -150,6 +184,7 @@ mockModule(require.resolve('lucide-react-native'), {
   ArrowDown: 'ArrowDown',
 });
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   Animated: {
     Color: AnimatedColorMock,
@@ -260,10 +295,10 @@ before(async () => {
 beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
   Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { documentElement: { scrollHeight: 10000 } },
-  });
+  browserWindow.scrollY = 0;
+  browserDocument.visibilityState = 'visible';
+  browserDocument.documentElement.scrollHeight = 10000;
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -271,6 +306,7 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  subscriptions.length = 0;
   toasts.length = 0;
   platform.OS = 'ios';
   sessionStatus = 'valid';
@@ -279,6 +315,8 @@ afterEach(async () => {
   browserScrollCalls.length = 0;
   browserListeners.clear();
   homeReselectionHandler = null;
+  homeFocusEffect = null;
+  homeFocusCleanup = null;
   openProfileSwitcher.mock.resetCalls();
   for (const [key, descriptor] of [
     ['window', originalWindow],
@@ -357,6 +395,65 @@ async function respond(request: Request, data: object) {
     request.sink.complete();
   });
 }
+async function focusHome() {
+  const effect = homeFocusEffect;
+  assert.ok(effect, 'Home should register its focus revalidation');
+  await act(async () => {
+    homeFocusCleanup?.();
+    const cleanup = effect();
+    homeFocusCleanup = typeof cleanup === 'function' ? cleanup : null;
+  });
+}
+async function scrollHomeTo(y: number) {
+  await act(async () => {
+    list().props.onScroll({ nativeEvent: { contentOffset: { y } } });
+  });
+}
+function homeNewPostsButton() {
+  assert.ok(renderer);
+  const button = renderer.root
+    .findAllByType('Button' as never)
+    .find((node) => String(node.props.children).includes('새 글 보기'));
+  assert.ok(button, 'A post event below the top should expose the new-post action');
+  return button;
+}
+function homePost(id: string) {
+  const homeTimeline = payload('homeTimeline', [id]).homeTimeline as {
+    edges: Array<{ node: unknown }>;
+  };
+  const post = homeTimeline.edges[0]?.node;
+  assert.ok(post);
+  return post;
+}
+function emitHomePost(subscription: Subscription, id: string) {
+  subscription.sink.next({ data: { homeTimelinePostAdded: homePost(id) } } as GraphQLResponse);
+}
+function createTimelineNetwork() {
+  return Network.create(
+    (operation, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        requests.push({ name: operation.name, variables, sink });
+      }),
+    (operation, variables, cacheConfig) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        const connected = cacheConfig.metadata?.onSubscriptionConnected;
+        const subscription: Subscription = {
+          name: operation.name,
+          variables,
+          sink,
+          connected:
+            typeof connected === 'function'
+              ? (connected as (reconnected: boolean) => void)
+              : undefined,
+          disposed: false,
+        };
+        subscriptions.push(subscription);
+        return () => {
+          subscription.disposed = true;
+        };
+      }),
+  );
+}
 function list() {
   assert.ok(renderer);
   return renderer.root.find((node) => (node.type as unknown) === 'FlatList');
@@ -367,6 +464,7 @@ function assertConnection(
   ids: string[],
   hasNextPage = true,
   endCursor = `cursor-${ids.at(-1)}`,
+  edgeCursors: readonly (string | null)[] = ids.map((id) => `cursor-${id}`),
 ) {
   assert.ok(renderer);
   assert.deepEqual(
@@ -387,7 +485,7 @@ function assertConnection(
   );
   assert.deepEqual(
     edgeIds.map((edgeId) => source.get(edgeId)?.cursor),
-    ids.map((id) => `cursor-${id}`),
+    edgeCursors,
   );
   const pageInfo = source.get((connection.pageInfo as { __ref: string }).__ref);
   assert.equal(pageInfo?.endCursor, endCursor);
@@ -398,11 +496,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
   it('Home: pending optional request summary preserves actual posts and connection', async () => {
     postRequestSummaryMode = 'pending';
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
     await act(async () => {
@@ -420,14 +514,55 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
   });
 
+  it('Home subscription prepends actual Posts once and preserves the server pagination cursor', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    const subscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+    );
+    assert.ok(subscription);
+    assert.deepEqual(subscription.variables.connections, [
+      ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'),
+    ]);
+
+    await act(async () => emitHomePost(subscription, 'incoming'));
+    await act(async () => emitHomePost(subscription, 'incoming'));
+    await act(async () => emitHomePost(subscription, 'a'));
+    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
+      null,
+      'cursor-a',
+      'cursor-b',
+    ]);
+
+    await act(async () => list().props.onEndReached());
+    const nextPage = latest('PostListHomeNextPageQuery');
+    assert.equal(nextPage.variables.cursor, 'cursor-b');
+    await respond(nextPage, payload('homeTimeline', ['older'], false));
+    assertConnection(
+      environment,
+      'homeTimeline',
+      ['incoming', 'a', 'b', 'older'],
+      false,
+      'cursor-older',
+      [null, 'cursor-a', 'cursor-b', 'cursor-older'],
+    );
+  });
+
   it('Home: optional request summary error preserves posts and retries with Home refresh', async () => {
     postRequestSummaryMode = 'error';
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
     await act(async () => {
@@ -459,34 +594,115 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assertConnection(environment, 'homeTimeline', ['fresh']);
   });
 
-  it('Home: re-entry reuses complete cache while stale cache still fetches', async () => {
+  it('Home: cached re-entry keeps rows visible during a quiet latest refresh', async () => {
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
+    const scrollOffsets: number[] = [];
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
         children: timelineScreenWithPushContext('Home'),
       });
+    const renderWithScrollRef = () =>
+      create(render(), {
+        createNodeMock: ({ type }) =>
+          type === 'FlatList'
+            ? {
+                scrollToOffset: ({ offset }: { offset: number }) => {
+                  scrollOffsets.push(offset);
+                  const flatList = renderer?.root.find(
+                    (node) => (node.type as unknown) === 'FlatList',
+                  );
+                  flatList?.props.onScroll?.({
+                    nativeEvent: { contentOffset: { y: offset } },
+                  });
+                },
+              }
+            : null,
+      });
 
     await act(async () => {
-      renderer = create(render());
+      renderer = renderWithScrollRef();
     });
     assert.equal(requests.length, 1);
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    const firstSubscription = subscriptions.at(-1);
+    assert.ok(firstSubscription);
+
+    await focusHome();
+    assert.equal(requests.length, 2);
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
 
     await act(async () => {
       renderer?.unmount();
-      renderer = create(render());
+      renderer = renderWithScrollRef();
     });
-    assert.equal(requests.length, 1, 'complete cached data should not trigger revalidation');
+    assert.equal(requests.length, 2, 'complete cache renders without a route query');
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    assert.equal(firstSubscription.disposed, true);
+
+    await focusHome();
+    assert.equal(requests.length, 3, 'focus should check the latest Home data');
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh', 'a']));
+    assertConnection(environment, 'homeTimeline', ['fresh', 'a']);
+
+    const activeSubscription = subscriptions.at(-1);
+    assert.ok(activeSubscription);
+    await scrollHomeTo(480);
+    const beforePostEvent = requests.length;
+    await act(async () => emitHomePost(activeSubscription, 'streamed'));
+    assert.equal(
+      requests.length,
+      beforePostEvent,
+      'a Post event updates Relay without a Home query',
+    );
+    assertConnection(environment, 'homeTimeline', ['streamed', 'fresh', 'a'], true, 'cursor-a', [
+      null,
+      'cursor-fresh',
+      'cursor-a',
+    ]);
+    await act(async () => homeNewPostsButton().props.onPress());
+    assert.equal(scrollOffsets.at(-1), 0);
+    assert.equal(requests.length, beforePostEvent, 'the new-post action only scrolls to the top');
+
+    await scrollHomeTo(480);
+    await act(async () => {
+      activeSubscription.connected?.(false);
+      activeSubscription.connected?.(true);
+    });
+    assert.equal(requests.length, beforePostEvent, 'revalidation waits while reading older posts');
+    await scrollHomeTo(0);
+    assert.equal(requests.length, beforePostEvent + 1, 'the pending revalidation runs at the top');
+    assert.equal(list().props.refreshing, false);
+
+    const interruptedRefresh = latest('HomePageQuery');
+    await act(async () => activeSubscription.connected?.(true));
+    await scrollHomeTo(480);
+    const requestCountWhileReading = requests.length;
+    await respond(interruptedRefresh, payload('homeTimeline', ['late']));
+    assert.equal(requests.length, requestCountWhileReading);
+    assertConnection(environment, 'homeTimeline', ['streamed', 'fresh', 'a'], true, 'cursor-a', [
+      null,
+      'cursor-fresh',
+      'cursor-a',
+    ]);
+
+    await scrollHomeTo(0);
+    assert.equal(
+      requests.length,
+      requestCountWhileReading + 1,
+      'returning to the top starts one fresh query after the interrupted response',
+    );
+    assert.equal(list().props.refreshing, false);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['latest', 'fresh']));
+    assertConnection(environment, 'homeTimeline', ['latest', 'fresh']);
 
     await act(async () => {
       renderer?.unmount();
@@ -500,23 +716,55 @@ describe('Timeline refresh and pagination with real Relay', () => {
     await act(async () => {
       renderer = create(render());
     });
-    assert.equal(requests.length, 2, 'stale cached data should still trigger a request');
+    assert.equal(requests.length, 6, 'invalidated cached data should still trigger a request');
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh']));
     assertConnection(environment, 'homeTimeline', ['fresh']);
   });
 
+  it('Home actor Environment replacement disposes its previous subscription owner', async () => {
+    const firstEnvironment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const nextEnvironment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const render = (environment: Environment) =>
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: timelineScreenWithPushContext('Home'),
+      });
+
+    await act(async () => {
+      renderer = create(render(firstEnvironment));
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['first-actor']));
+    const previousSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+    );
+    assert.ok(previousSubscription);
+
+    const requestCountBeforeSwitch = requests.length;
+    await act(async () => renderer?.update(render(nextEnvironment)));
+    assert.equal(requests.length, requestCountBeforeSwitch + 1);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['next-actor']));
+
+    const nextSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+    );
+    assert.ok(nextSubscription);
+    assert.notEqual(nextSubscription, previousSubscription);
+    assert.equal(previousSubscription.disposed, true);
+    assertConnection(nextEnvironment, 'homeTimeline', ['next-actor']);
+  });
+
   it('Home: continues through empty pages with each Relay cursor until a post is visible', async () => {
     platform.OS = 'web';
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: { documentElement: { scrollHeight: 100 } },
-    });
+    browserDocument.documentElement.scrollHeight = 100;
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
     const cursorA = 'db:00000000-0000-4000-8000-000000000001';
@@ -555,11 +803,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     for (const first of ['pagination', 'refresh'] as const) {
       it(`${timeline}: ${first} completes first without stale connection edges or cursor`, async () => {
         const environment = new Environment({
-          network: Network.create((operation, variables) =>
-            Observable.create<GraphQLResponse>((sink) => {
-              requests.push({ name: operation.name, variables, sink });
-            }),
-          ),
+          network: createTimelineNetwork(),
           store: new Store(new RecordSource()),
         });
         const field = timeline === 'Home' ? 'homeTimeline' : 'localTimeline';
@@ -612,11 +856,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
 for (const timeline of ['Home', 'Local'] as const) {
   it(`${timeline}: parent updates preserve rows while Relay connection updates remain visible`, async () => {
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
     const render = () =>
@@ -646,11 +886,7 @@ async function renderLocal(status: 'guest' | 'valid' = 'guest') {
   platform.OS = 'web';
   sessionStatus = status;
   const environment = new Environment({
-    network: Network.create((operation, variables) =>
-      Observable.create<GraphQLResponse>((sink) => {
-        requests.push({ name: operation.name, variables, sink });
-      }),
-    ),
+    network: createTimelineNetwork(),
     store: new Store(new RecordSource()),
   });
   await act(async () => {
@@ -767,11 +1003,7 @@ for (const os of ['web', 'ios', 'android']) {
     it(`${os} ${timeline}: 상단 탭 재선택은 목록을 유지하며 refresh하고 pending 입력은 합친다`, async () => {
       platform.OS = os;
       const environment = new Environment({
-        network: Network.create((operation, variables) =>
-          Observable.create<GraphQLResponse>((sink) => {
-            requests.push({ name: operation.name, variables, sink });
-          }),
-        ),
+        network: createTimelineNetwork(),
         store: new Store(new RecordSource()),
       });
       let offset = 480;

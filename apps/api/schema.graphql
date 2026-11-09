@@ -913,6 +913,10 @@ type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
 }
 
+type Subscription {
+  homeTimelinePostAdded: Post
+}
+
 input UnblockProfileInput {
   id: ID!
 }
