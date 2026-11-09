@@ -35,7 +35,7 @@ The local `withIosResourceBundleDeploymentTarget` config plugin raises explicitl
 
 Run its focused regression check with `pnpm --filter @kosmo/app test:config-plugins` (Ruby must be on `PATH`, or set `KOSMO_RUBY`). The app's `test` command also runs it in CI. It executes the generated Podfile hook and checks repeat application and target preservation.
 
-For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.14 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
+For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.23 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
 
 A normal iOS prebuild also requires `KOSMO_IOS_GOOGLE_SERVICES_FILE` to point to the Firebase plist. A build that temporarily excludes Firebase only validates that reduced configuration, not the production app. The successful 2026-09-22 [Release/device CI build](https://github.com/byulmaru/kosmo/actions/runs/35740298451/job/106787998544) used Xcode 26.6; it does not establish Xcode 27 Debug/simulator compatibility.
 
