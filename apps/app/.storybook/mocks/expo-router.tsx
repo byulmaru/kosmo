@@ -96,6 +96,10 @@ export function usePathname() {
   return useContext(RouterContext).pathname;
 }
 
+export function useIsFocused() {
+  return true;
+}
+
 export function useCurrentRouteInfo() {
   const { params, pathname } = useContext(RouterContext);
   return { params, pathname };
@@ -103,10 +107,6 @@ export function useCurrentRouteInfo() {
 
 export function useSegments() {
   return useContext(RouterContext).segments;
-}
-
-export function useIsFocused() {
-  return true;
 }
 
 export function useLocalSearchParams<T extends Record<string, string | undefined>>() {
