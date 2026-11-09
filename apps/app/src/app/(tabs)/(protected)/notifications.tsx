@@ -1,3 +1,5 @@
+import { useIsFocused } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   NotificationList,
@@ -34,7 +36,20 @@ export default function NotificationsScreen() {
 }
 
 function NotificationsContent() {
-  const { fetchKey } = useRouteBoundary();
+  const { fetchKey, refetch } = useRouteBoundary();
+  const isFocused = useIsFocused();
+  const hasBeenFocused = useRef(false);
+  useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+    if (hasBeenFocused.current) {
+      refetch();
+    } else {
+      hasBeenFocused.current = true;
+    }
+  }, [isFocused, refetch]);
+
   const data = useLazyLoadQuery<NotificationsPageQuery>(
     NotificationsQuery,
     {},
@@ -43,7 +58,7 @@ function NotificationsContent() {
   const profile = data.currentSession?.selectedProfile ?? null;
 
   return profile ? (
-    <NotificationList profile={profile} />
+    <NotificationList active={isFocused} profile={profile} />
   ) : (
     <NotificationListState state="profileRequired" />
   );

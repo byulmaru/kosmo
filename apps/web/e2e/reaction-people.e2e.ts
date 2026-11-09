@@ -17,70 +17,190 @@ test.beforeEach(async () => {
 test('로컬에서 게시글·반응 상세를 왕복하면 목록과 위치를 복원한다', async ({
   context,
   page,
-}) => {
-  await page.setViewportSize({ height: 844, width: 390 });
-  const viewer = await createE2ESession({ handle: 'e2e-local-navigation-viewer' });
-  const reactor = await createE2EProfile({ handle: 'e2e-local-navigation-reactor' });
-  const postBody = 'Local navigation restore target';
-  const post = await createE2EPost({ body: postBody, profileId: viewer.profile!.id });
-  await db.insert(Reactions).values({ postId: post.id, profileId: reactor.id, type: '❤️' });
-  for (let index = 0; index < 6; index += 1) {
-    await createE2EPost({
-      body: `Local navigation filler ${index}`,
-      profileId: viewer.profile!.id,
+}, testInfo) => {
+  const navigationSnapshots: Array<{ phase: string; roundTrip?: number; snapshot: unknown }> = [];
+  const captureNavigationState = async (phase: string, roundTrip?: number) => {
+    let snapshot: unknown;
+    try {
+      snapshot = await page.evaluate(() => {
+        type Navigation = {
+          getParent?: () => Navigation | null | undefined;
+          getState?: () => unknown;
+        };
+        type Fiber = {
+          memoizedProps?: { navigation?: Navigation };
+          return?: Fiber | null;
+        };
+        type SafeState = {
+          key: string | null;
+          type: string | null;
+          index: number | null;
+          routes: Array<{
+            key: string | null;
+            name: string | null;
+            state: SafeState | null;
+          }>;
+        };
+
+        const shellHost =
+          document.querySelector('[data-testid="universal-shell-root"]') ??
+          document.querySelector('[data-testid="universal-shell-content"]');
+        if (!shellHost) {
+          return { status: 'unavailable', reason: 'shell-host-not-found' } as const;
+        }
+
+        const fiberKey = Object.keys(shellHost).find((key) => key.startsWith('__reactFiber$'));
+        const fiber = fiberKey
+          ? ((shellHost as unknown as Record<string, unknown>)[fiberKey] as Fiber | undefined)
+          : undefined;
+        if (!fiber) {
+          return { status: 'unavailable', reason: 'host-fiber-not-found' } as const;
+        }
+
+        let navigation: Navigation | undefined;
+        let currentFiber: Fiber | undefined = fiber;
+        for (let depth = 0; currentFiber && depth < 100; depth += 1) {
+          const candidate = currentFiber.memoizedProps?.navigation;
+          if (
+            candidate &&
+            typeof candidate.getState === 'function' &&
+            typeof candidate.getParent === 'function'
+          ) {
+            navigation = candidate;
+            break;
+          }
+          currentFiber = currentFiber.return ?? undefined;
+        }
+        if (!navigation) {
+          return { status: 'unavailable', reason: 'navigation-provider-not-found' } as const;
+        }
+
+        let rootNavigation = navigation;
+        let reachedRoot = false;
+        for (let depth = 0; depth < 8; depth += 1) {
+          const parent = rootNavigation.getParent?.();
+          if (!parent || parent === rootNavigation) {
+            reachedRoot = true;
+            break;
+          }
+          rootNavigation = parent;
+        }
+        if (!reachedRoot || typeof rootNavigation.getState !== 'function') {
+          return { status: 'unavailable', reason: 'root-navigation-not-found' } as const;
+        }
+
+        const sanitizeState = (value: unknown, depth = 0): SafeState | null => {
+          if (depth > 16 || !value || typeof value !== 'object') {
+            return null;
+          }
+          const state = value as Record<string, unknown>;
+          if (!Array.isArray(state.routes)) {
+            return null;
+          }
+          return {
+            key: typeof state.key === 'string' ? state.key : null,
+            type: typeof state.type === 'string' ? state.type : null,
+            index: typeof state.index === 'number' ? state.index : null,
+            routes: state.routes.map((value) => {
+              const route =
+                value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+              return {
+                key: typeof route.key === 'string' ? route.key : null,
+                name: typeof route.name === 'string' ? route.name : null,
+                state: sanitizeState(route.state, depth + 1),
+              };
+            }),
+          };
+        };
+
+        const state = sanitizeState(rootNavigation.getState());
+        return state
+          ? { status: 'available', state }
+          : { status: 'unavailable', reason: 'root-state-unavailable' };
+      });
+    } catch {
+      snapshot = { status: 'unavailable', reason: 'page-evaluation-failed' };
+    }
+    navigationSnapshots.push({
+      phase,
+      ...(roundTrip === undefined ? {} : { roundTrip }),
+      snapshot,
     });
-  }
-  await setE2ESessionCookie(context, viewer.token);
-  await page.goto('/home');
+  };
+  try {
+    await page.setViewportSize({ height: 844, width: 390 });
+    const viewer = await createE2ESession({ handle: 'e2e-local-navigation-viewer' });
+    const reactor = await createE2EProfile({ handle: 'e2e-local-navigation-reactor' });
+    const postBody = 'Local navigation restore target';
+    const post = await createE2EPost({ body: postBody, profileId: viewer.profile!.id });
+    await db.insert(Reactions).values({ postId: post.id, profileId: reactor.id, type: '❤️' });
+    for (let index = 0; index < 6; index += 1) {
+      await createE2EPost({
+        body: `Local navigation filler ${index}`,
+        profileId: viewer.profile!.id,
+      });
+    }
+    await setE2ESessionCookie(context, viewer.token);
+    await page.goto('/home');
 
-  const timelineTabs = page.getByRole('tablist', { name: '타임라인' });
-  const localTab = timelineTabs.getByRole('tab', { name: '로컬', exact: true });
-  await localTab.click();
-  await expect(page).toHaveURL('/local');
-  await expect(localTab).toHaveAttribute('aria-selected', 'true');
+    const timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+    const localTab = timelineTabs.getByRole('tab', { name: '로컬', exact: true });
+    await localTab.click();
+    await expect(page).toHaveURL('/local');
+    await expect(localTab).toHaveAttribute('aria-selected', 'true');
 
-  const postPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}`;
-  const localPost = page.getByRole('article').filter({ hasText: postBody });
-  await expect(localPost).toBeVisible();
-  await localPost.scrollIntoViewIfNeeded();
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
-  const localScroll = await page.evaluate(() => window.scrollY);
+    const postPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}`;
+    const localPost = page.getByRole('article').filter({ hasText: postBody });
+    await expect(localPost).toBeVisible();
+    await localPost.scrollIntoViewIfNeeded();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    const localScroll = await page.evaluate(() => window.scrollY);
 
-  for (let roundTrip = 0; roundTrip < 2; roundTrip += 1) {
-    await localPost.getByText(postBody, { exact: true }).click();
-    await expect(page).toHaveURL(postPath);
-    const currentPost = page.getByTestId(`post-thread-current-${toGlobalId('Post', post.id)}`);
-    await expect(currentPost).toBeInViewport();
+    for (let roundTrip = 0; roundTrip < 2; roundTrip += 1) {
+      await captureNavigationState('local-before-open', roundTrip + 1);
+      await localPost.getByText(postBody, { exact: true }).click();
+      await expect(page).toHaveURL(postPath);
+      const currentPost = page.getByTestId(`post-thread-current-${toGlobalId('Post', post.id)}`);
+      await expect(currentPost).toBeInViewport();
+      await captureNavigationState('post-opened', roundTrip + 1);
 
-    if (roundTrip === 0) {
-      await page.goBack();
+      if (roundTrip === 1) {
+        await page.goBack();
+        await expect(page).toHaveURL('/local');
+        await expect(localTab).toHaveAttribute('aria-selected', 'true');
+        await expect(localPost).toBeInViewport();
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
+        await captureNavigationState('browser-back', roundTrip + 1);
+
+        await page.goForward();
+        await expect(page).toHaveURL(postPath);
+        await expect(currentPost).toBeInViewport();
+        await captureNavigationState('browser-forward', roundTrip + 1);
+      }
+
+      await captureNavigationState('before-app-back', roundTrip + 1);
+      await page.getByRole('button', { name: '뒤로 가기' }).click();
       await expect(page).toHaveURL('/local');
       await expect(localTab).toHaveAttribute('aria-selected', 'true');
       await expect(localPost).toBeInViewport();
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
 
-      await page.goForward();
-      await expect(page).toHaveURL(postPath);
-      await expect(currentPost).toBeInViewport();
+      const peoplePath = `${postPath}/reactions`;
+      await localPost.locator(`a[href="${peoplePath}"]`).click();
+      await expect.poll(() => new URL(page.url()).pathname).toBe(peoplePath);
+      await expect(page.getByRole('heading', { name: '반응한 사람', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: '뒤로 가기' }).click();
+      await expect(page).toHaveURL('/local');
+      await expect(localTab).toHaveAttribute('aria-selected', 'true');
+      await expect(localPost).toBeInViewport();
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
     }
-
-    await page.getByRole('button', { name: '뒤로 가기' }).click();
-    await expect(page).toHaveURL('/local');
-    await expect(localTab).toHaveAttribute('aria-selected', 'true');
-    await expect(localPost).toBeInViewport();
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
-
-    const peoplePath = `${postPath}/reactions`;
-    await localPost.locator(`a[href="${peoplePath}"]`).click();
-    await expect.poll(() => new URL(page.url()).pathname).toBe(peoplePath);
-    await expect(
-      page.getByRole('heading', { name: '반응한 사람', exact: true }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: '뒤로 가기' }).click();
-    await expect(page).toHaveURL('/local');
-    await expect(localTab).toHaveAttribute('aria-selected', 'true');
-    await expect(localPost).toBeInViewport();
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(localScroll, 0);
+  } finally {
+    await captureNavigationState('finally');
+    await testInfo.attach('reaction-people-navigation-state.json', {
+      body: Buffer.from(JSON.stringify(navigationSnapshots, null, 2)),
+      contentType: 'application/json',
+    });
   }
 });
 

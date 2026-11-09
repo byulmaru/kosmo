@@ -350,6 +350,9 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
     handle: 'e2e-selected-profile-target',
   });
   const targetPostBody = 'E2E selected profile mute target body';
+  const visibleTargetPostBody = page
+    .getByText(targetPostBody, { exact: true })
+    .filter({ visible: true });
   await createE2EPost({ body: targetPostBody, profileId: target.id });
   await createE2EFollow({
     followerProfileId: owner.profile!.id,
@@ -363,10 +366,10 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   await setE2ESessionCookie(context, owner.token);
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   await page.getByRole('tablist', { name: '타임라인' }).getByRole('tab', { name: '로컬' }).click();
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   await page
     .getByRole('link', { name: `${target.displayName} @${target.handle}`, exact: true })
     .click();
@@ -384,10 +387,10 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
 
   await navigatePrimary(page, '로컬');
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await selectProfileFromSwitcher(page, secondProfile.handle);
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   expect(
     await db.$count(
       ProfileMutes,
@@ -399,10 +402,10 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   ).toBe(0);
 
   await selectProfileFromSwitcher(page, owner.profile!.handle);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await navigatePrimary(page, '홈');
   await expect(page).toHaveURL(/\/home$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await navigatePrimary(page, '설정');
   await expect(page).toHaveURL(/\/settings$/u);
   await page.getByRole('link', { name: '뮤트 및 차단 설정 열기' }).click();
@@ -421,11 +424,11 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   await navigatePrimary(page, '홈');
   await expect(page).toHaveURL(/\/home$/u);
   await page.reload();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   await navigatePrimary(page, '로컬');
   await expect(page).toHaveURL(/\/local$/u);
   await page.reload();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   expect(
     await db.$count(
       ProfileMutes,

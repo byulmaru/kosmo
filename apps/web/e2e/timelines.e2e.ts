@@ -28,7 +28,7 @@ function formatDateLabel(iso: string) {
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
-  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true });
+  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true }).filter({ visible: true });
 
   await expect(bodyShortcuts).toHaveCount(bodies.length);
   await expect(bodyShortcuts).toHaveText(bodies);
@@ -384,7 +384,7 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 
   await page.goto(`/@${emptyProfile.handle}`);
-  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+  await expect(page.getByText('아직 게시글이 없어요').filter({ visible: true })).toBeVisible();
 });
 
 test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }, testInfo) => {

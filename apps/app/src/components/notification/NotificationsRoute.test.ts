@@ -25,6 +25,7 @@ mockModule('react-native', {
   Pressable: 'Pressable',
   useWindowDimensions: () => ({ width: 390, height: 844 }),
 });
+mockModule('expo-router', { useIsFocused: () => true });
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 });

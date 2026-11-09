@@ -252,10 +252,12 @@ for (const mode of ['reply', 'quote'] as const) {
     await expect(page).toHaveURL(new RegExp(`${childPath.replaceAll('/', '\\/')}$`));
     await page.evaluate(() => window.history.back());
     await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
-    await expect(page.getByText(parentBody, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(parentBody, { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
 
     const historyLength = await page.evaluate(() => window.history.length);
-    const detailEngagement = page.getByTestId('post-layout-engagement');
+    const detailEngagement = page.getByTestId('post-layout-engagement').filter({ visible: true });
     if (mode === 'reply') {
       await detailEngagement.getByTestId('post-action-reply').click();
     } else {
@@ -498,7 +500,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
     profile: { relativeHandle: '@e2e-composer' },
     replyParent: null,
   });
-  await expect(page.getByText(body)).toBeVisible();
+  await expect(page.getByText(body).filter({ visible: true })).toBeVisible();
 });
 
 test('기본 공개 범위 저장부터 Local 재선택까지 production wiring을 유지한다', async ({
@@ -856,7 +858,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await page.goto(`/@${selectedProfile.handle}`);
   const publishedPostRow = page
     .getByTestId('post-list-standard-row')
-    .filter({ hasText: contentWarning });
+    .filter({ hasText: contentWarning, visible: true });
   await expect(publishedPostRow).toBeVisible();
   await publishedPostRow.getByRole('link').last().click();
   await expect(page).toHaveURL(/\/@e2e-composer-profile-b\/[^/]+$/);
