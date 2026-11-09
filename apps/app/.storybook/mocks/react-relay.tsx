@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, PayloadData, RequestParameters, Variables } from 'relay-runtime';
@@ -129,16 +129,18 @@ function createStoryEnvironment(
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeStoryOperation(
-        request,
-        variables,
-        mock,
-        environmentIndex,
-        selectedProfileId,
-        () => paginationResponseIndex++,
-        nextOperationResponseIndex,
-      ),
+    network: Network.create(
+      (request, variables) =>
+        executeStoryOperation(
+          request,
+          variables,
+          mock,
+          environmentIndex,
+          selectedProfileId,
+          () => paginationResponseIndex++,
+          nextOperationResponseIndex,
+        ),
+      () => Observable.create<GraphQLResponse>(() => undefined),
     ),
     store: new Store(new RecordSource()),
   });

@@ -169,7 +169,7 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
           controller?.finish();
         })
         .catch(() => undefined);
-      await page.unroute('**/graphql');
+      await page.unrouteAll({ behavior: 'wait' });
     },
     eventPostReady: eventPostReady.promise,
     homePageQueryCount: () => homePageQueryCount,

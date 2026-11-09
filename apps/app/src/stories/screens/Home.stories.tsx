@@ -5,6 +5,7 @@ import {
   Environment,
   getRequest,
   Network,
+  Observable,
   RecordSource,
   Store,
 } from 'relay-runtime';
@@ -16,6 +17,7 @@ import HomePageQueryNode from '@/components/timeline/__generated__/HomePageQuery
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GraphQLResponse } from 'relay-runtime';
 
 const emptyHomeTimeline = {
   edges: [],
@@ -150,14 +152,17 @@ function HomePushPermissionStory() {
 function CachedHomeAutoRevalidationStory() {
   const [requestCount, setRequestCount] = useState(0);
   const environment = useMemo(() => {
-    const network = Network.create((request) => {
-      if (request.name === 'HomePageQuery') {
-        setRequestCount((count) => count + 1);
-        return Promise.reject(new Error('홈 자동 재검증 실패'));
-      }
+    const network = Network.create(
+      (request) => {
+        if (request.name === 'HomePageQuery') {
+          setRequestCount((count) => count + 1);
+          return Promise.reject(new Error('홈 자동 재검증 실패'));
+        }
 
-      return Promise.resolve({ data: {} });
-    });
+        return Promise.resolve({ data: {} });
+      },
+      () => Observable.create<GraphQLResponse>(() => undefined),
+    );
     const nextEnvironment = new Environment({
       network,
       store: new Store(new RecordSource()),
@@ -372,18 +377,21 @@ export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   render: () => <HomeRefreshStory />,
 };
 
-export const CachedMountReusesTimelineWithoutRequest: Story = {
+export const CachedMountRevalidatesWithoutLoadingIndicator: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('캐시된 홈 게시글')).resolves.toBeVisible();
 
-    expect(body.queryByText('홈을 새로 불러오지 못했어요.')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent(/^1$/),
+    );
+    const revalidationToast = await body.findByText('홈을 새로 불러오지 못했어요.');
+    expect(revalidationToast).toBeVisible();
     expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
     expect(canvas.queryByText('홈을 불러오는 중입니다.')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent('0');
   },
   render: () => <CachedHomeAutoRevalidationStory />,
 };
