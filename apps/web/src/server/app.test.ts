@@ -720,6 +720,39 @@ describe('runtime routing', () => {
     }
   });
 
+  test('serves valid image-use terms URLs as public SPA documents without navigation headers', async () => {
+    const path = '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY';
+    const headers = { 'user-agent': 'Googlebot/2.1' };
+    const response = await app.request(path, { headers });
+    const head = await app.request(path, { headers, method: 'HEAD' });
+    const nonDocument = await app.request(path, {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('cache-control')).toBe('no-cache');
+    expect(response.headers.get('vary')).toContain('Accept');
+    expect(await response.text()).toBe('<html>expo app</html>');
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-type')).toContain('text/html');
+    expect(head.headers.get('cache-control')).toBe('no-cache');
+    expect(head.headers.get('vary')).toContain('Accept');
+    expect(await head.text()).toBe('');
+    expect(nonDocument.status).toBe(404);
+    expect(await nonDocument.text()).toBe('404 Not Found');
+  });
+
+  test.each([
+    '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY&extra=value',
+    '/terms/image-use/v1?personal=DENY&personal=DENY&noncommercial=DENY&commercial=DENY',
+  ])('rejects invalid image-use terms URL %s before the SPA fallback', async (path) => {
+    const response = await app.request(path);
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe('유효하지 않은 이미지 이용 조건입니다.');
+  });
+
   test.each(['/child-safety', '/privacy/changes/2026-10-13'])(
     'keeps non-document policy representations out of the SPA for %s',
     async (path) => {

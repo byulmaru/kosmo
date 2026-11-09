@@ -4,13 +4,15 @@ import { db, Instances, Media, PostContents, PostMentions, Posts, Profiles } fro
 import { MediaState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { isValidMediaPublicationRights, mediaUseTermsUrl } from '@kosmo/core/media-metadata';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { html } from 'hono/html';
+import { html, raw } from 'hono/html';
 import { captureUnexpectedError } from '../sentry';
+import type { MediaPublicationMetadata } from '@kosmo/core/media-metadata';
 
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
 const SHARE_METADATA_START = '<!-- kosmo-share-metadata:start -->';
@@ -22,6 +24,7 @@ type ShareImage = {
   readonly altText?: string;
   readonly height?: number;
   readonly mediaType?: string;
+  readonly publicationMetadata?: MediaPublicationMetadata;
   readonly url: string;
   readonly width?: number;
 };
@@ -297,6 +300,7 @@ async function findVisibleImages(
       altText: Media.altText,
       id: Media.id,
       mediaType: Media.mediaType,
+      publicationMetadata: Media.publicationMetadata,
       state: Media.state,
       url: Media.url,
     })
@@ -316,6 +320,7 @@ async function findVisibleImages(
     images.push({
       ...(media.altText !== null ? { altText: media.altText } : {}),
       ...(mediaType ? { mediaType } : {}),
+      ...(media.publicationMetadata ? { publicationMetadata: media.publicationMetadata } : {}),
       url,
     });
   }
@@ -367,6 +372,18 @@ function parsePublicImageUrl(value: string): string | null {
   }
 }
 
+function parsePublicLinkUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function parseImageMediaType(value: string | null): string | null {
   if (!value) {
     return null;
@@ -397,6 +414,10 @@ function defaultImage(origin: string): ShareImage {
 
 function renderMetadata(metadata: ShareMetadata) {
   const firstImage = metadata.images[0] ?? defaultImage('https://kos.moe');
+  const structuredData = serializeJsonLd({
+    '@context': 'https://schema.org',
+    '@graph': metadata.images.map(createImageObject),
+  });
   const imageTags = metadata.images.map(
     (image) => html`
       <meta property="og:image" content="${image.url}" />
@@ -418,6 +439,9 @@ function renderMetadata(metadata: ShareMetadata) {
     <meta property="og:title" content="${metadata.title}" />
     <meta property="og:description" content="${metadata.description}" />
     ${imageTags}
+    <script type="application/ld+json">
+      ${raw(structuredData)}
+    </script>
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${metadata.title}" />
     <meta name="twitter:description" content="${metadata.description}" />
@@ -433,6 +457,39 @@ function renderMetadata(metadata: ShareMetadata) {
       ? html`<meta name="twitter:image:alt" content="${firstImage.altText}" />`
       : ''}
   `;
+}
+
+function createImageObject(image: ShareImage) {
+  const imageObject = { '@type': 'ImageObject', contentUrl: image.url };
+  const publication = image.publicationMetadata;
+  if (!publication) {
+    return imageObject;
+  }
+
+  const attributionUrl = parsePublicLinkUrl(publication.attributionUrl);
+  const attributionName = publication.attributionName.trim();
+  const rights = publication.rights;
+  const license =
+    attributionUrl && rights && isValidMediaPublicationRights(rights)
+      ? mediaUseTermsUrl(rights, new URL(attributionUrl).origin)
+      : undefined;
+
+  return {
+    ...imageObject,
+    ...(attributionUrl && attributionName
+      ? { creditText: `${attributionName} (${attributionUrl})` }
+      : {}),
+    ...(license ? { license } : {}),
+  };
+}
+
+function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 function replaceShareMetadata(html: string, metadata: string): string | null {

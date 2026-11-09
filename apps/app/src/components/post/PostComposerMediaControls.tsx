@@ -25,6 +25,7 @@ import {
   postComposerMediaLimit,
   takeAvailableComposerMedia,
 } from './postComposerMedia';
+import type { MediaPublicationRights } from '@kosmo/core/media-metadata';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
@@ -37,6 +38,7 @@ type ComposerMediaItemFields = {
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
   readonly applyAiProhibitFilter?: boolean;
+  readonly rights?: MediaPublicationRights;
   readonly requiresReselection?: boolean;
 };
 
@@ -59,6 +61,7 @@ export type PostRequestMediaItem = Readonly<{
   readonly altText: string | null;
   readonly applyAiProhibitFilter: boolean;
   readonly mediaId: string;
+  readonly rights?: MediaPublicationRights;
 }>;
 
 const releaseMediaPreview = (item: ComposerMediaItem) => {
@@ -71,6 +74,7 @@ export type PostComposerMediaControlsRenderProps = {
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
   readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
+  readonly onRightsChange: (key: string, rights: MediaPublicationRights | undefined) => void;
   readonly onMediaAction: () => void;
   readonly onMediaRemove: (key: string) => void;
   readonly onMediaRetry: (item: ComposerMediaItem) => void;
@@ -393,6 +397,7 @@ export function PostComposerMediaControls({
             altText: item.altText.trim() || null,
             applyAiProhibitFilter: item.applyAiProhibitFilter ?? false,
             mediaId: item.mediaId!,
+            ...(item.rights ? { rights: Object.freeze({ ...item.rights }) } : {}),
           }),
         ),
       );
@@ -450,6 +455,12 @@ export function PostComposerMediaControls({
           ),
         );
       },
+      onRightsChange: (key, rights) =>
+        updateMedia((items) =>
+          items.map((item) =>
+            item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
+          ),
+        ),
       onMediaAction: () => void selectMedia(),
       onMediaRemove: removeMedia,
       onMediaRetry: (item) =>

@@ -36,30 +36,32 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
-- Local GraphQL의 Post·Reply·Quote 작성은 caller, 입력, Media ownership을 검증하고 Local Post 입력을 준비한 뒤
-  Media publication 결과로 동기 PostCreate 또는 비동기 PostRequest를 선택한다. Media가 없거나 모든 publication이
-  `completed`면 canonical `postCreateWorkflow`를 실행한다. 하나라도 `processing`이면 `postRequestWorkflow`가
-  immutable request snapshot과 stable `postId`를 소유한다. 어느 경로도 모든 Media가 READY가 되기 전에는 Post row나
-  Post Content를 생성하지 않는다. READY Media는 다시 업로드하지 않는다. Active `mediaUploadWorkflow`가 있으면 기존
-  publication Update로 고정 필터 선택을 확인하고, READY+URL row가 publication 완료를 증명하므로 Update가 `processing`을
-  반환해도 upload `result()` cleanup을 기다리지 않고 재사용한다. Workflow가 닫혀 Update가 `WorkflowNotFoundError`를
-  반환하면 retained final result로 선택을 확인한다. 과거 결과에 선택이 없으면 기존 unknown-filter 규칙을 유지해 false 요청은
-  허용하고 true 요청은 Media 재첨부 `ValidationError`로 거부한다.
-  UPLOADING Media의 새 admission은 stable `media-upload:${mediaId}` ID의 exported `mediaUploadWorkflow`를 generic
-  `runWorkflow` Update-with-Start로 실행하며 `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse policy, 명시적인
-  `applyAiProhibitFilter`를 사용한다. Workflow의 final result는 Kosmo Media row가 READY로 정산된 결과이며, Update는 Media
-  `publishUploadV2` workflow-backed Nexus operation의 `completed | processing` 결과를 반환한다. Media가 `completed`를
-  반환하면 Workflow가 Kosmo DB finalizer를 끝낸 뒤 완료 결과를 응답하고, `processing`은 즉시 응답한 뒤 Workflow가 기존
-  `startUpload.result()`를 기다려 finalizer를 실행한다. Filter/Hope 처리 선택과 실행은 Media가 소유한다.
-  UPLOADING preflight 이후 Workflow가 먼저 닫혀 UWS `REJECT_DUPLICATE`로 거절될 때는 exact Workflow ID/type의
-  `WorkflowExecutionAlreadyStartedError`만 recovery 후보로 분류한다. Primary DB에서 같은 Account 소유의 Local Media를 다시
-  읽어 READY+URL과 retained filter 호환성이 모두 확인되면 completed로 이어가고, 그렇지 않으면 원래 오류 또는 filter
-  ValidationError를 보존한다.
-  새 Workflow input은 `applyAiProhibitFilter`를 사용한다. 기존 history/input은 `applyNightshade`와 기존 `applyHope` 및
-  `publishUpload({id})` acknowledgement sequence를 유지한다. Legacy Workflow에 새 Update가 합류하면 Media를 다시 호출하지
-  않고 원래 flag와 요청 선택을 비교한다. 불일치는 거부하고, 같은 true 선택은 아직 끝나지 않았을 때 `processing`을 반환하며,
-  false 선택은 legacy 실행의 실제 finalized result까지 기다려 `completed`를 반환한다. Update handler 정산 대기는 Workflow
-  finalization과 completed 응답을 해소한 뒤 수행해 서로 기다리는 deadlock을 만들지 않는다.
+- Local GraphQL의 Post·Reply·Quote 작성은 caller, 입력, Media ownership과 optional Media rights를 검증하고 Local Post
+  입력을 준비한다. Post 대상 UPLOADING Media의 `mediaUploadWithMetadataWorkflow` type과
+  `mediaUploadMetadataPublish` Update-with-Start는 기존 `media-upload:${mediaId}` logical Workflow ID를 대상으로 하며,
+  generic `runWorkflow`에서 `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse policy를 사용한다.
+  `prepareMediaUploadActivity`는 provider 호출 전에 해당 posting Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, optional rights를
+  `Media.publicationMetadata`로 한 번 고정한다. 이 snapshot에는 Post ID나 Post URL이 없다. 이미 snapshot이 있는
+  UPLOADING retry는 rights 값과 rights 입력 여부가 같아야 하며 원래 attribution을 유지한다. READY Media 재사용은
+  snapshot을 수정하거나 backfill하지 않고 새 rights 입력도 적용하지 않는다. Sync/async Post ID는 모든 대상 Media가
+  READY가 된 뒤 기존 Post 생성 시점에 할당하며 Media 처리 전에 예약하지 않는다. 신규 Workflow는 preparation
+  Activity가 유효한 persisted frozen metadata를 반환하기 전에는 `startUpload`나 public provider operation을 호출하지
+  않는다. Provider 적용 metadata receipt가 누락되거나 snapshot과 다르면 Media READY 전환과 Post 생성을 차단한다.
+  이 type은 READY/filter 확인을 위해 기존 `mediaUploadPublish` Update도 등록한다. Legacy `mediaUploadWorkflow` type은
+  기존 Update와 history command trace를 유지하고 metadata-required Update를 등록하지 않는다. 이미 실행 중인 Legacy
+  type은 새 publication caller에 실패를 돌려준다. `publishUploadV2`가 `completed`를 반환하고 metadata receipt가 일치하면
+  DB finalizer가 이를 적용해 Media를 READY로 전환한 뒤 publication Update가 응답한다. Workflow 자체는 Update 응답 뒤에도
+  Nexus `startUpload` operation을 정산한 다음 반환한다. `processing`은 provider acceptance만 뜻하며, 이후
+  `startUpload.result()`의 최종 receipt가 일치해 적용된 뒤에만 finalizer가 READY로 전환한다. 누락·불일치 receipt는 READY와 Post 생성 없이
+  non-retryable failure가 된다. 모든 새 Post-target Media의 AI 학습 거부는 file metadata이며, user-controlled optional
+  `applyAiProhibitFilter`/Glaze pixel processing과 별개이고 filter를 자동으로 켜지 않는다. 이 filter는 기본 off다.
+  Provider의 filter/Hope 선택과 실행은 Media가 소유한다. UPLOADING preflight 이후 Workflow가
+  먼저 닫혀 UWS `REJECT_DUPLICATE`로 거절될 때는 exact Workflow ID/type의 `WorkflowExecutionAlreadyStartedError`만 recovery
+  후보로 분류한다. Primary DB에서 같은 Account 소유의 Local Media를 다시 읽어 READY+URL과 retained filter 호환성이 모두
+  확인되면 completed로 이어가고, 그렇지 않으면 원래 오류 또는 filter `ValidationError`를 보존한다. 기존 history/input은
+  `applyNightshade`와 기존 `applyHope` 및 `publishUpload({id})` acknowledgement sequence를 그대로 재생한다. Legacy workflow에
+  기존 Update가 합류하면 Media를 다시 호출하지 않고 원래 flag와 요청 선택을 비교한다. 불일치는 거부하고 기존 result
+  semantics를 유지한다.
   신규 history는 `patched('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
   `ABANDON` cancellation과 76시간 schedule-to-close 한도로 실행한다. Worker handler는 기존 `media-upload:${mediaId}` Workflow ID로
   `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은

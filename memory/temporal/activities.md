@@ -34,8 +34,9 @@
 - 신규 `postRequestWorkflow` history는 `patched('post-request-media-nexus-v1')` 뒤에서 Worker-local
   `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을 `ABANDON` cancellation과 76시간 schedule-to-close로
   호출한다. Production handler는 `mediaUploadWorkflow`의 기존 Workflow ID와 `USE_EXISTING` conflict,
-  `ALLOW_DUPLICATE` reuse를 사용해 실행 중인 upload를 공유하며 cancellation handler는 PostRequest가 upload 소유자가
-  아니므로 Workflow를 취소하지 않는다. Nexus service endpoint는 `${namespace}-media-upload`이고 Worker는 실제
+  `REJECT_DUPLICATE` reuse를 사용해 실행 중인 upload를 공유하며 cancellation handler는 PostRequest가 upload 소유자가
+  아니므로 Workflow를 취소하지 않는다. API의 새 Post publication은 같은 ID의 `mediaUploadWithMetadataWorkflow`를
+  실행할 수 있으며, Nexus `USE_EXISTING`은 그 active run에 합류한다. Nexus service endpoint는 `${namespace}-media-upload`이고 Worker는 실제
   `KOSMO_TASK_QUEUE`에서 operation handler와 Media Upload Workflow를 함께 등록한다. 이 marker 이전 history의
   child-start branch, polling/heartbeat Activity identity와 retry marker는 해당 history가 drain될 때까지 보존한다.
 - Local Post request publication은 기존 create transaction Activity를 `createPostActivityV2` history alias로 호출한다.
@@ -47,6 +48,20 @@
 - `reconcilePostRequestActivity`는 stable `postId`가 같은 Account/Profile의 완전한 Local Post인지 확인한다. ABSENT는
   조회 시점에 완성된 row가 없다는 뜻뿐이며, in-flight Activity가 이후 commit하지 않는다는 증거가 아니다. timeout 뒤
   이 결과만으로 요청을 FAILED로 마감하지 않는다.
+
+- Metadata-required `mediaUploadWithMetadataWorkflow` uses the existing `prepareMediaUploadActivity` before any provider
+  operation. The Activity validates the same Account-owned Local UPLOADING session and staging reference, preserves existing
+  `publicationMetadata`, and writes a first snapshot only with `publication_metadata IS NULL` plus the current identity/state
+  predicates. The snapshot contains the posting Profile's full handle (`@username@instance.domain`) and public Profile URL plus optional self-declared rights; it has
+  no Post ID or Post URL. If an UPLOADING retry finds a snapshot, rights values and whether rights were supplied must match, and
+  the original attribution is retained. The Activity returns the persisted frozen metadata to this Workflow. The provider DTO
+  sets `credit` to `@username@instance.domain (profileURL)` and includes the optional `copyright`, `usageTerms`, and `webStatement` trio only
+  when rights are present; the `webStatement` origin comes from the attribution Profile URL. If an older Activity
+  implementation ignores the new input and returns no metadata, the Workflow fails non-retryably before `startUpload` or
+  public provider publication.
+  `finalizeMediaUploadActivity` checks the exact applied provider metadata receipt against the persisted snapshot before changing
+  Media to READY. A missing or mismatched receipt blocks READY and Post creation. READY Media reuse does not backfill or edit a
+  snapshot, and legacy upload completion without publication metadata remains supported.
 
 - `getRemoteProfileActorStateActivity`는 usable Profile과 actor의 7일 freshness를 읽기 전용으로 반환하며 fetch나 상태 변경을 하지 않는다. `fetchRemoteProfileActorActivity`는 네트워크 전에 현재 저장 actor의 Profile 사용 가능 상태와 요청 URI·Instance 정책을 확인하고 origin/signing loader를 선택한 뒤 Fedify에서 actor를 가져와 expanded JSON-LD와 fetch 시작 시각을 반환한다. `applyRemoteProfileActorActivity`는 네트워크 없이 문서를 다시 검증하고 receipt/fetch timestamp를 써서 원자적으로 투영한다. `recoverRemoteProfileActorActivity`는 cached lookup의 verified receipt에만 쓰며 exact actor URI를 다시 확인해 Unresponsive Instance를 CAS 복구하되 freshness timestamp는 보존한다. Update Workflow는 state miss면 `null`이고 hit이면 supplied document를 receipt timestamp로 적용한다. 별도 receipt-only recovery Activity는 호출하지 않으며, apply가 동반하는 atomic recovery는 유지한다.
 - `lookupRemoteActorUriActivity`는 저장 actor URI를 우선하고 없을 때만 WebFinger를 실행한다. State, fetch, apply Activity를 Workflow가 순서화한다. Refresh Workflow는 state를 읽고 fresh면 반환하며 stale/missing이면 fetch와 apply를 수행한다. Actor fetch는 Fedify shared helper에서 하며 parsed protocol rejection은 `RemoteActorMaterializationError`가 된다.

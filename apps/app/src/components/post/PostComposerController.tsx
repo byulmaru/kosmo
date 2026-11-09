@@ -720,6 +720,7 @@ function PostComposerContents({
               items,
               onAltTextChange,
               onApplyAiProhibitFilterChange,
+              onRightsChange,
               onMediaAction,
               onMediaRemove,
               onMediaRetry,
@@ -756,6 +757,7 @@ function PostComposerContents({
                   mobileState={mediaEditor.tool}
                   onAltTextChange={onAltTextChange}
                   onApplyAiProhibitFilterChange={onApplyAiProhibitFilterChange}
+                  onRightsChange={onRightsChange}
                   onBack={closeMediaEditor}
                   onClose={() => {
                     setMediaEditor(null);

@@ -17,6 +17,7 @@ import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { fraciBinary, FractionalIndexOf } from 'fraci';
+import type { MediaPublicationMetadata } from '../media-metadata';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
@@ -244,6 +245,7 @@ export const Media = pgTable(
     mediaType: text('media_type'),
     url: text('url'),
     altText: text('alt_text'),
+    publicationMetadata: jsonb('publication_metadata').$type<MediaPublicationMetadata>(),
     thumbhash: text('thumbhash'),
     storageReference: text('storage_reference').unique(),
     uploadExpiresAt: datetime('upload_expires_at'),

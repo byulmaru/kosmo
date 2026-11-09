@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { db, Media, Posts } from '@kosmo/core/db';
-import { MediaSource, MediaState } from '@kosmo/core/enums';
+import { db, Instances, Media, Posts, Profiles } from '@kosmo/core/db';
+import {
+  InstanceKind,
+  InstanceState,
+  MediaSource,
+  MediaState,
+  MediaUsePermission,
+} from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
+  MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME,
   MEDIA_UPLOAD_PUBLISH_UPDATE_NAME,
-  MEDIA_UPLOAD_WORKFLOW_TYPE,
+  MEDIA_UPLOAD_WITH_METADATA_WORKFLOW_TYPE,
 } from '@kosmo/core/temporal/media-upload';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
@@ -22,16 +29,20 @@ import {
   WorkflowNotFoundError,
   WorkflowUpdateFailedError,
 } from '@temporalio/client';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { graphql } from 'graphql';
 import { schema } from '@/graphql/schema';
 import type { TestContext } from 'node:test';
+import type { MediaPublicationMetadata, MediaPublicationRights } from '@kosmo/core/media-metadata';
 import type {
   MediaUploadPublishInput,
   MediaUploadPublishResult,
+  MediaUploadWithMetadataWorkflowInput,
   MediaUploadWorkflowResult,
 } from '@kosmo/core/temporal/media-upload';
 import type { PostCreateWorkflowArgs } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
+import type { SQL } from 'drizzle-orm';
 import type { ExecutionResult } from 'graphql';
 
 type CreatePostResult = {
@@ -46,6 +57,7 @@ const requestSubmit = (input: {
   media?: readonly {
     applyAiProhibitFilter?: boolean;
     mediaId: string;
+    rights?: MediaPublicationRights;
   }[];
   visibility: 'PUBLIC';
 }) =>
@@ -112,30 +124,170 @@ const setupMediaStorageHead = (t: TestContext) => {
 
 const setupMediaRows = (
   t: TestContext,
-  rows: readonly {
+  rows: {
     id: string;
+    publicationMetadata?: MediaPublicationMetadata | null;
     source: MediaSource;
     state: MediaState;
     storageReference: string | null;
     url: string | null;
   }[],
-  post?: { id: string; profileId: string },
-) =>
+  options: {
+    readonly postId?: string;
+    readonly profileId?: string;
+    readonly finalPostCreated?: () => boolean;
+  } = {},
+) => {
+  for (const row of rows) {
+    row.publicationMetadata ??= null;
+  }
+
+  const previousOrigin = process.env.PUBLIC_ORIGIN;
+  process.env.PUBLIC_ORIGIN = 'https://kosmo.example';
+  t.after(() => {
+    if (previousOrigin === undefined) {
+      delete process.env.PUBLIC_ORIGIN;
+    } else {
+      process.env.PUBLIC_ORIGIN = previousOrigin;
+    }
+  });
+
+  const localInstanceId = '00000000-0000-4000-8000-000000000020';
+  const publicationAuthor = {
+    displayName: 'Public author',
+    domain: 'kosmo.example',
+    handle: 'author',
+    instanceId: localInstanceId,
+    joinedInstanceId: localInstanceId,
+  };
+  const localInstance = {
+    canonicalOrigin: 'https://kosmo.example',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    domain: 'kosmo.example',
+    id: localInstanceId,
+    kind: InstanceKind.LOCAL,
+    state: InstanceState.ACTIVE,
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  t.mock.method(
+    db,
+    'select',
+    (...selection: unknown[]) =>
+      ({
+        from: (table: unknown) => {
+          if (table === Media) {
+            return {
+              where: (condition: unknown) => {
+                const params = new PgDialect().sqlToQuery(condition as SQL).params;
+                const matchingRows = rows.filter(({ id }) => params.includes(id));
+                const matchingRowsPromise = Promise.resolve(matchingRows);
+                Object.assign(matchingRowsPromise, {
+                  limit: async (limit: number) => {
+                    assert.equal(limit, 1);
+                    const row = matchingRows[0];
+                    return row ? [row] : [];
+                  },
+                });
+                return matchingRowsPromise;
+              },
+            };
+          }
+          if (table === Posts) {
+            assert.equal(selection.length, 0, 'Only the final Post payload may be read');
+            assert.ok(options.postId, 'Final Post lookup requires the PostCreate result');
+            assert.ok(options.profileId, 'Final Post lookup requires its author Profile');
+            assert.equal(
+              options.finalPostCreated?.(),
+              true,
+              'Final Post lookup must follow a successful PostCreate result',
+            );
+            return {
+              where: () => ({
+                limit: async (limit: number) => {
+                  assert.equal(limit, 1);
+                  return [{ id: options.postId, profileId: options.profileId }];
+                },
+              }),
+            };
+          }
+          if (table === Profiles) {
+            return {
+              innerJoin: () => ({ where: () => ({ limit: async () => [publicationAuthor] }) }),
+            };
+          }
+          if (table === Instances) {
+            return { where: () => ({ limit: async () => [localInstance] }) };
+          }
+          assert.fail(`Unexpected Media publication lookup: ${String(table)}`);
+        },
+      }) as never,
+  );
+
+  return {
+    persistPublicationMetadata: (
+      mediaId: string,
+      publicationMetadata: MediaPublicationMetadata,
+    ) => {
+      const row = rows.find((item) => item.id === mediaId);
+      assert.ok(row);
+      row.publicationMetadata = publicationMetadata;
+    },
+  };
+};
+
+const setupPublishUpdate = (
+  t: TestContext,
+  results: ReadonlyMap<string, MediaUploadPublishResult>,
+  persistPublicationMetadata?: (
+    mediaId: string,
+    publicationMetadata: MediaPublicationMetadata,
+  ) => void,
+) => {
+  const calls: Array<{ input: MediaUploadPublishInput; mediaId: string }> = [];
+  const metadataCalls: MediaUploadWithMetadataWorkflowInput[] = [];
+  const mock = t.mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async (updateName: unknown, options: unknown) => {
+      assert.equal(updateName, MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME);
+      const request = options as {
+        args: readonly [MediaUploadPublishInput];
+        startWorkflowOperation: {
+          options: { args: readonly [MediaUploadWithMetadataWorkflowInput] };
+        };
+      };
+      const input = request.args[0];
+      const workflowInput = request.startWorkflowOperation.options.args[0];
+      const mediaId = workflowInput.mediaId;
+      calls.push({ input, mediaId });
+      metadataCalls.push(workflowInput);
+      persistPublicationMetadata?.(mediaId, workflowInput.publicationMetadata);
+      const result = results.get(mediaId);
+      assert.ok(result);
+      return result as never;
+    },
+  );
+  return { calls, metadataCalls, mock: mock.mock };
+};
+
+test('createPost executes identical no-media submissions as separate PostCreate workflows', async (t) => {
+  const profileId = '00000000-0000-4000-8000-000000000002';
+  const postIds = ['00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004'];
+  const workflowArgs: PostCreateWorkflowArgs[] = [];
+  const postRows = postIds.map((id) => ({ id, profileId }));
   t.mock.method(
     db,
     'select',
     () =>
       ({
         from: (table: unknown) => {
-          if (table === Media) {
-            return { where: async () => rows };
-          }
           assert.equal(table, Posts);
-          assert.ok(post);
           return {
             where: () => ({
               limit: async (limit: number) => {
                 assert.equal(limit, 1);
+                const post = postRows.shift();
+                assert.ok(post);
                 return [post];
               },
             }),
@@ -143,39 +295,6 @@ const setupMediaRows = (
         },
       }) as never,
   );
-
-const setupPublishUpdate = (
-  t: TestContext,
-  results: ReadonlyMap<string, MediaUploadPublishResult>,
-) => {
-  const calls: Array<{ input: MediaUploadPublishInput; mediaId: string }> = [];
-  const mock = t.mock.method(
-    temporalClient.workflow,
-    'executeUpdateWithStart',
-    async (updateName: unknown, options: unknown) => {
-      assert.equal(updateName, MEDIA_UPLOAD_PUBLISH_UPDATE_NAME);
-      const request = options as {
-        args: readonly [MediaUploadPublishInput];
-        startWorkflowOperation: {
-          options: { args: readonly [{ mediaId: string }] };
-        };
-      };
-      const input = request.args[0];
-      const mediaId = request.startWorkflowOperation.options.args[0].mediaId;
-      calls.push({ input, mediaId });
-      const result = results.get(mediaId);
-      assert.ok(result);
-      return result as never;
-    },
-  );
-  return { calls, mock: mock.mock };
-};
-
-test('createPost executes identical no-media submissions as separate PostCreate workflows', async (t) => {
-  const profileId = '00000000-0000-4000-8000-000000000002';
-  const postIds = ['00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004'];
-  const workflowArgs: PostCreateWorkflowArgs[] = [];
-  const postIdsForLookup = [...postIds];
   const execute = t.mock.method(
     temporalClient.workflow,
     'execute',
@@ -195,26 +314,7 @@ test('createPost executes identical no-media submissions as separate PostCreate 
   );
   const start = t.mock.method(temporalClient.workflow, 'start');
   const getHandle = t.mock.method(temporalClient.workflow, 'getHandle');
-  t.mock.method(
-    db,
-    'select',
-    () =>
-      ({
-        from: (table: unknown) => {
-          assert.equal(table, Posts);
-          return {
-            where: () => ({
-              limit: async (limit: number) => {
-                assert.equal(limit, 1);
-                const postId = postIdsForLookup.shift();
-                assert.ok(postId);
-                return [{ id: postId, profileId }];
-              },
-            }),
-          };
-        },
-      }) as never,
-  );
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
   mockTemporalDeadline(t);
 
   const first = await requestSubmit({ bodyText: 'post body', visibility: 'PUBLIC' });
@@ -229,7 +329,7 @@ test('createPost executes identical no-media submissions as separate PostCreate 
   assert.equal(execute.mock.callCount(), 2);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(getHandle.mock.callCount(), 0);
-  assert.deepEqual(postIdsForLookup, []);
+  assert.equal(publish.mock.callCount(), 0);
   const requestIds = workflowArgs.map(({ requestId }) => requestId);
   assert.ok(requestIds.every((requestId) => /^[0-9a-f-]{36}$/i.test(requestId)));
   assert.equal(new Set(requestIds).size, requestIds.length);
@@ -317,11 +417,47 @@ test('createPost rejects duplicate media before checking uploads or starting the
   assert.equal(publish.mock.callCount(), 0);
 });
 
+test('createPost rejects non-monotone Media rights before checking uploads or publishing', async (t) => {
+  const mediaId = '00000000-0000-4000-8000-000000000003';
+  const select = t.mock.method(db, 'select', () => {
+    throw new Error('Invalid rights must be rejected before reading Media');
+  });
+  const fetch = t.mock.method(globalThis, 'fetch');
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+
+  const result = await requestSubmit({
+    bodyText: 'invalid reuse terms',
+    media: [
+      {
+        mediaId: encodeGlobalId('Media', mediaId),
+        rights: {
+          personal: MediaUsePermission.DENY,
+          noncommercial: MediaUsePermission.ORIGINAL,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ],
+    visibility: 'PUBLIC',
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'media.0.rights');
+  assert.equal(select.mock.callCount(), 0);
+  assert.equal(fetch.mock.callCount(), 0);
+  assert.equal(publish.mock.callCount(), 0);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
+});
+
 test('createPost creates a Post after a completed Media publication', async (t) => {
   const mediaId = '00000000-0000-4000-8000-000000000003';
   const uploadId = '00000000-0000-4000-8000-000000000004';
   const postId = '00000000-0000-4000-8000-000000000005';
   const profileId = '00000000-0000-4000-8000-000000000002';
+  let finalPostCreated = false;
   setupMediaStorageHead(t);
   const select = setupMediaRows(
     t,
@@ -334,7 +470,11 @@ test('createPost creates a Post after a completed Media publication', async (t) 
         url: null,
       },
     ],
-    { id: postId, profileId },
+    {
+      postId,
+      profileId,
+      finalPostCreated: () => finalPostCreated,
+    },
   );
   const publish = setupPublishUpdate(
     t,
@@ -349,6 +489,7 @@ test('createPost creates a Post after a completed Media publication', async (t) 
         },
       ],
     ]),
+    select.persistPublicationMetadata,
   );
   const workflowArgs: PostCreateWorkflowArgs[] = [];
   const execute = t.mock.method(
@@ -358,6 +499,7 @@ test('createPost creates a Post after a completed Media publication', async (t) 
       assert.equal(workflow, postCreateWorkflow.workflow);
       const args = (options as { args: readonly [PostCreateWorkflowArgs] }).args[0];
       workflowArgs.push(args);
+      finalPostCreated = true;
       return { authorProfileId: profileId, postId, status: 'created' } as never;
     },
   );
@@ -378,11 +520,129 @@ test('createPost creates a Post after a completed Media publication', async (t) 
   assert.equal(publish.mock.callCount(), 1);
   assert.equal(execute.mock.callCount(), 1);
   assert.equal(workflowArgs[0]?.revalidateAuthorization, true);
+  assert.equal(workflowArgs[0]?.postId, undefined);
   assert.equal(workflowArgs[0]?.input.profileId, profileId);
   assert.deepEqual(workflowArgs[0]?.input.media, [{ altText: null, mediaId }]);
+  assert.deepEqual(publish.metadataCalls[0]?.publicationMetadata, {
+    attributionName: '@author@kosmo.example',
+    attributionUrl: 'https://kosmo.example/@author',
+  });
   assert.equal(start.mock.callCount(), 0);
   assert.equal(getHandle.mock.callCount(), 0);
-  assert.equal(select.mock.callCount(), 2);
+});
+
+test('createPost rejects changed or omitted rights for pending Media metadata', async (t) => {
+  const mediaId = '00000000-0000-4000-8000-000000000003';
+  const uploadId = '00000000-0000-4000-8000-000000000004';
+  const rights: MediaPublicationRights = {
+    personal: MediaUsePermission.EDIT,
+    noncommercial: MediaUsePermission.EDIT,
+    commercial: MediaUsePermission.EDIT,
+  };
+  const publicationMetadata: MediaPublicationMetadata = {
+    attributionName: 'Public author',
+    attributionUrl: 'https://kosmo.example/@author',
+    rights,
+  };
+  setupMediaStorageHead(t);
+  setupMediaRows(t, [
+    {
+      id: mediaId,
+      publicationMetadata,
+      source: MediaSource.LOCAL,
+      state: MediaState.UPLOADING,
+      storageReference: `nexus:v1:${uploadId}`,
+      url: null,
+    },
+  ]);
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', () =>
+    assert.fail('Mismatched retained rights must fail before publication admission'),
+  );
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  mockTemporalDeadline(t);
+
+  const result = await requestSubmit({
+    bodyText: 'pending rights changed',
+    media: [
+      {
+        mediaId: encodeGlobalId('Media', mediaId),
+        rights: {
+          personal: MediaUsePermission.EDIT,
+          noncommercial: MediaUsePermission.EDIT,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ],
+    visibility: 'PUBLIC',
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'media.0');
+  const omittedRights = await requestSubmit({
+    bodyText: 'pending rights omitted',
+    media: [{ mediaId: encodeGlobalId('Media', mediaId) }],
+    visibility: 'PUBLIC',
+  });
+  const omittedRightsError = omittedRights.errors?.[0]?.originalError;
+  assert.ok(omittedRightsError instanceof ValidationError);
+  assert.equal(omittedRightsError.field, 'media.0');
+  assert.equal(publish.mock.callCount(), 0);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
+});
+
+test('createPost maps a pending metadata conflict returned after publication admission', async (t) => {
+  const mediaId = '00000000-0000-4000-8000-000000000003';
+  const uploadId = '00000000-0000-4000-8000-000000000004';
+  setupMediaStorageHead(t);
+  setupMediaRows(t, [
+    {
+      id: mediaId,
+      source: MediaSource.LOCAL,
+      state: MediaState.UPLOADING,
+      storageReference: `nexus:v1:${uploadId}`,
+      url: null,
+    },
+  ]);
+  const metadataConflict = ApplicationFailure.nonRetryable(
+    'Media already has different publication rights; attach it again',
+    'MediaUploadMetadataConflict',
+  );
+  const publish = t.mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async (updateName: unknown) => {
+      assert.equal(updateName, MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME);
+      throw metadataConflict;
+    },
+  );
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  mockTemporalDeadline(t);
+
+  const result = await requestSubmit({
+    bodyText: 'metadata changed after preflight',
+    media: [
+      {
+        mediaId: encodeGlobalId('Media', mediaId),
+        rights: {
+          personal: MediaUsePermission.EDIT,
+          noncommercial: MediaUsePermission.ORIGINAL,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ],
+    visibility: 'PUBLIC',
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'media.0');
+  assert.equal(publish.mock.callCount(), 1);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
 });
 
 test('createPost recovers a closed upload that finalized after the preflight read', async (t) => {
@@ -395,6 +655,7 @@ test('createPost recovers a closed upload that finalized after the preflight rea
   const postId = '00000000-0000-4000-8000-000000000007';
   const currentMediaRow: {
     id: string;
+    publicationMetadata?: MediaPublicationMetadata | null;
     source: MediaSource;
     state: MediaState;
     storageReference: string | null;
@@ -407,12 +668,18 @@ test('createPost recovers a closed upload that finalized after the preflight rea
     url: null,
   };
   const mediaRows = [currentMediaRow];
-  const select = setupMediaRows(t, mediaRows, { id: postId, profileId });
+  let finalPostCreated = false;
+  setupMediaRows(t, mediaRows, {
+    postId,
+    profileId,
+    finalPostCreated: () => finalPostCreated,
+  });
   setupMediaStorageHead(t);
   const resetMedia = (id: string, uploadId: string) => {
     currentMediaRow.id = id;
     currentMediaRow.state = MediaState.UPLOADING;
     currentMediaRow.storageReference = `nexus:v1:${uploadId}`;
+    currentMediaRow.publicationMetadata = null;
     currentMediaRow.url = null;
     mediaRows.splice(0, mediaRows.length, currentMediaRow);
   };
@@ -422,7 +689,7 @@ test('createPost recovers a closed upload that finalized after the preflight rea
       new WorkflowExecutionAlreadyStartedError(
         'Workflow execution already started',
         `media-upload:${mediaId}`,
-        MEDIA_UPLOAD_WORKFLOW_TYPE,
+        MEDIA_UPLOAD_WITH_METADATA_WORKFLOW_TYPE,
       ),
     ]),
   );
@@ -433,18 +700,20 @@ test('createPost recovers a closed upload that finalized after the preflight rea
       const request = options as {
         startWorkflowOperation: {
           options: {
-            args: readonly [{ mediaId: string; accountId: string }];
+            args: readonly [MediaUploadWithMetadataWorkflowInput];
           };
         };
       };
-      const mediaId = request.startWorkflowOperation.options.args[0]?.mediaId;
+      const workflowInput = request.startWorkflowOperation.options.args[0];
+      const mediaId = workflowInput?.mediaId;
       assert.ok(mediaId);
-      assert.equal(request.startWorkflowOperation.options.args[0]?.accountId, accountId);
+      assert.equal(workflowInput.accountId, accountId);
       if (mediaId === missingMediaId) {
         mediaRows.splice(0, 1);
       } else if (mediaId === completedMediaId || mediaId === mismatchedMediaId) {
         currentMediaRow.state = MediaState.READY;
         currentMediaRow.url = 'https://media.example/ready.webp';
+        currentMediaRow.publicationMetadata = workflowInput.publicationMetadata;
       }
       const error = duplicateErrors.get(mediaId);
       assert.ok(error);
@@ -489,6 +758,7 @@ test('createPost recovers a closed upload that finalized after the preflight rea
         (options as { args: readonly [PostCreateWorkflowArgs] }).args[0]?.input.profileId,
         profileId,
       );
+      finalPostCreated = true;
       return { authorProfileId: profileId, postId, status: 'created' } as never;
     },
   );
@@ -507,18 +777,20 @@ test('createPost recovers a closed upload that finalized after the preflight rea
   assert.equal(result.data?.createPost.post?.id, encodeGlobalId('Post', postId));
   assert.equal(result.data?.createPost.request, null);
   resetMedia(pendingMediaId, '00000000-0000-4000-8000-000000000009');
+  finalPostCreated = false;
   const pendingResult = await submitMedia(pendingMediaId);
   assert.equal(pendingResult.errors?.[0]?.originalError, duplicateErrors.get(pendingMediaId));
 
   resetMedia(missingMediaId, '00000000-0000-4000-8000-000000000010');
+  finalPostCreated = false;
   const missingResult = await submitMedia(missingMediaId);
   assert.equal(missingResult.errors?.[0]?.originalError, duplicateErrors.get(missingMediaId));
 
   resetMedia(mismatchedMediaId, '00000000-0000-4000-8000-000000000011');
+  finalPostCreated = false;
   const mismatchedResult = await submitMedia(mismatchedMediaId);
   assert.ok(mismatchedResult.errors?.[0]?.originalError instanceof ValidationError);
 
-  assert.equal(select.mock.callCount(), 9);
   assert.equal(publish.mock.callCount(), 4);
   assert.equal(getHandle.mock.callCount(), 2);
   assert.deepEqual(retainedResultCalls, [
@@ -537,6 +809,11 @@ test('createPost queues a request for mixed Media when one publication is proces
   const processingMediaId = '00000000-0000-4000-8000-000000000004';
   const completedUploadId = '00000000-0000-4000-8000-000000000005';
   const processingUploadId = '00000000-0000-4000-8000-000000000006';
+  const rights: MediaPublicationRights = {
+    personal: MediaUsePermission.EDIT,
+    noncommercial: MediaUsePermission.ORIGINAL,
+    commercial: MediaUsePermission.DENY,
+  };
   setupMediaStorageHead(t);
   const select = setupMediaRows(t, [
     {
@@ -568,6 +845,7 @@ test('createPost queues a request for mixed Media when one publication is proces
       ],
       [processingMediaId, { status: 'processing', id: processingMediaId }],
     ]),
+    select.persistPublicationMetadata,
   );
   const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
     throw new Error('A processing Media must not create a Post');
@@ -598,7 +876,7 @@ test('createPost queues a request for mixed Media when one publication is proces
     bodyText: 'mixed uploads',
     media: [
       { applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', completedMediaId) },
-      { mediaId: encodeGlobalId('Media', processingMediaId) },
+      { mediaId: encodeGlobalId('Media', processingMediaId), rights },
     ],
     visibility: 'PUBLIC',
   });
@@ -614,7 +892,6 @@ test('createPost queues a request for mixed Media when one publication is proces
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(start.mock.callCount(), 1);
   assert.equal(getHandle.mock.callCount(), 0);
-  assert.equal(select.mock.callCount(), 1);
 
   const snapshot = started[0]?.args?.[0];
   assert.ok(snapshot);
@@ -622,10 +899,23 @@ test('createPost queues a request for mixed Media when one publication is proces
   assert.equal(started[0]?.workflowId, postRequestWorkflowId(accountId, snapshot.requestId));
   assert.equal(started[0]?.workflowIdConflictPolicy, 'FAIL');
   assert.equal(started[0]?.workflowIdReusePolicy, 'REJECT_DUPLICATE');
+  assert.equal(snapshot.postId, undefined);
   assert.deepEqual(snapshot.input.media, [
     { altText: null, applyNightshade: true, mediaId: completedMediaId },
     { altText: null, applyNightshade: false, mediaId: processingMediaId },
   ]);
+  const publicationByMediaId = new Map(
+    publish.metadataCalls.map(({ mediaId, publicationMetadata }) => [mediaId, publicationMetadata]),
+  );
+  assert.deepEqual(publicationByMediaId.get(completedMediaId), {
+    attributionName: '@author@kosmo.example',
+    attributionUrl: 'https://kosmo.example/@author',
+  });
+  assert.deepEqual(publicationByMediaId.get(processingMediaId), {
+    attributionName: '@author@kosmo.example',
+    attributionUrl: 'https://kosmo.example/@author',
+    rights,
+  });
   assert.deepEqual(started[0]?.typedSearchAttributes, [
     {
       key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.ownerAccountId, type: 'KEYWORD' },
@@ -649,7 +939,8 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
   const legacyUnknownMediaId = '00000000-0000-4000-8000-000000000006';
   const postId = '00000000-0000-4000-8000-000000000007';
   const profileId = '00000000-0000-4000-8000-000000000002';
-  const select = setupMediaRows(
+  let finalPostCreated = false;
+  setupMediaRows(
     t,
     [matchingMediaId, mismatchedMediaId, unknownMediaId, legacyUnknownMediaId].map((id) => ({
       id,
@@ -658,7 +949,7 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
       storageReference: null,
       url: 'https://media.example/ready.webp',
     })),
-    { id: postId, profileId },
+    { postId, profileId, finalPostCreated: () => finalPostCreated },
   );
   const retainedResults = new Map<string, MediaUploadWorkflowResult | null>([
     [
@@ -708,6 +999,7 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
     async (workflow: unknown, options: unknown) => {
       assert.equal(workflow, postCreateWorkflow.workflow);
       workflowArgs.push((options as { args: readonly [PostCreateWorkflowArgs] }).args[0]);
+      finalPostCreated = true;
       return { authorProfileId: profileId, postId, status: 'created' } as never;
     },
   );
@@ -724,6 +1016,7 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
   assert.equal(matchingResult.data?.createPost.post?.id, encodeGlobalId('Post', postId));
   assert.equal(matchingResult.data?.createPost.request, null);
 
+  finalPostCreated = false;
   const mismatchedResult = await requestSubmit({
     bodyText: 'different filter',
     media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', mismatchedMediaId) }],
@@ -733,6 +1026,7 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
   assert.ok(mismatchError instanceof ValidationError);
   assert.equal(mismatchError.field, 'media.0');
 
+  finalPostCreated = false;
   const unknownResult = await requestSubmit({
     bodyText: 'unknown filter',
     media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', unknownMediaId) }],
@@ -742,6 +1036,7 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
   assert.ok(unknownError instanceof ValidationError);
   assert.equal(unknownError.field, 'media.0');
 
+  finalPostCreated = false;
   const legacyUnknownResult = await requestSubmit({
     bodyText: 'legacy upload with default filter',
     media: [
@@ -767,7 +1062,6 @@ test('createPost trusts retained READY Media results and rejects unknown or mism
     `media-upload:${unknownMediaId}`,
     `media-upload:${legacyUnknownMediaId}`,
   ]);
-  assert.equal(select.mock.callCount(), 6);
   assert.equal(execute.mock.callCount(), 2);
   assert.equal(workflowArgs.length, 2);
   assert.equal(start.mock.callCount(), 0);
@@ -780,7 +1074,8 @@ test('createPost reuses READY Media after an active publication Update without w
   const unrelatedMediaId = '00000000-0000-4000-8000-000000000005';
   const postId = '00000000-0000-4000-8000-000000000006';
   const profileId = '00000000-0000-4000-8000-000000000002';
-  const select = setupMediaRows(
+  let finalPostCreated = false;
+  setupMediaRows(
     t,
     [mediaId, conflictMediaId, unrelatedMediaId].map((id) => ({
       id,
@@ -789,7 +1084,7 @@ test('createPost reuses READY Media after an active publication Update without w
       storageReference: null,
       url: 'https://media.example/ready.webp',
     })),
-    { id: postId, profileId },
+    { postId, profileId, finalPostCreated: () => finalPostCreated },
   );
   const selectionConflict = ApplicationFailure.nonRetryable(
     'Media upload filter does not match',
@@ -825,6 +1120,7 @@ test('createPost reuses READY Media after an active publication Update without w
     async (workflow: unknown, options: unknown) => {
       assert.equal(workflow, postCreateWorkflow.workflow);
       workflowArgs.push((options as { args: readonly [PostCreateWorkflowArgs] }).args[0]);
+      finalPostCreated = true;
       return { authorProfileId: profileId, postId, status: 'created' } as never;
     },
   );
@@ -847,6 +1143,7 @@ test('createPost reuses READY Media after an active publication Update without w
     updateName: MEDIA_UPLOAD_PUBLISH_UPDATE_NAME,
   });
 
+  finalPostCreated = false;
   const conflictResult = await requestSubmit({
     bodyText: 'filter conflict for ready image',
     media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', conflictMediaId) }],
@@ -854,6 +1151,7 @@ test('createPost reuses READY Media after an active publication Update without w
   });
   assert.ok(conflictResult.errors?.[0]?.originalError instanceof ValidationError);
 
+  finalPostCreated = false;
   const unrelatedResult = await requestSubmit({
     bodyText: 'unrelated ready image update failure',
     media: [{ applyAiProhibitFilter: true, mediaId: encodeGlobalId('Media', unrelatedMediaId) }],
@@ -866,10 +1164,80 @@ test('createPost reuses READY Media after an active publication Update without w
   assert.equal(publish.mock.callCount(), 0);
   assert.equal(execute.mock.callCount(), 1);
   assert.equal(start.mock.callCount(), 0);
-  assert.equal(select.mock.callCount(), 4);
   const createdMedia = workflowArgs[0]?.input.media?.[0];
   assert.ok(createdMedia && 'mediaId' in createdMedia);
   assert.equal(createdMedia.mediaId, mediaId);
+});
+
+test('createPost leaves published READY Media metadata unchanged when new rights are supplied', async (t) => {
+  const profileId = '00000000-0000-4000-8000-000000000002';
+  const mediaId = '00000000-0000-4000-8000-000000000003';
+  const newPostId = '00000000-0000-4000-8000-000000000004';
+  const storedRights: MediaPublicationRights = {
+    personal: MediaUsePermission.EDIT,
+    noncommercial: MediaUsePermission.ORIGINAL,
+    commercial: MediaUsePermission.DENY,
+  };
+  const publicationMetadata: MediaPublicationMetadata = {
+    attributionName: 'Original author',
+    attributionUrl: 'https://kosmo.example/@author',
+    rights: storedRights,
+  };
+  const mediaRow = {
+    id: mediaId,
+    publicationMetadata,
+    source: MediaSource.LOCAL,
+    state: MediaState.READY,
+    storageReference: null,
+    url: 'https://media.example/ready.webp',
+  };
+  let finalPostCreated = false;
+  setupMediaRows(t, [mediaRow], {
+    postId: newPostId,
+    profileId,
+    finalPostCreated: () => finalPostCreated,
+  });
+  t.mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    () => ({ executeUpdate: async () => ({ status: 'completed', id: mediaId }) }) as never,
+  );
+  const postArgs: PostCreateWorkflowArgs[] = [];
+  const execute = t.mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.equal(workflow, postCreateWorkflow.workflow);
+      postArgs.push((options as { args: readonly [PostCreateWorkflowArgs] }).args[0]);
+      finalPostCreated = true;
+      return { authorProfileId: profileId, postId: newPostId, status: 'created' } as never;
+    },
+  );
+  const publishMetadata = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
+  mockTemporalDeadline(t);
+
+  const result = await requestSubmit({
+    bodyText: 'reuse already published image',
+    media: [
+      {
+        mediaId: encodeGlobalId('Media', mediaId),
+        rights: {
+          personal: MediaUsePermission.ORIGINAL,
+          noncommercial: MediaUsePermission.DENY,
+          commercial: MediaUsePermission.DENY,
+        },
+      },
+    ],
+    visibility: 'PUBLIC',
+  });
+
+  assert.deepEqual(result.errors, undefined);
+  assert.equal(result.data?.createPost.post?.id, encodeGlobalId('Post', newPostId));
+  assert.equal(postArgs[0]?.postId, undefined);
+  assert.deepEqual(postArgs[0]?.input.media, [{ altText: null, mediaId }]);
+  assert.equal(publishMetadata.mock.callCount(), 0);
+  assert.equal(execute.mock.callCount(), 1);
+  assert.deepEqual(mediaRow.publicationMetadata, publicationMetadata);
 });
 
 test('createPost maps nested Media selection conflicts and preserves unrelated publish errors', async (t) => {
@@ -880,7 +1248,7 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
   const unrelatedUploadId = '00000000-0000-4000-8000-000000000006';
   const unexpectedDuplicateUploadId = '00000000-0000-4000-8000-000000000008';
   setupMediaStorageHead(t);
-  const select = setupMediaRows(t, [
+  setupMediaRows(t, [
     {
       id: conflictMediaId,
       source: MediaSource.LOCAL,
@@ -922,7 +1290,7 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
     temporalClient.workflow,
     'executeUpdateWithStart',
     async (updateName: unknown) => {
-      assert.equal(updateName, MEDIA_UPLOAD_PUBLISH_UPDATE_NAME);
+      assert.equal(updateName, MEDIA_UPLOAD_METADATA_PUBLISH_UPDATE_NAME);
       const failure = failures.shift();
       assert.ok(failure);
       throw failure;
@@ -960,7 +1328,6 @@ test('createPost maps nested Media selection conflicts and preserves unrelated p
   });
   assert.equal(unexpectedDuplicateResult.errors?.[0]?.originalError, unexpectedDuplicate);
   assert.equal(publish.mock.callCount(), 3);
-  assert.equal(select.mock.callCount(), 3);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(start.mock.callCount(), 0);
 });
@@ -1056,7 +1423,7 @@ test('createPost reports unsupported uploads by their original media index', asy
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(
+  t.mock.method(
     temporalClient.workflow,
     'getHandle',
     () =>
@@ -1088,7 +1455,6 @@ test('createPost reports unsupported uploads by their original media index', asy
   assert.equal(error.field, 'media.1');
   assert.equal(error.code, 'VALIDATION');
   assert.equal(select.mock.callCount(), 1);
-  assert.equal(getHandle.mock.callCount(), 1);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(publish.mock.callCount(), 0);
@@ -1140,7 +1506,7 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
         }),
       }) as never,
   );
-  const getHandle = t.mock.method(
+  t.mock.method(
     temporalClient.workflow,
     'getHandle',
     () =>
@@ -1175,7 +1541,6 @@ test('createPost leaves storage outages unknown and does not mark a media slot m
   assert.equal(error, outage);
   assert.equal(result.errors?.[0]?.extensions.field, undefined);
   assert.equal(select.mock.callCount(), 1);
-  assert.equal(getHandle.mock.callCount(), 1);
   assert.equal(start.mock.callCount(), 0);
   assert.equal(execute.mock.callCount(), 0);
   assert.equal(publish.mock.callCount(), 0);
@@ -1185,7 +1550,7 @@ test('createPost returns a PostRequest start error without querying request stat
   const mediaId = '00000000-0000-4000-8000-000000000003';
   const uploadId = '00000000-0000-4000-8000-000000000004';
   setupMediaStorageHead(t);
-  setupMediaRows(t, [
+  const select = setupMediaRows(t, [
     {
       id: mediaId,
       source: MediaSource.LOCAL,
@@ -1197,6 +1562,7 @@ test('createPost returns a PostRequest start error without querying request stat
   const publish = setupPublishUpdate(
     t,
     new Map<string, MediaUploadPublishResult>([[mediaId, { status: 'processing', id: mediaId }]]),
+    select.persistPublicationMetadata,
   );
   const admissionFailure = new Error('Temporal start acknowledgement was lost');
   const start = t.mock.method(temporalClient.workflow, 'start', async () => {

@@ -1,4 +1,18 @@
-import { ArrowLeftIcon, FlagIcon, XIcon } from 'lucide-react-native';
+import {
+  isValidMediaPublicationRights,
+  MEDIA_USE_PERMISSION_LABELS,
+  MediaUsePermission,
+  mediaUseTermsUrl,
+} from '@kosmo/core/media-metadata';
+import { Link } from 'expo-router';
+import {
+  ArrowLeftIcon,
+  CopyrightIcon,
+  ExternalLinkIcon,
+  FlagIcon,
+  InfoIcon,
+  XIcon,
+} from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
   Image,
@@ -13,20 +27,25 @@ import {
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { TextArea } from '@/components/ui/TextField';
+import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import type { MediaPublicationRights } from '@kosmo/core/media-metadata';
+import type { Href } from 'expo-router';
 import type { ReactNode, RefObject } from 'react';
 import type { TextStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
-export type ComposerMediaEditorTool = 'alt' | 'nightshade' | 'sensitive';
+export type ComposerMediaEditorTool = 'alt' | 'nightshade' | 'rights' | 'sensitive';
 export type ComposerMediaEditorMobileState =
   | 'alt'
   | 'altKeyboard'
   | 'default'
   | 'nightshade'
+  | 'rights'
   | 'sensitive';
 
 export type ComposerMediaEditorProps = {
@@ -34,6 +53,7 @@ export type ComposerMediaEditorProps = {
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
   readonly onApplyAiProhibitFilterChange: (key: string, value: boolean) => void;
+  readonly onRightsChange: (key: string, rights: MediaPublicationRights | undefined) => void;
   readonly onBack: () => void;
   readonly onClose: () => void;
   readonly onDone: () => void;
@@ -49,6 +69,28 @@ export type ComposerMediaEditorProps = {
 };
 
 const altTextLimit = 1000;
+const defaultMediaPublicationRights: MediaPublicationRights = {
+  personal: MediaUsePermission.DENY,
+  noncommercial: MediaUsePermission.DENY,
+  commercial: MediaUsePermission.DENY,
+};
+const mediaPublicationRightOptions = [
+  { label: MEDIA_USE_PERMISSION_LABELS[MediaUsePermission.DENY], value: MediaUsePermission.DENY },
+  {
+    label: MEDIA_USE_PERMISSION_LABELS[MediaUsePermission.ORIGINAL],
+    value: MediaUsePermission.ORIGINAL,
+  },
+  { label: MEDIA_USE_PERMISSION_LABELS[MediaUsePermission.EDIT], value: MediaUsePermission.EDIT },
+] as const;
+const mediaPublicationRightPurposes = [
+  { label: '개인적 이용', rowLabel: '개인', scope: 'personal' },
+  { label: '비상업적 이용', rowLabel: '비상업', scope: 'noncommercial' },
+  { label: '상업적 이용', rowLabel: '상업', scope: 'commercial' },
+] as const satisfies readonly {
+  label: string;
+  rowLabel: string;
+  scope: keyof MediaPublicationRights;
+}[];
 const composerFieldFocusStyle = {
   borderWidth: borderWidths[1],
   outlineWidth: 0,
@@ -146,6 +188,12 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
                   selected={mobileTool === 'nightshade'}
                 />
               ) : null}
+              <MobileToolButton
+                icon={<CopyrightIcon color={theme.foregroundPrimary} size={iconSizes[20]} />}
+                label="이용조건"
+                onPress={() => props.onToolChange('rights')}
+                selected={mobileTool === 'rights'}
+              />
             </View>
             {mobileTool ? (
               <MobileToolSheet
@@ -286,6 +334,7 @@ function EditorTabs({
           />,
         ]
       : []),
+    <Tab key="rights" option={{ label: '이용조건', value: 'rights' }} />,
   ];
 
   return (
@@ -442,6 +491,16 @@ function WebToolPanel(
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
         />
+      ) : props.tool === 'rights' ? (
+        <RightsToolContent
+          itemNumber={props.selectedIndex + 1}
+          onRightsChange={(rights) => {
+            if (props.selected) {
+              props.onRightsChange(props.selected.key, rights);
+            }
+          }}
+          rights={props.selected?.rights}
+        />
       ) : (
         <NightshadeToolContent
           applyAiProhibitFilter={props.selected?.applyAiProhibitFilter ?? false}
@@ -491,6 +550,17 @@ function MobileToolSheet(
           itemNumber={props.selectedIndex + 1}
           onSensitiveMediaChange={props.onSensitiveMediaChange}
           sensitiveMedia={props.sensitiveMedia}
+        />
+      ) : props.tool === 'rights' ? (
+        <RightsToolContent
+          compact
+          itemNumber={props.selectedIndex + 1}
+          onRightsChange={(rights) => {
+            if (props.selected) {
+              props.onRightsChange(props.selected.key, rights);
+            }
+          }}
+          rights={props.selected?.rights}
         />
       ) : (
         <NightshadeToolContent
@@ -693,6 +763,136 @@ function NightshadeToolContent({
   );
 }
 
+function RightsToolContent({
+  compact = false,
+  itemNumber,
+  onRightsChange,
+  rights,
+}: {
+  readonly compact?: boolean;
+  readonly itemNumber: number;
+  readonly onRightsChange: (rights: MediaPublicationRights | undefined) => void;
+  readonly rights: MediaPublicationRights | undefined;
+}) {
+  const theme = useTheme();
+
+  return (
+    <>
+      {!compact ? (
+        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>
+          이미지 {itemNumber}
+        </Text>
+      ) : null}
+      <Text style={[styles.toolTitle, { color: theme.foregroundPrimary }]}>이용조건</Text>
+      <View
+        style={[
+          styles.sensitiveSetting,
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        ]}
+      >
+        <View style={styles.sensitiveCopy}>
+          <Text style={[styles.sensitiveLabel, { color: theme.foregroundPrimary }]}>
+            라이센스 설정
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel="라이센스 설정"
+          onValueChange={(enabled) =>
+            onRightsChange(enabled ? { ...defaultMediaPublicationRights } : undefined)
+          }
+          value={rights !== undefined}
+        />
+      </View>
+      <View style={styles.rightsNotice}>
+        <View accessibilityElementsHidden pointerEvents="none">
+          <InfoIcon color={theme.foregroundSecondary} size={iconSizes[16]} />
+        </View>
+        <Text style={[styles.rightsNoticeText, { color: theme.foregroundSecondary }]}>
+          저작권을 보유한 이미지에만 설정하세요.
+        </Text>
+      </View>
+      {rights ? (
+        <>
+          <View style={styles.rightsMatrix}>
+            <View style={styles.rightsMatrixHeader}>
+              <View style={styles.rightsRowLabelColumn} />
+              <View style={styles.rightsMatrixOptions}>
+                {mediaPublicationRightOptions.map((option) => (
+                  <Text
+                    key={option.value}
+                    style={[styles.rightsColumnHeader, { color: theme.foregroundSecondary }]}
+                  >
+                    {option.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
+            {mediaPublicationRightPurposes.map(({ label, rowLabel, scope }) => (
+              <View key={scope} style={styles.rightsMatrixRow}>
+                <Text
+                  style={[
+                    styles.rightsRowLabelColumn,
+                    styles.rightsRowLabel,
+                    { color: theme.foregroundPrimary },
+                  ]}
+                >
+                  {rowLabel}
+                </Text>
+                <RadioGroup
+                  accessibilityLabel={label}
+                  onChange={(value) => {
+                    const nextRights = { ...rights, [scope]: value };
+                    if (isValidMediaPublicationRights(nextRights)) {
+                      onRightsChange(nextRights);
+                    }
+                  }}
+                  style={styles.rightsMatrixOptions}
+                  value={rights[scope]}
+                >
+                  {mediaPublicationRightOptions.map((option) => {
+                    const nextRights = { ...rights, [scope]: option.value };
+                    // The column headers provide visible labels; each radio keeps its canonical accessible label.
+                    return (
+                      <RadioOption
+                        key={option.value}
+                        children={false}
+                        option={{
+                          ...option,
+                          disabled: !isValidMediaPublicationRights(nextRights),
+                        }}
+                        style={styles.rightsMatrixOption}
+                      />
+                    );
+                  })}
+                </RadioGroup>
+              </View>
+            ))}
+          </View>
+          <Link
+            asChild
+            href={mediaUseTermsUrl(rights, getPublicWebOrigin()) as Href}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <Pressable
+              accessibilityLabel="이용조건 보기"
+              accessibilityRole="link"
+              style={styles.rightsTermsLink}
+            >
+              <Text style={[styles.rightsTermsLinkText, { color: theme.actionLinkBase }]}>
+                이용조건 보기
+              </Text>
+              <View accessibilityElementsHidden pointerEvents="none">
+                <ExternalLinkIcon color={theme.actionLinkBase} size={iconSizes[16]} />
+              </View>
+            </Pressable>
+          </Link>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function MobileToolButton({
   icon,
   label,
@@ -819,6 +1019,30 @@ const styles = StyleSheet.create({
   },
   sensitiveCopy: { flex: 1, gap: space[4] },
   sensitiveLabel: textStyles.uiLabelM,
+  rightsNotice: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
+  rightsNoticeText: { flex: 1, ...textStyles.uiCopyS },
+  rightsMatrix: { gap: space[4] },
+  rightsMatrixHeader: { alignItems: 'center', flexDirection: 'row' },
+  rightsColumnHeader: { flex: 1, textAlign: 'center', ...textStyles.uiCopyS },
+  rightsMatrixRow: { alignItems: 'center', flexDirection: 'row' },
+  rightsRowLabelColumn: { width: space[48] },
+  rightsRowLabel: textStyles.uiLabelS,
+  rightsMatrixOptions: { flex: 1, flexDirection: 'row' },
+  rightsMatrixOption: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: space[48],
+    minWidth: space[48],
+    padding: 0,
+  },
+  rightsTermsLink: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: space[4],
+    minHeight: 48,
+  },
+  rightsTermsLinkText: { ...textStyles.uiLabelS, textDecorationLine: 'underline' },
   altToolLabel: textStyles.uiLabelS,
   footer: {
     alignItems: 'center',

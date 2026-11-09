@@ -38,8 +38,12 @@ import {
   mockMediaUploadNexusOperationWorkflow,
 } from './test-fixtures/media-upload-nexus-operation';
 import type { TestContext } from 'node:test';
+import type { MediaPublicationMetadata } from '@kosmo/core/media-metadata';
 import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
-import type { MediaUploadWorkflowResult } from '@kosmo/core/temporal/media-upload';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type {
   PostCreateActivityInput,
   PostCreateActivityResult,
@@ -381,6 +385,7 @@ type PostRequestMediaRow = {
   readonly accountId: string;
   readonly id: string;
   readonly mediaType?: string | null;
+  readonly publicationMetadata?: MediaPublicationMetadata | null;
   readonly source: MediaSource;
   readonly state: MediaState;
   readonly storageReference?: string | null;
@@ -430,11 +435,13 @@ const mockPostRequestMediaDatabase = (
         reject?: (reason: unknown) => unknown,
       ) =>
         Promise.resolve(
-          [...mediaRows.values()].filter(
-            ({ accountId, id }) =>
-              queriedMediaIds.includes(id) &&
-              (!requiresAccountScope || queriedAccountIds.includes(accountId)),
-          ),
+          [...mediaRows.values()]
+            .filter(
+              ({ accountId, id }) =>
+                queriedMediaIds.includes(id) &&
+                (!requiresAccountScope || queriedAccountIds.includes(accountId)),
+            )
+            .map((row) => ({ ...row, publicationMetadata: row.publicationMetadata ?? null })),
         ).then(resolve, reject),
     };
     return query as never;
@@ -510,11 +517,11 @@ const createPostRequestTestEnvironment = () => createTestWorkflowEnvironment();
 
 const createMockMediaUploadActivities = (
   mediaRows: Map<string, PostRequestMediaRow>,
-  onPrepare: (input: Parameters<typeof prepareMediaUploadActivity>[0]) => void = () => {},
+  onPrepare: (input: MediaUploadWorkflowInput) => void = () => {},
   onFinalize: (input: Parameters<typeof finalizeMediaUploadActivity>[0]) => void = () => {},
 ) => ({
   prepareMediaUploadActivity: async (input: Parameters<typeof prepareMediaUploadActivity>[0]) => {
-    onPrepare(input);
+    onPrepare(input as MediaUploadWorkflowInput);
     return {
       contentType: 'image/jpeg' as const,
       id: `u_${input.mediaId}`,
@@ -538,6 +545,7 @@ const createParallelMediaUploadHarness = async (
     readonly beforePublish: (uploadId: string) => Promise<void>;
     readonly releaseGates: readonly (() => void)[];
     readonly shouldFail?: boolean | ((uploadId: string) => boolean);
+    readonly generatePostIdActivity?: () => Promise<string>;
   },
 ) => {
   const remoteWorkers: RunningTestWorker[] = [];
@@ -571,6 +579,9 @@ const createParallelMediaUploadHarness = async (
         return committedPost(input);
       },
       getPostRequestMediaStateActivity,
+      ...(options.generatePostIdActivity === undefined
+        ? {}
+        : { generatePostIdActivity: options.generatePostIdActivity }),
     },
     { nexusServices: [mediaUploadServiceHandler] },
   );
@@ -776,7 +787,11 @@ test(
     const firstMediaId = randomUUID();
     const readyMediaId = randomUUID();
     const secondMediaId = randomUUID();
-    const args = createPostRequestWithMedia([firstMediaId, readyMediaId, secondMediaId]);
+    const args = withoutPostId(
+      createPostRequestWithMedia([firstMediaId, readyMediaId, secondMediaId]),
+    );
+    const generatedPostId = randomUUID();
+    let postIdGenerationCalls = 0;
     const pendingMediaIds = [firstMediaId, secondMediaId];
     const pendingUploadIds = pendingMediaIds.map((mediaId) => `u_${mediaId}`);
     const publishStarted = new Map<string, PromiseWithResolvers<void>>(
@@ -808,6 +823,10 @@ test(
             () =>
               resolve(),
         ),
+        generatePostIdActivity: async () => {
+          postIdGenerationCalls += 1;
+          return generatedPostId;
+        },
       },
     );
 
@@ -826,7 +845,12 @@ test(
         (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
         PostRequestStatus.PROCESSING,
       );
+      assert.equal(
+        (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).snapshot.postId,
+        undefined,
+      );
       assert.equal(postCreateInputs.length, 0);
+      assert.equal(postIdGenerationCalls, 0);
 
       const firstUpload = environment.client.workflow.getHandle(
         mediaUploadWorkflow.workflowIdFromArgs({
@@ -852,6 +876,7 @@ test(
         PostRequestStatus.PROCESSING,
       );
       assert.equal(postCreateInputs.length, 0);
+      assert.equal(postIdGenerationCalls, 0);
 
       releasePublish.get(`u_${firstMediaId}`)!.resolve();
       const [firstResult, result] = await Promise.all([
@@ -860,6 +885,9 @@ test(
       ]);
       assert.equal(firstResult.id, `u_${firstMediaId}`);
       assert.equal(result.status, PostRequestStatus.PUBLISHED);
+      assert.equal(result.result?.postId, generatedPostId);
+      assert.equal(postIdGenerationCalls, 1);
+      assert.equal(postCreateInputs[0]?.postId, generatedPostId);
       assert.deepEqual(
         postCreateInputs.map(({ input }) => input.media),
         [expectedPostMedia],

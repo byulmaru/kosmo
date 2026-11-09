@@ -162,6 +162,13 @@ input CreatePostMediaInput {
   altText: String
   applyAiProhibitFilter: Boolean = false
   mediaId: ID!
+  rights: CreatePostMediaRightsInput
+}
+
+input CreatePostMediaRightsInput {
+  commercial: MediaUsePermission!
+  noncommercial: MediaUsePermission!
+  personal: MediaUsePermission!
 }
 
 input CreatePostMentionInput {
@@ -355,14 +362,30 @@ type Media implements Node {
   id: ID!
   mediaType: String
   readyAt: DateTime
+  rights: MediaRights
   state: MediaState!
   thumbhash: String
   url: String
 }
 
+type MediaRights {
+  commercial: MediaUsePermission!
+  holderName: String!
+  holderUrl: String!
+  licenseUrl: String!
+  noncommercial: MediaUsePermission!
+  personal: MediaUsePermission!
+}
+
 enum MediaState {
   READY
   UPLOADING
+}
+
+enum MediaUsePermission {
+  DENY
+  EDIT
+  ORIGINAL
 }
 
 type MentionNotification implements Node & Notification {

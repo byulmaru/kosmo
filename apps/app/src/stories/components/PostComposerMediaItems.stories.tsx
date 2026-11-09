@@ -142,6 +142,13 @@ function InteractiveMediaItems({ updateArgs, ...props }: InteractiveMediaItemsPr
               setMedia(nextMedia);
               updateArgs?.({ media: nextMedia });
             }}
+            onRightsChange={(key, rights) => {
+              const nextMedia = media.map((item) =>
+                item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
+              );
+              setMedia(nextMedia);
+              updateArgs?.({ media: nextMedia });
+            }}
             onAltTextChange={(key, altText) => {
               const nextMedia = media.map((item) =>
                 item.key === key ? { ...item, altText } : item,
