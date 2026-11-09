@@ -2,7 +2,7 @@
 
 ## 범위와 조건
 
-제품 revision `cfcb3275400a6a26851dec98369861fcbed2a5f7`을 새 production export로 실행했다. 이 보고서는 기능·접근성 QA이며 성능 A/B 재측정이 아니다. 제품 코드는 추가 변경하지 않았다.
+최초 검증은 제품 revision `cfcb3275400a6a26851dec98369861fcbed2a5f7`을 새 production export로 실행했다. 아래 접근성 이름 후속 수정은 별도 기록이다. 이 보고서는 기능·접근성 QA이며 성능 A/B 재측정이 아니다. 최초 검증 단계에서는 제품 코드를 추가 변경하지 않았다.
 
 - macOS, Playwright 1.60.0 번들 Chromium 148.0.7778.96. 내장 Browser 수동 검증은 별도로 수행했다.
 - 실제 로컬 BFF/API와 실행별 격리 `kosmo_test_*` DB. 기존 fixture로 생성한 인증 세션을 사용했다. 내장 Browser는 로컬 OIDC mock의 로그인 링크를 통해 로그인했다. 운영 계정·데이터는 사용하지 않았다.
@@ -43,3 +43,29 @@ history back 직후의 프로그램 `scrollTo`는 진행 중인 복원과 경쟁
 로컬 비추적 `test-results/prod-1222/web-followup/`에 임시 spec/config/run script, 단계별 실행 로그, axe·접근성 트리 원본, 이미지 geometry·클릭 offset, 내장 Browser 화면을 보관한다. 새 테스트 인프라나 dependency를 추가하지 않았으며 임시 QA spec/config는 PR에 포함하지 않는다.
 
 기존 격리 DB wrapper로 실행하며 macOS에서는 sandbox 밖에서 버전이 일치하는 bundled Chromium을 사용한다. 다른 작업의 서버·DB를 재사용하거나 초기화하지 않는다.
+
+## 접근성 이름 후속 수정 — 2026-10-28
+
+위 네 ARIA 항목을 검토한 결과, 이름을 지원하지 않는 일반 Web 컨테이너에 label이 적용되어 있었다.
+
+- 활성 프로필 컨테이너에 Web `group` 역할을 부여했다. 자식 링크와 버튼은 독립적으로 유지한다.
+- 활성 프로필 핸들의 Web label을 제거해 실제 `@handle` 텍스트가 노출되게 했다.
+- 공용 Web Form의 이름을 wrapper에서 실제 `<form aria-label>`로 옮겼다.
+- Composer의 일반 Web wrapper에 중복으로 붙은 이름을 제거했다. 실제 Form·dialog가 이름을 소유하며 Native label은 유지한다.
+- 관련 Storybook·E2E 선택자는 역할과 실제 핸들 텍스트를 사용한다. 승인된 낮은 대비 예외와 색상 token은 변경하지 않았다.
+
+수정한 production export와 동일한 격리 DB·번들 Chromium 조건에서 Following 및 지연 이미지·미디어 시나리오 **2개 통과**. 실제 페이지에서 `활성 프로필` group과 `게시글 작성` form을 접근 가능한 이름으로 찾을 수 있고, 잘못된 일반 div label은 사라졌음을 확인했다. axe의 ARIA 수동 검토 항목은 **4→0곳**이다. Following에는 승인된 대비 위반 1건과 대비 수동 검토 2곳, 모바일에는 위반 0건과 대비 수동 검토 3곳이 남는다.
+
+Shell·Composer Storybook **109개**, Web Form의 이름 전달·IME 및 제출 단축키 단위 테스트 **1개**, 앱 TypeScript·변경 파일 ESLint·Prettier·production Web build를 통과했다. 원본은 로컬 비추적 `test-results/prod-1222/aria-followup/`에 보관한다. 실제 VoiceOver/NVDA 낭독과 Native runtime은 실행하지 않았으며 자동 검사 통과를 이를 대신하는 증거로 사용하지 않는다.
+
+## 중복 Form 이름 회귀 수정 — 2026-10-28
+
+CI의 `Composer Clipboard Failure And Scope Interaction`은 서로 다른 프로필의 작성 폼 두 개를 동시에 렌더한다. 이름을 실제 form으로 옮긴 뒤 두 landmark의 이름이 모두 `게시글 작성`이 되어 axe `landmark-unique` 검사가 실패했고, 동일 head에서 로컬 재현했다.
+
+Web form 이름에 현재 작성 프로필의 핸들을 포함해 구분한다. Native 이름은 유지한다. 서로 다른 ID에 같은 핸들을 사용하던 alternate fixture를 실제 서로 다른 프로필 조건에 맞추고, 기존 붙여넣기·업로드 재시도·입력 범위 검증이 각 form의 접근 가능한 이름으로 대상을 찾게 했다. 새 prop이나 의존성은 추가하지 않았다.
+
+Posts 전체·Composer tests·Composer ProfileSwitcher Storybook **165개 통과**. 최종 선택자로 실패 테스트 단독 재실행, 앱 TypeScript와 변경 파일 ESLint·Prettier도 통과했다. 앞선 Web runtime 결과의 `게시글 작성` form 이름은 이 변경 이후 `게시글 작성 (@handle)`이 된다. 이 후속 수정에서는 production Web QA와 실제 스크린리더·Native runtime을 재실행하지 않았다.
+
+이전 head의 Web E2E shard 2는 테스트 시작 전 `config.webServer` 준비가 120초를 초과해 실패했다. 로그만으로 어느 서버가 지연됐는지는 확정할 수 없으며 폼 이름 회귀와 구분한다.
+
+후속 CI에서 기존 이름과 정확히 일치하도록 찾던 E2E 선택자 누락도 확인했다. 게시·온보딩·프로필 전환·인증의 기존 helper를 새 form role/name에 맞췄다. 최신 production build와 격리 DB에서 관련 E2E는 **29개 통과, 1개 실패**했고, 실패한 프로필 viewerState 테스트는 코드 변경 없이 격리 재실행에서 **1개 통과**했다. 최초 실패 화면에는 새 프로필 delta 확인 뒤 route 이동 시 gamma가 활성 프로필로 표시되어 있었다. 전환 시점의 일시적 문제 가능성은 남으며 전체 30개가 한 실행에서 통과한 것으로 표현하지 않는다. Web TypeScript·변경 파일 ESLint·Prettier도 통과했다. 로컬 원본은 `test-results/prod-1222/unique-form-e2e/`에 보관한다.
