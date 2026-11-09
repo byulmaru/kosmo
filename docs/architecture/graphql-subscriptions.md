@@ -8,6 +8,8 @@ The worker publishes `homeTimelinePostAdded` to the topic scoped to the recipien
 
 The client subscribes to the actual Post and prepends it to the already loaded Home connection; it does not refetch the full Home list for each event. Since Redis delivery can be missed, a latest Home read on app resume or subscription reconnection reconciles gaps. If the reader is below the newest position, the client keeps the reading position and defers lifecycle revalidation until it returns to the top. `새 글 보기` scrolls there immediately without a per-event query; a pending lifecycle revalidation runs after reaching the top.
 
+When logout replaces the actor Environment, the client disposes its current SSE subscription operation.
+
 Redis Pub/Sub is transient, and every GraphQL subscription built on this foundation tolerates event loss. A publish issued while the publisher is disconnected is dropped and is not queued for later delivery. Subscribers reconnect and restore their active topic listeners, but messages published while disconnected are not replayed. The transport does not provide persistence, event IDs, cursors, or replay. The Home timeline reconciles possible gaps with a latest read on app resume or subscription reconnection.
 
 Topic names and payload tuples follow Yoga's `createPubSub` behavior, including dynamic topics encoded as `<topic>:<id>`. Event details cross Redis as JSON, so payloads must be JSON serializable. No-payload events are represented in the serialized envelope without changing their `detail` value.

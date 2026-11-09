@@ -2370,7 +2370,7 @@ test(
         .where(eq(Sessions.id, noProfileViewer.session.id));
       await expectPermissionDenied();
       await expectPermissionDenied(noProfileViewer.token);
-      const defaultProfileChannel = `homeTimelinePostAdded:${viewer.profile.id}`;
+      const defaultProfileChannel = `homeTimelinePostAdded:${noProfileViewer.profile.id}`;
       assert.equal(
         (await redis.pubSubNumSub(defaultProfileChannel))[defaultProfileChannel] ?? 0,
         0,

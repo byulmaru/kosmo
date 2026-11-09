@@ -36,6 +36,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { GraphQLResponse, GraphQLSingularResponse, PayloadData } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
 import type { HomeTimelinePostAddedSubscription } from './__generated__/HomeTimelinePostAddedSubscription.graphql';
@@ -48,6 +49,12 @@ type HomeTimelineState = Readonly<{
   atTop: boolean;
   hasNewPosts: boolean;
   revalidationPending: boolean;
+}>;
+
+type HomeRefreshResource = Readonly<{
+  refresh: HomeRefresh;
+  recordPayload: (response: GraphQLResponse) => void;
+  dispose: () => void;
 }>;
 
 const HomeQuery = graphql`
@@ -286,11 +293,35 @@ function HomeContent({
     [onAutomaticRefresh],
   );
 
-  useEffect(() => {
+  const refreshResource = useMemo<HomeRefreshResource>(() => {
     let activeMode: 'automatic' | 'manual' | null = null;
     let automaticRefreshQueued = false;
     let subscription: { unsubscribe: () => void } | null = null;
     let refreshToastCleanup: (() => void) | null = null;
+    let payloadsDuringRead: PayloadData[] = [];
+    const subscriptionOperation = createOperationDescriptor(
+      getRequest(HomeTimelinePostAddedSubscriptionDocument),
+      { connections: [homeTimelineConnectionId] },
+    );
+    const recordPayload = (response: GraphQLResponse) => {
+      if (activeMode === null) {
+        return;
+      }
+
+      const responses: readonly GraphQLSingularResponse[] = Array.isArray(response)
+        ? response
+        : [response as GraphQLSingularResponse];
+      for (const item of responses) {
+        if (!('data' in item) || item.data === null || item.data === undefined) {
+          continue;
+        }
+
+        const data = item.data as PayloadData;
+        if (data.homeTimelinePostAdded !== null && data.homeTimelinePostAdded !== undefined) {
+          payloadsDuringRead.push(data);
+        }
+      }
+    };
     const refresh: HomeRefresh = (mode) => {
       if (mode === 'pause-automatic') {
         const hadPendingAutomaticRefresh = automaticRefreshQueued || activeMode === 'automatic';
@@ -300,6 +331,7 @@ function HomeContent({
           const automaticSubscription = subscription;
           subscription = null;
           activeMode = null;
+          payloadsDuringRead = [];
           automaticSubscription?.unsubscribe();
         }
 
@@ -323,6 +355,13 @@ function HomeContent({
       }
 
       const finish = (error?: Error) => {
+        const payloads = payloadsDuringRead;
+        payloadsDuringRead = [];
+        // A canonical first-page response replaces connection edges, so replay arrivals through their subscription operation.
+        for (const payload of payloads) {
+          environment.commitPayload(subscriptionOperation, payload);
+        }
+
         activeMode = null;
         if (mode === 'manual') {
           setRefreshing(false);
@@ -345,6 +384,7 @@ function HomeContent({
         }
       };
 
+      payloadsDuringRead = [];
       subscription = fetchQuery(
         environment,
         HomeQuery,
@@ -356,13 +396,31 @@ function HomeContent({
       });
     };
 
-    registerHomeRefresh(refresh);
+    const dispose = () => {
+      const activeSubscription = subscription;
+      const wasRefreshingManually = activeMode === 'manual';
+      subscription = null;
+      activeMode = null;
+      automaticRefreshQueued = false;
+      payloadsDuringRead = [];
+      activeSubscription?.unsubscribe();
+      if (wasRefreshingManually) {
+        setRefreshing(false);
+      }
+      refreshToastCleanup?.();
+      refreshToastCleanup = null;
+    };
+
+    return { dispose, recordPayload, refresh };
+  }, [environment, queueRevalidation, showToast]);
+
+  useEffect(() => {
+    registerHomeRefresh(refreshResource.refresh);
     return () => {
       registerHomeRefresh(null);
-      subscription?.unsubscribe();
-      refreshToastCleanup?.();
+      refreshResource.dispose();
     };
-  }, [environment, queueRevalidation, registerHomeRefresh, showToast]);
+  }, [refreshResource, registerHomeRefresh]);
 
   useEffect(() => {
     if (!hasSelectedProfile || !timelineState.atTop || !timelineState.revalidationPending) {
@@ -384,7 +442,11 @@ function HomeContent({
   return (
     <>
       {hasSelectedProfile ? (
-        <HomeTimelineUpdates onPostAdded={handlePostAdded} onRevalidation={queueRevalidation} />
+        <HomeTimelineUpdates
+          onPostAdded={handlePostAdded}
+          onRevalidation={queueRevalidation}
+          onSubscriptionPayload={refreshResource.recordPayload}
+        />
       ) : null}
       <HomeContentView
         active={active}
@@ -403,18 +465,22 @@ function HomeContent({
 function HomeTimelineUpdates({
   onPostAdded,
   onRevalidation,
+  onSubscriptionPayload,
 }: {
   onPostAdded: (response: HomeTimelinePostAddedSubscription['response'] | null | undefined) => void;
   onRevalidation: () => void;
+  onSubscriptionPayload: (response: GraphQLResponse) => void;
 }) {
   const subscriptionConfig = useMemo(
     () => ({
       subscription: HomeTimelinePostAddedSubscriptionDocument,
       variables: { connections: [homeTimelineConnectionId] },
-      cacheConfig: { metadata: { onSubscriptionConnected: onRevalidation } },
+      cacheConfig: {
+        metadata: { onSubscriptionConnected: onRevalidation, onSubscriptionPayload },
+      },
       onNext: onPostAdded,
     }),
-    [onPostAdded, onRevalidation],
+    [onPostAdded, onRevalidation, onSubscriptionPayload],
   );
 
   useSubscription<HomeTimelinePostAddedSubscription>(subscriptionConfig);

@@ -72,6 +72,7 @@ type Request = {
 const requests: Request[] = [];
 type Subscription = Request & {
   connected?: (reconnected: boolean) => void;
+  onPayload?: (response: GraphQLResponse) => void;
   disposed: boolean;
 };
 const subscriptions: Subscription[] = [];
@@ -426,7 +427,9 @@ function homePost(id: string) {
   return post;
 }
 function emitHomePost(subscription: Subscription, id: string) {
-  subscription.sink.next({ data: { homeTimelinePostAdded: homePost(id) } } as GraphQLResponse);
+  const response = { data: { homeTimelinePostAdded: homePost(id) } } as GraphQLResponse;
+  subscription.onPayload?.(response);
+  subscription.sink.next(response);
 }
 function createTimelineNetwork() {
   return Network.create(
@@ -437,6 +440,7 @@ function createTimelineNetwork() {
     (operation, variables, cacheConfig) =>
       Observable.create<GraphQLResponse>((sink) => {
         const connected = cacheConfig.metadata?.onSubscriptionConnected;
+        const onPayload = cacheConfig.metadata?.onSubscriptionPayload;
         const subscription: Subscription = {
           name: operation.name,
           variables,
@@ -444,6 +448,10 @@ function createTimelineNetwork() {
           connected:
             typeof connected === 'function'
               ? (connected as (reconnected: boolean) => void)
+              : undefined,
+          onPayload:
+            typeof onPayload === 'function'
+              ? (onPayload as (response: GraphQLResponse) => void)
               : undefined,
           disposed: false,
         };
@@ -557,6 +565,50 @@ describe('Timeline refresh and pagination with real Relay', () => {
       'cursor-older',
       [null, 'cursor-a', 'cursor-b', 'cursor-older'],
     );
+  });
+
+  it('Home lifecycle read keeps a streamed Post when its older response completes', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    const initialRead = latest('HomePageQuery');
+    await respond(initialRead, payload('homeTimeline', ['a', 'b']));
+
+    const activeSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+    );
+    assert.ok(activeSubscription);
+
+    await focusHome();
+    const canonicalRead = latest('HomePageQuery');
+    assert.notEqual(canonicalRead, initialRead);
+    assert.equal(requests.length, 2);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => emitHomePost(activeSubscription, 'incoming'));
+    assert.equal(requests.length, 2, 'A Post event does not start another Home query');
+    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
+      null,
+      'cursor-a',
+      'cursor-b',
+    ]);
+
+    await respond(canonicalRead, payload('homeTimeline', ['a', 'b']));
+    assert.equal(requests.length, 2);
+    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
+      null,
+      'cursor-a',
+      'cursor-b',
+    ]);
   });
 
   it('Home: optional request summary error preserves posts and retries with Home refresh', async () => {

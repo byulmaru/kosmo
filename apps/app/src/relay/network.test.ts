@@ -270,6 +270,71 @@ describe('Relay 네트워크', () => {
     }
   });
 
+  it('forwards each raw SSE payload to local metadata before Relay and omits it from the request', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const deliveryOrder: string[] = [];
+    const metadataPayloads: GraphQLResponse[] = [];
+    const forwardedPayloads: GraphQLResponse[] = [];
+    let requestBody: Record<string, unknown> | undefined;
+    const eventResponse: GraphQLResponse = {
+      data: { currentSession: { id: 'session-web' } },
+    };
+    globalThis.fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return sseResponse([sseEvent('next', eventResponse), sseEvent('complete')]);
+    };
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://kos.moe' } },
+    });
+
+    try {
+      const observable = createGraphQLSubscription(null)(
+        subscriptionRequest,
+        { include: true },
+        {
+          metadata: {
+            onSubscriptionPayload: (payload: GraphQLResponse) => {
+              deliveryOrder.push('metadata');
+              metadataPayloads.push(payload);
+            },
+          },
+        },
+      );
+      if (!('subscribe' in observable)) {
+        assert.fail('GraphQL subscription did not return a Relay observable.');
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        observable.subscribe({
+          complete: resolve,
+          error: reject,
+          next: (payload) => {
+            deliveryOrder.push('relay');
+            forwardedPayloads.push(payload);
+          },
+        });
+      });
+
+      assert.deepEqual(deliveryOrder, ['metadata', 'relay']);
+      assert.deepEqual(metadataPayloads, [eventResponse]);
+      assert.deepEqual(forwardedPayloads, metadataPayloads);
+      assert.deepEqual(requestBody, {
+        operationName: subscriptionRequest.name,
+        query: subscriptionRequest.text,
+        variables: { include: true },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalWindow) {
+        Object.defineProperty(globalThis, 'window', originalWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
   it('web SSE subscription uses BFF cookie credentials without a bearer token', async () => {
     const originalFetch = globalThis.fetch;
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

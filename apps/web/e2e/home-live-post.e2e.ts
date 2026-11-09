@@ -349,13 +349,13 @@ for (const width of [390, 1440]) {
         const homeQueryCountBeforeEvent = eventRoute.homePageQueryCount();
         await eventRoute.sendPostFrames();
 
+        await expect(eventCard).toHaveCount(1);
         await expect
           .poll(async () => {
             const nextTop = await anchor.evaluate((element) => element.getBoundingClientRect().top);
             return Math.abs(nextTop - anchorTop);
           })
           .toBeLessThanOrEqual(3);
-        await expect(eventCard).toHaveCount(1);
         await expect(page.getByRole('button', { name: '새 글 보기' })).toBeVisible();
         expect(eventRoute.homePageQueryCount()).toBe(homeQueryCountBeforeEvent);
 
