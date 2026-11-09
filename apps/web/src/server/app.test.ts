@@ -28,6 +28,7 @@ const {
   createSession,
   discovery,
   federationFetch,
+  postCommit,
   revokeSession,
   setInboundObservabilityReporter,
 } = vi.hoisted(() => ({
@@ -38,10 +39,13 @@ const {
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
-  revokeSession:
-    vi.fn<
-      (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
-    >(),
+  postCommit: vi.fn<() => Promise<void>>(),
+  revokeSession: vi.fn<
+    (input: { token?: string }) => Promise<{
+      postCommit: () => Promise<void>;
+      status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED';
+    }>
+  >(),
   setInboundObservabilityReporter: vi.fn(),
 }));
 
@@ -125,7 +129,8 @@ beforeEach(() => {
       }) as unknown as Awaited<ReturnType<typeof oidcAuthorizationCodeGrant>>,
   );
   createSession.mockResolvedValue('kosmo-session-token');
-  revokeSession.mockResolvedValue({ status: 'REVOKED' });
+  postCommit.mockResolvedValue(undefined);
+  revokeSession.mockResolvedValue({ postCommit, status: 'REVOKED' });
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -382,6 +387,38 @@ describe('Web logout BFF', () => {
     expect(response.headers.get('set-cookie')).toContain('SameSite=Lax');
     expect(response.headers.get('set-cookie')).toContain('Secure');
     expect(revokeSession).toHaveBeenCalledWith({ token: 'cookie-token' });
+    expect(postCommit).toHaveBeenCalledOnce();
+  });
+
+  test('기다리던 post-commit이 끝난 뒤에 cookie를 제거하고 성공을 반환한다', async () => {
+    const postCommitStarted = Promise.withResolvers<void>();
+    const postCommitRelease = Promise.withResolvers<void>();
+    postCommit.mockImplementationOnce(async () => {
+      postCommitStarted.resolve();
+      await postCommitRelease.promise;
+    });
+    let responseSettled = false;
+
+    const responsePromise = Promise.resolve(
+      app.request('https://kos.moe/logout', {
+        headers: {
+          cookie: 'kosmo_session=cookie-token',
+          origin: 'https://kos.moe',
+        },
+        method: 'POST',
+      }),
+    );
+    void responsePromise.then(() => {
+      responseSettled = true;
+    });
+
+    await postCommitStarted.promise;
+    expect(responseSettled).toBe(false);
+
+    postCommitRelease.resolve();
+    const response = await responsePromise;
+    expect(response.status).toBe(204);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
   test('cookie가 없어도 이미 인증 불가한 성공으로 처리한다', async () => {

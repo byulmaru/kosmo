@@ -5,6 +5,7 @@ import { createServer } from 'node:net';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createClient } from '@redis/client';
 
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
 const { runRedisCommand } = await import('./client.ts');
@@ -48,9 +49,15 @@ test('lets a process exit after its Redis connection attempt fails', async () =>
       '--input-type=module',
       '--eval',
       `const { runRedisCommand } = await import('./client.ts');
-      const result = await runRedisCommand((client) => client.ping());
-      if (result !== null) {
+      const { performance } = await import('node:perf_hooks');
+      const initial = await runRedisCommand((client) => client.ping());
+      const startedAt = performance.now();
+      const waited = await runRedisCommand((client) => client.ping(), { waitForReady: true });
+      if (initial !== null || waited !== null) {
         throw new Error('unreachable Redis must be unavailable');
+      }
+      if (performance.now() - startedAt > 1_000) {
+        throw new Error('waitForReady exceeded its bounded connection wait');
       }`,
     ],
     {
@@ -64,6 +71,53 @@ test('lets a process exit after its Redis connection attempt fails', async () =>
   assert.equal(result.error, undefined, result.stderr);
   assert.equal(result.status, 0, result.stderr);
 });
+
+test(
+  'waitForReady publishes once after a cold Redis connection',
+  { skip: !testRedisUrl },
+  async () => {
+    const previousRedisUrl = process.env.REDIS_URL;
+    process.env.REDIS_URL = testRedisUrl;
+
+    const observer = createClient({ url: testRedisUrl! });
+    const channel = `kosmo:test:redis:${randomUUID()}`;
+    const observed = Promise.withResolvers<string>();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let subscribed = false;
+
+    try {
+      await observer.connect();
+      await observer.subscribe(channel, (message) => {
+        observed.resolve(message);
+      });
+      subscribed = true;
+      timeout = setTimeout(() => {
+        observed.reject(new Error('waitForReady publish was not observed'));
+      }, 1_000);
+
+      const message = JSON.stringify({ detail: true });
+      const result = await runRedisCommand((client) => client.publish(channel, message), {
+        waitForReady: true,
+      });
+
+      assert.deepEqual(result, { value: 1 });
+      assert.equal(await observed.promise, message);
+    } finally {
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
+      if (subscribed) {
+        await observer.unsubscribe(channel);
+      }
+      observer.destroy();
+      if (previousRedisUrl === undefined) {
+        delete process.env.REDIS_URL;
+      } else {
+        process.env.REDIS_URL = previousRedisUrl;
+      }
+    }
+  },
+);
 
 test(
   'returns unavailable after a delayed Redis reply and reconnects on the next request',

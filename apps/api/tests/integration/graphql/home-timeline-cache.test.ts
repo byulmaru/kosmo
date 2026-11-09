@@ -2263,11 +2263,31 @@ test('falls back to the DB Home policy when Redis is unconfigured', async () => 
 });
 
 test(
-  'streams new Home Posts to the selected Profile and returns null when a Post is no longer readable',
+  'streams Home Posts, handles unreadable Posts, and ends only revoked Session subscriptions',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const viewer = await createAuth();
+    const activeProfile = await createProfile('surviving-home-session');
+    await db.insert(AccountProfiles).values({
+      accountId: viewer.account.id,
+      profileId: activeProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const activeSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: viewer.account.id,
+        activeProfileId: activeProfile.id,
+        state: SessionState.ACTIVE,
+        token: `home-token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const activeSessionMarker = await createContentfulPost(
+      activeProfile.id,
+      'active Session subscription marker',
+    );
     const selectedProfile = await createProfile('selected-home-subscription');
     await db.insert(AccountProfiles).values({
       accountId: viewer.account.id,
@@ -2294,6 +2314,13 @@ test(
     await redis.connect();
     const waitForProfileSubscribers = (profileId: string, count: number) => {
       const channel = `homeTimelinePostAdded:${profileId}`;
+      return waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(channel))[channel] ?? 0,
+        count,
+      );
+    };
+    const waitForSessionSubscribers = (sessionId: string, count: number) => {
+      const channel = `sessionEnded:${sessionId}`;
       return waitForSubscriberCount(
         async () => (await redis.pubSubNumSub(channel))[channel] ?? 0,
         count,
@@ -2381,11 +2408,16 @@ test(
         token: viewer.token,
         selectedProfileId: selectedProfile.id,
       });
+      const activeSessionSubscription = await subscribe({ token: activeSession.token });
       const defaultProfileEvent = defaultProfileSubscription.readEvent();
       const selectedProfileEvent = selectedProfileSubscription.readEvent();
+      const activeSessionPostEvent = activeSessionSubscription.readEvent();
       await Promise.all([
         waitForProfileSubscribers(viewer.profile.id, 1),
         waitForProfileSubscribers(selectedProfile.id, 1),
+        waitForProfileSubscribers(activeProfile.id, 1),
+        waitForSessionSubscribers(viewer.session.id, 1),
+        waitForSessionSubscribers(activeSession.id, 1),
       ]);
 
       await fanoutHomeTimelinePost({ postId: post.id });
@@ -2452,10 +2484,63 @@ test(
         data: { homeTimelinePostAdded: null },
       });
 
+      const defaultProfileCompletion = defaultProfileSubscription.readEvent();
+      const selectedProfileCompletion = selectedProfileSubscription.readEvent();
+      const revoked = await requestGraphQL<{
+        revokeCurrentSession: { completed: boolean };
+      }>('mutation { revokeCurrentSession { completed } }', {}, viewer.token);
+      assert.equal(revoked.errors, undefined, JSON.stringify(revoked.errors));
+      assert.deepEqual(revoked.data, { revokeCurrentSession: { completed: true } });
+
+      const completionEvents = await Promise.all([
+        withTimeout(
+          defaultProfileCompletion,
+          'Default Profile subscription did not complete after Session revocation',
+        ),
+        withTimeout(
+          selectedProfileCompletion,
+          'Selected Profile subscription did not complete after Session revocation',
+        ),
+      ]);
+      for (const completionEvent of completionEvents) {
+        assert.ok(completionEvent);
+        assert.match(completionEvent, /^event: complete$/m);
+        assert.doesNotMatch(completionEvent, /^event: error$/m);
+        assert.doesNotMatch(completionEvent, /"errors"\s*:/);
+      }
+
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 0),
+        waitForProfileSubscribers(selectedProfile.id, 0),
+        waitForSessionSubscribers(viewer.session.id, 0),
+        waitForProfileSubscribers(activeProfile.id, 1),
+        waitForSessionSubscribers(activeSession.id, 1),
+      ]);
+
+      homeTimelinePubSub.publish('homeTimelinePostAdded', activeProfile.id, {
+        postId: activeSessionMarker.id,
+      });
+      const activeSessionEvent = await withTimeout(
+        activeSessionPostEvent,
+        'An unrelated Session subscription stopped after revocation',
+      );
+      assert.deepEqual(getSseData(activeSessionEvent), {
+        data: {
+          homeTimelinePostAdded: {
+            id: encodeGlobalId('Post', activeSessionMarker.id),
+            profile: { displayName: activeProfile.displayName },
+            content: { bodyText: 'active Session subscription marker' },
+          },
+        },
+      });
+
       await Promise.all(readers.map((reader) => reader.cancel()));
       await Promise.all([
         waitForProfileSubscribers(viewer.profile.id, 0),
         waitForProfileSubscribers(selectedProfile.id, 0),
+        waitForProfileSubscribers(activeProfile.id, 0),
+        waitForSessionSubscribers(viewer.session.id, 0),
+        waitForSessionSubscribers(activeSession.id, 0),
       ]);
     } finally {
       await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
