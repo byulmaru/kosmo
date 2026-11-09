@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MediaUsePermission } from './enums';
-import { isValidMediaPublicationRights, mediaProviderPublicationMetadata } from './media-metadata';
+import {
+  isValidMediaPublicationRights,
+  mediaProviderPublicationMetadata,
+  parseMediaUseTermsRights,
+} from './media-metadata';
 import type { MediaPublicationMetadata, MediaPublicationRights } from './media-metadata';
 
 const permission = MediaUsePermission;
@@ -43,6 +47,43 @@ test('media publication rights allow only monotone permissions from personal to 
   }
   for (const rights of rejected) {
     assert.equal(isValidMediaPublicationRights(rights), false, JSON.stringify(rights));
+  }
+});
+
+test('parses exact image-use terms parameters from scalar and query-array values', () => {
+  const rights: MediaPublicationRights = {
+    personal: permission.EDIT,
+    noncommercial: permission.ORIGINAL,
+    commercial: permission.DENY,
+  };
+
+  assert.deepEqual(
+    parseMediaUseTermsRights({
+      personal: ['EDIT'],
+      noncommercial: 'ORIGINAL',
+      commercial: ['DENY'],
+    }),
+    rights,
+  );
+  assert.deepEqual(parseMediaUseTermsRights(rights), rights);
+});
+
+test('rejects incomplete, ambiguous, unknown, invalid, or unordered image-use terms parameters', () => {
+  const invalidParameters: ReadonlyArray<
+    Readonly<Record<string, string | readonly string[] | undefined>>
+  > = [
+    { personal: 'DENY', noncommercial: 'DENY' },
+    { personal: 'DENY', noncommercial: 'DENY', commercial: 'DENY', extra: 'value' },
+    { personal: 'DENY', noncommercial: undefined, commercial: 'DENY' },
+    { personal: [], noncommercial: 'DENY', commercial: 'DENY' },
+    { personal: ['DENY', 'EDIT'], noncommercial: 'DENY', commercial: 'DENY' },
+    { personal: 'deny', noncommercial: 'DENY', commercial: 'DENY' },
+    { personal: ' DENY', noncommercial: 'DENY', commercial: 'DENY' },
+    { personal: 'DENY', noncommercial: 'ORIGINAL', commercial: 'ORIGINAL' },
+  ];
+
+  for (const parameters of invalidParameters) {
+    assert.equal(parseMediaUseTermsRights(parameters), null, JSON.stringify(parameters));
   }
 });
 

@@ -137,7 +137,9 @@ export function PolicyCard({ children, title }: PropsWithChildren<{ title: strin
   const theme = useTheme();
   return (
     <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.text }]}>
+        {title}
+      </Text>
       {children}
     </View>
   );

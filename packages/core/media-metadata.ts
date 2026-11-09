@@ -62,6 +62,34 @@ export const isValidMediaPublicationRights = (rights: MediaPublicationRights): b
   permissionRank[rights.personal] >= permissionRank[rights.noncommercial] &&
   permissionRank[rights.noncommercial] >= permissionRank[rights.commercial];
 
+const parsePermission = (
+  value: string | readonly string[] | undefined,
+): MediaUsePermissionValue | null => {
+  const permission = typeof value === 'string' ? value : value?.length === 1 ? value[0] : undefined;
+  return permission !== undefined &&
+    Object.values(MediaUsePermission).includes(permission as MediaUsePermissionValue)
+    ? (permission as MediaUsePermissionValue)
+    : null;
+};
+
+export const parseMediaUseTermsRights = (
+  parameters: Readonly<Record<string, string | readonly string[] | undefined>>,
+): MediaPublicationRights | null => {
+  if (Object.keys(parameters).length !== 3) {
+    return null;
+  }
+
+  const personal = parsePermission(parameters.personal);
+  const noncommercial = parsePermission(parameters.noncommercial);
+  const commercial = parsePermission(parameters.commercial);
+  if (personal === null || noncommercial === null || commercial === null) {
+    return null;
+  }
+
+  const rights = { personal, noncommercial, commercial };
+  return isValidMediaPublicationRights(rights) ? rights : null;
+};
+
 export const mediaUseTermsUrl = (rights: MediaPublicationRights, origin: string): string =>
   new URL(
     `/terms/image-use/v1?personal=${rights.personal}&noncommercial=${rights.noncommercial}&commercial=${rights.commercial}`,
