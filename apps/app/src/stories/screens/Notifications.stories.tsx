@@ -1490,6 +1490,7 @@ export const NoSelectedProfileScreen: Story = {
 export const OperationalReadBeforeNavigation: Story = {
   parameters: {
     relay: {
+      actorBoundary: true,
       data: { currentSession: { id: 'notification-session', selectedProfile: operationalProfile } },
       mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
         notificationMutationRequest(request.name, variables);
