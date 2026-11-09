@@ -1,1 +1,1 @@
-import './home-timeline-post-added';
+import './timeline';

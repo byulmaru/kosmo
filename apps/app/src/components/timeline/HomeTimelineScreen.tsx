@@ -39,7 +39,7 @@ import type { ViewStyle } from 'react-native';
 import type { GraphQLResponse, GraphQLSingularResponse, PayloadData } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
-import type { HomeTimelinePostAddedSubscription } from './__generated__/HomeTimelinePostAddedSubscription.graphql';
+import type { HomeTimelineSubscription } from './__generated__/HomeTimelineSubscription.graphql';
 
 type HomeRefreshMode = 'automatic' | 'manual' | 'pause-automatic';
 type HomeAutomaticRefresh = (mode?: 'automatic' | 'pause-automatic') => void;
@@ -77,31 +77,35 @@ const HomeQuery = graphql`
   }
 `;
 
-const HomeTimelinePostAddedSubscriptionDocument = graphql`
-  subscription HomeTimelinePostAddedSubscription($connections: [ID!]!) {
-    homeTimelinePostAdded
-      @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
-      id
-      content {
-        id
-      }
-      profile {
-        viewerState {
-          profileBlock {
+const HomeTimelineSubscriptionDocument = graphql`
+  subscription HomeTimelineSubscription($connections: [ID!]!) {
+    timeline {
+      __typename
+      ... on TimelinePostAdded {
+        post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
+          id
+          content {
             id
           }
-        }
-      }
-      repostSource {
-        profile {
-          viewerState {
-            profileBlock {
-              id
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
             }
           }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
+          ...PostListItem_post
         }
       }
-      ...PostListItem_post
     }
   }
 `;
@@ -260,8 +264,11 @@ function HomeContent({
     }));
   }, []);
   const handlePostAdded = useCallback(
-    (response: HomeTimelinePostAddedSubscription['response'] | null | undefined) => {
-      if (!response?.homeTimelinePostAdded) {
+    (response: HomeTimelineSubscription['response'] | null | undefined) => {
+      if (
+        response?.timeline?.__typename !== 'TimelinePostAdded' ||
+        response.timeline.post == null
+      ) {
         return;
       }
 
@@ -300,7 +307,7 @@ function HomeContent({
     let refreshToastCleanup: (() => void) | null = null;
     let payloadsDuringRead: PayloadData[] = [];
     const subscriptionOperation = createOperationDescriptor(
-      getRequest(HomeTimelinePostAddedSubscriptionDocument),
+      getRequest(HomeTimelineSubscriptionDocument),
       { connections: [homeTimelineConnectionId] },
     );
     const recordPayload = (response: GraphQLResponse) => {
@@ -317,7 +324,11 @@ function HomeContent({
         }
 
         const data = item.data as PayloadData;
-        if (data.homeTimelinePostAdded !== null && data.homeTimelinePostAdded !== undefined) {
+        if (
+          data.timeline?.__typename === 'TimelinePostAdded' &&
+          data.timeline.post !== null &&
+          data.timeline.post !== undefined
+        ) {
           payloadsDuringRead.push(data);
         }
       }
@@ -467,13 +478,13 @@ function HomeTimelineUpdates({
   onRevalidation,
   onSubscriptionPayload,
 }: {
-  onPostAdded: (response: HomeTimelinePostAddedSubscription['response'] | null | undefined) => void;
+  onPostAdded: (response: HomeTimelineSubscription['response'] | null | undefined) => void;
   onRevalidation: () => void;
   onSubscriptionPayload: (response: GraphQLResponse) => void;
 }) {
   const subscriptionConfig = useMemo(
     () => ({
-      subscription: HomeTimelinePostAddedSubscriptionDocument,
+      subscription: HomeTimelineSubscriptionDocument,
       variables: { connections: [homeTimelineConnectionId] },
       cacheConfig: {
         metadata: { onSubscriptionConnected: onRevalidation, onSubscriptionPayload },
@@ -483,7 +494,7 @@ function HomeTimelineUpdates({
     [onPostAdded, onRevalidation, onSubscriptionPayload],
   );
 
-  useSubscription<HomeTimelinePostAddedSubscription>(subscriptionConfig);
+  useSubscription<HomeTimelineSubscription>(subscriptionConfig);
 
   useFocusEffect(
     useCallback(() => {

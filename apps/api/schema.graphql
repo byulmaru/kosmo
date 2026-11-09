@@ -914,7 +914,13 @@ type SubmitContentReportPayload {
 }
 
 type Subscription {
-  homeTimelinePostAdded: Post
+  timeline: TimelineEvent
+}
+
+union TimelineEvent = TimelinePostAdded
+
+type TimelinePostAdded {
+  post: Post
 }
 
 input UnblockProfileInput {

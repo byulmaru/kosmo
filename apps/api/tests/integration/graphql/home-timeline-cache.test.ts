@@ -2340,7 +2340,7 @@ test(
             ? {}
             : { extensions: { selectedProfileId: encodeGlobalId('Profile', selectedProfileId) } }),
           query:
-            'subscription HomeTimelinePostAdded { homeTimelinePostAdded { id profile { displayName } content { bodyText } } }',
+            'subscription Timeline { timeline { __typename ... on TimelinePostAdded { post { id profile { displayName } content { bodyText } } } } }',
         }),
         headers: {
           accept: 'text/event-stream',
@@ -2429,10 +2429,13 @@ test(
       assert.match(liveEvent, /event: next/);
       assert.deepEqual(getSseData(liveEvent), {
         data: {
-          homeTimelinePostAdded: {
-            id: encodeGlobalId('Post', post.id),
-            profile: { displayName: author.displayName },
-            content: { bodyText: 'live Home subscription body' },
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', post.id),
+              profile: { displayName: author.displayName },
+              content: { bodyText: 'live Home subscription body' },
+            },
           },
         },
       });
@@ -2449,10 +2452,13 @@ test(
       );
       assert.deepEqual(getSseData(updatedProfileEvent), {
         data: {
-          homeTimelinePostAdded: {
-            id: encodeGlobalId('Post', updatedProfilePost.id),
-            profile: { displayName: updatedAuthorDisplayName },
-            content: { bodyText: 'post after author profile update' },
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', updatedProfilePost.id),
+              profile: { displayName: updatedAuthorDisplayName },
+              content: { bodyText: 'post after author profile update' },
+            },
           },
         },
       });
@@ -2466,10 +2472,13 @@ test(
       );
       assert.deepEqual(getSseData(defaultProfileLiveEvent), {
         data: {
-          homeTimelinePostAdded: {
-            id: encodeGlobalId('Post', defaultProfileMarker.id),
-            profile: { displayName: viewer.profile.displayName },
-            content: { bodyText: 'default Home subscription marker' },
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', defaultProfileMarker.id),
+              profile: { displayName: viewer.profile.displayName },
+              content: { bodyText: 'default Home subscription marker' },
+            },
           },
         },
       });
@@ -2481,7 +2490,12 @@ test(
         'Deleted Post subscription event was not delivered',
       );
       assert.deepEqual(getSseData(missingPostEvent), {
-        data: { homeTimelinePostAdded: null },
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: null,
+          },
+        },
       });
 
       const defaultProfileCompletion = defaultProfileSubscription.readEvent();
@@ -2526,10 +2540,13 @@ test(
       );
       assert.deepEqual(getSseData(activeSessionEvent), {
         data: {
-          homeTimelinePostAdded: {
-            id: encodeGlobalId('Post', activeSessionMarker.id),
-            profile: { displayName: activeProfile.displayName },
-            content: { bodyText: 'active Session subscription marker' },
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', activeSessionMarker.id),
+              profile: { displayName: activeProfile.displayName },
+              content: { bodyText: 'active Session subscription marker' },
+            },
           },
         },
       });

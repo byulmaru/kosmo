@@ -4,16 +4,31 @@ import { initContextCache } from '@pothos/core';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
-builder.subscriptionField('homeTimelinePostAdded', (t) =>
+const TimelinePostAdded = builder.objectRef<{ postId: string }>('TimelinePostAdded').implement({
+  fields: (t) => ({
+    post: t.field({
+      type: Post,
+      nullable: true,
+      resolve: ({ postId }) => postId,
+    }),
+  }),
+});
+
+const TimelineEvent = builder.unionType('TimelineEvent', {
+  types: [TimelinePostAdded],
+  resolveType: () => 'TimelinePostAdded',
+});
+
+builder.subscriptionField('timeline', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
-    type: Post,
+    type: TimelineEvent,
     nullable: true,
     subscribe: (_parent, _args, ctx) =>
       homeTimelinePubSub.subscribe('homeTimelinePostAdded', ctx.session.profile.id),
-    resolve: ({ postId }, _args, ctx) => {
+    resolve: (event, _args, ctx) => {
       // Subscription contexts persist across events, so related Pothos-loaded rows may be stale.
       Object.assign(ctx, initContextCache());
-      return postId;
+      return event;
     },
   }),
 );

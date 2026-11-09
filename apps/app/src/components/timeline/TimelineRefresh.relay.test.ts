@@ -410,11 +410,14 @@ async function scrollHomeTo(y: number) {
     list().props.onScroll({ nativeEvent: { contentOffset: { y } } });
   });
 }
-function homeNewPostsButton() {
+function findHomeNewPostsButton() {
   assert.ok(renderer);
-  const button = renderer.root
+  return renderer.root
     .findAllByType('Button' as never)
     .find((node) => String(node.props.children).includes('새 글 보기'));
+}
+function homeNewPostsButton() {
+  const button = findHomeNewPostsButton();
   assert.ok(button, 'A post event below the top should expose the new-post action');
   return button;
 }
@@ -426,10 +429,15 @@ function homePost(id: string) {
   assert.ok(post);
   return post;
 }
-function emitHomePost(subscription: Subscription, id: string) {
-  const response = { data: { homeTimelinePostAdded: homePost(id) } } as GraphQLResponse;
+function emitHomeTimelineEvent(subscription: Subscription, post: object | null) {
+  const response = {
+    data: { timeline: { __typename: 'TimelinePostAdded', post } },
+  } as GraphQLResponse;
   subscription.onPayload?.(response);
   subscription.sink.next(response);
+}
+function emitHomePost(subscription: Subscription, id: string) {
+  emitHomeTimelineEvent(subscription, homePost(id));
 }
 function createTimelineNetwork() {
   return Network.create(
@@ -537,14 +545,20 @@ describe('Timeline refresh and pagination with real Relay', () => {
     });
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
     const subscription = subscriptions.findLast(
-      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
     );
     assert.ok(subscription);
     assert.deepEqual(subscription.variables.connections, [
       ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'),
     ]);
 
+    await scrollHomeTo(480);
+    await act(async () => emitHomeTimelineEvent(subscription, null));
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    assert.equal(findHomeNewPostsButton(), undefined);
+
     await act(async () => emitHomePost(subscription, 'incoming'));
+    assert.ok(findHomeNewPostsButton(), 'A real Post event should expose the same new-post action');
     await act(async () => emitHomePost(subscription, 'incoming'));
     await act(async () => emitHomePost(subscription, 'a'));
     assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
@@ -584,7 +598,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     await respond(initialRead, payload('homeTimeline', ['a', 'b']));
 
     const activeSubscription = subscriptions.findLast(
-      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
     );
     assert.ok(activeSubscription);
 
@@ -793,7 +807,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     });
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['first-actor']));
     const previousSubscription = subscriptions.findLast(
-      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
     );
     assert.ok(previousSubscription);
 
@@ -803,7 +817,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['next-actor']));
 
     const nextSubscription = subscriptions.findLast(
-      (candidate) => candidate.name === 'HomeTimelinePostAddedSubscription',
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
     );
     assert.ok(nextSubscription);
     assert.notEqual(nextSubscription, previousSubscription);

@@ -107,7 +107,7 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
 
       return nativeFetch(input, init);
     };
-  }, 'HomeTimelinePostAddedSubscription');
+  }, 'HomeTimelineSubscription');
 
   const eventPostReady = deferred<HomePostNode | null>();
   let homePageQueryCount = 0;
@@ -179,7 +179,12 @@ async function installHomePostEventRoute(page: Page, postId: string, refreshMark
       }
 
       const nextEvent = `event: next\ndata: ${JSON.stringify({
-        data: { homeTimelinePostAdded: capturedEventPost },
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: capturedEventPost,
+          },
+        },
       })}\n\n`;
       await page.evaluate(
         (frames) => {
@@ -289,7 +294,7 @@ for (const width of [390, 1440]) {
         await page.goto('/home');
         expect(await eventRoute.eventPostReady).not.toBeNull();
         const subscription = await eventRoute.waitForSubscriptionRequest();
-        expect(subscription?.operationName).toBe('HomeTimelinePostAddedSubscription');
+        expect(subscription?.operationName).toBe('HomeTimelineSubscription');
         expect(subscription?.extensions?.selectedProfileId).toBe(
           toGlobalId('Profile', fixture.viewer.profile!.id),
         );
@@ -333,7 +338,7 @@ for (const width of [390, 1440]) {
       try {
         await page.goto('/home');
         const subscription = await eventRoute.waitForSubscriptionRequest();
-        expect(subscription?.operationName).toBe('HomeTimelinePostAddedSubscription');
+        expect(subscription?.operationName).toBe('HomeTimelineSubscription');
         expect(subscription?.extensions?.selectedProfileId).toBe(
           toGlobalId('Profile', fixture.viewer.profile!.id),
         );
