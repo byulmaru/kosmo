@@ -155,6 +155,60 @@ test.each([
   ]);
 });
 
+test('escapes hostile image alt text in share metadata attributes', async () => {
+  vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+  vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+  const altText = `" ' onerror="alert(1)"><img src=x onerror="alert(1)">`;
+  const rows = [
+    [
+      {
+        authorDisplayName: 'Alice',
+        authorHandle: 'alice',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: postContentDocumentFromTextAndMedia('public body', [{ mediaId }]),
+        currentContentId: 'content',
+        postId,
+        replyParentId: null,
+        repostSourceId: null,
+      },
+    ],
+    [
+      {
+        id: mediaId,
+        altText,
+        mediaType: 'image/png',
+        state: 'READY',
+        url: 'https://media.example/image.png',
+      },
+    ],
+  ];
+  vi.spyOn(db, 'select').mockImplementation(() => {
+    const result = Promise.resolve(rows.shift());
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      leftJoin: () => query,
+      where: () => query,
+      limit: () => result,
+      then: result.then.bind(result),
+    };
+    return query as unknown as ReturnType<typeof db.select>;
+  });
+
+  const response = await routes.request(path, { method: 'GET' });
+  const html = await response.text();
+  const escapedAltText =
+    '&quot; &#39; onerror=&quot;alert(1)&quot;&gt;&lt;img src=x onerror=&quot;alert(1)&quot;&gt;';
+
+  expect(response.status).toBe(200);
+  expect(html).toContain(`<meta property="og:image:alt" content="${escapedAltText}" />`);
+  expect(html).toContain(`<meta name="twitter:image:alt" content="${escapedAltText}" />`);
+  expect(html).not.toContain('<img');
+  expect(html).not.toContain('onerror="alert(1)">');
+});
+
 test.each([
   [null, true, 'resolved', 'public body with sensitive media'],
   ['spoiler warning', false, 'throws', '열람 주의 문구: spoiler warning'],
