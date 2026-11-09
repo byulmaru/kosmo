@@ -29,7 +29,7 @@ Store rating uses an optional native module; see [OTA compatibility](../../docs/
 
 Use Ruby 3.4 (the CI version) and the CocoaPods 1.17.0 version locked in `Gemfile.lock` via `bundle exec pod install`. macOS's system Ruby is not the CI toolchain. Run `xcodebuild -version` and `swift --version` when reporting a native build failure: the `macos-26` CI runner does not pin an Xcode version.
 
-Expo SDK 56's `expo-modules-jsi` is locked to 56.0.13, which includes the [explicit C setter pointer fix](https://github.com/expo/expo/pull/46736) needed for the observed Xcode 27 / Swift 6.4 compilation failure. Install with `pnpm install --frozen-lockfile`; do not patch generated iOS files or `node_modules` to apply that fix.
+Expo SDK 56's `expo-modules-jsi` is locked to 56.0.14, which includes the [explicit C setter pointer fix](https://github.com/expo/expo/pull/46736) needed for the observed Xcode 27 / Swift 6.4 compilation failure. Install with `pnpm install --frozen-lockfile`; do not patch generated iOS files or `node_modules` to apply that fix.
 
 The local `withIosResourceBundleDeploymentTarget` config plugin raises explicitly lower Pod resource bundle deployment targets to the existing Expo SDK 56 minimum, iOS 16.4. Xcode 27 rejects the old iOS 12–13 targets left by some Pods; the app's deployment target alone does not update those resource bundles. Higher, inherited, and unset values remain unchanged.
 
