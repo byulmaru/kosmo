@@ -307,10 +307,14 @@ test('Home·Local은 muted outer/source Author의 Post·Quote·Repost를 제외�
   });
 
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto(`/@${mutedSource.handle}`);
-  await muteFromProfile(page, mutedSource.displayName);
-  await page.goto(`/@${mutedOuter.handle}`);
-  await muteFromProfile(page, mutedOuter.displayName);
+  await test.step('Mute Source fixture profile', async () => {
+    await page.goto(`/@${mutedSource.handle}`);
+    await muteFromProfile(page, mutedSource.displayName);
+  });
+  await test.step('Mute Outer fixture profile', async () => {
+    await page.goto(`/@${mutedOuter.handle}`);
+    await muteFromProfile(page, mutedOuter.displayName);
+  });
 
   for (const route of ['/home', '/local']) {
     await page.goto(route);
@@ -637,6 +641,7 @@ async function muteFromProfile(
   displayName: string,
   options: { checkFocus?: boolean } = {},
 ) {
+  await expect(page.getByRole('heading', { name: displayName, exact: true })).toBeVisible();
   await openMuteConfirmation(page);
   const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   if (options.checkFocus) {

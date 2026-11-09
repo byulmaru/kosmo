@@ -91,3 +91,15 @@ index c79e1fe689300110596914060f2668f42f76c351..e9a2f4150b372f1363e5828e4bf650c3
                      {
                          display: (isFocused ||
                              (nextPresentation != null &&
+diff --git a/build/fork/createMemoryHistory.js b/build/fork/createMemoryHistory.js
+index c26fcb91f4c3f81909a47077b60d646d7b4a3a0b..7a4ff6d79ee24ee8d2aea1dc90197d0be6fe6088 100644
+--- a/build/fork/createMemoryHistory.js
++++ b/build/fork/createMemoryHistory.js
+@@ -173,6 +173,7 @@
+                     // This was triggered by `history.go(n)`, we shouldn't call the listener
+                     return;
+                 }
++                index = history.index;
+                 listener();
+             };
+             window.addEventListener('popstate', onPopState);

@@ -85,6 +85,30 @@ presentations continue using absolute fill so their existing layout and
 overlay behavior remain intact. This change does not add a scroll container,
 history state, or measurement registry.
 
+## Browser Back and Forward memory state
+
+`createMemoryHistory` keeps a closed-over cursor for writes and branch
+truncation. Its `index` getter already resolves the current record from the
+browser history ID, and its programmatic `go()` pop handler updates the closed
+cursor. The external `listen()` pop handler did not. After browser Back,
+`useLinking` could read the correct record through the getter, then `replace()`
+would overwrite the stale Forward record because it updates `items[index]`.
+Forward then lost the post route's saved navigation and protected-route state,
+so linking rebuilt state from the URL.
+
+The patch synchronizes the closed cursor from `history.index` for external
+`popstate` events, after filtering programmatic `go()` events and before calling
+listeners. This preserves each browser entry's in-memory route state and lets a
+new push after Back truncate the obsolete Forward branch. The change is in
+Expo Router's Web memory-history implementation; native navigation and history
+behavior are unchanged.
+
+[`WebMemoryHistory.test.ts`](../apps/app/src/components/shell/WebMemoryHistory.test.ts)
+loads the patched Expo Router module and checks actual browser Back, Forward,
+state restoration, and branch truncation. CI has not yet passed for this patch
+update; the existing Web E2E history and route-state cases remain runtime
+coverage to verify on the PR head.
+
 Keep runtime verification in the existing Web E2E cases for document scroll,
 link/click navigation, and route headers including bookmarks:
 [`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts),
