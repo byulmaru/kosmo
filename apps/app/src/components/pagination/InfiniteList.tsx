@@ -1,12 +1,4 @@
-import {
-  Component,
-  forwardRef,
-  Fragment,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react';
+import { Component, Fragment, useCallback, useEffect, useRef } from 'react';
 import { FlatList, Platform, View } from 'react-native';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -14,7 +6,7 @@ import {
   usePaginationScrollRegistration,
 } from './PaginationScrollView';
 import { useAutomaticPagination } from './useAutomaticPagination';
-import type { ForwardedRef, ReactElement, ReactNode, RefAttributes } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { LoadNext } from './useAutomaticPagination';
@@ -39,8 +31,6 @@ export type InfiniteListProps<Item> = Readonly<{
   empty?: ReactElement | null;
   header?: ReactElement | null;
 }>;
-
-export type InfiniteListHandle = Readonly<{ scrollToTop: () => void }>;
 
 type WebPrependAnchorProps = Readonly<{
   active: boolean;
@@ -112,29 +102,26 @@ class WebPrependAnchor extends Component<WebPrependAnchorProps, object, WebPrepe
   }
 }
 
-function InfiniteListImplementation<Item>(
-  {
-    active = true,
-    data,
-    empty,
-    hasNext,
-    isLoadingNext,
-    keyExtractor,
-    loadNext,
-    maintainVisibleContentPosition = false,
-    onAtTopChange,
-    onLoadErrorChange,
-    onRefresh,
-    pageSize,
-    footer,
-    header,
-    renderItem,
-    refreshing,
-    reselectDestination,
-    style,
-  }: InfiniteListProps<Item>,
-  ref: ForwardedRef<InfiniteListHandle>,
-) {
+export function InfiniteList<Item>({
+  active = true,
+  data,
+  empty,
+  hasNext,
+  isLoadingNext,
+  keyExtractor,
+  loadNext,
+  maintainVisibleContentPosition = false,
+  onAtTopChange,
+  onLoadErrorChange,
+  onRefresh,
+  pageSize,
+  footer,
+  header,
+  renderItem,
+  refreshing,
+  reselectDestination,
+  style,
+}: InfiniteListProps<Item>) {
   const scrollRef = useRef<FlatList<Item>>(null);
   const shellChrome = useShellChrome();
   const hasPaginationScrollContext = usePaginationScrollContext();
@@ -158,7 +145,6 @@ function InfiniteListImplementation<Item>(
     }
     scrollRef.current?.scrollToOffset({ animated: true, offset: 0 });
   }, []);
-  useImperativeHandle(ref, () => ({ scrollToTop }), [scrollToTop]);
   const reportAtTop = useCallback((atTop: boolean) => onAtTopChange?.(atTop), [onAtTopChange]);
   const handleNativeScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -253,10 +239,6 @@ function InfiniteListImplementation<Item>(
     />
   );
 }
-
-export const InfiniteList = forwardRef(InfiniteListImplementation) as <Item>(
-  props: InfiniteListProps<Item> & RefAttributes<InfiniteListHandle>,
-) => ReactElement | null;
 
 const styles = {
   nativeList: { flex: 1 },

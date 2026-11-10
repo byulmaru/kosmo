@@ -322,7 +322,7 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test('아래에서 Post 이벤트를 받으면 읽던 위치를 유지하고 새 글 보기로 이동한다', async ({
+    test('아래에서 Post 이벤트를 받아도 읽던 위치를 유지하고 새 Post를 맨 위에 추가한다', async ({
       context,
       page,
     }) => {
@@ -361,12 +361,11 @@ for (const width of [390, 1440]) {
             return Math.abs(nextTop - anchorTop);
           })
           .toBeLessThanOrEqual(3);
-        await expect(page.getByRole('button', { name: '새 글 보기' })).toBeVisible();
         expect(eventRoute.homePageQueryCount()).toBe(homeQueryCountBeforeEvent);
 
         // Let an independently queued lifecycle read see the real Post after the stream proof.
         eventRoute.allowEventPostInCanonicalReads();
-        await page.getByRole('button', { name: '새 글 보기' }).click();
+        await page.evaluate(() => window.scrollTo(0, 0));
         await expect(eventCard).toHaveCount(1);
         await expect(page.getByRole('article').first()).toContainText(fixture.eventPostBody);
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);

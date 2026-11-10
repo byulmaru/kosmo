@@ -46,7 +46,6 @@ type HomeRefresh = (mode: HomeRefreshMode) => void;
 
 type HomeTimelineState = Readonly<{
   atTop: boolean;
-  hasNewPosts: boolean;
   revalidationPending: boolean;
 }>;
 
@@ -250,33 +249,15 @@ function HomeContent({
   const [postRequestRefreshKey, setPostRequestRefreshKey] = useState(0);
   const [timelineState, setTimelineState] = useState<HomeTimelineState>({
     atTop: false,
-    hasNewPosts: false,
     revalidationPending: false,
   });
   const hasSelectedProfile = data.currentSession?.selectedProfile != null;
   const queueRevalidation = useCallback(() => {
     setTimelineState((current) => ({
       ...current,
-      hasNewPosts: current.atTop ? current.hasNewPosts : true,
       revalidationPending: true,
     }));
   }, []);
-  const handlePostAdded = useCallback(
-    (response: HomeTimelineSubscription['response'] | null | undefined) => {
-      if (
-        response?.timeline?.__typename !== 'TimelinePostAdded' ||
-        response.timeline.post == null
-      ) {
-        return;
-      }
-
-      setTimelineState((current) => ({
-        ...current,
-        hasNewPosts: !current.atTop,
-      }));
-    },
-    [],
-  );
 
   const handleAtTopChange = useCallback(
     (atTop: boolean) => {
@@ -288,7 +269,6 @@ function HomeContent({
         return {
           ...current,
           atTop,
-          hasNewPosts: atTop ? false : current.hasNewPosts,
         };
       });
       if (!atTop) {
@@ -426,14 +406,11 @@ function HomeContent({
 
   return (
     <>
-      {hasSelectedProfile ? (
-        <HomeTimelineUpdates onPostAdded={handlePostAdded} onRevalidation={queueRevalidation} />
-      ) : null}
+      {hasSelectedProfile ? <HomeTimelineUpdates onRevalidation={queueRevalidation} /> : null}
       <HomeContentView
         active={active}
         data={data}
         fetchKey={fetchKey}
-        hasNewPosts={timelineState.hasNewPosts}
         onAtTopChange={handleAtTopChange}
         onRefresh={onRefresh}
         postRequestRefreshKey={postRequestRefreshKey}
@@ -443,21 +420,14 @@ function HomeContent({
   );
 }
 
-function HomeTimelineUpdates({
-  onPostAdded,
-  onRevalidation,
-}: {
-  onPostAdded: (response: HomeTimelineSubscription['response'] | null | undefined) => void;
-  onRevalidation: () => void;
-}) {
+function HomeTimelineUpdates({ onRevalidation }: { onRevalidation: () => void }) {
   const subscriptionConfig = useMemo(
     () => ({
       subscription: HomeTimelineSubscriptionDocument,
       variables: { connections: [homeTimelineConnectionId] },
       cacheConfig: { metadata: { onSubscriptionConnected: onRevalidation } },
-      onNext: onPostAdded,
     }),
-    [onPostAdded, onRevalidation],
+    [onRevalidation],
   );
 
   useSubscription<HomeTimelineSubscription>(subscriptionConfig);
@@ -503,7 +473,6 @@ function HomeContentView({
   active,
   data,
   fetchKey,
-  hasNewPosts,
   onAtTopChange,
   onRefresh,
   postRequestRefreshKey,
@@ -512,7 +481,6 @@ function HomeContentView({
   active: boolean;
   data: HomePageQuery$data;
   fetchKey: string;
-  hasNewPosts: boolean;
   onAtTopChange: (atTop: boolean) => void;
   onRefresh: () => void;
   postRequestRefreshKey: number;
@@ -580,7 +548,6 @@ function HomeContentView({
       <PostList
         active={active}
         header={postRequestCards}
-        hasNewPosts={hasNewPosts}
         home={data}
         identityKey={`home:${selectedProfile.id}`}
         onAtTopChange={onAtTopChange}

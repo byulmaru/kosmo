@@ -1,13 +1,10 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { usePaginationScrollContext } from '@/components/pagination/PaginationScrollView';
 import { getShellLayout } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -19,7 +16,6 @@ import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { useProfilePinOrder } from './ProfilePinOrder';
 import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import type { ReactElement } from 'react';
-import type { InfiniteListHandle } from '@/components/pagination/InfiniteList';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
@@ -208,7 +204,6 @@ const PostListHashtagFragment = graphql`
 type Props = {
   active?: boolean;
   error?: boolean;
-  hasNewPosts?: boolean;
   header?: ReactElement | null;
   hashtag?: PostList_hashtag$key | null;
   home?: PostList_home$key | null;
@@ -228,7 +223,6 @@ type Props = {
 export const PostList = memo(function PostList({
   active = true,
   error = false,
-  hasNewPosts = false,
   header,
   hashtag: hashtagKey,
   home: homeKey,
@@ -245,25 +239,10 @@ export const PostList = memo(function PostList({
   refreshing = false,
 }: Props) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const hasPaginationScrollContext = usePaginationScrollContext();
   const postListPresentation: PostListPresentation =
     getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
-  const mobileWeb = Platform.OS === 'web' && postListPresentation === 'mobile';
-  const newPostsButtonStyle =
-    Platform.OS === 'web'
-      ? [
-          styles.newPostsButtonWeb,
-          {
-            bottom:
-              (mobileWeb ? getBottomTabBarContentHeight(Platform.OS) : 0) +
-              insets.bottom +
-              spacing.lg,
-          },
-        ]
-      : styles.newPostsButtonNative;
-  const homeListRef = useRef<InfiniteListHandle>(null);
   const homePagination = usePaginationFragment<PostListHomeNextPageQuery, PostList_home$key>(
     PostListHomeFragment,
     homeKey ?? null,
@@ -402,17 +381,6 @@ export const PostList = memo(function PostList({
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
           <View style={listContainerStyle}>
-            {isHome && hasNewPosts ? (
-              <View pointerEvents="box-none" style={newPostsButtonStyle}>
-                <Button
-                  onPress={() => homeListRef.current?.scrollToTop()}
-                  size="compact"
-                  tone="secondary"
-                >
-                  새 글 보기
-                </Button>
-              </View>
-            ) : null}
             <InfiniteList
               active={active}
               data={visibleEdges}
@@ -426,7 +394,6 @@ export const PostList = memo(function PostList({
               onAtTopChange={isHome ? onAtTopChange : undefined}
               onLoadErrorChange={handleLoadErrorChange}
               onRefresh={onRefresh}
-              ref={isHome ? homeListRef : undefined}
               pageSize={20}
               footer={
                 isLoadingNext ? (
@@ -517,21 +484,6 @@ function PostListState({
 const styles = StyleSheet.create({
   flexRoot: { flex: 1, minHeight: 0, width: '100%' },
   loadingNext: { alignItems: 'center', padding: spacing.lg },
-  newPostsButtonNative: {
-    alignItems: 'center',
-    bottom: spacing.lg,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    zIndex: 20,
-  },
-  newPostsButtonWeb: {
-    alignItems: 'center',
-    left: 0,
-    position: 'fixed' as never,
-    right: 0,
-    zIndex: 20,
-  },
   root: { width: '100%' },
   skeletonItem: {
     alignItems: 'flex-start',

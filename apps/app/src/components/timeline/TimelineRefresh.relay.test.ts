@@ -412,17 +412,6 @@ async function scrollHomeTo(y: number) {
     list().props.onScroll({ nativeEvent: { contentOffset: { y } } });
   });
 }
-function findHomeNewPostsButton() {
-  assert.ok(renderer);
-  return renderer.root
-    .findAllByType('Button' as never)
-    .find((node) => String(node.props.children).includes('새 글 보기'));
-}
-function homeNewPostsButton() {
-  const button = findHomeNewPostsButton();
-  assert.ok(button, 'A post event below the top should expose the new-post action');
-  return button;
-}
 function homePost(id: string) {
   const homeTimeline = payload('homeTimeline', [id]).homeTimeline as {
     edges: Array<{ node: unknown }>;
@@ -548,15 +537,16 @@ describe('Timeline refresh and pagination with real Relay', () => {
       ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'),
     ]);
 
+    const requestCount = requests.length;
     await scrollHomeTo(480);
     await act(async () => emitHomeTimelineEvent(subscription, null));
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
-    assert.equal(findHomeNewPostsButton(), undefined);
+    assert.equal(requests.length, requestCount);
 
     await act(async () => emitHomePost(subscription, 'incoming'));
-    assert.ok(findHomeNewPostsButton(), 'A real Post event should expose the same new-post action');
     await act(async () => emitHomePost(subscription, 'incoming'));
     await act(async () => emitHomePost(subscription, 'a'));
+    assert.equal(requests.length, requestCount, 'Post events do not trigger Home queries');
     assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
       null,
       'cursor-a',
@@ -667,32 +657,14 @@ describe('Timeline refresh and pagination with real Relay', () => {
       network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
-    const scrollOffsets: number[] = [];
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
         children: timelineScreenWithPushContext('Home'),
       });
-    const renderWithScrollRef = () =>
-      create(render(), {
-        createNodeMock: ({ type }) =>
-          type === 'FlatList'
-            ? {
-                scrollToOffset: ({ offset }: { offset: number }) => {
-                  scrollOffsets.push(offset);
-                  const flatList = renderer?.root.find(
-                    (node) => (node.type as unknown) === 'FlatList',
-                  );
-                  flatList?.props.onScroll?.({
-                    nativeEvent: { contentOffset: { y: offset } },
-                  });
-                },
-              }
-            : null,
-      });
 
     await act(async () => {
-      renderer = renderWithScrollRef();
+      renderer = create(render());
     });
     assert.equal(requests.length, 1);
     await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
@@ -708,7 +680,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
 
     await act(async () => {
       renderer?.unmount();
-      renderer = renderWithScrollRef();
+      renderer = create(render());
     });
     assert.equal(requests.length, 2, 'complete cache renders without a route query');
     assertConnection(environment, 'homeTimeline', ['a', 'b']);
@@ -736,9 +708,6 @@ describe('Timeline refresh and pagination with real Relay', () => {
       'cursor-fresh',
       'cursor-a',
     ]);
-    await act(async () => homeNewPostsButton().props.onPress());
-    assert.equal(scrollOffsets.at(-1), 0);
-    assert.equal(requests.length, beforePostEvent, 'the new-post action only scrolls to the top');
 
     await scrollHomeTo(480);
     await act(async () => {
