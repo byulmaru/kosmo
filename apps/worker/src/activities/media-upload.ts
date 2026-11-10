@@ -232,6 +232,7 @@ export async function prepareMediaUploadActivity(input: MediaUploadPreparationIn
 }
 
 type FinalizeMediaUploadInput = MediaUploadPreparationInput & {
+  readonly applyAiProhibitFilter?: boolean;
   readonly expectedPublicationMetadata?: MediaProviderPublicationMetadata;
   readonly remoteUploadId: string;
   readonly result: MediaUploadResult;
@@ -301,6 +302,9 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
   const completed = await db
     .update(MediaTable)
     .set({
+      ...(input.applyAiProhibitFilter === undefined
+        ? {}
+        : { aiProhibitFilterApplied: input.applyAiProhibitFilter }),
       mediaType: result.data.mediaType,
       url: result.data.url,
       readyAt: Temporal.Now.instant(),

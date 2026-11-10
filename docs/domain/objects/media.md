@@ -28,17 +28,18 @@ Remote Media는 등록 시 Ready다.
 
 ## 속성
 
-| 속성                 | 타입/nullability            | 검증 정책                                                                                                  | 존재 조건                                  | 조회 조건                    | 조회 권한             |
-| -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------- | --------------------- |
-| Upload Expires At    | 시각, 필수                  | 제한된 업로드 권한의 만료 시각                                                                             | Source가 Local                             | Upload Account 조회          | `Media.UploadAccount` |
-| Ready At             | 시각, 필수                  | 저장 성공을 확인한 시각                                                                                    | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| URL                  | URL, 필수                   | 저장 서비스가 확정한 공개 표현                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| Media Type           | 문자열, 필수                | 저장 서비스가 확정한 표현 형식                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
-| Alt Text             | 문자열, nullable            | 사람이 읽을 수 있는 이미지 이름                                                                            | 항상                                       | Media 조회 정책 통과         | 없음                  |
-| Publication Metadata | nullable immutable snapshot | Post 작성 Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, 선택적 self-declared rights | Local Media의 첫 Post 준비                 | Media 조회 정책 통과         | 없음                  |
-| ThumbHash            | Base64 문자열, nullable     | 이미지 placeholder metadata                                                                                | Media Storage Service가 생성한 Local Media | 권한이 있는 Media projection | 없음                  |
-| Remote URL           | URL, 필수                   | 원격 Media 원본 위치                                                                                       | Source가 Remote                            | Media 조회 정책 통과         | 없음                  |
-| Remote Fetched At    | 시각, nullable              | 마지막 성공 fetch 결과로 갱신                                                                              | Source가 Remote                            | 운영 조회                    | `Account.Operator`    |
+| 속성                       | 타입/nullability            | 검증 정책                                                                                                  | 존재 조건                                  | 조회 조건                    | 조회 권한             |
+| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------- | --------------------- |
+| Upload Expires At          | 시각, 필수                  | 제한된 업로드 권한의 만료 시각                                                                             | Source가 Local                             | Upload Account 조회          | `Media.UploadAccount` |
+| Ready At                   | 시각, 필수                  | 저장 성공을 확인한 시각                                                                                    | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| URL                        | URL, 필수                   | 저장 서비스가 확정한 공개 표현                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Media Type                 | 문자열, 필수                | 저장 서비스가 확정한 표현 형식                                                                             | State가 Ready인 Local                      | Media 조회 정책 통과         | 없음                  |
+| Alt Text                   | 문자열, nullable            | 사람이 읽을 수 있는 이미지 이름                                                                            | 항상                                       | Media 조회 정책 통과         | 없음                  |
+| Publication Metadata       | nullable immutable snapshot | Post 작성 Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, 선택적 self-declared rights | Local Media의 첫 Post 준비                 | Media 조회 정책 통과         | 없음                  |
+| AI Prohibit Filter Applied | Boolean, nullable           | 성공적으로 완료된 선택적 픽셀 필터가 적용되었는지 나타냄                                                   | 새 Local upload의 완료가 확인된 경우       | Media Upload Account 조회    | `Media.UploadAccount` |
+| ThumbHash                  | Base64 문자열, nullable     | 이미지 placeholder metadata                                                                                | Media Storage Service가 생성한 Local Media | 권한이 있는 Media projection | 없음                  |
+| Remote URL                 | URL, 필수                   | 원격 Media 원본 위치                                                                                       | Source가 Remote                            | Media 조회 정책 통과         | 없음                  |
+| Remote Fetched At          | 시각, nullable              | 마지막 성공 fetch 결과로 갱신                                                                              | Source가 Remote                            | 운영 조회                    | `Account.Operator`    |
 
 Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 결과와 연결하는 persistence 정보다. 저장
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
@@ -72,6 +73,11 @@ Use Rights는 개인적이고 비상업적인 용도, 개인적 이용 범위를
 Post를 위해 새로 처리되는 모든 Local Media에는 Use Rights와 AI 학습 방지 필터 선택 여부와 무관하게 AI 학습 거부를
 파일 metadata로 기록한다. 이 metadata는 별도의 `applyAiProhibitFilter` 이미지 처리를 켜지 않는다. Provider가 적용한
 metadata receipt가 없거나 frozen snapshot과 일치하지 않으면 Media `READY` 전환과 Post 생성을 차단한다.
+
+`AI Prohibit Filter Applied`는 새 선택적 필터 경로로 성공 완료한 Local upload에서만 기록한다. `true`는 픽셀 필터를
+요청해 적용한 경우, `false`는 필터 없이 해당 경로의 완료가 확인된 경우를 뜻한다. 기존 Media, 필터 요청을 알 수 없는
+legacy 완료, Remote Media는 `null`로 남는다. 이 값은 파일 metadata의 AI 학습 거부 표시와 별개다. Post나 Profile을 통해
+Media를 조회할 수 있는 다른 viewer에게는 값이 보이지 않고, Media의 Upload Account만 조회할 수 있다.
 
 ## 관계
 

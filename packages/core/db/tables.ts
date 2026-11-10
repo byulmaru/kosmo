@@ -264,6 +264,7 @@ export const Media = pgTable(
     url: text('url'),
     altText: text('alt_text'),
     publicationMetadata: jsonb('publication_metadata').$type<MediaPublicationMetadata>(),
+    aiProhibitFilterApplied: boolean('ai_prohibit_filter_applied'),
     thumbhash: text('thumbhash'),
     storageReference: text('storage_reference').unique(),
     uploadExpiresAt: datetime('upload_expires_at'),

@@ -262,6 +262,7 @@ const reactionNotificationFragment = graphql`
         media {
           id
           altText
+          aiProhibitFilterApplied
           url
         }
       }
@@ -405,6 +406,7 @@ const repostNotificationFragment = graphql`
         media {
           id
           altText
+          aiProhibitFilterApplied
           url
         }
       }
@@ -471,6 +473,7 @@ function toPreview(post: {
         document: unknown;
         media:
           | ReadonlyArray<{
+              aiProhibitFilterApplied: boolean | null | undefined;
               altText: string | null | undefined;
               id: string;
               url: string | null | undefined;
@@ -492,8 +495,9 @@ function toPreview(post: {
     bodyText: content.bodyText,
     contentWarning: content.contentWarning ?? null,
     media:
-      content.media?.map<PostMediaItem>(({ altText, id, url }) => ({
+      content.media?.map<PostMediaItem>(({ aiProhibitFilterApplied, altText, id, url }) => ({
         altText: altText ?? null,
+        aiProhibitFilterApplied,
         id,
         url: url ?? null,
       })) ?? null,

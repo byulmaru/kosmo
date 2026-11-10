@@ -70,6 +70,7 @@ function clampZoomOffset(
 }
 
 function AndroidZoomImage({
+  aiProhibitFilterApplied,
   accessibilityLabel,
   onBlankAreaTap,
   onStatus,
@@ -422,6 +423,7 @@ function AndroidZoomImage({
             style={[styles.imageContainer, animatedImageStyle]}
           >
             <ViewerImage
+              aiProhibitFilterApplied={aiProhibitFilterApplied}
               accessibilityLabel={accessibilityLabel}
               onStatus={onStatus}
               status={status}

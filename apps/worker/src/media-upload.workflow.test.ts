@@ -449,6 +449,7 @@ test(
         const completedFinalization = finalizationsFor(completed);
         assert.equal(completedFinalization.length, 1);
         assert.equal(completedFinalization[0]?.remoteUploadId, completed.prepared.id);
+        assert.equal(completedFinalization[0]?.applyAiProhibitFilter, true);
         assert.deepEqual(completedFinalization[0]?.result, {
           id: completed.prepared.id,
           url: 'https://published.example/' + completed.prepared.id + '.webp',
@@ -481,6 +482,7 @@ test(
           applyAiProhibitFilter: false,
         });
         assert.equal(finalizationsFor(processing).length, 1);
+        assert.equal(finalizationsFor(processing)[0]?.applyAiProhibitFilter, false);
 
         const failureScenarios: Array<{
           readonly scenario: Scenario;
@@ -551,6 +553,7 @@ test(
         });
         assert.deepEqual(await legacyFalseHandle.result(), legacyFalse.sourceResult);
         assert.equal(finalizationsFor(legacyFalse).length, 1);
+        assert.equal(finalizationsFor(legacyFalse)[0]?.applyAiProhibitFilter, undefined);
 
         const legacyTrueHandle = await startMediaUpload(legacyTrue);
         await legacyTrue.hopeEntered.promise;
@@ -565,6 +568,7 @@ test(
         await completeSourceUpload(environment, legacyTrue, events);
         assert.deepEqual(await legacyTrueHandle.result(), legacyTrue.sourceResult);
         assert.equal(finalizationsFor(legacyTrue).length, 1);
+        assert.equal(finalizationsFor(legacyTrue)[0]?.applyAiProhibitFilter, undefined);
         assert.equal('applyAiProhibitFilter' in (await legacyTrueHandle.result()), false);
 
         assert.deepEqual(operationNames(completed), ['startUpload', 'publishUploadV2']);
@@ -950,6 +954,7 @@ test(
         finalizations[0]?.expectedPublicationMetadata,
         processingValid.expectedMetadata,
       );
+      assert.equal(finalizations[0]?.applyAiProhibitFilter, false);
       assert.deepEqual(finalizations[0]?.result, processingValid.uploadResult);
 
       const mismatchHandle = await start(processingMismatched);

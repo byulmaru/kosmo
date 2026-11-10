@@ -24,6 +24,7 @@ const PostBodyFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -67,8 +68,9 @@ export function PostBody({
       media={
         mediaPresentation === 'hidden'
           ? null
-          : (content.media?.map(({ altText, id, url }) => ({
+          : (content.media?.map(({ aiProhibitFilterApplied, altText, id, url }) => ({
               altText: altText ?? null,
+              aiProhibitFilterApplied,
               id,
               url: url ?? null,
             })) ?? null)

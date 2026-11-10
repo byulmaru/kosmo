@@ -32,6 +32,7 @@ type RequestData = {
   bodyText: string;
   contentWarning: string | null;
   media: Array<{
+    aiProhibitFilterApplied?: boolean | null;
     altText: string | null;
     id: string;
     thumbhash?: string | null;
@@ -102,6 +103,9 @@ mockModule('@/components/ui/ModalSheet', {
 mockModule('@/components/ui/ConfirmationContent', {
   ConfirmationContent: (props: Record<string, unknown>) =>
     createElement('ConfirmationContent', props),
+});
+mockModule('./MediaProtectionBadge', {
+  MediaProtectionBadge: () => createElement('MediaProtectionBadge'),
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -221,6 +225,43 @@ describe('PostRequestCard', () => {
     assert.equal(visibleText()?.includes('취소됨'), true);
     await act(async () => button('새 글 작성')?.props.onPress());
     assert.deepEqual(onCompose.mock.calls[0]?.arguments, []);
+  });
+
+  it('shows the saved per-Media protection status with its existing Alt Text', async () => {
+    await renderCard(
+      makeRequest('FAILED', {
+        media: [
+          {
+            id: 'filtered-media',
+            altText: '원본 ALT',
+            url: 'https://media.example/filtered.webp',
+            aiProhibitFilterApplied: true,
+          },
+        ],
+      }),
+    );
+    assert.equal(findAllByType('MediaProtectionBadge').length, 1);
+    assert.equal(
+      findAllByType('Image')[0]?.props.accessibilityLabel,
+      '원본 ALT, 학습방지 필터 적용됨',
+    );
+
+    for (const aiProhibitFilterApplied of [false, null, undefined]) {
+      await updateCard(
+        makeRequest('FAILED', {
+          media: [
+            {
+              id: 'unprotected-media',
+              altText: '원본 ALT',
+              url: 'https://media.example/unprotected.webp',
+              aiProhibitFilterApplied,
+            },
+          ],
+        }),
+      );
+      assert.equal(findAllByType('MediaProtectionBadge').length, 0);
+      assert.equal(findAllByType('Image')[0]?.props.accessibilityLabel, '원본 ALT');
+    }
   });
 
   it('keeps polling without cancelling when confirmation is declined or dismissed', async () => {

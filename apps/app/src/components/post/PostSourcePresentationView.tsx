@@ -45,6 +45,7 @@ type PresentationContent = {
   readonly linkPreview: PostLinkPreviewData | null | undefined;
   readonly media:
     | ReadonlyArray<{
+        readonly aiProhibitFilterApplied: boolean | null | undefined;
         readonly altText: string | null | undefined;
         readonly id: string;
         readonly url: string | null | undefined;
@@ -75,6 +76,7 @@ const PostSourcePreviewFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -112,6 +114,7 @@ const PostSourcePresentationViewFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -441,8 +444,9 @@ function presentationMedia(
   media: PresentationContent['media'],
 ): ReadonlyArray<PostMediaItem> | null {
   return (
-    media?.map(({ altText, id, url }) => ({
+    media?.map(({ aiProhibitFilterApplied, altText, id, url }) => ({
       altText: altText ?? null,
+      aiProhibitFilterApplied,
       id,
       url: url ?? null,
     })) ?? null

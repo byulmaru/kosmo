@@ -9,6 +9,7 @@ import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { MediaProtectionBadge } from './MediaProtectionBadge';
 import type { PostRequestCard_request$key } from './__generated__/PostRequestCard_request.graphql';
 import type { PostRequestCardCancelMutation } from './__generated__/PostRequestCardCancelMutation.graphql';
 import type { PostRequestCardRefetchQuery } from './__generated__/PostRequestCardRefetchQuery.graphql';
@@ -51,6 +52,7 @@ const PostRequestCardFragment = graphql`
       id
       url
       altText
+      aiProhibitFilterApplied
       thumbhash
     }
     sensitiveMedia
@@ -218,7 +220,13 @@ export function PostRequestCard({
   const canCancel = request.status === 'QUEUED' || request.status === 'PROCESSING';
   const canCompose = request.status === 'FAILED' || request.status === 'CANCELLED';
   const excerpt = request.bodyText.trim();
-  let thumbnail: { readonly altText: string | null; readonly uri: string } | undefined;
+  let thumbnail:
+    | {
+        readonly aiProhibitFilterApplied: boolean;
+        readonly altText: string | null;
+        readonly uri: string;
+      }
+    | undefined;
   if (!request.sensitiveMedia) {
     for (const item of request.media) {
       if (!item) {
@@ -226,7 +234,11 @@ export function PostRequestCard({
       }
       const uri = item.url?.trim() || getThumbhashPreviewUri(item.thumbhash);
       if (uri) {
-        thumbnail = { altText: item.altText ?? null, uri };
+        thumbnail = {
+          aiProhibitFilterApplied: item.aiProhibitFilterApplied === true,
+          altText: item.altText ?? null,
+          uri,
+        };
         break;
       }
     }
@@ -279,12 +291,19 @@ export function PostRequestCard({
             </Text>
           ) : null}
           {thumbnail ? (
-            <Image
-              accessibilityLabel={thumbnail.altText || '첨부 이미지'}
-              resizeMode="cover"
-              source={{ uri: thumbnail.uri }}
-              style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
-            />
+            <View style={styles.thumbnailFrame}>
+              <Image
+                accessibilityLabel={`${thumbnail.altText || '첨부 이미지'}${thumbnail.aiProhibitFilterApplied ? ', 학습방지 필터 적용됨' : ''}`}
+                resizeMode="cover"
+                source={{ uri: thumbnail.uri }}
+                style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
+              />
+              {thumbnail.aiProhibitFilterApplied ? (
+                <View pointerEvents="none" style={styles.thumbnailProtectionBadgePosition}>
+                  <MediaProtectionBadge />
+                </View>
+              ) : null}
+            </View>
           ) : null}
         </View>
       ) : null}
@@ -401,7 +420,14 @@ const styles = StyleSheet.create({
   status: { ...textStyles.uiCopyM, marginLeft: 'auto', textAlign: 'right' },
   preview: { alignItems: 'flex-start', flexDirection: 'row', gap: space[12] },
   excerpt: { ...textStyles.contentM, flex: 1, minWidth: 0 },
-  thumbnail: { borderRadius: radius[8], height: 56, width: 56 },
+  thumbnailFrame: { borderRadius: radius[8], height: 56, overflow: 'hidden', width: 56 },
+  thumbnail: { height: '100%', width: '100%' },
+  thumbnailProtectionBadgePosition: {
+    position: 'absolute',
+    right: space[4],
+    top: space[4],
+    zIndex: 1,
+  },
   queryError: { alignItems: 'flex-start', gap: space[8] },
   queryErrorText: textStyles.uiCopyM,
   actions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },

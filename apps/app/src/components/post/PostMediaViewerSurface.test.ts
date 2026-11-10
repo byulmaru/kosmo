@@ -114,6 +114,9 @@ mock.module('@/components/ui/IconButton', {
     IconButton: (props: Record<string, unknown>) => createElement('IconButton', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./MediaProtectionBadge', {
+  exports: { MediaProtectionBadge: () => createElement('MediaProtectionBadge') },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('expo-router', {
   exports: { Link },
@@ -1598,11 +1601,29 @@ describe('PostMediaViewerSurface', () => {
   });
 
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
-    await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: true }],
+    });
     assert.equal(image().props.accessible, true);
-    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt, 학습방지 필터 적용됨');
     assert.equal(image().props.accessibilityRole, 'image');
     assert.equal(image().props.resizeMode, 'contain');
+    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 1);
+
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: false }],
+    });
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 0);
+
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: null }],
+    });
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 0);
 
     await render({ currentIndex: 2, media: [media(1, null), media(2, null), media(3, null)] });
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');

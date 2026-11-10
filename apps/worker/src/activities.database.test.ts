@@ -2921,6 +2921,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       readonly remoteUploadId: string;
       readonly result: MediaUploadWorkflowResult;
     } = {
+      applyAiProhibitFilter: true,
       mediaId,
       accountId: fixture.account.id,
       remoteUploadId,
@@ -2946,16 +2947,18 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     );
 
     const stillUploading = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(stillUploading.state, MediaState.UPLOADING);
+    assert.equal(stillUploading.aiProhibitFilterApplied, null);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2965,10 +2968,16 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(firstReady.state, MediaState.READY);
     assert.ok(firstReady.readyAt);
+    assert.equal(firstReady.aiProhibitFilterApplied, true);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...input, applyAiProhibitFilter: false }),
+      result,
+    );
     const retriedReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2978,6 +2987,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(retriedReady.state, MediaState.READY);
     assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    assert.equal(retriedReady.aiProhibitFilterApplied, true);
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
@@ -2998,12 +3008,13 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     };
     assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
     const nightshadeReady = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, nightshade.mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.equal(nightshadeReady.aiProhibitFilterApplied, null);
     assert.deepEqual(
       await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
       nightshadeResult,
@@ -3029,7 +3040,12 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       [concurrentResult, concurrentResult],
     );
     const converged = await db
-      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
+        readyAt: Media.readyAt,
+        state: Media.state,
+        url: Media.url,
+      })
       .from(Media)
       .where(eq(Media.id, concurrent.mediaId))
       .limit(1)
@@ -3037,6 +3053,28 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     assert.equal(converged.state, MediaState.READY);
     assert.equal(converged.url, concurrentResult.url);
     assert.ok(converged.readyAt);
+    assert.equal(converged.aiProhibitFilterApplied, null);
+
+    const unfiltered = await createUploadingMedia();
+    const unfilteredResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: unfiltered.remoteUploadId,
+      url: 'https://media.example/unfiltered.webp',
+    };
+    await finalizeMediaUploadActivity({
+      ...unfiltered,
+      accountId: fixture.account.id,
+      applyAiProhibitFilter: false,
+      remoteUploadId: unfiltered.remoteUploadId,
+      result: unfilteredResult,
+    });
+    const unfilteredReady = await db
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied })
+      .from(Media)
+      .where(eq(Media.id, unfiltered.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(unfilteredReady.aiProhibitFilterApplied, false);
   } finally {
     if (mediaIds.length > 0) {
       await db.delete(Media).where(inArray(Media.id, mediaIds));

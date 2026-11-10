@@ -17,6 +17,10 @@ Current media direction:
   Media can be attached to a Post or used as a Profile representation.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
+- `ai_prohibit_filter_applied` records a confirmed optional pixel-filter choice only after the new filter upload path
+  completes. It has no default or backfill: existing Media and legacy completions with unknown filter outcome remain
+  `null`. Keep it distinct from AI-training-prohibition file metadata, and expose its value only to the Media Upload
+  Account.
 - All new Local Media uploads use the existing Media server path without requiring a client-reported size. The server
   enforces a shared 16 MiB per-file limit from the bytes actually received before storing them in private staging.
   Staged bytes are not public; `completeMediaUpload` succeeds only after Media Storage Service confirms the final result.

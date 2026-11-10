@@ -1554,6 +1554,82 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('AI Prohibit Filter Applied는 Media Upload Account만 확인할 수 있다', async () => {
+    const owner = await createAuthenticatedSession();
+    const media = await createReadyMedia(owner.account.id, owner.profile.id);
+    await db.update(Media).set({ aiProhibitFilterApplied: true }).where(eq(Media.id, media.id));
+    const post = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: null, mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(post);
+    const postId = post.data!.createPost.post.id;
+
+    const anotherProfile = await createProfile(`same-account-${crypto.randomUUID()}`);
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: anotherProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const anotherProfileToken = `token-${crypto.randomUUID()}`;
+    await db.insert(Sessions).values({
+      accountId: owner.account.id,
+      activeProfileId: anotherProfile.id,
+      state: SessionState.ACTIVE,
+      token: anotherProfileToken,
+    });
+
+    for (const token of [owner.token, anotherProfileToken]) {
+      const result = await requestPostMediaFilter(postId, token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.node?.content?.media, [{ aiProhibitFilterApplied: true }]);
+    }
+
+    const otherAccount = await createAuthenticatedSession();
+    const otherViewer = await requestPostMediaFilter(postId, otherAccount.token);
+    assertNoGraphQLErrors(otherViewer);
+    assert.deepEqual(otherViewer.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+
+    const anonymousViewer = await requestPostMediaFilter(postId);
+    assertNoGraphQLErrors(anonymousViewer);
+    assert.deepEqual(anonymousViewer.data?.node?.content?.media, [
+      { aiProhibitFilterApplied: null },
+    ]);
+
+    await db.update(Media).set({ aiProhibitFilterApplied: false }).where(eq(Media.id, media.id));
+    const unfilteredOwner = await requestPostMediaFilter(postId, owner.token);
+    assertNoGraphQLErrors(unfilteredOwner);
+    assert.deepEqual(unfilteredOwner.data?.node?.content?.media, [
+      { aiProhibitFilterApplied: false },
+    ]);
+
+    await db.update(Media).set({ aiProhibitFilterApplied: null }).where(eq(Media.id, media.id));
+    const legacyOwner = await requestPostMediaFilter(postId, owner.token);
+    assertNoGraphQLErrors(legacyOwner);
+    assert.deepEqual(legacyOwner.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+
+    const remoteProfile = await createRemoteActorProfile(`remote-filter-${crypto.randomUUID()}`);
+    const remoteMedia = await db
+      .insert(Media)
+      .values({
+        aiProhibitFilterApplied: true,
+        profileId: remoteProfile.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/filter.png',
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remotePost = await createContentfulPost(remoteProfile.id, { mediaIds: [remoteMedia.id] });
+    const remoteViewer = await requestPostMediaFilter(encodeGlobalId('Post', remotePost.id));
+    assertNoGraphQLErrors(remoteViewer);
+    assert.deepEqual(remoteViewer.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+  });
+
   test('Post를 조회할 수 없는 viewer에게 Media 표시 정보를 노출하지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const media = await createReadyMedia(auth.account.id, auth.profile.id);
@@ -2782,6 +2858,23 @@ const requestPostContent = (postId: string, token?: string) =>
             mentionedProfiles { displayName id relativeHandle }
           }
         }
+      }
+    }`,
+    { postId },
+    token,
+  );
+
+const requestPostMediaFilter = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      content: {
+        media: Array<{ aiProhibitFilterApplied: boolean | null }> | null;
+      } | null;
+    } | null;
+  }>(
+    `query PostMediaFilter($postId: ID!) {
+      node(id: $postId) {
+        ... on Post { content { media { aiProhibitFilterApplied } } }
       }
     }`,
     { postId },

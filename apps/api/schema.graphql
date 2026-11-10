@@ -358,6 +358,7 @@ type MarkNotificationReadPayload {
 }
 
 type Media implements Node {
+  aiProhibitFilterApplied: Boolean
   altText: String
   id: ID!
   mediaType: String
