@@ -1027,6 +1027,7 @@ function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$va
           media: (input.media ?? []).map((item) => ({
             __typename: 'Media',
             altText: item.altText ?? null,
+            aiProhibitFilterApplied: null,
             id: item.mediaId,
             url: postMediaImageUri,
           })),
