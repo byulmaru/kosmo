@@ -45,9 +45,6 @@ const graphql = (parts: TemplateStringsArray) => {
 };
 
 mockModule('react-relay', { ...ReactRelay, graphql });
-mockModule('@/session/SessionProvider', {
-  useSession: () => ({ selectedProfileId }),
-});
 mockModule('./PostRequestCard', {
   PostRequestCard: ({
     onCompose,
@@ -55,11 +52,7 @@ mockModule('./PostRequestCard', {
     request,
   }: {
     onCompose?: () => void;
-    onPublished?: (result: {
-      authorProfileId: string | null;
-      postId: string | null;
-      requestNodeId: string;
-    }) => void;
+    onPublished?: (requestNodeId: string) => void;
     request: { id: string; requestId: string; status: string };
   }) =>
     createElement('PostRequestCard', {
@@ -73,7 +66,6 @@ mockModule('./PostRequestCard', {
 
 let renderer: ReactTestRenderer | null = null;
 let PostRequestListSummary: typeof PostRequestListSummaryComponent;
-let selectedProfileId = 'profile-a';
 const networkRequests: Array<{
   variables: Variables;
   respond: (response: GraphQLResponse) => void;
@@ -93,7 +85,6 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  selectedProfileId = 'profile-a';
   networkRequests.length = 0;
   mock.restoreAll();
 });
@@ -400,21 +391,13 @@ describe('Home post request cards', () => {
     {
       label: 'with a Post projection',
       post: { id: 'post-a', profileId: 'profile-a' },
-      authorProfileId: 'profile-a',
-      postId: 'post-a',
-      homePostIds: ['post-a', 'post-home-first-page', 'post-home-next-page'],
-      homeCursors: [null, 'cursor-home-first-page', 'cursor-home-next-page'],
     },
     {
       label: 'without a Post projection',
       post: null,
-      authorProfileId: null,
-      postId: null,
-      homePostIds: ['post-home-first-page', 'post-home-next-page'],
-      homeCursors: ['cursor-home-first-page', 'cursor-home-next-page'],
     },
   ] as const) {
-    it(`removes a polled PUBLISHED request ${testCase.label}`, async () => {
+    it(`removes a polled PUBLISHED request without changing Home ${testCase.label}`, async () => {
       const environment = createEnvironment();
       const request = makeRequest('request-a', 'PROCESSING');
       const cancelledRequest = makeRequest('request-b', 'CANCELLED');
@@ -433,19 +416,10 @@ describe('Home post request cards', () => {
       const publishedCard = all('PostRequestCard')[0];
       assert.ok(publishedCard);
       assert.equal(publishedCard.props.status, 'PUBLISHED');
-      const onPublished = publishedCard.props.onPublished as (result: {
-        authorProfileId: string | null;
-        postId: string | null;
-        requestNodeId: string;
-      }) => void;
+      const onPublished = publishedCard.props.onPublished as (requestNodeId: string) => void;
       await act(async () => {
-        const result = {
-          authorProfileId: testCase.authorProfileId,
-          postId: testCase.postId,
-          requestNodeId: request.id,
-        };
-        onPublished(result);
-        onPublished(result);
+        onPublished(request.id);
+        onPublished(request.id);
       });
 
       assert.equal(all('PostRequestCard').length, 0);
@@ -455,7 +429,10 @@ describe('Home post request cards', () => {
         'client:root',
         'PostList_homeTimeline',
       );
-      assert.deepEqual(connectionNodeIds(environment, homeConnectionId), testCase.homePostIds);
+      assert.deepEqual(connectionNodeIds(environment, homeConnectionId), [
+        'post-home-first-page',
+        'post-home-next-page',
+      ]);
 
       const source = environment.getStore().getSource();
       const connection = source.get(homeConnectionId) as Record<string, unknown> | null;
@@ -465,7 +442,7 @@ describe('Home post request cards', () => {
       assert.ok(edgeIds);
       assert.deepEqual(
         edgeIds.map((edgeId) => (edgeId ? source.get(edgeId)?.['cursor'] : null)),
-        testCase.homeCursors,
+        ['cursor-home-first-page', 'cursor-home-next-page'],
       );
 
       const pageInfoId = (connection['pageInfo'] as { __ref?: string } | undefined)?.__ref;
@@ -508,46 +485,6 @@ describe('Home post request cards', () => {
       listRequestIds(environment),
       requests.map((item) => item.id),
     );
-    assert.deepEqual(
-      connectionNodeIds(
-        environment,
-        ConnectionHandler.getConnectionID('client:root', 'PostList_homeTimeline'),
-      ),
-      [],
-    );
-  });
-
-  it('removes a published request without inserting another Profile’s Post', async () => {
-    const environment = createEnvironment();
-    const request = makeRequest('request-a', 'PROCESSING');
-    seedPostRequestLists(environment, [request]);
-    seedHomeConnection(environment);
-    selectedProfileId = 'profile-a';
-
-    await renderSummary(environment);
-    await act(async () => {
-      updateRequestStatus(environment, request, 'PUBLISHED', {
-        id: 'post-b',
-        profileId: 'profile-b',
-      });
-    });
-    const publishedCard = all('PostRequestCard')[0];
-    assert.ok(publishedCard);
-    const onPublished = publishedCard.props.onPublished as (result: {
-      authorProfileId: string | null;
-      postId: string | null;
-      requestNodeId: string;
-    }) => void;
-    await act(async () =>
-      onPublished({
-        authorProfileId: 'profile-b',
-        postId: 'post-b',
-        requestNodeId: request.id,
-      }),
-    );
-
-    assert.equal(all('PostRequestCard').length, 0);
-    assert.deepEqual(listRequestIds(environment), []);
     assert.deepEqual(
       connectionNodeIds(
         environment,

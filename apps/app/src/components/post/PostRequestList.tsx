@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
 import { graphql, useFragment, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { useSession } from '@/session/SessionProvider';
 import {
   POST_REQUEST_HOME_ACTIVE_STATUSES,
-  reconcilePublishedPostInHome,
+  removePostRequestFromLoadedProfileRequests,
 } from './postRequestCache';
 import { PostRequestCard } from './PostRequestCard';
 import type { FetchPolicy } from 'relay-runtime';
@@ -35,11 +34,6 @@ const PostRequestListQuery = graphql`
   }
 `;
 
-type PublishedPost = Readonly<{
-  authorProfileId: string | null;
-  postId: string | null;
-  requestNodeId: string;
-}>;
 type RequestSummaryProps = Readonly<{
   fetchKey?: string;
   fetchPolicy?: FetchPolicy;
@@ -49,20 +43,13 @@ type RequestSummaryProps = Readonly<{
 
 function usePostRequestCardHandlers(profileId: string) {
   const environment = useRelayEnvironment();
-  const { selectedProfileId } = useSession();
   const onPublished = useCallback(
-    ({ authorProfileId, postId, requestNodeId }: PublishedPost) => {
+    (requestNodeId: string) => {
       commitLocalUpdate(environment, (store) => {
-        reconcilePublishedPostInHome(store, {
-          authorProfileId,
-          currentProfileId: selectedProfileId,
-          postId,
-          profileId,
-          requestNodeId,
-        });
+        removePostRequestFromLoadedProfileRequests(store, profileId, requestNodeId);
       });
     },
-    [environment, profileId, selectedProfileId],
+    [environment, profileId],
   );
 
   return { onPublished };

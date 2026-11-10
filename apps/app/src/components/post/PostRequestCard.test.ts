@@ -38,7 +38,7 @@ type RequestData = {
     url: string | null;
   } | null>;
   id: string;
-  post: { id: string; profile: { id: string; relativeHandle: string } } | null;
+  post: { id: string; profile: { relativeHandle: string } } | null;
   requestId: string;
   sensitiveMedia: boolean;
   status: string;
@@ -386,25 +386,9 @@ describe('PostRequestCard', () => {
     }
   });
 
-  for (const [label, post, expected] of [
-    [
-      'with a Post projection',
-      { id: 'post-id', profile: { id: 'profile-writer', relativeHandle: '@writer' } },
-      {
-        requestNodeId: 'request-node-id',
-        postId: 'post-id',
-        authorProfileId: 'profile-writer',
-      },
-    ],
-    [
-      'without a Post projection',
-      null,
-      {
-        requestNodeId: 'request-node-id',
-        postId: null,
-        authorProfileId: null,
-      },
-    ],
+  for (const [label, post] of [
+    ['with a Post projection', { id: 'post-id', profile: { relativeHandle: '@writer' } }],
+    ['without a Post projection', null],
   ] as const) {
     it(`emits completion only after an active-to-published transition ${label}`, async () => {
       const onPublished = mock.fn();
@@ -420,7 +404,7 @@ describe('PostRequestCard', () => {
 
       await updateCard(makeRequest('QUEUED'), { onPublished });
       await updateCard(published, { onPublished });
-      assert.deepEqual(onPublished.mock.calls[0]?.arguments, [expected]);
+      assert.deepEqual(onPublished.mock.calls[0]?.arguments, ['request-node-id']);
     });
   }
 
@@ -468,7 +452,7 @@ describe('PostRequestCard', () => {
 
     await updateCard(
       makeRequest('PUBLISHED', {
-        post: { id: 'post-id', profile: { id: 'profile-writer', relativeHandle: '@writer' } },
+        post: { id: 'post-id', profile: { relativeHandle: '@writer' } },
       }),
     );
     await act(async () => mock.timers.tick(POLL_INTERVAL_MS * 2));

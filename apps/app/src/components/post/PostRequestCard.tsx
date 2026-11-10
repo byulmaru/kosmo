@@ -58,14 +58,12 @@ const PostRequestCardFragment = graphql`
     post {
       id
       profile {
-        id
         relativeHandle
       }
       replyParent {
         id
         replyCount
       }
-      ...PostListItem_post
     }
     requestId
     status
@@ -82,15 +80,9 @@ const CancelPostRequestMutation = graphql`
   }
 `;
 
-type PublishedPost = {
-  authorProfileId: string | null;
-  postId: string | null;
-  requestNodeId: string;
-};
-
 type PostRequestCardProps = {
   onCompose?: () => void;
-  onPublished?: (post: PublishedPost) => void;
+  onPublished?: (requestNodeId: string) => void;
   request: PostRequestCard_request$key;
 };
 
@@ -125,16 +117,12 @@ export function PostRequestCard({
       ACTIVE_STATUSES.has(previousRequest.status) &&
       request.status === 'PUBLISHED'
     ) {
-      onPublished?.({
-        authorProfileId: request.post?.profile.id ?? null,
-        postId: request.post?.id ?? null,
-        requestNodeId: request.id,
-      });
+      onPublished?.(request.id);
     }
     if (previousRequest.id !== request.id || previousRequest.status !== request.status) {
       setPreviousRequest({ id: request.id, status: request.status });
     }
-  }, [onPublished, previousRequest, request.id, request.post, request.status]);
+  }, [onPublished, previousRequest, request.id, request.status]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
