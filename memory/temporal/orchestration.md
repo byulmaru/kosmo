@@ -107,10 +107,9 @@
   시작하지 않는다. Collection Activity는 primary DB의 Post current content에서 canonical document를 읽어 Media가
   없을 때 첫 HTTP(S) 링크의 metadata를 authenticated Embed service에서 가져와 기존 URL-keyed cache를 갱신한다. KOSMO
   Worker는 service 응답 metadata만 사용하며 원문 HTML을 직접 가져오는 local parser fallback을 두지 않는다. Service key는
-  Worker 전용 `EMBED_API_KEY` 환경 변수로 전달하고 Bearer token으로 보낸다. Vault VSO는 `secret` mount의
-  `kubernetes/kosmo/{{env}}/embed`
-  경로에서 `EMBED_API_KEY`만 `embed-api` Secret으로 복사하고 Worker Deployment만 갱신한다. 일반 `env` Secret이나 다른
-  workload에 이 key를 넣지 않는다. Secret이나 key가 없으면 Worker startup은 계속되고 collection은 service 요청 없이
+  `EMBED_API_KEY` 환경 변수로 전달하고 Bearer token으로 보낸다. Vault VSO는 `secret` mount의
+  `kubernetes/kosmo/{dev,prod}` 경로에서 `env` Secret을 동기화하고, Worker는 기존 `envFrom`으로 이 key를 받는다. 이 Secret은
+  다른 workload에도 공유된다. key가 없으면 Worker startup은 계속되고 collection은 service 요청 없이
   `null`과 failure backoff로 처리되어 기존 성공 metadata를 보존한다. HTTP 또는 JSON decoding 실패도 같은 실패 경계에 두며,
   기존 성공 metadata를 덮어쓰지 않는다. Embed service가 public URL, DNS·redirect, CPU와 response body 경계를 보장해야
   하며, 운영 요청은 이 경계를 검증한 뒤에만 연결한다.
