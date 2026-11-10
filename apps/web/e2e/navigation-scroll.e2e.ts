@@ -196,7 +196,20 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
     }
 
     await page.setViewportSize(surface.viewport);
-    await page.goto('/home');
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
+    const initialHomeResponsePromise = waitForGraphQLOperation(page, 'HomePageQuery');
+    const initialEntry = await homeEntry(
+      page,
+      surface.kind === 'header' ? 'navigation' : surface.kind,
+    );
+    if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+      await initialEntry.tap();
+    } else {
+      await initialEntry.click();
+    }
+    const initialHomeResponse = await initialHomeResponsePromise;
+    await initialHomeResponse.finished();
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
     await scrollDocument(page);
 
