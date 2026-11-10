@@ -221,7 +221,7 @@ describe('PostMediaImage', () => {
 
     for (const aiProhibitFilterApplied of [false, null, undefined]) {
       const item = { ...media('unprotected', '원본 ALT'), aiProhibitFilterApplied };
-      await render(1, item);
+      await render(1, item, true, false, () => undefined);
       assert.equal(rendered('MediaProtectionBadge').length, 0);
       assert.equal(image('unprotected').props.accessibilityLabel, '원본 ALT');
       assert.equal(pressable('원본 ALT 크게 보기').props.accessibilityRole, 'button');
