@@ -552,7 +552,7 @@ export const ReactionRepostProfileTargetsContract: Story = {
       }
 
       const kindRail = group.getByTestId('notification-kind-target');
-      expect(group.getByRole('link', { name: /학습방지 필터 적용됨/ })).toBeTruthy();
+      await expect(kindRail).toHaveAccessibleName(/학습방지 필터 적용됨/);
       const kindIcon = group.getByTestId(`${kind}-notification-kind`);
       const railBounds = kindRail.getBoundingClientRect();
       const iconBounds = kindIcon.getBoundingClientRect();
