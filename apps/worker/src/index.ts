@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg, pgRead } from '@kosmo/core/db';
+import { disposeRedisPubSub } from '@kosmo/core/redis/pubsub';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyMetrics, closeFedifyQueue, startFedifyMetrics } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
@@ -67,12 +68,16 @@ if (import.meta.main) {
         await connection?.close();
       } finally {
         try {
-          await closeFedifyQueue();
+          disposeRedisPubSub();
         } finally {
           try {
-            await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
+            await closeFedifyQueue();
           } finally {
-            await server[Symbol.asyncDispose]();
+            try {
+              await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
+            } finally {
+              await server[Symbol.asyncDispose]();
+            }
           }
         }
       }

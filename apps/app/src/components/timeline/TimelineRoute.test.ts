@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, mock, test } from 'node:test';
+import { afterEach, before, beforeEach, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -12,6 +13,19 @@ const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const platform = { OS: 'ios' };
+const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const browserWindow = {
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  scrollTo: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = { addEventListener: () => ({ remove: () => undefined }) };
 let width = 390;
 let boundaryState: 'content' | 'loading' = 'content';
 let renderer: ReactTestRenderer | undefined;
@@ -24,6 +38,7 @@ const shellChrome = {
 
 mockModule('expo-router', {
   Redirect: () => null,
+  useFocusEffect: () => undefined,
   useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
   useIsFocused: () => true,
@@ -34,6 +49,7 @@ mockModule(require.resolve('lucide-react-native'), {
   UserRoundPlus: 'UserRoundPlus',
 });
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: object) => styles },
@@ -59,8 +75,11 @@ mockModule('react-relay', {
     check: () => ({ status: 'missing' }),
     retain: () => ({ dispose: () => undefined }),
   }),
+  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
+  ConnectionHandler,
+  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
   getRequest: () => ({}),
@@ -110,12 +129,27 @@ before(async () => {
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
+});
+
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   platform.OS = 'ios';
   width = 390;
   boundaryState = 'content';
   shellChrome.navigationDrawerOpen = false;
+  if (originalWindowDescriptor) {
+    Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
+  if (originalDocumentDescriptor) {
+    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
+  }
 });
 
 test('Native 타임라인 파라미터가 Local이면 같은 route에서 Local 콘텐츠를 표시한다', async () => {

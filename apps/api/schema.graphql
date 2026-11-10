@@ -913,6 +913,16 @@ type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
 }
 
+type Subscription {
+  timeline: TimelineEvent
+}
+
+union TimelineEvent = TimelinePostAdded
+
+type TimelinePostAdded {
+  post: Post
+}
+
 input UnblockProfileInput {
   id: ID!
 }

@@ -1,4 +1,4 @@
-import { Redirect, useIsFocused } from 'expo-router';
+import { Redirect, useFocusEffect, useIsFocused } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import {
   startTransition,
@@ -10,9 +10,15 @@ import {
   useState,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
+import { AppState, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { graphql, useLazyLoadQuery, useRelayEnvironment, useSubscription } from 'react-relay';
+import {
+  ConnectionHandler,
+  createOperationDescriptor,
+  fetchQuery,
+  getRequest,
+  ROOT_ID,
+} from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { PostRequestListSummary } from '@/components/post/PostRequestList';
@@ -32,6 +38,21 @@ import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
+import type { HomeTimelineSubscription } from './__generated__/HomeTimelineSubscription.graphql';
+
+type HomeRefreshMode = 'automatic' | 'manual' | 'pause-automatic';
+type HomeAutomaticRefresh = (mode?: 'automatic' | 'pause-automatic') => void;
+type HomeRefresh = (mode: HomeRefreshMode) => void;
+
+type HomeTimelineState = Readonly<{
+  atTop: boolean;
+  revalidationPending: boolean;
+}>;
+
+type HomeRefreshResource = Readonly<{
+  refresh: HomeRefresh;
+  dispose: () => void;
+}>;
 
 const HomeQuery = graphql`
   query HomePageQuery {
@@ -53,14 +74,52 @@ const HomeQuery = graphql`
   }
 `;
 
+const HomeTimelineSubscriptionDocument = graphql`
+  subscription HomeTimelineSubscription($connections: [ID!]!) {
+    timeline {
+      __typename
+      ... on TimelinePostAdded {
+        post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
+          id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
+          ...PostListItem_post
+        }
+      }
+    }
+  }
+`;
+
+const homeTimelineConnectionId = ConnectionHandler.getConnectionID(
+  ROOT_ID,
+  'PostList_homeTimeline',
+);
+
 export default function HomeScreen() {
   const active = useIsFocused();
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const homeRefreshRef = useRef<(() => void) | null>(null);
-  const registerHomeRefresh = useCallback((refresh: (() => void) | null) => {
+  const homeRefreshRef = useRef<HomeRefresh | null>(null);
+  const registerHomeRefresh = useCallback((refresh: HomeRefresh | null) => {
     homeRefreshRef.current = refresh;
   }, []);
   const handleHomeReselection = useCallback(() => {
@@ -68,10 +127,13 @@ export default function HomeScreen() {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
     }
     if (homeRefreshRef.current) {
-      homeRefreshRef.current();
+      homeRefreshRef.current('manual');
     } else {
       startTransition(() => routeBoundaryRef.current?.refetch());
     }
+  }, []);
+  const requestAutomaticRefresh = useCallback<HomeAutomaticRefresh>((mode = 'automatic') => {
+    homeRefreshRef.current?.(mode);
   }, []);
 
   useEffect(() => {
@@ -98,6 +160,7 @@ export default function HomeScreen() {
       >
         <HomeRouteContent
           active={active}
+          onAutomaticRefresh={requestAutomaticRefresh}
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
         />
@@ -140,12 +203,14 @@ function HomeFrame({
 
 function HomeRouteContent({
   active,
+  onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
 }: {
   active: boolean;
+  onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
-  registerHomeRefresh: (refresh: (() => void) | null) => void;
+  registerHomeRefresh: (refresh: HomeRefresh | null) => void;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -153,6 +218,7 @@ function HomeRouteContent({
     <HomeContent
       active={active}
       fetchKey={fetchKey}
+      onAutomaticRefresh={onAutomaticRefresh}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
     />
@@ -162,13 +228,15 @@ function HomeRouteContent({
 function HomeContent({
   active,
   fetchKey,
+  onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
 }: {
   active: boolean;
   fetchKey: string;
+  onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
-  registerHomeRefresh: (refresh: (() => void) | null) => void;
+  registerHomeRefresh: (refresh: HomeRefresh | null) => void;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -179,67 +247,233 @@ function HomeContent({
   );
   const [refreshing, setRefreshing] = useState(false);
   const [postRequestRefreshKey, setPostRequestRefreshKey] = useState(0);
+  const [timelineState, setTimelineState] = useState<HomeTimelineState>({
+    atTop: false,
+    revalidationPending: false,
+  });
+  const hasSelectedProfile = data.currentSession?.selectedProfile != null;
+  const queueRevalidation = useCallback(() => {
+    setTimelineState((current) => ({
+      ...current,
+      revalidationPending: true,
+    }));
+  }, []);
 
-  useEffect(() => {
-    let refreshInFlight = false;
+  const handleAtTopChange = useCallback(
+    (atTop: boolean) => {
+      setTimelineState((current) => {
+        if (current.atTop === atTop) {
+          return current;
+        }
+
+        return {
+          ...current,
+          atTop,
+        };
+      });
+      if (!atTop) {
+        onAutomaticRefresh('pause-automatic');
+      }
+    },
+    [onAutomaticRefresh],
+  );
+
+  const refreshResource = useMemo<HomeRefreshResource>(() => {
+    let activeMode: 'automatic' | 'manual' | null = null;
+    let automaticRefreshQueued = false;
     let subscription: { unsubscribe: () => void } | null = null;
     let refreshToastCleanup: (() => void) | null = null;
-    const refresh = () => {
-      if (refreshInFlight) {
+    const refresh: HomeRefresh = (mode) => {
+      if (mode === 'pause-automatic') {
+        const hadPendingAutomaticRefresh = automaticRefreshQueued || activeMode === 'automatic';
+        automaticRefreshQueued = false;
+
+        if (activeMode === 'automatic') {
+          const automaticSubscription = subscription;
+          subscription = null;
+          activeMode = null;
+          automaticSubscription?.unsubscribe();
+        }
+
+        if (hadPendingAutomaticRefresh) {
+          queueRevalidation();
+        }
         return;
       }
 
-      refreshInFlight = true;
+      if (mode === 'manual' && activeMode !== 'manual') {
+        if (activeMode === 'automatic') {
+          const automaticSubscription = subscription;
+          subscription = null;
+          activeMode = null;
+          automaticSubscription?.unsubscribe();
+        }
+
+        automaticRefreshQueued = false;
+        setTimelineState((current) =>
+          current.revalidationPending ? { ...current, revalidationPending: false } : current,
+        );
+      }
+
+      if (activeMode) {
+        if (mode === 'automatic') {
+          automaticRefreshQueued = true;
+        }
+        return;
+      }
+
+      activeMode = mode;
       setPostRequestRefreshKey((key) => key + 1);
-      setRefreshing(true);
+      if (mode === 'manual') {
+        setRefreshing(true);
+      }
+
+      const finish = (error?: Error) => {
+        activeMode = null;
+        if (mode === 'manual') {
+          setRefreshing(false);
+        }
+
+        if (error) {
+          refreshToastCleanup = showToast('홈을 새로 불러오지 못했어요.', {
+            action: { label: '다시 시도', onPress: () => refresh('manual') },
+            persistent: true,
+            tone: 'danger',
+          });
+        } else {
+          refreshToastCleanup?.();
+          refreshToastCleanup = null;
+        }
+
+        if (automaticRefreshQueued) {
+          automaticRefreshQueued = false;
+          refresh('automatic');
+        }
+      };
+
       subscription = fetchQuery(
         environment,
         HomeQuery,
         {},
         { fetchPolicy: 'network-only' },
       ).subscribe({
-        complete: () => {
-          refreshInFlight = false;
-          setRefreshing(false);
-          refreshToastCleanup?.();
-          refreshToastCleanup = null;
-        },
-        error: () => {
-          refreshInFlight = false;
-          setRefreshing(false);
-          refreshToastCleanup = showToast('홈을 새로 불러오지 못했어요.', {
-            action: { label: '다시 시도', onPress: refresh },
-            persistent: true,
-            tone: 'danger',
-          });
-        },
+        complete: () => finish(),
+        error: (error: Error) => finish(error),
       });
     };
 
-    registerHomeRefresh(refresh);
+    const dispose = () => {
+      const activeSubscription = subscription;
+      const wasRefreshingManually = activeMode === 'manual';
+      subscription = null;
+      activeMode = null;
+      automaticRefreshQueued = false;
+      activeSubscription?.unsubscribe();
+      if (wasRefreshingManually) {
+        setRefreshing(false);
+      }
+      refreshToastCleanup?.();
+      refreshToastCleanup = null;
+    };
+
+    return { dispose, refresh };
+  }, [environment, queueRevalidation, showToast]);
+
+  useEffect(() => {
+    registerHomeRefresh(refreshResource.refresh);
     return () => {
       registerHomeRefresh(null);
-      subscription?.unsubscribe();
-      refreshToastCleanup?.();
+      refreshResource.dispose();
     };
-  }, [environment, registerHomeRefresh, showToast]);
+  }, [refreshResource, registerHomeRefresh]);
+
+  useEffect(() => {
+    if (!hasSelectedProfile || !timelineState.atTop || !timelineState.revalidationPending) {
+      return;
+    }
+
+    // Revalidation crosses into Relay's network, so start it after the Home list reaches the top.
+    setTimelineState((current) =>
+      current.revalidationPending ? { ...current, revalidationPending: false } : current,
+    );
+    onAutomaticRefresh();
+  }, [
+    hasSelectedProfile,
+    onAutomaticRefresh,
+    timelineState.atTop,
+    timelineState.revalidationPending,
+  ]);
 
   return (
-    <HomeContentView
-      active={active}
-      data={data}
-      fetchKey={fetchKey}
-      onRefresh={onRefresh}
-      postRequestRefreshKey={postRequestRefreshKey}
-      refreshing={refreshing}
-    />
+    <>
+      {hasSelectedProfile ? <HomeTimelineUpdates onRevalidation={queueRevalidation} /> : null}
+      <HomeContentView
+        active={active}
+        data={data}
+        fetchKey={fetchKey}
+        onAtTopChange={handleAtTopChange}
+        onRefresh={onRefresh}
+        postRequestRefreshKey={postRequestRefreshKey}
+        refreshing={refreshing}
+      />
+    </>
   );
+}
+
+function HomeTimelineUpdates({ onRevalidation }: { onRevalidation: () => void }) {
+  const subscriptionConfig = useMemo(
+    () => ({
+      subscription: HomeTimelineSubscriptionDocument,
+      variables: { connections: [homeTimelineConnectionId] },
+      cacheConfig: { metadata: { onSubscriptionConnected: onRevalidation } },
+    }),
+    [onRevalidation],
+  );
+
+  useSubscription<HomeTimelineSubscription>(subscriptionConfig);
+
+  useFocusEffect(
+    useCallback(() => {
+      onRevalidation();
+    }, [onRevalidation]),
+  );
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const revalidateWhenVisible = () => {
+        if (document.visibilityState !== 'hidden') {
+          onRevalidation();
+        }
+      };
+      const revalidateOnVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          onRevalidation();
+        }
+      };
+      document.addEventListener('visibilitychange', revalidateOnVisibilityChange);
+      window.addEventListener('focus', revalidateWhenVisible);
+      return () => {
+        document.removeEventListener('visibilitychange', revalidateOnVisibilityChange);
+        window.removeEventListener('focus', revalidateWhenVisible);
+      };
+    }
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        onRevalidation();
+      }
+    });
+    return () => appStateSubscription.remove();
+  }, [onRevalidation]);
+
+  return null;
 }
 
 function HomeContentView({
   active,
   data,
   fetchKey,
+  onAtTopChange,
   onRefresh,
   postRequestRefreshKey,
   refreshing,
@@ -247,6 +481,7 @@ function HomeContentView({
   active: boolean;
   data: HomePageQuery$data;
   fetchKey: string;
+  onAtTopChange: (atTop: boolean) => void;
   onRefresh: () => void;
   postRequestRefreshKey: number;
   refreshing: boolean;
@@ -315,6 +550,7 @@ function HomeContentView({
         header={postRequestCards}
         home={data}
         identityKey={`home:${selectedProfile.id}`}
+        onAtTopChange={onAtTopChange}
         onRefresh={onRefresh}
         replyProfile={selectedProfile}
         refreshing={refreshing}

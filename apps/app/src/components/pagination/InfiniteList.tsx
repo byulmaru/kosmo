@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef } from 'react';
+import { Component, Fragment, useCallback, useEffect, useRef } from 'react';
 import { FlatList, Platform, View } from 'react-native';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -6,8 +6,8 @@ import {
   usePaginationScrollRegistration,
 } from './PaginationScrollView';
 import { useAutomaticPagination } from './useAutomaticPagination';
-import type { ReactElement } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ReactElement, ReactNode } from 'react';
+import type { NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { LoadNext } from './useAutomaticPagination';
 
@@ -18,6 +18,8 @@ export type InfiniteListProps<Item> = Readonly<{
   isLoadingNext: boolean;
   keyExtractor: (item: Item, index: number) => string;
   loadNext: LoadNext;
+  maintainVisibleContentPosition?: boolean;
+  onAtTopChange?: (atTop: boolean) => void;
   onLoadErrorChange?: (loadError: boolean, onRetry: () => void) => void;
   onRefresh?: () => void;
   pageSize: number;
@@ -30,6 +32,76 @@ export type InfiniteListProps<Item> = Readonly<{
   header?: ReactElement | null;
 }>;
 
+type WebPrependAnchorProps = Readonly<{
+  active: boolean;
+  children: ReactNode;
+  itemKeys: ReadonlyArray<string>;
+}>;
+
+type WebPrependAnchorSnapshot = Readonly<{
+  scrollHeight: number;
+  scrollX: number;
+  scrollY: number;
+}> | null;
+
+// eslint-disable-next-line @eslint-react/no-class-component -- React's pre-commit snapshot is needed to preserve the Web prepend position.
+class WebPrependAnchor extends Component<WebPrependAnchorProps, object, WebPrependAnchorSnapshot> {
+  getSnapshotBeforeUpdate(previousProps: Readonly<WebPrependAnchorProps>) {
+    const { itemKeys } = this.props;
+    const insertedItemCount = itemKeys.length - previousProps.itemKeys.length;
+    if (
+      !previousProps.active ||
+      !this.props.active ||
+      previousProps.itemKeys.length === 0 ||
+      insertedItemCount <= 0 ||
+      !previousProps.itemKeys.every((key, index) => itemKeys[insertedItemCount + index] === key) ||
+      typeof window === 'undefined' ||
+      typeof document === 'undefined'
+    ) {
+      return null;
+    }
+
+    const scrollY = window.scrollY;
+    if (scrollY <= 0) {
+      return null;
+    }
+
+    return {
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollX: window.scrollX,
+      scrollY,
+    };
+  }
+
+  componentDidUpdate(
+    _previousProps: Readonly<WebPrependAnchorProps>,
+    _previousState: Readonly<object>,
+    snapshot: WebPrependAnchorSnapshot,
+  ) {
+    if (!snapshot || !this.props.active) {
+      return;
+    }
+
+    const scrollHeight = document.documentElement.scrollHeight;
+    const heightDelta = scrollHeight - snapshot.scrollHeight;
+    if (heightDelta <= 0) {
+      return;
+    }
+
+    const maxScrollY = Math.max(0, scrollHeight - window.innerHeight);
+    const desiredScrollY = Math.min(snapshot.scrollY + heightDelta, maxScrollY);
+    if (Math.abs(window.scrollY - desiredScrollY) <= 1) {
+      return;
+    }
+
+    window.scrollTo({ behavior: 'auto', left: snapshot.scrollX, top: desiredScrollY });
+  }
+
+  render() {
+    return this.props.children;
+  }
+}
+
 export function InfiniteList<Item>({
   active = true,
   data,
@@ -38,6 +110,8 @@ export function InfiniteList<Item>({
   isLoadingNext,
   keyExtractor,
   loadNext,
+  maintainVisibleContentPosition = false,
+  onAtTopChange,
   onLoadErrorChange,
   onRefresh,
   pageSize,
@@ -63,8 +137,39 @@ export function InfiniteList<Item>({
   });
   usePaginationScrollRegistration(hasNativeScrollParent ? nativeScrollProps : null);
   const scrollToTop = useCallback(() => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
+      }
+      return;
+    }
     scrollRef.current?.scrollToOffset({ animated: true, offset: 0 });
   }, []);
+  const reportAtTop = useCallback((atTop: boolean) => onAtTopChange?.(atTop), [onAtTopChange]);
+  const handleNativeScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      reportAtTop(event.nativeEvent.contentOffset.y <= 0);
+    },
+    [reportAtTop],
+  );
+
+  useEffect(() => {
+    if (!onAtTopChange) {
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined') {
+        return;
+      }
+      const handleScroll = () => reportAtTop(window.scrollY <= 0);
+      window.addEventListener('scroll', handleScroll, { passive: true });
+      handleScroll();
+      return () => window.removeEventListener('scroll', handleScroll);
+    }
+
+    reportAtTop(true);
+  }, [onAtTopChange, reportAtTop]);
 
   useEffect(() => {
     if (
@@ -84,16 +189,28 @@ export function InfiniteList<Item>({
   }, [loadError, loadNextPage, onLoadErrorChange]);
 
   if (Platform.OS === 'web' || hasNativeScrollParent) {
-    return (
+    const itemKeys =
+      Platform.OS === 'web' && maintainVisibleContentPosition ? data.map(keyExtractor) : undefined;
+    const list = (
       <View style={style}>
         {header}
         {data.length === 0
           ? empty
           : data.map((item, index) => (
-              <Fragment key={keyExtractor(item, index)}>{renderItem({ index, item })}</Fragment>
+              <Fragment key={itemKeys?.[index] ?? keyExtractor(item, index)}>
+                {renderItem({ index, item })}
+              </Fragment>
             ))}
         {footer}
       </View>
+    );
+
+    return itemKeys ? (
+      <WebPrependAnchor active={active} itemKeys={itemKeys}>
+        {list}
+      </WebPrependAnchor>
+    ) : (
+      list
     );
   }
 
@@ -106,6 +223,13 @@ export function InfiniteList<Item>({
       keyExtractor={keyExtractor}
       keyboardShouldPersistTaps="handled"
       ListFooterComponent={footer}
+      maintainVisibleContentPosition={
+        maintainVisibleContentPosition
+          ? { minIndexForVisible: 0, autoscrollToTopThreshold: 0 }
+          : undefined
+      }
+      onScroll={onAtTopChange ? handleNativeScroll : undefined}
+      scrollEventThrottle={onAtTopChange ? 16 : undefined}
       onEndReached={onEndReached}
       onEndReachedThreshold={1}
       onRefresh={onRefresh}

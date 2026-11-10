@@ -137,6 +137,12 @@ all-or-nothing read boundary다. Node·kubelet 권한을 이미 가진 운영 �
   invalid·forged credential을 받아들이거나 state·권한 검사를 생략하는 경로, replica가 revocation을
   반영한 뒤에도 폐기된 Session credential을 인증하는 경로, 공격자가 lag를 일으키거나 증폭하는
   구체적 경로는 별도로 finding 여부를 검토한다.
+
+  GraphQL subscription startup은 local Session·Profile 종료 listener를 등록한 뒤 첫 event를
+  소비하기 전에 primary에서 trusted session context의 Session ID·Account ID와 일치하는 ACTIVE
+  Session과 ACTIVE Account를 한 번 확인한다. 이 확인은 auth context 전체를 소급해 갱신하지 않고,
+  event별 primary query를 추가하거나 다른 일반 SELECT의 replica 정책을 바꾸지 않는다.
+
 - GraphQL의 viewer별 visibility와 owner 권한은 PostgreSQL RLS가 아니라 중앙 application
   policy가 적용한다. Shared non-owner runtime role과 database constraint가 구조적 경계를
   보완한다. RLS 부재 자체는 finding이 아니지만 application policy 우회는 finding이다.

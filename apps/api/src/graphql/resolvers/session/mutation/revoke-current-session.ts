@@ -33,6 +33,7 @@ builder.mutationField('revokeCurrentSession', (t) =>
         },
         db,
       );
+      await result.postCommit();
 
       return {
         completed: result.status === 'REVOKED' || result.status === 'ALREADY_UNAUTHENTICATED',

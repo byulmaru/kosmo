@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
@@ -24,7 +24,29 @@ import {
   SessionState,
 } from '../enums';
 import { PermissionDeniedError } from '../error';
-import { createOidcSession, revokeCurrentSession } from './session';
+import type { RedisClientType } from '@redis/client';
+
+const publishedEvents: Array<{ readonly channel: string; readonly message: string }> = [];
+let redisUnavailable = false;
+const redisClient = {
+  publish: async (channel: string, message: string) => {
+    publishedEvents.push({ channel, message });
+    return 1;
+  },
+} as unknown as RedisClientType;
+
+mock.module(new URL('../redis/client.ts', import.meta.url), {
+  namedExports: {
+    runRedisCommand: async <T>(command: (client: RedisClientType) => Promise<T>) => {
+      if (redisUnavailable) {
+        return null;
+      }
+      return { value: await command(redisClient) };
+    },
+  },
+});
+
+const { createOidcSession, revokeCurrentSession } = await import('./session.ts');
 
 after(async () => {
   await pg.end();
@@ -310,7 +332,7 @@ test('현재 Active Session만 폐기하고 같은 Account의 다른 Session을 
     .then(firstOrThrow);
 
   try {
-    assert.deepEqual(await revokeCurrentSession({ token: session.token }), { status: 'REVOKED' });
+    assert.equal((await revokeCurrentSession({ token: session.token })).status, 'REVOKED');
     assert.equal(
       (
         await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, session.id))
@@ -333,12 +355,14 @@ test('Suspended Account의 현재 Session은 폐기하고 Disabled Account는 �
   const disabled = await createFixture({ accountState: AccountState.DISABLED });
 
   try {
-    assert.deepEqual(await revokeCurrentSession({ token: suspended.session.token }), {
-      status: 'REVOKED',
-    });
-    assert.deepEqual(await revokeCurrentSession({ token: disabled.session.token }), {
-      status: 'ALREADY_UNAUTHENTICATED',
-    });
+    assert.equal(
+      (await revokeCurrentSession({ token: suspended.session.token })).status,
+      'REVOKED',
+    );
+    assert.equal(
+      (await revokeCurrentSession({ token: disabled.session.token })).status,
+      'ALREADY_UNAUTHENTICATED',
+    );
     assert.equal(
       (
         await db
@@ -364,12 +388,15 @@ test('Revoked·Expired·missing credential은 terminal 결과를 유지한다', 
       revokeCurrentSession({ token: 'missing-token' }),
       revokeCurrentSession({}),
     ]);
-    assert.deepEqual(results, [
-      { status: 'ALREADY_UNAUTHENTICATED' },
-      { status: 'ALREADY_UNAUTHENTICATED' },
-      { status: 'ALREADY_UNAUTHENTICATED' },
-      { status: 'ALREADY_UNAUTHENTICATED' },
-    ]);
+    assert.deepEqual(
+      results.map(({ status }) => status),
+      [
+        'ALREADY_UNAUTHENTICATED',
+        'ALREADY_UNAUTHENTICATED',
+        'ALREADY_UNAUTHENTICATED',
+        'ALREADY_UNAUTHENTICATED',
+      ],
+    );
   } finally {
     await cleanup([revoked.account.id, expired.account.id]);
   }
@@ -438,7 +465,7 @@ test('폐기가 Active를 조회한 뒤 만료가 확정돼도 Expired terminal 
       .then((rows) => rows[0]?.state);
 
     assert.equal(expired.length, 1);
-    assert.deepEqual(revoked, { status: 'ALREADY_UNAUTHENTICATED' });
+    assert.equal(revoked.status, 'ALREADY_UNAUTHENTICATED');
     assert.equal(finalState, SessionState.EXPIRED);
   } finally {
     allowExpiration.resolve();
@@ -448,14 +475,13 @@ test('폐기가 Active를 조회한 뒤 만료가 확정돼도 Expired terminal 
 });
 
 test('호출 transaction이 rollback되면 Session 폐기도 rollback된다', async () => {
+  publishedEvents.length = 0;
   const { account, session } = await createFixture();
 
   try {
     await assert.rejects(
       db.transaction(async (tx) => {
-        assert.deepEqual(await revokeCurrentSession({ token: session.token }, tx), {
-          status: 'REVOKED',
-        });
+        assert.equal((await revokeCurrentSession({ token: session.token }, tx)).status, 'REVOKED');
         throw new Error('rollback');
       }),
       /rollback/,
@@ -466,7 +492,73 @@ test('호출 transaction이 rollback되면 Session 폐기도 rollback된다', as
       )[0]?.state,
       SessionState.ACTIVE,
     );
+    assert.deepEqual(publishedEvents, []);
   } finally {
+    await cleanup([account.id]);
+  }
+});
+
+test('폐기 post-commit은 해당 Session만 한 번 알리고 새 terminal 재시도는 다시 알린다', async () => {
+  publishedEvents.length = 0;
+  const { account, session } = await createFixture();
+  const expired = await createFixture({ sessionState: SessionState.EXPIRED });
+  const disabled = await createFixture({ accountState: AccountState.DISABLED });
+
+  try {
+    const revoked = await revokeCurrentSession({ token: session.token });
+    assert.equal(revoked.status, 'REVOKED');
+    await Promise.all([revoked.postCommit(), revoked.postCommit()]);
+    assert.deepEqual(publishedEvents, [
+      { channel: `sessionEnded:${session.id}`, message: '{"detail":true}' },
+    ]);
+
+    const retry = await revokeCurrentSession({ token: session.token });
+    assert.equal(retry.status, 'ALREADY_UNAUTHENTICATED');
+    await retry.postCommit();
+
+    const expiredRetry = await revokeCurrentSession({ token: expired.session.token });
+    assert.equal(expiredRetry.status, 'ALREADY_UNAUTHENTICATED');
+    await expiredRetry.postCommit();
+
+    const disabledResult = await revokeCurrentSession({ token: disabled.session.token });
+    assert.equal(disabledResult.status, 'ALREADY_UNAUTHENTICATED');
+    await disabledResult.postCommit();
+
+    const missing = await revokeCurrentSession({ token: 'missing-token' });
+    assert.equal(missing.status, 'ALREADY_UNAUTHENTICATED');
+    await missing.postCommit();
+
+    assert.deepEqual(publishedEvents, [
+      { channel: `sessionEnded:${session.id}`, message: '{"detail":true}' },
+      { channel: `sessionEnded:${session.id}`, message: '{"detail":true}' },
+      { channel: `sessionEnded:${expired.session.id}`, message: '{"detail":true}' },
+      { channel: `sessionEnded:${disabled.session.id}`, message: '{"detail":true}' },
+    ]);
+  } finally {
+    await cleanup([account.id, expired.account.id, disabled.account.id]);
+  }
+});
+
+test('post-commit event 오류가 폐기 성공을 실패로 바꾸지 않는다', async (t) => {
+  publishedEvents.length = 0;
+  redisUnavailable = true;
+  t.mock.method(console, 'error', () => undefined);
+  const { account, session } = await createFixture();
+
+  try {
+    const result = await revokeCurrentSession({ token: session.token });
+    await result.postCommit();
+
+    assert.equal(result.status, 'REVOKED');
+    assert.deepEqual(publishedEvents, []);
+    assert.equal(
+      (
+        await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, session.id))
+      )[0]?.state,
+      SessionState.REVOKED,
+    );
+  } finally {
+    redisUnavailable = false;
     await cleanup([account.id]);
   }
 });

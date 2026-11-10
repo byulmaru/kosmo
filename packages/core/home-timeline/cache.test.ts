@@ -25,6 +25,7 @@ import {
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
 import { runRedisCommand } from '../redis/client';
+import { disposeRedisPubSub } from '../redis/pubsub';
 import {
   cacheHomeTimelinePage,
   fanoutHomeTimelinePost,
@@ -50,6 +51,7 @@ const contentIds: string[] = [];
 const naturalLanguageMuteDecisionKeys: string[] = [];
 
 after(async () => {
+  disposeRedisPubSub();
   await invalidateHomeTimelines({ profileIds });
   if (postIds.length > 0) {
     await db

@@ -4,6 +4,10 @@ import type { RedisClientType } from '@redis/client';
 const connectTimeoutMs = 500;
 const commandTimeoutMs = 250;
 
+type RunRedisCommandOptions = {
+  readonly waitForReady?: boolean;
+};
+
 let redisClient: RedisClientType | undefined;
 
 function logRedisError(error: unknown): void {
@@ -36,8 +40,54 @@ function createRedisClient(url: string): RedisClientType {
   return client;
 }
 
+function waitUntilRedisClientReady(client: RedisClientType): Promise<boolean> {
+  if (client.isReady) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(onTimeout, connectTimeoutMs);
+    client.once('ready', onReady);
+
+    if (!client.isOpen) {
+      try {
+        void client.connect().catch(() => {
+          if (redisClient === client && !client.isReady) {
+            resetRedisClient(client);
+          }
+          finish(false);
+        });
+      } catch {
+        if (redisClient === client && !client.isReady) {
+          resetRedisClient(client);
+        }
+        finish(false);
+      }
+    }
+
+    function cleanup() {
+      client.off('ready', onReady);
+      clearTimeout(timer);
+    }
+
+    function finish(ready: boolean) {
+      cleanup();
+      resolve(ready);
+    }
+
+    function onReady() {
+      finish(true);
+    }
+
+    function onTimeout() {
+      finish(false);
+    }
+  });
+}
+
 export async function runRedisCommand<T>(
   command: (client: RedisClientType) => Promise<T>,
+  { waitForReady = false }: RunRedisCommandOptions = {},
 ): Promise<{ value: T } | null> {
   const url = process.env.REDIS_URL?.trim();
   if (!url) {
@@ -53,14 +103,20 @@ export async function runRedisCommand<T>(
   }
 
   if (!client.isReady) {
-    if (!client.isOpen) {
-      void client.connect().catch(() => {
-        if (redisClient === client && !client.isReady) {
-          resetRedisClient(client);
-        }
-      });
+    if (waitForReady) {
+      if (!(await waitUntilRedisClientReady(client))) {
+        return null;
+      }
+    } else {
+      if (!client.isOpen) {
+        void client.connect().catch(() => {
+          if (redisClient === client && !client.isReady) {
+            resetRedisClient(client);
+          }
+        });
+      }
+      return null;
     }
-    return null;
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;

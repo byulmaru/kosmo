@@ -5,6 +5,7 @@ import {
   Environment,
   getRequest,
   Network,
+  Observable,
   RecordSource,
   Store,
 } from 'relay-runtime';
@@ -16,6 +17,7 @@ import HomePageQueryNode from '@/components/timeline/__generated__/HomePageQuery
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GraphQLResponse } from 'relay-runtime';
 
 const emptyHomeTimeline = {
   edges: [],
@@ -99,6 +101,7 @@ function expectHomeBrandHeader(canvasElement: HTMLElement) {
 
 function HomeRefreshStory() {
   const homeReselectionRef = useRef<(() => void) | null>(null);
+  const requestPhaseRef = useRef<'cached' | 'error' | 'recovered'>('cached');
   const registerHomeReselection = useCallback((handler: () => void) => {
     homeReselectionRef.current = handler;
     return () => {
@@ -108,26 +111,70 @@ function HomeRefreshStory() {
     };
   }, []);
   const reselectHome = useCallback(() => homeReselectionRef.current?.(), []);
+  const environment = useMemo(() => {
+    const network = Network.create(
+      (request) => {
+        if (request.name !== 'HomePageQuery') {
+          return Promise.resolve({ data: {} });
+        }
+
+        const requestPhase = requestPhaseRef.current;
+        if (requestPhase === 'error') {
+          return Observable.create<GraphQLResponse>((sink) => {
+            const timeout = setTimeout(() => sink.error(new Error('홈 재조회 실패')), 300);
+            return () => clearTimeout(timeout);
+          });
+        }
+
+        return Promise.resolve({
+          data: requestPhase === 'recovered' ? recoveredHomeData : cachedHomeData,
+        });
+      },
+      () => Observable.create<GraphQLResponse>(() => undefined),
+    );
+    const nextEnvironment = new Environment({
+      network,
+      store: new Store(new RecordSource()),
+    });
+
+    nextEnvironment.commitPayload(
+      createOperationDescriptor(getRequest(HomePageQueryNode), {}),
+      cachedHomeData,
+    );
+    return nextEnvironment;
+  }, []);
+  const createEnvironment = useCallback(() => environment, [environment]);
+  const handleHomeReselection = useCallback(() => {
+    if (requestPhaseRef.current === 'cached') {
+      requestPhaseRef.current = 'error';
+    } else if (requestPhaseRef.current === 'error') {
+      requestPhaseRef.current = 'recovered';
+    }
+
+    reselectHome();
+  }, [reselectHome]);
 
   return (
-    <ShellChromeProvider
-      navigationDrawerOpen={false}
-      openNavigationDrawer={() => undefined}
-      openProfileSwitcher={() => undefined}
-      registerHomeReselection={registerHomeReselection}
-      reselectHome={reselectHome}
-    >
-      <View>
-        <Pressable
-          accessibilityLabel="홈 다시 불러오기"
-          accessibilityRole="button"
-          onPress={reselectHome}
-        >
-          <Text>홈 다시 불러오기</Text>
-        </Pressable>
-        <HomeScreen />
-      </View>
-    </ShellChromeProvider>
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <ShellChromeProvider
+        navigationDrawerOpen={false}
+        openNavigationDrawer={() => undefined}
+        openProfileSwitcher={() => undefined}
+        registerHomeReselection={registerHomeReselection}
+        reselectHome={reselectHome}
+      >
+        <View>
+          <Pressable
+            accessibilityLabel="홈 다시 불러오기"
+            accessibilityRole="button"
+            onPress={handleHomeReselection}
+          >
+            <Text>홈 다시 불러오기</Text>
+          </Pressable>
+          <HomeScreen />
+        </View>
+      </ShellChromeProvider>
+    </RelayActorProvider>
   );
 }
 
@@ -150,14 +197,17 @@ function HomePushPermissionStory() {
 function CachedHomeAutoRevalidationStory() {
   const [requestCount, setRequestCount] = useState(0);
   const environment = useMemo(() => {
-    const network = Network.create((request) => {
-      if (request.name === 'HomePageQuery') {
-        setRequestCount((count) => count + 1);
-        return Promise.reject(new Error('홈 자동 재검증 실패'));
-      }
+    const network = Network.create(
+      (request) => {
+        if (request.name === 'HomePageQuery') {
+          setRequestCount((count) => count + 1);
+          return Promise.reject(new Error('홈 자동 재검증 실패'));
+        }
 
-      return Promise.resolve({ data: {} });
-    });
+        return Promise.resolve({ data: {} });
+      },
+      () => Observable.create<GraphQLResponse>(() => undefined),
+    );
     const nextEnvironment = new Environment({
       network,
       store: new Store(new RecordSource()),
@@ -338,19 +388,6 @@ export const ErrorFull: Story = {
 
 export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  parameters: {
-    relay: {
-      operationResponses: {
-        HomePageQuery: {
-          sequence: [
-            { data: cachedHomeData },
-            { delayMs: 300, error: '홈 재조회 실패' },
-            { data: recoveredHomeData },
-          ],
-        },
-      },
-    },
-  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -372,18 +409,21 @@ export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   render: () => <HomeRefreshStory />,
 };
 
-export const CachedMountReusesTimelineWithoutRequest: Story = {
+export const CachedMountRevalidatesWithoutLoadingIndicator: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await expect(canvas.findByText('캐시된 홈 게시글')).resolves.toBeVisible();
 
-    expect(body.queryByText('홈을 새로 불러오지 못했어요.')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent(/^1$/),
+    );
+    const revalidationToast = await body.findByText('홈을 새로 불러오지 못했어요.');
+    expect(revalidationToast).toBeVisible();
     expect(canvas.getByText('캐시된 홈 게시글')).toBeVisible();
     expect(canvas.queryByText('잠시 후 다시 시도해주세요.')).not.toBeInTheDocument();
     expect(canvas.queryByText('홈을 불러오는 중입니다.')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('home-automatic-request-count')).toHaveTextContent('0');
   },
   render: () => <CachedHomeAutoRevalidationStory />,
 };

@@ -178,6 +178,98 @@ describe('Relay 네트워크', () => {
     }
   });
 
+  it('SSE reports initial and reconnected operation-local callbacks without serializing metadata', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const connectionStates: boolean[] = [];
+    const requestBodies: Array<Record<string, unknown>> = [];
+    let failFirstStream: (() => void) | undefined;
+    let resolveFirstConnected: () => void = () => undefined;
+    let resolveReconnected: () => void = () => undefined;
+    let rejectReconnect: (error: unknown) => void = () => undefined;
+    const firstConnected = new Promise<void>((resolve) => {
+      resolveFirstConnected = resolve;
+    });
+    const reconnected = new Promise<void>((resolve) => {
+      resolveReconnected = resolve;
+    });
+    const reconnectError = new Promise<never>((_resolve, reject) => {
+      rejectReconnect = reject;
+    });
+    let fetchCount = 0;
+    globalThis.fetch = async (_input, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      fetchCount += 1;
+      const body =
+        fetchCount === 1
+          ? new ReadableStream<Uint8Array>({
+              start(controller) {
+                failFirstStream = () => controller.error(new TypeError('stream disconnected'));
+              },
+            })
+          : new ReadableStream<Uint8Array>({ start() {} });
+      return new Response(body, {
+        headers: { 'content-type': 'text/event-stream' },
+        status: 200,
+      });
+    };
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://kos.moe' } },
+    });
+    mock.timers.enable({ apis: ['setTimeout'] });
+
+    let subscription: { unsubscribe: () => void } | undefined;
+    try {
+      const observable = createGraphQLSubscription(null, 'profile-a')(
+        subscriptionRequest,
+        { include: true },
+        {
+          metadata: {
+            onSubscriptionConnected: (reconnected: boolean) => {
+              connectionStates.push(reconnected);
+              if (reconnected) {
+                resolveReconnected();
+              } else {
+                resolveFirstConnected();
+              }
+            },
+          },
+        },
+      );
+      if (!('subscribe' in observable)) {
+        assert.fail('GraphQL subscription did not return a Relay observable.');
+      }
+      const reconnectedOrFailed = Promise.race([reconnected, reconnectError]);
+      subscription = observable.subscribe({ error: rejectReconnect });
+      await firstConnected;
+      assert.deepEqual(connectionStates, [false]);
+      assert.ok(failFirstStream);
+      failFirstStream();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      mock.timers.runAll();
+      await reconnectedOrFailed;
+
+      const expectedRequest = {
+        operationName: subscriptionRequest.name,
+        query: subscriptionRequest.text,
+        variables: { include: true },
+        extensions: { selectedProfileId: 'profile-a' },
+      };
+      assert.deepEqual(connectionStates, [false, true]);
+      assert.deepEqual(requestBodies, [expectedRequest, expectedRequest]);
+    } finally {
+      subscription?.unsubscribe();
+      mock.timers.reset();
+      globalThis.fetch = originalFetch;
+      if (originalWindow) {
+        Object.defineProperty(globalThis, 'window', originalWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
   it('web SSE subscription uses BFF cookie credentials without a bearer token', async () => {
     const originalFetch = globalThis.fetch;
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

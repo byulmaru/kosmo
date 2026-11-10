@@ -92,7 +92,7 @@ export function createGraphQLSubscription(
 ): SubscribeFunction {
   let client: ReturnType<typeof createClient> | undefined;
 
-  return (request, variables) =>
+  return (request, variables, cacheConfig) =>
     Observable.create<GraphQLResponse>((sink) => {
       if (!request.text) {
         sink.error(new Error(`Relay operation ${request.name} has no query text.`));
@@ -109,6 +109,8 @@ export function createGraphQLSubscription(
         });
       }
 
+      const onSubscriptionConnected = cacheConfig.metadata?.onSubscriptionConnected;
+
       return client.subscribe(
         {
           operationName: request.name,
@@ -120,6 +122,13 @@ export function createGraphQLSubscription(
           next: (response) => sink.next(response as GraphQLResponse),
           error: (cause) => sink.error(new RelayTransportError(cause)),
           complete: () => sink.complete(),
+        },
+        {
+          connected: (reconnected) => {
+            if (typeof onSubscriptionConnected === 'function') {
+              onSubscriptionConnected(reconnected);
+            }
+          },
         },
       );
     });

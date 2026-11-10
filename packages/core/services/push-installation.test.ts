@@ -566,9 +566,10 @@ test('session revoke deletes installations for terminal and active sessions', as
       .update(Sessions)
       .set({ state: SessionState.EXPIRED })
       .where(eq(Sessions.id, oldSession.id));
-    assert.deepEqual(await revokeCurrentSession({ token: oldSession.token }), {
-      status: 'ALREADY_UNAUTHENTICATED',
-    });
+    assert.equal(
+      (await revokeCurrentSession({ token: oldSession.token })).status,
+      'ALREADY_UNAUTHENTICATED',
+    );
     assert.deepEqual(
       await db
         .select({ id: PushInstallations.id })
@@ -577,9 +578,7 @@ test('session revoke deletes installations for terminal and active sessions', as
       [],
     );
 
-    assert.deepEqual(await revokeCurrentSession({ token: newSession.token }), {
-      status: 'REVOKED',
-    });
+    assert.equal((await revokeCurrentSession({ token: newSession.token })).status, 'REVOKED');
     assert.deepEqual(
       await db
         .select({ id: PushInstallations.id })

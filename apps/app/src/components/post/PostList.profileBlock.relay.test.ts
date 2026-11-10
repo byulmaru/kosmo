@@ -106,6 +106,9 @@ stub('react-native', {
   findNodeHandle: () => null,
   useWindowDimensions: () => ({ height: 844, width: 390 }),
 });
+stub('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 stub('expo-router', {
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
   usePathname: () => '/home',

@@ -211,6 +211,7 @@ type Props = {
   identityKey?: string;
   local?: PostList_local$key | null;
   loading?: boolean;
+  onAtTopChange?: (atTop: boolean) => void;
   onRetry?: () => void;
   onRefresh?: () => void;
   profile?: (PostList_profile$key & PostList_profile_pinned$key) | null;
@@ -229,6 +230,7 @@ export const PostList = memo(function PostList({
   identityKey,
   local: localKey,
   loading = false,
+  onAtTopChange,
   onRetry,
   onRefresh,
   profile: profileKey,
@@ -388,6 +390,8 @@ export const PostList = memo(function PostList({
               key={listIdentityKey}
               keyExtractor={(edge) => edge.node.id}
               loadNext={loadNext}
+              maintainVisibleContentPosition={isHome}
+              onAtTopChange={isHome ? onAtTopChange : undefined}
               onLoadErrorChange={handleLoadErrorChange}
               onRefresh={onRefresh}
               pageSize={20}

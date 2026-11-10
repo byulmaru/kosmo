@@ -134,9 +134,11 @@ test('profile route action follows Profile.viewerState after switching', async (
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
+  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
   await page.goto('/@gamma');
+  const profileLayoutResponse = await profileLayoutResponsePromise;
+  await profileLayoutResponse.finished();
   await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
-  await page.waitForLoadState('networkidle');
 
   graphQLRequests.clear();
 
@@ -166,20 +168,37 @@ test('home route active profile query refetches after switching profiles', async
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
-  await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
 
-  const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const homeQueryResponse = page.waitForResponse((response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const requestBody = JSON.parse(response.request().postData() ?? '{}') as {
+      extensions?: { selectedProfileId?: string | null } | null;
+      operationName?: string | null;
+    };
+    return (
+      requestBody.operationName === 'HomePageQuery' &&
+      requestBody.extensions?.selectedProfileId === alphaHomeProfileId
+    );
+  });
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
   expect(responseBody.data?.selectProfile?.profile?.id).toBe(alphaHomeProfileId);
   const homeQueryBody = (await (await homeQueryResponse).json()) as {
-    data?: { homeTimeline?: { edges?: unknown[] | null } | null };
+    data?: {
+      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+      homeTimeline?: { edges?: unknown[] | null } | null;
+    };
   };
+  expect(homeQueryBody.data?.currentSession?.selectedProfile?.id).toBe(alphaHomeProfileId);
   expect(homeQueryBody.data?.homeTimeline?.edges).toEqual([]);
 
-  await page.waitForLoadState('networkidle');
+  await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
+  await expect(page.getByText(betaPostBody)).toBeHidden();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
@@ -277,16 +296,22 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await page.goto('/login');
   await page.waitForURL('**/first-profile/handle');
 
-  await createProfileFromSwitcher(page, 'revisionalpha');
+  const alphaProfileId = await createProfileFromSwitcher(page, 'revisionalpha');
   const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
 
-  await selectProfileFromSwitcher(page, 'revisionalpha');
+  const alphaSelectionResponse = await selectProfileFromSwitcher(page, 'revisionalpha');
+  const selectedAlphaProfileId = alphaSelectionResponse.data?.selectProfile?.profile?.id;
+  expect(selectedAlphaProfileId).toBe(alphaProfileId);
+  const alphaHomeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
   await page.goto('/home');
+  const alphaHomeQueryBody = (await (await alphaHomeQueryResponse).json()) as {
+    data?: { currentSession?: { selectedProfile?: { id?: string | null } | null } | null };
+  };
+  expect(alphaHomeQueryBody.data?.currentSession?.selectedProfile?.id).toBe(selectedAlphaProfileId);
   await expect(page.getByRole('progressbar')).toHaveCount(0);
-  await page.waitForLoadState('networkidle');
 
   let failHomeQueries = true;
   await page.route('**/graphql', async (route) => {

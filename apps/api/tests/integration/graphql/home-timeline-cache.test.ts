@@ -16,17 +16,30 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
+import { homeTimelinePubSub } from '@kosmo/core/home-timeline/events';
 import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
+import { disposeRedisPubSub } from '@kosmo/core/redis/pubsub';
+import { createClient } from '@redis/client';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
+import {
+  createSseEventReader,
+  getSseData,
+  waitForSubscriberCount,
+  withTimeout,
+} from '../../../src/graphql/subscription-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
 import type * as NaturalLanguageMuteCache from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import type * as CoreRedis from '../../../../../packages/core/redis/client';
-import type { deriveContext as DeriveContext, Env } from '../../../src/context';
+import type {
+  Context as ApiContext,
+  deriveContext as DeriveContext,
+  Env,
+} from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -120,7 +133,7 @@ type SmartFilterResultsConnection = {
 
 type Auth = {
   readonly account: { readonly id: string };
-  readonly profile: { readonly id: string };
+  readonly profile: { readonly id: string; readonly displayName: string };
   readonly session: { readonly id: string };
   readonly token: string;
 };
@@ -249,6 +262,7 @@ after(async () => {
   if (configuredLocalInstanceId) {
     await db.delete(Instances).where(eq(Instances.id, configuredLocalInstanceId));
   }
+  disposeRedisPubSub();
   await pg.end();
   if (previousPublicOrigin === undefined) {
     delete process.env.PUBLIC_ORIGIN;
@@ -2251,6 +2265,486 @@ test('falls back to the DB Home policy when Redis is unconfigured', async () => 
     }
   }
 });
+
+test(
+  'streams Home Posts, handles unreadable Posts, and ends only revoked Session subscriptions',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createAuth();
+    const activeProfile = await createProfile('surviving-home-session');
+    await db.insert(AccountProfiles).values({
+      accountId: viewer.account.id,
+      profileId: activeProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const activeSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: viewer.account.id,
+        activeProfileId: activeProfile.id,
+        state: SessionState.ACTIVE,
+        token: `home-token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const activeSessionMarker = await createContentfulPost(
+      activeProfile.id,
+      'active Session subscription marker',
+    );
+    const selectedProfile = await createProfile('selected-home-subscription');
+    await db.insert(AccountProfiles).values({
+      accountId: viewer.account.id,
+      profileId: selectedProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const author = await createProfile('home-subscription-author');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: selectedProfile.id,
+      followeeProfileId: author.id,
+    });
+    const post = await createContentfulPost(author.id, 'live Home subscription body');
+    const updatedProfilePost = await createContentfulPost(
+      author.id,
+      'post after author profile update',
+    );
+    const defaultProfileMarker = await createContentfulPost(
+      viewer.profile.id,
+      'default Home subscription marker',
+    );
+    const redis = createClient({ url: testRedisUrl! });
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+    redis.on('error', () => undefined);
+    await redis.connect();
+    const waitForProfileSubscribers = (profileId: string, count: number) => {
+      const channel = `homeTimelinePostAdded:${profileId}`;
+      return waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(channel))[channel] ?? 0,
+        count,
+      );
+    };
+    const waitForSessionSubscribers = (sessionId: string, count: number) => {
+      const channel = `sessionEnded:${sessionId}`;
+      return waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(channel))[channel] ?? 0,
+        count,
+      );
+    };
+    let capturedContext: ApiContext | undefined;
+    const capturedContextApp = new Hono<Env>();
+    capturedContextApp.use('*', async (context, next) => {
+      const requestContext = capturedContext ?? (await deriveContext(context));
+      capturedContext = requestContext;
+      context.set('context', requestContext);
+      return next();
+    });
+    capturedContextApp.route('/graphql', yoga);
+
+    const requestSubscription = async (
+      {
+        token,
+        selectedProfileId,
+      }: {
+        readonly token?: string;
+        readonly selectedProfileId?: string;
+      } = {},
+      requestApp: Hono<Env> = app,
+    ) =>
+      requestApp.request('/graphql', {
+        body: JSON.stringify({
+          ...(selectedProfileId === undefined
+            ? {}
+            : { extensions: { selectedProfileId: encodeGlobalId('Profile', selectedProfileId) } }),
+          query:
+            'subscription Timeline { timeline { __typename ... on TimelinePostAdded { post { id profile { displayName } content { bodyText } } } } }',
+        }),
+        headers: {
+          accept: 'text/event-stream',
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+
+    const subscribe = async (
+      options: {
+        readonly token: string;
+        readonly selectedProfileId?: string;
+      },
+      requestApp: Hono<Env> = app,
+    ) => {
+      const response = await requestSubscription(options, requestApp);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+      assert.ok(response.body);
+      const reader = response.body.getReader();
+      readers.push(reader);
+      return { readEvent: createSseEventReader(reader), reader };
+    };
+
+    const expectPermissionDenied = async (token?: string) => {
+      const response = await requestSubscription({ token });
+      let result: unknown;
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        assert.ok(response.body);
+        const reader = response.body.getReader();
+        try {
+          result = getSseData(
+            await withTimeout(
+              createSseEventReader(reader)(),
+              'Unauthorized Home subscription did not return a GraphQL error',
+            ),
+          );
+        } finally {
+          await reader.cancel().catch(() => undefined);
+        }
+      } else {
+        result = await response.json();
+      }
+
+      assert.ok(typeof result === 'object' && result !== null && 'errors' in result);
+      const errors = (result as { errors?: readonly { extensions?: { code?: string } }[] }).errors;
+      assert.ok(errors?.length);
+      assert.equal(errors[0]?.extensions?.code, 'PERMISSION_DENIED');
+    };
+
+    try {
+      const noProfileViewer = await createAuth();
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: null })
+        .where(eq(Sessions.id, noProfileViewer.session.id));
+      await expectPermissionDenied();
+      await expectPermissionDenied(noProfileViewer.token);
+      const defaultProfileChannel = `homeTimelinePostAdded:${noProfileViewer.profile.id}`;
+      assert.equal(
+        (await redis.pubSubNumSub(defaultProfileChannel))[defaultProfileChannel] ?? 0,
+        0,
+      );
+
+      const defaultProfileSubscription = await subscribe(
+        { token: viewer.token },
+        capturedContextApp,
+      );
+      assert.equal(capturedContext?.session?.id, viewer.session.id);
+      const selectedProfileSubscription = await subscribe({
+        token: viewer.token,
+        selectedProfileId: selectedProfile.id,
+      });
+      const activeSessionSubscription = await subscribe({ token: activeSession.token });
+      const defaultProfileEvent = defaultProfileSubscription.readEvent();
+      const selectedProfileEvent = selectedProfileSubscription.readEvent();
+      const activeSessionPostEvent = activeSessionSubscription.readEvent();
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 1),
+        waitForProfileSubscribers(selectedProfile.id, 1),
+        waitForProfileSubscribers(activeProfile.id, 1),
+        waitForSessionSubscribers(viewer.session.id, 1),
+        waitForSessionSubscribers(activeSession.id, 1),
+      ]);
+
+      await fanoutHomeTimelinePost({ postId: post.id });
+      const liveEvent = await withTimeout(
+        selectedProfileEvent,
+        'Selected Profile did not receive the Home Post subscription event',
+      );
+      assert.ok(liveEvent);
+      assert.match(liveEvent, /event: next/);
+      assert.deepEqual(getSseData(liveEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', post.id),
+              profile: { displayName: author.displayName },
+              content: { bodyText: 'live Home subscription body' },
+            },
+          },
+        },
+      });
+
+      const updatedAuthorDisplayName = 'Updated Home subscription author';
+      await db
+        .update(Profiles)
+        .set({ displayName: updatedAuthorDisplayName })
+        .where(eq(Profiles.id, author.id));
+      await fanoutHomeTimelinePost({ postId: updatedProfilePost.id });
+      const updatedProfileEvent = await withTimeout(
+        selectedProfileSubscription.readEvent(),
+        'Selected Profile did not receive the Post after its author profile update',
+      );
+      assert.deepEqual(getSseData(updatedProfileEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', updatedProfilePost.id),
+              profile: { displayName: updatedAuthorDisplayName },
+              content: { bodyText: 'post after author profile update' },
+            },
+          },
+        },
+      });
+
+      homeTimelinePubSub.publish('homeTimelinePostAdded', viewer.profile.id, {
+        postId: defaultProfileMarker.id,
+      });
+      const defaultProfileLiveEvent = await withTimeout(
+        defaultProfileEvent,
+        'Default Profile did not receive its Home Post subscription marker',
+      );
+      assert.deepEqual(getSseData(defaultProfileLiveEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', defaultProfileMarker.id),
+              profile: { displayName: viewer.profile.displayName },
+              content: { bodyText: 'default Home subscription marker' },
+            },
+          },
+        },
+      });
+
+      await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+      homeTimelinePubSub.publish('homeTimelinePostAdded', selectedProfile.id, { postId: post.id });
+      const missingPostEvent = await withTimeout(
+        selectedProfileSubscription.readEvent(),
+        'Deleted Post subscription event was not delivered',
+      );
+      assert.deepEqual(getSseData(missingPostEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: null,
+          },
+        },
+      });
+
+      const defaultProfileCompletion = defaultProfileSubscription.readEvent();
+      const selectedProfileCompletion = selectedProfileSubscription.readEvent();
+      const revoked = await requestGraphQL<{
+        revokeCurrentSession: { completed: boolean };
+      }>('mutation { revokeCurrentSession { completed } }', {}, viewer.token);
+      assert.equal(revoked.errors, undefined, JSON.stringify(revoked.errors));
+      assert.deepEqual(revoked.data, { revokeCurrentSession: { completed: true } });
+
+      assert.ok(capturedContext);
+      const staleSessionSubscription = await subscribe({ token: viewer.token }, capturedContextApp);
+      const staleSessionCompletion = await withTimeout(
+        staleSessionSubscription.readEvent(),
+        'A subscription opened with its pre-revocation Session context did not complete',
+      );
+      assert.ok(staleSessionCompletion);
+      assert.match(staleSessionCompletion, /^event: complete$/m);
+      assert.doesNotMatch(staleSessionCompletion, /^event: next$/m);
+      assert.doesNotMatch(staleSessionCompletion, /^event: error$/m);
+
+      const completionEvents = await Promise.all([
+        withTimeout(
+          defaultProfileCompletion,
+          'Default Profile subscription did not complete after Session revocation',
+        ),
+        withTimeout(
+          selectedProfileCompletion,
+          'Selected Profile subscription did not complete after Session revocation',
+        ),
+      ]);
+      for (const completionEvent of completionEvents) {
+        assert.ok(completionEvent);
+        assert.match(completionEvent, /^event: complete$/m);
+        assert.doesNotMatch(completionEvent, /^event: error$/m);
+        assert.doesNotMatch(completionEvent, /"errors"\s*:/);
+      }
+
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 0),
+        waitForProfileSubscribers(selectedProfile.id, 0),
+        waitForSessionSubscribers(viewer.session.id, 0),
+        waitForProfileSubscribers(activeProfile.id, 1),
+        waitForSessionSubscribers(activeSession.id, 1),
+      ]);
+
+      homeTimelinePubSub.publish('homeTimelinePostAdded', activeProfile.id, {
+        postId: activeSessionMarker.id,
+      });
+      const activeSessionEvent = await withTimeout(
+        activeSessionPostEvent,
+        'An unrelated Session subscription stopped after revocation',
+      );
+      assert.deepEqual(getSseData(activeSessionEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', activeSessionMarker.id),
+              profile: { displayName: activeProfile.displayName },
+              content: { bodyText: 'active Session subscription marker' },
+            },
+          },
+        },
+      });
+
+      await Promise.all(readers.map((reader) => reader.cancel()));
+      await Promise.all([
+        waitForProfileSubscribers(viewer.profile.id, 0),
+        waitForProfileSubscribers(selectedProfile.id, 0),
+        waitForProfileSubscribers(activeProfile.id, 0),
+        waitForSessionSubscribers(viewer.session.id, 0),
+        waitForSessionSubscribers(activeSession.id, 0),
+      ]);
+    } finally {
+      await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
+      await redis.close();
+    }
+  },
+);
+
+test(
+  'closes subscriptions for a disabled Profile across Sessions while preserving another Profile on the same Session',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const owner = await createAuth();
+    const otherProfile = await createProfile('surviving-profile-subscription');
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: otherProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const secondSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: owner.account.id,
+        activeProfileId: owner.profile.id,
+        state: SessionState.ACTIVE,
+        token: `home-token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const otherProfilePost = await createContentfulPost(
+      otherProfile.id,
+      'the other Profile remains subscribed',
+    );
+    const redis = createClient({ url: testRedisUrl! });
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+    redis.on('error', () => undefined);
+    await redis.connect();
+
+    const waitForTopicCount = (topic: string, id: string, count: number) =>
+      waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(`${topic}:${id}`))[`${topic}:${id}`] ?? 0,
+        count,
+      );
+
+    const subscribe = async (token: string, profileId: string) => {
+      const response = await app.request('/graphql', {
+        body: JSON.stringify({
+          extensions: { selectedProfileId: encodeGlobalId('Profile', profileId) },
+          query:
+            'subscription Timeline { timeline { __typename ... on TimelinePostAdded { post { id content { bodyText } } } } }',
+        }),
+        headers: {
+          accept: 'text/event-stream',
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+      assert.ok(response.body);
+      const reader = response.body.getReader();
+      readers.push(reader);
+      return { readEvent: createSseEventReader(reader) };
+    };
+
+    try {
+      const profileAOnFirstSession = await subscribe(owner.token, owner.profile.id);
+      const profileAOnSecondSession = await subscribe(secondSession.token, owner.profile.id);
+      const profileBOnFirstSession = await subscribe(owner.token, otherProfile.id);
+      const firstProfileCompletion = profileAOnFirstSession.readEvent();
+      const secondProfileCompletion = profileAOnSecondSession.readEvent();
+
+      await Promise.all([
+        waitForTopicCount('profileDisabled', owner.profile.id, 1),
+        waitForTopicCount('profileDisabled', otherProfile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
+        waitForTopicCount('sessionEnded', owner.session.id, 1),
+        waitForTopicCount('sessionEnded', secondSession.id, 1),
+      ]);
+
+      const deleted = await requestGraphQL<{
+        deleteProfile: { profileId: string; success: boolean };
+      }>(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) { profileId success }
+        }`,
+        { id: encodeGlobalId('Profile', owner.profile.id) },
+        owner.token,
+      );
+      assert.equal(deleted.errors, undefined, JSON.stringify(deleted.errors));
+      assert.deepEqual(deleted.data?.deleteProfile, {
+        profileId: encodeGlobalId('Profile', owner.profile.id),
+        success: true,
+      });
+
+      const completions = await Promise.all([
+        withTimeout(firstProfileCompletion, 'Profile A subscription did not complete'),
+        withTimeout(
+          secondProfileCompletion,
+          'Profile A subscription in another Session did not complete',
+        ),
+      ]);
+      for (const completion of completions) {
+        assert.ok(completion);
+        assert.match(completion, /^event: complete$/m);
+        assert.doesNotMatch(completion, /^event: error$/m);
+        assert.doesNotMatch(completion, /"errors"\s*:/);
+      }
+
+      await Promise.all([
+        waitForTopicCount('profileDisabled', owner.profile.id, 0),
+        waitForTopicCount('profileDisabled', otherProfile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
+        waitForTopicCount('sessionEnded', owner.session.id, 1),
+        waitForTopicCount('sessionEnded', secondSession.id, 0),
+      ]);
+
+      homeTimelinePubSub.publish('homeTimelinePostAdded', otherProfile.id, {
+        postId: otherProfilePost.id,
+      });
+      const otherProfileEvent = await withTimeout(
+        profileBOnFirstSession.readEvent(),
+        'The other Profile subscription stopped after Profile A was disabled',
+      );
+      assert.deepEqual(getSseData(otherProfileEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', otherProfilePost.id),
+              content: { bodyText: 'the other Profile remains subscribed' },
+            },
+          },
+        },
+      });
+
+      await Promise.all(readers.map((reader) => reader.cancel()));
+      await Promise.all([
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 0),
+        waitForTopicCount('sessionEnded', owner.session.id, 0),
+        waitForTopicCount('profileDisabled', otherProfile.id, 0),
+      ]);
+    } finally {
+      await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
+      await redis.close();
+    }
+  },
+);
 
 async function createAuth(): Promise<Auth> {
   const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);

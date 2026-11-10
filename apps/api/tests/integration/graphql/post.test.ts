@@ -481,6 +481,88 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(remoteDirectRead.data?.node?.content.bodyText, 'remote direct content');
   });
 
+  test('비활성 viewer의 이전 context로는 FOLLOWERS Post Node와 PostContent를 읽을 수 없다', async () => {
+    const author = await createAuthenticatedSession({
+      profileHandle: 'disabled_viewer_post_author',
+    });
+    const viewer = await createAuthenticatedSession({ profileHandle: 'disabled_post_viewer' });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+    const post = await createContentfulPost(author.profile.id, {
+      bodyText: 'private to the still-following viewer',
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const postContent = await db
+      .select({ id: PostContents.id })
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    let staleContext: Awaited<ReturnType<typeof deriveContext>> | undefined;
+    const staleContextApp = new Hono<Env>();
+    staleContextApp.use('*', async (c, next) => {
+      const context = staleContext ?? (await deriveContext(c));
+      staleContext = context;
+      c.set('context', context);
+      return next();
+    });
+    staleContextApp.route('/graphql', yoga);
+
+    const query = `query DisabledViewerPost($postId: ID!, $contentId: ID!) {
+      post: node(id: $postId) { ... on Post { id content { bodyText } } }
+      content: node(id: $contentId) { ... on PostContent { id bodyText } }
+    }`;
+    const variables = {
+      contentId: encodeGlobalId('PostContent', postContent.id),
+      postId: encodeGlobalId('Post', post.id),
+    };
+    const readWithCapturedContext = () =>
+      requestGraphQL<{
+        content: { bodyText: string; id: string } | null;
+        post: { content: { bodyText: string }; id: string } | null;
+      }>(query, variables, viewer.token, staleContextApp);
+
+    const beforeStateUpdate = await readWithCapturedContext();
+    assertNoGraphQLErrors(beforeStateUpdate);
+    assert.deepEqual(beforeStateUpdate.data, {
+      content: {
+        bodyText: 'private to the still-following viewer',
+        id: encodeGlobalId('PostContent', postContent.id),
+      },
+      post: {
+        content: { bodyText: 'private to the still-following viewer' },
+        id: encodeGlobalId('Post', post.id),
+      },
+    });
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, viewer.profile.id));
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.activeProfileId, viewer.profile.id));
+    assert.equal(
+      await db
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, viewer.profile.id),
+            eq(ProfileFollows.followeeProfileId, author.profile.id),
+          ),
+        )
+        .then((follows) => follows.length),
+      1,
+    );
+
+    const afterStateUpdate = await readWithCapturedContext();
+    assertNoGraphQLErrors(afterStateUpdate);
+    assert.deepEqual(afterStateUpdate.data, { content: null, post: null });
+  });
+
   test('DIRECT createPost는 Mention 없이 저장되고 author만 읽을 수 있다', async () => {
     const author = await createAuthenticatedSession();
     const stranger = await createAuthenticatedSession();
@@ -2874,12 +2956,13 @@ const requestGraphQL = async <TData>(
   query: string,
   variables: Record<string, unknown>,
   token?: string,
+  requestApp: Hono<Env> = app,
 ): Promise<GraphQLResult<TData>> => {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
-  const response = await app.request('/graphql', {
+  const response = await requestApp.request('/graphql', {
     body: JSON.stringify({ query, variables }),
     headers,
     method: 'POST',

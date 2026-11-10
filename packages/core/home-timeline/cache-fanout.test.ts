@@ -15,6 +15,7 @@ let candidateRows = [];
 let redisResponses = [];
 let transactionResults = [];
 let evalCalls = 0;
+let publishedEvents = [];
 
 const client = {
   async ping() {
@@ -79,6 +80,12 @@ mock.module(new URL('../db/index.ts', import.meta.url), {
   exports: { ...tables, db },
 });
 
+mock.module(new URL('./events.ts', import.meta.url), {
+  exports: {
+    publishHomeTimelinePostAdded: (event) => publishedEvents.push(event),
+  },
+});
+
 const { fanoutHomeTimelinePost } = await import('./cache.ts');
 const postId = '550e8400-e29b-41d4-a716-446655440000';
 const viewerId = 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f';
@@ -95,6 +102,7 @@ const reset = ({ rows = [], redis = [], transaction = [] } = {}) => {
   redisResponses = [...redis];
   transactionResults = [...transaction];
   evalCalls = 0;
+  publishedEvents = [];
 };
 
 for (const url of [undefined, '  ']) {
@@ -122,6 +130,7 @@ redisResponses.push('ready', 'ready', 'ready');
 transactionResults.push([null], [0]);
 await fanoutHomeTimelinePost({ postId });
 assert.equal(evalCalls, 1);
+assert.deepEqual(publishedEvents, []);
 
 reset({
   rows: [{ profileId: viewerId, post }],
@@ -138,6 +147,18 @@ reset({
 });
 await fanoutHomeTimelinePost({ postId });
 assert.equal(evalCalls, 1);
+
+reset({
+  rows: [
+    { profileId: viewerId, post },
+    { profileId: 'a6b51e1e-cdae-4016-af05-224b6218e61d', post },
+  ],
+  redis: ['ready', 'ready', 'ready', 'ready'],
+  transaction: [[null], [null], [1, 0]],
+});
+await fanoutHomeTimelinePost({ postId });
+assert.equal(evalCalls, 2);
+assert.deepEqual(publishedEvents, [{ postId, profileId: viewerId }]);
 
 reset({ redis: ['ready'] });
 await fanoutHomeTimelinePost({ postId });
@@ -178,6 +199,8 @@ let redisCalls = 0;
 let failNextRedisCalls = 0;
 let candidateRows = [];
 let selectQueries = 0;
+let evalResult = 0;
+let publishedEvents = [];
 
 const client = {
   async zScore() {
@@ -209,7 +232,7 @@ const client = {
     return transaction;
   },
   async eval() {
-    return 0;
+    return evalResult;
   },
 };
 
@@ -248,6 +271,12 @@ mock.module(new URL('../db/index.ts', import.meta.url), {
   exports: { ...tables, db },
 });
 
+mock.module(new URL('./events.ts', import.meta.url), {
+  exports: {
+    publishHomeTimelinePostAdded: (event) => publishedEvents.push(event),
+  },
+});
+
 const {
   insertHomeTimelinePost,
   listHomeTimelineRecipientPage,
@@ -279,6 +308,19 @@ await retryAfterRedisFailure(() => insertHomeTimelinePost({
   postId,
   profileId,
 }), 2);
+
+evalResult = 1;
+publishedEvents = [];
+await insertHomeTimelinePost({ postId, profileId });
+assert.deepEqual(publishedEvents, [{ postId, profileId }]);
+
+evalResult = 0;
+await insertHomeTimelinePost({ postId, profileId });
+assert.deepEqual(publishedEvents, [{ postId, profileId }]);
+
+candidateRows = [];
+await insertHomeTimelinePost({ postId, profileId });
+assert.deepEqual(publishedEvents, [{ postId, profileId }]);
 
 candidateRows = [{ profileId }];
 const callsBeforeRecipientPage = redisCalls;
@@ -317,6 +359,103 @@ assert.deepEqual(await listHomeTimelineRecipientPage({
 await removeHomeTimelinePost({ postId });
 await reconcileHomeTimelineFollow({ profileId });
 assert.equal(redisCalls, callsBeforeUnconfigured);
+`;
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--experimental-test-module-mocks',
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '--eval',
+      childScript,
+    ],
+    {
+      cwd: import.meta.dirname,
+      encoding: 'utf8',
+      timeout: 5_000,
+    },
+  );
+
+  assert.equal(result.error, undefined, result.stderr);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test('successful Home insertion survives a PubSub transport error', () => {
+  const childScript = String.raw`
+import assert from 'node:assert/strict';
+import { mock } from 'node:test';
+import { sql } from 'drizzle-orm';
+import * as tables from '../db/tables.ts';
+
+let evalCalls = 0;
+const postId = '550e8400-e29b-41d4-a716-446655440000';
+const profileId = 'a70d5412-1fb3-4ba3-8b07-6f9d2ee6764f';
+const post = {
+  id: postId,
+  profileId,
+  currentContentId: null,
+  quoteConsentStatus: null,
+  repostSourceId: null,
+};
+
+const db = {
+  select() {
+    const query = {
+      from() { return this; },
+      innerJoin() { return this; },
+      where() { return this; },
+      orderBy() { return this; },
+      limit() { return this; },
+      getSQL() { return sql.empty(); },
+      then(onFulfilled, onRejected) {
+        return Promise.resolve([post]).then(onFulfilled, onRejected);
+      },
+    };
+    return query;
+  },
+};
+
+mock.module(new URL('../db/index.ts', import.meta.url), {
+  exports: { ...tables, db },
+});
+
+const client = {
+  multi() {
+    const transaction = {
+      zScore() { return transaction; },
+      async exec() { return [null]; },
+    };
+    return transaction;
+  },
+  async eval() {
+    evalCalls += 1;
+    return 1;
+  },
+};
+
+mock.module(new URL('../redis/client.ts', import.meta.url), {
+  exports: {
+    runRedisCommand: async (command) => ({ value: await command(client) }),
+  },
+});
+
+mock.module(new URL('../redis/pubsub.ts', import.meta.url), {
+  exports: {
+    redisEventTarget: {
+      addEventListener() {},
+      dispatchEvent() { throw new Error('PubSub transport unavailable'); },
+      removeEventListener() {},
+    },
+    disposeRedisPubSub() {},
+  },
+});
+
+process.env.REDIS_URL = 'redis://mock';
+const { insertHomeTimelinePost } = await import('./cache.ts');
+await insertHomeTimelinePost({ postId, profileId });
+assert.equal(evalCalls, 1);
 `;
 
   const result = spawnSync(

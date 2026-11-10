@@ -29,9 +29,10 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 ### Home Post List
 
 - Home Post List는 viewer Profile마다 계산되는 파생 목록이다. Post를 목록에 넣을 때 당시의 후보, Visibility,
-  Eligibility, Follow, Block, Mute 규칙을 판정한다. Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에
-  몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과 Post 삭제 여부, 바깥 Post와 direct Source Post의 Author
-  Profile ACTIVE 상태를 다시 확인한다.
+  Eligibility, Follow, Block, Mute 규칙을 판정한다. 이 규칙을 통과한 새 Post는 열린 Home 목록에도 수동
+  새로고침 없이 반영될 수 있다. 목록에 반영되지 않은 항목은 이후 최신 Home 조회에서 현재 정책에 따라 보정된다.
+  Follow·Block·Mute와 Profile/Post 상태 변경은 Home 목록에 몇 초 안에 반영될 수 있다. 조회할 때는 viewer 권한과
+  Post 삭제 여부, 바깥 Post와 direct Source Post의 Author Profile ACTIVE 상태를 다시 확인한다.
 - Home GraphQL 페이지는 Natural Language Mute Rule을 적용하기 전의 bounded 후보 Post를 기준으로 나눈다. 요청한
   후보 수와 최대 한 항목의 lookahead만 읽으며, 제외 후 반환 edge 수는 더 적거나 비어 있을 수 있다. `pageInfo`와
   cursor는 소비한 후보 페이지를 나타내고 lookahead 후보는 다음 요청에 남으므로, edge가 비어 있어도 다음 페이지로

@@ -2,6 +2,7 @@ import { and, DrizzleQueryError, eq, exists, sql } from 'drizzle-orm';
 import { first, getDatabaseConnection, ProfileFollows, Profiles, Sessions } from '../db';
 import { ProfileState } from '../enums';
 import { NotFoundError } from '../error';
+import { publishProfileDisabled } from '../profile/events';
 import type { Database } from '../db';
 
 const disableProfileOnce = (profileId: string, handle?: Database) =>
@@ -88,4 +89,6 @@ export const disableProfile = async (profileId: string, handle?: Database): Prom
 
     await disableProfileOnce(profileId, handle);
   }
+
+  await publishProfileDisabled(profileId);
 };
