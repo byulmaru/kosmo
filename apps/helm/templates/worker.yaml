@@ -129,6 +129,12 @@ spec:
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
+            - name: EMBED_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "embed-api"
+                  key: "EMBED_API_KEY"
+                  optional: true
 {{ if $fcm }}
             - name: FIREBASE_PROJECT_ID
               value: {{ required "worker.fcm.projectId is required" $fcm.projectId | quote }}

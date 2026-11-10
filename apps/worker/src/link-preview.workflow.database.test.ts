@@ -10,7 +10,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
+import { getLinkPreviewUrlHash } from '@kosmo/core/link-preview';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { Worker } from '@temporalio/worker';
@@ -54,10 +54,8 @@ const profileIds = new Set<string>();
 const postIds = new Set<string>();
 const contentIds = new Set<string>();
 
-mock.module('@kosmo/core/link-preview', {
+mock.module(new URL('./activities/link-preview-client.js', import.meta.url).href, {
   exports: {
-    getLinkPreviewUrlHash,
-    normalizeLinkPreviewUrl,
     fetchLinkPreview: async (url: string) => {
       fetchLinkPreviewCalls += 1;
       fetchLinkPreviewInput = url;

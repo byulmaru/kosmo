@@ -651,9 +651,6 @@ importers:
       fraci:
         specifier: 0.19.0
         version: 0.19.0(drizzle-orm@1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.6.7))
-      ipaddr.js:
-        specifier: ^2.5.0
-        version: 2.5.0
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -6368,10 +6365,6 @@ packages:
 
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
-
-  ipaddr.js@2.5.0:
-    resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
-    engines: {node: '>= 10'}
 
   is-array-buffer@3.0.5:
     resolution: {integrity: sha512-DDfANUiiG2wC1qawP66qlTugJeL5HyzMpfr8lLK+jMQirGzNod0B12cFB/9q838Ru27sBwfw78/rdoU7RERz6A==}
@@ -15517,8 +15510,6 @@ snapshots:
   invariant@2.2.4:
     dependencies:
       loose-envify: 1.4.0
-
-  ipaddr.js@2.5.0: {}
 
   is-array-buffer@3.0.5:
     dependencies:

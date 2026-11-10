@@ -1,13 +1,10 @@
 import '@kosmo/core/polyfill';
 
 import { db, first, LinkPreviews, PostContents, Posts, withPrimaryDatabase } from '@kosmo/core/db';
-import {
-  fetchLinkPreview,
-  getLinkPreviewUrlHash,
-  normalizeLinkPreviewUrl,
-} from '@kosmo/core/link-preview';
+import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
 import { getPostContentLinkPreviewUrl } from '@kosmo/core/post-content';
 import { and, eq, sql } from 'drizzle-orm';
+import { fetchLinkPreview } from './link-preview-client.js';
 import type { LinkPreviewCollectionInput } from '../workflows/link-preview';
 
 const refreshTtl = Temporal.Duration.from({ hours: 168 });
