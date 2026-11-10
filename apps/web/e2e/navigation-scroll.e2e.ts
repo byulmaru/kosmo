@@ -12,7 +12,7 @@ import {
 } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { isGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Route } from '@playwright/test';
 
 const recentSearchesKey = 'kosmo:recent-searches';
 
@@ -194,39 +194,113 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
         profileId: session.profile!.id,
       });
     }
+    const refreshMarkerBody = 'E2E Home reselection refresh readiness marker';
+    const refreshMarker = await createE2EPost({
+      body: refreshMarkerBody,
+      profileId: session.profile!.id,
+    });
 
     await page.setViewportSize(surface.viewport);
     await page.goto('/settings');
     await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
-    const initialHomeResponsePromise = waitForGraphQLOperation(page, 'HomePageQuery');
-    const initialEntry = await homeEntry(
-      page,
-      surface.kind === 'header' ? 'navigation' : surface.kind,
-    );
-    if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
-      await initialEntry.tap();
-    } else {
-      await initialEntry.click();
-    }
-    const initialHomeResponse = await initialHomeResponsePromise;
-    await initialHomeResponse.finished();
-    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
-    await scrollDocument(page);
-
-    const entry = await homeEntry(page, surface.kind);
-    await expect(entry).toHaveAttribute('href', '/home');
+    let initialHomeQueryInFlightCount = 0;
+    let countHomeRefreshes = false;
+    let homeSubscriptionReady = false;
+    let hideMarkerFromFirstHomeResponse = true;
     let refreshCount = 0;
-    await page.route('**/graphql', async (route) => {
-      if (isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
-        refreshCount += 1;
-      }
-      await route.continue();
-    });
-    const homeRefreshRequestPromise = page.waitForRequest((request) =>
-      isGraphQLOperation(request.postData(), 'HomePageQuery'),
-    );
 
+    const graphQLRoute = async (route: Route) => {
+      const request = route.request();
+      const operation = request.postData();
+
+      if (
+        request.headers()['accept']?.includes('text/event-stream') &&
+        isGraphQLOperation(operation, 'HomeTimelineSubscription')
+      ) {
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+          body: 'event: complete\ndata: \n\n',
+        });
+        homeSubscriptionReady = true;
+        return;
+      }
+
+      if (!isGraphQLOperation(operation, 'HomePageQuery')) {
+        await route.continue();
+        return;
+      }
+
+      const countAsRefresh = countHomeRefreshes;
+      const subscriptionReadyAtRequestStart = homeSubscriptionReady;
+      const withholdReadinessMarker =
+        !countAsRefresh && (hideMarkerFromFirstHomeResponse || !subscriptionReadyAtRequestStart);
+      if (countAsRefresh) {
+        refreshCount += 1;
+      } else {
+        hideMarkerFromFirstHomeResponse = false;
+        initialHomeQueryInFlightCount += 1;
+      }
+
+      try {
+        const response = await route.fetch();
+        if (withholdReadinessMarker) {
+          const body = (await response.json()) as {
+            data?: {
+              homeTimeline?: {
+                edges?: Array<{ node?: { id?: string } | null } | null> | null;
+              } | null;
+            };
+          };
+          if (body.data?.homeTimeline?.edges) {
+            const edges = body.data.homeTimeline.edges;
+            body.data.homeTimeline.edges = edges.filter(
+              (edge) => edge?.node?.id !== toGlobalId('Post', refreshMarker.id),
+            );
+          }
+          await route.fulfill({ response, body: JSON.stringify(body) });
+        } else {
+          await route.fulfill({ response });
+        }
+      } finally {
+        if (!countAsRefresh) {
+          initialHomeQueryInFlightCount -= 1;
+        }
+      }
+    };
+
+    await page.route('**/graphql', graphQLRoute);
     try {
+      const initialHomeResponsePromise = waitForGraphQLOperation(page, 'HomePageQuery');
+      const homeSubscriptionResponsePromise = waitForGraphQLOperation(
+        page,
+        'HomeTimelineSubscription',
+      );
+      const initialEntry = await homeEntry(
+        page,
+        surface.kind === 'header' ? 'navigation' : surface.kind,
+      );
+      if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+        await initialEntry.tap();
+      } else {
+        await initialEntry.click();
+      }
+      const initialHomeResponse = await initialHomeResponsePromise;
+      await initialHomeResponse.finished();
+      await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+      const homeSubscriptionResponse = await homeSubscriptionResponsePromise;
+      await homeSubscriptionResponse.finished();
+      await expect(page.getByRole('article').filter({ hasText: refreshMarkerBody })).toBeVisible();
+      await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+
+      await scrollDocument(page);
+      const entry = await homeEntry(page, surface.kind);
+      await expect(entry).toHaveAttribute('href', '/home');
+      await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+      const homeRefreshRequestPromise = page.waitForRequest((request) =>
+        isGraphQLOperation(request.postData(), 'HomePageQuery'),
+      );
+      countHomeRefreshes = true;
       if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
         await entry.tap();
       } else {
@@ -234,13 +308,13 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
       }
 
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-      await expect.poll(() => refreshCount).toBe(1);
       const homeRefreshRequest = await homeRefreshRequestPromise;
       const homeRefreshResponse = await homeRefreshRequest.response();
       expect(homeRefreshResponse).not.toBeNull();
       await homeRefreshResponse!.finished();
+      expect(refreshCount).toBe(1);
     } finally {
-      await page.unroute('**/graphql');
+      await page.unroute('**/graphql', graphQLRoute);
     }
   });
 }
