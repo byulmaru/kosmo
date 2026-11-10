@@ -10,7 +10,7 @@ import type {
 
 type ChildWorkflowCallOptions<T extends Workflow> = WithWorkflowArgs<
   T,
-  Omit<ChildWorkflowOptions, 'typeInfo'>
+  Omit<ChildWorkflowOptions, 'typeInfo'> & { typeInfo?: never }
 >;
 
 type RunChildWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = Omit<
