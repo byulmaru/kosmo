@@ -1,5 +1,8 @@
+import { Accounts, db, Sessions, withPrimaryDatabase } from '@kosmo/core/db';
+import { AccountState, SessionState } from '@kosmo/core/enums';
 import { profilePubSub } from '@kosmo/core/profile/events';
 import { sessionPubSub } from '@kosmo/core/session/events';
+import { and, eq } from 'drizzle-orm';
 import { isAsyncIterable } from 'graphql-yoga';
 import type { ExecutionResult } from 'graphql';
 import type { Plugin } from 'graphql-yoga';
@@ -8,6 +11,7 @@ import type { UserContext } from '@/context';
 const closeOnInvalidation = (
   source: AsyncIterable<ExecutionResult>,
   sessionId: string,
+  accountId: string,
   profileId?: string,
 ): AsyncIterableIterator<ExecutionResult> => {
   const sourceIterator = source[Symbol.asyncIterator]();
@@ -33,6 +37,27 @@ const closeOnInvalidation = (
     void signalEnd.catch(() => undefined);
   }
 
+  let startupCheck: Promise<boolean> | undefined;
+  const isSessionActive = () => {
+    startupCheck ??= withPrimaryDatabase(() =>
+      db
+        .select({ id: Sessions.id })
+        .from(Sessions)
+        .innerJoin(Accounts, eq(Sessions.accountId, Accounts.id))
+        .where(
+          and(
+            eq(Sessions.id, sessionId),
+            eq(Sessions.accountId, accountId),
+            eq(Sessions.state, SessionState.ACTIVE),
+            eq(Accounts.state, AccountState.ACTIVE),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows.length > 0),
+    );
+    return startupCheck;
+  };
+
   const close = (): Promise<void> => {
     if (!closing) {
       closed = true;
@@ -47,11 +72,18 @@ const closeOnInvalidation = (
 
   return {
     async next(): Promise<IteratorResult<ExecutionResult>> {
-      if (closed) {
+      if (closed || invalidated) {
+        await close();
         return { done: true, value: undefined };
       }
 
       try {
+        const sessionActive = await Promise.race([isSessionActive(), ...signalEnds, closedResult]);
+        if (closed || invalidated || sessionActive !== true) {
+          await close();
+          return { done: true, value: undefined };
+        }
+
         const result = await Promise.race([sourceIterator.next(), ...signalEnds, closedResult]);
         if (closed || invalidated) {
           await close();
@@ -90,7 +122,9 @@ export const useSubscriptionInvalidation = (): Plugin<UserContext> => ({
     return {
       onSubscribeResult: ({ result, setResult }) => {
         if (isAsyncIterable(result)) {
-          setResult(closeOnInvalidation(result, session.id, session.profile?.id));
+          setResult(
+            closeOnInvalidation(result, session.id, session.accountId, session.profile?.id),
+          );
         }
       },
     };

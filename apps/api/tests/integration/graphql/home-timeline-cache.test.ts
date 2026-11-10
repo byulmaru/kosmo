@@ -35,7 +35,11 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
 import type * as NaturalLanguageMuteCache from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import type * as CoreRedis from '../../../../../packages/core/redis/client';
-import type { deriveContext as DeriveContext, Env } from '../../../src/context';
+import type {
+  Context as ApiContext,
+  deriveContext as DeriveContext,
+  Env,
+} from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -2326,15 +2330,27 @@ test(
         count,
       );
     };
+    let capturedContext: ApiContext | undefined;
+    const capturedContextApp = new Hono<Env>();
+    capturedContextApp.use('*', async (context, next) => {
+      const requestContext = capturedContext ?? (await deriveContext(context));
+      capturedContext = requestContext;
+      context.set('context', requestContext);
+      return next();
+    });
+    capturedContextApp.route('/graphql', yoga);
 
-    const requestSubscription = async ({
-      token,
-      selectedProfileId,
-    }: {
-      readonly token?: string;
-      readonly selectedProfileId?: string;
-    } = {}) =>
-      app.request('/graphql', {
+    const requestSubscription = async (
+      {
+        token,
+        selectedProfileId,
+      }: {
+        readonly token?: string;
+        readonly selectedProfileId?: string;
+      } = {},
+      requestApp: Hono<Env> = app,
+    ) =>
+      requestApp.request('/graphql', {
         body: JSON.stringify({
           ...(selectedProfileId === undefined
             ? {}
@@ -2350,11 +2366,14 @@ test(
         method: 'POST',
       });
 
-    const subscribe = async (options: {
-      readonly token: string;
-      readonly selectedProfileId?: string;
-    }) => {
-      const response = await requestSubscription(options);
+    const subscribe = async (
+      options: {
+        readonly token: string;
+        readonly selectedProfileId?: string;
+      },
+      requestApp: Hono<Env> = app,
+    ) => {
+      const response = await requestSubscription(options, requestApp);
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
       assert.ok(response.body);
@@ -2403,7 +2422,11 @@ test(
         0,
       );
 
-      const defaultProfileSubscription = await subscribe({ token: viewer.token });
+      const defaultProfileSubscription = await subscribe(
+        { token: viewer.token },
+        capturedContextApp,
+      );
+      assert.equal(capturedContext?.session?.id, viewer.session.id);
       const selectedProfileSubscription = await subscribe({
         token: viewer.token,
         selectedProfileId: selectedProfile.id,
@@ -2505,6 +2528,17 @@ test(
       }>('mutation { revokeCurrentSession { completed } }', {}, viewer.token);
       assert.equal(revoked.errors, undefined, JSON.stringify(revoked.errors));
       assert.deepEqual(revoked.data, { revokeCurrentSession: { completed: true } });
+
+      assert.ok(capturedContext);
+      const staleSessionSubscription = await subscribe({ token: viewer.token }, capturedContextApp);
+      const staleSessionCompletion = await withTimeout(
+        staleSessionSubscription.readEvent(),
+        'A subscription opened with its pre-revocation Session context did not complete',
+      );
+      assert.ok(staleSessionCompletion);
+      assert.match(staleSessionCompletion, /^event: complete$/m);
+      assert.doesNotMatch(staleSessionCompletion, /^event: next$/m);
+      assert.doesNotMatch(staleSessionCompletion, /^event: error$/m);
 
       const completionEvents = await Promise.all([
         withTimeout(
