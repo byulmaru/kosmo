@@ -65,7 +65,7 @@ index 6911c31922fd72621bfaa46c47b83274216a4744..8cc233c66bde1d28105831b50a36348e
              // previousStateRef.current = state;
              previousStateRef.current = rootState;
 diff --git a/build/layouts/StackClient.js b/build/layouts/StackClient.js
-index a8bc993e5b372d8159a739575d7729ef68bbc3fd..d12064c0d4af2eb3388dd74a200cb7dd2f9c4528 100644
+index a8bc993e5b372d8159a739575d7729ef68bbc3fd..ed0e64356a5ca6a7302bca342937ed9a5cb53138 100644
 --- a/build/layouts/StackClient.js
 +++ b/build/layouts/StackClient.js
 @@ -184,6 +184,7 @@ const stackRouterOverride = (original) => {
@@ -76,3 +76,30 @@ index a8bc993e5b372d8159a739575d7729ef68bbc3fd..d12064c0d4af2eb3388dd74a200cb7dd
                                  path: action.type === 'NAVIGATE' && action.payload.path !== undefined
                                      ? action.payload.path
                                      : route.path,
+diff --git a/build/react-navigation/native-stack/views/NativeStackView.js b/build/react-navigation/native-stack/views/NativeStackView.js
+index c79e1fe689300110596914060f2668f42f76c351..e9a2f4150b372f1363e5828e4bf650c31e8eeade 100644
+--- a/build/react-navigation/native-stack/views/NativeStackView.js
++++ b/build/react-navigation/native-stack/views/NativeStackView.js
+@@ -83,7 +83,9 @@ function NativeStackView({ state, descriptors, describe }) {
+                                     ? () => ((0, jsx_runtime_1.jsx)(react_native_1.Image, { source: headerBackIcon?.source ?? headerBackImageSource, resizeMode: "contain", tintColor: tintColor, style: styles.backImage }))
+                                     : undefined, onPress: navigation.goBack }))
+                             : headerLeft, headerTransparent: headerTransparent })), style: [
+-                    react_native_1.StyleSheet.absoluteFill,
++                    react_native_1.Platform.OS === 'web' && !TRANSPARENT_PRESENTATIONS.includes(presentation)
++                        ? { position: 'relative' }
++                        : react_native_1.StyleSheet.absoluteFill,
+                     {
+                         display: (isFocused ||
+                             (nextPresentation != null &&
+diff --git a/build/fork/createMemoryHistory.js b/build/fork/createMemoryHistory.js
+index c26fcb91f4c3f81909a47077b60d646d7b4a3a0b..7a4ff6d79ee24ee8d2aea1dc90197d0be6fe6088 100644
+--- a/build/fork/createMemoryHistory.js
++++ b/build/fork/createMemoryHistory.js
+@@ -173,6 +173,7 @@
+                     // This was triggered by `history.go(n)`, we shouldn't call the listener
+                     return;
+                 }
++                index = history.index;
+                 listener();
+             };
+             window.addEventListener('popstate', onPopState);

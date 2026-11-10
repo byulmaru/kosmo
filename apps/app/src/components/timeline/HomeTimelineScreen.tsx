@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, useIsFocused } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import {
   startTransition,
@@ -54,6 +54,7 @@ const HomeQuery = graphql`
 `;
 
 export default function HomeScreen() {
+  const active = useIsFocused();
   const environment = useRelayEnvironment();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
@@ -96,6 +97,7 @@ export default function HomeScreen() {
         title="홈을 불러오지 못했어요"
       >
         <HomeRouteContent
+          active={active}
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
         />
@@ -137,9 +139,11 @@ function HomeFrame({
 }
 
 function HomeRouteContent({
+  active,
   onRefresh,
   registerHomeRefresh,
 }: {
+  active: boolean;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
 }) {
@@ -147,6 +151,7 @@ function HomeRouteContent({
 
   return (
     <HomeContent
+      active={active}
       fetchKey={fetchKey}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
@@ -155,10 +160,12 @@ function HomeRouteContent({
 }
 
 function HomeContent({
+  active,
   fetchKey,
   onRefresh,
   registerHomeRefresh,
 }: {
+  active: boolean;
   fetchKey: string;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
@@ -219,6 +226,7 @@ function HomeContent({
 
   return (
     <HomeContentView
+      active={active}
       data={data}
       fetchKey={fetchKey}
       onRefresh={onRefresh}
@@ -229,12 +237,14 @@ function HomeContent({
 }
 
 function HomeContentView({
+  active,
   data,
   fetchKey,
   onRefresh,
   postRequestRefreshKey,
   refreshing,
 }: {
+  active: boolean;
   data: HomePageQuery$data;
   fetchKey: string;
   onRefresh: () => void;
@@ -301,6 +311,7 @@ function HomeContentView({
     <View style={styles.timeline}>
       <HomePushPermissionBanner />
       <PostList
+        active={active}
         header={postRequestCards}
         home={data}
         identityKey={`home:${selectedProfile.id}`}

@@ -134,6 +134,7 @@ mockModule('expo-router', {
     replace: (href: string) => navigations.push(href),
     setParams: (params: object) => navigations.push(params),
   }),
+  useIsFocused: () => true,
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
 mockModule('lucide-react-native', {

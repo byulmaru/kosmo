@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import type { Text } from 'react-native';
 
 export default function SettingsBlockedProfilesRoute() {
+  const active = useIsFocused();
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
@@ -40,7 +41,10 @@ export default function SettingsBlockedProfilesRoute() {
       <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="차단한 프로필" titleRef={headingRef} />
       </MobileWebRouteChrome>
-      <SettingsBlockedProfiles onUnblockSuccess={() => headingRef.current?.focus()} />
+      <SettingsBlockedProfiles
+        active={active}
+        onUnblockSuccess={() => headingRef.current?.focus()}
+      />
     </PaginationScrollView>
   );
 }

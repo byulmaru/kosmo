@@ -14,10 +14,12 @@ type HookOptions = {
   loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void;
   nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
+  webDocumentActive?: boolean;
   webScrollTarget?: 'container' | 'document';
 };
 
 type HookResult = {
+  endRef: { current: unknown };
   loadError: boolean;
   loadNextPage: () => void;
   nativeScrollProps: ReturnType<typeof createNativeScrollHandlers>;
@@ -27,15 +29,34 @@ type HookResult = {
 const platform = { OS: 'web' };
 const listeners = new Map<string, Set<EventListener>>();
 const animationFrames = new Map<number, FrameRequestCallback>();
+const intersectionCallbacks: Array<
+  (entries: Array<Pick<IntersectionObserverEntry, 'isIntersecting'>>) => void
+> = [];
 const loadRequests: Array<{
   count: number;
   onComplete: (error: Error | null) => void;
 }> = [];
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const originalIntersectionObserverDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'IntersectionObserver',
+);
 let nextAnimationFrame = 0;
 let renderer: ReactTestRenderer | null = null;
 let current: HookResult | undefined;
+
+class TestIntersectionObserver {
+  constructor(callback: IntersectionObserverCallback) {
+    intersectionCallbacks.push((entries) =>
+      callback(entries as IntersectionObserverEntry[], this as unknown as IntersectionObserver),
+    );
+  }
+
+  observe() {}
+
+  disconnect() {}
+}
 
 const windowFixture = {
   requestAnimationFrame: (callback: FrameRequestCallback) => {
@@ -83,9 +104,17 @@ beforeEach(() => {
     writable: true,
     value: documentFixture,
   });
+  Object.defineProperty(globalThis, 'IntersectionObserver', {
+    configurable: true,
+    writable: true,
+    value: TestIntersectionObserver,
+  });
 });
 
-const restoreGlobal = (name: 'window' | 'document', descriptor?: PropertyDescriptor) => {
+const restoreGlobal = (
+  name: 'window' | 'document' | 'IntersectionObserver',
+  descriptor?: PropertyDescriptor,
+) => {
   if (descriptor) {
     Object.defineProperty(globalThis, name, descriptor);
   } else {
@@ -104,10 +133,12 @@ afterEach(async () => {
   documentFixture.documentElement.scrollHeight = 1200;
   listeners.clear();
   animationFrames.clear();
+  intersectionCallbacks.length = 0;
   loadRequests.length = 0;
   nextAnimationFrame = 0;
   restoreGlobal('window', originalWindowDescriptor);
   restoreGlobal('document', originalDocumentDescriptor);
+  restoreGlobal('IntersectionObserver', originalIntersectionObserverDescriptor);
 });
 
 function HookProbe(options: HookOptions) {
@@ -175,6 +206,57 @@ async function completeRequest(index: number, error: Error | null) {
 }
 
 describe('useAutomaticPagination', () => {
+  it('inactive Web document pagination skips automatic checks and resumes near-end after activation', async () => {
+    await renderHook(options({ webDocumentActive: false }));
+    await runAnimationFrame();
+    await dispatchWindowEvent('scroll');
+    await dispatchWindowEvent('resize');
+    assert.equal(loadRequests.length, 0);
+
+    await updateHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+  });
+
+  it('Web page completion while inactive does not chain until focus resumes sequential fill', async () => {
+    await renderHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+
+    await updateHook(options({ isLoadingNext: true }));
+    await updateHook(options({ isLoadingNext: true, webDocumentActive: false }));
+    await completeRequest(0, null);
+    await updateHook(options({ itemCount: 40, webDocumentActive: false }));
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1, 'inactive success does not request another page');
+
+    await updateHook(options({ itemCount: 40 }));
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 2, 'refocus measures the current document again');
+
+    await updateHook(options({ isLoadingNext: true, itemCount: 40 }));
+    await completeRequest(1, null);
+    await updateHook(options({ itemCount: 60 }));
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 3, 'sequential fill continues after refocus');
+  });
+
+  it('a queued document IntersectionObserver callback does not request while inactive', async () => {
+    await renderHook(options({ webDocumentActive: false }));
+    await act(async () => {
+      currentResult().endRef.current = {};
+    });
+    await updateHook(options());
+    const callback = intersectionCallbacks[0];
+    assert.ok(callback);
+
+    await updateHook(options({ webDocumentActive: false }));
+    await act(async () => {
+      callback([{ isIntersecting: true }]);
+    });
+    assert.equal(loadRequests.length, 0);
+  });
+
   it('Web near-end에서 한 번 요청하고 짧은 성공 page 뒤 다시 측정한다', async () => {
     await renderHook(options());
     await runAnimationFrame();
@@ -297,8 +379,22 @@ describe('useAutomaticPagination', () => {
     assert.equal(currentResult().loadError, false);
   });
 
+  it('inactive Web document pagination still allows manual loading and retry', async () => {
+    await renderHook(options({ webDocumentActive: false }));
+
+    await act(async () => currentResult().loadNextPage());
+    assert.equal(loadRequests.length, 1);
+
+    await completeRequest(0, new Error('next page failed'));
+    assert.equal(currentResult().loadError, true);
+
+    await act(async () => currentResult().loadNextPage());
+    assert.equal(loadRequests.length, 2);
+    assert.equal(currentResult().loadError, false);
+  });
+
   it('Web container는 document listener 없이 저장된 metric으로 다음 page를 측정한다', async () => {
-    await renderHook(options({ webScrollTarget: 'container' }));
+    await renderHook(options({ webDocumentActive: false, webScrollTarget: 'container' }));
     assert.equal(listeners.get('scroll')?.size ?? 0, 0);
     assert.equal(listeners.get('resize')?.size ?? 0, 0);
 
@@ -310,17 +406,24 @@ describe('useAutomaticPagination', () => {
     });
     assert.equal(loadRequests.length, 1);
 
-    await updateHook(options({ isLoadingNext: true, webScrollTarget: 'container' }));
+    await updateHook(
+      options({ isLoadingNext: true, webDocumentActive: false, webScrollTarget: 'container' }),
+    );
     await completeRequest(0, null);
     await updateHook(
-      options({ isLoadingNext: false, itemCount: 40, webScrollTarget: 'container' }),
+      options({
+        isLoadingNext: false,
+        itemCount: 40,
+        webDocumentActive: false,
+        webScrollTarget: 'container',
+      }),
     );
     assert.equal(loadRequests.length, 2);
   });
 
   it('Native metric으로 요청하고 Relay loading 뒤 저장된 metric을 다시 측정한다', async () => {
     platform.OS = 'ios';
-    await renderHook(options());
+    await renderHook(options({ webDocumentActive: false }));
 
     await act(async () => {
       currentResult().nativeScrollProps.onLayout({
@@ -341,11 +444,11 @@ describe('useAutomaticPagination', () => {
     });
     assert.equal(loadRequests.length, 1, 'Native in-flight guard를 유지한다');
 
-    await updateHook(options({ isLoadingNext: true, itemCount: 20 }));
+    await updateHook(options({ isLoadingNext: true, itemCount: 20, webDocumentActive: false }));
     await completeRequest(0, null);
     assert.equal(loadRequests.length, 1, 'Relay loading 중에는 성공 재측정을 보류한다');
 
-    await updateHook(options({ isLoadingNext: false, itemCount: 40 }));
+    await updateHook(options({ isLoadingNext: false, itemCount: 40, webDocumentActive: false }));
     assert.equal(loadRequests.length, 2, '성공 뒤 저장된 Native metric을 다시 측정한다');
   });
 

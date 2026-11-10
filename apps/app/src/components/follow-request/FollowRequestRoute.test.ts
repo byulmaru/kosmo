@@ -30,6 +30,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('expo-router', { useIsFocused: () => true });
+
 const openNavigationDrawer = mock.fn();
 mockModule('react-native', {
   Platform: { OS: 'web' },

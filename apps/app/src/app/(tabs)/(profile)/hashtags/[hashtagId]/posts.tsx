@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -34,15 +34,17 @@ const HashtagPostsPageQuery = graphql`
 `;
 
 export default function HashtagPostsScreen() {
+  const active = useIsFocused();
+
   return (
     <>
       <MobileWebRouteMenu />
-      <HashtagPostsScreenContent />
+      <HashtagPostsScreenContent active={active} />
     </>
   );
 }
 
-function HashtagPostsScreenContent() {
+function HashtagPostsScreenContent({ active }: { active: boolean }) {
   const { hashtagId: rawHashtagId } = useLocalSearchParams<{
     hashtagId?: string | string[];
   }>();
@@ -62,34 +64,45 @@ function HashtagPostsScreenContent() {
   );
 
   return hashtagId ? (
-    <HashtagPostsRoute backButton={backButton} hashtagId={hashtagId} key={hashtagId} />
+    <HashtagPostsRoute
+      active={active}
+      backButton={backButton}
+      hashtagId={hashtagId}
+      key={hashtagId}
+    />
   ) : (
-    <HashtagPostsState backButton={backButton} state="notFound" />
+    <HashtagPostsState active={active} backButton={backButton} state="notFound" />
   );
 }
 
 function HashtagPostsRoute({
+  active,
   backButton,
   hashtagId,
 }: {
+  active: boolean;
   backButton: ReactNode;
   hashtagId: string;
 }) {
   return (
     <RouteBoundary
-      error={(retry) => <HashtagPostsState backButton={backButton} onRetry={retry} state="error" />}
-      loading={<HashtagPostsState backButton={backButton} state="loading" />}
+      error={(retry) => (
+        <HashtagPostsState active={active} backButton={backButton} onRetry={retry} state="error" />
+      )}
+      loading={<HashtagPostsState active={active} backButton={backButton} state="loading" />}
       title="게시글 목록을 불러오지 못했어요"
     >
-      <HashtagPostsContent backButton={backButton} hashtagId={hashtagId} />
+      <HashtagPostsContent active={active} backButton={backButton} hashtagId={hashtagId} />
     </RouteBoundary>
   );
 }
 
 function HashtagPostsContent({
+  active,
   backButton,
   hashtagId,
 }: {
+  active: boolean;
   backButton: ReactNode;
   hashtagId: string;
 }) {
@@ -102,7 +115,7 @@ function HashtagPostsContent({
   const hashtag = data.node?.__typename === 'Hashtag' && data.node.postList ? data.node : null;
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   if (!hashtag) {
-    return <HashtagPostsState backButton={backButton} state="notFound" />;
+    return <HashtagPostsState active={active} backButton={backButton} state="notFound" />;
   }
 
   const identityKey = `hashtag:${hashtag.id}:${selectedProfile?.id ?? 'guest'}`;
@@ -110,6 +123,7 @@ function HashtagPostsContent({
     <>
       <PageHeader leading={backButton} title={`#${hashtag.name}`} titleLines={1} />
       <PostList
+        active={active}
         hashtag={hashtag.postList}
         identityKey={identityKey}
         replyProfile={selectedProfile}
@@ -119,10 +133,12 @@ function HashtagPostsContent({
 }
 
 function HashtagPostsState({
+  active,
   backButton,
   onRetry,
   state,
 }: {
+  active: boolean;
   backButton: ReactNode;
   onRetry?: () => void;
   state: 'error' | 'loading' | 'notFound';
@@ -131,9 +147,9 @@ function HashtagPostsState({
     <>
       <PageHeader leading={backButton} title="게시글" />
       {state === 'loading' ? (
-        <PostList loading />
+        <PostList active={active} loading />
       ) : state === 'error' ? (
-        <PostList error onRetry={onRetry} />
+        <PostList active={active} error onRetry={onRetry} />
       ) : (
         <StateView title="해시태그를 찾을 수 없어요" />
       )}

@@ -40,7 +40,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   await setE2ESessionCookie(context, recipient.token);
   await page.goto('/notifications');
   await selectProfile(page, recipientProfileB.handle);
-  await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+  await expect(page.getByText('아직 알림이 없어요').filter({ visible: true })).toBeVisible();
 
   const followerContext = await browser.newContext();
   const followerPage = await followerContext.newPage();
@@ -66,7 +66,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await expect(page.getByRole('link', { name: '알림, 읽지 않은 알림 1개' })).toBeVisible();
 
     await selectProfile(page, recipientProfileB.handle);
-    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+    await expect(page.getByText('아직 알림이 없어요').filter({ visible: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
     await expect(page.getByText('E2E Notification Follower님이 팔로우했습니다')).toHaveCount(0);
 
@@ -153,7 +153,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
 
     await page.getByRole('link', { name: '알림', exact: true }).click();
     await expect(page).toHaveURL('/notifications');
-    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+    await expect(page.getByText('아직 알림이 없어요').filter({ visible: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
     expect(
       await db.select().from(Notifications).where(eq(Notifications.id, notification!.id)),
@@ -564,7 +564,10 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await assertQuerySuccess(detailResponse);
     await ancestorImageRequested;
 
-    const sourceRow = page.getByTestId(`post-thread-current-${sourceId}`);
+    const sourceRow = page.getByTestId(`post-thread-current-${sourceId}`).filter({ visible: true });
+    const visibleRootRow = page
+      .getByTestId(`post-thread-item-${toGlobalId('Post', root.id)}`)
+      .filter({ visible: true });
     await expect(sourceRow).toBeInViewport();
     const header = page.getByRole('heading', { name: '게시글', exact: true }).locator('..');
     const sourceHeaderDistance = async () => {
@@ -612,7 +615,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
 
     await page.mouse.wheel(0, -10_000);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+    await expect(visibleRootRow.getByText(rootBody, { exact: false })).toBeVisible();
 
     await page.getByRole('link', { name: '홈', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
@@ -620,7 +623,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await expect(sourceRow).toBeAttached();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+    await expect(visibleRootRow.getByText(rootBody, { exact: false })).toBeVisible();
     await expect(sourceRow).not.toBeInViewport();
   } finally {
     releaseAncestorImage();

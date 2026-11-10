@@ -26,6 +26,7 @@ mockModule('expo-router', {
   Redirect: () => null,
   useLocalSearchParams: () => ({ timeline: 'local' }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
+  useIsFocused: () => true,
 });
 mockModule('lucide-react-native', { Menu: 'Menu', UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -15,6 +15,7 @@ let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let dismissedToPaths: string[] = [];
 let replacedPaths: string[] = [];
+let routeFocused = true;
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
@@ -38,6 +39,17 @@ mock.module('expo-router', {
     Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
     Slot: () => createElement(SlotRoute),
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
+    useFocusEffect: (effect: () => (() => void) | void) => {
+      const focused = routeFocused;
+      useEffect(() => {
+        if (!focused) {
+          return;
+        }
+
+        return effect();
+      }, [effect, focused]);
+    },
+    useIsFocused: () => routeFocused,
     usePathname: () => pathname,
     useRouter: () => ({
       dismissTo: (href: string) => dismissedToPaths.push(href),
@@ -326,6 +338,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  routeFocused = true;
 });
 
 describe('Settings routes', () => {
@@ -1048,6 +1061,28 @@ describe('Protected layout session guard', () => {
       await act(async () => renderer?.unmount());
       renderer = null;
     }
+  });
+
+  it('inactive guest 보호 route는 redirect하지 않고 focus될 때 루트로 이동한다', async () => {
+    routeFocused = false;
+    sessionStatus = 'guest';
+    SlotRoute = () => createElement('ProtectedSlot');
+    await act(async () => {
+      renderer = create(createElement(ProtectedLayout));
+    });
+
+    assert.deepEqual(replacedPaths, []);
+    assert.equal(rendered('Splash').length, 1);
+    assert.equal(rendered('ProtectedSlot').length, 0);
+
+    routeFocused = true;
+    await act(async () => {
+      renderer?.update(createElement(ProtectedLayout));
+    });
+
+    assert.deepEqual(replacedPaths, ['/']);
+    assert.equal(rendered('Splash').length, 1);
+    assert.equal(rendered('ProtectedSlot').length, 0);
   });
 });
 

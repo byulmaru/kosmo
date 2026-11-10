@@ -78,7 +78,10 @@ for (const viewport of [
       for (const index of [8, 7, 6]) {
         if (index !== 8) {
           const response = waitForGraphQLOperation(page, 'PostDetailQuery');
-          await page.locator(`a[href="${detailPath(index)}"]`).click();
+          await page
+            .locator(`a[href="${detailPath(index)}"] [data-testid="post-timestamp"]`)
+            .filter({ visible: true })
+            .click();
           await expectGraphQLSuccess(await response);
         }
         const current = page.getByTestId(`post-thread-current-${posts[index]!.globalId}`);
@@ -267,6 +270,7 @@ test('실제 GraphQL Home의 Local·Remote 콘텐츠 경고는 행 진입과 분
   ).toBeVisible();
 
   const postId = toGlobalId('Post', localPost.id);
+  const currentPost = page.getByTestId(`post-thread-current-${postId}`).filter({ visible: true });
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
   await localArticle.getByTestId('post-list-row-body').click();
   const response = await detailResponse;
@@ -277,16 +281,16 @@ test('실제 GraphQL Home의 Local·Remote 콘텐츠 경고는 행 진입과 분
     variables: { postId },
   });
   await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(localBody, { exact: true })).toBeVisible();
+  await expect(currentPost.getByText(localBody, { exact: true })).toBeVisible();
   await expect(
-    page.getByTestId('post-content-warning').getByText('다시 가리기', { exact: true }),
+    currentPost.getByTestId('post-content-warning').getByText('다시 가리기', { exact: true }),
   ).toBeVisible();
 
-  await page.getByTestId('post-content-warning').click();
+  await currentPost.getByTestId('post-content-warning').click();
   await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(localBody, { exact: true })).toHaveCount(0);
+  await expect(currentPost.getByText(localBody, { exact: true })).toHaveCount(0);
   await expect(
-    page.getByTestId('post-content-warning').getByText('보기', { exact: true }),
+    currentPost.getByTestId('post-content-warning').getByText('보기', { exact: true }),
   ).toBeVisible();
 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
@@ -447,18 +451,19 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect(heading).toBeVisible();
   await expect.poll(async () => (await heading.locator('..').boundingBox())?.height).toBe(64);
   await expect(page.getByRole('button', { name: '메뉴 열기' })).toHaveCount(0);
-  await expect(page.getByText(body)).toBeVisible();
+  const visiblePostBody = page.getByText(body).filter({ visible: true });
+  await expect(visiblePostBody).toBeVisible();
   await expect(page.getByText(/전체 공개$/)).toBeVisible();
 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
   await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByText(body)).toBeVisible();
+  await expect(visiblePostBody).toBeVisible();
 
   await page.goto(`/wrong-handle/${postId}`);
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
     .toBe(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(body)).toBeVisible();
+  await expect(visiblePostBody).toBeVisible();
 });
 
 test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview를 표시한다', async ({
@@ -570,7 +575,8 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
   await page.goto(`/@${viewer.profile!.handle}/${childId}`);
   await detailResponse;
-  await expect(page.getByText(childBody)).toBeVisible();
+  const currentPost = page.getByTestId(`post-thread-current-${childId}`).filter({ visible: true });
+  await expect(currentPost.getByText(childBody)).toBeVisible();
 
   const parentRow = page.getByTestId(`post-thread-item-${parentId}`);
   await expect(parentRow).toBeVisible();

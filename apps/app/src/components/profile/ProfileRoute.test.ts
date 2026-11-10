@@ -185,6 +185,7 @@ mockModule('expo-router', {
   useCurrentRouteInfo: () => currentRouteInfo ?? { params: globalParams, pathname },
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
+  useIsFocused: () => true,
   useRouter: () => ({
     back: () => (routerBackCount += 1),
     canGoBack: () => routerCanGoBack,

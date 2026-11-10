@@ -66,6 +66,57 @@ index content, browser Back restored Beta's following rows, and Forward restored
 Sasha's index. The override was a diagnostic and did not change the deployed
 application.
 
+## Default Web Stack document flow boundary
+
+The default Web `Stack` renders through React Navigation's `NativeStackView`.
+Its outer `Screen` wrapper uses absolute fill, which removes the active route
+from normal layout flow inside `UniversalShell`. The active route no longer
+sizes the shell route container in normal flow. In this content-sized Web
+shell, document scroll extents and pointer hit areas can then diverge from the
+visible content.
+
+For Web screens whose `presentation` is not `transparentModal` or
+`containedTransparentModal`, this patch uses `{ position: 'relative' }` on the
+outer screen wrapper so the active route participates in normal document
+flow. The existing focus, preload, and transparent-presentation `display`
+logic remains unchanged: inactive screens stay mounted with `display: none`
+and retain their navigation state. Native platforms and transparent
+presentations continue using absolute fill so their existing layout and
+overlay behavior remain intact. This change does not add a scroll container,
+history state, or measurement registry.
+
+## Browser Back and Forward memory state
+
+`createMemoryHistory` keeps a closed-over cursor for writes and branch
+truncation. Its `index` getter already resolves the current record from the
+browser history ID, and its programmatic `go()` pop handler updates the closed
+cursor. The external `listen()` pop handler did not. After browser Back,
+`useLinking` could read the correct record through the getter, then `replace()`
+would overwrite the stale Forward record because it updates `items[index]`.
+Forward then lost the post route's saved navigation and protected-route state,
+so linking rebuilt state from the URL.
+
+The patch synchronizes the closed cursor from `history.index` for external
+`popstate` events, after filtering programmatic `go()` events and before calling
+listeners. This preserves each browser entry's in-memory route state and lets a
+new push after Back truncate the obsolete Forward branch. The change is in
+Expo Router's Web memory-history implementation; native navigation and history
+behavior are unchanged.
+
+[`WebMemoryHistory.test.ts`](../apps/app/src/components/shell/WebMemoryHistory.test.ts)
+loads the patched Expo Router module and covers browser Back, Forward,
+route-state restoration, and branch truncation after Back. Existing Web E2E
+cases cover document scroll, link/click navigation, and route headers including
+bookmarks:
+
+[`reaction-people.e2e.ts`](../apps/web/e2e/reaction-people.e2e.ts) covers post
+and reaction navigation, app Back, browser Back/Forward, and Local list position
+restoration.
+
+[`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts),
+[`search.e2e.ts`](../apps/web/e2e/search.e2e.ts), and
+[`mobile-route-headers.e2e.ts`](../apps/web/e2e/mobile-route-headers.e2e.ts).
+
 ## Invariants and current caveat
 
 When a partial layout state is deferred, the linking listener must still be
@@ -93,11 +144,12 @@ behavior passed every removal check.
 
 An upstream merge or issue closure is not enough. Remove this patch only after
 a compatible Expo Router release is published and its Web linking/history
-behavior has the equivalent protection. Upstream may refactor the helper or
-source path; compare behavior at the Web history boundary, then run the
-regression checks below against the unpatched package. Keep the behavioral
-tests after removal so they protect the upstream fix from later dependency
-upgrades.
+behavior has the equivalent protection and the default Web Stack preserves
+document flow for non-transparent screens. Upstream may refactor helpers or
+source paths; compare behavior at both the Web history and Stack layout
+boundaries, then run the regression checks below against the unpatched package.
+Keep the behavioral tests after removal so they protect the upstream fix from
+later dependency upgrades.
 
 Before removal is considered complete, verify:
 
@@ -105,6 +157,11 @@ Before removal is considered complete, verify:
   through every `pushState` and `replaceState` for static routes, profile home
   and following, post detail, and post reactions. Exercise normal and delayed
   shell/profile Relay responses, and include routes with query and hash values.
+- Default Web Stack screens participate in normal document flow for regular
+  presentations, while transparent presentations retain overlay positioning,
+  native screens retain their existing layout, and inactive route screens stay
+  mounted but hidden. Verify scroll and route content interaction at the Web
+  runtime boundary.
 - Internal `push` and `replace`, query/hash-only changes, and browser
   back/forward still produce the expected URL and route state.
 - From a nested following or followers route, navigate to a different profile

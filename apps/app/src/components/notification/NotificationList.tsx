@@ -27,6 +27,7 @@ import type { NotificationListMarkReadMutation } from './__generated__/Notificat
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
+  active?: boolean;
   profile: NotificationList_profile$key;
 };
 
@@ -88,7 +89,7 @@ const notificationListMarkReadMutation = graphql`
   }
 `;
 
-export function NotificationList({ profile }: NotificationListProps) {
+export function NotificationList({ active = true, profile }: NotificationListProps) {
   const theme = useTheme();
   const scrollRef = useRef<ScrollView>(null);
   const shellChrome = useShellChrome();
@@ -126,11 +127,14 @@ export function NotificationList({ profile }: NotificationListProps) {
     },
   );
 
-  useEffect(
-    () =>
-      publishUnreadIds(edges?.flatMap(({ node }) => (node.readAt === null ? [node.id] : [])) ?? []),
-    [edges, publishUnreadIds],
-  );
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    return publishUnreadIds(
+      edges?.flatMap(({ node }) => (node.readAt === null ? [node.id] : [])) ?? [],
+    );
+  }, [active, edges, publishUnreadIds]);
   const notifications = visibleEdges.flatMap(({ node }) => {
     if (node.__typename === 'FollowNotification' && node.follow) {
       return <NotificationListItem key={node.id} notification={node.follow} />;

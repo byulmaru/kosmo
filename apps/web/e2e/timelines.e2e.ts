@@ -28,7 +28,7 @@ function formatDateLabel(iso: string) {
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
-  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true });
+  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true }).filter({ visible: true });
 
   await expect(bodyShortcuts).toHaveCount(bodies.length);
   await expect(bodyShortcuts).toHaveText(bodies);
@@ -360,7 +360,12 @@ test('프로필 게시글 목록은 해당 프로필이 작성한 글만 보여�
     'E2E timeline profile latest body',
     'E2E timeline profile older body',
   ]);
-  await expect(page.getByText('E2E timeline other profile body')).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('article')
+      .filter({ visible: true })
+      .getByText('E2E timeline other profile body', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여준다', async ({ context, page }) => {
@@ -384,7 +389,7 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 
   await page.goto(`/@${emptyProfile.handle}`);
-  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+  await expect(page.getByText('아직 게시글이 없어요').filter({ visible: true })).toBeVisible();
 });
 
 test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }, testInfo) => {

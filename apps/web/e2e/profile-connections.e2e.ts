@@ -109,10 +109,10 @@ for (const scenario of [
     const ownerPost = page.getByRole('article').filter({ hasText: ownerPostBody }).first();
     const targetProfileLinks = page
       .locator(`a[href="${targetPath}"]`)
-      .filter({ hasText: target.displayName });
+      .filter({ hasText: target.displayName, visible: true });
     const relationOnlyRow = page
       .locator(`a[href="/@${relationOnly.handle}"]`)
-      .filter({ hasText: relationOnly.displayName });
+      .filter({ hasText: relationOnly.displayName, visible: true });
 
     await page.goto(ownerPath);
     await expect(
@@ -128,7 +128,7 @@ for (const scenario of [
     await expect(connectionHeading).toBeVisible();
     const targetRow = page
       .locator(`a[href="${targetPath}"]`)
-      .filter({ hasText: target.displayName });
+      .filter({ hasText: target.displayName, visible: true });
     await expect(targetRow).toBeVisible();
     await targetRow.click();
 

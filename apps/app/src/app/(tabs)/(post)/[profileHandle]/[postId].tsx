@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
@@ -55,6 +55,7 @@ const PostQuery = graphql`
 `;
 
 export default function PostDetailScreen() {
+  const active = useIsFocused();
   const params = useLocalSearchParams<{
     postId: string;
     profileHandle: string;
@@ -84,6 +85,7 @@ export default function PostDetailScreen() {
       title="게시글을 불러오지 못했어요"
     >
       <PostDetailContent
+        active={active}
         header={header}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
@@ -122,10 +124,12 @@ function PostDetailHeader() {
 }
 
 function PostDetailContent({
+  active,
   header,
   postId,
   routeRelativeHandle,
 }: {
+  active: boolean;
   header: ReactNode;
   postId: string;
   routeRelativeHandle: string;
@@ -181,6 +185,7 @@ function PostDetailContent({
     </PostDetailFrame>
   ) : (
     <PostDetailThread
+      active={active}
       header={header}
       identity={postId}
       onCurrentPostBackgroundPress={() => router.push(`/${post.profile.relativeHandle}/${post.id}`)}
