@@ -1,4 +1,12 @@
-import { forwardRef, Fragment, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import {
+  Component,
+  forwardRef,
+  Fragment,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react';
 import { FlatList, Platform, View } from 'react-native';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
@@ -6,7 +14,7 @@ import {
   usePaginationScrollRegistration,
 } from './PaginationScrollView';
 import { useAutomaticPagination } from './useAutomaticPagination';
-import type { ForwardedRef, ReactElement, RefAttributes } from 'react';
+import type { ForwardedRef, ReactElement, ReactNode, RefAttributes } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { LoadNext } from './useAutomaticPagination';
@@ -33,6 +41,76 @@ export type InfiniteListProps<Item> = Readonly<{
 }>;
 
 export type InfiniteListHandle = Readonly<{ scrollToTop: () => void }>;
+
+type WebPrependAnchorProps = Readonly<{
+  active: boolean;
+  children: ReactNode;
+  itemKeys: ReadonlyArray<string>;
+}>;
+
+type WebPrependAnchorSnapshot = Readonly<{
+  scrollHeight: number;
+  scrollX: number;
+  scrollY: number;
+}> | null;
+
+// eslint-disable-next-line @eslint-react/no-class-component -- React's pre-commit snapshot is needed to preserve the Web prepend position.
+class WebPrependAnchor extends Component<WebPrependAnchorProps, object, WebPrependAnchorSnapshot> {
+  getSnapshotBeforeUpdate(previousProps: Readonly<WebPrependAnchorProps>) {
+    const { itemKeys } = this.props;
+    const insertedItemCount = itemKeys.length - previousProps.itemKeys.length;
+    if (
+      !previousProps.active ||
+      !this.props.active ||
+      previousProps.itemKeys.length === 0 ||
+      insertedItemCount <= 0 ||
+      !previousProps.itemKeys.every((key, index) => itemKeys[insertedItemCount + index] === key) ||
+      typeof window === 'undefined' ||
+      typeof document === 'undefined'
+    ) {
+      return null;
+    }
+
+    const scrollY = window.scrollY;
+    if (scrollY <= 0) {
+      return null;
+    }
+
+    return {
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollX: window.scrollX,
+      scrollY,
+    };
+  }
+
+  componentDidUpdate(
+    _previousProps: Readonly<WebPrependAnchorProps>,
+    _previousState: Readonly<object>,
+    snapshot: WebPrependAnchorSnapshot,
+  ) {
+    if (!snapshot || !this.props.active) {
+      return;
+    }
+
+    const scrollHeight = document.documentElement.scrollHeight;
+    const heightDelta = scrollHeight - snapshot.scrollHeight;
+    if (heightDelta <= 0) {
+      return;
+    }
+
+    const maxScrollY = Math.max(0, scrollHeight - window.innerHeight);
+    const desiredScrollY = Math.min(snapshot.scrollY + heightDelta, maxScrollY);
+    if (Math.abs(window.scrollY - desiredScrollY) <= 1) {
+      return;
+    }
+
+    window.scrollTo({ behavior: 'auto', left: snapshot.scrollX, top: desiredScrollY });
+  }
+
+  render() {
+    return this.props.children;
+  }
+}
 
 function InfiniteListImplementation<Item>(
   {
@@ -125,16 +203,28 @@ function InfiniteListImplementation<Item>(
   }, [loadError, loadNextPage, onLoadErrorChange]);
 
   if (Platform.OS === 'web' || hasNativeScrollParent) {
-    return (
+    const itemKeys =
+      Platform.OS === 'web' && maintainVisibleContentPosition ? data.map(keyExtractor) : undefined;
+    const list = (
       <View style={style}>
         {header}
         {data.length === 0
           ? empty
           : data.map((item, index) => (
-              <Fragment key={keyExtractor(item, index)}>{renderItem({ index, item })}</Fragment>
+              <Fragment key={itemKeys?.[index] ?? keyExtractor(item, index)}>
+                {renderItem({ index, item })}
+              </Fragment>
             ))}
         {footer}
       </View>
+    );
+
+    return itemKeys ? (
+      <WebPrependAnchor active={active} itemKeys={itemKeys}>
+        {list}
+      </WebPrependAnchor>
+    ) : (
+      list
     );
   }
 
