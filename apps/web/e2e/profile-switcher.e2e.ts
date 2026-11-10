@@ -134,9 +134,11 @@ test('profile route action follows Profile.viewerState after switching', async (
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
+  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
   await page.goto('/@gamma');
+  const profileLayoutResponse = await profileLayoutResponsePromise;
+  await profileLayoutResponse.finished();
   await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
-  await page.waitForLoadState('networkidle');
 
   graphQLRequests.clear();
 
