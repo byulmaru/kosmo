@@ -36,17 +36,19 @@ export const LargeImageGeometry: Story = {
     const canvas = within(canvasElement);
     const card = canvas.getByTestId('post-link-preview-card');
     const view = canvasElement.ownerDocument.defaultView;
-    const imageFrame =
-      view &&
-      Array.from(card.querySelectorAll('div')).find(
-        (element) => view.getComputedStyle(element).backgroundImage !== 'none',
-      );
     const title = canvas.getByText(args.preview.title);
-    if (!imageFrame || !view) {
-      throw new Error('The preview card and image must render in a browser.');
+    if (!view) {
+      throw new Error('The preview card must render in a browser.');
     }
 
     await waitFor(() => {
+      const imageFrame = Array.from(card.querySelectorAll('div')).find(
+        (element) => view.getComputedStyle(element).backgroundImage !== 'none',
+      );
+      if (!imageFrame) {
+        throw new Error('The preview image must render in a browser.');
+      }
+
       const imageRect = imageFrame.getBoundingClientRect();
       const titleRect = title.getBoundingClientRect();
       const imageStyle = view.getComputedStyle(imageFrame);
