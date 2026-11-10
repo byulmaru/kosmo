@@ -13,6 +13,12 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 다중 tile은 `spacing.sm` gap과 `radii.md` gallery radius를 사용하되 gallery 외곽 border는 사용하지 않는다. 이미지·loading·error fallback은 같은 tile 경계를 채우고 원본을 늘이거나 찌그러뜨리지 않은 채 `cover`로 crop한다. 한 tile의 상태가 바뀌어도 인접 tile의 순서와 gallery surface를 밀지 않는다.
 
+## Filtered Media
+
+- `Media.aiProhibitFilterApplied === true`인 이미지에는 `Shield` passive badge를 tile의 오른쪽 위 `spacing.sm` inset에 표시한다. 기존 media overlay scrim, fixed white glyph, `iconSizes[16]`와 rounded pill을 사용한다. `false`, `null`, 누락된 값은 badge를 표시하지 않는다.
+- Badge는 pointer와 accessibility tree에서 장식으로 취급한다. 기존 Alt Text 또는 document 순서 fallback은 그대로 유지하고, accessible image name에 `학습방지 필터 적용됨`을 덧붙인다. Gallery open target과 navigation은 기존 `PostMediaImage`가 소유한다.
+- Sensitive Media가 가려져 gallery tile을 mount하지 않는 동안에는 badge도 표시하지 않는다. Gallery에서 공개한 뒤 실제 이미지와 함께 표시한다.
+
 ## Sensitive Media
 
 - 가림 상태에서는 이미지를 mount하거나 byte를 load하지 않는다.
@@ -33,8 +39,8 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 ## 검증 경계
 
-- Component test는 1·2·3·4장의 구조·순서·surface·tile geometry, 단일 이미지 비율, Sensitive 미mount·공개 전후, error·retry 격리와 비대화형 예외를 확인한다.
-- Storybook은 일반 Post 폭과 compact viewport에서 1·2·3·4장, Sensitive, 부분 로딩 실패와 Reply 부모 preview를 확인한다. 현재 a11y 실행은 `color-contrast`를 제외하므로 전체 WCAG 적합성 증거가 아니다.
+- Component test는 1·2·3·4장의 구조·순서·surface·tile geometry, 단일 이미지 비율, strict-true Filtered Media badge와 false/null/unknown omission, 기존 open callback, Sensitive 미mount·공개 전후, error·retry 격리와 비대화형 예외를 확인한다.
+- Storybook은 일반 Post 폭과 compact viewport에서 1·2·3·4장, 필터 적용·미적용·unknown Media, Sensitive, 부분 로딩 실패와 Reply 부모 preview를 확인한다. 현재 a11y 실행은 `color-contrast`를 제외하므로 전체 WCAG 적합성 증거가 아니다.
 - Web runtime의 keyboard·focus·pointer 관찰은 iOS VoiceOver·touch와 Android TalkBack·touch 결과를 대체하지 않는다. 자동화와 플랫폼별 runtime 증거를 PR에 구분해 기록한다.
 
 ## 제외 범위

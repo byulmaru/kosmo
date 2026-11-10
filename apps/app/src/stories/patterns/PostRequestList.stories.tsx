@@ -1,5 +1,6 @@
 import { fn } from 'storybook/test';
 import { PostRequestListSummary } from '@/components/post/PostRequestList';
+import ogImage from '../../../public/og-default.png?url';
 import { profile } from '../fixtures';
 import { Catalog } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -17,7 +18,16 @@ const failedRequest = {
   bodyText: '게시 요청의 본문을 확인할 수 있어요.',
   contentWarning: null,
   id: 'post-request-list-node-failed',
-  media: [],
+  media: [
+    {
+      __typename: 'Media' as const,
+      aiProhibitFilterApplied: true,
+      altText: '필터가 적용된 이미지',
+      id: 'post-request-list-filtered-media',
+      thumbhash: null,
+      url: ogImage,
+    },
+  ],
   post: null,
   requestId: 'post-request-list-failed',
   status: 'FAILED' as const,
@@ -27,6 +37,16 @@ const queuedRequest = {
   ...failedRequest,
   bodyText: '처리 중인 게시 요청입니다.',
   id: 'post-request-list-node-queued',
+  media: [
+    {
+      __typename: 'Media' as const,
+      aiProhibitFilterApplied: false,
+      altText: '필터가 적용되지 않은 이미지',
+      id: 'post-request-list-unfiltered-media',
+      thumbhash: null,
+      url: ogImage,
+    },
+  ],
   requestId: 'post-request-list-queued',
   status: 'QUEUED' as const,
 };

@@ -125,6 +125,7 @@ export type StoryReplyParentReference = StoryPostReference & {
 
 export type StoryMedia = {
   __typename: 'Media';
+  aiProhibitFilterApplied: boolean | null;
   altText: string | null;
   id: string;
   url: string | null;
@@ -184,7 +185,11 @@ export function post({
   contentWarning?: string | null;
   id?: string;
   isPinned?: boolean;
-  media?: StoryMedia[] | null;
+  media?: Array<
+    Omit<StoryMedia, 'aiProhibitFilterApplied'> & {
+      aiProhibitFilterApplied?: StoryMedia['aiProhibitFilterApplied'];
+    }
+  > | null;
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
@@ -210,7 +215,11 @@ export function post({
             contentWarning,
             id: `content-${id}`,
             linkPreview: null,
-            media,
+            media:
+              media?.map((item) => ({
+                ...item,
+                aiProhibitFilterApplied: item.aiProhibitFilterApplied ?? null,
+              })) ?? null,
             mentionedProfiles: [],
           },
     createdAt,

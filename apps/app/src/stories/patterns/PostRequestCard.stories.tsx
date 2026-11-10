@@ -19,6 +19,7 @@ const author = profile({
 type MediaFixture = {
   readonly __typename: 'Media';
   readonly altText: string | null;
+  readonly aiProhibitFilterApplied: boolean | null;
   readonly id: string;
   readonly thumbhash: string | null;
   readonly url: string | null;
@@ -31,6 +32,7 @@ const mediaUrl =
 const media: MediaFixture = {
   __typename: 'Media',
   altText: '보라색 하늘',
+  aiProhibitFilterApplied: null,
   id: 'post-request-card-media',
   thumbhash: null,
   url: mediaUrl,
@@ -79,6 +81,7 @@ const hashOnlyProcessing = request({
     {
       __typename: 'Media',
       altText: '보라색 하늘',
+      aiProhibitFilterApplied: null,
       id: 'post-request-card-hash-only-media',
       thumbhash: '6RQCBwAA' + 'AAAAAAAAAAAAAAAAAAAAAAAA',
       url: null,
@@ -93,6 +96,7 @@ const missingThumbhashProcessing = request({
     {
       __typename: 'Media',
       altText: '하늘',
+      aiProhibitFilterApplied: null,
       id: 'post-request-card-missing-thumbhash-media',
       thumbhash: null,
       url: null,

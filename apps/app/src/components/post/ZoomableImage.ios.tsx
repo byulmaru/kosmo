@@ -30,6 +30,7 @@ export function ZoomableImagePagerGesture({ children }: { children: ReactElement
 }
 
 function IOSZoomableImage({
+  aiProhibitFilterApplied,
   accessibilityLabel,
   onBlankAreaTap,
   onStatus,
@@ -295,6 +296,7 @@ function IOSZoomableImage({
           zoomScale={1}
         >
           <ViewerImage
+            aiProhibitFilterApplied={aiProhibitFilterApplied}
             accessibilityLabel={accessibilityLabel}
             onFrameLayout={handleImageFrameLayout}
             onStatus={handleStatus}

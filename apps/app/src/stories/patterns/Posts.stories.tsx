@@ -1027,6 +1027,7 @@ function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$va
           media: (input.media ?? []).map((item) => ({
             __typename: 'Media',
             altText: item.altText ?? null,
+            aiProhibitFilterApplied: null,
             id: item.mediaId,
             url: postMediaImageUri,
           })),
@@ -2248,6 +2249,40 @@ function ContentWarningRevealStory() {
         ]}
         mentionedProfiles={[]}
         postId="content-warning-story-post"
+      />
+    </Catalog>
+  );
+}
+
+function PostMediaProtectionStory() {
+  return (
+    <Catalog>
+      <PostContentRenderer
+        bodyText="오늘 산책길에서 찍은 사진이에요."
+        contentWarning={null}
+        document={null}
+        media={[
+          {
+            aiProhibitFilterApplied: true,
+            altText: '필터가 적용된 이미지',
+            id: 'post-media-protection-filtered',
+            url: postMediaImageUri,
+          },
+          {
+            aiProhibitFilterApplied: false,
+            altText: '필터가 적용되지 않은 이미지',
+            id: 'post-media-protection-unfiltered',
+            url: postMediaImageUri,
+          },
+          {
+            aiProhibitFilterApplied: null,
+            altText: '적용 상태를 알 수 없는 이미지',
+            id: 'post-media-protection-unknown',
+            url: postMediaImageUri,
+          },
+        ]}
+        mentionedProfiles={[]}
+        postId="post-media-protection-story-post"
       />
     </Catalog>
   );
@@ -7025,6 +7060,10 @@ export const ProductionComposerDefaultVisibilityUpdate: Story = {
 
 export const ContentWarningReveal: Story = {
   render: () => <ContentWarningRevealStory />,
+};
+
+export const PostMediaProtectionStates: Story = {
+  render: () => <PostMediaProtectionStory />,
 };
 
 export const ContentWarningRevealInteraction: Story = {

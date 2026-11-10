@@ -282,6 +282,7 @@ async function runMediaUploadWorkflow(
         const finalized = await finalizeMediaUploadActivity({
           ...parsed.data,
           remoteUploadId: prepared.id,
+          ...(isNewInput ? { applyAiProhibitFilter: selectedFilter } : {}),
           ...(publicationMetadata === undefined
             ? {}
             : { expectedPublicationMetadata: publicationMetadata }),
@@ -326,6 +327,7 @@ async function runMediaUploadWorkflow(
       const finalized = await finalizeMediaUploadActivity({
         ...parsed.data,
         remoteUploadId: prepared.id,
+        ...(isNewInput ? { applyAiProhibitFilter: selectedFilter } : {}),
         ...(publicationMetadata === undefined
           ? {}
           : { expectedPublicationMetadata: publicationMetadata }),

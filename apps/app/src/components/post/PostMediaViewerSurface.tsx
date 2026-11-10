@@ -197,6 +197,7 @@ export function PostMediaViewerSurface({
       <ZoomableImage
         key={zoomKey}
         accessibilityLabel={imageName}
+        aiProhibitFilterApplied={currentMedia.aiProhibitFilterApplied === true}
         onBlankAreaTap={onClose}
         onStatus={settle}
         onZoomedChange={setZoomed}
@@ -521,6 +522,7 @@ function NativeMediaPager({
           ) : item.url ? (
             <ViewerImage
               accessibilityLabel={item.altText?.trim() || `${index + 1}번째 첨부 이미지`}
+              aiProhibitFilterApplied={item.aiProhibitFilterApplied === true}
               onStatus={() => undefined}
               status="ready"
               url={item.url}

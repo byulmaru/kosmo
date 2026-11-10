@@ -247,6 +247,9 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   미리보기를 표시한다. `PostMediaImage`의 로딩·실패 처리를 재사용한다. CW가 있으면 경고만 표시하고
   본문·썸네일을 숨긴다. sensitive media는 썸네일을 숨긴다. 접근할 수 없는 Post는 `preview=null`로
   전달한다. 표시 영역은 기존 `PostContentPrivacyBoundary`를 사용한다.
+- 첫 미디어의 `aiProhibitFilterApplied`가 strict `true`이면 썸네일에 passive `Shield` badge를 표시하고
+  알림 link name에 `학습방지 필터 적용됨`을 포함한다. `false`, `null`, 누락 값에서는 생략하며 기존 사진별
+  행위자 Profile 이동과 사진 외 게시글 이동을 유지한다.
 - 한 줄 미리보기는 `contentM`의 16px/24px를 사용한다. Figma의 MCP 매칭용 대체 폰트를
   가져오지 않고 프로덕션 UI의 SUIT와 본문의 Pretendard를 유지한다.
 - 미리보기의 하단 여백은 썸네일 유무와 무관하게 일반 행과 같은 8px이다.
