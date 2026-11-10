@@ -238,6 +238,9 @@ PostContent 조회는 해당 URL에 이미 저장된 metadata만 읽으며 새 �
 backfill하지 않는다. 따라서 기존 게시물도 같은 정규화 URL의 metadata가 이미 저장되어 있거나, 다른 게시물의 정상적인 생성 후 처리로 그 URL의 metadata가
 저장되면 카드를 표시할 수 있다.
 
+KOSMO Worker는 인증된 Embed metadata service에 후보 URL의 metadata를 요청한다. 원문 페이지의 HTML을 KOSMO에서 직접
+가져오지 않으며, metadata를 가져오지 못하거나 응답을 사용할 수 없으면 기존 Post 조회·표시를 유지한다.
+
 Post에 Media가 하나라도 있으면 Link Preview 카드를 표시하지 않는다. Content Warning으로 본문이 숨겨진 동안 카드도
 함께 숨겨 기존 reveal 경계를 따른다. Metadata를 읽거나 갱신하지 못해도 원문 Post와 본문은 계속 조회·표시할 수 있고,
 첫 조회에 성공 값이 없으면 카드만 생략한다. 이 규칙은 Local·Remote Post에 동일하게 적용한다.
@@ -246,9 +249,10 @@ Post에 Media가 하나라도 있으면 Link Preview 카드를 표시하지 않�
 fresh로 보며, 이후 갱신 대상이 될 수 있다. 최근 실패 뒤에는 10분 동안 재조회를 억제한다. 기존 성공 값은 freshness 만료나
 갱신 실패만으로 삭제하지 않으며, 다음 성공한 갱신으로 대체될 때까지 표시할 수 있다.
 
-Metadata를 가져오는 URL은 공개 HTTP(S) 주소만 허용한다. 인증정보(user:password)가 포함된 URL, 비기본 포트와
-사설·예약·loopback 주소는 허용하지 않으며, redirect에도 같은 주소 제한을 적용한다. 별도 공용 메타데이터 서비스,
-iframe과 embed를 사용하지 않는다.
+Metadata 대상은 공개 HTTP(S) URL이다. 인증정보(user:password)가 포함된 URL, 비기본 포트와 사설·예약·loopback
+주소는 허용하지 않으며, redirect를 따라갈 때도 같은 제한을 적용한다. 이 검증과 DNS rebinding 방지는 Embed service가
+보장해야 하며, DNS·redirect 및 처리 자원·응답 크기 경계가 검증되기 전에는 운영 요청을 연결하지 않는다. KOSMO는
+Embed service가 반환한 metadata를 사용하며, iframe이나 embed 문서를 렌더링하지 않는다.
 
 ## 확정 용어
 
