@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { createRequire } from 'node:module';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
@@ -19,7 +20,7 @@ import BottomTabBarProfileFragment from '../shell/__generated__/BottomTabBar_pro
 import SidebarNavigationFragment from '../shell/__generated__/SidebarNavigation_query.graphql';
 import UniversalShellQueryArtifact from '../shell/__generated__/UniversalShellQuery.graphql';
 import NotificationListNextPageQueryArtifact from './__generated__/NotificationListNextPageQuery.graphql';
-import { NotificationStreamUpdates } from './NotificationStreamUpdates';
+import type { ComponentType } from 'react';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
@@ -31,6 +32,25 @@ type Subscription = {
 const subscriptionsA: Subscription[] = [];
 const subscriptionsB: Subscription[] = [];
 let renderer: ReturnType<typeof create> | null = null;
+let NotificationStreamUpdates: ComponentType<{ profileId: string }>;
+const require = createRequire(import.meta.url);
+const mockModule = (specifier: string | URL, exports: object) =>
+  mock.module(specifier, {
+    exports,
+  } as unknown as Parameters<typeof mock.module>[1]);
+
+mockModule('react-relay', {
+  ...ReactRelay,
+  graphql: (parts: TemplateStringsArray) => {
+    const name = parts.join('').match(/(?:query|fragment|mutation|subscription) (\w+)/)?.[1];
+    assert.ok(name);
+    return require(`./__generated__/${name}.graphql.ts`).default;
+  },
+});
+
+before(async () => {
+  ({ NotificationStreamUpdates } = await import('./NotificationStreamUpdates'));
+});
 
 function createNetwork(subscriptions: Subscription[]) {
   return Network.create(

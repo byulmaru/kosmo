@@ -308,6 +308,9 @@ mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule('@/components/notification/NotificationStreamUpdates', {
+  NotificationStreamUpdates: () => null,
+});
 mockModule('@/components/PageHeader', {
   PageHeader: () => null,
 });
