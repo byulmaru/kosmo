@@ -101,6 +101,7 @@ function expectHomeBrandHeader(canvasElement: HTMLElement) {
 
 function HomeRefreshStory() {
   const homeReselectionRef = useRef<(() => void) | null>(null);
+  const requestPhaseRef = useRef<'cached' | 'error' | 'recovered'>('cached');
   const registerHomeReselection = useCallback((handler: () => void) => {
     homeReselectionRef.current = handler;
     return () => {
@@ -110,26 +111,70 @@ function HomeRefreshStory() {
     };
   }, []);
   const reselectHome = useCallback(() => homeReselectionRef.current?.(), []);
+  const environment = useMemo(() => {
+    const network = Network.create(
+      (request) => {
+        if (request.name !== 'HomePageQuery') {
+          return Promise.resolve({ data: {} });
+        }
+
+        const requestPhase = requestPhaseRef.current;
+        if (requestPhase === 'error') {
+          return Observable.create<GraphQLResponse>((sink) => {
+            const timeout = setTimeout(() => sink.error(new Error('홈 재조회 실패')), 300);
+            return () => clearTimeout(timeout);
+          });
+        }
+
+        return Promise.resolve({
+          data: requestPhase === 'recovered' ? recoveredHomeData : cachedHomeData,
+        });
+      },
+      () => Observable.create<GraphQLResponse>(() => undefined),
+    );
+    const nextEnvironment = new Environment({
+      network,
+      store: new Store(new RecordSource()),
+    });
+
+    nextEnvironment.commitPayload(
+      createOperationDescriptor(getRequest(HomePageQueryNode), {}),
+      cachedHomeData,
+    );
+    return nextEnvironment;
+  }, []);
+  const createEnvironment = useCallback(() => environment, [environment]);
+  const handleHomeReselection = useCallback(() => {
+    if (requestPhaseRef.current === 'cached') {
+      requestPhaseRef.current = 'error';
+    } else if (requestPhaseRef.current === 'error') {
+      requestPhaseRef.current = 'recovered';
+    }
+
+    reselectHome();
+  }, [reselectHome]);
 
   return (
-    <ShellChromeProvider
-      navigationDrawerOpen={false}
-      openNavigationDrawer={() => undefined}
-      openProfileSwitcher={() => undefined}
-      registerHomeReselection={registerHomeReselection}
-      reselectHome={reselectHome}
-    >
-      <View>
-        <Pressable
-          accessibilityLabel="홈 다시 불러오기"
-          accessibilityRole="button"
-          onPress={reselectHome}
-        >
-          <Text>홈 다시 불러오기</Text>
-        </Pressable>
-        <HomeScreen />
-      </View>
-    </ShellChromeProvider>
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <ShellChromeProvider
+        navigationDrawerOpen={false}
+        openNavigationDrawer={() => undefined}
+        openProfileSwitcher={() => undefined}
+        registerHomeReselection={registerHomeReselection}
+        reselectHome={reselectHome}
+      >
+        <View>
+          <Pressable
+            accessibilityLabel="홈 다시 불러오기"
+            accessibilityRole="button"
+            onPress={handleHomeReselection}
+          >
+            <Text>홈 다시 불러오기</Text>
+          </Pressable>
+          <HomeScreen />
+        </View>
+      </ShellChromeProvider>
+    </RelayActorProvider>
   );
 }
 
@@ -343,19 +388,6 @@ export const ErrorFull: Story = {
 
 export const RefetchFailureKeepsCachedTimelineAndRecovers: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  parameters: {
-    relay: {
-      operationResponses: {
-        HomePageQuery: {
-          sequence: [
-            { data: cachedHomeData },
-            { delayMs: 300, error: '홈 재조회 실패' },
-            { data: recoveredHomeData },
-          ],
-        },
-      },
-    },
-  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
