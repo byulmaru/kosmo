@@ -111,6 +111,59 @@ describe('PostLinkPreviewCard', () => {
     assert.equal(title?.props.numberOfLines, 2);
     assert.equal(description?.props.numberOfLines, 2);
   });
+
+  it('renders a qualifying image above the copy in a 16:9 frame on first render', async () => {
+    const preview: PostLinkPreviewData = {
+      description: '설명',
+      imageHeight: 400,
+      imageUrl: 'https://cdn.example.com/preview.webp',
+      imageWidth: 600,
+      title: '제목',
+      url: 'https://example.com/article',
+    };
+    await render({ preview });
+
+    const image = rendered('Image')[0];
+    assert.ok(image);
+    assert.equal(image.props.resizeMode, 'cover');
+    assert.deepEqual(image.props.source, { uri: preview.imageUrl });
+    assertLargeImage();
+
+    await update({ ...preview, imageHeight: 401 });
+    assertCompactImage();
+  });
+
+  it('derives image layout immediately from the current URL and dimensions', async () => {
+    const preview: PostLinkPreviewData = {
+      description: null,
+      imageHeight: 400,
+      imageUrl: null,
+      imageWidth: 600,
+      title: '제목',
+      url: 'https://example.com/article',
+    };
+    await render({ preview });
+    assert.equal(rendered('Image').length, 0);
+
+    const imageUrl = 'https://cdn.example.com/preview.webp';
+    await update({ ...preview, imageUrl, imageWidth: 599, imageHeight: 399 });
+    assertCompactImage();
+
+    await update({ ...preview, imageUrl });
+    assertLargeImage();
+
+    await update({ ...preview, imageUrl, imageHeight: null });
+    assertCompactImage();
+
+    await update({ ...preview, imageUrl, imageHeight: 0 });
+    assertCompactImage();
+
+    await update({ ...preview, imageUrl, imageWidth: undefined, imageHeight: undefined });
+    assertCompactImage();
+
+    await update({ ...preview, imageWidth: 600, imageHeight: 400 });
+    assert.equal(rendered('Image').length, 0);
+  });
 });
 
 async function render(props: { interactive?: boolean; preview: PostLinkPreviewData }) {
@@ -119,6 +172,47 @@ async function render(props: { interactive?: boolean; preview: PostLinkPreviewDa
   });
 }
 
+async function update(preview: PostLinkPreviewData) {
+  await act(async () => {
+    renderer?.update(createElement(PostLinkPreviewCard, { preview }));
+  });
+}
+
 function rendered(type: string): ReactTestInstance[] {
   return renderer?.root.findAll((node) => node.type === type) ?? [];
+}
+
+function assertLargeImage() {
+  const image = rendered('Image')[0];
+  assert.ok(image);
+  const style = flattenStyle(image.props.style);
+  assert.equal(style.aspectRatio, 16 / 9);
+  assert.equal(style.width, '100%');
+  assert.equal(style.height, undefined);
+  assert.equal(visualOrder()[0], 'Image');
+}
+
+function assertCompactImage() {
+  const image = rendered('Image')[0];
+  assert.ok(image);
+  const style = flattenStyle(image.props.style);
+  assert.equal(style.width, 96);
+  assert.equal(style.height, 96);
+  assert.equal(style.aspectRatio, undefined);
+  assert.equal(visualOrder()[0], 'Text');
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (!Array.isArray(style)) {
+    return style && typeof style === 'object' ? (style as Record<string, unknown>) : {};
+  }
+  return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
+}
+
+function visualOrder(): string[] {
+  return (
+    renderer?.root
+      .findAll((node) => String(node.type) === 'Image' || String(node.type) === 'Text')
+      .map(({ type }) => String(type)) ?? []
+  );
 }

@@ -1197,12 +1197,16 @@ describe('Post Reply GraphQL 경계', () => {
       title: 'Article title',
       description: 'Article summary',
       imageUrl: 'https://preview.example/card.png',
+      imageWidth: 1200,
+      imageHeight: 630,
     };
     const laterPreview = {
       url: normalizedLaterUrl,
       title: 'Later title',
       description: null,
       imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
     };
     const now = Temporal.Now.instant();
     await db.insert(LinkPreviews).values([
@@ -1228,6 +1232,39 @@ describe('Post Reply GraphQL 경계', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.node?.content?.linkPreview, firstPreview);
+    assert.equal(executions, 0);
+
+    await db
+      .update(LinkPreviews)
+      .set({ imageWidth: null, imageHeight: null })
+      .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(normalizedFirstUrl)));
+    const legacyResult = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', post.id),
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(legacyResult);
+    assert.deepEqual(legacyResult.data?.node?.content?.linkPreview, {
+      ...firstPreview,
+      imageWidth: null,
+      imageHeight: null,
+    });
+    await db
+      .update(LinkPreviews)
+      .set({ imageUrl: null, imageWidth: 1200, imageHeight: 630 })
+      .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(normalizedFirstUrl)));
+    const missingImageResult = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', post.id),
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(missingImageResult);
+    assert.deepEqual(missingImageResult.data?.node?.content?.linkPreview, {
+      ...firstPreview,
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    });
     assert.equal(executions, 0);
   });
 
@@ -2795,6 +2832,8 @@ const requestPostContentLinkPreview = (postId: string, token?: string) =>
         linkPreview: {
           description: string | null;
           imageUrl: string | null;
+          imageWidth: number | null;
+          imageHeight: number | null;
           title: string;
           url: string;
         } | null;
@@ -2804,7 +2843,7 @@ const requestPostContentLinkPreview = (postId: string, token?: string) =>
     `query PostContentLinkPreview($postId: ID!) {
       node(id: $postId) {
         ... on Post {
-          content { linkPreview { description imageUrl title url } }
+          content { linkPreview { description imageHeight imageUrl imageWidth title url } }
         }
       }
     }`,

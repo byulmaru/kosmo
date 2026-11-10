@@ -235,6 +235,8 @@ test(
       assert.equal(initialFailureRow.title, null);
       assert.equal(initialFailureRow.description, null);
       assert.equal(initialFailureRow.imageUrl, null);
+      assert.equal(initialFailureRow.imageWidth, null);
+      assert.equal(initialFailureRow.imageHeight, null);
       assert.equal(initialFailureRow.lastSuccessfulFetchAt, null);
       assert.ok(initialFailureRow.lastFailureAt);
 
@@ -257,6 +259,8 @@ test(
         title: 'Fetched title',
         description: 'Fetched description',
         imageUrl: 'https://preview.example/image.png',
+        imageWidth: 1200,
+        imageHeight: 630,
       };
 
       await runWorkflow({ postId: firstPostId });
@@ -273,6 +277,8 @@ test(
       assert.equal(storedSuccess.title, fetchedPreview.title);
       assert.equal(storedSuccess.description, fetchedPreview.description);
       assert.equal(storedSuccess.imageUrl, fetchedPreview.imageUrl);
+      assert.equal(storedSuccess.imageWidth, fetchedPreview.imageWidth);
+      assert.equal(storedSuccess.imageHeight, fetchedPreview.imageHeight);
       assert.ok(storedSuccess.lastSuccessfulFetchAt);
       assert.equal(storedSuccess.lastFailureAt, null);
 
@@ -288,6 +294,8 @@ test(
         title: 'Previous title',
         description: 'Previous description',
         imageUrl: 'https://preview.example/old-image.png',
+        imageWidth: 800,
+        imageHeight: 600,
         lastSuccessfulFetchAt: previousSuccessfulFetchAt,
       };
       await db.insert(LinkPreviews).values(previousMetadata);
@@ -307,6 +315,8 @@ test(
       assert.equal(storedFailure.title, previousMetadata.title);
       assert.equal(storedFailure.description, previousMetadata.description);
       assert.equal(storedFailure.imageUrl, previousMetadata.imageUrl);
+      assert.equal(storedFailure.imageWidth, previousMetadata.imageWidth);
+      assert.equal(storedFailure.imageHeight, previousMetadata.imageHeight);
       assert.equal(
         storedFailure.lastSuccessfulFetchAt?.epochMilliseconds,
         previousSuccessfulFetchAt.epochMilliseconds,
@@ -315,6 +325,33 @@ test(
 
       await runWorkflow({ postId: stalePostId });
       assert.equal(fetchLinkPreviewCalls, 3, 'recent failure should prevent another fetch');
+
+      await db
+        .update(LinkPreviews)
+        .set({ lastFailureAt: Temporal.Now.instant().subtract({ minutes: 11 }) })
+        .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(staleUrl)));
+      fetchedPreview = {
+        url: staleUrl,
+        title: 'Refreshed without dimensions',
+        description: 'Refreshed description',
+        imageUrl: 'https://preview.example/refreshed-image.png',
+        imageWidth: null,
+        imageHeight: null,
+      };
+
+      await runWorkflow({ postId: stalePostId });
+      assert.equal(fetchLinkPreviewCalls, 4);
+      const refreshedWithoutDimensions = await db
+        .select()
+        .from(LinkPreviews)
+        .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(staleUrl)))
+        .limit(1)
+        .then(first);
+      assert.ok(refreshedWithoutDimensions);
+      assert.equal(refreshedWithoutDimensions.title, fetchedPreview.title);
+      assert.equal(refreshedWithoutDimensions.imageUrl, fetchedPreview.imageUrl);
+      assert.equal(refreshedWithoutDimensions.imageWidth, null);
+      assert.equal(refreshedWithoutDimensions.imageHeight, null);
     });
   },
 );

@@ -13,7 +13,9 @@ const PostBodyFragment = graphql`
       contentWarning
       linkPreview {
         description
+        imageHeight
         imageUrl
+        imageWidth
         title
         url
       }

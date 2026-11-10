@@ -12,6 +12,8 @@ const PostContentLinkPreview = builder.simpleObject('PostContentLinkPreview', {
     title: t.string(),
     description: t.string({ nullable: true }),
     imageUrl: t.string({ nullable: true }),
+    imageWidth: t.int({ nullable: true }),
+    imageHeight: t.int({ nullable: true }),
   }),
 });
 
@@ -38,6 +40,8 @@ builder.objectField(PostContent, 'linkPreview', (t) =>
             title: LinkPreviews.title,
             description: LinkPreviews.description,
             imageUrl: LinkPreviews.imageUrl,
+            imageWidth: LinkPreviews.imageWidth,
+            imageHeight: LinkPreviews.imageHeight,
           })
           .from(LinkPreviews)
           .where(eq(LinkPreviews.urlHash, urlHash))
@@ -50,6 +54,8 @@ builder.objectField(PostContent, 'linkPreview', (t) =>
               title: current.title,
               description: current.description,
               imageUrl: current.imageUrl,
+              imageWidth: current.imageUrl === null ? null : current.imageWidth,
+              imageHeight: current.imageUrl === null ? null : current.imageHeight,
             };
       } catch (error) {
         reportError(error);

@@ -72,6 +72,8 @@ const refreshLinkPreview = async (value: string): Promise<void> => {
       title: fetched.title,
       description: fetched.description,
       imageUrl: fetched.imageUrl,
+      imageWidth: fetched.imageWidth,
+      imageHeight: fetched.imageHeight,
       lastSuccessfulFetchAt: fetchedAt,
     })
     .onConflictDoUpdate({
@@ -81,6 +83,8 @@ const refreshLinkPreview = async (value: string): Promise<void> => {
         title: fetched.title,
         description: fetched.description,
         imageUrl: fetched.imageUrl,
+        imageWidth: fetched.imageWidth,
+        imageHeight: fetched.imageHeight,
         lastSuccessfulFetchAt: fetchedAt,
         lastFailureAt: null,
         updatedAt: sql`now()`,

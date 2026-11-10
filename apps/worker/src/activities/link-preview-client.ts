@@ -8,11 +8,23 @@ const maxResponseBytes = 512 * 1024;
 const titleMaxLength = 300;
 const descriptionMaxLength = 1_000;
 
+const imageDimensionSchema = z
+  .number()
+  .finite()
+  .int()
+  .min(1)
+  .max(2_147_483_647)
+  .nullable()
+  .optional()
+  .catch(null);
+
 const metadataSchema = z.object({
   url: z.string(),
   title: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   image: z.string().nullable().optional(),
+  imageWidth: imageDimensionSchema,
+  imageHeight: imageDimensionSchema,
 });
 
 function limitedText(value: unknown, maxLength: number): string | null {
@@ -113,14 +125,24 @@ export async function fetchLinkPreview(value: string): Promise<LinkPreview | nul
       return null;
     }
 
+    const imageUrl =
+      typeof metadata.data.image === 'string'
+        ? normalizeLinkPreviewUrl(metadata.data.image.trim())
+        : null;
+    const imageDimensions =
+      imageUrl !== null &&
+      typeof metadata.data.imageWidth === 'number' &&
+      typeof metadata.data.imageHeight === 'number'
+        ? [metadata.data.imageWidth, metadata.data.imageHeight]
+        : null;
+
     return {
       url,
       title,
       description: limitedText(metadata.data.description, descriptionMaxLength),
-      imageUrl:
-        typeof metadata.data.image === 'string'
-          ? normalizeLinkPreviewUrl(metadata.data.image.trim())
-          : null,
+      imageUrl,
+      imageWidth: imageDimensions?.[0] ?? null,
+      imageHeight: imageDimensions?.[1] ?? null,
     };
   } catch {
     return null;

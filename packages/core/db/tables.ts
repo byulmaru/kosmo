@@ -242,6 +242,8 @@ export const LinkPreviews = pgTable(
     title: text('title'),
     description: text('description'),
     imageUrl: text('image_url'),
+    imageWidth: integer('image_width'),
+    imageHeight: integer('image_height'),
     lastSuccessfulFetchAt: datetime('last_successful_fetch_at'),
     lastFailureAt: datetime('last_failure_at'),
     createdAt: createdAt(),

@@ -53,9 +53,37 @@ export const Image: Story = {
   args: {
     preview: {
       description: '새로운 기능과 커뮤니티 소식을 확인해 보세요.',
+      imageHeight: 630,
       imageUrl: ogDefaultUrl,
+      imageWidth: 1200,
       title: '이미지가 있는 링크',
       url: 'https://example.com/image',
+    },
+  },
+};
+
+export const CompactWideImage: Story = {
+  args: {
+    preview: {
+      description: null,
+      imageHeight: 300,
+      imageUrl: ogDefaultUrl,
+      imageWidth: 599,
+      title: '작은 가로 이미지',
+      url: 'https://example.com/small-wide-image',
+    },
+  },
+};
+
+export const SquareImage: Story = {
+  args: {
+    preview: {
+      description: null,
+      imageHeight: 600,
+      imageUrl: ogDefaultUrl,
+      imageWidth: 600,
+      title: '정사각형 이미지',
+      url: 'https://example.com/square-image',
     },
   },
 };

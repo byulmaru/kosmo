@@ -550,7 +550,9 @@ scalar PostContentDocument
 
 type PostContentLinkPreview {
   description: String
+  imageHeight: Int
   imageUrl: String
+  imageWidth: Int
   title: String!
   url: String!
 }
