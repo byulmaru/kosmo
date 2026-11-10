@@ -9,6 +9,12 @@
 - Post 내부의 일반 Link Preview surface에는 [`background/surface`](./colors.md#component-usage-mapping)를 사용한다. 이를 modal·menu용 elevated card로 올리지 않으며, Quote Source preview의 별도 no-fill 표현은 유지한다.
 - 외부 페이지를 화면 안에 iframe, embed 또는 별도 page content로 렌더링하지 않는다.
 
+## 이미지 presentation
+
+- 큰 이미지는 이미지 URL이 있고, 사전에 전달된 이미지 크기 정보의 너비와 높이가 모두 양의 정수이며, 너비가 600px 이상이고 너비/높이 비율이 1.5 이상일 때 사용한다. 카드는 이미지를 텍스트 위에 전체 너비로 표시하고, 이미지 영역은 16:9 비율이 유지되는 `cover` frame을 사용한다.
+- 작은 이미지, 정사각형·세로 이미지, 크기 정보가 없거나 불완전·유효하지 않은 이미지는 기존 96×96 compact 배치를 유지한다. 이미지 URL이 없으면 기존 텍스트 카드로 표시한다.
+- 크기 정보가 카드의 첫 표시 시점에 준비되어 있어야 한다. 이미지 로드 완료 뒤 크기나 배치를 다시 분류하지 않으며, 이미지가 로드되어도 카드 높이가 바뀌지 않게 한다.
+
 ## 상호작용
 
 - 대화형 Post Content에서는 카드 전체가 본문 첫 링크와 같은 URL을 연다. 카드 입력은 부모 Post의 navigation을 함께 실행하지 않는다.

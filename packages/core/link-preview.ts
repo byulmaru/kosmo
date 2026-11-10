@@ -5,6 +5,8 @@ export interface LinkPreview {
   readonly title: string;
   readonly description: string | null;
   readonly imageUrl: string | null;
+  readonly imageWidth: number | null;
+  readonly imageHeight: number | null;
 }
 
 export function normalizeLinkPreviewUrl(value: string): string | null {

@@ -97,11 +97,13 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     assert.equal(contentRenderer?.props.mentionedProfiles, mentionedProfiles);
   });
 
-  it('forwards mentionedProfiles through the non-interactive source preview path', async () => {
+  it('forwards mentionedProfiles and link preview dimensions through the source preview path', async () => {
     const mentionedProfiles = [mentionedProfile('profile-source-mentioned')];
     const linkPreview: PostLinkPreviewData = {
       description: 'Source summary',
-      imageUrl: null,
+      imageHeight: 630,
+      imageUrl: 'https://cdn.example.com/source-preview.webp',
+      imageWidth: 1200,
       title: 'Source title',
       url: 'https://example.com/source',
     };

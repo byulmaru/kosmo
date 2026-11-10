@@ -65,7 +65,9 @@ const PostSourcePreviewFragment = graphql`
       document
       linkPreview {
         description
+        imageHeight
         imageUrl
+        imageWidth
         title
         url
       }
@@ -103,7 +105,9 @@ const PostSourcePresentationViewFragment = graphql`
       document
       linkPreview {
         description
+        imageHeight
         imageUrl
+        imageWidth
         title
         url
       }

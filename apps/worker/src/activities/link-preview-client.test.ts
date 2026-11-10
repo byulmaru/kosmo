@@ -33,6 +33,8 @@ test('requests metadata with the Bearer key and keeps the requested normalized U
         title: '  Example title  ',
         description: '   ',
         image: 'https://CDN.EXAMPLE:443/card.png',
+        imageWidth: 1200,
+        imageHeight: 630,
         siteName: 42,
         type: 'article',
         favicon: 'https://cdn.example/favicon.ico',
@@ -58,6 +60,8 @@ test('requests metadata with the Bearer key and keeps the requested normalized U
     title: 'Example title',
     description: null,
     imageUrl: 'https://cdn.example/card.png',
+    imageWidth: 1200,
+    imageHeight: 630,
   });
 });
 
@@ -180,9 +184,59 @@ test('returns null when the API request exceeds its deadline', async (t) => {
   assert.equal(signal?.aborted, true);
 });
 
-test('requires a usable title and drops invalid optional images', async (t) => {
+test('requires a usable title and valid image dimensions', async (t) => {
   t.after(restoreEmbedApiKey);
   setEmbedApiKey('test-embed-key');
+  const imageUrl = 'https://cdn.example/card.png';
+  const cases = [
+    {
+      input: {
+        title: 'Boundary dimensions',
+        image: imageUrl,
+        imageWidth: 1,
+        imageHeight: 2_147_483_647,
+      },
+      output: { imageUrl, imageWidth: 1, imageHeight: 2_147_483_647 },
+    },
+    {
+      input: { title: 'Dimensions without an image', imageWidth: 1, imageHeight: 2_147_483_647 },
+      output: { imageUrl: null, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: { title: 'Partial dimensions', image: imageUrl, imageWidth: 1200 },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: { title: 'Zero dimension', image: imageUrl, imageWidth: 0, imageHeight: 630 },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: {
+        title: 'Fractional dimension',
+        image: imageUrl,
+        imageWidth: 1200,
+        imageHeight: 630.5,
+      },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: {
+        title: 'Dimension above Int32',
+        image: imageUrl,
+        imageWidth: 2_147_483_648,
+        imageHeight: 630,
+      },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: { title: 'String dimension', image: imageUrl, imageWidth: '1200', imageHeight: 630 },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
+      input: { title: 'Missing dimensions', image: imageUrl },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+  ];
   const responses = [
     new Response(
       JSON.stringify({ url: normalizedUrl, title: '  ', image: 'javascript:alert(1)' }),
@@ -192,8 +246,20 @@ test('requires a usable title and drops invalid optional images', async (t) => {
       headers: { 'content-type': 'application/json' },
     }),
     new Response(
-      JSON.stringify({ url: normalizedUrl, title: 'Title', image: 'javascript:alert(1)' }),
+      JSON.stringify({
+        url: normalizedUrl,
+        title: 'Title',
+        image: 'javascript:alert(1)',
+        imageWidth: 1200,
+        imageHeight: 630,
+      }),
       { headers: { 'content-type': 'application/json' } },
+    ),
+    ...cases.map(
+      ({ input }) =>
+        new Response(JSON.stringify({ url: normalizedUrl, ...input }), {
+          headers: { 'content-type': 'application/json' },
+        }),
     ),
   ];
   t.mock.method(globalThis, 'fetch', async () => responses.shift()!);
@@ -205,5 +271,16 @@ test('requires a usable title and drops invalid optional images', async (t) => {
     title: 'Title',
     description: null,
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
   });
+
+  for (const { input, output } of cases) {
+    assert.deepEqual(await fetchLinkPreview(normalizedUrl), {
+      url: normalizedUrl,
+      title: input.title,
+      description: null,
+      ...output,
+    });
+  }
 });
