@@ -213,52 +213,32 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
     await scrollDocument(page);
 
+    const entry = await homeEntry(page, surface.kind);
+    await expect(entry).toHaveAttribute('href', '/home');
     let refreshCount = 0;
-    let phase = 'preparing-entry';
     await page.route('**/graphql', async (route) => {
       if (isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
         refreshCount += 1;
-        console.info(
-          JSON.stringify({
-            event: 'current-home-reselect-query',
-            surface: surface.name,
-            phase,
-            refreshCount,
-          }),
-        );
       }
       await route.continue();
     });
-    const homeRefreshResponse = waitForGraphQLOperation(page, 'HomePageQuery');
-    void homeRefreshResponse.then(
-      () => {
-        console.info(
-          JSON.stringify({
-            event: 'current-home-reselect-first-response',
-            surface: surface.name,
-            phase,
-            refreshCount,
-          }),
-        );
-        phase = 'after-first-response';
-      },
-      () => {},
+    const homeRefreshRequestPromise = page.waitForRequest((request) =>
+      isGraphQLOperation(request.postData(), 'HomePageQuery'),
     );
 
     try {
-      const entry = await homeEntry(page, surface.kind);
-      await expect(entry).toHaveAttribute('href', '/home');
       if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
-        phase = 'activating';
         await entry.tap();
       } else {
-        phase = 'activating';
         await entry.click();
       }
 
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       await expect.poll(() => refreshCount).toBe(1);
-      await homeRefreshResponse;
+      const homeRefreshRequest = await homeRefreshRequestPromise;
+      const homeRefreshResponse = await homeRefreshRequest.response();
+      expect(homeRefreshResponse).not.toBeNull();
+      await homeRefreshResponse!.finished();
     } finally {
       await page.unroute('**/graphql');
     }

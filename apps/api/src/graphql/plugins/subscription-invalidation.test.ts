@@ -55,9 +55,14 @@ const getIterator = async (
 
 const createSignal = () => {
   let resolveNext!: (result: IteratorResult<true>) => void;
+  let rejectNext!: (error: unknown) => void;
   let returnCount = 0;
   const iterator: AsyncIterableIterator<true> = {
-    next: () => new Promise((resolve) => (resolveNext = resolve)),
+    next: () =>
+      new Promise((resolve, reject) => {
+        resolveNext = resolve;
+        rejectNext = reject;
+      }),
     return: async () => {
       returnCount += 1;
       resolveNext?.({ done: true, value: undefined });
@@ -70,6 +75,7 @@ const createSignal = () => {
   return {
     iterator,
     end: () => resolveNext({ done: false, value: true }),
+    fail: (error: unknown) => rejectNext(error),
     returnCount: () => returnCount,
   };
 };
@@ -78,10 +84,13 @@ const createPendingSource = () => {
   const queuedResults: IteratorResult<ExecutionResult>[] = [];
   const waitingReaders: ((result: IteratorResult<ExecutionResult>) => void)[] = [];
   let returnCount = 0;
+  let resolveNextStarted!: () => void;
+  const nextStarted = new Promise<void>((resolve) => (resolveNextStarted = resolve));
   const source: AsyncIterable<ExecutionResult> = {
     [Symbol.asyncIterator]() {
       return {
         next: () => {
+          resolveNextStarted();
           const queuedResult = queuedResults.shift();
           return queuedResult
             ? Promise.resolve(queuedResult)
@@ -99,6 +108,7 @@ const createPendingSource = () => {
   };
   return {
     source,
+    nextStarted,
     emit: (value: ExecutionResult) => {
       const result = { done: false, value } as const;
       const resolve = waitingReaders.shift();
@@ -181,6 +191,112 @@ test('session-only subscriptions do not subscribe to Profile signals', async (t)
 
   assert.deepEqual(await pendingRead, { done: true, value: undefined });
   assert.equal(source.returnCount(), 1);
+  assert.equal(sessionSignal.returnCount(), 1);
+});
+
+test('delivers sequential source events and closes a later pending read on Session end', async (t) => {
+  installSessionCheck(t);
+  const sessionSignal = createSignal();
+  t.mock.method(sessionPubSub, 'subscribe', () => sessionSignal.iterator as never);
+  t.mock.method(profilePubSub, 'subscribe', () => createSignal().iterator as never);
+
+  const source = createPendingSource();
+  const iterator = await getIterator('session-1', source.source);
+  const markers = Array.from({ length: 32 }, (_, index): ExecutionResult => ({ data: { index } }));
+  const received: ExecutionResult[] = [];
+
+  for (const marker of markers) {
+    const pendingRead = iterator.next();
+    source.emit(marker);
+    const result = await pendingRead;
+    assert.equal(result.done, false);
+    received.push(result.value);
+  }
+
+  assert.deepEqual(received, markers);
+  const pendingRead = iterator.next();
+  sessionSignal.end();
+
+  assert.deepEqual(await pendingRead, { done: true, value: undefined });
+  assert.equal(source.returnCount(), 1);
+  assert.equal(sessionSignal.returnCount(), 1);
+});
+
+test('a rejected Session signal rejects a pending source read and cleans up', async (t) => {
+  installSessionCheck(t);
+  const sessionSignal = createSignal();
+  t.mock.method(sessionPubSub, 'subscribe', () => sessionSignal.iterator as never);
+  t.mock.method(profilePubSub, 'subscribe', () => createSignal().iterator as never);
+
+  const source = createPendingSource();
+  const iterator = await getIterator('session-1', source.source);
+  const pendingRead = iterator.next();
+  assert.equal(
+    await Promise.race([source.nextStarted.then(() => true), pendingRead.then(() => false)]),
+    true,
+  );
+  const failure = new Error('Session signal failed');
+  sessionSignal.fail(failure);
+
+  await assert.rejects(pendingRead, failure);
+  assert.equal(source.returnCount(), 1);
+  assert.equal(sessionSignal.returnCount(), 1);
+});
+
+test('a rejected Session signal between reads rejects once, then completes', async (t) => {
+  installSessionCheck(t);
+  const sessionSignal = createSignal();
+  t.mock.method(sessionPubSub, 'subscribe', () => sessionSignal.iterator as never);
+  t.mock.method(profilePubSub, 'subscribe', () => createSignal().iterator as never);
+
+  const source = createPendingSource();
+  const iterator = await getIterator('session-1', source.source);
+  const marker: ExecutionResult = { data: { post: 'first' } };
+  const firstRead = iterator.next();
+  source.emit(marker);
+  assert.deepEqual(await firstRead, { done: false, value: marker });
+
+  const failure = new Error('Session signal failed while idle');
+  sessionSignal.fail(failure);
+  await assert.rejects(iterator.next(), failure);
+  assert.deepEqual(await iterator.next(), { done: true, value: undefined });
+  assert.equal(source.returnCount(), 1);
+  assert.equal(sessionSignal.returnCount(), 1);
+});
+
+test('invalidation completes a pending read when source return does not settle source next', async (t) => {
+  installSessionCheck(t);
+  const sessionSignal = createSignal();
+  t.mock.method(sessionPubSub, 'subscribe', () => sessionSignal.iterator as never);
+  t.mock.method(profilePubSub, 'subscribe', () => createSignal().iterator as never);
+
+  let returnCount = 0;
+  let resolveNextStarted!: () => void;
+  const nextStarted = new Promise<void>((resolve) => (resolveNextStarted = resolve));
+  const source: AsyncIterable<ExecutionResult> = {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => {
+          resolveNextStarted();
+          return new Promise<IteratorResult<ExecutionResult>>(() => {});
+        },
+        return: async () => {
+          returnCount += 1;
+          return { done: true, value: undefined };
+        },
+      };
+    },
+  };
+  const iterator = await getIterator('session-1', source);
+  const pendingRead = iterator.next();
+  assert.equal(
+    await Promise.race([nextStarted.then(() => true), pendingRead.then(() => false)]),
+    true,
+  );
+  sessionSignal.end();
+
+  assert.deepEqual(await pendingRead, { done: true, value: undefined });
+  assert.equal(returnCount, 1);
   assert.equal(sessionSignal.returnCount(), 1);
 });
 
