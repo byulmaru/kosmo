@@ -14,6 +14,7 @@ import { identifyAnalytics } from '@/analytics/client';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
+import { NotificationStreamUpdates } from '@/components/notification/NotificationStreamUpdates';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
@@ -412,6 +413,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
             <RelayActorBoundary>
+              {profile ? <NotificationStreamUpdates profileId={profile.id} /> : null}
               <ContentReportProvider>{children}</ContentReportProvider>
             </RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>

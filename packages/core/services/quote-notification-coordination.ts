@@ -12,6 +12,7 @@ import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState 
 import { postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
 import type { Transaction } from '../db';
+import type { NotificationEventCollector } from '../notification/events';
 
 export const QuoteNotificationJudgmentOutcome = {
   EMITTED: 'EMITTED',
@@ -78,6 +79,7 @@ export const materializeCoordinatedNotification = async (
     sourceId,
     suppressedOutcome,
   }: MaterializeCoordinatedNotificationInput,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> => {
   const judgmentCondition = and(
     eq(NotificationQuoteJudgments.quotePostId, quotePostId),
@@ -160,13 +162,17 @@ export const materializeCoordinatedNotification = async (
     return [];
   }
 
-  const notificationIds = await materializeNotification(database, {
-    actorAccountId,
-    kind,
-    recipientProfileId,
-    relatedProfileId,
-    sourceId,
-  });
+  const notificationIds = await materializeNotification(
+    database,
+    {
+      actorAccountId,
+      kind,
+      recipientProfileId,
+      relatedProfileId,
+      sourceId,
+    },
+    eventCollector,
+  );
 
   if (notificationIds.length === 0) {
     const concurrentCandidate = await quoteNotificationCandidates(
@@ -212,6 +218,7 @@ export const materializeCoordinatedNotification = async (
 export const materializeReplyNotificationIfEligible = async (
   database: Transaction,
   postId: string,
+  eventCollector?: NotificationEventCollector,
 ): Promise<MaterializedReplyNotification | null> => {
   const source = await database
     .select({
@@ -266,24 +273,32 @@ export const materializeReplyNotificationIfEligible = async (
   }
 
   if (source.repostSourceId !== null) {
-    const notificationIds = await materializeCoordinatedNotification(database, {
-      actorAccountId: source.actorAccountId,
-      eligible: true,
-      kind: NotificationKind.REPLY,
-      quotePostId: source.id,
-      recipientProfileId: source.recipientProfileId,
-      relatedProfileId: source.relatedProfileId,
-      sourceId: source.id,
-    });
+    const notificationIds = await materializeCoordinatedNotification(
+      database,
+      {
+        actorAccountId: source.actorAccountId,
+        eligible: true,
+        kind: NotificationKind.REPLY,
+        quotePostId: source.id,
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+        sourceId: source.id,
+      },
+      eventCollector,
+    );
     return { notificationIds, recipientProfileId: source.recipientProfileId };
   }
 
-  const notificationIds = await materializeNotification(database, {
-    actorAccountId: source.actorAccountId,
-    kind: NotificationKind.REPLY,
-    recipientProfileId: source.recipientProfileId,
-    relatedProfileId: source.relatedProfileId,
-    sourceId: source.id,
-  });
+  const notificationIds = await materializeNotification(
+    database,
+    {
+      actorAccountId: source.actorAccountId,
+      kind: NotificationKind.REPLY,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.relatedProfileId,
+      sourceId: source.id,
+    },
+    eventCollector,
+  );
   return { notificationIds, recipientProfileId: source.recipientProfileId };
 };

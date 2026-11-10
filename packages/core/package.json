@@ -18,6 +18,7 @@
     "./local-instance": "./local-instance.ts",
     "./media-metadata": "./media-metadata.ts",
     "./media-upload": "./media-upload.ts",
+    "./notification/events": "./notification/events.ts",
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
     "./post-content/server-document": "./post-content/server-document.ts",

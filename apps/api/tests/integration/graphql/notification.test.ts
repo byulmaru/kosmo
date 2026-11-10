@@ -14,15 +14,25 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { notificationPubSub } from '@kosmo/core/notification/events';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { disposeRedisPubSub } from '@kosmo/core/redis/pubsub';
+import { publishSessionEnded } from '@kosmo/core/session/events';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import {
   executeProfileFollowPairTransition,
   profileFollowPairWorkflowId,
 } from '@kosmo/core/temporal/follow-command';
 import { normalizeHandle } from '@kosmo/core/utils';
+import { createClient } from '@redis/client';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import {
+  createSseEventReader,
+  getSseData,
+  waitForSubscriberCount,
+  withTimeout,
+} from '../../../src/graphql/subscription-test-helpers';
 import {
   trackLocalPostCreateWorkflows,
   waitForLocalPostCreateWorkflows,
@@ -36,6 +46,10 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
+if (testRedisUrl) {
+  process.env.REDIS_URL = testRedisUrl;
+}
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -113,6 +127,7 @@ describe('Notification GraphQL Node boundary', () => {
       await waitForLocalPostCreateWorkflows();
     } finally {
       restoreLocalPostCreateWorkflowTracking?.();
+      disposeRedisPubSub();
       await pg.end();
     }
   });
@@ -3607,6 +3622,152 @@ describe('Notification GraphQL Node boundary', () => {
     assert.ok(await notificationReadAt(inactiveNotification.id));
     assert.equal(await notificationReadAt(unauthorized.id), null);
   });
+
+  test(
+    'streams selected Profile and Account Operational Notifications and closes an idle stream on Session end',
+    { skip: !testRedisUrl },
+    async () => {
+      const auth = await createAuthenticatedSession();
+      const otherProfile = await createProfile('other-notification-profile');
+      await addMembership(auth.account.id, otherProfile.id, AccountProfileRole.MEMBER);
+      const related = await createProfile('notification-event-author');
+      const selectedNotification = await createFollowNotification(auth.profile.id, related.id);
+      const otherProfileNotification = await createFollowNotification(otherProfile.id, related.id);
+      const operationalNotification = await createOperationalNotification(auth.account.id, {
+        href: '/maintenance',
+        title: 'Scheduled maintenance',
+      });
+      const foreignAuth = await createAuthenticatedSession();
+      const redis = createClient({ url: testRedisUrl! });
+      const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+      redis.on('error', () => undefined);
+      await redis.connect();
+
+      const notificationTopic = `notificationAdded:${auth.account.id}`;
+      const sessionTopic = `sessionEnded:${auth.session.id}`;
+      const response = await app.request('/graphql', {
+        body: JSON.stringify({
+          query: `subscription NotificationEvents {
+            notifications {
+              __typename
+              ... on NotificationAdded {
+                notification { __typename id readAt }
+                profile { id unreadNotificationCount }
+              }
+            }
+          }`,
+        }),
+        headers: {
+          accept: 'text/event-stream',
+          authorization: `Bearer ${auth.token}`,
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+      assert.ok(response.body);
+      const reader = response.body.getReader();
+      readers.push(reader);
+      const readEvent = createSseEventReader(reader);
+
+      try {
+        const firstEvent = readEvent();
+        await Promise.all([
+          waitForSubscriberCount(
+            async () => (await redis.pubSubNumSub(notificationTopic))[notificationTopic] ?? 0,
+            1,
+          ),
+          waitForSubscriberCount(
+            async () => (await redis.pubSubNumSub(sessionTopic))[sessionTopic] ?? 0,
+            1,
+          ),
+        ]);
+
+        notificationPubSub.publish('notificationAdded', auth.account.id, {
+          notificationId: otherProfileNotification.id,
+          recipientProfileId: otherProfile.id,
+        });
+        notificationPubSub.publish('notificationAdded', foreignAuth.account.id, {
+          notificationId: selectedNotification.id,
+          recipientProfileId: auth.profile.id,
+        });
+        notificationPubSub.publish('notificationAdded', auth.account.id, {
+          notificationId: operationalNotification.id,
+          recipientProfileId: null,
+        });
+
+        assert.deepEqual(
+          getSseData(await withTimeout(firstEvent, 'Operational notification missing')),
+          {
+            data: {
+              notifications: {
+                __typename: 'NotificationAdded',
+                notification: {
+                  __typename: 'OperationalNotification',
+                  id: encodeGlobalId('OperationalNotification', operationalNotification.id),
+                  readAt: null,
+                },
+                profile: {
+                  id: encodeGlobalId('Profile', auth.profile.id),
+                  unreadNotificationCount: 2,
+                },
+              },
+            },
+          },
+        );
+
+        const selectedEvent = readEvent();
+        notificationPubSub.publish('notificationAdded', auth.account.id, {
+          notificationId: selectedNotification.id,
+          recipientProfileId: auth.profile.id,
+        });
+        assert.deepEqual(
+          getSseData(await withTimeout(selectedEvent, 'Selected Profile notification missing')),
+          {
+            data: {
+              notifications: {
+                __typename: 'NotificationAdded',
+                notification: {
+                  __typename: 'FollowNotification',
+                  id: encodeGlobalId('FollowNotification', selectedNotification.id),
+                  readAt: null,
+                },
+                profile: {
+                  id: encodeGlobalId('Profile', auth.profile.id),
+                  unreadNotificationCount: 2,
+                },
+              },
+            },
+          },
+        );
+
+        const idleCompletion = readEvent();
+        await publishSessionEnded(auth.session.id);
+        const completionEvent = await withTimeout(
+          idleCompletion,
+          'Idle Notification stream did not close',
+        );
+        assert.ok(completionEvent);
+        assert.match(completionEvent, /^event: complete$/m);
+        assert.doesNotMatch(completionEvent, /^event: error$/m);
+
+        await Promise.all([
+          waitForSubscriberCount(
+            async () => (await redis.pubSubNumSub(notificationTopic))[notificationTopic] ?? 0,
+            0,
+          ),
+          waitForSubscriberCount(
+            async () => (await redis.pubSubNumSub(sessionTopic))[sessionTopic] ?? 0,
+            0,
+          ),
+        ]);
+      } finally {
+        await Promise.all(readers.map((item) => item.cancel().catch(() => undefined)));
+        await redis.close();
+      }
+    },
+  );
 });
 
 type NotificationNode = {
