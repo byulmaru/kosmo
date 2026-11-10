@@ -173,6 +173,7 @@ mock.module(require.resolve('lucide-react-native'), {
     ChevronRightIcon: 'ChevronRightIcon',
     CopyrightIcon: 'CopyrightIcon',
     ExternalLinkIcon: 'ExternalLinkIcon',
+    ShieldIcon: 'ShieldIcon',
     XIcon: 'XIcon',
   },
 } as unknown as Parameters<typeof mock.module>[1]);

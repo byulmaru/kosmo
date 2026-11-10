@@ -115,7 +115,9 @@ mock.module('@/components/ui/IconButton', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./MediaProtectionBadge', {
-  exports: { MediaProtectionBadge: () => createElement('MediaProtectionBadge') },
+  exports: {
+    MediaProtectionBadge: () => createElement('View', { testID: 'media-protection-badge' }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('expo-router', {
@@ -1609,21 +1611,21 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt, 학습방지 필터 적용됨');
     assert.equal(image().props.accessibilityRole, 'image');
     assert.equal(image().props.resizeMode, 'contain');
-    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 1);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 1);
 
     await render({
       currentIndex: 0,
       media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: false }],
     });
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
-    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 0);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 0);
 
     await render({
       currentIndex: 0,
       media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: null }],
     });
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
-    assert.equal(renderer?.root.findAllByType('MediaProtectionBadge').length, 0);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 0);
 
     await render({ currentIndex: 2, media: [media(1, null), media(2, null), media(3, null)] });
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');
