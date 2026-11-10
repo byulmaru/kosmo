@@ -34,7 +34,7 @@ import {
 } from './postComposerState';
 import {
   prependPostRequestToLoadedProfileRequests,
-  reconcilePublishedPostInHome,
+  removePostRequestFromLoadedProfileRequests,
 } from './postRequestCache';
 import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
@@ -97,7 +97,6 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       post {
         id
-        ...PostListItem_post
       }
       request {
         id
@@ -290,7 +289,6 @@ function PostComposerContents({
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
-  const { selectedProfileId } = useSession();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
@@ -533,32 +531,24 @@ function PostComposerContents({
             visibility,
           });
           const actorProfileId = input.actorProfileId;
-          if (typeof actorProfileId === 'string' && actorProfileId.length > 0) {
+          if (
+            acceptedRequest?.id &&
+            typeof actorProfileId === 'string' &&
+            actorProfileId.length > 0
+          ) {
             commitLocalUpdate(environment, (store) => {
-              if (acceptedRequest?.id) {
+              if (acceptedRequest.status === 'PUBLISHED') {
+                removePostRequestFromLoadedProfileRequests(
+                  store,
+                  actorProfileId,
+                  acceptedRequest.id,
+                );
+              } else {
                 prependPostRequestToLoadedProfileRequests(
                   store,
                   actorProfileId,
                   acceptedRequest.id,
                 );
-              }
-
-              const request = acceptedRequest?.id ? store.get(acceptedRequest.id) : null;
-              const requestStatus = request?.getValue('status');
-              const post = createdPost?.id
-                ? store.get(createdPost.id)
-                : requestStatus === 'PUBLISHED'
-                  ? request?.getLinkedRecord('post')
-                  : null;
-              if (createdPost?.id || requestStatus === 'PUBLISHED') {
-                const authorProfile = post?.getLinkedRecord('profile');
-                reconcilePublishedPostInHome(store, {
-                  authorProfileId: authorProfile?.getDataID() ?? null,
-                  currentProfileId: selectedProfileId,
-                  postId: post?.getDataID() ?? null,
-                  profileId: actorProfileId,
-                  ...(acceptedRequest?.id ? { requestNodeId: acceptedRequest.id } : {}),
-                });
               }
             });
           }

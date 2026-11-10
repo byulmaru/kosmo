@@ -19,10 +19,6 @@ import {
 import CreatePostMutation from './__generated__/PostComposerCreatePostMutation.graphql';
 import PostComposerMentionSuggestionsQueryNode from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
 import PostRequestListQueryNode from './__generated__/PostRequestListQuery.graphql';
-import {
-  prependPostRequestToLoadedProfileRequests,
-  reconcilePublishedPostInHome,
-} from './postRequestCache';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
@@ -725,7 +721,7 @@ describe('PostComposer character count', () => {
 
 describe('PostComposer request acknowledgement cache projection', () => {
   for (const status of ['QUEUED', 'PUBLISHED'] as const) {
-    it(`projects a ${status} acknowledgement into Profile requests and the real Home Post`, async () => {
+    it(`projects a ${status} acknowledgement into Profile requests without changing Home`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
       const createdPosts: Array<{ id: string }> = [];
@@ -813,6 +809,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
           },
         }),
       );
+      assert.equal(targetProps?.body, '');
       assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
       assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
       assert.deepEqual(analyticsEvents, [
@@ -838,18 +835,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
 
       assert.deepEqual(requestIds('profile-a'), status === 'PUBLISHED' ? [] : [requestNodeId]);
       assert.deepEqual(requestIds('profile-b'), []);
-      if (status === 'QUEUED') {
-        await act(async () => {
-          commitLocalUpdate(environment, (store) => {
-            prependPostRequestToLoadedProfileRequests(store, profileA.id, requestNodeId);
-          });
-        });
-        assert.deepEqual(requestIds('profile-a'), [requestNodeId]);
-      }
-      assert.deepEqual(
-        homeTimelinePostIds(environment),
-        status === 'PUBLISHED' ? [publishedPostId, 'post-home-existing'] : ['post-home-existing'],
-      );
+      assert.deepEqual(homeTimelinePostIds(environment), ['post-home-existing']);
 
       const requestRecord = environment.getStore().getSource().get(requestNodeId);
       assert.equal(requestRecord?.bodyText, '접수된 본문');
@@ -858,19 +844,6 @@ describe('PostComposer request acknowledgement cache projection', () => {
       assert.equal(requestRecord?.draft, undefined);
 
       if (status === 'PUBLISHED') {
-        await act(async () => {
-          commitLocalUpdate(environment, (store) => {
-            reconcilePublishedPostInHome(store, {
-              authorProfileId: profileA.id,
-              currentProfileId: sessionSelectedProfileId,
-              postId: publishedPostId,
-              profileId: profileA.id,
-              requestNodeId,
-            });
-          });
-        });
-        assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
-
         await act(async () => {
           renderer?.update(createElement(PostComposer, composerProps(profileB)));
         });
@@ -944,12 +917,12 @@ describe('PostComposer request acknowledgement cache projection', () => {
         });
         assert.deepEqual(requestIds(profileA.id), []);
         assert.deepEqual(requestIds(profileB.id), []);
-        assert.deepEqual(homeTimelinePostIds(environment), [publishedPostId, 'post-home-existing']);
+        assert.deepEqual(homeTimelinePostIds(environment), ['post-home-existing']);
       }
     });
   }
 
-  it('accepts a real Post response with no request and reconciles it into Home once', async () => {
+  it('accepts a real Post response with no request without changing Home', async () => {
     const createdPostId = 'post-direct-created';
     const createdPosts: Array<{ id: string }> = [];
     let acceptedCount = 0;
@@ -1010,7 +983,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
         },
       },
     ]);
-    assert.deepEqual(homeTimelinePostIds(environment), [createdPostId, 'post-home-existing']);
+    assert.deepEqual(homeTimelinePostIds(environment), ['post-home-existing']);
     for (const profileId of [profileA.id, profileB.id]) {
       const data = environment.lookup(createOperationDescriptor(query, { profileId }).fragment)
         .data as {
