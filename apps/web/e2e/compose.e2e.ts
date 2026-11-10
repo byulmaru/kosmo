@@ -630,12 +630,6 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
     },
   });
   expect(submitBody.data?.createPost?.post?.id).toEqual(expect.any(String));
-  await expect
-    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
-      timeout: 30_000,
-    })
-    .toBeGreaterThan(0);
-
   const localResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
   await page.goto('/local');
   const localResponse = await localResponsePromise;

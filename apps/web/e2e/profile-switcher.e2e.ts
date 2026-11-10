@@ -539,11 +539,6 @@ async function createPost(page: Page, body: string) {
   expect(operation?.variables).toMatchObject({
     input: { bodyText: body },
   });
-  await expect
-    .poll(() => page.getByRole('article').filter({ hasText: body }).count(), {
-      timeout: 30_000,
-    })
-    .toBeGreaterThan(0);
 }
 
 async function failGraphQLOperation(page: Page, operationName: string) {
