@@ -784,6 +784,89 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assertConnection(environment, 'homeTimeline', ['fresh']);
   });
 
+  it('Home reselect turns queued lifecycle revalidation into one manual read', async () => {
+    platform.OS = 'web';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    const activeSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(activeSubscription);
+
+    await act(async () => {
+      browserWindow.scrollY = 480;
+      browserListeners.get('scroll')?.();
+    });
+    const requestsBeforeReconnect = requests.length;
+    await act(async () => activeSubscription.connected?.(true));
+    assert.equal(requests.length, requestsBeforeReconnect);
+
+    const scrollCallsBeforeReselect = browserScrollCalls.length;
+    await act(async () => shellChrome.reselectHome());
+    assert.ok(browserScrollCalls.length > scrollCallsBeforeReselect);
+    assert.equal(browserWindow.scrollY, 0);
+    assert.equal(requests.length, requestsBeforeReconnect + 1);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh', 'a']));
+    assert.equal(requests.length, requestsBeforeReconnect + 1);
+    assertConnection(environment, 'homeTimeline', ['fresh', 'a']);
+
+    await act(async () => activeSubscription.connected?.(true));
+    assert.equal(requests.length, requestsBeforeReconnect + 2);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['latest', 'fresh']));
+    assertConnection(environment, 'homeTimeline', ['latest', 'fresh']);
+  });
+
+  it('Home reselect replaces an active automatic read and keeps the manual result', async () => {
+    platform.OS = 'web';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+
+    await focusHome();
+    const automaticRead = latest('HomePageQuery');
+    assert.equal(requests.length, 2);
+
+    const scrollCallsBeforeReselect = browserScrollCalls.length;
+    await act(async () => shellChrome.reselectHome());
+    assert.ok(browserScrollCalls.length > scrollCallsBeforeReselect);
+    assert.equal(requests.length, 3);
+    const manualRead = latest('HomePageQuery');
+    assert.notEqual(manualRead, automaticRead);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => shellChrome.reselectHome());
+    assert.equal(requests.length, 3, 'a repeated manual gesture should not start another read');
+
+    await respond(manualRead, payload('homeTimeline', ['manual', 'a']));
+    assertConnection(environment, 'homeTimeline', ['manual', 'a']);
+    await respond(automaticRead, payload('homeTimeline', ['automatic', 'a']));
+    assert.equal(requests.length, 3);
+    assertConnection(environment, 'homeTimeline', ['manual', 'a']);
+  });
+
   it('Home actor Environment replacement disposes its previous subscription owner', async () => {
     const firstEnvironment = new Environment({
       network: createTimelineNetwork(),

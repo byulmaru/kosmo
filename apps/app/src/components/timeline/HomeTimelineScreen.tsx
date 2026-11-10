@@ -321,6 +321,20 @@ function HomeContent({
         return;
       }
 
+      if (mode === 'manual' && activeMode !== 'manual') {
+        if (activeMode === 'automatic') {
+          const automaticSubscription = subscription;
+          subscription = null;
+          activeMode = null;
+          automaticSubscription?.unsubscribe();
+        }
+
+        automaticRefreshQueued = false;
+        setTimelineState((current) =>
+          current.revalidationPending ? { ...current, revalidationPending: false } : current,
+        );
+      }
+
       if (activeMode) {
         if (mode === 'automatic') {
           automaticRefreshQueued = true;
