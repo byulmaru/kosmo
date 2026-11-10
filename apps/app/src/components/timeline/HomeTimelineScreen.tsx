@@ -36,7 +36,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { GraphQLResponse, GraphQLSingularResponse, PayloadData } from 'relay-runtime';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
 import type { HomeTimelineSubscription } from './__generated__/HomeTimelineSubscription.graphql';
@@ -53,7 +52,6 @@ type HomeTimelineState = Readonly<{
 
 type HomeRefreshResource = Readonly<{
   refresh: HomeRefresh;
-  recordPayload: (response: GraphQLResponse) => void;
   dispose: () => void;
 }>;
 
@@ -305,34 +303,6 @@ function HomeContent({
     let automaticRefreshQueued = false;
     let subscription: { unsubscribe: () => void } | null = null;
     let refreshToastCleanup: (() => void) | null = null;
-    let payloadsDuringRead: PayloadData[] = [];
-    const subscriptionOperation = createOperationDescriptor(
-      getRequest(HomeTimelineSubscriptionDocument),
-      { connections: [homeTimelineConnectionId] },
-    );
-    const recordPayload = (response: GraphQLResponse) => {
-      if (activeMode === null) {
-        return;
-      }
-
-      const responses: readonly GraphQLSingularResponse[] = Array.isArray(response)
-        ? response
-        : [response as GraphQLSingularResponse];
-      for (const item of responses) {
-        if (!('data' in item) || item.data === null || item.data === undefined) {
-          continue;
-        }
-
-        const data = item.data as PayloadData;
-        if (
-          data.timeline?.__typename === 'TimelinePostAdded' &&
-          data.timeline.post !== null &&
-          data.timeline.post !== undefined
-        ) {
-          payloadsDuringRead.push(data);
-        }
-      }
-    };
     const refresh: HomeRefresh = (mode) => {
       if (mode === 'pause-automatic') {
         const hadPendingAutomaticRefresh = automaticRefreshQueued || activeMode === 'automatic';
@@ -342,7 +312,6 @@ function HomeContent({
           const automaticSubscription = subscription;
           subscription = null;
           activeMode = null;
-          payloadsDuringRead = [];
           automaticSubscription?.unsubscribe();
         }
 
@@ -366,13 +335,6 @@ function HomeContent({
       }
 
       const finish = (error?: Error) => {
-        const payloads = payloadsDuringRead;
-        payloadsDuringRead = [];
-        // A canonical first-page response replaces connection edges, so replay arrivals through their subscription operation.
-        for (const payload of payloads) {
-          environment.commitPayload(subscriptionOperation, payload);
-        }
-
         activeMode = null;
         if (mode === 'manual') {
           setRefreshing(false);
@@ -395,7 +357,6 @@ function HomeContent({
         }
       };
 
-      payloadsDuringRead = [];
       subscription = fetchQuery(
         environment,
         HomeQuery,
@@ -413,7 +374,6 @@ function HomeContent({
       subscription = null;
       activeMode = null;
       automaticRefreshQueued = false;
-      payloadsDuringRead = [];
       activeSubscription?.unsubscribe();
       if (wasRefreshingManually) {
         setRefreshing(false);
@@ -422,7 +382,7 @@ function HomeContent({
       refreshToastCleanup = null;
     };
 
-    return { dispose, recordPayload, refresh };
+    return { dispose, refresh };
   }, [environment, queueRevalidation, showToast]);
 
   useEffect(() => {
@@ -453,11 +413,7 @@ function HomeContent({
   return (
     <>
       {hasSelectedProfile ? (
-        <HomeTimelineUpdates
-          onPostAdded={handlePostAdded}
-          onRevalidation={queueRevalidation}
-          onSubscriptionPayload={refreshResource.recordPayload}
-        />
+        <HomeTimelineUpdates onPostAdded={handlePostAdded} onRevalidation={queueRevalidation} />
       ) : null}
       <HomeContentView
         active={active}
@@ -476,22 +432,18 @@ function HomeContent({
 function HomeTimelineUpdates({
   onPostAdded,
   onRevalidation,
-  onSubscriptionPayload,
 }: {
   onPostAdded: (response: HomeTimelineSubscription['response'] | null | undefined) => void;
   onRevalidation: () => void;
-  onSubscriptionPayload: (response: GraphQLResponse) => void;
 }) {
   const subscriptionConfig = useMemo(
     () => ({
       subscription: HomeTimelineSubscriptionDocument,
       variables: { connections: [homeTimelineConnectionId] },
-      cacheConfig: {
-        metadata: { onSubscriptionConnected: onRevalidation, onSubscriptionPayload },
-      },
+      cacheConfig: { metadata: { onSubscriptionConnected: onRevalidation } },
       onNext: onPostAdded,
     }),
-    [onPostAdded, onRevalidation, onSubscriptionPayload],
+    [onPostAdded, onRevalidation],
   );
 
   useSubscription<HomeTimelineSubscription>(subscriptionConfig);

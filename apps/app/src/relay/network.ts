@@ -110,7 +110,6 @@ export function createGraphQLSubscription(
       }
 
       const onSubscriptionConnected = cacheConfig.metadata?.onSubscriptionConnected;
-      const onSubscriptionPayload = cacheConfig.metadata?.onSubscriptionPayload;
 
       return client.subscribe(
         {
@@ -120,12 +119,7 @@ export function createGraphQLSubscription(
           ...(selectedProfileId ? { extensions: { selectedProfileId } } : {}),
         },
         {
-          next: (response) => {
-            if (typeof onSubscriptionPayload === 'function') {
-              onSubscriptionPayload(response as GraphQLResponse);
-            }
-            sink.next(response as GraphQLResponse);
-          },
+          next: (response) => sink.next(response as GraphQLResponse),
           error: (cause) => sink.error(new RelayTransportError(cause)),
           complete: () => sink.complete(),
         },

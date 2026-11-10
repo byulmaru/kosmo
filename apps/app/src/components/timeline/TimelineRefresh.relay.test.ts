@@ -6,7 +6,9 @@ import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
   ConnectionHandler,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
@@ -15,6 +17,7 @@ import {
 } from 'relay-runtime';
 import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { colors } from '@/theme/tokens';
+import deletePostMutation from '../post/__generated__/PostDeletionActionDeletePostMutation.graphql';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -72,7 +75,6 @@ type Request = {
 const requests: Request[] = [];
 type Subscription = Request & {
   connected?: (reconnected: boolean) => void;
-  onPayload?: (response: GraphQLResponse) => void;
   disposed: boolean;
 };
 const subscriptions: Subscription[] = [];
@@ -433,7 +435,6 @@ function emitHomeTimelineEvent(subscription: Subscription, post: object | null) 
   const response = {
     data: { timeline: { __typename: 'TimelinePostAdded', post } },
   } as GraphQLResponse;
-  subscription.onPayload?.(response);
   subscription.sink.next(response);
 }
 function emitHomePost(subscription: Subscription, id: string) {
@@ -448,7 +449,6 @@ function createTimelineNetwork() {
     (operation, variables, cacheConfig) =>
       Observable.create<GraphQLResponse>((sink) => {
         const connected = cacheConfig.metadata?.onSubscriptionConnected;
-        const onPayload = cacheConfig.metadata?.onSubscriptionPayload;
         const subscription: Subscription = {
           name: operation.name,
           variables,
@@ -456,10 +456,6 @@ function createTimelineNetwork() {
           connected:
             typeof connected === 'function'
               ? (connected as (reconnected: boolean) => void)
-              : undefined,
-          onPayload:
-            typeof onPayload === 'function'
-              ? (onPayload as (response: GraphQLResponse) => void)
               : undefined,
           disposed: false,
         };
@@ -581,7 +577,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
     );
   });
 
-  it('Home lifecycle read keeps a streamed Post when its older response completes', async () => {
+  it('Home lifecycle read does not restore a streamed Post deleted before completion', async () => {
     const environment = new Environment({
       network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
@@ -616,13 +612,19 @@ describe('Timeline refresh and pagination with real Relay', () => {
       'cursor-b',
     ]);
 
+    const deleteOperation = createOperationDescriptor(getRequest(deletePostMutation), {
+      id: 'incoming',
+    });
+    await act(async () => {
+      environment.commitPayload(deleteOperation, {
+        deletePost: { postId: 'incoming', replyParent: null },
+      });
+    });
+
     await respond(canonicalRead, payload('homeTimeline', ['a', 'b']));
     assert.equal(requests.length, 2);
-    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
-      null,
-      'cursor-a',
-      'cursor-b',
-    ]);
+    assert.equal(environment.getStore().getSource().get('incoming'), null);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
   });
 
   it('Home: optional request summary error preserves posts and retries with Home refresh', async () => {
@@ -754,11 +756,6 @@ describe('Timeline refresh and pagination with real Relay', () => {
     const requestCountWhileReading = requests.length;
     await respond(interruptedRefresh, payload('homeTimeline', ['late']));
     assert.equal(requests.length, requestCountWhileReading);
-    assertConnection(environment, 'homeTimeline', ['streamed', 'fresh', 'a'], true, 'cursor-a', [
-      null,
-      'cursor-fresh',
-      'cursor-a',
-    ]);
 
     await scrollHomeTo(0);
     assert.equal(
