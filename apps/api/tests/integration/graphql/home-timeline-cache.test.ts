@@ -2566,6 +2566,152 @@ test(
   },
 );
 
+test(
+  'closes subscriptions for a disabled Profile across Sessions while preserving another Profile on the same Session',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const owner = await createAuth();
+    const otherProfile = await createProfile('surviving-profile-subscription');
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: otherProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const secondSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: owner.account.id,
+        activeProfileId: owner.profile.id,
+        state: SessionState.ACTIVE,
+        token: `home-token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const otherProfilePost = await createContentfulPost(
+      otherProfile.id,
+      'the other Profile remains subscribed',
+    );
+    const redis = createClient({ url: testRedisUrl! });
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+    redis.on('error', () => undefined);
+    await redis.connect();
+
+    const waitForTopicCount = (topic: string, id: string, count: number) =>
+      waitForSubscriberCount(
+        async () => (await redis.pubSubNumSub(`${topic}:${id}`))[`${topic}:${id}`] ?? 0,
+        count,
+      );
+
+    const subscribe = async (token: string, profileId: string) => {
+      const response = await app.request('/graphql', {
+        body: JSON.stringify({
+          extensions: { selectedProfileId: encodeGlobalId('Profile', profileId) },
+          query:
+            'subscription Timeline { timeline { __typename ... on TimelinePostAdded { post { id content { bodyText } } } } }',
+        }),
+        headers: {
+          accept: 'text/event-stream',
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+      assert.ok(response.body);
+      const reader = response.body.getReader();
+      readers.push(reader);
+      return { readEvent: createSseEventReader(reader) };
+    };
+
+    try {
+      const profileAOnFirstSession = await subscribe(owner.token, owner.profile.id);
+      const profileAOnSecondSession = await subscribe(secondSession.token, owner.profile.id);
+      const profileBOnFirstSession = await subscribe(owner.token, otherProfile.id);
+      const firstProfileCompletion = profileAOnFirstSession.readEvent();
+      const secondProfileCompletion = profileAOnSecondSession.readEvent();
+
+      await Promise.all([
+        waitForTopicCount('profileDisabled', owner.profile.id, 1),
+        waitForTopicCount('profileDisabled', otherProfile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
+        waitForTopicCount('sessionEnded', owner.session.id, 1),
+        waitForTopicCount('sessionEnded', secondSession.id, 1),
+      ]);
+
+      const deleted = await requestGraphQL<{
+        deleteProfile: { profileId: string; success: boolean };
+      }>(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) { profileId success }
+        }`,
+        { id: encodeGlobalId('Profile', owner.profile.id) },
+        owner.token,
+      );
+      assert.equal(deleted.errors, undefined, JSON.stringify(deleted.errors));
+      assert.deepEqual(deleted.data?.deleteProfile, {
+        profileId: encodeGlobalId('Profile', owner.profile.id),
+        success: true,
+      });
+
+      const completions = await Promise.all([
+        withTimeout(firstProfileCompletion, 'Profile A subscription did not complete'),
+        withTimeout(
+          secondProfileCompletion,
+          'Profile A subscription in another Session did not complete',
+        ),
+      ]);
+      for (const completion of completions) {
+        assert.ok(completion);
+        assert.match(completion, /^event: complete$/m);
+        assert.doesNotMatch(completion, /^event: error$/m);
+        assert.doesNotMatch(completion, /"errors"\s*:/);
+      }
+
+      await Promise.all([
+        waitForTopicCount('profileDisabled', owner.profile.id, 0),
+        waitForTopicCount('profileDisabled', otherProfile.id, 1),
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
+        waitForTopicCount('sessionEnded', owner.session.id, 1),
+        waitForTopicCount('sessionEnded', secondSession.id, 0),
+      ]);
+
+      homeTimelinePubSub.publish('homeTimelinePostAdded', otherProfile.id, {
+        postId: otherProfilePost.id,
+      });
+      const otherProfileEvent = await withTimeout(
+        profileBOnFirstSession.readEvent(),
+        'The other Profile subscription stopped after Profile A was disabled',
+      );
+      assert.deepEqual(getSseData(otherProfileEvent), {
+        data: {
+          timeline: {
+            __typename: 'TimelinePostAdded',
+            post: {
+              id: encodeGlobalId('Post', otherProfilePost.id),
+              content: { bodyText: 'the other Profile remains subscribed' },
+            },
+          },
+        },
+      });
+
+      await Promise.all(readers.map((reader) => reader.cancel()));
+      await Promise.all([
+        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
+        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 0),
+        waitForTopicCount('sessionEnded', owner.session.id, 0),
+        waitForTopicCount('profileDisabled', otherProfile.id, 0),
+      ]);
+    } finally {
+      await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
+      await redis.close();
+    }
+  },
+);
+
 async function createAuth(): Promise<Auth> {
   const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
   const account = await db

@@ -3,7 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { Instances, PostMentions, Posts, ProfileFollows, ProfileMutes, Profiles } from '../db';
 import { ProfileState } from '../enums';
 import { visiblePostWhere } from './post';
-import { visibleProfileWhere } from './profile';
+import { activeViewerProfileWhere, visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
@@ -246,6 +246,7 @@ export const homePostListWhere = ({
     homeCandidateWhere,
     homeMentionTargetWhere,
     postVisibilityWhere,
+    activeViewerProfileWhere({ db, viewerProfileId }),
     homePostProfileStateWhere({ db }),
     profileBlockVisibilityWhere({
       database: db,

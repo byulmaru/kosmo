@@ -5,7 +5,7 @@ import { applySelectedProfileExtension } from '../context';
 import { useError } from './plugins/error';
 import { useMutationPrimaryDatabase } from './plugins/primary-database';
 import { useSentryTracing } from './plugins/sentry-tracing';
-import { useSessionEnded } from './plugins/session-ended';
+import { useSubscriptionInvalidation } from './plugins/subscription-invalidation';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
@@ -37,7 +37,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   landingPage: false,
   plugins: [
     useExecutionCancellation(),
-    useSessionEnded(),
+    useSubscriptionInvalidation(),
     useMutationPrimaryDatabase(),
     useSentryTracing(),
     useError(),

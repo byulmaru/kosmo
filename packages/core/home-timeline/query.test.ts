@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -284,6 +284,25 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
     ]) {
       assert.equal(visiblePostIds.has(excludedPost.id), false, excludedPost.id);
     }
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, viewer.id));
+    assert.equal(
+      await db
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, viewer.id),
+            eq(ProfileFollows.followeeProfileId, followedAuthor.id),
+          ),
+        )
+        .then((follows) => follows.length),
+      1,
+    );
+    assert.deepEqual(await queryHomeTimeline({ profileId: viewer.id, limit: 100 }), []);
   } finally {
     if (postIds.length > 0) {
       await db
@@ -302,6 +321,16 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
     }
     if (contentIds.length > 0) {
       await db.delete(PostContents).where(inArray(PostContents.id, contentIds));
+    }
+    if (profileIds.length > 0) {
+      await db
+        .delete(ProfileFollows)
+        .where(
+          or(
+            inArray(ProfileFollows.followerProfileId, profileIds),
+            inArray(ProfileFollows.followeeProfileId, profileIds),
+          ),
+        );
     }
     if (profileIds.length > 0) {
       await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
