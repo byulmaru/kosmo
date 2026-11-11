@@ -5331,12 +5331,16 @@ export const OrdinaryPost: Story = {
     expect(article).toHaveStyle({ paddingLeft: '8px', paddingRight: '8px' });
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
     expect(bodyShortcut.closest('[role="link"]')).toBeNull();
-    const timestampLink = standardRow.querySelector<HTMLAnchorElement>('a[href="/@kosmo/short"]');
+    const timestampLink = standardRow.querySelector<HTMLAnchorElement>(
+      `a[href="/${shortPost.profile.relativeHandle}/${shortPost.slug}"]`,
+    );
     expect(timestampLink).not.toBeNull();
     expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     await userEvent.click(bodyShortcut);
-    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+    );
   },
   render: () => <ProductionPostListItemStory postId="short" presentation="wide" />,
 };
@@ -5890,7 +5894,7 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
 
       await userEvent.click(canvas.getByTestId('post-list-row-body'));
       await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@kosmo/linked',
+        `/${linkedPost.profile.relativeHandle}/${linkedPost.slug}`,
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -6220,9 +6224,13 @@ export const PostDetailThreadRoute: Story = {
       canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
     ).toBeNull();
     await userEvent.click(canvas.getByText('Child 본문'));
-    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${routeChildPost.profile.relativeHandle}/${routeChildPost.slug}`,
+    );
     await userEvent.click(descendantQuote.getByTestId('source-post-body'));
-    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${routeSourcePost.profile.relativeHandle}/${routeSourcePost.slug}`,
+    );
   },
   render: () => (
     <>
@@ -10161,7 +10169,9 @@ export const ActionBarPendingNavigation: Story = {
     const slot = canvas.getByTestId('post-action-bookmark-slot').getBoundingClientRect();
     await pressActionBarPoint(canvasElement, { x: slot.left + 1, y: (slot.top + slot.bottom) / 2 });
     expect(actionBarNavigationObserver).toHaveBeenCalledTimes(1);
-    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith('/@kosmo/short');
+    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(
+      `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+    );
     expect(bookmark).toHaveAttribute('aria-busy', 'true');
   },
 };
@@ -10198,20 +10208,22 @@ export const ActionBarThreadNavigation: Story = {
       .getByTestId('post-detail-scroll')
       .closest<HTMLElement>('[tabindex="-1"]')!;
     let count = 0;
-    for (const [rowId, postId] of [
-      ['post-thread-item-route-root', 'route-root'],
-      ['post-thread-item-route-parent', 'route-parent'],
-      ['post-thread-current-route-current', 'route-current'],
-      ['post-thread-item-route-child', 'route-child'],
-      ['post-thread-item-route-reply-quote', 'route-reply-quote'],
-    ]) {
-      const row = canvas.getByTestId(rowId!);
+    for (const [rowId, targetPost] of [
+      ['post-thread-item-route-root', routeRootPost],
+      ['post-thread-item-route-parent', routeParentPost],
+      ['post-thread-current-route-current', routeCurrentPost],
+      ['post-thread-item-route-child', routeChildPost],
+      ['post-thread-item-route-reply-quote', routeReplyQuotePost],
+    ] as const) {
+      const row = canvas.getByTestId(rowId);
       // A pointer click must survive focus moving from the screen ancestor to its background host.
       routeFocus.focus({ preventScroll: true });
       expect(routeFocus).toHaveFocus();
       await checkActionBarWhitespace(row, () => {
         expect(actionBarNavigationObserver).toHaveBeenCalledTimes(++count);
-        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(`/@kosmo/${postId}`);
+        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(
+          `/${targetPost.profile.relativeHandle}/${targetPost.slug}`,
+        );
       });
     }
     const toolbar = within(current).getByRole('toolbar', { name: '액션 바' });
