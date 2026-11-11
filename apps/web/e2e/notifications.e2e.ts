@@ -609,7 +609,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
     await page.goto(`/@stale-reply-author/${sourceId}`);
     await assertQuerySuccess(correctedDetailResponse);
-    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${source.slug}`);
     await expect(sourceRow).toBeInViewport();
     await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
@@ -620,7 +620,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await page.getByRole('link', { name: '홈', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
     await page.goBack();
-    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${source.slug}`);
     await expect(sourceRow).toBeAttached();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(visibleRootRow.getByText(rootBody, { exact: false })).toBeVisible();
