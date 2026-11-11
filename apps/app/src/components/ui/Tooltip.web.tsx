@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radius, space, textStyles } from '@/theme/tokens';
 import { Dropdown } from './Dropdown';
-import type { RefObject } from 'react';
+import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { TooltipProps } from './Tooltip';
 
@@ -19,6 +19,20 @@ export function Tooltip({ children, label }: TooltipProps) {
   const open = (hovered || focused) && !dismissed;
   const describedBy = children.props['aria-describedby'];
   const activeDescription = open ? [describedBy, tooltipId].filter(Boolean).join(' ') : describedBy;
+  const handlePointerLeave = (event: ReactPointerEvent<HTMLElement>) => {
+    const ownerDocument = event.currentTarget.ownerDocument;
+    const NodeConstructor = ownerDocument.defaultView?.Node;
+    const relatedTarget = event.relatedTarget;
+    if (
+      NodeConstructor &&
+      relatedTarget instanceof NodeConstructor &&
+      (triggerRef.current?.contains(relatedTarget) ||
+        ownerDocument.getElementById(tooltipId)?.contains(relatedTarget))
+    ) {
+      return;
+    }
+    setHovered(false);
+  };
 
   return (
     <span
@@ -36,7 +50,7 @@ export function Tooltip({ children, label }: TooltipProps) {
         setDismissed(false);
         setHovered(true);
       }}
-      onPointerLeave={() => setHovered(false)}
+      onPointerLeave={handlePointerLeave}
       ref={triggerRef}
       style={{ display: 'inline-flex', height: 'max-content', width: 'max-content' }}
     >
@@ -54,6 +68,8 @@ export function Tooltip({ children, label }: TooltipProps) {
             id={tooltipId}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={handlePointerLeave}
             role="tooltip"
             style={{ maxWidth: `calc(100vw - ${space[8] * 2}px)` }}
           >
