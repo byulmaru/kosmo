@@ -1,4 +1,4 @@
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { space } from '@/theme/tokens';
 import baseMeta, { TooltipStoryFrame } from './Tooltip.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -30,12 +30,16 @@ export const HoverDescriptionAndDismiss: Story = {
     expect(trigger.getAttribute('aria-describedby')).toContain(tooltip.id);
     expect(trigger.getAttribute('aria-describedby')).toContain('tooltip-story-description');
 
-    await user.hover(tooltip);
+    // user-event omits relatedTarget; provide the destination across the portal.
+    await fireEvent.pointerOut(trigger, { relatedTarget: tooltip });
+    await fireEvent.pointerOver(tooltip, { relatedTarget: trigger });
     expect(page.getByRole('tooltip')).toBeVisible();
-    await user.click(within(tooltip).getByText('이 게시글에는 민감한 콘텐츠가 포함되어 있습니다.'));
+    await fireEvent.click(
+      within(tooltip).getByText('이 게시글에는 민감한 콘텐츠가 포함되어 있습니다.'),
+    );
     expect(page.getByRole('tooltip')).toBeVisible();
     expect(canvas.queryByText('미디어 미리보기가 열렸습니다.')).not.toBeInTheDocument();
-    await user.hover(canvasElement.ownerDocument.body);
+    await fireEvent.pointerOut(tooltip, { relatedTarget: canvasElement.ownerDocument.body });
     await waitFor(() => expect(page.queryByRole('tooltip')).not.toBeInTheDocument());
     expect(trigger.getAttribute('aria-describedby')).toBe('tooltip-story-description');
   },

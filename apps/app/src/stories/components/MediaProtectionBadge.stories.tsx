@@ -1,5 +1,5 @@
 import { ImageBackground, StyleSheet, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { MediaProtectionBadge } from '@/components/post/MediaProtectionBadge';
 import { PostMediaImage } from '@/components/post/PostMediaImage';
 import { spacing } from '@/theme/tokens';
@@ -47,12 +47,15 @@ export const OpensFilteredImage: Story = {
     const tooltip = await page.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('AI 학습방지 필터가 적용되었어요.');
 
-    await user.hover(tooltip);
+    // user-event omits relatedTarget, so model the portal crossing explicitly.
+    await fireEvent.pointerOut(badge, { relatedTarget: tooltip });
+    await fireEvent.pointerOver(tooltip, { relatedTarget: badge });
     expect(tooltip).toBeVisible();
-    await user.click(tooltip);
+    await fireEvent.click(tooltip);
     expect(imageOpen).not.toHaveBeenCalled();
 
-    await user.hover(badge);
+    await fireEvent.pointerOut(tooltip, { relatedTarget: badge });
+    await fireEvent.pointerOver(badge, { relatedTarget: tooltip });
     await user.click(badge);
     expect(imageOpen).toHaveBeenCalledOnce();
     expect(imageOpen).toHaveBeenCalledWith(2, expect.any(Object));
