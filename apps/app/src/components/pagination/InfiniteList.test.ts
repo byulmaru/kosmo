@@ -268,7 +268,8 @@ describe('InfiniteList', () => {
     await act(async () => loadRequests[0]?.onComplete(null));
     await update(props({ data: [], empty: createElement('Empty'), showLoadMoreButton: true }));
     const nextAction = loadMoreButton();
-    await act(async () => nextAction.props.onPress());
+    const onPressNext = nextAction.props.onPress as () => void;
+    await act(async () => onPressNext());
     assert.equal(loadRequests.length, 2, 'the same visible page can continue from the next cursor');
 
     await update(
@@ -282,14 +283,14 @@ describe('InfiniteList', () => {
       }),
     );
     assert.ok(renderer?.root.find((node) => (node.type as unknown) === 'LoadingFooter'));
-    await act(async () => nextAction.props.onPress());
+    await act(async () => onPressNext());
     assert.equal(loadRequests.length, 2, 'a pending Relay page cannot be requested again');
 
     await act(async () => loadRequests[1]?.onComplete(null));
     await update(
       props({ data: [], empty: createElement('Empty'), hasNext: false, showLoadMoreButton: true }),
     );
-    await act(async () => nextAction.props.onPress());
+    await act(async () => onPressNext());
     assert.equal(loadRequests.length, 2, 'the guarded loader cannot request after the final page');
   });
 

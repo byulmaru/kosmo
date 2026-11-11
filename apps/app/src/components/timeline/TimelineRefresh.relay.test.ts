@@ -1115,7 +1115,7 @@ describe('Guest Local with real Relay', () => {
     await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
     assertConnection(environment, 'localTimeline', ['a', 'b']);
     assert.equal(renderer!.root.findAllByType(TimelineTabs).length, 0);
-    assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
+    assert.ok(loadMoreButton());
 
     await scrollGuestNearEnd();
     const next = latest('PostListLocalNextPageQuery');
@@ -1123,6 +1123,7 @@ describe('Guest Local with real Relay', () => {
     assert.equal(next.variables.count, 20);
     await respond(next, guestPayload(['c'], false));
     assertConnection(environment, 'localTimeline', ['a', 'b', 'c'], false);
+    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
     const requestCount = requests.length;
     await scrollGuestNearEnd();
     assert.equal(requests.length, requestCount);
