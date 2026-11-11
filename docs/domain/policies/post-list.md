@@ -42,14 +42,18 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   Follow나 일반 Profile Mute로 Post를 다시 제외하지 않지만 현재 직접 Post 조회의 Visibility·Eligibility·Block 경계는 적용한다.
   비활성·Content 없는·viewer 작성 Post와 직접 조회할 수 없는 Post는 숨긴다. 조회는 판정을 새로 계산하거나 Home 목록 cache를
   변경하지 않으며, 페이지의 Post 개수와 표시 순서는 보장하지 않는다.
-- [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때만
-  기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. Content가 있는 Post는 Quote를
-  포함해 그 Post 자체가 판정 대상이며, 작성자가 viewer이면 판정과 판정 cache 재사용을 건너뛰고 기존 eligibility에
-  따라 포함한다. Content 없는 순수 Repost에는 독립 판정이 없고 Repost Author와 무관하게 direct Source Post의 판정을
-  재사용한다. Source가 Quote이면 그 Quote 자체의 판정을 쓰며, Quote가 가리키는 Source까지 판정 대상을 바꾸지 않는다.
-  일반 적재, Follow 보정과 Home 목록 cache 재구성에서 새로 추가할 때도 적용하며, 이미 Home에 있는 항목을 규칙
-  생성·변경·제거 또는 판정 대상 식별 방식 변경으로 소급 변경하지 않는다. Local·Profile·Hashtag 목록, 검색,
-  Notification, Bookmark, Post 직접 조회와 상호작용에는 적용하지 않는다.
+- [Natural Language Mute Rule](../objects/natural-language-mute-rule.md)은 Home Post List에 Post를 새로 추가할 때
+  새 판정을 만들며, 기존 접근·Visibility·Eligibility·Block·Mute 정책을 통과한 항목을 추가로 제외한다. Content가
+  있는 Post는 Quote를 포함해 그 Post 자체가 판정 대상이며, 작성자가 viewer이면 판정과 판정 cache 재사용을 건너뛰고
+  기존 eligibility에 따라 포함한다. Content 없는 순수 Repost에는 독립 판정이 없고 Repost Author와 무관하게 direct
+  Source Post의 판정을 재사용한다. Source가 Quote이면 그 Quote 자체의 판정을 쓰며, Quote가 가리키는 Source까지 판정
+  대상을 바꾸지 않는다. 일반 적재, Follow 보정과 Home 목록 cache 재구성에서 새로 추가할 때도 적용하며, 이미 Home에
+  있는 항목을 규칙 생성·변경·제거 또는 판정 대상 식별 방식 변경으로 소급 변경하지 않는다.
+- 현재 선택 viewer Profile의 Rule이 있는 Local Post List는 해당 Local 후보 Post 자체의 저장된 유효 Exclude 판정만
+  추가로 적용한다. 새 판정은 만들지 않으며 viewer 작성 Post와 Include·미저장·유효하지 않은 판정은 기존 Local 정책에
+  따라 표시한다. 선택 Profile이나 현재 Rule이 없으면 이전 판정을 무시한다. Rule 삭제 뒤에는 남아 있는 판정도 Local
+  노출에 사용하지 않는다. 이 규칙은 기존 Visibility·Eligibility·Block·Mute 정책을 완화하지 않으며, Profile·Hashtag
+  목록, 검색, Notification, Bookmark, Post 직접 조회와 상호작용에는 적용하지 않는다.
 - Home 파생 목록은 언제든 사라질 수 있는 임시 cache이며, 영구 Home projection이나 별도 초기화 상태를 저장하지 않는다.
   인증된 Home 조회는 기존 cache의 7일 만료 시간을 연장하고, Post 삽입을 위한 background 처리는 기존 만료 시간을
   연장하지 않는다. cache가 없거나 요청한 범위에 유효한 항목이 없으면 그 페이지를 DB에서 현재 정책에 따라 조회하며,
@@ -97,6 +101,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 - Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
 - 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
+- 현재 선택한 viewer Profile에 Natural Language Mute Rule이 있으면 해당 Post 자체의 저장된 유효 Exclude 판정도 적용한다. Local 조회는 새 판정을 만들지 않으며, viewer가 작성한 Post와 유효한 Exclude 판정이 없는 Post는 기존 정책에 따라 표시한다. 선택 Profile이나 현재 Rule이 없으면 이전 판정을 적용하지 않는다. Rule 삭제 뒤에도 이전 판정은 남아 있을 수 있지만 Local 노출에는 사용하지 않는다. Quote는 direct Source가 아니라 Quote 자체의 판정을 사용한다. 제외된 후보가 있어도 기존 bounded page와 cursor는 유지되며, 반환 edge 수가 적거나 비어 있을 수 있다.
 - configured Local Instance 또는 운영자가 추가 설정한 Instance에 속한 Active/Normal Profile이 작성한 Public Post 중 Content가 있고 Reply Parent가 없는 eligible Post를 포함한다.
 - 이미 기존 수신 경로를 통해 Kosmo에 수신·저장된 Post만 조회한다. Instance 설정은 새 Post를 수집하지 않으며, 선택한 Instance의 모든 Post가 노출됨을 보장하지 않는다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
@@ -116,7 +121,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Profile Mute               | Exclude                                                                                           | Exclude                    | 방문한 Profile만 예외                                     | Exclude                    |
 | Word Mute Rule             | Scope와 Mute Decision 적용                                                                        | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
 | Hashtag Mute Rule          | Scope와 Mute Decision 적용                                                                        | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용                                | Scope와 Mute Decision 적용 |
-| Natural Language Mute Rule | 본문 Post는 자체 판정, 순수 Repost는 direct Source 판정 재사용; viewer 작성 판정 대상은 판정 생략 | —                          | —                                                         | —                          |
+| Natural Language Mute Rule | 본문 Post는 자체 판정, 순수 Repost는 direct Source 판정 재사용; viewer 작성 판정 대상은 판정 생략 | 저장 Exclude만 재사용      | —                                                         | —                          |
 | Profile Domain Block       | Exclude                                                                                           | Exclude                    | Exclude                                                   | Exclude                    |
 | Domain Limit               | Include                                                                                           | Include                    | Include                                                   | Exclude                    |
 | Sensitive Media            | Collapse                                                                                          | Collapse                   | Collapse                                                  | Collapse                   |

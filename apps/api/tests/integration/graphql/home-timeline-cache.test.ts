@@ -115,6 +115,17 @@ type HomeConnection = {
   };
 };
 
+type LocalTimelineConnection = {
+  readonly edges: readonly {
+    readonly node: { readonly id: string };
+  }[];
+  readonly pageInfo: {
+    readonly endCursor: string | null;
+    readonly hasNextPage: boolean;
+    readonly hasPreviousPage: boolean;
+  };
+};
+
 type SmartFilterResultsConnection = {
   readonly edges: readonly {
     readonly cursor: string;
@@ -1862,6 +1873,267 @@ test(
 );
 
 test(
+  'uses only the selected Profile’s saved Exclude decisions in Local without new judgments',
+  { skip: !testRedisUrl },
+  async () => {
+    const viewer = await createAuth(configuredLocalInstanceId);
+    const otherViewer = await createAuth();
+    const author = await createProfile('local-cached-mute-author', configuredLocalInstanceId);
+    const idPrefix = crypto.randomUUID().slice(0, 23);
+    const postId = (suffix: number) => `${idPrefix}-${suffix.toString(16).padStart(12, '0')}`;
+
+    const newestExcluded = await createContentfulPost(
+      author.id,
+      'cached exclude newest',
+      postId(100),
+    );
+    const nextExcluded = await createContentfulPost(author.id, 'cached exclude next', postId(90));
+    const cachedInclude = await createContentfulPost(author.id, 'cached include', postId(80));
+    const unknownDecision = await createContentfulPost(author.id, 'unknown decision', postId(70));
+    const malformedDecision = await createContentfulPost(
+      author.id,
+      'malformed decision',
+      postId(65),
+    );
+    const ownPost = await createContentfulPost(viewer.profile.id, 'viewer authored', postId(60));
+    const otherProfileDecision = await createContentfulPost(
+      author.id,
+      'other Profile exclusion only',
+      postId(50),
+    );
+    const excludedSource = await createContentfulPost(
+      author.id,
+      'excluded Quote source',
+      postId(40),
+    );
+    const quoteWithoutOwnDecision = await createQuote(
+      author.id,
+      excludedSource.id,
+      'Quote without own decision',
+      postId(30),
+    );
+    const includedSource = await createContentfulPost(
+      author.id,
+      'included Quote source',
+      postId(20),
+    );
+    const quoteWithOwnExclusion = await createQuote(
+      author.id,
+      includedSource.id,
+      'Quote excluded by own decision',
+      postId(10),
+    );
+
+    await db.insert(NaturalLanguageMuteRules).values([
+      { ownerProfileId: viewer.profile.id, condition: 'exclude matching posts' },
+      { ownerProfileId: otherViewer.profile.id, condition: 'exclude matching posts' },
+    ]);
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
+    await Promise.all([
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, newestExcluded.id, {
+        decision: 'exclude',
+        probability: 0.1,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, nextExcluded.id, {
+        decision: 'exclude',
+        probability: 0.99,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, cachedInclude.id, {
+        decision: 'include',
+        probability: 0.99,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, ownPost.id, {
+        decision: 'exclude',
+        probability: 0.99,
+      }),
+      cacheNaturalLanguageMuteDecision(otherViewer.profile.id, otherProfileDecision.id, {
+        decision: 'exclude',
+        probability: 0.99,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, excludedSource.id, {
+        decision: 'exclude',
+        probability: 0.1,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, includedSource.id, {
+        decision: 'include',
+        probability: 0.1,
+      }),
+      cacheNaturalLanguageMuteDecision(viewer.profile.id, quoteWithOwnExclusion.id, {
+        decision: 'exclude',
+        probability: 0.1,
+      }),
+    ]);
+    await runRedisCommand((client) =>
+      client.hSetEx(
+        decisionHashKey,
+        { [malformedDecision.id]: '{' },
+        { expiration: { type: 'EX', value: 604_800 } },
+      ),
+    );
+    await runRedisCommand((client) => client.hExpire(decisionHashKey, [newestExcluded.id], 300));
+
+    const excludedTtlBefore = (
+      await runRedisCommand((client) => client.hTTL(decisionHashKey, [newestExcluded.id]))
+    )?.value?.[0];
+    const unknownValueBefore = (
+      await runRedisCommand((client) => client.hGet(decisionHashKey, unknownDecision.id))
+    )?.value;
+    const unknownTtlBefore = (
+      await runRedisCommand((client) => client.hTTL(decisionHashKey, [unknownDecision.id]))
+    )?.value?.[0];
+    assert.ok(excludedTtlBefore !== undefined && excludedTtlBefore > 0 && excludedTtlBefore <= 300);
+    assert.equal(unknownValueBefore, null);
+    assert.equal(unknownTtlBefore, -2);
+
+    let modelCalls = 0;
+    const restoreModel = installNaturalMuteModel(() => {
+      modelCalls += 1;
+      return 0.99;
+    });
+    try {
+      const result = await requestLocalTimeline(viewer.token, { first: 20 });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.ok(result.data?.localTimeline);
+      const visibleIds = result.data.localTimeline.edges.map(({ node }) => node.id).sort();
+      assert.deepEqual(
+        visibleIds,
+        [
+          cachedInclude,
+          unknownDecision,
+          malformedDecision,
+          ownPost,
+          otherProfileDecision,
+          quoteWithoutOwnDecision,
+          includedSource,
+        ]
+          .map(({ id }) => encodeGlobalId('Post', id))
+          .sort(),
+      );
+      assert.equal(modelCalls, 0);
+
+      const excludedTtlAfter = (
+        await runRedisCommand((client) => client.hTTL(decisionHashKey, [newestExcluded.id]))
+      )?.value?.[0];
+      const unknownValueAfter = (
+        await runRedisCommand((client) => client.hGet(decisionHashKey, unknownDecision.id))
+      )?.value;
+      const unknownTtlAfter = (
+        await runRedisCommand((client) => client.hTTL(decisionHashKey, [unknownDecision.id]))
+      )?.value?.[0];
+      assert.ok(
+        excludedTtlAfter !== undefined &&
+          excludedTtlAfter > 0 &&
+          excludedTtlAfter <= excludedTtlBefore,
+      );
+      assert.equal(unknownValueAfter, null);
+      assert.equal(unknownTtlAfter, unknownTtlBefore);
+
+      const firstPage = await requestLocalTimeline(viewer.token, { first: 1 });
+      assert.equal(firstPage.errors, undefined, JSON.stringify(firstPage.errors));
+      assert.ok(firstPage.data?.localTimeline);
+      assert.deepEqual(firstPage.data.localTimeline.edges, []);
+      assert.equal(firstPage.data.localTimeline.pageInfo.hasNextPage, true);
+      const firstCursor = firstPage.data.localTimeline.pageInfo.endCursor;
+      assert.ok(firstCursor);
+
+      const secondPage = await requestLocalTimeline(viewer.token, {
+        first: 1,
+        after: firstCursor,
+      });
+      assert.equal(secondPage.errors, undefined, JSON.stringify(secondPage.errors));
+      assert.ok(secondPage.data?.localTimeline);
+      assert.deepEqual(secondPage.data.localTimeline.edges, []);
+      assert.equal(secondPage.data.localTimeline.pageInfo.hasNextPage, true);
+      const secondCursor = secondPage.data.localTimeline.pageInfo.endCursor;
+      assert.ok(secondCursor);
+      assert.notEqual(secondCursor, firstCursor);
+
+      const thirdPage = await requestLocalTimeline(viewer.token, {
+        first: 1,
+        after: secondCursor,
+      });
+      assert.equal(thirdPage.errors, undefined, JSON.stringify(thirdPage.errors));
+      assert.ok(thirdPage.data?.localTimeline);
+      assert.deepEqual(
+        thirdPage.data.localTimeline.edges.map(({ node }) => node.id),
+        [encodeGlobalId('Post', cachedInclude.id)],
+      );
+      assert.equal(thirdPage.data.localTimeline.pageInfo.hasNextPage, true);
+      const thirdCursor = thirdPage.data.localTimeline.pageInfo.endCursor;
+      assert.ok(thirdCursor);
+
+      const backwardPage = await requestLocalTimeline(viewer.token, {
+        last: 1,
+        before: thirdCursor,
+      });
+      assert.equal(backwardPage.errors, undefined, JSON.stringify(backwardPage.errors));
+      assert.ok(backwardPage.data?.localTimeline);
+      assert.deepEqual(backwardPage.data.localTimeline.edges, []);
+      assert.equal(backwardPage.data.localTimeline.pageInfo.hasPreviousPage, true);
+      assert.equal(backwardPage.data.localTimeline.pageInfo.endCursor, secondCursor);
+
+      const firstBackwardPage = await requestLocalTimeline(viewer.token, {
+        last: 1,
+        before: secondCursor,
+      });
+      assert.equal(firstBackwardPage.errors, undefined, JSON.stringify(firstBackwardPage.errors));
+      assert.ok(firstBackwardPage.data?.localTimeline);
+      assert.deepEqual(firstBackwardPage.data.localTimeline.edges, []);
+      assert.equal(firstBackwardPage.data.localTimeline.pageInfo.hasPreviousPage, false);
+      assert.equal(firstBackwardPage.data.localTimeline.pageInfo.endCursor, firstCursor);
+
+      const guestResult = await requestLocalTimeline(undefined, { first: 20 });
+      assert.equal(guestResult.errors, undefined, JSON.stringify(guestResult.errors));
+      assert.ok(guestResult.data?.localTimeline);
+      assert.equal(guestResult.data.localTimeline.edges.length, 11);
+
+      const noProfileViewer = await createAuth();
+      await db
+        .update(Sessions)
+        .set({ activeProfileId: null })
+        .where(eq(Sessions.id, noProfileViewer.session.id));
+      const noProfileResult = await requestLocalTimeline(noProfileViewer.token, { first: 20 });
+      assert.equal(noProfileResult.errors, undefined, JSON.stringify(noProfileResult.errors));
+      assert.ok(noProfileResult.data?.localTimeline);
+      assert.equal(noProfileResult.data.localTimeline.edges.length, 11);
+
+      const previousRedisUrl = process.env.REDIS_URL;
+      delete process.env.REDIS_URL;
+      try {
+        const redisUnavailable = await requestLocalTimeline(viewer.token, { first: 20 });
+        assert.equal(redisUnavailable.errors, undefined, JSON.stringify(redisUnavailable.errors));
+        assert.ok(redisUnavailable.data?.localTimeline);
+        assert.equal(redisUnavailable.data.localTimeline.edges.length, 11);
+      } finally {
+        if (previousRedisUrl === undefined) {
+          delete process.env.REDIS_URL;
+        } else {
+          process.env.REDIS_URL = previousRedisUrl;
+        }
+      }
+
+      await db
+        .delete(NaturalLanguageMuteRules)
+        .where(eq(NaturalLanguageMuteRules.ownerProfileId, viewer.profile.id));
+      const afterRuleDelete = await requestLocalTimeline(viewer.token, { first: 20 });
+      assert.equal(afterRuleDelete.errors, undefined, JSON.stringify(afterRuleDelete.errors));
+      assert.ok(afterRuleDelete.data?.localTimeline);
+      assert.equal(afterRuleDelete.data.localTimeline.edges.length, 11);
+      assert.equal(
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, newestExcluded.id)))?.value,
+        JSON.stringify({ decision: 'exclude', probability: 0.1 }),
+      );
+      assert.equal(modelCalls, 0);
+    } finally {
+      restoreModel();
+      await runRedisCommand((client) =>
+        client.unlink([decisionHashKey, naturalMuteDecisionHashKey(otherViewer.profile.id)]),
+      );
+    }
+  },
+);
+
+test(
   'uses one source verdict for a batch of Reposts while preserving viewer-authored content',
   { skip: !testRedisUrl },
   async () => {
@@ -2746,7 +3018,7 @@ test(
   },
 );
 
-async function createAuth(): Promise<Auth> {
+async function createAuth(instanceId = localInstanceId): Promise<Auth> {
   const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
   const account = await db
     .insert(Accounts)
@@ -2758,7 +3030,7 @@ async function createAuth(): Promise<Auth> {
     .returning()
     .then(firstOrThrow);
   fixtureAccountIds.push(account.id);
-  const profile = await createProfile(`home-viewer-${suffix}`);
+  const profile = await createProfile(`home-viewer-${suffix}`, instanceId);
   await db.insert(AccountProfiles).values({
     accountId: account.id,
     profileId: profile.id,
@@ -2778,7 +3050,7 @@ async function createAuth(): Promise<Auth> {
   return { account, profile, session, token: session.token };
 }
 
-async function createProfile(handlePrefix: string) {
+async function createProfile(handlePrefix: string, instanceId = localInstanceId) {
   const handle = `${handlePrefix}-${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`;
   const profile = await db
     .insert(Profiles)
@@ -2786,7 +3058,7 @@ async function createProfile(handlePrefix: string) {
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: localInstanceId,
+      instanceId,
       normalizedHandle: handle,
       state: ProfileState.ACTIVE,
     })
@@ -2907,6 +3179,27 @@ async function requestHome(
       homeTimeline(first: $first, last: $last, after: $after, before: $before) {
         edges { cursor node { id content { bodyText } repostSource { id content { bodyText } } smartFilterProbability @include(if: $includeSmartFilterProbability) } }
         pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+      }
+    }`,
+    pagination,
+    token,
+  );
+}
+
+async function requestLocalTimeline(
+  token?: string,
+  pagination: {
+    readonly first?: number | null;
+    readonly last?: number | null;
+    readonly after?: string | null;
+    readonly before?: string | null;
+  } = {},
+) {
+  return requestGraphQL<{ localTimeline: LocalTimelineConnection | null }>(
+    `query LocalTimeline($first: Int, $last: Int, $after: String, $before: String) {
+      localTimeline(first: $first, last: $last, after: $after, before: $before) {
+        edges { node { id } }
+        pageInfo { endCursor hasNextPage hasPreviousPage }
       }
     }`,
     pagination,

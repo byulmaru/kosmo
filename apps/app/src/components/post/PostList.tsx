@@ -414,6 +414,7 @@ export const PostList = memo(function PostList({
               )}
               reselectDestination={reselectDestination ?? (isHome || isLocal ? 'home' : undefined)}
               refreshing={refreshing}
+              showLoadMoreButton={isLocal}
               style={listContainerStyle}
             />
           </View>
