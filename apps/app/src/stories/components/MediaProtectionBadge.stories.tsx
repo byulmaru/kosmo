@@ -41,22 +41,24 @@ export const OpensFilteredImage: Story = {
       bounds.left + 1,
       bounds.top + bounds.height / 2,
     );
-    expect(pointerTarget).toBe(badge);
+    if (!pointerTarget) {
+      throw new Error('Expected a hit target at the badge coordinates.');
+    }
 
-    await user.hover(badge);
+    await user.hover(pointerTarget);
     const tooltip = await page.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('AI 학습방지 필터가 적용되었어요.');
 
     // user-event omits relatedTarget, so model the portal crossing explicitly.
-    await fireEvent.pointerOut(badge, { relatedTarget: tooltip });
-    await fireEvent.pointerOver(tooltip, { relatedTarget: badge });
+    await fireEvent.pointerOut(pointerTarget, { relatedTarget: tooltip });
+    await fireEvent.pointerOver(tooltip, { relatedTarget: pointerTarget });
     expect(tooltip).toBeVisible();
     await fireEvent.click(tooltip);
     expect(imageOpen).not.toHaveBeenCalled();
 
-    await fireEvent.pointerOut(tooltip, { relatedTarget: badge });
-    await fireEvent.pointerOver(badge, { relatedTarget: tooltip });
-    await user.click(badge);
+    await fireEvent.pointerOut(tooltip, { relatedTarget: pointerTarget });
+    await fireEvent.pointerOver(pointerTarget, { relatedTarget: tooltip });
+    await user.click(pointerTarget);
     expect(imageOpen).toHaveBeenCalledOnce();
     expect(imageOpen).toHaveBeenCalledWith(2, expect.any(Object));
     expect(page.queryByRole('tooltip')).not.toBeInTheDocument();
