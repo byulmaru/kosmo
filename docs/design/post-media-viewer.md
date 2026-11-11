@@ -87,7 +87,7 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 - 선택한 gallery tile의 document index에서 viewer를 시작한다.
 - 현재 선택한 Media가 탐색 가능한 `Ready` 상태이고 `rights.licenseUrl`이 있으면 image chrome의 닫기 control 반대편에 `이용 조건` 48×48 icon link를 표시한다. 이용조건 link가 없으면 생략한다.
 - 현재 이미지의 `Media.aiProhibitFilterApplied`가 strict `true`이면 실제 이미지 frame의 오른쪽 아래에 passive `Shield` badge를 표시한다. 상단 close/counter와 분리하고, Gallery와 같은 overlay pill·16px white glyph를 사용한다. false·null·누락 값에는 표시하지 않는다.
-- Viewer badge는 모든 플랫폼의 accessibility tree에서 장식으로 숨기며 별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서 hover하면 브라우저 기본 툴팁 `AI 학습방지 필터가 적용되었어요.`를 표시한다. Native에서는 badge가 pointer 입력을 가로막지 않는다. 기존 Alt Text 또는 document 순서 fallback과 accessible image name의 `학습방지 필터 적용됨`은 유지하며, 탐색·zoom·close·focus 동작은 바뀌지 않는다.
+- Viewer badge는 모든 플랫폼의 accessibility tree에서 장식으로 숨기며 별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이 `AI 학습방지 필터가 적용되었어요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의 시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다. 기존 Alt Text 또는 document 순서 fallback과 accessible image name의 `학습방지 필터 적용됨`은 유지하며, 탐색·zoom·close·focus 동작은 바뀌지 않는다.
 - 2장 이상이면 시각적 `현재 위치/전체`를 표시하고, 1장이면 시각 counter를 생략한다. Screen Reader에는 장수와 관계없이 현재 위치와 전체 개수를 알린다.
 - 현재 이미지의 nullable Alt Text를 accessible name으로 사용하고, 없으면 document 순서 기반의 `N번째 첨부 이미지`를 사용한다. 현재 위치 안내는 이미지 이름과 별도로 전달해 내용을 위치 정보로 대체하거나 중복 낭독하지 않는다.
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.

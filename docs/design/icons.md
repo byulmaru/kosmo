@@ -54,8 +54,9 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 | Viewer 다음 이미지               | `ChevronRight` / `ChevronRightIcon`                           | `24`, stroke `2`, fixed white                                                     | `48×48` `IconButton`; 공용 inverse 원형 surface; 마지막 이미지에서 disabled·공통 opacity                                                                                     | `PostMediaViewer`                                                                                               |
 
 학습방지 필터 적용 `Shield` badge는 모든 플랫폼에서 accessibility tree에 숨기고 새 focus stop을 만들지 않는다.
-Web hover에 브라우저 기본 툴팁 `AI 학습방지 필터가 적용되었어요.`를 표시하며, Native에서는 badge가 pointer
-입력을 막지 않는다. 기존 image name `학습방지 필터 적용됨`은 유지한다.
+Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이 `AI 학습방지 필터가 적용되었어요.`를 별도의 정보 surface로
+표시한다. 이 문구는 accessibility-hidden badge의 시각적 내용이 아니다. Native에서는 badge가 pointer 입력을
+막지 않는다. 기존 image name `학습방지 필터 적용됨`은 유지한다.
 
 Profile 고정 action은 canonical `24×24` `Pin`을 재사용한다. attribution의 인접 label은 `고정됨`, owner
 action label은 상태에 따라 `프로필에 고정` 또는 `프로필 고정 해제`다.
